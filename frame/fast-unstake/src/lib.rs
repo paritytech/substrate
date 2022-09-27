@@ -148,7 +148,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ErasToCheckPerBlock<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// A map of all new idle staker accounts.
+	/// A map of all new idle staker stash accounts.
 	#[pallet::storage]
 	pub type IdleNewStakers<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, ()>;
 
@@ -300,7 +300,7 @@ pub mod pallet {
 				Error::<T>::NotFullyBonded
 			);
 
-			IdleNewStakers::<T>::remove(&ctrl);
+			IdleNewStakers::<T>::remove(&ledger.stash);
 
 			let num_slashing_spans =
 				Staking::<T>::slashing_spans(&ledger.stash).iter().count() as u32;
