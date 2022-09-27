@@ -41,6 +41,8 @@ pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32
 	pub(crate) stash: AccountId,
 	/// The list of eras for which they have been checked.
 	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
+	/// Deposit to be slashed if the unstake was unsuccessful.
+	pub(crate) deposit: u64,
 }
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo, RuntimeDebugNoBound)]

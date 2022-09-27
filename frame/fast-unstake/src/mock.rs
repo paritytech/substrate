@@ -164,12 +164,13 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 }
 
 parameter_types! {
-	pub static SlashPerEra: u32 = 100;
+	pub static DepositAmount: u32 = 28_000;
 }
 
 impl fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type SlashPerEra = SlashPerEra;
+	type Deposit = DepositAmount;
+	type DepositCurrency = Balances;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type WeightInfo = ();
 }

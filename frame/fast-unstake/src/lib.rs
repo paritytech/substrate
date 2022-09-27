@@ -81,7 +81,7 @@ pub mod pallet {
 	use super::*;
 	use crate::types::*;
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_staking::Pallet as Staking;
 	use sp_runtime::{
@@ -113,10 +113,12 @@ pub mod pallet {
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
 			+ TryInto<Event<Self>>;
 
-		/// The amount of balance slashed per each era that was wastefully checked.
-		///
-		/// A reasonable value could be `runtime_weight_to_fee(weight_per_era_check)`.
-		type SlashPerEra: Get<BalanceOf<Self>>;
+		/// The currency used for deposits.
+		type DepositCurrency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+
+		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
+		/// the costs of resources on unsuccessful unstake.
+		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
@@ -132,9 +134,9 @@ pub mod pallet {
 
 	/// The map of all accounts wishing to be unstaked.
 	///
-	/// Keeps track of `AccountId` wishing to unstake.
+	/// Keeps track of `AccountId` wishing to unstake and it's corresponding deposit.
 	#[pallet::storage]
-	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, ()>;
+	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
 
 	/// Number of eras to check per block.
 	///
@@ -231,8 +233,10 @@ pub mod pallet {
 			Staking::<T>::chill(RawOrigin::Signed(ctrl.clone()).into())?;
 			Staking::<T>::unbond(RawOrigin::Signed(ctrl).into(), ledger.total)?;
 
+			T::DepositCurrency::reserve(&ledger.stash, T::Deposit::get())?;
+
 			// enqueue them.
-			Queue::<T>::insert(ledger.stash, ());
+			Queue::<T>::insert(ledger.stash, T::Deposit::get());
 			Ok(())
 		}
 
@@ -315,18 +319,23 @@ pub mod pallet {
 				return T::DbWeight::get().reads(2)
 			}
 
-			let UnstakeRequest { stash, mut checked } = match Head::<T>::take().or_else(|| {
-				// NOTE: there is no order guarantees in `Queue`.
-				Queue::<T>::drain()
-					.map(|(stash, _)| UnstakeRequest { stash, checked: Default::default() })
-					.next()
-			}) {
-				None => {
-					// There's no `Head` and nothing in the `Queue`, nothing to do here.
-					return T::DbWeight::get().reads(4)
-				},
-				Some(head) => head,
-			};
+			let UnstakeRequest { stash, mut checked, deposit } =
+				match Head::<T>::take().or_else(|| {
+					// NOTE: there is no order guarantees in `Queue`.
+					Queue::<T>::drain()
+						.map(|(stash, deposit)| UnstakeRequest {
+							stash,
+							deposit: deposit.into(),
+							checked: Default::default(),
+						})
+						.next()
+				}) {
+					None => {
+						// There's no `Head` and nothing in the `Queue`, nothing to do here.
+						return T::DbWeight::get().reads(4)
+					},
+					Some(head) => head,
+				};
 
 			log!(
 				debug,
@@ -381,9 +390,12 @@ pub mod pallet {
 					num_slashing_spans,
 				);
 
+				T::DepositCurrency::unreserve(&stash, deposit.into());
+
 				log!(info, "unstaked {:?}, outcome: {:?}", stash, result);
 
 				Self::deposit_event(Event::<T>::Unstaked { stash, result });
+
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras remaining to be checked.
@@ -406,22 +418,18 @@ pub mod pallet {
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
 				// you are exposed.
 				if is_exposed {
-					let amount = T::SlashPerEra::get()
-						.saturating_mul(eras_checked.saturating_add(checked.len() as u32).into());
-					pallet_staking::slashing::do_slash::<T>(
-						&stash,
-						amount,
-						&mut Default::default(),
-						&mut Default::default(),
-						current_era,
-					);
-					log!(info, "slashed {:?} by {:?}", stash, amount);
-					Self::deposit_event(Event::<T>::Slashed { stash, amount });
+					T::DepositCurrency::slash_reserved(&stash, deposit.into());
+					log!(info, "slashed {:?} by {:?}", stash, deposit);
+					Self::deposit_event(Event::<T>::Slashed { stash, amount: deposit.into() });
 				} else {
 					// Not exposed in these eras.
 					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
 						Ok(_) => {
-							Head::<T>::put(UnstakeRequest { stash: stash.clone(), checked });
+							Head::<T>::put(UnstakeRequest {
+								stash: stash.clone(),
+								checked,
+								deposit,
+							});
 							Self::deposit_event(Event::<T>::Checking {
 								stash,
 								eras: unchecked_eras_to_check,
