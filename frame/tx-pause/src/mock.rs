@@ -88,10 +88,12 @@ pub struct MockUnpausableCalls;
 
 impl Contains<RuntimeCall> for MockUnpausableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
-		matches!(call,
-			RuntimeCall::TxPause(..) |
-			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {..})
-			)
+		match *call {
+			// Remark is used as a no-op call in the benchmarking
+			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {..}) => true,
+			_ => false,
+		}
 	}
 }
 
@@ -113,6 +115,7 @@ impl SortedMembers<u64> for UnpauseOrigin {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
 	type UnpausableCalls = MockUnpausableCalls;
