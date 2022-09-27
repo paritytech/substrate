@@ -47,16 +47,14 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
 	Verifier,
 };
-pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
-	config::{
-		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
-		TransportConfig,
-	},
+	config::{NetworkConfiguration, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId},
+	config::{
+		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
+	},
 	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
@@ -879,12 +877,8 @@ where
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
-			transactions_handler_executor: Box::new(|task| {
-				async_std::task::spawn(task);
-			}),
 			network_config,
 			chain: client.clone(),
-			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
 			fork_id,
 			import_queue,

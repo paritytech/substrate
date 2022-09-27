@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
+mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
-pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -109,7 +109,10 @@ use codec::{Encode, HasCompact};
 use frame_support::{
 	dispatch::{DispatchClass, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
-	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
+	traits::{
+		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
+		ReservableCurrency, Time,
+	},
 	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
@@ -126,6 +129,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
 	exec::{Frame, VarSizedKey as StorageKey},
+	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
@@ -225,7 +229,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(8);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -236,11 +240,12 @@ pub mod pallet {
 		/// The time implementation used to supply timestamps to contracts through `seal_now`.
 		type Time: Time;
 
-		/// The generator used to supply randomness to contracts through `seal_random`.
+		/// The generator used to supply randomness to contracts through `seal_random`
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId>
+			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -1036,7 +1041,7 @@ where
 		};
 		let schedule = T::Schedule::get();
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin,
+			origin.clone(),
 			dest,
 			&mut gas_meter,
 			&mut storage_meter,
@@ -1045,7 +1050,11 @@ where
 			data,
 			debug_message,
 		);
-		InternalCallOutput { result, gas_meter, storage_deposit: storage_meter.into_deposit() }
+		InternalCallOutput {
+			result,
+			gas_meter,
+			storage_deposit: storage_meter.into_deposit(&origin),
+		}
 	}
 
 	/// Internal function that does the actual instantiation.
@@ -1089,7 +1098,7 @@ where
 				value.saturating_add(extra_deposit),
 			)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin,
+				origin.clone(),
 				executable,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -1100,17 +1109,23 @@ where
 				debug_message,
 			);
 			storage_deposit = storage_meter
-				.into_deposit()
+				.into_deposit(&origin)
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 
+	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
 	fn deposit_event(topics: Vec<T::Hash>, event: Event<T>) {
 		<frame_system::Pallet<T>>::deposit_event_indexed(
 			&topics,
 			<T as Config>::RuntimeEvent::from(event).into(),
 		)
+	}
+
+	/// Return the existential deposit of [`Config::Currency`].
+	fn min_balance() -> BalanceOf<T> {
+		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 }

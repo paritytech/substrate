@@ -2771,7 +2771,7 @@ mod unbond {
 
 	#[test]
 	fn partial_unbond_era_tracking() {
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().ed(1).build_and_execute(|| {
 			// to make the depositor capable of withdrawing.
 			StakingMinBond::set(1);
 			MinCreateBond::<T>::set(1);
