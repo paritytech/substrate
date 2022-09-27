@@ -422,7 +422,7 @@ macro_rules! decl_tests {
 				);
 			});
 		}
-		
+
 		#[test]
 		fn balance_transfer_when_held_should_not_work() {
 			<$ext_builder>::default().build().execute_with(|| {
