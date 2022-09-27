@@ -61,7 +61,7 @@ where
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	fn follow(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let stream =
+		let stream_import =
 			self.client.import_notification_stream().filter_map(|notification| async move {
 				let event = if notification.is_new_best {
 					FollowEvent::BestBlockChanged(BestBlockChanged {
@@ -76,10 +76,19 @@ where
 				Some(event)
 			});
 
+		let stream_finalized =
+			self.client
+				.finality_notification_stream()
+				.filter_map(|notification| async move {
+					Some(FollowEvent::Finalized(Finalized { block_hash: notification.hash }))
+				});
+
+		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+
 		// TODO: client().runtime_version_at()
 
 		let fut = async move {
-			sink.pipe_from_stream(stream.boxed()).await;
+			sink.pipe_from_stream(merged.boxed()).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -105,8 +114,16 @@ pub struct BestBlockChanged<Hash> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Finalized<Hash> {
+	/// The hash of the finalized block.
+	pub block_hash: Hash,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[serde(tag = "event")]
 pub enum FollowEvent<Hash> {
 	NewBlock(NewBlock<Hash>),
 	BestBlockChanged(BestBlockChanged<Hash>),
+	Finalized(Finalized<Hash>),
 }
