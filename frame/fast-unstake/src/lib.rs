@@ -522,7 +522,8 @@ impl<T: Config> OnStakersUpdate<T::AccountId> for Pallet<T> {
 	}
 
 	fn on_finish_idle() {
-		// remove all new voters. They are now in use in other phases of generating a voter list.
+		// remove all new idle stakers. They are now in use in other phases of generating an active
+		// staker list for an era.
 		let _ = IdleNewStakers::<T>::clear(u32::max_value(), None);
 	}
 }
