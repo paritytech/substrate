@@ -71,7 +71,7 @@ pub mod v1 {
 			let referenda_count = v0::ReferendumInfoOf::<T>::iter().count();
 			log::info!(target: TARGET, "{} referenda will be migrated.", referenda_count);
 
-			Ok((referenda_count as u32, props_count as u32).encode())
+			Ok((props_count as u32, referenda_count as u32).encode())
 		}
 
 		#[allow(deprecated)]
