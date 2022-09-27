@@ -370,18 +370,20 @@ pub trait ElectionProviderBase {
 }
 
 pub trait BoundedElectionProvider: ElectionProviderBase {
-	/// The upper bound on election winners
+	/// The upper bound on election winners.
 	type MaxWinners: Get<u32>;
 
-	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
-	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
+	/// Elect a new set of winners, bounded by `MaxWinners` but an unbounded
+	/// number of backers per winner. [`Self::DataProvider`]. An implementation
+	/// could nonetheless impose its own custom limits.
 	///
-	/// The result is returned in a target major format, namely as *vector of supports*.
+	/// The result is returned in a target major format, namely as *vector of
+	/// supports*.
 	///
-	/// This should be implemented as a self-weighing function. The implementor should register its
-	/// appropriate weight at the end of execution with the system pallet directly.
-	fn elect(
-	) -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
+	/// This should be implemented as a self-weighing function. The implementor
+	/// should register its appropriate weight at the end of execution with the
+	/// system pallet directly.
+	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
 }
 
 pub trait ElectionProvider: ElectionProviderBase {
