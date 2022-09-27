@@ -31,7 +31,7 @@ use sp_runtime::{
 
 use frame_system::RawOrigin;
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
-use sp_npos_elections::{VoterListStatus, VoterListStatusInterface};
+use sp_npos_elections::{StakersStatusInterface, VoterListStatus};
 use sp_std::prelude::*;
 
 pub type AccountId = u128;
@@ -201,9 +201,9 @@ parameter_types! {
 	pub static SlashPerEra: u32 = 100;
 }
 
-pub struct MockVoterListStatusInterface;
+pub struct MockStakersStatusInterface;
 // Default for testing puposes
-impl VoterListStatusInterface for MockVoterListStatusInterface {
+impl StakersStatusInterface for MockStakersStatusInterface {
 	// hard coded, always idle for now.
 	// TODO: extend interface to toggle between idle and in use.
 	fn status() -> VoterListStatus {
@@ -214,7 +214,7 @@ impl VoterListStatusInterface for MockVoterListStatusInterface {
 impl fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type SlashPerEra = SlashPerEra;
-	type VoterListStatusInterface = MockVoterListStatusInterface;
+	type StakersStatusInterface = MockStakersStatusInterface;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type WeightInfo = ();
 }

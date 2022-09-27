@@ -590,7 +590,7 @@ impl<AccountId> OnStakersUpdate<AccountId> for () {
 /// Trait for getting whether the current vote list is inactive or being used to determine the next
 /// session. In NPoS, voters will be inactive in the `Phase::Off` phase of an election, and actively
 /// being used in all the other stages.
-pub trait VoterListStatusInterface {
+pub trait StakersStatusInterface {
 	/// The current status of voter list usage.
 	fn status() -> VoterListStatus;
 }

@@ -88,7 +88,7 @@ pub mod pallet {
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_nomination_pools::PoolId;
 	use pallet_staking::Pallet as Staking;
-	use sp_npos_elections::VoterListStatusInterface;
+	use sp_npos_elections::StakersStatusInterface;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		DispatchResult,
@@ -134,7 +134,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Information of the current voter list status.
-		type VoterListStatusInterface: VoterListStatusInterface;
+		type StakersStatusInterface: StakersStatusInterface;
 	}
 
 	/// The current "head of the queue" being unstaked.
@@ -292,7 +292,7 @@ pub mod pallet {
 		pub fn immediate_unstake(origin: OriginFor<T>) -> DispatchResult {
 			todo!("Implement function");
 			// TODO: check if in IdleNewVoters
-			// TODO: check VoterListStatusInterface is Idle still.
+			// TODO: check StakersStatusInterface is Idle still.
 			// TODO: rm from IdleNewVoters
 			// TODO: go through unstake logic.
 		}

@@ -247,7 +247,7 @@ use sp_arithmetic::{
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, OnStakersUpdate, Supports,
-	VoteWeight, VoterListStatus, VoterListStatusInterface,
+	VoteWeight, VoterListStatus, StakersStatusInterface,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -1623,7 +1623,7 @@ pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 }
 
 /// Provide the current voter list status of this election
-impl<T: Config> VoterListStatusInterface for Pallet<T> {
+impl<T: Config> StakersStatusInterface for Pallet<T> {
 	/// the voter list is idle in `Phase::Off`, and in use otherwise.
 	fn status() -> VoterListStatus {
 		match CurrentPhase::<T>::get() {
