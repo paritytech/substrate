@@ -50,7 +50,7 @@ fn register_insufficient_funds_fails() {
 	use pallet_balances::Error as BalancesError;
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
-		<T as Config>::DepositCurrency::make_free_balance_be(&1, 0);
+		<T as Config>::DepositCurrency::make_free_balance_be(&1, 3);
 
 		// Controller account registers for fast unstake.
 		assert_err!(
