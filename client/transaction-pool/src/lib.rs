@@ -662,7 +662,6 @@ where
 				metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
 			});
 
-			// is Some(tree_route) == (enacted.len != 0 || retracted.len != 0)
 			if let true = next_action.resubmit {
 				let mut resubmit_transactions = Vec::new();
 
@@ -841,7 +840,8 @@ where
 			ChainEvent::Finalized { hash, .. } => (hash, true),
 		};
 
-		//compute t
+		// compute actual tree route from best_block to notified block, and use it instead of
+		// tree_route provided with event
 		let tree_route = if let Some(best_block) = self.best_block {
 			Some(Arc::new(self.api.tree_route(best_block, *hash).unwrap()))
 		} else {
@@ -872,7 +872,7 @@ where
 		let best_block = &mut self.best_block;
 		log::trace!(target: "txpool", "resolve hash:{hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{finalized_block:?}");
 
-		//block was already finalized
+		// block was already finalized
 		if let Some(finalized_block) = *finalized_block {
 			if finalized_block == hash {
 				log::trace!(target:"txpool", "handle_enactment: block already finalized: exit 3b");
@@ -915,7 +915,7 @@ where
 		if finalized {
 			*finalized_block = Some(hash);
 
-			//check if the recent best_block was retracted
+			// check if the recent best_block was retracted
 			let best_block_retracted = if let Some(best_block) = *best_block {
 				match tree_route {
 					Some(tr) => tr.retracted().iter().map(|x| x.hash).any(|x| x == best_block),
@@ -925,7 +925,7 @@ where
 				false
 			};
 
-			//...if it was retracted, or was not set, newly finalized block becomes new best_block
+			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
 			if best_block_retracted || best_block.is_none() {
 				*best_block = Some(hash)
 			}
