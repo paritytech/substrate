@@ -167,6 +167,7 @@ pub trait StakersStatusInterface {
 }
 
 /// The variants of whether a stakers list is being used or not.
+#[derive(PartialEq, Eq)]
 pub enum StakersStatus {
 	Idle,
 	InUse,
