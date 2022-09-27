@@ -158,9 +158,9 @@ impl<AccountId> OnStakersUpdate<AccountId> for () {
 	}
 }
 
-/// Trait for getting whether the current stakers list is inactive or being used to determine the next
-/// session. In NPoS, stakers list will be inactive in the `Phase::Off` phase of an election, and actively
-/// being used in all the other stages.
+/// Trait for getting whether the current stakers list is inactive or being used to determine the
+/// next session. In NPoS, stakers list will be inactive in the `Phase::Off` phase of an election,
+/// and actively being used in all the other stages.
 pub trait StakersStatusInterface {
 	/// The current status of stakers list usage.
 	fn status() -> StakersStatus;
