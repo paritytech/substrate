@@ -181,7 +181,7 @@ pub mod pallet {
 		NotQueued,
 		/// The provided un-staker is already in Head, and cannot deregister.
 		AlreadyHead,
-		/// The call is not allowed at this point because the pallet is not active. 
+		/// The call is not allowed at this point because the pallet is not active.
 		CallNotAllowed,
 	}
 
