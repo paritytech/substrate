@@ -19,9 +19,7 @@
 
 use super::*;
 use crate::{mock::*, types::*, weights::WeightInfo, Event};
-use frame_support::{
-	assert_err, assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency,
-};
+use frame_support::{assert_noop, assert_ok, bounded_vec, pallet_prelude::*, traits::Currency};
 use pallet_staking::{CurrentEra, IndividualExposure, RewardDestination};
 
 use sp_runtime::traits::BadOrigin;
@@ -53,7 +51,7 @@ fn register_insufficient_funds_fails() {
 		<T as Config>::DepositCurrency::make_free_balance_be(&1, 3);
 
 		// Controller account registers for fast unstake.
-		assert_err!(
+		assert_noop!(
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
 			BalancesError::<T, _>::InsufficientBalance,
 		);
@@ -64,7 +62,7 @@ fn register_insufficient_funds_fails() {
 }
 
 #[test]
-fn register_eras_0_fails() {
+fn register_disabled_fails() {
 	ExtBuilder::default().build_and_execute(|| {
 		assert_noop!(
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
@@ -156,8 +154,11 @@ fn deregister_works() {
 }
 
 #[test]
-fn deregister_eras_0_fails() {
+fn deregister_disabled_fails() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
+		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+		ErasToCheckPerBlock::<T>::put(0);
 		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::CallNotAllowed);
 	});
 }

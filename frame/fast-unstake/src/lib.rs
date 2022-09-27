@@ -81,7 +81,10 @@ pub mod pallet {
 	use super::*;
 	use crate::types::*;
 	use frame_election_provider_support::ElectionProvider;
-	use frame_support::{pallet_prelude::*, traits::ReservableCurrency};
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{Defensive, ReservableCurrency},
+	};
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_staking::Pallet as Staking;
 	use sp_runtime::{
@@ -266,7 +269,7 @@ pub mod pallet {
 			);
 			let deposit = Queue::<T>::take(stash.clone());
 
-			if let Some(deposit) = deposit {
+			if let Some(deposit) = deposit.defensive() {
 				let remaining = T::DepositCurrency::unreserve(&stash, deposit);
 				if !remaining.is_zero() {
 					frame_support::defensive!("`not enough balance to unreserve`");
