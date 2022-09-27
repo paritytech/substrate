@@ -110,11 +110,11 @@ fn on_idle_full_block<T: Config>() {
 benchmarks! {
 	// on_idle, we we don't check anyone, but fully unbond and move them to another pool.
 	on_idle_unstake {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 		));
-		ErasToCheckPerBlock::<T>::put(1);
 
 		// run on_idle once. This will check era 0.
 		assert_eq!(Head::<T>::get(), None);
