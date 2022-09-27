@@ -653,39 +653,36 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
-		/// \[era_index, validator_payout, remainder\]
-		EraPaid(EraIndex, BalanceOf<T>, BalanceOf<T>),
-		/// The nominator has been rewarded by this amount. \[stash, amount\]
-		Rewarded(T::AccountId, BalanceOf<T>),
+		EraPaid { era_index: EraIndex, validator_payout: BalanceOf<T>, remainder: BalanceOf<T> },
+		/// The nominator has been rewarded by this amount.
+		Rewarded { stash: T::AccountId, amount: BalanceOf<T> },
 		/// One staker (and potentially its nominators) has been slashed by the given amount.
-		/// \[staker, amount\]
-		Slashed(T::AccountId, BalanceOf<T>),
+		Slashed { staker: T::AccountId, amount: BalanceOf<T> },
 		/// An old slashing report from a prior era was discarded because it could
-		/// not be processed. \[session_index\]
-		OldSlashingReportDiscarded(SessionIndex),
+		/// not be processed.
+		OldSlashingReportDiscarded { session_index: SessionIndex },
 		/// A new set of stakers was elected.
 		StakersElected,
 		/// An account has bonded this amount. \[stash, amount\]
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
 		/// it will not be emitted for staking rewards when they are added to stake.
-		Bonded(T::AccountId, BalanceOf<T>),
-		/// An account has unbonded this amount. \[stash, amount\]
-		Unbonded(T::AccountId, BalanceOf<T>),
+		Bonded { stash: T::AccountId, amount: BalanceOf<T> },
+		/// An account has unbonded this amount.
+		Unbonded { stash: T::AccountId, amount: BalanceOf<T> },
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
-		/// from the unlocking queue. \[stash, amount\]
-		Withdrawn(T::AccountId, BalanceOf<T>),
-		/// A nominator has been kicked from a validator. \[nominator, stash\]
-		Kicked(T::AccountId, T::AccountId),
+		/// from the unlocking queue.
+		Withdrawn { stash: T::AccountId, amount: BalanceOf<T> },
+		/// A nominator has been kicked from a validator.
+		Kicked { nominator: T::AccountId, stash: T::AccountId },
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
 		/// An account has stopped participating as either a validator or nominator.
-		/// \[stash\]
-		Chilled(T::AccountId),
-		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
-		PayoutStarted(EraIndex, T::AccountId),
+		Chilled { stash: T::AccountId },
+		/// The stakers' rewards are getting paid.
+		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
-		ValidatorPrefsSet(T::AccountId, ValidatorPrefs),
+		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
 	}
 
 	#[pallet::error]
@@ -850,7 +847,7 @@ pub mod pallet {
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-			Self::deposit_event(Event::<T>::Bonded(stash.clone(), value));
+			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
 			let item = StakingLedger {
 				stash,
 				total: value,
@@ -911,7 +908,7 @@ pub mod pallet {
 						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
 			}
 			Ok(())
 		}
@@ -994,7 +991,7 @@ pub mod pallet {
 						.defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
+				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
 			Ok(())
 		}
@@ -1050,7 +1047,7 @@ pub mod pallet {
 			if ledger.total < old_total {
 				// Already checked that this won't overflow by entry condition.
 				let value = old_total - ledger.total;
-				Self::deposit_event(Event::<T>::Withdrawn(stash, value));
+				Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 			}
 
 			Ok(post_info_weight.into())
@@ -1088,7 +1085,7 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs.clone());
-			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash, prefs });
 
 			Ok(())
 		}
@@ -1471,7 +1468,10 @@ pub mod pallet {
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), rebonded_value));
+			Self::deposit_event(Event::<T>::Bonded {
+				stash: ledger.stash.clone(),
+				amount: rebonded_value,
+			});
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
@@ -1546,10 +1546,10 @@ pub mod pallet {
 					if let Some(ref mut nom) = maybe_nom {
 						if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
 							nom.targets.swap_remove(pos);
-							Self::deposit_event(Event::<T>::Kicked(
-								nom_stash.clone(),
-								stash.clone(),
-							));
+							Self::deposit_event(Event::<T>::Kicked {
+								nominator: nom_stash.clone(),
+								stash: stash.clone(),
+							});
 						}
 					}
 				});

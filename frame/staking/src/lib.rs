@@ -953,7 +953,9 @@ where
 		if bonded_eras.first().filter(|(_, start)| offence_session >= *start).is_some() {
 			R::report_offence(reporters, offence)
 		} else {
-			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded(offence_session));
+			<Pallet<T>>::deposit_event(Event::<T>::OldSlashingReportDiscarded {
+				session_index: offence_session,
+			});
 			Ok(())
 		}
 	}

@@ -303,7 +303,11 @@ fn rewards_should_work() {
 		assert_eq!(mock::RewardRemainderUnbalanced::get(), maximum_payout - total_payout_0,);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
+			Event::EraPaid {
+				era_index: 0,
+				validator_payout: total_payout_0,
+				remainder: maximum_payout - total_payout_0
+			}
 		);
 		mock::make_all_reward_payment(0);
 
@@ -341,7 +345,11 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPaid(1, total_payout_1, maximum_payout - total_payout_1)
+			Event::EraPaid {
+				era_index: 1,
+				validator_payout: total_payout_1,
+				remainder: maximum_payout - total_payout_1
+			}
 		);
 		mock::make_all_reward_payment(1);
 
@@ -1645,7 +1653,7 @@ fn rebond_emits_right_value_in_event() {
 			})
 		);
 		// Event emitted should be correct
-		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 100));
+		assert_eq!(*staking_events().last().unwrap(), Event::Bonded { stash: 11, amount: 100 });
 
 		// Re-bond way more than available
 		Staking::rebond(RuntimeOrigin::signed(10), 100_000).unwrap();
@@ -1660,7 +1668,7 @@ fn rebond_emits_right_value_in_event() {
 			})
 		);
 		// Event emitted should be correct, only 800
-		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 800));
+		assert_eq!(*staking_events().last().unwrap(), Event::Bonded { stash: 11, amount: 800 });
 	});
 }
 
@@ -2870,9 +2878,9 @@ fn deferred_slashes_are_deferred() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(3, 11075, 33225),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 }
 			]
 		);
 	})
@@ -2901,9 +2909,9 @@ fn retroactive_deferred_slashes_two_eras_before() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(3, 7100, 21300),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				Event::EraPaid { era_index: 3, validator_payout: 7100, remainder: 21300 },
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 },
 			]
 		);
 	})
@@ -2934,7 +2942,10 @@ fn retroactive_deferred_slashes_one_before() {
 		mock::start_active_era(4);
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![Event::StakersElected, Event::EraPaid(3, 11075, 33225)]
+			vec![
+				Event::StakersElected,
+				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 }
+			]
 		);
 
 		assert_eq!(Staking::ledger(10).unwrap().total, 1000);
@@ -2944,9 +2955,9 @@ fn retroactive_deferred_slashes_one_before() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(4, 11075, 33225),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				Event::EraPaid { era_index: 4, validator_payout: 11075, remainder: 33225 },
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 }
 			]
 		);
 
@@ -3090,9 +3101,9 @@ fn remove_deferred() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(3, 11075, 33225),
-				Event::Slashed(11, 50),
-				Event::Slashed(101, 7)
+				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
+				Event::Slashed { staker: 11, amount: 50 },
+				Event::Slashed { staker: 101, amount: 7 }
 			]
 		);
 
@@ -4057,7 +4068,7 @@ fn offences_weight_calculated_correctly() {
 				&one_offender,
 				&[Perbill::from_percent(50)],
 				0,
-				DisableStrategy::WhenSlashed
+				DisableStrategy::WhenSlashed{}
 			),
 			one_offence_unapplied_weight
 		);
@@ -4955,10 +4966,10 @@ fn min_commission_works() {
 		// event emitted should be correct
 		assert_eq!(
 			*staking_events().last().unwrap(),
-			Event::ValidatorPrefsSet(
-				11,
-				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
-			)
+			Event::ValidatorPrefsSet {
+				stash: 11,
+				prefs: ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			}
 		);
 
 		assert_ok!(Staking::set_staking_configs(
