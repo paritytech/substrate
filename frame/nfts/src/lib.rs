@@ -316,10 +316,22 @@ pub mod pallet {
 	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, OptionQuery>;
 
-	/// Maps a unique collection id to it's config.
 	#[pallet::storage]
+	/// Config of a collection.
 	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfig>;
+		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfig, OptionQuery>;
+
+	#[pallet::storage]
+	/// Config of an item.
+	pub(super) type ItemConfigOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::ItemId,
+		ItemConfig,
+		OptionQuery,
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -642,11 +654,12 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			owner: AccountIdLookupOf<T>,
+			config: ItemConfig,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, item, owner, |collection_details| {
+			Self::do_mint(collection, item, owner, config, |collection_details| {
 				ensure!(collection_details.issuer == origin, Error::<T, I>::NoPermission);
 				Ok(())
 			})
@@ -811,14 +824,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
 
-			details.is_frozen = true;
-			Item::<T, I>::insert(&collection, &item, &details);
+			let mut settings = Self::get_item_settings(&collection, &item)?;
+			if !settings.contains(ItemSetting::NonTransferable) {
+				settings.insert(ItemSetting::NonTransferable);
+			}
+			ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
 
 			Self::deposit_event(Event::<T, I>::Frozen { collection, item });
 			Ok(())
@@ -842,14 +856,15 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			ensure!(collection_details.admin == origin, Error::<T, I>::NoPermission);
+			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
 
-			details.is_frozen = false;
-			Item::<T, I>::insert(&collection, &item, &details);
+			let mut settings = Self::get_item_settings(&collection, &item)?;
+			if settings.contains(ItemSetting::NonTransferable) {
+				settings.remove(ItemSetting::NonTransferable);
+			}
+			ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
 
 			Self::deposit_event(Event::<T, I>::Thawed { collection, item });
 			Ok(())
@@ -1251,10 +1266,11 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let settings = Self::get_collection_settings(&collection)?;
+			let collection_settings = Self::get_collection_settings(&collection)?;
 			let maybe_is_frozen = match maybe_item {
-				None => Some(settings.contains(CollectionSetting::LockedAttributes)),
-				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
+				None => Ok(collection_settings.contains(CollectionSetting::LockedAttributes)),
+				Some(item) => Self::get_item_settings(&collection, &item)
+					.map(|v| v.contains(ItemSetting::NonTransferable)),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 
@@ -1265,7 +1281,9 @@ pub mod pallet {
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if !settings.contains(CollectionSetting::FreeHolding) && maybe_check_owner.is_some() {
+			if !collection_settings.contains(CollectionSetting::FreeHolding) &&
+				maybe_check_owner.is_some()
+			{
 				deposit = T::DepositPerByte::get()
 					.saturating_mul(((key.len() + value.len()) as u32).into())
 					.saturating_add(T::AttributeDepositBase::get());
@@ -1318,10 +1336,11 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let settings = Self::get_collection_settings(&collection)?;
+			let collection_settings = Self::get_collection_settings(&collection)?;
 			let maybe_is_frozen = match maybe_item {
-				None => Some(settings.contains(CollectionSetting::LockedAttributes)),
-				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
+				None => Ok(collection_settings.contains(CollectionSetting::LockedAttributes)),
+				Some(item) => Self::get_item_settings(&collection, &item)
+					.map(|v| v.contains(ItemSetting::NonTransferable)),
 			};
 			ensure!(!maybe_is_frozen.unwrap_or(false), Error::<T, I>::Frozen);
 

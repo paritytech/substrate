@@ -27,11 +27,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(config.values())
 	}
 
+	pub fn get_item_settings(
+		collection_id: &T::CollectionId,
+		item_id: &T::ItemId,
+	) -> Result<ItemSettings, DispatchError> {
+		let config = ItemConfigOf::<T, I>::get(&collection_id, &item_id)
+			.ok_or(Error::<T, I>::UnknownItem)?;
+		Ok(config.values())
+	}
+
 	pub fn is_collection_setting_disabled(
 		collection_id: &T::CollectionId,
 		setting: CollectionSetting,
 	) -> Result<(bool, CollectionSettings), DispatchError> {
 		let settings = Self::get_collection_settings(&collection_id)?;
+		Ok((!settings.contains(setting), settings))
+	}
+
+	pub fn is_item_setting_disabled(
+		collection_id: &T::CollectionId,
+		item_id: &T::ItemId,
+		setting: ItemSetting,
+	) -> Result<(bool, ItemSettings), DispatchError> {
+		let settings = Self::get_item_settings(&collection_id, &item_id)?;
 		Ok((!settings.contains(setting), settings))
 	}
 

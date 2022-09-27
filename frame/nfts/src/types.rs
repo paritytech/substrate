@@ -94,8 +94,6 @@ pub struct ItemDetails<AccountId, DepositBalance, Approvals> {
 	pub(super) owner: AccountId,
 	/// The approved transferrer of this item, if one is set.
 	pub(super) approvals: Approvals,
-	/// Whether the item can be transferred or not.
-	pub(super) is_frozen: bool,
 	/// The amount held in the pallet's default account for this item. Free-hold items will have
 	/// this as zero.
 	pub(super) deposit: DepositBalance,
@@ -201,6 +199,65 @@ impl TypeInfo for CollectionConfig {
 			.path(Path::new("BitFlags", module_path!()))
 			.type_params(vec![TypeParameter::new("T", Some(meta_type::<CollectionSetting>()))])
 			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("CollectionSetting")))
+	}
+}
+
+// Support for up to 64 user-enabled features on an item.
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum ItemSetting {
+	/// Disallow transferring this item.
+	NonTransferable,
+	/// Disallow to modify metadata of this item.
+	LockedMetadata,
+	/// Disallow to modify attributes of this item.
+	LockedAttributes,
+}
+
+pub(super) type ItemSettings = BitFlags<ItemSetting>;
+
+/// Wrapper type for `ItemSettings` that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct ItemConfig(pub ItemSettings);
+
+impl ItemConfig {
+	pub fn empty() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+
+	pub fn values(&self) -> ItemSettings {
+		self.0
+	}
+}
+
+impl MaxEncodedLen for ItemConfig {
+	fn max_encoded_len() -> usize {
+		u64::max_encoded_len()
+	}
+}
+
+impl Encode for ItemConfig {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.bits().using_encoded(f)
+	}
+}
+impl EncodeLike for ItemConfig {}
+impl Decode for ItemConfig {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let field = u64::decode(input)?;
+		Ok(Self(ItemSettings::from_bits(field as u64).map_err(|_| "invalid value")?))
+	}
+}
+
+impl TypeInfo for ItemConfig {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("BitFlags", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<ItemSetting>()))])
+			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("ItemSetting")))
 	}
 }
 

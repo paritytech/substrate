@@ -159,7 +159,7 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 
 /// Trait for providing an interface for multiple collections of NFT-like items which may be
 /// minted, burned and/or have attributes set on them.
-pub trait Mutate<AccountId>: Inspect<AccountId> {
+pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	/// Mint some `item` of `collection` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
@@ -167,6 +167,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		_collection: &Self::CollectionId,
 		_item: &Self::ItemId,
 		_who: &AccountId,
+		_config: &ItemConfig,
 	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}

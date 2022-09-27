@@ -44,9 +44,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)?;
 		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
 
+		let (action_allowed, _) =
+			Self::is_item_setting_disabled(&collection, &item, ItemSetting::NonTransferable)?;
+		ensure!(action_allowed, Error::<T, I>::Locked);
+
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
-		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 		with_details(&collection_details, &mut details)?;
 
 		Account::<T, I>::remove((&details.owner, &collection, &item));
@@ -140,6 +143,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
 			CollectionConfigOf::<T, I>::remove(&collection);
+			#[allow(deprecated)]
+			ItemConfigOf::<T, I>::remove_prefix(&collection, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
@@ -155,6 +160,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		owner: T::AccountId,
+		config: ItemConfig,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
@@ -186,12 +192,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				let details = ItemDetails {
-					owner,
-					approvals: ApprovalsOf::<T, I>::default(),
-					is_frozen: false,
-					deposit,
-				};
+				ItemConfigOf::<T, I>::insert(&collection, &item, config);
+				let details =
+					ItemDetails { owner, approvals: ApprovalsOf::<T, I>::default(), deposit };
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},
@@ -226,6 +229,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Item::<T, I>::remove(&collection, &item);
 		Account::<T, I>::remove((&owner, &collection, &item));
 		ItemPriceOf::<T, I>::remove(&collection, &item);
+		ItemConfigOf::<T, I>::remove(&collection, &item);
 
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
@@ -246,6 +250,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CollectionSetting::NonTransferableItems,
 		)?;
 		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
+
+		let (action_allowed, _) =
+			Self::is_item_setting_disabled(&collection, &item, ItemSetting::NonTransferable)?;
+		ensure!(action_allowed, Error::<T, I>::Locked);
 
 		if let Some(ref price) = price {
 			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
