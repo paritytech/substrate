@@ -99,7 +99,7 @@ pub struct StorageParams {
 
 	/// The `StateVersion` to use. Substrate `--dev` should use `V1` and Polkadot `V0`.
 	/// Selecting the wrong version can corrupt the DB.
-	#[clap(long, possible_values = ["0", "1"])]
+	#[clap(long, value_parser = ["0", "1"])]
 	pub state_version: u8,
 
 	/// Trie cache size in bytes.

@@ -18,7 +18,7 @@
 
 //! Definitions of [`ArgEnum`] types.
 
-use clap::ArgEnum;
+use clap::{ArgEnum, PossibleValue};
 
 /// The instantiation strategy to use in compiled mode.
 #[derive(Debug, Clone, Copy, ArgEnum)]
@@ -59,20 +59,22 @@ pub enum WasmExecutionMethod {
 	Compiled,
 }
 
-impl std::fmt::Display for WasmExecutionMethod {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Interpreted => write!(f, "Interpreted"),
-			Self::Compiled => write!(f, "Compiled"),
+const INTERPRETED_NAME: &str = "interpreted-i-know-what-i-do";
+
+impl clap::ValueEnum for WasmExecutionMethod {
+	/// All possible argument values, in display order.
+	fn value_variants<'a>() -> &'a [Self] {
+		let variants = &[Self::Interpreted, Self::Compiled];
+		if cfg!(feature = "wasmtime") {
+			variants
+		} else {
+			&variants[..1]
 		}
 	}
-}
 
-impl std::str::FromStr for WasmExecutionMethod {
-	type Err = String;
-
-	fn from_str(s: &str) -> Result<Self, String> {
-		if s.eq_ignore_ascii_case("interpreted-i-know-what-i-do") {
+	/// Parse an argument into `Self`.
+	fn from_str(s: &str, _: bool) -> Result<Self, String> {
+		if s.eq_ignore_ascii_case(INTERPRETED_NAME) {
 			Ok(Self::Interpreted)
 		} else if s.eq_ignore_ascii_case("compiled") {
 			#[cfg(feature = "wasmtime")]
@@ -84,19 +86,27 @@ impl std::str::FromStr for WasmExecutionMethod {
 				Err("`Compiled` variant requires the `wasmtime` feature to be enabled".into())
 			}
 		} else {
-			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
+			Err(format!("Unknown variant `{}`", s))
 		}
+	}
+
+	/// The canonical argument value.
+	///
+	/// The value is `None` for skipped variants.
+	fn to_possible_value<'a>(&self) -> Option<PossibleValue<'a>> {
+		Some(match self {
+			#[cfg(feature = "wasmtime")]
+			WasmExecutionMethod::Compiled => PossibleValue::new("compiled"),
+			WasmExecutionMethod::Interpreted => PossibleValue::new(INTERPRETED_NAME),
+		})
 	}
 }
 
-impl WasmExecutionMethod {
-	/// Returns all the variants of this enum to be shown in the cli.
-	pub fn variants() -> &'static [&'static str] {
-		let variants = &["interpreted-i-know-what-i-do", "compiled"];
-		if cfg!(feature = "wasmtime") {
-			variants
-		} else {
-			&variants[..1]
+impl std::fmt::Display for WasmExecutionMethod {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Interpreted => write!(f, "Interpreted"),
+			Self::Compiled => write!(f, "Compiled"),
 		}
 	}
 }
@@ -107,6 +117,7 @@ pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
 	_instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
+	println!("execution method: {:?}", execution_method);
 	match execution_method {
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		#[cfg(feature = "wasmtime")]
@@ -235,7 +246,8 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 }
 
 /// Database backend
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, clap::ValueEnum)]
+#[clap(rename_all = "lower")]
 pub enum Database {
 	/// Facebooks RocksDB
 	#[cfg(feature = "rocksdb")]
@@ -246,27 +258,8 @@ pub enum Database {
 	/// instance of ParityDb
 	Auto,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
+	#[clap(alias = "paritydb-experimental")]
 	ParityDbDeprecated,
-}
-
-impl std::str::FromStr for Database {
-	type Err = String;
-
-	fn from_str(s: &str) -> Result<Self, String> {
-		#[cfg(feature = "rocksdb")]
-		if s.eq_ignore_ascii_case("rocksdb") {
-			return Ok(Self::RocksDb)
-		}
-		if s.eq_ignore_ascii_case("paritydb-experimental") {
-			return Ok(Self::ParityDbDeprecated)
-		} else if s.eq_ignore_ascii_case("paritydb") {
-			return Ok(Self::ParityDb)
-		} else if s.eq_ignore_ascii_case("auto") {
-			Ok(Self::Auto)
-		} else {
-			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
-		}
-	}
 }
 
 impl Database {

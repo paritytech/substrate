@@ -27,7 +27,7 @@ mod transaction_pool_params;
 
 use crate::arg_enums::{CryptoScheme, OutputType};
 use clap::Args;
-use sp_core::crypto::Ss58AddressFormat;
+use sp_core::crypto::{Ss58AddressFormat, Ss58AddressFormatRegistry};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -39,6 +39,20 @@ pub use crate::params::{
 	node_key_params::*, offchain_worker_params::*, pruning_params::*, shared_params::*,
 	transaction_pool_params::*,
 };
+
+#[derive(Clone, Debug)]
+struct FormatRegistryWrapper(Ss58AddressFormatRegistry);
+
+/// Parse Ss58AddressFormat
+pub fn parse_ss58_address_format(x: &str) -> Result<Ss58AddressFormat, String> {
+	match Ss58AddressFormatRegistry::try_from(x) {
+		Ok(format_registry) => Ok(format_registry.into()),
+		Err(e) => Err(format!(
+			"Unable to parse variant. Known variants: {:?}",
+			Ss58AddressFormat::all_names()
+		)),
+	}
+}
 
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a
 /// decimal.
@@ -138,9 +152,8 @@ pub struct NetworkSchemeFlag {
 		short = 'n',
 		long,
 		value_name = "NETWORK",
-		possible_values = &Ss58AddressFormat::all_names()[..],
 		ignore_case = true,
-		parse(try_from_str = Ss58AddressFormat::try_from),
+		value_parser = parse_ss58_address_format,
 	)]
 	pub network: Option<Ss58AddressFormat>,
 }

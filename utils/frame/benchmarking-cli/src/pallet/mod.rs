@@ -133,7 +133,7 @@ pub struct PalletCmd {
 	#[clap(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = WasmExecutionMethod::variants(),
+		value_enum,
 		ignore_case = true,
 		default_value = DEFAULT_WASM_EXECUTION_METHOD,
 	)]

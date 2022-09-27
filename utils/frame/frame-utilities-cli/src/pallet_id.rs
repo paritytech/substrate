@@ -37,8 +37,7 @@ pub struct PalletIdCmd {
 	#[clap(
 		long,
 		value_name = "NETWORK",
-		possible_values = &Ss58AddressFormat::all_names()[..],
-		parse(try_from_str = Ss58AddressFormat::try_from),
+		value_parser = sc_cli::parse_ss58_address_format,
 		ignore_case = true,
 	)]
 	pub network: Option<Ss58AddressFormat>,
