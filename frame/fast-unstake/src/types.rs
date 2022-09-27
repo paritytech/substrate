@@ -17,14 +17,12 @@
 
 //! Types used in the Fast Unstake pallet.
 
-use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{Currency, Get, IsSubType},
+	traits::{Currency, Get},
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
-use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
 use sp_staking::EraIndex;
 use sp_std::{fmt::Debug, prelude::*};
 
