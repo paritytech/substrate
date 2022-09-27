@@ -47,7 +47,7 @@ pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
 	fn start_destroy() -> Weight;
-	fn destroy_accounts(m: u32) -> Weight;
+	fn destroy_accounts(c: u32) -> Weight;
 	fn destroy_approvals(m: u32) -> Weight;
 	fn finish_destroy() -> Weight;
 	fn mint() -> Weight;
@@ -88,27 +88,45 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 
+	// Storage: Assets Asset (r:1 w:1)
 	fn start_destroy() -> Weight {
-		Weight::from_ref_time(15_473_000 as u64)
+		Weight::from_ref_time(31_000_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 
-	fn destroy_accounts(_m: u32) -> Weight {
-		Weight::from_ref_time(15_473_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(1 as u64))
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Account (r:1 w:0)
+	// Storage: System Account (r:20 w:20)
+	/// The range of component `c` is `[0, 1000]`.
+	fn destroy_accounts(c: u32, ) -> Weight {
+		Weight::from_ref_time(37_000_000 as u64)
+			// Standard Error: 19_301
+			.saturating_add(Weight::from_ref_time(25_467_908 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().reads((2 as u64).saturating_mul(c as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((2 as u64).saturating_mul(c as u64)))
 	}
 
-	fn destroy_approvals(_m: u32) -> Weight {
-		Weight::from_ref_time(15_473_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Approvals (r:1 w:0)
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy_approvals(a: u32, ) -> Weight {
+		Weight::from_ref_time(39_000_000 as u64)
+			// Standard Error: 14_298
+			.saturating_add(Weight::from_ref_time(27_632_144 as u64).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(a as u64)))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(a as u64)))
 	}
 
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Metadata (r:1 w:0)
 	fn finish_destroy() -> Weight {
-	    	Weight::from_ref_time(15_473_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
+		Weight::from_ref_time(33_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 
@@ -276,27 +294,45 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 
+	// Storage: Assets Asset (r:1 w:1)
 	fn start_destroy() -> Weight {
-		Weight::from_ref_time(15_473_000 as u64)
+		Weight::from_ref_time(31_000_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 
-	fn destroy_accounts(_m: u32) -> Weight {
-		Weight::from_ref_time(15_473_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Account (r:1 w:0)
+	// Storage: System Account (r:20 w:20)
+	/// The range of component `c` is `[0, 1000]`.
+	fn destroy_accounts(c: u32, ) -> Weight {
+		Weight::from_ref_time(37_000_000 as u64)
+			// Standard Error: 19_301
+			.saturating_add(Weight::from_ref_time(25_467_908 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().reads((2 as u64).saturating_mul(c as u64)))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((2 as u64).saturating_mul(c as u64)))
 	}
 
-	fn destroy_approvals(_m: u32) -> Weight {
-		Weight::from_ref_time(15_473_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Approvals (r:1 w:0)
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy_approvals(a: u32, ) -> Weight {
+		Weight::from_ref_time(39_000_000 as u64)
+			// Standard Error: 14_298
+			.saturating_add(Weight::from_ref_time(27_632_144 as u64).saturating_mul(a as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(a as u64)))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(a as u64)))
 	}
 
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Metadata (r:1 w:0)
 	fn finish_destroy() -> Weight {
-	    	Weight::from_ref_time(15_473_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+		Weight::from_ref_time(33_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 

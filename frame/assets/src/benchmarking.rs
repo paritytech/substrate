@@ -196,10 +196,8 @@ benchmarks_instance_pallet! {
 	}
 
 	destroy_approvals {
-		let c in 0 .. T::RemoveKeysLimit::get();
 		let a in 0 .. T::RemoveKeysLimit::get();
 		let (caller, _) = create_default_minted_asset::<T, I>(true, 100u32.into());
-		add_consumers::<T, I>(caller.clone(), c);
 		add_approvals::<T, I>(caller.clone(), a);
 		Assets::<T, I>::freeze_asset(
 			SystemOrigin::Signed(caller.clone()).into(),
