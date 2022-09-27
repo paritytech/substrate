@@ -133,8 +133,8 @@ pub trait MmrApi<BlockHash> {
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
 	/// a MMR proof for the set of leaves at the given `leaf_indices` with MMR fixed to the state
-	/// with exactly `leaves_count` leaves. `leaves_count` must be larger than all `leaf_indices` for
-	/// the function to succeed.
+	/// with exactly `leaves_count` leaves. `leaves_count` must be larger than all `leaf_indices`
+	/// for the function to succeed.
 	///
 	/// Optionally, a block hash at which the runtime should be queried can be specified.
 	/// Note that specifying the block hash isn't super-useful here, unless you're generating
