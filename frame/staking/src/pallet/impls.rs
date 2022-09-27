@@ -182,7 +182,7 @@ impl<T: Config> Pallet<T> {
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
 		Self::deposit_event(Event::<T>::PayoutStarted {
-			era_indx: era,
+			era_index: era,
 			validator_stash: ledger.stash.clone(),
 		});
 
