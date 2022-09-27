@@ -171,6 +171,7 @@ benchmarks! {
 	}
 
 	register_fast_unstake {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		whitelist_account!(who);
 		assert_eq!(Queue::<T>::count(), 0);
@@ -182,6 +183,7 @@ benchmarks! {
 	}
 
 	deregister {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
