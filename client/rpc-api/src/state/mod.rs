@@ -76,7 +76,7 @@ pub trait StateApi<Hash> {
 
 	/// Returns the runtime metadata as an opaque blob.
 	#[method(name = "state_getMetadata", blocking)]
-	fn metadata(&self, pallets: Option<Vec<Vec<u8>>>, hash: Option<Hash>) -> RpcResult<Bytes>;
+	fn metadata(&self, pallets: Option<Vec<String>>, hash: Option<Hash>) -> RpcResult<Bytes>;
 
 	/// Get the runtime version.
 	#[method(name = "state_getRuntimeVersion", aliases = ["chain_getRuntimeVersion"], blocking)]
