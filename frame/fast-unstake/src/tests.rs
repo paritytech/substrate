@@ -57,8 +57,9 @@ fn register_insufficient_funds_fails() {
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
 			BalancesError::<T, _>::InsufficientBalance,
 		);
+
 		// Ensure stash is in the queue.
-		assert_ne!(Queue::<T>::get(1), None);
+		assert_eq!(Queue::<T>::get(1), None);
 	});
 }
 
