@@ -354,6 +354,11 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
+/// Base trait for [`ElectionProvider`] and [`BoundedElectionProvider`]. It is
+/// meant to be used only with an extension trait that adds an election
+/// functionality.
+///
+/// Data can be bounded or unbounded and is fetched from [`Self::DataProvider`].
 pub trait ElectionProviderBase {
 	/// The account identifier type.
 	type AccountId;
@@ -374,35 +379,27 @@ pub trait ElectionProviderBase {
 	fn ongoing() -> bool;
 }
 
+/// Elect a new set of winners, bounded by `MaxWinners`.
+///
+/// Returns a result in bounded, target major format, namely as
+/// *BoundedVec<(AccountId, Vec<Support>), MaxWinners>*.   
 pub trait BoundedElectionProvider: ElectionProviderBase {
 	/// The upper bound on election winners.
 	type MaxWinners: Get<u32>;
-
-	/// Elect a new set of winners, bounded by `MaxWinners` but an unbounded
-	/// number of backers per winner. Data is fetched from
-	/// [`ElectionProviderBase::DataProvider`]. An implementation could
-	/// nonetheless impose its own custom limits.
-	///
-	/// The result is returned in a target major format, namely as *Bounded vector of
-	/// support*.
-	///
-	/// This should be implemented as a self-weighing function. The implementor
-	/// should register its appropriate weight at the end of execution with the
+	/// Performs the election. This should be implemented as a self-weighing function. The
+	/// implementor should register its appropriate weight at the end of execution with the
 	/// system pallet directly.
 	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
 }
 
+/// Elect a new set of winners, without specifying any bounds on the amount
+/// of data fetched from [`ElectionProviderBase::DataProvider`].
+/// An implementation could nonetheless impose its own custom limits.
+///
+/// The result is returned in a target major format, namely as
+/// *Vec<(AccountId, Vec<Support>)>*.
 pub trait ElectionProvider: ElectionProviderBase {
-	/// Elect a new set of winners, without specifying any bounds on the amount
-	/// of data fetched from [`ElectionProviderBase::DataProvider`].
-	/// An implementation could nonetheless impose its own custom limits.
-	///
-	/// The result is returned in a target major format, namely as *vector of
-	/// support*.
-	///
-	/// This should be implemented as a self-weighing function. The implementor
-	/// should register its appropriate weight at the end of execution with the
-	/// system pallet directly.
+	/// Performs the election. This should be implemented as a self-weighing function.
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
