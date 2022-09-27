@@ -48,10 +48,7 @@ use sc_consensus::{
 	Verifier,
 };
 use sc_network::{
-	config::{
-		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, RequestResponseConfig,
-		Role, SyncMode, TransportConfig,
-	},
+	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
