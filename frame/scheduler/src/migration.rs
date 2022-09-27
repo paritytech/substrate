@@ -18,7 +18,7 @@
 //! Migrations for the scheduler pallet.
 
 use super::*;
-use frame_support::traits::{schedule::MaybeHashed, OnRuntimeUpgrade};
+use frame_support::traits::OnRuntimeUpgrade;
 
 /// The log target.
 const TARGET: &'static str = "runtime::scheduler::migration";
@@ -133,7 +133,7 @@ pub mod v3 {
 			for (block_number, agenda) in Agenda::<T>::iter() {
 				for schedule in agenda.iter().cloned().filter_map(|s| s) {
 					match schedule.call {
-						MaybeHashed::Value(call) => {
+						frame_support::traits::schedule::MaybeHashed::Value(call) => {
 							let l = call.using_encoded(|c| c.len());
 							if l > max_length {
 								log::error!(

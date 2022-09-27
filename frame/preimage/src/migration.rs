@@ -215,9 +215,9 @@ mod test {
 			assert_eq!(v0::image_count::<T>(), Some(4));
 			assert_eq!(v1::image_count::<T>(), None, "V1 storage should be corrupted");
 
-			v1::Migration::<T>::pre_upgrade().unwrap();
+			let state = v1::Migration::<T>::pre_upgrade().unwrap();
 			let _w = v1::Migration::<T>::on_runtime_upgrade();
-			v1::Migration::<T>::post_upgrade().unwrap();
+			v1::Migration::<T>::post_upgrade(state).unwrap();
 
 			// V0 and V1 share the same prefix, so `iter_values` still counts the same.
 			assert_eq!(v0::image_count::<T>(), Some(3));
