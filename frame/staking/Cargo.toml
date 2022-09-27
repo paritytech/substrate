@@ -40,7 +40,6 @@ rand_chacha = { version = "0.2", default-features = false, optional = true }
 [dev-dependencies]
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-npos-elections = { version = "4.0.0-dev", path = "../../primitives/npos-elections" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
@@ -58,7 +57,6 @@ std = [
 	"codec/std",
 	"scale-info/std",
 	"sp-std/std",
-	"sp-npos-elections/std",
 	"sp-io/std",
 	"frame-support/std",
 	"sp-runtime/std",
