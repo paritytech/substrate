@@ -56,7 +56,7 @@ use sc_rpc::{
 	system::SystemApiServer,
 	DenyUnsafe, SubscriptionTaskExecutor,
 };
-use sc_rpc_spec_v2::transaction::TransactionApiServer;
+use sc_rpc_spec_v2::{chain_head::ChainHeadApiServer, transaction::TransactionApiServer};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -673,6 +673,10 @@ where
 	)
 	.into_rpc();
 
+	let chain_head_v2 =
+		sc_rpc_spec_v2::chain_head::ChainHead::new(client.clone(), task_executor.clone())
+			.into_rpc();
+
 	let author = sc_rpc::author::Author::new(
 		client.clone(),
 		transaction_pool,
@@ -691,6 +695,7 @@ where
 	}
 
 	// Part of the RPC v2 spec.
+	rpc_api.merge(chain_head_v2).map_err(|e| Error::Application(e.into()))?;
 	rpc_api.merge(transaction_v2).map_err(|e| Error::Application(e.into()))?;
 
 	// Part of the old RPC spec.
