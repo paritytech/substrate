@@ -69,16 +69,6 @@ pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	pub(super) status: AssetStatus,
 }
 
-impl<Balance, AccountId, DepositBalance> AssetDetails<Balance, AccountId, DepositBalance> {
-	pub fn destroy_witness(&self) -> DestroyWitness {
-		DestroyWitness {
-			accounts: self.accounts,
-			sufficients: self.sufficients,
-			approvals: self.approvals,
-		}
-	}
-}
-
 /// Data concerning an approval.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, MaxEncodedLen, TypeInfo)]
 pub struct Approval<Balance, DepositBalance> {
@@ -148,20 +138,6 @@ pub struct AssetMetadata<DepositBalance, BoundedString> {
 	pub(super) decimals: u8,
 	/// Whether the asset metadata may be changed by a non Force origin.
 	pub(super) is_frozen: bool,
-}
-
-/// Witness data for the destroy transactions.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
-pub struct DestroyWitness {
-	/// The number of accounts holding the asset.
-	#[codec(compact)]
-	pub(super) accounts: u32,
-	/// The number of accounts holding the asset with a self-sufficient reference.
-	#[codec(compact)]
-	pub(super) sufficients: u32,
-	/// The number of transfer-approvals of the asset.
-	#[codec(compact)]
-	pub(super) approvals: u32,
 }
 
 /// Trait for allowing a minimum balance on the account to be specified, beyond the

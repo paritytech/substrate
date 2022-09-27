@@ -420,6 +420,8 @@ pub mod pallet {
 			approvals_destroyed: u32,
 			approvals_remaining: u32,
 		},
+		/// An asset class is in the process of being destroyed.
+		Destroying { asset_id: T::AssetId },
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
 
@@ -615,6 +617,7 @@ pub mod pallet {
 					details.status = AssetStatus::Destroying;
 					// TODO: Remove previlleged roles. How?
 
+					Self::deposit_event(Event::Destroying { asset_id: id });
 					Ok(())
 				},
 			)?;
