@@ -16,4 +16,4 @@
 // limitations under the License.
 
 pub mod buy_sell;
-pub mod common;
+pub mod settings;
