@@ -282,26 +282,35 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn immediate_unstake(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
-			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
-				.map(|l| l.stash)
-				.ok_or(Error::<T>::NotController)?;
+
+			let ledger =
+				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
 
 			/// Very important: the new unstaker must still be idle from when they first registered
 			/// as a nominator or validator.
 			ensure!(IdleNewStakers::<T>::contains_key(&ctrl), Error::<T>::NotIdleNewStaker);
 			ensure!(T::StakersStatusInterface::status(), StakerListStatus::Idle);
 
+			// second part of the && is defensive.
+			ensure!(
+				ledger.active == ledger.total && ledger.unlocking.is_empty(),
+				Error::<T>::NotFullyBonded
+			);
+
 			IdleNewStakers::<T>::remove(&ctrl);
 
-			let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
+			let num_slashing_spans =
+				Staking::<T>::slashing_spans(&ledger.stash).iter().count() as u32;
+
+			Staking::<T>::unbond(RawOrigin::Signed(ctrl).into(), ledger.total)?;
 
 			let result = pallet_staking::Pallet::<T>::force_unstake(
 				RawOrigin::Root.into(),
-				stash.clone(),
+				ledger.stash.clone(),
 				num_slashing_spans,
 			);
 
-			Self::deposit_event(Event::<T>::IdleNewStakerUnstaked { stash, result });
+			Self::deposit_event(Event::<T>::IdleNewStakerUnstaked { stash: ledger.stash, result });
 			Ok(())
 		}
 
