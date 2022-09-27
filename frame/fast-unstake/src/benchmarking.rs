@@ -121,7 +121,7 @@ benchmarks! {
 		on_idle_full_block::<T>();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap() })
+			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap(), deposit: T::Deposit::get() })
 		);
 	}
 	: {
@@ -162,7 +162,7 @@ benchmarks! {
 		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked })
+			Some(UnstakeRequest { stash: who.clone(), checked, deposit: T::Deposit::get() })
 		);
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),

@@ -266,7 +266,17 @@ pub mod pallet {
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
 				Error::<T>::AlreadyHead
 			);
-			Queue::<T>::remove(stash);
+			let deposit = Queue::<T>::take(stash.clone());
+
+			if let Some(deposit) = deposit {
+				let remaining = T::DepositCurrency::unreserve(&stash, deposit);
+				if !remaining.is_zero() {
+					frame_support::defensive!("`not enough balance to unreserve`");
+					ErasToCheckPerBlock::<T>::put(0);
+					Self::deposit_event(Event::<T>::InternalError)
+				}
+			}
+
 			Ok(())
 		}
 

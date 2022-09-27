@@ -137,10 +137,17 @@ fn cannot_register_if_has_unlocking_chunks() {
 fn deregister_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
+
+		assert_eq!(<T as Config>::DepositCurrency::reserved_balance(&1), 0);
+
 		// Controller account registers for fast unstake.
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
+		assert_eq!(<T as Config>::DepositCurrency::reserved_balance(&1), DepositAmount::get());
+
 		// Controller then changes mind and deregisters.
 		assert_ok!(FastUnstake::deregister(RuntimeOrigin::signed(2)));
+		assert_eq!(<T as Config>::DepositCurrency::reserved_balance(&1), 0);
+
 		// Ensure stash no longer exists in the queue.
 		assert_eq!(Queue::<T>::get(1), None);
 	});
@@ -353,11 +360,15 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// given
+			assert_eq!(<T as Config>::DepositCurrency::reserved_balance(&1), 0);
+
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(6)));
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(8)));
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(10)));
+
+			assert_eq!(<T as Config>::DepositCurrency::reserved_balance(&1), DepositAmount::get());
 
 			assert_eq!(Queue::<T>::count(), 5);
 			assert_eq!(Head::<T>::get(), None);
@@ -396,6 +407,8 @@ mod on_idle {
 				}),
 			);
 			assert_eq!(Queue::<T>::count(), 3);
+
+			assert_eq!(<T as Config>::DepositCurrency::reserved_balance(&1), 0);
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
