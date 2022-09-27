@@ -180,16 +180,18 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		/// The outer origin type.
-		type Origin: From<RawOrigin<Self::AccountId, I>>;
+		/// The runtime origin type.
+		type RuntimeOrigin: From<RawOrigin<Self::AccountId, I>>;
 
-		/// The outer call dispatch type.
+		/// The runtime call dispatch type.
 		type Proposal: Parameter
-			+ Dispatchable<Origin = <Self as Config<I>>::Origin, PostInfo = PostDispatchInfo>
-			+ From<frame_system::Call<Self>>
+			+ Dispatchable<
+				RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin,
+				PostInfo = PostDispatchInfo,
+			> + From<frame_system::Call<Self>>
 			+ GetDispatchInfo;
 
-		/// The outer event type.
+		/// The runtime event type.
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 

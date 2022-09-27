@@ -131,7 +131,9 @@ where
 	fn consumed_weight(&self, block: &BlockId<Block>) -> Result<NanoSeconds> {
 		// Hard-coded key for System::BlockWeight. It could also be passed in as argument
 		// for the benchmark, but I think this should work as well.
-		let hash = hex::decode("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96")?;
+		let hash = array_bytes::hex2bytes(
+			"26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96",
+		)?;
 		let key = StorageKey(hash);
 
 		let mut raw_weight = &self

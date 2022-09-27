@@ -176,7 +176,7 @@ mod tests {
 		let file = tmp.path().join("mysecret").to_path_buf();
 		let key = ed25519::SecretKey::generate();
 
-		fs::write(&file, hex::encode(key.as_ref())).expect("Writes secret key");
+		fs::write(&file, array_bytes::bytes2hex("", key.as_ref())).expect("Writes secret key");
 		check_key(file.clone(), &key);
 
 		fs::write(&file, &key).expect("Writes secret key");
