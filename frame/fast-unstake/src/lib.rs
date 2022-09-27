@@ -288,7 +288,7 @@ pub mod pallet {
 
 			// Very important: the new unstaker must still be idle from when they first registered
 			// as a nominator or validator.
-			ensure!(IdleNewStakers::<T>::contains_key(&ctrl), Error::<T>::NotIdleNewStaker);
+			ensure!(IdleNewStakers::<T>::contains_key(&ledger.stash), Error::<T>::NotIdleNewStaker);
 			ensure!(
 				T::StakersStatusInterface::status() == StakersStatus::Idle,
 				Error::<T>::NotIdleNewStaker
