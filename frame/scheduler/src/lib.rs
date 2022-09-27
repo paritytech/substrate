@@ -603,6 +603,8 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 									log::error!("No name in Lookup for id: {:?}", &id);
 								}
 								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
+							} else {
+								log::info!("Schedule is unnamed");
 							}
 
 							let call = match schedule.call {
@@ -620,7 +622,9 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 									bounded
 								},
 								MaybeHashed::Value(v) => {
-									let call = T::Preimages::bound(v).ok()?;
+									let call = T::Preimages::bound(v)
+										.map_err(|e| log::error!("Could not bound Call: {:?}", e))
+										.ok()?;
 									if call.lookup_needed() {
 										weight.saturating_accrue(
 											T::DbWeight::get().reads_writes(0, 1),
