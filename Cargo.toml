@@ -86,6 +86,7 @@ members = [
 	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
+	"frame/contracts/primitives",
 	"frame/contracts/runtime-api",
 	"frame/conviction-voting",
 	"frame/democracy",
