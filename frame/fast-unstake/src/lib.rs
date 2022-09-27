@@ -180,6 +180,8 @@ pub mod pallet {
 		AlreadyHead,
 		/// The call is not allowed at this point.
 		CallNotAllowed,
+		/// Insufficient balance for a deposit
+		InsufficientBalance,
 	}
 
 	#[pallet::hooks]
