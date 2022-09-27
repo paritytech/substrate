@@ -254,7 +254,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{new_test_ext, System, Test, CALL},
-		AllExtrinsicsLen, BlockWeight, DispatchClass
+		AllExtrinsicsLen, BlockWeight, DispatchClass,
 	};
 	use frame_support::{assert_err, assert_ok, dispatch::Pays, weights::Weight};
 	use sp_std::marker::PhantomData;

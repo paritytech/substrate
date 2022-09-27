@@ -359,7 +359,9 @@ where
 
 /// Implementation for test extrinsic.
 #[cfg(feature = "std")]
-impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
+impl<Call: Encode + GetDispatchInfo, Extra: Encode> GetDispatchInfo
+	for sp_runtime::testing::TestXt<Call, Extra>
+{
 	fn get_dispatch_info(&self) -> DispatchInfo {
 		// for testing: weight == size.
 		DispatchInfo {
