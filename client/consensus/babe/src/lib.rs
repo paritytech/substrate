@@ -763,12 +763,12 @@ where
 			.ok_or(sp_consensus::Error::InvalidAuthoritiesSet)
 	}
 
-	// fn authorities_len(&self, epoch_descriptor: &Self::AuxData) -> Option<usize> {
-	// 	self.epoch_changes
-	// 		.shared_data()
-	// 		.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
-	// 		.map(|epoch| epoch.as_ref().authorities.len())
-	// }
+	fn authorities_len(&self, epoch_descriptor: &Self::AuxData) -> Option<usize> {
+		self.epoch_changes
+			.shared_data()
+			.viable_epoch(epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+			.map(|epoch| epoch.as_ref().authorities.len())
+	}
 
 	async fn claim_slot(
 		&self,
