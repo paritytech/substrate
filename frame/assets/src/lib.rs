@@ -120,6 +120,9 @@
 //! * [`System`](../frame_system/index.html)
 //! * [`Support`](../frame_support/index.html)
 
+// This recursion limit is needed because we have too many benchmarks and benchmarking will fail if
+// we add more without this limit.
+#![recursion_limit = "1024"]
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 

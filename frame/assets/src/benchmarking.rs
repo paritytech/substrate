@@ -178,7 +178,9 @@ benchmarks_instance_pallet! {
 	}
 
 	destroy_accounts {
-		let (caller, _) = create_default_minted_asset::<T, I>(true, 100u32.into());
+		let c in 0 .. T::RemoveKeysLimit::get();
+		let (caller, _) = create_default_asset::<T, I>(true);
+		add_sufficients::<T, I>(caller.clone(), c);
 		Assets::<T, I>::freeze_asset(
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
@@ -186,11 +188,31 @@ benchmarks_instance_pallet! {
 		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default());
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
-		// assert_last_event::<T, I>(Event::DestroyedAccounts {
-		// 	asset_id: Default::default() ,
-		// 	accounts_destroyed: 5,
-		// 	accounts_remaining: 0,
-		// }.into());
+		assert_last_event::<T, I>(Event::DestroyedAccounts {
+			asset_id: Default::default() ,
+			accounts_destroyed: c,
+			accounts_remaining: 0,
+		}.into());
+	}
+
+	destroy_approvals {
+		let c in 0 .. T::RemoveKeysLimit::get();
+		let a in 0 .. T::RemoveKeysLimit::get();
+		let (caller, _) = create_default_minted_asset::<T, I>(true, 100u32.into());
+		add_consumers::<T, I>(caller.clone(), c);
+		add_approvals::<T, I>(caller.clone(), a);
+		Assets::<T, I>::freeze_asset(
+			SystemOrigin::Signed(caller.clone()).into(),
+			Default::default(),
+		)?;
+		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default());
+	}:_(SystemOrigin::Signed(caller), Default::default())
+	verify {
+		assert_last_event::<T, I>(Event::DestroyedApprovals {
+			asset_id: Default::default() ,
+			approvals_destroyed: a,
+			approvals_remaining: 0,
+		}.into());
 	}
 
 	finish_destroy {
@@ -207,19 +229,6 @@ benchmarks_instance_pallet! {
 		}.into()
 		);
 	}
-
-	// destroy {
-	// 	let c in 0 .. 5_000;
-	// 	let a in 0 .. 5_00;
-	// 	let (caller, _) = create_default_asset::<T, I>(true);
-	// 	add_consumers::<T, I>(caller.clone(), c);
-	// 	// add_sufficients::<T, I>(caller.clone(), s);
-	// 	add_approvals::<T, I>(caller.clone(), a);
-	// 	let witness = Asset::<T, I>::get(T::AssetId::default()).unwrap().destroy_witness();
-	// }: _(SystemOrigin::Signed(caller), Default::default(), witness)
-	// verify {
-	// 	assert_last_event::<T, I>(Event::Destroyed { asset_id: Default::default() }.into());
-	// }
 
 	mint {
 		let (caller, caller_lookup) = create_default_asset::<T, I>(true);
