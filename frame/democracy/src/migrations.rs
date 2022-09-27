@@ -87,8 +87,9 @@ pub mod v1 {
 			}
 
 			ReferendumInfoOf::<T>::translate(
-				|_key, old: ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>| {
+				|index, old: ReferendumInfo<T::BlockNumber, T::Hash, BalanceOf<T>>| {
 					weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+					log::info!(target: TARGET, "migrating referendum #{:?}", &index);
 					Some(match old {
 						ReferendumInfo::Ongoing(status) =>
 							ReferendumInfo::Ongoing(ReferendumStatus {
@@ -122,6 +123,7 @@ pub mod v1 {
 			}
 
 			if let Some((hash, threshold)) = v0::NextExternal::<T>::take() {
+				log::info!(target: TARGET, "migrating next external proposal");
 				NextExternal::<T>::put((Bounded::from_legacy_hash(hash), threshold));
 			}
 
@@ -141,6 +143,12 @@ pub mod v1 {
 			let new_ref_count = crate::ReferendumInfoOf::<T>::iter().count() as u32;
 			assert_eq!(new_ref_count, old_ref_count, "must migrate all referenda");
 
+			log::info!(
+				target: TARGET,
+				"{} public proposals migrated, {} referenda migrated",
+				new_props_count,
+				new_ref_count,
+			);
 			Ok(())
 		}
 	}

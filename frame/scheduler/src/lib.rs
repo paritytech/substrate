@@ -587,63 +587,79 @@ impl<T: Config<Hash = PreimageHash>> Pallet<T> {
 			}
 		}
 
-		Agenda::<T>::translate::<Vec<Option<ScheduledV3Of<T>>>, _>(|_, agenda| {
+		Agenda::<T>::translate::<Vec<Option<ScheduledV3Of<T>>>, _>(|block, agenda| {
+			log::info!("Migrating agenda of block: {:?}", &block);
 			Some(BoundedVec::truncate_from(
 				agenda
 					.into_iter()
 					.map(|schedule| {
 						weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
-						schedule.and_then(|schedule| {
-							if let Some(id) = schedule.maybe_id.as_ref() {
-								let name = blake2_256(id);
-								if let Some(item) = old::Lookup::<T>::take(id) {
-									Lookup::<T>::insert(name, item);
-									log::info!("Migrated name for id: {:?}", id);
+						schedule
+							.and_then(|schedule| {
+								if let Some(id) = schedule.maybe_id.as_ref() {
+									let name = blake2_256(id);
+									if let Some(item) = old::Lookup::<T>::take(id) {
+										Lookup::<T>::insert(name, item);
+										log::info!("Migrated name for id: {:?}", id);
+									} else {
+										log::error!("No name in Lookup for id: {:?}", &id);
+									}
+									weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
 								} else {
-									log::error!("No name in Lookup for id: {:?}", &id);
+									log::info!("Schedule is unnamed");
 								}
-								weight.saturating_accrue(T::DbWeight::get().reads_writes(2, 2));
-							} else {
-								log::info!("Schedule is unnamed");
-							}
 
-							let call = match schedule.call {
-								MaybeHashed::Hash(h) => {
-									let bounded = Bounded::from_legacy_hash(h);
-									// Check that the call can be decoded in the new runtime.
-									if let Err(err) =
-										T::Preimages::peek::<<T as Config>::RuntimeCall>(&bounded)
-									{
-										log::error!("Dropping undecodable call {}: {:?}", &h, &err);
-										return None
-									}
-									weight.saturating_accrue(T::DbWeight::get().reads(1));
-									log::info!("Migrated call by hash, hash: {:?}", h);
-									bounded
-								},
-								MaybeHashed::Value(v) => {
-									let call = T::Preimages::bound(v)
-										.map_err(|e| log::error!("Could not bound Call: {:?}", e))
-										.ok()?;
-									if call.lookup_needed() {
-										weight.saturating_accrue(
-											T::DbWeight::get().reads_writes(0, 1),
+								let call = match schedule.call {
+									MaybeHashed::Hash(h) => {
+										let bounded = Bounded::from_legacy_hash(h);
+										// Check that the call can be decoded in the new runtime.
+										if let Err(err) = T::Preimages::peek::<
+											<T as Config>::RuntimeCall,
+										>(&bounded)
+										{
+											log::error!(
+												"Dropping undecodable call {}: {:?}",
+												&h,
+												&err
+											);
+											return None
+										}
+										weight.saturating_accrue(T::DbWeight::get().reads(1));
+										log::info!("Migrated call by hash, hash: {:?}", h);
+										bounded
+									},
+									MaybeHashed::Value(v) => {
+										let call = T::Preimages::bound(v)
+											.map_err(|e| {
+												log::error!("Could not bound Call: {:?}", e)
+											})
+											.ok()?;
+										if call.lookup_needed() {
+											weight.saturating_accrue(
+												T::DbWeight::get().reads_writes(0, 1),
+											);
+										}
+										log::info!(
+											"Migrated call by value, hash: {:?}",
+											call.hash()
 										);
-									}
-									log::info!("Migrated call by value, hash: {:?}", call.hash());
-									call
-								},
-							};
+										call
+									},
+								};
 
-							Some(Scheduled {
-								maybe_id: schedule.maybe_id.map(|x| blake2_256(&x[..])),
-								priority: schedule.priority,
-								call,
-								maybe_periodic: schedule.maybe_periodic,
-								origin: schedule.origin,
-								_phantom: Default::default(),
+								Some(Scheduled {
+									maybe_id: schedule.maybe_id.map(|x| blake2_256(&x[..])),
+									priority: schedule.priority,
+									call,
+									maybe_periodic: schedule.maybe_periodic,
+									origin: schedule.origin,
+									_phantom: Default::default(),
+								})
 							})
-						})
+							.or_else(|| {
+								log::info!("Schedule in agenda for block {:?} is empty - nothing to do here.", &block);
+								None
+							})
 					})
 					.collect::<Vec<_>>(),
 			))
