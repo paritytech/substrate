@@ -167,6 +167,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A staker was unstaked.
 		Unstaked { stash: T::AccountId, maybe_pool_id: Option<PoolId>, result: DispatchResult },
+		/// A idle new staker was unstaked.
+		IdleNewStakerUnstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
 		/// A staker was partially checked for the given eras, but the process did not finish.
@@ -193,6 +195,8 @@ pub mod pallet {
 		NotQueued,
 		/// The provided un-staker is already in Head, and cannot deregister.
 		AlreadyHead,
+		/// The provided un-staker is not an idle new staker.
+		NotIdleNewStaker,
 	}
 
 	#[pallet::hooks]
@@ -281,20 +285,37 @@ pub mod pallet {
 		/// Request an immediate unstake.
 		/// This will only be satisfied iff:
 		///
-		/// 1. The sender called `nominate() or `vcalidate()` during an `Idle` stakers list status.
-		/// 2. The sender calls `immediate_unstake` in the same era and the stakers list status is
-		/// still `Idle`.
+		/// 1. The sender called `nominate() or `validate()` during an `Idle` stakers list.
+		/// 2. The sender calls `immediate_unstake` in the same era and the stakers list
+		/// remains `Idle`.
 		///
 		/// In the context of election multi phase, the stakers list will be idle in the Phase::Off
 		/// period. If `nominate()` or `validate()` was called during this phase, and the phase is
 		/// *still* Idle, then immediate unstake will be successful.
 		#[pallet::weight(0)]
 		pub fn immediate_unstake(origin: OriginFor<T>) -> DispatchResult {
-			todo!("Implement function");
-			// TODO: check if in IdleNewStakers
-			// TODO: check StakersStatusInterface is Idle still.
-			// TODO: rm from IdleNewStakers
-			// TODO: go through unstake logic.
+			let ctrl = ensure_signed(origin)?;
+			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
+				.map(|l| l.stash)
+				.ok_or(Error::<T>::NotController)?;
+
+			/// Very important: the new unstaker must still be idle from when they first registered
+			/// as a nominator or validator.
+			ensure!(IdleNewStakers::<T>::contains_key(&ctrl), Error::<T>::NotIdleNewStaker);
+			ensure!(T::StakersStatusInterface::status(), StakerListStatus::Idle);
+
+			IdleNewStakers::<T>::remove(&ctrl);
+
+			let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
+
+			let result = pallet_staking::Pallet::<T>::force_unstake(
+				RawOrigin::Root.into(),
+				stash.clone(),
+				num_slashing_spans,
+			);
+
+			Self::deposit_event(Event::<T>::IdleNewStakerUnstaked { stash, result });
+			Ok(())
 		}
 
 		/// Control the operation of this pallet.
