@@ -78,8 +78,8 @@ impl pallet_balances::Config for Test {
 }
 
 /// Filter to block balance pallet calls
-pub struct MockSafeModeFilter;
-impl Contains<RuntimeCall> for MockSafeModeFilter {
+pub struct MockUnstoppableCalls;
+impl Contains<RuntimeCall> for MockUnstoppableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
@@ -216,7 +216,7 @@ impl SortedMembers<u64> for RepayOrigin {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type SafeModeFilter = MockSafeModeFilter;
+	type UnstoppableCalls = MockUnstoppableCalls;
 	type ActivateDuration = ActivateDuration;
 	type ExtendDuration = ExtendDuration;
 	type ActivateStakeAmount = ActivateStakeAmount;

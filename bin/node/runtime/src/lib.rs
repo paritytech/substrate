@@ -201,8 +201,8 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-pub struct UnpausablePallets;
-impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausablePallets {
+pub struct UnpausableCalls; // TODO move to calls, use (..) to match on pallets like ProxyType
+impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausableCalls {
 	fn contains(pallet: &pallet_tx_pause::PalletNameOf<Runtime>) -> bool {
 		pallet.as_ref() ==
 			<pallet_safe_mode::Pallet<Runtime> as PalletInfoAccess>::name()
@@ -211,9 +211,17 @@ impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausablePallets {
 	}
 }
 
+impl Contains<RuntimeCall> for MockUnpausableCalls {
+	fn contains(call: &RuntimeCall) -> bool {
+		matches!(call,
+			RuntimeCall::TxPause(..) |
+			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {..})
+			)
+	}
+}
+
 impl pallet_tx_pause::Config for Runtime {
 	type Event = Event;
-	type UnpausablePallets = UnpausablePallets;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
 	type MaxNameLen = ConstU32<256>;
@@ -238,7 +246,7 @@ parameter_types! {
 impl pallet_safe_mode::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
-	type SafeModeFilter = Nothing; // TODO add TxPause pallet
+	type UnstoppableCalls = Nothing; // TODO add TxPause pallet
 	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type EnableOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
@@ -251,7 +259,7 @@ impl pallet_safe_mode::Config for Runtime {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = InsideBoth<SafeMode, TxPause>;
+	type BaseCallFilter = TheseExcept<InsideBoth<SafeMode, TxPause>, UnpausableCalls>; // TODO consider Exclude or NotInside... so no config for UnpausableCalls unneeded ( see TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -326,6 +334,11 @@ parameter_types! {
 	MaxEncodedLen,
 	scale_info::TypeInfo,
 )]
+
+pub enum PausePresets {
+	...,
+
+}
 pub enum ProxyType {
 	Any,
 	NonTransfer,

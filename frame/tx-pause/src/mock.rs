@@ -84,16 +84,17 @@ parameter_types! {
   pub const PauseTooLongNames: bool = false;
 }
 
-pub struct MockUnpausablePallets;
+pub struct MockUnpausableCalls;
 
-impl Contains<PalletNameOf<Test>> for MockUnpausablePallets {
-	fn contains(pallet: &PalletNameOf<Test>) -> bool {
-		let unpausables: Vec<PalletNameOf<Test>> =
-			vec![b"UnpausablePallet".to_vec().try_into().unwrap()];
-
-		unpausables.iter().any(|i| i == pallet)
+impl Contains<RuntimeCall> for MockUnpausableCalls {
+	fn contains(call: &RuntimeCall) -> bool {
+		matches!(call,
+			RuntimeCall::TxPause(..) |
+			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {..})
+			)
 	}
 }
+
 // Required impl to use some <Configured Origin>::get() in tests
 impl SortedMembers<u64> for PauseOrigin {
 	fn sorted_members() -> Vec<u64> {
@@ -114,7 +115,7 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
-	type UnpausablePallets = MockUnpausablePallets;
+	type UnpausableCalls = MockUnpausableCalls;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();

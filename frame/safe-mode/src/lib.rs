@@ -61,8 +61,8 @@ pub mod pallet {
 
 		/// Contains all calls that can be dispatched even when the safe-mode is activated.
 		///
-		/// The `SafeMode` pallet is always included and does not need to be added here.
-		type SafeModeFilter: Contains<Self::RuntimeCall>;
+		/// The `SafeMode` pallet cannot disable it's own calls, and does not need to be explicitly added here.
+		type UnstoppableCalls: Contains<Self::RuntimeCall>;
 
 		/// How long the safe-mode will stay active when activated with [`Pallet::activate`].
 		#[pallet::constant]
@@ -317,7 +317,7 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Automatically inactivates the safe-mode when the period ran out.
+		/// Automatically inactivates the safe-mode when the period runs out.
 		///
 		/// Bypasses any call filters to avoid getting rejected by them.
 		fn on_initialize(current: T::BlockNumber) -> Weight {
@@ -424,7 +424,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if Self::is_activated() {
-			T::SafeModeFilter::contains(call)
+			T::UnstoppableCalls::contains(call)
 		} else {
 			true
 		}

@@ -27,10 +27,15 @@ pub mod weights;
 
 use frame_support::{
 	pallet_prelude::*,
-	traits::{CallMetadata, Contains, GetCallMetadata},
+	traits::{CallMetadata, Contains, GetCallMetadata, IsSubType, IsType},
+	dispatch::GetDispatchInfo,
 };
 use frame_system::pallet_prelude::*;
 use sp_std::{convert::TryInto, prelude::*};
+use sp_runtime::{
+	traits::Dispatchable,
+	DispatchResult
+};
 
 pub use pallet::*;
 pub use weights::*;
@@ -51,6 +56,14 @@ pub mod pallet {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// The overarching call type.
+		type RuntimeCall: Parameter
+		+ Dispatchable<Origin = Self::Origin>
+		+ GetDispatchInfo
+		+ From<frame_system::Call<Self>>
+		+ IsSubType<Call<Self>>
+		+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 		/// The only origin that can pause calls.
 		type PauseOrigin: EnsureOrigin<Self::Origin>;
 
@@ -60,7 +73,7 @@ pub mod pallet {
 		/// Pallets that are safe and can never be paused.
 		///
 		/// The tx-pause pallet is always assumed to be safe itself.
-		type UnpausablePallets: Contains<PalletNameOf<Self>>;
+		type UnpausableCalls: Contains<<Self as Config>::RuntimeCall>;
 
 		/// Maximum length for pallet- and function-names.
 		///
@@ -144,17 +157,28 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::pause_call())]
 		pub fn pause_call(
 			origin: OriginFor<T>,
-			pallet: PalletNameOf<T>,
-			call: CallNameOf<T>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_pause(&pallet, &call)?;
-			PausedCalls::<T>::insert((&pallet, &call), ());
-			Self::deposit_event(Event::CallPaused(pallet, call));
+			let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
+
+			Self::ensure_can_pause(&pallet_name, &function_name)?;
+			PausedCalls::<T>::insert((&pallet_name, &function_name), ());
+			Self::deposit_event(Event::CallPaused(pallet_name, function_name));
 
 			Ok(())
 		}
+
+		// TODO add preset pause functionality (set of calls) See proxy and ProyType in node runtime
+		// pub fn pause_preset(
+		// 	origin: OriginFor<T>,
+		// 	preset: PausePresets,
+		// ) {
+		// 	loop
+		// 		do_pause_call() // run over a pre-config vec of calls for each type of PausePreset
+		// 		// we can use the same storage, a vec of all paused calls.
+		// }
 
 		/// Un-pause a call.
 		///
@@ -163,14 +187,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unpause_call())]
 		pub fn unpause_call(
 			origin: OriginFor<T>,
-			pallet: PalletNameOf<T>,
-			call: CallNameOf<T>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unpause(&pallet, &call)?;
-			PausedCalls::<T>::remove((&pallet, &call));
-			Self::deposit_event(Event::CallUnpaused(pallet, call));
+			let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
+
+			Self::ensure_can_unpause(&pallet_name, &function_name)?;
+			PausedCalls::<T>::remove((&pallet_name, &function_name));
+			Self::deposit_event(Event::CallUnpaused(pallet_name, function_name));
 
 			Ok(())
 		}
@@ -203,9 +228,10 @@ impl<T: Config> Pallet<T> {
 		if pallet.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if T::UnpausablePallets::contains(&pallet) {
-			return Err(Error::<T>::IsUnpausable)
-		}
+		// TODO need a way to see if any RuntimeCall matches the stringy pallet & call names here
+		// if T::UnpausableCalls::contains(&pallet, &call) {
+		// 	return Err(Error::<T>::IsUnpausable)
+		// }
 		if Self::is_paused(pallet, call) {
 			return Err(Error::<T>::IsPaused)
 		}
@@ -233,6 +259,6 @@ where
 	/// Return whether the call is allowed to be dispatched.
 	fn contains(call: &T::RuntimeCall) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
-		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
+			!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
 	}
 }
