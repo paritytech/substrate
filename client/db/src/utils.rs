@@ -195,6 +195,8 @@ fn open_database_at<Block: BlockT>(
 		#[cfg(feature = "rocksdb")]
 		DatabaseSource::RocksDb { path, cache_size } =>
 			open_kvdb_rocksdb::<Block>(path, db_type, create, *cache_size)?,
+		DatabaseSource::Redis { url } =>
+			crate::redis::open(&url, db_type)?,
 		DatabaseSource::Custom { db, require_create_flag } => {
 			if *require_create_flag && !create {
 				return Err(OpenDbError::DoesNotExist)
@@ -268,6 +270,12 @@ impl From<parity_db::Error> for OpenDbError {
 		} else {
 			OpenDbError::Internal(err.to_string())
 		}
+	}
+}
+
+impl From<redis::RedisError> for OpenDbError {
+	fn from(err: redis::RedisError) -> Self {
+		OpenDbError::Internal(err.to_string())
 	}
 }
 

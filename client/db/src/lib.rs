@@ -39,6 +39,7 @@ mod stats;
 #[cfg(any(feature = "rocksdb", test))]
 mod upgrade;
 mod utils;
+mod redis;
 
 use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};
@@ -358,6 +359,12 @@ pub enum DatabaseSource {
 		path: PathBuf,
 	},
 
+	/// Load a Redis database from a given url.
+	Redis {
+		/// Url of the database.
+		url: String,
+	},
+
 	/// Use a custom already-open database.
 	Custom {
 		/// the handle to the custom storage
@@ -380,6 +387,7 @@ impl DatabaseSource {
 			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { path, .. } => Some(path),
 			DatabaseSource::ParityDb { path } => Some(path),
+			DatabaseSource::Redis { .. } => None,
 			DatabaseSource::Custom { .. } => None,
 		}
 	}
@@ -400,6 +408,7 @@ impl DatabaseSource {
 				*path = p.into();
 				true
 			},
+			DatabaseSource::Redis { .. } => false,
 			DatabaseSource::Custom { .. } => false,
 		}
 	}
@@ -412,6 +421,7 @@ impl std::fmt::Display for DatabaseSource {
 			#[cfg(feature = "rocksdb")]
 			DatabaseSource::RocksDb { .. } => "RocksDb",
 			DatabaseSource::ParityDb { .. } => "ParityDb",
+			DatabaseSource::Redis { .. } => "Redis",
 			DatabaseSource::Custom { .. } => "Custom",
 		};
 		write!(f, "{}", name)
@@ -1048,7 +1058,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let (needs_init, db) =
 			match crate::utils::open_database::<Block>(db_source, DatabaseType::Full, false) {
-				Ok(db) => (false, db),
+				Ok(db) => (true, db), // TODO: FIXME: (false, db),
 				Err(OpenDbError::DoesNotExist) => {
 					let db =
 						crate::utils::open_database::<Block>(db_source, DatabaseType::Full, true)?;

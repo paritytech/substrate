@@ -242,6 +242,8 @@ pub enum Database {
 	RocksDb,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
 	ParityDb,
+	/// Redis.
+	Redis,
 	/// Detect whether there is an existing database. Use it, if there is, if not, create new
 	/// instance of ParityDb
 	Auto,
@@ -261,6 +263,8 @@ impl std::str::FromStr for Database {
 			return Ok(Self::ParityDbDeprecated)
 		} else if s.eq_ignore_ascii_case("paritydb") {
 			return Ok(Self::ParityDb)
+		} else if s.eq_ignore_ascii_case("redis") {
+			return Ok(Self::Redis)
 		} else if s.eq_ignore_ascii_case("auto") {
 			Ok(Self::Auto)
 		} else {
@@ -277,6 +281,7 @@ impl Database {
 			"rocksdb",
 			"paritydb",
 			"paritydb-experimental",
+			"redis",
 			"auto",
 		]
 	}

@@ -219,6 +219,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			#[cfg(feature = "rocksdb")]
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
+			Database::Redis => DatabaseSource::Redis { url: "redis://127.0.0.1/".to_string() }, // TODO: FIXME
 			Database::ParityDbDeprecated => {
 				eprintln!(
 					"WARNING: \"paritydb-experimental\" database setting is deprecated and will be removed in future releases. \
