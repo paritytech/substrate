@@ -383,8 +383,8 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	/// [`ElectionProviderBase::DataProvider`]. An implementation could
 	/// nonetheless impose its own custom limits.
 	///
-	/// The result is returned in a target major format, namely as *vector of
-	/// supports*.
+	/// The result is returned in a target major format, namely as *Bounded vector of
+	/// support*.
 	///
 	/// This should be implemented as a self-weighing function. The implementor
 	/// should register its appropriate weight at the end of execution with the
@@ -398,7 +398,7 @@ pub trait ElectionProvider: ElectionProviderBase {
 	/// An implementation could nonetheless impose its own custom limits.
 	///
 	/// The result is returned in a target major format, namely as *vector of
-	/// supports*.
+	/// support*.
 	///
 	/// This should be implemented as a self-weighing function. The implementor
 	/// should register its appropriate weight at the end of execution with the
