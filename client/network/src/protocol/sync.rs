@@ -1145,10 +1145,6 @@ impl<B: BlockT> ChainSync<B> {
 					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
 						peer.update_common_number(number);
 					}
-
-					if let Some(peer) = who.and_then(|p| self.peers.get_mut(&p)) {
-						peer.update_common_number(number);
-					}
 				},
 				Err(BlockImportError::IncompleteHeader(who)) => {
 					if let Some(peer) = who {

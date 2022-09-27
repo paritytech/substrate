@@ -30,7 +30,7 @@ use pubsub::PubSubMetadata;
 const MEGABYTE: usize = 1024 * 1024;
 
 /// Maximal payload accepted by RPC servers.
-pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 150 * MEGABYTE;
+pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
 
 /// Default maximum number of connections for WS RPC servers.
 const WS_MAX_CONNECTIONS: usize = 100;

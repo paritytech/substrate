@@ -7496,7 +7496,6 @@ dependencies = [
  "sp-version",
  "sp-wasm-interface",
  "substrate-test-runtime",
- "test-case",
  "tracing",
  "tracing-subscriber",
  "wasmi",
@@ -9955,28 +9954,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "test-case"
-version = "2.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07aea929e9488998b64adc414c29fe5620398f01c2e3f58164122b17e567a6d5"
-dependencies = [
- "test-case-macros",
-]
-
-[[package]]
-name = "test-case-macros"
-version = "2.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c95968eedc6fc4f5c21920e0f4264f78ec5e4c56bb394f319becc1a5830b3e54"
-dependencies = [
- "cfg-if 1.0.0",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
