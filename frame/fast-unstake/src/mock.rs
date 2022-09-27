@@ -31,7 +31,7 @@ use sp_runtime::{
 
 use frame_system::RawOrigin;
 use pallet_staking::{Exposure, IndividualExposure, StakerStatus};
-use sp_npos_elections::{StakersStatus, StakersStatusInterface};
+use sp_staking::{StakersStatus, StakersStatusInterface};
 use sp_std::prelude::*;
 
 pub type AccountId = u128;
@@ -258,7 +258,13 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			exposed_nominators: vec![(1, 2, 100), (3, 4, 100), (5, 6, 100), (7, 8, 100), (9, 10, 100)],
+			exposed_nominators: vec![
+				(1, 2, 100),
+				(3, 4, 100),
+				(5, 6, 100),
+				(7, 8, 100),
+				(9, 10, 100),
+			],
 		}
 	}
 }
@@ -278,7 +284,8 @@ impl ExtBuilder {
 		(VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA)
 			.map(|v| {
 				// for the sake of sanity, let's register this taker as an actual validator.
-				let others = (NOMINATOR_PREFIX..(NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA))
+				let others = (NOMINATOR_PREFIX..
+					(NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA))
 					.map(|n| IndividualExposure { who: n, value: 0 as Balance })
 					.collect::<Vec<_>>();
 				(v, Exposure { total: 0, own: 0, others })
@@ -290,14 +297,16 @@ impl ExtBuilder {
 
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
-		let mut storage = frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
+		let mut storage =
+			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		// create one default pool.
 		let _ = pallet_nomination_pools::GenesisConfig::<Runtime> { ..Default::default() }
 			.assimilate_storage(&mut storage);
 
 		let validators_range = VALIDATOR_PREFIX..VALIDATOR_PREFIX + VALIDATORS_PER_ERA;
-		let nominators_range = NOMINATOR_PREFIX..NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA;
+		let nominators_range =
+			NOMINATOR_PREFIX..NOMINATOR_PREFIX + NOMINATORS_PER_VALIDATOR_PER_ERA;
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: self
@@ -306,8 +315,7 @@ impl ExtBuilder {
 				.into_iter()
 				.map(|(stash, _, balance)| (stash, balance * 2))
 				.chain(
-					self
-						.exposed_nominators
+					self.exposed_nominators
 						.clone()
 						.into_iter()
 						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),

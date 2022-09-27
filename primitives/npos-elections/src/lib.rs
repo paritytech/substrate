@@ -308,7 +308,12 @@ impl<A: IdentifierT> std::fmt::Debug for Voter<A> {
 impl<AccountId: IdentifierT> Voter<AccountId> {
 	/// Create a new `Voter`.
 	pub fn new(who: AccountId) -> Self {
-		Self { who, edges: Default::default(), budget: Default::default(), load: Default::default() }
+		Self {
+			who,
+			edges: Default::default(),
+			budget: Default::default(),
+			load: Default::default(),
+		}
 	}
 
 	/// Returns `true` if `self` votes for `target`.
@@ -549,7 +554,8 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 				if let Some(idx) = c_idx_cache.get(&v) {
 					// This candidate is valid + already cached.
 					let mut candidate = candidates[*idx].borrow_mut();
-					candidate.approval_stake = candidate.approval_stake.saturating_add(voter_stake.into());
+					candidate.approval_stake =
+						candidate.approval_stake.saturating_add(voter_stake.into());
 					edges.push(Edge {
 						who: v.clone(),
 						candidate: Rc::clone(&candidates[*idx]),
@@ -567,38 +573,4 @@ pub fn setup_inputs<AccountId: IdentifierT>(
 		.collect::<Vec<_>>();
 
 	(candidates, voters)
-}
-
-/// Trait describing something that implements a hook for any operations to perform when the voter
-/// list updates.
-pub trait OnStakersUpdate<AccountId> {
-	/// A hook for any operations to perform when voter list changes from idle.
-	fn on_finish_idle();
-	/// A hook for any operations to perform when a new voter is added.
-	fn on_new_voter(who: AccountId);
-}
-
-impl<AccountId> OnStakersUpdate<AccountId> for () {
-	fn on_finish_idle() {
-		// Nothing to do here
-	}
-	fn on_new_voter(_: AccountId) {
-		// Nothing to do here
-	}
-}
-
-/// Trait for getting whether the current vote list is inactive or being used to determine the next
-/// session. In NPoS, voters will be inactive in the `Phase::Off` phase of an election, and actively
-/// being used in all the other stages.
-pub trait StakersStatusInterface {
-	/// The current status of voter list usage.
-	fn status() -> StakersStatus;
-}
-
-/// The variants of whether a voter list is being used or not.
-pub enum StakersStatus {
-	/// the voter list is not currently in use.
-	Idle,
-	/// The voter list is actively being used.
-	InUse,
 }

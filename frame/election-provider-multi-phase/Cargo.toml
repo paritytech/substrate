@@ -30,6 +30,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
@@ -45,6 +46,7 @@ rand = { version = "0.7.3" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
@@ -65,6 +67,7 @@ std = [
 	"sp-core/std",
 	"sp-runtime/std",
 	"sp-npos-elections/std",
+	"sp-staking/std",
 	"sp-arithmetic/std",
 	"frame-election-provider-support/std",
 	"log/std",
