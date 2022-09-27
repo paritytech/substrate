@@ -710,6 +710,9 @@ cfg_if! {
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {
+				fn metadata_for_pallets(_pallet_names: Vec<Vec<u8>>) -> OpaqueMetadata {
+					unimplemented!()
+				}
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}
@@ -980,6 +983,9 @@ cfg_if! {
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {
+				fn metadata_for_pallets(pallet_names_to_keep: Vec<Vec<u8>>) -> OpaqueMetadata {
+					unimplemented!()
+				}
 				fn metadata() -> OpaqueMetadata {
 					unimplemented!()
 				}

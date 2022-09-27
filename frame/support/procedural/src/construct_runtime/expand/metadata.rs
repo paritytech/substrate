@@ -74,9 +74,25 @@ pub fn expand_runtime_metadata(
 
 	quote! {
 		impl #runtime {
+			pub fn metadata_for_pallets(pallets_to_keep: #scrate::sp_std::vec::Vec<#scrate::sp_std::vec::Vec<u8>>) -> #scrate::metadata::RuntimeMetadataPrefixed {
+				Self::metadata_inner(Some(pallets_to_keep))
+			}
 			pub fn metadata() -> #scrate::metadata::RuntimeMetadataPrefixed {
+				Self::metadata_inner(None)
+			}
+			fn metadata_inner(pallets_to_keep: Option<#scrate::sp_std::vec::Vec<#scrate::sp_std::vec::Vec<u8>>>) -> #scrate::metadata::RuntimeMetadataPrefixed {
+				let mut pallets = #scrate::sp_std::vec![ #(#pallets),* ];
+
+				// Filter pallet list to only include those asked for, if provided.
+				if let Some(pallet_names_to_keep) = pallets_to_keep {
+					pallets = pallets
+						.into_iter()
+						.filter(|p| pallet_names_to_keep.iter().any(|n| n == p.name.as_bytes()))
+						.collect();
+				}
+
 				#scrate::metadata::RuntimeMetadataLastVersion::new(
-					#scrate::sp_std::vec![ #(#pallets),* ],
+					pallets,
 					#scrate::metadata::ExtrinsicMetadata {
 						ty: #scrate::scale_info::meta_type::<#extrinsic>(),
 						version: <#extrinsic as #scrate::sp_runtime::traits::ExtrinsicMetadata>::VERSION,

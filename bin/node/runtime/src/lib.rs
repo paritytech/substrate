@@ -1799,6 +1799,9 @@ impl_runtime_apis! {
 	}
 
 	impl sp_api::Metadata<Block> for Runtime {
+		fn metadata_for_pallets(pallets_to_keep: Vec<Vec<u8>>) -> OpaqueMetadata {
+			OpaqueMetadata::new(Runtime::metadata_for_pallets(pallets_to_keep).into())
+		}
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
 		}

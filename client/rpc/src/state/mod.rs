@@ -115,7 +115,9 @@ where
 	) -> Result<Option<u64>, Error>;
 
 	/// Returns the runtime metadata as an opaque blob.
-	fn metadata(&self, block: Option<Block::Hash>) -> Result<Bytes, Error>;
+	///
+	/// If a list of pallet names is provided, only metadata for those pallets will be returned.
+	fn metadata(&self, pallets: Option<Vec<Vec<u8>>>, block: Option<Block::Hash>) -> Result<Bytes, Error>;
 
 	/// Get the runtime version.
 	fn runtime_version(&self, block: Option<Block::Hash>) -> Result<RuntimeVersion, Error>;
@@ -267,8 +269,8 @@ where
 		self.backend.storage_size(block, key).map_err(Into::into)
 	}
 
-	fn metadata(&self, block: Option<Block::Hash>) -> RpcResult<Bytes> {
-		self.backend.metadata(block).map_err(Into::into)
+	fn metadata(&self, pallets: Option<Vec<Vec<u8>>>, block: Option<Block::Hash>) -> RpcResult<Bytes> {
+		self.backend.metadata(pallets, block).map_err(Into::into)
 	}
 
 	fn runtime_version(&self, at: Option<Block::Hash>) -> RpcResult<RuntimeVersion> {

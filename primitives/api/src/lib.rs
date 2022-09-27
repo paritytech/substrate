@@ -730,6 +730,9 @@ decl_runtime_apis! {
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
 	pub trait Metadata {
+		/// Returns the metadata of a runtime filtered to contain only
+		/// details about the list of pallets provided.
+		fn metadata_for_pallets(pallets_to_keep: sp_std::vec::Vec<sp_std::vec::Vec<u8>>) -> OpaqueMetadata;
 		/// Returns the metadata of a runtime.
 		fn metadata() -> OpaqueMetadata;
 	}

@@ -296,11 +296,16 @@ where
 			.map_err(client_err)
 	}
 
-	fn metadata(&self, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
+	fn metadata(&self, pallets: Option<Vec<Vec<u8>>>, block: Option<Block::Hash>) -> std::result::Result<Bytes, Error> {
 		self.block_or_best(block).map_err(client_err).and_then(|block| {
-			self.client
-				.runtime_api()
-				.metadata(&BlockId::Hash(block))
+			let api = self.client.runtime_api();
+
+			let metadata = match pallets {
+				Some(pallet_names) => api.metadata_for_pallets(&BlockId::Hash(block), pallet_names),
+				None => api.metadata(&BlockId::Hash(block))
+			};
+
+			metadata
 				.map(Into::into)
 				.map_err(|e| Error::Client(Box::new(e)))
 		})
