@@ -23,8 +23,8 @@
 //! Something that will provide the functionality of election will implement
 //! [`ElectionProvider`] and its parent-trait [`ElectionProviderBase`], whilst needing an
 //! associated [`ElectionProviderBase::DataProvider`], which needs to be
-//! fulfilled by an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is* the receiver of
-//! the election, resulting in a diagram as below:
+//! fulfilled by an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is*
+//! the receiver of the election, resulting in a diagram as below:
 //!
 //! ```ignore
 //!                                         ElectionDataProvider
@@ -375,8 +375,9 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	type MaxWinners: Get<u32>;
 
 	/// Elect a new set of winners, bounded by `MaxWinners` but an unbounded
-	/// number of backers per winner. [`<Self as ElectionProviderBase>::DataProvider`]. An implementation
-	/// could nonetheless impose its own custom limits.
+	/// number of backers per winner. Data is fetched from
+	/// [`ElectionProviderBase::DataProvider`]. An implementation could
+	/// nonetheless impose its own custom limits.
 	///
 	/// The result is returned in a target major format, namely as *vector of
 	/// supports*.
@@ -388,23 +389,26 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 }
 
 pub trait ElectionProvider: ElectionProviderBase {
-	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
-	/// [`<Self as ElectionProviderBase>::DataProvider`]. An implementation could nonetheless impose its own custom limits.
+	/// Elect a new set of winners, without specifying any bounds on the amount
+	/// of data fetched from [`ElectionProviderBase::DataProvider`].
+	/// An implementation could nonetheless impose its own custom limits.
 	///
-	/// The result is returned in a target major format, namely as *vector of supports*.
+	/// The result is returned in a target major format, namely as *vector of
+	/// supports*.
 	///
-	/// This should be implemented as a self-weighing function. The implementor should register its
-	/// appropriate weight at the end of execution with the system pallet directly.
+	/// This should be implemented as a self-weighing function. The implementor
+	/// should register its appropriate weight at the end of execution with the
+	/// system pallet directly.
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
-/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
-/// happen instantly, not asynchronously.
+/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure
+/// an election needs to happen instantly, not asynchronously.
 ///
 /// The same `DataProvider` is assumed to be used.
 ///
-/// Consequently, allows for control over the amount of data that is being fetched from the
-/// [`ElectionProviderBase::DataProvider`].
+/// Consequently, allows for control over the amount of data that is being
+/// fetched from the [`ElectionProviderBase::DataProvider`].
 pub trait InstantElectionProvider: ElectionProvider {
 	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
 	/// bounds, this trait method can enforce bounds on the amount of data provided by the
