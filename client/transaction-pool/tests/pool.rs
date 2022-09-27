@@ -1591,3 +1591,50 @@ fn test_enactment_helper_3() {
 	let (result, _) = trigger_finalized(&pool, &root, b1);
 	assert_eq!(result, false);
 }
+
+#[test]
+fn test_enactment_helper_4() {
+	sp_tracing::try_init_simple();
+	let api = TestApi::empty();
+	api.push_block(1, vec![], true);
+
+	let (root, fork1, _) = create_chain(&api);
+	let (b1, _, _, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
+	let (pool, _background) = BasicPool::new_test(api.into());
+
+	/*
+	 *   A-B1-C1-D1-E1
+	 */
+
+	let (result, _) = trigger_finalized(&pool, &root, e1);
+	assert_eq!(result, true);
+
+	let (result, _) = trigger_finalized(&pool, &root, b1);
+	assert_eq!(result, false);
+}
+
+#[test]
+fn test_enactment_helper_5() {
+	sp_tracing::try_init_simple();
+	let api = TestApi::empty();
+	api.push_block(1, vec![], true);
+
+	let (root, fork1, fork2) = create_chain(&api);
+	let (_, _, _, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
+	let (_, _, _, e2) = (&fork2[0], &fork2[1], &fork2[2], &fork2[3]);
+	let (pool, _background) = BasicPool::new_test(api.into());
+
+	/*
+	 *      B1-C1-D1-E1
+	 *     /
+	 *    A
+	 *     \
+	 *      B2-C2-D2-E2
+	 */
+
+	let (result, _) = trigger_finalized(&pool, &root, e1);
+	assert_eq!(result, true);
+
+	let (result, _) = trigger_finalized(&pool, &root, e2);
+	assert_eq!(result, false);
+}
