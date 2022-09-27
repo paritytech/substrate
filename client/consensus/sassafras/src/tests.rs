@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -60,6 +60,8 @@ thread_local! {
 }
 
 type SassafrasBlockImport = crate::SassafrasBlockImport<TestBlock, TestClient, Arc<TestClient>>;
+
+type SassafrasIntermediate = crate::SassafrasIntermediate<TestBlock>;
 
 #[derive(Clone)]
 struct TestBlockImport {
@@ -226,6 +228,14 @@ struct DummyProposer {
 	parent_slot: Slot,
 }
 
+impl DummyProposer {
+	fn propose_block(self, digest: Digest) -> TestBlock {
+		block_on(self.propose(InherentData::default(), digest, Duration::default(), None))
+			.expect("Proposing block")
+			.block
+	}
+}
+
 impl Proposer<TestBlock> for DummyProposer {
 	type Error = Error;
 	type Transaction =
@@ -347,9 +357,6 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			.expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
-		let mut got_own = false;
-		let mut got_other = false;
-
 		let data = peer.data.as_ref().expect("babe link set up during initialization");
 
 		let environ = DummyFactory {
@@ -359,29 +366,35 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			mutator: mutator.clone(),
 		};
 
-		import_notifications.push(
-			// run each future until the imported block number is less than five and
-			// we don't receive onw block produced by us and one produced by another peer.
-			client
-				.import_notification_stream()
-				.take_while(move |n| {
-					future::ready(
-						n.header.number() < &5 || {
-							if n.origin == BlockOrigin::Own {
-								got_own = true;
-							} else {
-								got_other = true;
-							}
-							// continue until we have at least one block of our own
-							// and one of another peer.
-							!(got_own && got_other)
-						},
-					)
-				})
-				.for_each(|_| future::ready(())),
-		);
+		// Run the imported block number is less than five and we don't receive a block produced
+		// by us and one produced by another peer.
+		let mut got_own = false;
+		let mut got_other = false;
+		let import_futures = client
+			.import_notification_stream()
+			.take_while(move |n| {
+				future::ready(
+					n.header.number() < &5 || {
+						if n.origin == BlockOrigin::Own {
+							got_own = true;
+						} else {
+							got_other = true;
+						}
+						!(got_own && got_other)
+					},
+				)
+			})
+			.for_each(|_| future::ready(()));
+		import_notifications.push(import_futures);
 
 		let slot_duration = data.link.genesis_config.slot_duration();
+		let create_inherent_data_providers = Box::new(move |_, _| async move {
+			let slot = InherentDataProvider::from_timestamp_and_slot_duration(
+				Timestamp::current(),
+				slot_duration,
+			);
+			Ok((slot,))
+		});
 		let sassafras_params = SassafrasParams {
 			client: client.clone(),
 			keystore,
@@ -392,13 +405,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			sync_oracle: DummyOracle,
 			justification_sync_link: (),
 			force_authoring: false,
-			create_inherent_data_providers: move |_, _| async move {
-				let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-					Timestamp::current(),
-					slot_duration,
-				);
-				Ok((slot,))
-			},
+			create_inherent_data_providers,
 		};
 		let sassafras_worker = start_sassafras(sassafras_params).unwrap();
 		sassafras_futures.push(sassafras_worker);
@@ -419,10 +426,84 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	));
 }
 
+// Propose and import a new Sassafras block on top of the given parent.
+// This skips verification.
+fn propose_and_import_block<Transaction: Send + 'static>(
+	parent: &TestHeader,
+	slot: Option<Slot>,
+	proposer_factory: &mut DummyFactory,
+	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
+) -> Hash {
+	let proposer = block_on(proposer_factory.init(parent)).unwrap();
+
+	let slot = slot.unwrap_or_else(|| {
+		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
+		parent_pre_digest.slot + 1
+	});
+
+	let pre_digest = PreDigest {
+		slot,
+		authority_idx: 0,
+		vrf_output: VRFOutput::try_from([0; 32]).unwrap(),
+		vrf_proof: VRFProof::try_from([0; 64]).unwrap(),
+		ticket_aux: None,
+	};
+	let digest =
+		sp_runtime::generic::Digest { logs: vec![DigestItem::sassafras_pre_digest(pre_digest)] };
+
+	let mut block = proposer.propose_block(digest);
+
+	let epoch_descriptor = proposer_factory
+		.epoch_changes
+		.shared_data()
+		.epoch_descriptor_for_child_of(
+			descendent_query(&*proposer_factory.client),
+			&parent.hash(),
+			*parent.number(),
+			slot,
+		)
+		.unwrap()
+		.unwrap();
+
+	let seal = {
+		// Sign the pre-sealed hash of the block and then add it to a digest item.
+		let pair = AuthorityPair::from_seed(&[1; 32]);
+		let pre_hash = block.header.hash();
+		let signature = pair.sign(pre_hash.as_ref());
+		DigestItem::sassafras_seal(signature)
+	};
+
+	let post_hash = {
+		block.header.digest_mut().push(seal.clone());
+		let h = block.header.hash();
+		block.header.digest_mut().pop();
+		h
+	};
+
+	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
+	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+	import.body = Some(block.extrinsics);
+	import.post_digests.push(seal);
+	import.insert_intermediate(INTERMEDIATE_KEY, SassafrasIntermediate { epoch_descriptor });
+
+	match block_on(block_import.import_block(import, Default::default())).unwrap() {
+		ImportResult::Imported(_) => (),
+		_ => panic!("expected block to be imported"),
+	}
+
+	post_hash
+}
+
+// Smoke test for multiple nodes authoring and validating blocks
+#[test]
+fn authoring_blocks() {
+	run_one_test(|_, _| ())
+}
+
 #[test]
 #[should_panic]
 fn rejects_empty_block() {
-	let mut net = SassafrasTestNet::new(3);
+	let mut net = SassafrasTestNet::new(1);
 	let block_builder = |builder: BlockBuilder<_, _, _>| builder.build().unwrap().block;
 	net.mut_peers(|peer| {
 		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
@@ -430,6 +511,40 @@ fn rejects_empty_block() {
 }
 
 #[test]
-fn authoring_blocks() {
-	run_one_test(|_, _| ())
+fn importing_block_one_sets_genesis_epoch() {
+	let mut net = SassafrasTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+	let client = peer.client().as_client();
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		genesis_config: data.link.genesis_config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
+
+	let block_hash = propose_and_import_block(
+		&genesis_header,
+		Some(999.into()),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	let genesis_epoch = Epoch::genesis(&data.link.genesis_config, 999.into());
+
+	let epoch_changes = data.link.epoch_changes.shared_data();
+	let epoch_for_second_block = epoch_changes
+		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
+			Epoch::genesis(&data.link.genesis_config, slot)
+		})
+		.unwrap()
+		.unwrap();
+
+	assert_eq!(epoch_for_second_block, genesis_epoch);
 }

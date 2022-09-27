@@ -246,18 +246,15 @@ where
 					.extend(values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
 			});
 
-			// The fork choice rule is that we pick the heaviest chain (i.e.
-			// more primary blocks), if there's a tie we go with the longest
-			// chain.
+			// The fork choice rule is that we pick the heaviest chain (i.e. more blocks built
+			// using primary mechanism), if there's a tie we go with the longest chain.
 			block.fork_choice = {
-				let (last_best, last_best_number) = (info.best_hash, info.best_number);
-
-				let last_best_weight = if &last_best == block.header.parent_hash() {
+				let best_weight = if &info.best_hash == block.header.parent_hash() {
 					// the parent=genesis case is already covered for loading parent weight,
 					// so we don't need to cover again here.
 					parent_weight
 				} else {
-					aux_schema::load_block_weight(&*self.client, last_best)
+					aux_schema::load_block_weight(&*self.client, &info.best_hash)
 						.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 						.ok_or_else(|| {
 							ConsensusError::ChainLookup(
@@ -266,13 +263,9 @@ where
 						})?
 				};
 
-				Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
-					true
-				} else if total_weight == last_best_weight {
-					number > last_best_number
-				} else {
-					false
-				}))
+				let is_new_best = total_weight > best_weight ||
+					(total_weight == best_weight && number > info.best_number);
+				Some(ForkChoiceStrategy::Custom(is_new_best))
 			};
 			// Release the mutex, but it stays locked
 			epoch_changes.release_mutex()

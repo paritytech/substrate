@@ -91,7 +91,7 @@ fn claim_slot(
 /// Generate the tickets for the given epoch.
 /// Tickets additional information will be stored within the `Epoch` structure.
 /// The additional information will be used later during session to claim slots.
-pub fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<Ticket> {
+fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> Vec<Ticket> {
 	let config = &epoch.config;
 	let max_attempts = config.threshold_params.attempts_number;
 	let redundancy_factor = config.threshold_params.redundancy_factor;
@@ -396,7 +396,7 @@ async fn tickets_worker<B, C, SC>(
 		let tickets = epoch_changes
 			.shared_data()
 			.epoch_mut(&epoch_identifier)
-			.map(|epoch| authorship::generate_epoch_tickets(epoch, &keystore))
+			.map(|epoch| generate_epoch_tickets(epoch, &keystore))
 			.unwrap_or_default();
 
 		if tickets.is_empty() {
