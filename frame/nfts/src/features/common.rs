@@ -19,14 +19,19 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn get_collection_settings(
+		collection_id: &T::CollectionId,
+	) -> Result<CollectionSettings, DispatchError> {
+		let config = CollectionConfigOf::<T, I>::get(&collection_id)
+			.ok_or(Error::<T, I>::UnknownCollection)?;
+		Ok(config.values())
+	}
+
 	pub fn is_collection_setting_disabled(
 		collection_id: &T::CollectionId,
 		setting: CollectionSetting,
 	) -> Result<(bool, CollectionSettings), DispatchError> {
-		let config = CollectionConfigOf::<T, I>::get(&collection_id)
-			.ok_or(Error::<T, I>::UnknownCollection)?;
-
-		let settings = config.values();
+		let settings = Self::get_collection_settings(&collection_id)?;
 		Ok((!settings.contains(setting), settings))
 	}
 }

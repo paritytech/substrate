@@ -175,9 +175,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
 
-				let config = CollectionConfigOf::<T, I>::get(&collection)
-					.ok_or(Error::<T, I>::UnknownCollection)?;
-				let settings = config.values();
+				let settings = Self::get_collection_settings(&collection)?;
 
 				let deposit = match settings.contains(CollectionSetting::FreeHolding) {
 					true => Zero::zero(),

@@ -751,10 +751,7 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 
-			let config = CollectionConfigOf::<T, I>::get(&collection)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
-			let settings = config.values();
-
+			let settings = Self::get_collection_settings(&collection)?;
 			let deposit = match settings.contains(CollectionSetting::FreeHolding) {
 				true => Zero::zero(),
 				false => T::ItemDeposit::get(),
@@ -1232,9 +1229,7 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let config = CollectionConfigOf::<T, I>::get(&collection)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
-			let settings = config.values();
+			let settings = Self::get_collection_settings(&collection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
@@ -1301,9 +1296,7 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let config = CollectionConfigOf::<T, I>::get(&collection)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
-			let settings = config.values();
+			let settings = Self::get_collection_settings(&collection)?;
 
 			let maybe_is_frozen = match maybe_item {
 				None => Some(settings.contains(CollectionSetting::LockedAttributes)),
@@ -1353,9 +1346,7 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let config = CollectionConfigOf::<T, I>::get(&collection)
-				.ok_or(Error::<T, I>::UnknownCollection)?;
-			let settings = config.values();
+			let settings = Self::get_collection_settings(&collection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
