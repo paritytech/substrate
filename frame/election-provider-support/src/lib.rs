@@ -20,10 +20,11 @@
 //! This crate provides two traits that could interact to enable extensible election functionality
 //! within FRAME pallets.
 //!
-//! Something that will provide the functionality of election will implement [`ElectionProvider`],
-//! whilst needing an associated [`ElectionProvider::DataProvider`], which needs to be fulfilled by
-//! an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is* the receiver
-//! of the election, resulting in a diagram as below:
+//! Something that will provide the functionality of election will implement
+//! [`ElectionProvider`] and its parent-trait [`ElectionProviderBase`], whilst needing an
+//! associated [`ElectionProviderBase::DataProvider`], which needs to be
+//! fulfilled by an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is* the receiver of
+//! the election, resulting in a diagram as below:
 //!
 //! ```ignore
 //!                                         ElectionDataProvider
@@ -374,7 +375,7 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	type MaxWinners: Get<u32>;
 
 	/// Elect a new set of winners, bounded by `MaxWinners` but an unbounded
-	/// number of backers per winner. [`Self::DataProvider`]. An implementation
+	/// number of backers per winner. [`<Self as ElectionProviderBase>::DataProvider`]. An implementation
 	/// could nonetheless impose its own custom limits.
 	///
 	/// The result is returned in a target major format, namely as *vector of
@@ -388,7 +389,7 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 
 pub trait ElectionProvider: ElectionProviderBase {
 	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
-	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
+	/// [`<Self as ElectionProviderBase>::DataProvider`]. An implementation could nonetheless impose its own custom limits.
 	///
 	/// The result is returned in a target major format, namely as *vector of supports*.
 	///
@@ -403,7 +404,7 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// The same `DataProvider` is assumed to be used.
 ///
 /// Consequently, allows for control over the amount of data that is being fetched from the
-/// [`ElectionProvider::DataProvider`].
+/// [`ElectionProviderBase::DataProvider`].
 pub trait InstantElectionProvider: ElectionProvider {
 	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
 	/// bounds, this trait method can enforce bounds on the amount of data provided by the
