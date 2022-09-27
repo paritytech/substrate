@@ -99,7 +99,7 @@ fn beefy_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = H256::random();
-	let expected = format!("/{}/beefy/1", hex::encode(genesis_hash));
+	let expected = format!("/{}/beefy/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
 	let proto_name = beefy_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 
@@ -145,7 +145,7 @@ impl BeefyTestNet {
 		})
 	}
 
-	pub(crate) fn generate_blocks(
+	pub(crate) fn generate_blocks_and_sync(
 		&mut self,
 		count: usize,
 		session_length: u64,
@@ -168,6 +168,7 @@ impl BeefyTestNet {
 
 			block
 		});
+		self.block_until_sync();
 	}
 }
 
@@ -326,7 +327,7 @@ fn add_auth_change_digest(header: &mut Header, new_auth_set: BeefyValidatorSet) 
 }
 
 pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
-	keys.iter().map(|key| key.clone().public().into()).collect()
+	keys.iter().map(|&key| key.public().into()).collect()
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
@@ -528,8 +529,7 @@ fn beefy_finalizing_blocks() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 42 blocks including `AuthorityChange` digests every 10 blocks.
-	net.generate_blocks(42, session_len, &validator_set, true);
-	net.block_until_sync();
+	net.generate_blocks_and_sync(42, session_len, &validator_set, true);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -567,8 +567,7 @@ fn lagging_validators() {
 	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
 
 	// push 62 blocks including `AuthorityChange` digests every 30 blocks.
-	net.generate_blocks(62, session_len, &validator_set, true);
-	net.block_until_sync();
+	net.generate_blocks_and_sync(62, session_len, &validator_set, true);
 
 	let net = Arc::new(Mutex::new(net));
 
@@ -644,8 +643,7 @@ fn correct_beefy_payload() {
 	runtime.spawn(initialize_beefy(&mut net, bad_peers, min_block_delta));
 
 	// push 10 blocks
-	net.generate_blocks(12, session_len, &validator_set, false);
-	net.block_until_sync();
+	net.generate_blocks_and_sync(12, session_len, &validator_set, false);
 
 	let net = Arc::new(Mutex::new(net));
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
@@ -812,4 +810,38 @@ fn beefy_importing_blocks() {
 			Poll::Ready(())
 		}));
 	}
+}
+
+#[test]
+fn voter_initialization() {
+	sp_tracing::try_init_simple();
+	// Regression test for voter initialization where finality notifications were dropped
+	// after waiting for BEEFY pallet availability.
+
+	let mut runtime = Runtime::new().unwrap();
+	let peers = &[BeefyKeyring::Alice, BeefyKeyring::Bob];
+	let validator_set = ValidatorSet::new(make_beefy_ids(peers), 0).unwrap();
+	let session_len = 5;
+	// Should vote on all mandatory blocks no matter the `min_block_delta`.
+	let min_block_delta = 10;
+
+	let mut net = BeefyTestNet::new(2, 0);
+	let api = Arc::new(two_validators::TestApi {});
+	let beefy_peers = peers.iter().enumerate().map(|(id, key)| (id, key, api.clone())).collect();
+	runtime.spawn(initialize_beefy(&mut net, beefy_peers, min_block_delta));
+
+	// push 30 blocks
+	net.generate_blocks_and_sync(26, session_len, &validator_set, false);
+	let net = Arc::new(Mutex::new(net));
+
+	// Finalize multiple blocks at once to get a burst of finality notifications right from start.
+	// Need to finalize at least one block in each session, choose randomly.
+	// Expect voters to pick up all of them and BEEFY-finalize the mandatory blocks of each session.
+	finalize_block_and_wait_for_beefy(
+		&net,
+		peers,
+		&mut runtime,
+		&[1, 6, 10, 17, 24, 26],
+		&[1, 5, 10, 15, 20, 25],
+	);
 }

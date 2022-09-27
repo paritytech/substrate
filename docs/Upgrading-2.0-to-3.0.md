@@ -100,12 +100,12 @@ And update the overall definition for weights on frame and a few related types a
 +/// by  Operational  extrinsics.
 +const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 +/// We allow for 2 seconds of compute with a 6 second average block time.
-+const MAXIMUM_BLOCK_WEIGHT: Weight = 2 * WEIGHT_PER_SECOND;
++const MAXIMUM_BLOCK_WEIGHT: Weight = 2u64 * WEIGHT_PER_SECOND;
 +
  parameter_types! {
  	pub const BlockHashCount: BlockNumber = 2400;
 -	/// We allow for 2 seconds of compute with a 6 second average block time.
--	pub const MaximumBlockWeight: Weight = 2 * WEIGHT_PER_SECOND;
+-	pub const MaximumBlockWeight: Weight = 2u64 * WEIGHT_PER_SECOND;
 -	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 -	/// Assume 10% of weight for average on_initialize calls.
 -	pub MaximumExtrinsicWeight: Weight =
@@ -147,8 +147,8 @@ And update the overall definition for weights on frame and a few related types a
 +	type BlockWeights = RuntimeBlockWeights;
 +	type BlockLength = RuntimeBlockLength;
 +	type DbWeight = RocksDbWeight;
- 	type Origin = Origin;
- 	type Call = Call;
+ 	type RuntimeOrigin = RuntimeOrigin;
+ 	type RuntimeCall = RuntimeCall;
  	type Index = Index;
 @@ -171,25 +198,19 @@ impl frame_system::Trait for Runtime {
  	type Header = generic::Header<BlockNumber, BlakeTwo256>;

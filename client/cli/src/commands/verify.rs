@@ -55,7 +55,7 @@ impl VerifyCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
 		let message = utils::read_message(self.message.as_ref(), self.hex)?;
-		let sig_data = utils::decode_hex(&self.sig)?;
+		let sig_data = array_bytes::hex2bytes(&self.sig)?;
 		let uri = utils::read_uri(self.uri.as_ref())?;
 		let uri = if let Some(uri) = uri.strip_prefix("0x") { uri } else { &uri };
 
@@ -71,7 +71,7 @@ where
 	let signature =
 		Pair::Signature::try_from(&sig_data).map_err(|_| error::Error::SignatureFormatInvalid)?;
 
-	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
+	let pubkey = if let Ok(pubkey_vec) = array_bytes::hex2bytes(uri) {
 		Pair::Public::from_slice(pubkey_vec.as_slice())
 			.map_err(|_| error::Error::KeyFormatInvalid)?
 	} else {

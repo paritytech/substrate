@@ -20,6 +20,7 @@ use beefy_primitives::{BeefyApi, MmrRootHash};
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockchainEvents, Finalizer};
 use sc_consensus::BlockImport;
+use sc_network::ProtocolName;
 use sc_network_gossip::Network as GossipNetwork;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -55,6 +56,7 @@ pub use beefy_protocol_name::standard_name as protocol_standard_name;
 
 pub(crate) mod beefy_protocol_name {
 	use sc_chain_spec::ChainSpec;
+	use sc_network::ProtocolName;
 
 	const NAME: &str = "/beefy/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
@@ -66,10 +68,11 @@ pub(crate) mod beefy_protocol_name {
 	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
-	) -> std::borrow::Cow<'static, str> {
+	) -> ProtocolName {
+		let genesis_hash = genesis_hash.as_ref();
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
+			Some(fork_id) => format!("/{}/{}", array_bytes::bytes2hex("", genesis_hash), fork_id),
+			None => format!("/{}", array_bytes::bytes2hex("", genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
@@ -79,9 +82,9 @@ pub(crate) mod beefy_protocol_name {
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 /// For standard protocol name see [`beefy_protocol_name::standard_name`].
 pub fn beefy_peers_set_config(
-	protocol_name: std::borrow::Cow<'static, str>,
-) -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg = sc_network::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024);
+	protocol_name: ProtocolName,
+) -> sc_network_common::config::NonDefaultSetConfig {
+	let mut cfg = sc_network_common::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024);
 
 	cfg.allow_non_reserved(25, 25);
 	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());
@@ -202,7 +205,7 @@ where
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
 	/// Chain specific GRANDPA protocol name. See [`beefy_protocol_name::standard_name`].
-	pub protocol_name: std::borrow::Cow<'static, str>,
+	pub protocol_name: ProtocolName,
 	/// Links between the block importer, the background voter and the RPC layer.
 	pub links: BeefyVoterLinks<B>,
 }

@@ -42,7 +42,7 @@ use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
-use sc_network_common::service::NetworkBlock;
+use sc_network_common::{config::MultiaddrWithPeerId, service::NetworkBlock};
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
@@ -72,7 +72,7 @@ pub use sc_chain_spec::{
 pub use sc_consensus::ImportQueue;
 pub use sc_executor::NativeExecutionDispatch;
 #[doc(hidden)]
-pub use sc_network::config::{TransactionImport, TransactionImportFuture};
+pub use sc_network_transactions::config::{TransactionImport, TransactionImportFuture};
 pub use sc_rpc::{
 	RandomIntegerSubscriptionId, RandomStringSubscriptionId, RpcSubscriptionIdProvider,
 };
@@ -148,7 +148,7 @@ async fn build_network_future<
 		+ Send
 		+ Sync
 		+ 'static,
-	H: sc_network::ExHashT,
+	H: sc_network_common::ExHashT,
 >(
 	role: Role,
 	mut network: sc_network::NetworkWorker<B, H, C>,
@@ -230,8 +230,15 @@ async fn build_network_future<
 						}
 					}
 					sc_rpc::system::Request::NetworkAddReservedPeer(peer_addr, sender) => {
-						let x = network.add_reserved_peer(peer_addr)
-							.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
+						let result = match MultiaddrWithPeerId::try_from(peer_addr) {
+							Ok(peer) => {
+								network.add_reserved_peer(peer)
+							},
+							Err(err) => {
+								Err(err.to_string())
+							},
+						};
+						let x = result.map_err(sc_rpc::system::error::Error::MalformattedPeerArg);
 						let _ = sender.send(x);
 					}
 					sc_rpc::system::Request::NetworkRemoveReservedPeer(peer_id, sender) => {
@@ -408,7 +415,8 @@ where
 		.collect()
 }
 
-impl<B, H, C, Pool, E> sc_network::config::TransactionPool<H, B> for TransactionPoolAdapter<C, Pool>
+impl<B, H, C, Pool, E> sc_network_transactions::config::TransactionPool<H, B>
+	for TransactionPoolAdapter<C, Pool>
 where
 	C: HeaderBackend<B>
 		+ BlockBackend<B>

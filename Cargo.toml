@@ -43,6 +43,7 @@ members = [
 	"client/keystore",
 	"client/network",
 	"client/network-gossip",
+	"client/network/bitswap",
 	"client/network/common",
 	"client/network/light",
 	"client/network/sync",
@@ -54,6 +55,7 @@ members = [
 	"client/rpc",
 	"client/rpc-api",
 	"client/rpc-servers",
+	"client/rpc-spec-v2",
 	"client/service",
 	"client/service/test",
 	"client/state-db",
@@ -88,6 +90,7 @@ members = [
 	"frame/contracts/rpc/runtime-api",
 	"frame/conviction-voting",
 	"frame/democracy",
+	"frame/fast-unstake",
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
@@ -211,6 +214,7 @@ members = [
 	"primitives/version",
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
+	"primitives/weights",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",
@@ -258,7 +262,7 @@ crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
-ed25519-dalek = { opt-level = 3 }
+ed25519-zebra = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }

@@ -46,7 +46,6 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
-use crate::utils::LruHashSet;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -72,7 +71,7 @@ use libp2p::{
 	},
 };
 use log::{debug, error, info, trace, warn};
-use sc_network_common::config::ProtocolId;
+use sc_network_common::{config::ProtocolId, utils::LruHashSet};
 use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
@@ -1069,7 +1068,7 @@ mod tests {
 					// Skip the first swarm as all other swarms already know it.
 					.skip(1)
 					.filter(|p| *p != n)
-					.map(|p| Swarm::local_peer_id(&swarms[p].0).clone())
+					.map(|p| *Swarm::local_peer_id(&swarms[p].0))
 					.collect::<HashSet<_>>()
 			})
 			.collect::<Vec<_>>();

@@ -80,6 +80,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+use warp::TargetBlockImportResult;
 
 mod extra_requests;
 
@@ -315,6 +316,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingState,
 	/// Downloading warp proof.
 	DownloadingWarpProof,
+	/// Downloading warp sync target block.
+	DownloadingWarpTargetBlock,
 	/// Actively downloading block history after warp sync.
 	DownloadingGap(NumberFor<B>),
 }
@@ -659,10 +662,11 @@ where
 	}
 
 	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<B>)> + '_> {
-		if self.allowed_requests.is_empty() ||
-			self.state_sync.is_some() ||
-			self.mode == SyncMode::Warp
-		{
+		if self.mode == SyncMode::Warp {
+			return Box::new(std::iter::once(self.warp_target_block_request()).flatten())
+		}
+
+		if self.allowed_requests.is_empty() || self.state_sync.is_some() {
 			return Box::new(std::iter::empty())
 		}
 
@@ -824,7 +828,7 @@ where
 				// Only one pending state request is allowed.
 				return None
 			}
-			if let Some(request) = sync.next_warp_poof_request() {
+			if let Some(request) = sync.next_warp_proof_request() {
 				let mut targets: Vec<_> = self.peers.values().map(|p| p.best_number).collect();
 				if !targets.is_empty() {
 					targets.sort();
@@ -1031,6 +1035,40 @@ where
 							Vec::new()
 						}
 					},
+					PeerSyncState::DownloadingWarpTargetBlock => {
+						peer.state = PeerSyncState::Available;
+						if let Some(warp_sync) = &mut self.warp_sync {
+							if blocks.len() == 1 {
+								validate_blocks::<B>(&blocks, who, Some(request))?;
+								match warp_sync.import_target_block(
+									blocks.pop().expect("`blocks` len checked above."),
+								) {
+									TargetBlockImportResult::Success =>
+										return Ok(OnBlockData::Continue),
+									TargetBlockImportResult::BadResponse =>
+										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
+								}
+							} else if blocks.is_empty() {
+								debug!(target: "sync", "Empty block response from {}", who);
+								return Err(BadPeer(*who, rep::NO_BLOCK))
+							} else {
+								debug!(
+									target: "sync",
+									"Too many blocks ({}) in warp target block response from {}",
+									blocks.len(),
+									who,
+								);
+								return Err(BadPeer(*who, rep::NOT_REQUESTED))
+							}
+						} else {
+							debug!(
+								target: "sync",
+								"Logic error: we think we are downloading warp target block from {}, but no warp sync is happening.",
+								who,
+							);
+							return Ok(OnBlockData::Continue)
+						}
+					},
 					PeerSyncState::Available |
 					PeerSyncState::DownloadingJustification(..) |
 					PeerSyncState::DownloadingState |
@@ -1112,14 +1150,14 @@ where
 		};
 
 		match import_result {
-			state::ImportResult::Import(hash, header, state) => {
+			state::ImportResult::Import(hash, header, state, body, justifications) => {
 				let origin = BlockOrigin::NetworkInitialSync;
 				let block = IncomingBlock {
 					hash,
 					header: Some(header),
-					body: None,
+					body,
 					indexed_body: None,
-					justifications: None,
+					justifications,
 					origin: None,
 					allow_missing_state: true,
 					import_existing: true,
@@ -1399,8 +1437,13 @@ where
 							number,
 							hash,
 						);
-						self.state_sync =
-							Some(StateSync::new(self.client.clone(), header, *skip_proofs));
+						self.state_sync = Some(StateSync::new(
+							self.client.clone(),
+							header,
+							None,
+							None,
+							*skip_proofs,
+						));
 						self.allowed_requests.set_all();
 					}
 				}
@@ -2163,6 +2206,33 @@ where
 			})
 			.collect()
 	}
+
+	/// Generate block request for downloading of the target block body during warp sync.
+	fn warp_target_block_request(&mut self) -> Option<(&PeerId, BlockRequest<B>)> {
+		if let Some(sync) = &self.warp_sync {
+			if self.allowed_requests.is_empty() ||
+				sync.is_complete() ||
+				self.peers
+					.iter()
+					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpTargetBlock)
+			{
+				// Only one pending warp target block request is allowed.
+				return None
+			}
+			if let Some((target_number, request)) = sync.next_target_block_request() {
+				// Find a random peer that has a block with the target number.
+				for (id, peer) in self.peers.iter_mut() {
+					if peer.state.is_available() && peer.best_number >= target_number {
+						trace!(target: "sync", "New warp target block request for {}", id);
+						peer.state = PeerSyncState::DownloadingWarpTargetBlock;
+						self.allowed_requests.clear();
+						return Some((id, request))
+					}
+				}
+			}
+		}
+		None
+	}
 }
 
 // This is purely during a backwards compatible transitionary period and should be removed
@@ -2614,15 +2684,15 @@ mod test {
 		let (b1_hash, b1_number) = new_blocks(50);
 
 		// add 2 peers at blocks that we don't have locally
-		sync.new_peer(peer_id1.clone(), Hash::random(), 42).unwrap();
-		sync.new_peer(peer_id2.clone(), Hash::random(), 10).unwrap();
+		sync.new_peer(peer_id1, Hash::random(), 42).unwrap();
+		sync.new_peer(peer_id2, Hash::random(), 10).unwrap();
 
 		// we wil send block requests to these peers
 		// for these blocks we don't know about
 		assert!(sync.block_requests().all(|(p, _)| { *p == peer_id1 || *p == peer_id2 }));
 
 		// add a new peer at a known block
-		sync.new_peer(peer_id3.clone(), b1_hash, b1_number).unwrap();
+		sync.new_peer(peer_id3, b1_hash, b1_number).unwrap();
 
 		// we request a justification for a block we have locally
 		sync.request_justification(&b1_hash, b1_number);
@@ -2673,7 +2743,7 @@ mod test {
 			data: Some(Vec::new()),
 		};
 
-		sync.push_block_announce_validation(peer_id.clone(), header.hash(), block_annnounce, true);
+		sync.push_block_announce_validation(*peer_id, header.hash(), block_annnounce, true);
 
 		// Poll until we have procssed the block announcement
 		block_on(poll_fn(|cx| loop {
@@ -2790,8 +2860,8 @@ mod test {
 		let block3_fork = build_block_at(block2.hash(), false);
 
 		// Add two peers which are on block 1.
-		sync.new_peer(peer_id1.clone(), block1.hash(), 1).unwrap();
-		sync.new_peer(peer_id2.clone(), block1.hash(), 1).unwrap();
+		sync.new_peer(peer_id1, block1.hash(), 1).unwrap();
+		sync.new_peer(peer_id2, block1.hash(), 1).unwrap();
 
 		// Tell sync that our best block is 3.
 		sync.update_chain_info(&block3.hash(), 3);
@@ -2885,9 +2955,9 @@ mod test {
 
 		let best_block = blocks.last().unwrap().clone();
 		// Connect the node we will sync from
-		sync.new_peer(peer_id1.clone(), best_block.hash(), *best_block.header().number())
+		sync.new_peer(peer_id1, best_block.hash(), *best_block.header().number())
 			.unwrap();
-		sync.new_peer(peer_id2.clone(), info.best_hash, 0).unwrap();
+		sync.new_peer(peer_id2, info.best_hash, 0).unwrap();
 
 		let mut best_block_num = 0;
 		while best_block_num < MAX_DOWNLOAD_AHEAD {
@@ -2922,9 +2992,9 @@ mod test {
 					.map(|b| {
 						(
 							Ok(BlockImportStatus::ImportedUnknown(
-								b.header().number().clone(),
+								*b.header().number(),
 								Default::default(),
-								Some(peer_id1.clone()),
+								Some(peer_id1),
 							)),
 							b.hash(),
 						)
@@ -3034,7 +3104,7 @@ mod test {
 
 		let common_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize / 2].clone();
 		// Connect the node we will sync from
-		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number())
+		sync.new_peer(peer_id1, common_block.hash(), *common_block.header().number())
 			.unwrap();
 
 		send_block_announce(fork_blocks.last().unwrap().header().clone(), &peer_id1, &mut sync);
@@ -3059,7 +3129,7 @@ mod test {
 		}
 
 		// Now request and import the fork.
-		let mut best_block_num = finalized_block.header().number().clone() as u32;
+		let mut best_block_num = *finalized_block.header().number() as u32;
 		while best_block_num < *fork_blocks.last().unwrap().header().number() as u32 - 1 {
 			let request = get_block_request(
 				&mut sync,
@@ -3092,9 +3162,9 @@ mod test {
 					.map(|b| {
 						(
 							Ok(BlockImportStatus::ImportedUnknown(
-								b.header().number().clone(),
+								*b.header().number(),
 								Default::default(),
-								Some(peer_id1.clone()),
+								Some(peer_id1),
 							)),
 							b.hash(),
 						)
@@ -3165,7 +3235,7 @@ mod test {
 
 		let common_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize / 2].clone();
 		// Connect the node we will sync from
-		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number())
+		sync.new_peer(peer_id1, common_block.hash(), *common_block.header().number())
 			.unwrap();
 
 		send_block_announce(fork_blocks.last().unwrap().header().clone(), &peer_id1, &mut sync);
@@ -3190,7 +3260,7 @@ mod test {
 		}
 
 		// Now request and import the fork.
-		let mut best_block_num = finalized_block.header().number().clone() as u32;
+		let mut best_block_num = *finalized_block.header().number() as u32;
 		let mut request = get_block_request(
 			&mut sync,
 			FromBlock::Number(MAX_BLOCKS_TO_REQUEST as u64 + best_block_num as u64),
@@ -3231,9 +3301,9 @@ mod test {
 				.map(|b| {
 					(
 						Ok(BlockImportStatus::ImportedUnknown(
-							b.header().number().clone(),
+							*b.header().number(),
 							Default::default(),
-							Some(peer_id1.clone()),
+							Some(peer_id1),
 						)),
 						b.hash(),
 					)
@@ -3288,7 +3358,7 @@ mod test {
 		let peer_id1 = PeerId::random();
 		let common_block = blocks[1].clone();
 		// Connect the node we will sync from
-		sync.new_peer(peer_id1.clone(), common_block.hash(), *common_block.header().number())
+		sync.new_peer(peer_id1, common_block.hash(), *common_block.header().number())
 			.unwrap();
 
 		// Create a "new" header and announce it
@@ -3320,7 +3390,7 @@ mod test {
 
 		let peer_id1 = PeerId::random();
 		let best_block = blocks[3].clone();
-		sync.new_peer(peer_id1.clone(), best_block.hash(), *best_block.header().number())
+		sync.new_peer(peer_id1, best_block.hash(), *best_block.header().number())
 			.unwrap();
 
 		sync.peers.get_mut(&peer_id1).unwrap().state = PeerSyncState::Available;

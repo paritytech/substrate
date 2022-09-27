@@ -165,7 +165,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_runtime::{
-	traits::{Bounded, Dispatchable, Hash, Saturating, Zero},
+	traits::{Bounded, Dispatchable, Hash, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -206,6 +206,7 @@ type BalanceOf<T> =
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum PreimageStatus<AccountId, Balance, BlockNumber> {
@@ -252,8 +253,10 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + Sized {
-		type Proposal: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self>>;
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type Proposal: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ From<Call<Self>>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
@@ -288,25 +291,25 @@ pub mod pallet {
 
 		/// Origin from which the next tabled referendum may be forced. This is a normal
 		/// "super-majority-required" referendum.
-		type ExternalOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a majority-carries referendum.
-		type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalMajorityOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a negative-turnout-bias (default-carries) referendum.
-		type ExternalDefaultOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalDefaultOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote according to the `FastTrackVotingPeriod` asynchronously in a similar
 		/// manner to the emergency origin. It retains its threshold method.
-		type FastTrackOrigin: EnsureOrigin<Self::Origin>;
+		type FastTrackOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote immediately and asynchronously in a similar manner to the emergency
 		/// origin. It retains its threshold method.
-		type InstantOrigin: EnsureOrigin<Self::Origin>;
+		type InstantOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Indicator for whether an emergency origin is even allowed to happen. Some chains may
 		/// want to set this permanently to `false`, others may want to condition it on things such
@@ -319,13 +322,13 @@ pub mod pallet {
 		type FastTrackVotingPeriod: Get<Self::BlockNumber>;
 
 		/// Origin from which any referendum may be cancelled in an emergency.
-		type CancellationOrigin: EnsureOrigin<Self::Origin>;
+		type CancellationOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which proposals may be blacklisted.
-		type BlacklistOrigin: EnsureOrigin<Self::Origin>;
+		type BlacklistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which a proposal may be cancelled and its backers slashed.
-		type CancelProposalOrigin: EnsureOrigin<Self::Origin>;
+		type CancelProposalOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin for anyone able to veto proposals.
 		///
@@ -333,7 +336,7 @@ pub mod pallet {
 		///
 		/// The number of Vetoers for a proposal must be small, extrinsics are weighted according to
 		/// [MAX_VETOERS](./const.MAX_VETOERS.html)
-		type VetoOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type VetoOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Period in blocks where an external proposal may not be re-submitted after being vetoed.
 		#[pallet::constant]
@@ -344,7 +347,7 @@ pub mod pallet {
 		type PreimageByteDeposit: Get<BalanceOf<Self>>;
 
 		/// An origin that can provide a preimage using operational extrinsics.
-		type OperationalPreimageOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type OperationalPreimageOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -944,11 +947,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::delegate(T::MaxVotes::get()))]
 		pub fn delegate(
 			origin: OriginFor<T>,
-			to: T::AccountId,
+			to: AccountIdLookupOf<T>,
 			conviction: Conviction,
 			balance: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -1127,8 +1131,9 @@ pub mod pallet {
 			T::WeightInfo::unlock_set(T::MaxVotes::get())
 				.max(T::WeightInfo::unlock_remove(T::MaxVotes::get()))
 		)]
-		pub fn unlock(origin: OriginFor<T>, target: T::AccountId) -> DispatchResult {
+		pub fn unlock(origin: OriginFor<T>, target: AccountIdLookupOf<T>) -> DispatchResult {
 			ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&target);
 			Ok(())
 		}
@@ -1184,10 +1189,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_other_vote(T::MaxVotes::get()))]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 			index: ReferendumIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, scope)?;
 			Ok(())
@@ -1761,7 +1767,7 @@ impl<T: Config> Pallet<T> {
 	/// # </weight>
 	fn begin_block(now: T::BlockNumber) -> Weight {
 		let max_block_weight = T::BlockWeights::get().max_block;
-		let mut weight = 0;
+		let mut weight = Weight::zero();
 
 		let next = Self::lowest_unbaked();
 		let last = Self::referendum_count();

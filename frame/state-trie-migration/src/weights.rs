@@ -59,40 +59,40 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: StateTrieMigration SignedMigrationMaxLimits (r:1 w:0)
 	// Storage: StateTrieMigration MigrationProcess (r:1 w:1)
 	fn continue_migrate() -> Weight {
-		(19_019_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(19_019_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: StateTrieMigration SignedMigrationMaxLimits (r:1 w:0)
 	fn continue_migrate_wrong_witness() -> Weight {
-		(1_874_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(1_874_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
 	}
 	fn migrate_custom_top_success() -> Weight {
-		(16_381_000 as Weight)
+		Weight::from_ref_time(16_381_000 as u64)
 	}
 	// Storage: unknown [0x666f6f] (r:1 w:1)
 	fn migrate_custom_top_fail() -> Weight {
-		(25_966_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(25_966_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	fn migrate_custom_child_success() -> Weight {
-		(16_712_000 as Weight)
+		Weight::from_ref_time(16_712_000 as u64)
 	}
 	// Storage: unknown [0x666f6f] (r:1 w:1)
 	fn migrate_custom_child_fail() -> Weight {
-		(29_885_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(29_885_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: unknown [0x6b6579] (r:1 w:1)
 	fn process_top_key(v: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as u64).saturating_mul(v as u64))
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 }
 
@@ -101,39 +101,39 @@ impl WeightInfo for () {
 	// Storage: StateTrieMigration SignedMigrationMaxLimits (r:1 w:0)
 	// Storage: StateTrieMigration MigrationProcess (r:1 w:1)
 	fn continue_migrate() -> Weight {
-		(19_019_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(19_019_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: StateTrieMigration SignedMigrationMaxLimits (r:1 w:0)
 	fn continue_migrate_wrong_witness() -> Weight {
-		(1_874_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
+		Weight::from_ref_time(1_874_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 	}
 	fn migrate_custom_top_success() -> Weight {
-		(16_381_000 as Weight)
+		Weight::from_ref_time(16_381_000 as u64)
 	}
 	// Storage: unknown [0x666f6f] (r:1 w:1)
 	fn migrate_custom_top_fail() -> Weight {
-		(25_966_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(25_966_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	fn migrate_custom_child_success() -> Weight {
-		(16_712_000 as Weight)
+		Weight::from_ref_time(16_712_000 as u64)
 	}
 	// Storage: unknown [0x666f6f] (r:1 w:1)
 	fn migrate_custom_child_fail() -> Weight {
-		(29_885_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+		Weight::from_ref_time(29_885_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: unknown [0x6b6579] (r:1 w:1)
 	fn process_top_key(v: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add((2_000 as Weight).saturating_mul(v as Weight))
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(2_000 as u64).saturating_mul(v as u64))
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 }

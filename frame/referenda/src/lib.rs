@@ -72,7 +72,7 @@ use frame_support::{
 			v2::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime, MaybeHashed,
 		},
-		Currency, Get, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling,
+		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling,
 		ReservableCurrency, VoteTally,
 	},
 	BoundedVec,
@@ -108,6 +108,30 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
+pub use frame_support::traits::Get;
+pub use sp_std::vec::Vec;
+
+#[macro_export]
+macro_rules! impl_tracksinfo_get {
+	($tracksinfo:ty, $balance:ty, $blocknumber:ty) => {
+		impl
+			$crate::Get<
+				$crate::Vec<(
+					<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
+					$crate::TrackInfo<$balance, $blocknumber>,
+				)>,
+			> for $tracksinfo
+		{
+			fn get() -> $crate::Vec<(
+				<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
+				$crate::TrackInfo<$balance, $blocknumber>,
+			)> {
+				<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::tracks().to_vec()
+			}
+		}
+	};
+}
+
 const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 
 #[frame_support::pallet]
@@ -123,8 +147,11 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ From<Call<Self, I>>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
@@ -143,11 +170,11 @@ pub mod pallet {
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
 		/// Origin from which proposals may be submitted.
-		type SubmitOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 		/// Origin from which any vote may be cancelled.
-		type CancelOrigin: EnsureOrigin<Self::Origin>;
+		type CancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Origin from which any vote may be killed.
-		type KillOrigin: EnsureOrigin<Self::Origin>;
+		type KillOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 		/// The counting type for votes. Usually just balance.
@@ -183,11 +210,17 @@ pub mod pallet {
 
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
-		type Tracks: TracksInfo<
-			BalanceOf<Self, I>,
-			Self::BlockNumber,
-			Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
-		>;
+		#[pallet::constant]
+		type Tracks: Get<
+				Vec<(
+					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, Self::BlockNumber>>::Id,
+					TrackInfo<BalanceOf<Self, I>, Self::BlockNumber>,
+				)>,
+			> + TracksInfo<
+				BalanceOf<Self, I>,
+				Self::BlockNumber,
+				RuntimeOrigin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
+			>;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
@@ -699,7 +732,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
+		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
+			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
@@ -752,7 +786,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track)
+			.max(now.saturating_add(One::one()));
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };

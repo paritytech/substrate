@@ -16,10 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	config, error,
-	utils::{interval, LruHashSet},
-};
+use crate::config;
 
 use bytes::Bytes;
 use codec::{Decode, DecodeAll, Encode};
@@ -40,10 +37,14 @@ use message::{
 };
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
-use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
-use sc_consensus::import_queue::{BlockImportError, BlockImportStatus, IncomingBlock, Origin};
+use sc_client_api::HeaderBackend;
+use sc_consensus::import_queue::{
+	BlockImportError, BlockImportStatus, IncomingBlock, RuntimeOrigin,
+};
 use sc_network_common::{
-	config::ProtocolId,
+	config::{NonReservedPeerMode, ProtocolId},
+	error,
+	protocol::ProtocolName,
 	request_responses::RequestFailure,
 	sync::{
 		message::{
@@ -54,9 +55,9 @@ use sc_network_common::{
 		OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PollBlockAnnounceValidation,
 		SyncStatus,
 	},
+	utils::{interval, LruHashSet},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_blockchain::HeaderMetadata;
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
@@ -64,7 +65,6 @@ use sp_runtime::{
 	Justifications,
 };
 use std::{
-	borrow::Cow,
 	collections::{HashMap, HashSet, VecDeque},
 	io, iter,
 	num::NonZeroUsize,
@@ -191,7 +191,7 @@ pub struct Protocol<B: BlockT, Client> {
 	/// Handles opening the unique substream and sending and receiving raw messages.
 	behaviour: Notifications,
 	/// List of notifications protocols that have been registered.
-	notification_protocols: Vec<Cow<'static, str>>,
+	notification_protocols: Vec<ProtocolName>,
 	/// If we receive a new "substream open" event that contains an invalid handshake, we ask the
 	/// inner layer to force-close the substream. Force-closing the substream will generate a
 	/// "substream closed" event. This is a problem: since we can't propagate the "substream open"
@@ -262,13 +262,7 @@ impl<B: BlockT> BlockAnnouncesHandshake<B> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -346,7 +340,7 @@ where
 				bootnodes,
 				reserved_nodes: default_sets_reserved.clone(),
 				reserved_only: network_config.default_peers_set.non_reserved_mode ==
-					config::NonReservedPeerMode::Deny,
+					NonReservedPeerMode::Deny,
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -357,7 +351,7 @@ where
 				}
 
 				let reserved_only =
-					set_cfg.set_config.non_reserved_mode == config::NonReservedPeerMode::Deny;
+					set_cfg.set_config.non_reserved_mode == NonReservedPeerMode::Deny;
 
 				sets.push(sc_peerset::SetConfig {
 					in_peers: set_cfg.set_config.in_peers,
@@ -373,11 +367,16 @@ where
 
 		let block_announces_protocol = {
 			let genesis_hash =
-				chain.block_hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+				chain.hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
+			let genesis_hash = genesis_hash.as_ref();
 			if let Some(fork_id) = fork_id {
-				format!("/{}/{}/block-announces/1", hex::encode(genesis_hash), fork_id)
+				format!(
+					"/{}/{}/block-announces/1",
+					array_bytes::bytes2hex("", genesis_hash),
+					fork_id
+				)
 			} else {
-				format!("/{}/block-announces/1", hex::encode(genesis_hash))
+				format!("/{}/block-announces/1", array_bytes::bytes2hex("", genesis_hash))
 			}
 		};
 
@@ -467,7 +466,7 @@ where
 	}
 
 	/// Disconnects the given peer if we are connected to it.
-	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: &str) {
+	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
 			self.behaviour.disconnect_peer(
@@ -634,6 +633,7 @@ where
 					CustomMessageOutcome::BlockImport(origin, blocks),
 				Ok(OnBlockData::Request(peer, req)) =>
 					prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
+				Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 					self.peerset_handle.report_peer(id, repu);
@@ -981,6 +981,7 @@ where
 				CustomMessageOutcome::BlockImport(origin, blocks),
 			Ok(OnBlockData::Request(peer, req)) =>
 				prepare_block_request(self.chain_sync.as_ref(), &mut self.peers, peer, req),
+			Ok(OnBlockData::Continue) => CustomMessageOutcome::None,
 			Err(BadPeer(id, repu)) => {
 				self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
 				self.peerset_handle.report_peer(id, repu);
@@ -1092,7 +1093,7 @@ where
 	}
 
 	/// Sets the list of reserved peers for the given protocol/peerset.
-	pub fn set_reserved_peerset_peers(&self, protocol: Cow<'static, str>, peers: HashSet<PeerId>) {
+	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle
 				.set_reserved_peers(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peers);
@@ -1106,7 +1107,7 @@ where
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.
-	pub fn remove_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.remove_reserved_peer(
 				sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS),
@@ -1122,7 +1123,7 @@ where
 	}
 
 	/// Adds a `PeerId` to the list of reserved peers.
-	pub fn add_set_reserved_peer(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle
 				.add_reserved_peer(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
@@ -1145,7 +1146,7 @@ where
 	}
 
 	/// Add a peer to a peers set.
-	pub fn add_to_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn add_to_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle
 				.add_to_peers_set(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
@@ -1159,7 +1160,7 @@ where
 	}
 
 	/// Remove a peer from a peers set.
-	pub fn remove_from_peers_set(&self, protocol: Cow<'static, str>, peer: PeerId) {
+	pub fn remove_from_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
 			self.peerset_handle.remove_from_peers_set(
 				sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS),
@@ -1262,31 +1263,31 @@ fn prepare_warp_sync_request<B: BlockT>(
 #[must_use]
 pub enum CustomMessageOutcome<B: BlockT> {
 	BlockImport(BlockOrigin, Vec<IncomingBlock<B>>),
-	JustificationImport(Origin, B::Hash, NumberFor<B>, Justifications),
+	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
 	/// Notification protocols have been opened with a remote.
 	NotificationStreamOpened {
 		remote: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		/// See [`crate::Event::NotificationStreamOpened::negotiated_fallback`].
-		negotiated_fallback: Option<Cow<'static, str>>,
+		negotiated_fallback: Option<ProtocolName>,
 		roles: Roles,
 		notifications_sink: NotificationsSink,
 	},
 	/// The [`NotificationsSink`] of some notification protocols need an update.
 	NotificationStreamReplaced {
 		remote: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 		notifications_sink: NotificationsSink,
 	},
 	/// Notification protocols have been closed with a remote.
 	NotificationStreamClosed {
 		remote: PeerId,
-		protocol: Cow<'static, str>,
+		protocol: ProtocolName,
 	},
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived {
 		remote: PeerId,
-		messages: Vec<(Cow<'static, str>, Bytes)>,
+		messages: Vec<(ProtocolName, Bytes)>,
 	},
 	/// A new block request must be emitted.
 	BlockRequest {
@@ -1318,13 +1319,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B>
-		+ BlockBackend<B>
-		+ HeaderMetadata<B, Error = sp_blockchain::Error>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: HeaderBackend<B> + 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;

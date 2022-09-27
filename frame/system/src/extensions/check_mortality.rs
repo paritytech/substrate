@@ -56,7 +56,7 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for CheckMortality<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckMortality";
@@ -101,7 +101,10 @@ impl<T: Config + Send + Sync> SignedExtension for CheckMortality<T> {
 mod tests {
 	use super::*;
 	use crate::mock::{new_test_ext, System, Test, CALL};
-	use frame_support::weights::{DispatchClass, DispatchInfo, Pays};
+	use frame_support::{
+		dispatch::{DispatchClass, DispatchInfo, Pays},
+		weights::Weight,
+	};
 	use sp_core::H256;
 
 	#[test]
@@ -126,8 +129,11 @@ mod tests {
 	#[test]
 	fn signed_ext_check_era_should_change_longevity() {
 		new_test_ext().execute_with(|| {
-			let normal =
-				DispatchInfo { weight: 100, class: DispatchClass::Normal, pays_fee: Pays::Yes };
+			let normal = DispatchInfo {
+				weight: Weight::from_ref_time(100),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes,
+			};
 			let len = 0_usize;
 			let ext = (
 				crate::CheckWeight::<Test>::new(),
