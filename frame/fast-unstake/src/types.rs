@@ -36,11 +36,15 @@ pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 #[derive(
 	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
 )]
-pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32>> {
+pub struct UnstakeRequest<
+	AccountId: Eq + PartialEq + Debug,
+	MaxChecked: Get<u32>,
+	Balance: PartialEq + Debug,
+> {
 	/// Their stash account.
 	pub(crate) stash: AccountId,
 	/// The list of eras for which they have been checked.
 	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
 	/// Deposit to be slashed if the unstake was unsuccessful.
-	pub(crate) deposit: u64,
+	pub(crate) deposit: Balance,
 }

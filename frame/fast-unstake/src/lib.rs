@@ -129,7 +129,7 @@ pub mod pallet {
 	/// The current "head of the queue" being unstaked.
 	#[pallet::storage]
 	pub type Head<T: Config> =
-		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecking<T>>, OptionQuery>;
+		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecking<T>, BalanceOf<T>>, OptionQuery>;
 
 	/// The map of all accounts wishing to be unstaked.
 	///
@@ -331,7 +331,7 @@ pub mod pallet {
 					Queue::<T>::drain()
 						.map(|(stash, deposit)| UnstakeRequest {
 							stash,
-							deposit: deposit.into(),
+							deposit,
 							checked: Default::default(),
 						})
 						.next()
@@ -396,7 +396,7 @@ pub mod pallet {
 					num_slashing_spans,
 				);
 
-				let unreserved = T::DepositCurrency::unreserve(&stash, deposit.into());
+				let unreserved = T::DepositCurrency::unreserve(&stash, deposit);
 				if deposit > unreserved {
 					frame_support::defensive!("`not enough balance to unreserve`");
 					ErasToCheckPerBlock::<T>::put(0);
@@ -428,9 +428,9 @@ pub mod pallet {
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
 				// you are exposed.
 				if is_exposed {
-					T::DepositCurrency::slash_reserved(&stash, deposit.into());
+					T::DepositCurrency::slash_reserved(&stash, deposit);
 					log!(info, "slashed {:?} by {:?}", stash, deposit);
-					Self::deposit_event(Event::<T>::Slashed { stash, amount: deposit.into() });
+					Self::deposit_event(Event::<T>::Slashed { stash, amount: deposit });
 				} else {
 					// Not exposed in these eras.
 					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
