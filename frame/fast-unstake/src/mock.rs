@@ -214,11 +214,11 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			exposed_nominators: vec![
-				(1, 2, 100),
-				(3, 4, 100),
-				(5, 6, 100),
-				(7, 8, 100),
-				(9, 10, 100),
+				(1, 2, 28_000 + 100),
+				(3, 4, 28_000 + 100),
+				(5, 6, 28_000 + 100),
+				(7, 8, 28_000 + 100),
+				(9, 10, 28_000 + 100),
 			],
 		}
 	}
@@ -271,8 +271,8 @@ impl ExtBuilder {
 						.into_iter()
 						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),
 				)
-				.chain(validators_range.clone().map(|x| (x, 100)))
-				.chain(nominators_range.clone().map(|x| (x, 100)))
+				.chain(validators_range.clone().map(|x| (x, 28_000 + 100)))
+				.chain(nominators_range.clone().map(|x| (x, 28_000 + 100)))
 				.collect::<Vec<_>>(),
 		}
 		.assimilate_storage(&mut storage);

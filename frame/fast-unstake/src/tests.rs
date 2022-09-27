@@ -35,6 +35,7 @@ fn test_setup_works() {
 #[test]
 fn register_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Controller account registers for fast unstake.
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
 		// Ensure stash is in the queue.
@@ -45,6 +46,7 @@ fn register_works() {
 #[test]
 fn cannot_register_if_not_bonded() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Mint accounts 1 and 2 with 200 tokens.
 		for _ in 1..2 {
 			let _ = Balances::make_free_balance_be(&1, 200);
@@ -60,8 +62,9 @@ fn cannot_register_if_not_bonded() {
 #[test]
 fn cannot_register_if_in_queue() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Insert some Queue item
-		Queue::<T>::insert(1, ());
+		Queue::<T>::insert(1, 10);
 		// Cannot re-register, already in queue
 		assert_noop!(
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
@@ -73,8 +76,9 @@ fn cannot_register_if_in_queue() {
 #[test]
 fn cannot_register_if_head() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Insert some Head item for stash
-		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![] });
+		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], deposit: 28_000 });
 		// Controller attempts to regsiter
 		assert_noop!(
 			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
@@ -86,6 +90,7 @@ fn cannot_register_if_head() {
 #[test]
 fn cannot_register_if_has_unlocking_chunks() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Start unbonding half of staked tokens
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(2), 50_u128));
 		// Cannot register for fast unstake with unlock chunks active
@@ -99,6 +104,7 @@ fn cannot_register_if_has_unlocking_chunks() {
 #[test]
 fn deregister_works() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Controller account registers for fast unstake.
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
 		// Controller then changes mind and deregisters.
@@ -111,6 +117,7 @@ fn deregister_works() {
 #[test]
 fn cannot_deregister_if_not_controller() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Controller account registers for fast unstake.
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
 		// Stash tries to deregister.
@@ -121,6 +128,7 @@ fn cannot_deregister_if_not_controller() {
 #[test]
 fn cannot_deregister_if_not_queued() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Controller tries to deregister without first registering
 		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::NotQueued);
 	});
@@ -129,10 +137,11 @@ fn cannot_deregister_if_not_queued() {
 #[test]
 fn cannot_deregister_already_head() {
 	ExtBuilder::default().build_and_execute(|| {
+		ErasToCheckPerBlock::<T>::put(1);
 		// Controller attempts to register, should fail
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
 		// Insert some Head item for stash.
-		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![] });
+		Head::<T>::put(UnstakeRequest { stash: 1, checked: bounded_vec![], deposit: 28_000 });
 		// Controller attempts to deregister
 		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::AlreadyHead);
 	});
@@ -165,14 +174,14 @@ mod on_idle {
 
 			// set up Queue item
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 
 			// call on_idle with no remaining weight
 			FastUnstake::on_idle(System::block_number(), Weight::from_ref_time(0));
 
 			// assert nothing changed in Queue and Head
 			assert_eq!(Head::<T>::get(), None);
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 		});
 	}
 
@@ -185,7 +194,7 @@ mod on_idle {
 
 			// given
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 
 			assert_eq!(Queue::<T>::count(), 1);
 			assert_eq!(Head::<T>::get(), None);
@@ -204,7 +213,7 @@ mod on_idle {
 			);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3] })
 			);
 
 			// when: another 1 era.
@@ -220,7 +229,7 @@ mod on_idle {
 			);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			// when: then 5 eras, we only need 2 more.
@@ -242,7 +251,11 @@ mod on_idle {
 			);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 
 			// when: not enough weight to unstake:
@@ -254,7 +267,11 @@ mod on_idle {
 			assert_eq!(fast_unstake_events_since_last_call(), vec![]);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 
 			// when: enough weight to get over at least one iteration: then we are unblocked and can
@@ -300,7 +317,11 @@ mod on_idle {
 			// then
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 			assert_eq!(Queue::<T>::count(), 4);
 
@@ -317,7 +338,11 @@ mod on_idle {
 			// then
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 5, checked: bounded_vec![3, 2, 1, 0] }),
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 5,
+					checked: bounded_vec![3, 2, 1, 0]
+				}),
 			);
 			assert_eq!(Queue::<T>::count(), 3);
 
@@ -340,9 +365,9 @@ mod on_idle {
 
 			// register multi accounts for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(4)));
-			assert_eq!(Queue::<T>::get(3), Some(()));
+			assert_eq!(Queue::<T>::get(3), Some(28_000));
 
 			// assert 2 queue items are in Queue & None in Head to start with
 			assert_eq!(Queue::<T>::count(), 2);
@@ -391,7 +416,7 @@ mod on_idle {
 
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 
 			// process on idle
 			next_block(true);
@@ -402,7 +427,11 @@ mod on_idle {
 			// assert head item present
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 
 			next_block(true);
@@ -425,9 +454,11 @@ mod on_idle {
 			ErasToCheckPerBlock::<T>::put(BondingDuration::get() + 1);
 			CurrentEra::<T>::put(BondingDuration::get());
 
+			Balances::make_free_balance_be(&2, 100);
+
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 
 			// process on idle
 			next_block(true);
@@ -438,7 +469,11 @@ mod on_idle {
 			// assert head item present
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 
 			next_block(true);
@@ -464,7 +499,7 @@ mod on_idle {
 
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 
 			// process on idle
 			next_block(true);
@@ -475,28 +510,32 @@ mod on_idle {
 			// assert head item present
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3] })
 			);
 
 			next_block(true);
 
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			next_block(true);
 
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2, 1] })
 			);
 
 			next_block(true);
 
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 
 			next_block(true);
@@ -529,30 +568,34 @@ mod on_idle {
 
 			// register for fast unstake
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
-			assert_eq!(Queue::<T>::get(1), Some(()));
+			assert_eq!(Queue::<T>::get(1), Some(28_000));
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3] })
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2, 1] })
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 
 			// when: a new era happens right before one is free.
@@ -567,6 +610,7 @@ mod on_idle {
 					stash: 1,
 					// note era 0 is pruned to keep the vector length sane.
 					checked: bounded_vec![3, 2, 1, 4],
+					deposit: 28_000,
 				})
 			);
 
@@ -602,13 +646,13 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3] })
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			// when
@@ -618,13 +662,13 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2] })
 			);
 
 			// then we register a new era.
@@ -636,14 +680,18 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 4] })
+				Some(UnstakeRequest { deposit: 28_000, stash: 1, checked: bounded_vec![3, 2, 4] })
 			);
 
 			// progress to end
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 1, checked: bounded_vec![3, 2, 4, 1] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 1,
+					checked: bounded_vec![3, 2, 4, 1]
+				})
 			);
 
 			// but notice that we don't care about era 0 instead anymore! we're done.
@@ -685,6 +733,7 @@ mod on_idle {
 			));
 			assert_ok!(Staking::nominate(RuntimeOrigin::signed(exposed), vec![exposed]));
 
+			Balances::make_free_balance_be(&exposed, 100_000);
 			// register the exposed one.
 			assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(exposed)));
 
@@ -692,23 +741,26 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: exposed, checked: bounded_vec![3] })
+				Some(UnstakeRequest { deposit: 28_000, stash: exposed, checked: bounded_vec![3] })
 			);
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: exposed, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: exposed,
+					checked: bounded_vec![3, 2]
+				})
 			);
 			next_block(true);
 			assert_eq!(Head::<T>::get(), None);
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				// we slash them by 21, since we checked 3 eras in total (3, 2, 1).
 				vec![
 					Event::Checking { stash: exposed, eras: vec![3] },
 					Event::Checking { stash: exposed, eras: vec![2] },
-					Event::Slashed { stash: exposed, amount: 3 * 7 }
+					Event::Slashed { stash: exposed, amount: 28_000 }
 				]
 			);
 		});
@@ -727,7 +779,7 @@ mod on_idle {
 			pallet_staking::ErasStakers::<T>::mutate(0, VALIDATORS_PER_ERA, |expo| {
 				expo.others.push(IndividualExposure { who: exposed, value: 0 as Balance });
 			});
-			Balances::make_free_balance_be(&exposed, 100);
+			Balances::make_free_balance_be(&exposed, 28_000 + 100);
 			assert_ok!(Staking::bond(
 				RuntimeOrigin::signed(exposed),
 				exposed,
@@ -743,17 +795,21 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: exposed, checked: bounded_vec![3, 2] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: exposed,
+					checked: bounded_vec![3, 2]
+				})
 			);
 			next_block(true);
 			assert_eq!(Head::<T>::get(), None);
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				// we slash them by 28, since we checked 4 eras in total.
+				// we slash them
 				vec![
 					Event::Checking { stash: exposed, eras: vec![3, 2] },
-					Event::Slashed { stash: exposed, amount: 4 * 7 }
+					Event::Slashed { stash: exposed, amount: 28_000 }
 				]
 			);
 		});
@@ -784,7 +840,7 @@ mod on_idle {
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Slashed { stash: 100, amount: 100 }]
+				vec![Event::Slashed { stash: 100, amount: 28_000 }]
 			);
 		});
 	}
@@ -796,7 +852,7 @@ mod on_idle {
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// create a new validator that 100% not exposed.
-			Balances::make_free_balance_be(&42, 100);
+			Balances::make_free_balance_be(&42, 100 + 28_000);
 			assert_ok!(Staking::bond(RuntimeOrigin::signed(42), 42, 10, RewardDestination::Staked));
 			assert_ok!(Staking::validate(RuntimeOrigin::signed(42), Default::default()));
 
@@ -807,7 +863,11 @@ mod on_idle {
 			next_block(true);
 			assert_eq!(
 				Head::<T>::get(),
-				Some(UnstakeRequest { stash: 42, checked: bounded_vec![3, 2, 1, 0] })
+				Some(UnstakeRequest {
+					deposit: 28_000,
+					stash: 42,
+					checked: bounded_vec![3, 2, 1, 0]
+				})
 			);
 			next_block(true);
 			assert_eq!(Head::<T>::get(), None);
