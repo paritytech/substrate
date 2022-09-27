@@ -17,7 +17,7 @@
 
 //! Tests for the module.
 
-use super::{ConfigOp, Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
@@ -1354,7 +1354,8 @@ fn too_many_unbond_calls_should_not_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
-		for i in 0..MaxUnlockingChunks::get() - 1 {
+
+		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() - 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1369,7 +1370,7 @@ fn too_many_unbond_calls_should_not_work() {
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
 			Staking::ledger(&10).unwrap().unlocking.len(),
-			MaxUnlockingChunks::get() as usize
+			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
 		// can't do more.
 		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
@@ -5494,7 +5495,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 }
 
 #[test]
-fn reducing_history_depth_without_migration() {
+fn reducing_history_depth_abrupt() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		let original_history_depth = HistoryDepth::get();
@@ -5570,4 +5571,56 @@ fn reducing_history_depth_without_migration() {
 		// fix the corrupted state for post conditions check
 		HistoryDepth::set(original_history_depth);
 	});
+}
+
+#[test]
+fn reducing_max_unlocking_chunks_abrupt() {
+	// Concern is on validators only
+	// By Default 11, 10 are stash and ctrl and 21,20
+	ExtBuilder::default().build_and_execute(|| {
+		// given a staker at era=10 and MaxUnlockChunks set to 2
+		MaxUnlockingChunks::set(2);
+		start_active_era(10);
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
+		assert!(matches!(Staking::ledger(4), Some(_)));
+
+		// when staker unbonds
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
+
+		// then an unlocking chunk is added at `current_era + bonding_duration`
+		// => 10 + 3 = 13
+		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
+			bounded_vec![UnlockChunk { value: 20 as Balance, era: 13 as EraIndex }];
+		assert!(matches!(Staking::ledger(4),
+			Some(StakingLedger {
+				unlocking,
+				..
+			}) if unlocking==expected_unlocking));
+
+		// when staker unbonds at next era
+		start_active_era(11);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 50));
+		// then another unlock chunk is added
+		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
+			bounded_vec![UnlockChunk { value: 20, era: 13 }, UnlockChunk { value: 50, era: 14 }];
+		assert!(matches!(Staking::ledger(4),
+			Some(StakingLedger {
+				unlocking,
+				..
+			}) if unlocking==expected_unlocking));
+
+		// when staker unbonds further
+		start_active_era(12);
+		// then further unbonding not possible
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(4), 20), Error::<Test>::NoMoreChunks);
+
+		// when max unlocking chunks is reduced abruptly to a low value
+		MaxUnlockingChunks::set(1);
+		// then unbond, rebond ops are blocked with ledger in corrupt state
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(4), 20), Error::<Test>::NotController);
+		assert_noop!(Staking::rebond(RuntimeOrigin::signed(4), 100), Error::<Test>::NotController);
+
+		// reset the ledger corruption
+		MaxUnlockingChunks::set(2);
+	})
 }
