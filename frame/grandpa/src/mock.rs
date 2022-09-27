@@ -210,7 +210,7 @@ impl pallet_staking::Config for Test {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = ();
-	type OnVoterListUpdate = ();
+	type OnStakersUpdate = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
@@ -251,7 +251,8 @@ pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {
 }
 
 pub fn to_authorities(vec: Vec<(u64, u64)>) -> AuthorityList {
-	vec.into_iter()
+	vec
+		.into_iter()
 		.map(|(id, weight)| (UintAuthorityId(id).to_public_key::<AuthorityId>(), weight))
 		.collect()
 }
@@ -280,11 +281,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 		.iter()
 		.enumerate()
 		.map(|(i, (k, _))| {
-			(
-				i as u64,
-				i as u64,
-				TestSessionKeys { grandpa_authority: AuthorityId::from(k.clone()) },
-			)
+			(i as u64, i as u64, TestSessionKeys { grandpa_authority: AuthorityId::from(k.clone()) })
 		})
 		.collect();
 
@@ -296,9 +293,7 @@ pub fn new_test_ext_raw_authorities(authorities: AuthorityList) -> sp_io::TestEx
 
 	// controllers are the index + 1000
 	let stakers: Vec<_> = (0..authorities.len())
-		.map(|i| {
-			(i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator)
-		})
+		.map(|i| (i as u64, i as u64 + 1000, 10_000, pallet_staking::StakerStatus::<u64>::Validator))
 		.collect();
 
 	let staking_config = pallet_staking::GenesisConfig::<Test> {

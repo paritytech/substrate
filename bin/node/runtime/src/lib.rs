@@ -575,7 +575,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = NominationPools;
-	type OnVoterListUpdate = FastUnstake;
+	type OnStakersUpdate = FastUnstake;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
 }
@@ -731,7 +731,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
-	type OnVoterListUpdate = FastUnstake;
+	type OnStakersUpdate = FastUnstake;
 }
 
 parameter_types! {

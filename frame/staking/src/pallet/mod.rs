@@ -248,7 +248,7 @@ pub mod pallet {
 
 		/// A hook called when a staker is added to the system in the form of a nominator or
 		/// validator.
-		type OnVoterListUpdate: sp_npos_elections::OnVoterListUpdate<Self::AccountId>;
+		type OnStakersUpdate: sp_npos_elections::OnStakersUpdate<Self::AccountId>;
 
 		/// Some parameters of the benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;

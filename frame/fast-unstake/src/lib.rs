@@ -52,7 +52,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
-use sp_npos_elections::OnVoterListUpdate;
+use sp_npos_elections::OnStakersUpdate;
 
 #[cfg(test)]
 mod mock;
@@ -234,8 +234,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
 
-			let ledger =
-				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
+			let ledger = pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
 			ensure!(!Queue::<T>::contains_key(&ledger.stash), Error::<T>::AlreadyQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != ledger.stash),
@@ -292,6 +291,10 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn immediate_unstake(origin: OriginFor<T>) -> DispatchResult {
 			todo!("Implement function");
+			// TODO: check if in IdleNewVoters
+			// TODO: check VoterListStatusInterface is Idle still.
+			// TODO: rm from IdleNewVoters
+			// TODO: go through unstake logic.
 		}
 
 		/// Control the operation of this pallet.
@@ -351,8 +354,8 @@ pub mod pallet {
 				return T::DbWeight::get().reads(2)
 			}
 
-			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
-				.or_else(|| {
+			let UnstakeRequest { stash, mut checked, maybe_pool_id } =
+				match Head::<T>::take().or_else(|| {
 					// NOTE: there is no order guarantees in `Queue`.
 					Queue::<T>::drain()
 						.map(|(stash, maybe_pool_id)| UnstakeRequest {
@@ -362,12 +365,12 @@ pub mod pallet {
 						})
 						.next()
 				}) {
-				None => {
-					// There's no `Head` and nothing in the `Queue`, nothing to do here.
-					return T::DbWeight::get().reads(4)
-				},
-				Some(head) => head,
-			};
+					None => {
+						// There's no `Head` and nothing in the `Queue`, nothing to do here.
+						return T::DbWeight::get().reads(4)
+					},
+					Some(head) => head,
+				};
 
 			log!(
 				debug,
@@ -386,8 +389,7 @@ pub mod pallet {
 			let unchecked_eras_to_check = {
 				// get the last available `bonding_duration` eras up to current era in reverse
 				// order.
-				let total_check_range = (current_era.saturating_sub(bonding_duration)..=
-					current_era)
+				let total_check_range = (current_era.saturating_sub(bonding_duration)..=current_era)
 					.rev()
 					.collect::<Vec<_>>();
 				debug_assert!(
@@ -405,12 +407,7 @@ pub mod pallet {
 					.collect::<Vec<_>>()
 			};
 
-			log!(
-				debug,
-				"{} eras to check: {:?}",
-				unchecked_eras_to_check.len(),
-				unchecked_eras_to_check
-			);
+			log!(debug, "{} eras to check: {:?}", unchecked_eras_to_check.len(), unchecked_eras_to_check);
 
 			if unchecked_eras_to_check.is_empty() {
 				// `stash` is not exposed in any era now -- we can let go of them now.
@@ -449,13 +446,7 @@ pub mod pallet {
 				};
 
 				let result = unstake_result.and(pool_stake_result);
-				log!(
-					info,
-					"unstaked {:?}, maybe_pool {:?}, outcome: {:?}",
-					stash,
-					maybe_pool_id,
-					result
-				);
+				log!(info, "unstaked {:?}, maybe_pool {:?}, outcome: {:?}", stash, maybe_pool_id, result);
 
 				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
 				<T as Config>::WeightInfo::on_idle_unstake()
@@ -495,15 +486,8 @@ pub mod pallet {
 					// Not exposed in these eras.
 					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
 						Ok(_) => {
-							Head::<T>::put(UnstakeRequest {
-								stash: stash.clone(),
-								checked,
-								maybe_pool_id,
-							});
-							Self::deposit_event(Event::<T>::Checking {
-								stash,
-								eras: unchecked_eras_to_check,
-							});
+							Head::<T>::put(UnstakeRequest { stash: stash.clone(), checked, maybe_pool_id });
+							Self::deposit_event(Event::<T>::Checking { stash, eras: unchecked_eras_to_check });
 						},
 						Err(_) => {
 							// don't put the head back in -- there is an internal error in the
@@ -528,7 +512,7 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> OnVoterListUpdate<T::AccountId> for Pallet<T> {
+impl<T: Config> OnStakersUpdate<T::AccountId> for Pallet<T> {
 	fn on_new_voter(who: T::AccountId) {
 		// insert the new voter into `IdleNewVoters` if they are not already present.
 		match IdleNewVoters::<T>::try_get(&who) {

@@ -246,8 +246,8 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, OnVoterListUpdate,
-	Supports, VoteWeight, VoterListStatus, VoterListStatusInterface,
+	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, OnStakersUpdate, Supports,
+	VoteWeight, VoterListStatus, VoterListStatusInterface,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -588,7 +588,7 @@ pub mod pallet {
 
 		/// A hook called when a staker is added to the system in the form of a nominator or
 		/// validator.
-		type OnVoterListUpdate: sp_npos_elections::OnVoterListUpdate<Self::AccountId>;
+		type OnStakersUpdate: sp_npos_elections::OnStakersUpdate<Self::AccountId>;
 
 		/// Duration of the unsigned phase.
 		#[pallet::constant]
@@ -761,7 +761,7 @@ pub mod pallet {
 					match Self::create_snapshot() {
 						Ok(_) => {
 							Self::on_initialize_open_signed();
-							T::OnVoterListUpdate::on_finish_idle();
+							T::OnStakersUpdate::on_finish_idle();
 							T::WeightInfo::on_initialize_open_signed()
 						},
 						Err(why) => {
@@ -782,10 +782,9 @@ pub mod pallet {
 						//
 						// Notes:
 						//
-						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This
-						//     is a guard against the case that `elect` is called prematurely. This
-						//     adds a small amount of overhead, but that is unfortunately
-						//     unavoidable.
+						//   - `Self::finalize_signed_phase()` also appears in `fn do_elect`. This is a guard
+						//     against the case that `elect` is called prematurely. This adds a small amount of
+						//     overhead, but that is unfortunately unavoidable.
 						let _ = Self::finalize_signed_phase();
 						// In the future we can consider disabling the unsigned phase if the signed
 						// phase completes successfully, but for now we're enabling it
@@ -823,11 +822,10 @@ pub mod pallet {
 			// Create a lock with the maximum deadline of number of blocks in the unsigned phase.
 			// This should only come useful in an **abrupt** termination of execution, otherwise the
 			// guard will be dropped upon successful execution.
-			let mut lock =
-				StorageLock::<BlockAndTime<frame_system::Pallet<T>>>::with_block_deadline(
-					unsigned::OFFCHAIN_LOCK,
-					T::UnsignedPhase::get().saturated_into(),
-				);
+			let mut lock = StorageLock::<BlockAndTime<frame_system::Pallet<T>>>::with_block_deadline(
+				unsigned::OFFCHAIN_LOCK,
+				T::UnsignedPhase::get().saturated_into(),
+			);
 
 			match lock.try_lock() {
 				Ok(_guard) => {
@@ -853,9 +851,7 @@ pub mod pallet {
 			// 2. Maximum sum of [SolutionAccuracy; 16] must fit into `UpperOf<OffchainAccuracy>`.
 			let maximum_chain_accuracy: Vec<UpperOf<SolutionAccuracyOf<T>>> = (0..max_vote)
 				.map(|_| {
-					<UpperOf<SolutionAccuracyOf<T>>>::from(
-						<SolutionAccuracyOf<T>>::one().deconstruct(),
-					)
+					<UpperOf<SolutionAccuracyOf<T>>>::from(<SolutionAccuracyOf<T>>::one().deconstruct())
 				})
 				.collect();
 			let _: UpperOf<SolutionAccuracyOf<T>> = maximum_chain_accuracy
@@ -924,8 +920,8 @@ pub mod pallet {
 			assert!(voters as u32 == witness.voters, "{}", error_message);
 			assert!(targets as u32 == witness.targets, "{}", error_message);
 
-			let ready = Self::feasibility_check(*raw_solution, ElectionCompute::Unsigned)
-				.expect(error_message);
+			let ready =
+				Self::feasibility_check(*raw_solution, ElectionCompute::Unsigned).expect(error_message);
 
 			// Store the newly received solution.
 			log!(info, "queued unsigned solution with score {:?}", ready.score);
@@ -973,11 +969,8 @@ pub mod pallet {
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 
-			let solution = ReadySolution {
-				supports,
-				score: Default::default(),
-				compute: ElectionCompute::Emergency,
-			};
+			let solution =
+				ReadySolution { supports, score: Default::default(), compute: ElectionCompute::Emergency };
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Emergency,
@@ -1026,12 +1019,8 @@ pub mod pallet {
 				T::EstimateCallFee::estimate_call_fee(&call, None::<Weight>.into())
 			};
 
-			let submission = SignedSubmission {
-				who: who.clone(),
-				deposit,
-				raw_solution: *raw_solution,
-				call_fee,
-			};
+			let submission =
+				SignedSubmission { who: who.clone(), deposit, raw_solution: *raw_solution, call_fee };
 
 			// insert the submission if the queue has space or it's better than the weakest
 			// eject the weakest if the queue was full
@@ -1087,11 +1076,8 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			let solution = ReadySolution {
-				supports,
-				score: Default::default(),
-				compute: ElectionCompute::Fallback,
-			};
+			let solution =
+				ReadySolution { supports, score: Default::default(), compute: ElectionCompute::Fallback };
 
 			Self::deposit_event(Event::SolutionStored {
 				compute: ElectionCompute::Fallback,
@@ -1275,8 +1261,7 @@ pub mod pallet {
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
 	/// them one at a time instead of reading and decoding all of them at once.
 	#[pallet::storage]
-	pub type SignedSubmissionIndices<T: Config> =
-		StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
+	pub type SignedSubmissionIndices<T: Config> = StorageValue<_, SubmissionIndicesOf<T>, ValueQuery>;
 
 	/// Unchecked, signed solutions.
 	///
@@ -1390,8 +1375,8 @@ impl<T: Config> Pallet<T> {
 
 		let targets = T::DataProvider::electable_targets(Some(target_limit))
 			.map_err(ElectionError::DataProvider)?;
-		let voters = T::DataProvider::electing_voters(Some(voter_limit))
-			.map_err(ElectionError::DataProvider)?;
+		let voters =
+			T::DataProvider::electing_voters(Some(voter_limit)).map_err(ElectionError::DataProvider)?;
 		let mut desired_targets =
 			T::DataProvider::desired_targets().map_err(ElectionError::DataProvider)?;
 
@@ -1446,10 +1431,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This is always mandatory weight.
 	fn register_weight(weight: Weight) {
-		<frame_system::Pallet<T>>::register_extra_weight_unchecked(
-			weight,
-			DispatchClass::Mandatory,
-		);
+		<frame_system::Pallet<T>>::register_extra_weight_unchecked(weight, DispatchClass::Mandatory);
 	}
 
 	/// Kill everything created by [`Pallet::create_snapshot`].
@@ -1472,8 +1454,7 @@ impl<T: Config> Pallet<T> {
 		// Winners are not directly encoded in the solution.
 		let winners = solution.unique_targets();
 
-		let desired_targets =
-			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
+		let desired_targets = Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
 
@@ -1511,8 +1492,7 @@ impl<T: Config> Pallet<T> {
 			// around.
 
 			// Defensive-only: must exist in the snapshot.
-			let snapshot_index =
-				voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
+			let snapshot_index = voter_index(&assignment.who).ok_or(FeasibilityError::InvalidVoter)?;
 			// Defensive-only: index comes from the snapshot, must exist.
 			let (_voter, _stake, targets) =
 				snapshot_voters.get(snapshot_index).ok_or(FeasibilityError::InvalidVoter)?;
@@ -1661,8 +1641,8 @@ mod feasibility_check {
 
 	use super::*;
 	use crate::mock::{
-		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase,
-		TargetIndex, UnsignedPhase, VoterIndex,
+		raw_solution, roll_to, EpochLength, ExtBuilder, MultiPhase, Runtime, SignedPhase, TargetIndex,
+		UnsignedPhase, VoterIndex,
 	};
 	use frame_support::{assert_noop, assert_ok};
 
@@ -1733,10 +1713,7 @@ mod feasibility_check {
 			raw.solution.votes1[0].1 = 4;
 
 			// It should succeed
-			assert_noop!(
-				MultiPhase::feasibility_check(raw, COMPUTE),
-				FeasibilityError::WrongWinnerCount,
-			);
+			assert_noop!(MultiPhase::feasibility_check(raw, COMPUTE), FeasibilityError::WrongWinnerCount,);
 		})
 	}
 
@@ -1753,7 +1730,8 @@ mod feasibility_check {
 			// Swap all votes from 3 to 4. This will ensure that the number of unique winners will
 			// still be 4, but one of the indices will be gibberish. Requirement is to make sure 3 a
 			// winner, which we don't do here.
-			raw.solution
+			raw
+				.solution
 				.votes1
 				.iter_mut()
 				.filter(|(_, t)| *t == TargetIndex::from(3u16))
@@ -1823,10 +1801,7 @@ mod feasibility_check {
 					.count(),
 				1,
 			);
-			assert_noop!(
-				MultiPhase::feasibility_check(solution, COMPUTE),
-				FeasibilityError::InvalidVote,
-			);
+			assert_noop!(MultiPhase::feasibility_check(solution, COMPUTE), FeasibilityError::InvalidVote,);
 		})
 	}
 
@@ -1896,10 +1871,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_phase_events(),
-				vec![
-					Event::SignedPhaseStarted { round: 1 },
-					Event::UnsignedPhaseStarted { round: 1 }
-				],
+				vec![Event::SignedPhaseStarted { round: 1 }, Event::UnsignedPhaseStarted { round: 1 }],
 			);
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -2058,10 +2030,7 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(
-					crate::mock::RuntimeOrigin::signed(99),
-					Box::new(solution)
-				));
+				assert_ok!(MultiPhase::submit(crate::mock::RuntimeOrigin::signed(99), Box::new(solution)));
 			}
 
 			// an unexpected call to elect.
@@ -2088,10 +2057,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
-			assert_ok!(MultiPhase::submit(
-				crate::mock::RuntimeOrigin::signed(99),
-				Box::new(solution)
-			));
+			assert_ok!(MultiPhase::submit(crate::mock::RuntimeOrigin::signed(99), Box::new(solution)));
 
 			roll_to(30);
 			assert_ok!(MultiPhase::elect());
@@ -2105,11 +2071,7 @@ mod tests {
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Signed,
-						score: ElectionScore {
-							minimal_stake: 40,
-							sum_stake: 100,
-							sum_stake_squared: 5200
-						}
+						score: ElectionScore { minimal_stake: 40, sum_stake: 100, sum_stake_squared: 5200 }
 					}
 				],
 			);
@@ -2146,17 +2108,10 @@ mod tests {
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
-					Event::SolutionStored {
-						compute: ElectionCompute::Unsigned,
-						prev_ejected: false
-					},
+					Event::SolutionStored { compute: ElectionCompute::Unsigned, prev_ejected: false },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Unsigned,
-						score: ElectionScore {
-							minimal_stake: 40,
-							sum_stake: 100,
-							sum_stake_squared: 5200
-						}
+						score: ElectionScore { minimal_stake: 40, sum_stake: 100, sum_stake_squared: 5200 }
 					}
 				],
 			);
@@ -2228,10 +2183,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFailed,
-					Event::SolutionStored {
-						compute: ElectionCompute::Fallback,
-						prev_ejected: false
-					},
+					Event::SolutionStored { compute: ElectionCompute::Fallback, prev_ejected: false },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Fallback,
 						score: Default::default()
@@ -2344,12 +2296,7 @@ mod tests {
 		let all_targets: u32 = 5_000;
 		let desired: u32 = 1_000;
 		let weight_with = |active| {
-			<Runtime as Config>::WeightInfo::submit_unsigned(
-				all_voters,
-				all_targets,
-				active,
-				desired,
-			)
+			<Runtime as Config>::WeightInfo::submit_unsigned(all_voters, all_targets, active, desired)
 		};
 
 		let mut active = 1;

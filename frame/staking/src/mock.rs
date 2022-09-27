@@ -304,7 +304,7 @@ impl crate::pallet::pallet::Config for Test {
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = OnStakerSlashMock<Test>;
-	type OnVoterListUpdate = ();
+	type OnStakersUpdate = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
