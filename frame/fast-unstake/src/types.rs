@@ -20,11 +20,10 @@
 use crate::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{Currency, Get, IsSubType},
+	traits::{Currency, Get},
 	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
-use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
 use sp_staking::EraIndex;
 use sp_std::{fmt::Debug, prelude::*};
 
@@ -36,11 +35,11 @@ pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
 #[derive(
 	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
 )]
-pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32>> {
+pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, Balance: Eq + PartialEq + Debug, MaxChecked: Get<u32>> {
 	/// Their stash account.
 	pub(crate) stash: AccountId,
 	/// The list of eras for which they have been checked.
 	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
 	/// Deposit to be slashed if the unstake was unsuccessful.
-	pub(crate) deposit: u64,
+	pub(crate) deposit: Balance,
 }
