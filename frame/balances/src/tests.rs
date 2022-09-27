@@ -28,6 +28,7 @@ macro_rules! decl_tests {
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
+				fungible::{self, BalancedHold, Inspect, InspectHold, MutateHold},
 				LockableCurrency, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
 			}
@@ -394,12 +395,41 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn holding_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+
+				assert_eq!(Balances::balance(&1), 111);
+				assert_eq!(Balances::reducible_balance(&1, false), 111);
+				assert_eq!(Balances::balance_on_hold(&1), 0);
+
+				assert_ok!(Balances::hold(&1, 69));
+
+				assert_eq!(Balances::balance(&1), 111);
+				assert_eq!(Balances::reducible_balance(&1, false), 42);
+				assert_eq!(Balances::balance_on_hold(&1), 69);
+			});
+		}
+
+		#[test]
 		fn balance_transfer_when_reserved_should_not_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
 				assert_ok!(Balances::reserve(&1, 69));
 				assert_noop!(
 					Balances::transfer(Some(1).into(), 2, 69),
+					Error::<$test, _>::InsufficientBalance,
+				);
+			});
+		}
+		
+		#[test]
+		fn balance_transfer_when_held_should_not_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_ok!(Balances::hold(&1, 69));
+				assert_noop!(
+					<Balances as fungible::Transfer<_>>::transfer(&1, &2, 69, false),
 					Error::<$test, _>::InsufficientBalance,
 				);
 			});
@@ -438,6 +468,18 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn slashing_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_ok!(Balances::hold(&1, 69));
+				assert_eq!(<Balances as fungible::Mutate<_>>::slash(&1, 69), Ok(42));
+				assert_eq!(Balances::reducible_balance(&1, false), 0);
+				assert_eq!(Balances::balance_on_hold(&1), 69);
+				assert_eq!(Balances::total_issuance(), 69);
+			});
+		}
+
+		#[test]
 		fn withdrawing_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&2, 111);
@@ -463,6 +505,18 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn slashing_incomplete_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 42);
+				assert_ok!(Balances::hold(&1, 21));
+				assert_eq!(<Balances as fungible::Mutate<_>>::slash(&1, 69), Ok(21));
+				assert_eq!(Balances::reducible_balance(&1, false), 0);
+				assert_eq!(Balances::balance_on_hold(&1), 21);
+				assert_eq!(Balances::total_issuance(), 21);
+			});
+		}
+
+		#[test]
 		fn unreserving_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
@@ -470,6 +524,17 @@ macro_rules! decl_tests {
 				Balances::unreserve(&1, 42);
 				assert_eq!(Balances::reserved_balance(1), 69);
 				assert_eq!(Balances::free_balance(1), 42);
+			});
+		}
+
+		#[test]
+		fn releasing_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_ok!(Balances::hold(&1, 111));
+				assert_eq!(Balances::release(&1, 42, false), Ok(42));
+				assert_eq!(Balances::balance_on_hold(&1), 69);
+				assert_eq!(Balances::reducible_balance(&1, false), 42);
 			});
 		}
 
@@ -486,6 +551,18 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn slashing_held_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_ok!(Balances::hold(&1, 111));
+				assert_eq!(Balances::slash_held(&1, 42).1, 0);
+				assert_eq!(Balances::balance_on_hold(&1), 69);
+				assert_eq!(Balances::reducible_balance(&1, false), 0);
+				assert_eq!(Balances::total_issuance(), 69);
+			});
+		}
+
+		#[test]
 		fn slashing_incomplete_reserved_balance_should_work() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
@@ -494,6 +571,18 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(1), 69);
 				assert_eq!(Balances::reserved_balance(1), 0);
 				assert_eq!(<TotalIssuance<$test>>::get(), 69);
+			});
+		}
+
+		#[test]
+		fn slashing_incomplete_held_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_ok!(Balances::hold(&1, 42));
+				assert_eq!(Balances::slash_held(&1, 69).1, 0);
+				assert_eq!(Balances::reducible_balance(&1, false), 69);
+				assert_eq!(Balances::balance_on_hold(&1), 0);
+				assert_eq!(Balances::total_issuance(), 69);
 			});
 		}
 
@@ -529,11 +618,34 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn transferring_held_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 110);
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&2, 1);
+				assert_ok!(Balances::hold(&1, 110));
+				assert_ok!(Balances::transfer_held(&1, &2, 41, false, true), 41);
+				assert_eq!(Balances::balance_on_hold(&1), 69);
+				assert_eq!(Balances::reducible_balance(&1, false), 0);
+				assert_eq!(Balances::balance_on_hold(&2), 41);
+				assert_eq!(Balances::reducible_balance(&2, false), 1);
+			});
+		}
+
+		#[test]
 		fn transferring_reserved_balance_to_nonexistent_should_fail() {
 			<$ext_builder>::default().build().execute_with(|| {
 				let _ = Balances::deposit_creating(&1, 111);
 				assert_ok!(Balances::reserve(&1, 111));
 				assert_noop!(Balances::repatriate_reserved(&1, &2, 42, Status::Free), Error::<$test, _>::DeadAccount);
+			});
+		}
+
+		#[test]
+		fn transferring_held_fungible_to_nonexistent_should_fail() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 111);
+				assert_ok!(Balances::hold(&1, 111));
+				assert_noop!(Balances::transfer_held(&1, &2, 42, false, false), Error::<$test, _>::DeadAccount);
 			});
 		}
 
@@ -548,6 +660,20 @@ macro_rules! decl_tests {
 				assert_eq!(Balances::free_balance(1), 69);
 				assert_eq!(Balances::reserved_balance(2), 0);
 				assert_eq!(Balances::free_balance(2), 42);
+			});
+		}
+
+		#[test]
+		fn transferring_incomplete_held_fungible_should_work() {
+			<$ext_builder>::default().build().execute_with(|| {
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&1, 110);
+				let _ = <Balances as fungible::Mutate<_>>::mint_into(&2, 1);
+				assert_ok!(Balances::hold(&1, 41));
+				assert_ok!(Balances::transfer_held(&1, &2, 69, true, false), 41);
+				assert_eq!(Balances::balance_on_hold(&1), 0);
+				assert_eq!(Balances::reducible_balance(&1, false), 69);
+				assert_eq!(Balances::balance_on_hold(&2), 0);
+				assert_eq!(Balances::reducible_balance(&2, false), 42);
 			});
 		}
 
