@@ -47,7 +47,6 @@ pub struct UnstakeRequest<AccountId: Eq + PartialEq + Debug, MaxChecked: Get<u32
 #[scale_info(skip_type_params(T))]
 pub struct PreventStakingOpsIfUnbonding<T: Config + Send + Sync>(sp_std::marker::PhantomData<T>);
 
-#[cfg(test)]
 impl<T: Config + Send + Sync> PreventStakingOpsIfUnbonding<T> {
 	pub fn new() -> Self {
 		Self(Default::default())
