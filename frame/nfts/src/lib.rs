@@ -834,14 +834,7 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
 
-			let mut settings = Self::get_item_settings(&collection, &item)?;
-			if !settings.contains(ItemSetting::NonTransferable) {
-				settings.insert(ItemSetting::NonTransferable);
-			}
-			ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
-
-			Self::deposit_event(Event::<T, I>::Frozen { collection, item });
-			Ok(())
+			Self::do_freeze_item(collection, item)
 		}
 
 		/// Re-allow unprivileged transfer of an item.
@@ -866,14 +859,7 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
 
-			let mut settings = Self::get_item_settings(&collection, &item)?;
-			if settings.contains(ItemSetting::NonTransferable) {
-				settings.remove(ItemSetting::NonTransferable);
-			}
-			ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
-
-			Self::deposit_event(Event::<T, I>::Thawed { collection, item });
-			Ok(())
+			Self::do_thaw_item(collection, item)
 		}
 
 		/// Disallows specified settings for the whole collection.
@@ -899,26 +885,7 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
 
-			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
-				let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-				let mut settings = config.values();
-				let lock_settings = lock_config.values();
-
-				if lock_settings.contains(CollectionSetting::NonTransferableItems) {
-					settings.insert(CollectionSetting::NonTransferableItems);
-				}
-				if lock_settings.contains(CollectionSetting::LockedMetadata) {
-					settings.insert(CollectionSetting::LockedMetadata);
-				}
-				if lock_settings.contains(CollectionSetting::LockedAttributes) {
-					settings.insert(CollectionSetting::LockedAttributes);
-				}
-
-				config.0 = settings;
-
-				Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
-				Ok(())
-			})
+			Self::do_lock_collection(collection, lock_config)
 		}
 
 		/// Change the Owner of a collection.
@@ -1264,27 +1231,7 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {
-				let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownItem)?;
-				let mut settings = config.values();
-
-				if lock_metadata {
-					settings.insert(ItemSetting::LockedMetadata);
-				}
-				if lock_attributes {
-					settings.insert(ItemSetting::LockedAttributes);
-				}
-
-				config.0 = settings;
-
-				Self::deposit_event(Event::<T, I>::ItemLocked {
-					collection,
-					item,
-					lock_metadata,
-					lock_attributes,
-				});
-				Ok(())
-			})
+			Self::do_lock_item(collection, item, lock_metadata, lock_attributes)
 		}
 
 		/// Set an attribute for a collection or item.

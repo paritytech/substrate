@@ -19,6 +19,84 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn do_lock_collection(
+		collection: T::CollectionId,
+		lock_config: CollectionConfig,
+	) -> DispatchResult {
+		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
+			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+			let mut settings = config.values();
+			let lock_settings = lock_config.values();
+
+			if lock_settings.contains(CollectionSetting::NonTransferableItems) {
+				settings.insert(CollectionSetting::NonTransferableItems);
+			}
+			if lock_settings.contains(CollectionSetting::LockedMetadata) {
+				settings.insert(CollectionSetting::LockedMetadata);
+			}
+			if lock_settings.contains(CollectionSetting::LockedAttributes) {
+				settings.insert(CollectionSetting::LockedAttributes);
+			}
+
+			config.0 = settings;
+
+			Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
+			Ok(())
+		})
+	}
+
+	pub fn do_lock_item(
+		collection: T::CollectionId,
+		item: T::ItemId,
+		lock_metadata: bool,
+		lock_attributes: bool,
+	) -> DispatchResult {
+		ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {
+			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownItem)?;
+			let mut settings = config.values();
+
+			if lock_metadata {
+				settings.insert(ItemSetting::LockedMetadata);
+			}
+			if lock_attributes {
+				settings.insert(ItemSetting::LockedAttributes);
+			}
+
+			config.0 = settings;
+
+			Self::deposit_event(Event::<T, I>::ItemLocked {
+				collection,
+				item,
+				lock_metadata,
+				lock_attributes,
+			});
+			Ok(())
+		})
+	}
+
+	pub fn do_freeze_item(collection: T::CollectionId, item: T::ItemId) -> DispatchResult {
+		let mut settings = Self::get_item_settings(&collection, &item)?;
+		if !settings.contains(ItemSetting::NonTransferable) {
+			settings.insert(ItemSetting::NonTransferable);
+		}
+		ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
+
+		Self::deposit_event(Event::<T, I>::Frozen { collection, item });
+		Ok(())
+	}
+
+	pub fn do_thaw_item(collection: T::CollectionId, item: T::ItemId) -> DispatchResult {
+		let mut settings = Self::get_item_settings(&collection, &item)?;
+		if settings.contains(ItemSetting::NonTransferable) {
+			settings.remove(ItemSetting::NonTransferable);
+		}
+		ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
+
+		Self::deposit_event(Event::<T, I>::Thawed { collection, item });
+		Ok(())
+	}
+
+	// helpers
 	pub fn get_collection_settings(
 		collection_id: &T::CollectionId,
 	) -> Result<CollectionSettings, DispatchError> {
