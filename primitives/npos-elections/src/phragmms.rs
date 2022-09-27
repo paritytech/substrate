@@ -249,7 +249,7 @@ mod tests {
 		assert_eq!(
 			voters.iter().find(|x| x.who == 30).map(|v| (
 				v.who,
-					v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
+				v.edges.iter().map(|e| (e.who, e.weight)).collect::<Vec<_>>()
 			)).unwrap(),
 			(30, vec![(2, 0), (3, 30)]),
 		);
