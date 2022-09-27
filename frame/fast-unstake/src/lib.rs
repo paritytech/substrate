@@ -179,6 +179,8 @@ pub mod pallet {
 		NotQueued,
 		/// The provided un-staker is already in Head, and cannot deregister.
 		AlreadyHead,
+		/// The call is not allowed at this point.
+		CallNotAllowed,
 	}
 
 	#[pallet::hooks]
@@ -214,6 +216,8 @@ pub mod pallet {
 		/// the chain's resources.
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
+			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
+
 			let ctrl = ensure_signed(origin)?;
 
 			let ledger =
@@ -249,6 +253,8 @@ pub mod pallet {
 		/// `Staking::rebond`.
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
+			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
+
 			let ctrl = ensure_signed(origin)?;
 			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
 				.map(|l| l.stash)
