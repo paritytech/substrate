@@ -18,8 +18,8 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
+use sc_sysinfo::Throughput;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 lazy_static! {
 	/// The hardware requirements as measured on reference hardware.
@@ -65,17 +65,6 @@ pub enum Metric {
 	DiskRndWrite,
 }
 
-/// Throughput as measured in bytes per second.
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub enum Throughput {
-	/// KiB/s
-	KiBs(f64),
-	/// MiB/s
-	MiBs(f64),
-	/// GiB/s
-	GiBs(f64),
-}
-
 impl Metric {
 	/// The category of the metric.
 	pub fn category(&self) -> &'static str {
@@ -94,66 +83,6 @@ impl Metric {
 			Self::MemCopy => "Copy",
 			Self::DiskSeqWrite => "Seq Write",
 			Self::DiskRndWrite => "Rnd Write",
-		}
-	}
-}
-
-const KIBIBYTE: f64 = 1024.0;
-
-impl Throughput {
-	/// The unit of the metric.
-	pub fn unit(&self) -> &'static str {
-		match self {
-			Self::KiBs(_) => "KiB/s",
-			Self::MiBs(_) => "MiB/s",
-			Self::GiBs(_) => "GiB/s",
-		}
-	}
-
-	/// [`Self`] as number of byte/s.
-	pub fn to_bs(&self) -> f64 {
-		self.to_kibs() * KIBIBYTE
-	}
-
-	/// [`Self`] as number of kibibyte/s.
-	pub fn to_kibs(&self) -> f64 {
-		self.to_mibs() * KIBIBYTE
-	}
-
-	/// [`Self`] as number of mebibyte/s.
-	pub fn to_mibs(&self) -> f64 {
-		self.to_gibs() * KIBIBYTE
-	}
-
-	/// [`Self`] as number of gibibyte/s.
-	pub fn to_gibs(&self) -> f64 {
-		match self {
-			Self::KiBs(k) => *k / (KIBIBYTE * KIBIBYTE),
-			Self::MiBs(m) => *m / KIBIBYTE,
-			Self::GiBs(g) => *g,
-		}
-	}
-
-	/// Normalizes [`Self`] to use the larges unit possible.
-	pub fn normalize(&self) -> Self {
-		let bs = self.to_bs();
-
-		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
-			Self::GiBs(self.to_gibs())
-		} else if bs >= KIBIBYTE * KIBIBYTE {
-			Self::MiBs(self.to_mibs())
-		} else {
-			Self::KiBs(self.to_kibs())
-		}
-	}
-}
-
-impl fmt::Display for Throughput {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let normalized = self.normalize();
-		match normalized {
-			Self::KiBs(s) | Self::MiBs(s) | Self::GiBs(s) =>
-				write!(f, "{:.2?} {}", s, normalized.unit()),
 		}
 	}
 }

@@ -30,11 +30,11 @@ use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
-	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit,
+	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit, Throughput,
 };
 
 use crate::shared::check_build_profile;
-pub use hardware::{Metric, Requirement, Requirements, Throughput, SUBSTRATE_REFERENCE_HARDWARE};
+pub use hardware::{Metric, Requirement, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
 
 /// Command to benchmark the hardware.
 ///
@@ -128,6 +128,7 @@ impl MachineCmd {
 	/// Benchmarks a specific metric of the hardware and judges the resulting score.
 	fn run_benchmark(&self, requirement: &Requirement, dir: &Path) -> Result<BenchResult> {
 		// Dispatch the concrete function from `sc-sysinfo`.
+
 		let score = self.measure(&requirement.metric, dir)?;
 		let rel_score = score.to_bs() / requirement.minimum.to_bs();
 
