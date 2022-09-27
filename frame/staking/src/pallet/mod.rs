@@ -660,7 +660,7 @@ pub mod pallet {
 		Slashed { staker: T::AccountId, amount: BalanceOf<T> },
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.
-		OldSlashingReportDiscarded { session_indx: SessionIndex },
+		OldSlashingReportDiscarded { session_index: SessionIndex },
 		/// A new set of stakers was elected.
 		StakersElected,
 		/// An account has bonded this amount. \[stash, amount\]
