@@ -113,7 +113,7 @@ pub mod pallet {
 			+ TryInto<Event<Self>>;
 
 		/// The currency used for deposits.
-		type DepositCurrency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+		type DepositCurrency: ReservableCurrency<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
 		/// the costs of resources on unsuccessful unstake.
@@ -215,9 +215,9 @@ pub mod pallet {
 		/// the chain's resources.
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
 		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
-			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
-
 			let ctrl = ensure_signed(origin)?;
+
+			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
 
 			let ledger =
 				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
@@ -252,9 +252,10 @@ pub mod pallet {
 		/// `Staking::rebond`.
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
+			let ctrl = ensure_signed(origin)?;
+
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
 
-			let ctrl = ensure_signed(origin)?;
 			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
 				.map(|l| l.stash)
 				.ok_or(Error::<T>::NotController)?;
@@ -395,11 +396,15 @@ pub mod pallet {
 					num_slashing_spans,
 				);
 
-				T::DepositCurrency::unreserve(&stash, deposit.into());
-
-				log!(info, "unstaked {:?}, outcome: {:?}", stash, result);
-
-				Self::deposit_event(Event::<T>::Unstaked { stash, result });
+				let unreserved = T::DepositCurrency::unreserve(&stash, deposit.into());
+				if deposit > unreserved {
+					frame_support::defensive!("`not enough balance to unreserve`");
+					ErasToCheckPerBlock::<T>::put(0);
+					Self::deposit_event(Event::<T>::InternalError)
+				} else {
+					log!(info, "unstaked {:?}, outcome: {:?}", stash, result);
+					Self::deposit_event(Event::<T>::Unstaked { stash, result });
+				}
 
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
