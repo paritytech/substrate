@@ -91,7 +91,7 @@ impl Contains<RuntimeCall> for MockUnpausableCalls {
 		match *call {
 			// Remark is used as a no-op call in the benchmarking
 			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
-			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {..}) => true,
+			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. }) => true,
 			_ => false,
 		}
 	}

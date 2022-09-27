@@ -61,7 +61,8 @@ pub mod pallet {
 
 		/// Contains all calls that can be dispatched even when the safe-mode is activated.
 		///
-		/// The `SafeMode` pallet cannot disable it's own calls, and does not need to be explicitly added here.
+		/// The `SafeMode` pallet cannot disable it's own calls, and does not need to be explicitly
+		/// added here.
 		type UnstoppableCalls: Contains<Self::RuntimeCall>;
 
 		/// How long the safe-mode will stay active when activated with [`Pallet::activate`].

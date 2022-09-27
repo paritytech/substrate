@@ -213,10 +213,11 @@ impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausableCalls {
 
 impl Contains<RuntimeCall> for MockUnpausableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
-		matches!(call,
+		matches!(
+			call,
 			RuntimeCall::TxPause(..) |
-			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive {..})
-			)
+				RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. })
+		)
 	}
 }
 
@@ -259,7 +260,8 @@ impl pallet_safe_mode::Config for Runtime {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = TheseExcept<InsideBoth<SafeMode, TxPause>, UnpausableCalls>; // TODO consider Exclude or NotInside... so no config for UnpausableCalls unneeded ( see TheseExcept )
+	type BaseCallFilter = TheseExcept<InsideBoth<SafeMode, TxPause>, UnpausableCalls>; // TODO consider Exclude or NotInside... so no config for UnpausableCalls unneeded ( see
+																				   // TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -335,10 +337,11 @@ parameter_types! {
 	scale_info::TypeInfo,
 )]
 
-pub enum PausePresets {
-	...,
+// pub enum PausePresets {
+// 	..., // todo
 
-}
+// }
+
 pub enum ProxyType {
 	Any,
 	NonTransfer,
