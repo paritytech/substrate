@@ -592,11 +592,11 @@ impl<AccountId> OnStakersUpdate<AccountId> for () {
 /// being used in all the other stages.
 pub trait StakersStatusInterface {
 	/// The current status of voter list usage.
-	fn status() -> VoterListStatus;
+	fn status() -> StakersStatus;
 }
 
 /// The variants of whether a voter list is being used or not.
-pub enum VoterListStatus {
+pub enum StakersStatus {
 	/// the voter list is not currently in use.
 	Idle,
 	/// The voter list is actively being used.
