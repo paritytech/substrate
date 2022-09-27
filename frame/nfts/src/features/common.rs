@@ -34,4 +34,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let settings = Self::get_collection_settings(&collection_id)?;
 		Ok((!settings.contains(setting), settings))
 	}
+
+	pub fn is_feature_flag_set(feature: SystemFeature) -> bool {
+		let features = T::FeatureFlags::get();
+		return features.0.contains(feature)
+	}
 }

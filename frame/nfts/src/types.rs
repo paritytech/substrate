@@ -207,13 +207,52 @@ impl TypeInfo for CollectionConfig {
 // Support for up to 64 system-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
-#[derive(Copy, Clone, RuntimeDebug, PartialEq)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum SystemFeature {
+	/// Disallow trading operations.
 	NoTrading,
+	/// Disallow setting attributes.
 	NoAttributes,
+	/// Disallow transfer approvals.
 	NoApprovals,
+	/// Disallow atomic items swap.
 	NoSwaps,
+	/// Disallow public mints.
 	NoPublicMints,
 }
 
-pub type SystemFeatures = BitFlags<SystemFeature>;
+pub type SystemFeatureFlags = BitFlags<SystemFeature>;
+
+/// Wrapper type for `SystemFeatureFlags` that implements `Codec`.
+#[derive(Default, RuntimeDebug)]
+pub struct SystemFeatures(pub SystemFeatureFlags);
+
+impl MaxEncodedLen for SystemFeatures {
+	fn max_encoded_len() -> usize {
+		u64::max_encoded_len()
+	}
+}
+
+impl Encode for SystemFeatures {
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		self.0.bits().using_encoded(f)
+	}
+}
+impl EncodeLike for SystemFeatures {}
+impl Decode for SystemFeatures {
+	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
+		let field = u64::decode(input)?;
+		Ok(Self(SystemFeatureFlags::from_bits(field as u64).map_err(|_| "invalid value")?))
+	}
+}
+
+impl TypeInfo for SystemFeatures {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("BitFlags", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<SystemFeature>()))])
+			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("SystemFeature")))
+	}
+}

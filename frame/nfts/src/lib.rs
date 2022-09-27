@@ -182,6 +182,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxTips: Get<u32>;
 
+		/// Disables some of pallet's features.
+		#[pallet::constant]
 		type FeatureFlags: Get<SystemFeatures>;
 
 		#[cfg(feature = "runtime-benchmarks")]
@@ -484,6 +486,8 @@ pub mod pallet {
 		BidTooLow,
 		/// The item has reached its approval limit.
 		ReachedApprovalLimit,
+		/// The method is disabled by system settings.
+		MethodDisabled,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1002,6 +1006,10 @@ pub mod pallet {
 			delegate: AccountIdLookupOf<T>,
 			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoApprovals),
+				Error::<T, I>::MethodDisabled
+			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
@@ -1066,6 +1074,10 @@ pub mod pallet {
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoApprovals),
+				Error::<T, I>::MethodDisabled
+			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
@@ -1126,6 +1138,10 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoApprovals),
+				Error::<T, I>::MethodDisabled
+			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
@@ -1220,6 +1236,10 @@ pub mod pallet {
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoAttributes),
+				Error::<T, I>::MethodDisabled
+			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
@@ -1227,11 +1247,11 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let settings = Self::get_collection_settings(&collection)?;
-
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
+
+			let settings = Self::get_collection_settings(&collection)?;
 			let maybe_is_frozen = match maybe_item {
 				None => Some(settings.contains(CollectionSetting::LockedAttributes)),
 				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
@@ -1284,6 +1304,10 @@ pub mod pallet {
 			maybe_item: Option<T::ItemId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoAttributes),
+				Error::<T, I>::MethodDisabled
+			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
@@ -1295,7 +1319,6 @@ pub mod pallet {
 			}
 
 			let settings = Self::get_collection_settings(&collection)?;
-
 			let maybe_is_frozen = match maybe_item {
 				None => Some(settings.contains(CollectionSetting::LockedAttributes)),
 				Some(item) => ItemMetadataOf::<T, I>::get(collection, item).map(|v| v.is_frozen),
@@ -1631,6 +1654,10 @@ pub mod pallet {
 			whitelisted_buyer: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoTrading),
+				Error::<T, I>::MethodDisabled
+			);
 			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;
 			Self::do_set_price(collection, item, origin, price, whitelisted_buyer)
 		}
@@ -1653,6 +1680,10 @@ pub mod pallet {
 			bid_price: ItemPrice<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			ensure!(
+				!Self::is_feature_flag_set(SystemFeature::NoTrading),
+				Error::<T, I>::MethodDisabled
+			);
 			Self::do_buy_item(collection, item, origin, bid_price)
 		}
 

@@ -1498,7 +1498,7 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
-	pub FeatureFlags: SystemFeatures = SystemFeature::empty();
+	pub FeatureFlags: SystemFeatures = SystemFeatures(SystemFeature::empty());
 }
 
 impl pallet_nfts::Config for Runtime {
