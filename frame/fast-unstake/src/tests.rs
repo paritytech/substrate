@@ -44,6 +44,16 @@ fn register_works() {
 }
 
 #[test]
+fn register_unsigned_fails() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_noop!(
+			FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)),
+			Error::<T>::CallNotAllowed
+		);
+	});
+}
+
+#[test]
 fn cannot_register_if_not_bonded() {
 	ExtBuilder::default().build_and_execute(|| {
 		ErasToCheckPerBlock::<T>::put(1);
@@ -111,6 +121,13 @@ fn deregister_works() {
 		assert_ok!(FastUnstake::deregister(RuntimeOrigin::signed(2)));
 		// Ensure stash no longer exists in the queue.
 		assert_eq!(Queue::<T>::get(1), None);
+	});
+}
+
+#[test]
+fn deregister_unsigned_fails() {
+	ExtBuilder::default().build_and_execute(|| {
+		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::CallNotAllowed);
 	});
 }
 

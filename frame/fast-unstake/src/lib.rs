@@ -397,7 +397,7 @@ pub mod pallet {
 				);
 
 				let unreserved = T::DepositCurrency::unreserve(&stash, deposit);
-				if deposit > unreserved {
+				if !unreserved.is_zero() {
 					frame_support::defensive!("`not enough balance to unreserve`");
 					ErasToCheckPerBlock::<T>::put(0);
 					Self::deposit_event(Event::<T>::InternalError)
