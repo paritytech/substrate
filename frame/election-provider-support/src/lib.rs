@@ -132,12 +132,16 @@
 //!         type DataProvider: ElectionDataProvider<AccountId=AccountId, BlockNumber = BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
+//!     impl<T: Config> ElectionProviderBase for GenericElectionProvider<T> {
 //!         type AccountId = AccountId;
 //!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //! 	        fn ongoing() -> bool { false }
+//!        
+//!     }
+//!
+//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
 //!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
