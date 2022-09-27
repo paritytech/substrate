@@ -669,7 +669,6 @@ mod on_idle {
 	fn exposed_nominator_cannot_unstake() {
 		ExtBuilder::default().build_and_execute(|| {
 			ErasToCheckPerBlock::<T>::put(1);
-			SlashPerEra::set(7);
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// create an exposed nominator in era 1
@@ -721,7 +720,6 @@ mod on_idle {
 			// same as the previous check, but we check 2 eras per block, and we make the exposed be
 			// exposed in era 0, so that it is detected halfway in a check era.
 			ErasToCheckPerBlock::<T>::put(2);
-			SlashPerEra::set(7);
 			CurrentEra::<T>::put(BondingDuration::get());
 
 			// create an exposed nominator in era 1
