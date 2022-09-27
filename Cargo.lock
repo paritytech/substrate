@@ -4429,7 +4429,6 @@ dependencies = [
  "pallet-tips",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
- "pallet-transaction-storage",
  "pallet-treasury",
  "pallet-utility",
  "pallet-vesting",

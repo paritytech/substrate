@@ -1086,14 +1086,6 @@ impl pallet_ddc_metrics_offchain_worker::Config for Runtime {
 	type Call = Call;
 }
 
-impl pallet_transaction_storage::Config for Runtime {
-	type Event = Event;
-	type Currency = Balances;
-	type Call = Call;
-	type FeeDestination = ();
-	type WeightInfo = pallet_transaction_storage::weights::SubstrateWeight<Runtime>;
-}
-
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
@@ -1134,7 +1126,6 @@ construct_runtime!(
 		Multisig: pallet_multisig::{Pallet, Call, Storage, Event<T>},
 		Bounties: pallet_bounties::{Pallet, Call, Storage, Event<T>},
 		Tips: pallet_tips::{Pallet, Call, Storage, Event<T>},
-		TransactionStorage: pallet_transaction_storage::{Pallet, Call, Storage, Inherent, Config<T>, Event<T>},
 		CereDDCModule: pallet_cere_ddc::{Pallet, Call, Storage, Event<T>},
 		ChainBridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Pallet, Call, Storage, Event<T>},
@@ -1464,7 +1455,6 @@ impl_runtime_apis! {
 			add_benchmark!(params, batches, frame_system, SystemBench::<Runtime>);
 			add_benchmark!(params, batches, pallet_timestamp, Timestamp);
 			add_benchmark!(params, batches, pallet_tips, Tips);
-			add_benchmark!(params, batches, pallet_transaction_storage, TransactionStorage);
 			add_benchmark!(params, batches, pallet_treasury, Treasury);
 			add_benchmark!(params, batches, pallet_utility, Utility);
 			add_benchmark!(params, batches, pallet_vesting, Vesting);

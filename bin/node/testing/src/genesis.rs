@@ -119,6 +119,5 @@ pub fn config_endowed(
 			max_members: 999,
 		},
 		vesting: Default::default(),
-		transaction_storage: Default::default(),
 	}
 }
