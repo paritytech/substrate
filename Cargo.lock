@@ -6313,7 +6313,6 @@ dependencies = [
  "sp-application-crypto",
  "sp-core",
  "sp-io",
- "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
  "sp-std",

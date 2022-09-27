@@ -1642,9 +1642,9 @@ pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
 	InvalidTransaction::Custom(error_number)
 }
 
-/// Provide the current voter list status of this election
+/// Provide the current stakers status of this election
 impl<T: Config> StakersStatusInterface for Pallet<T> {
-	/// the voter list is idle in `Phase::Off`, and in use otherwise.
+	/// stakers list idle in `Phase::Off`, and in use otherwise.
 	fn status() -> StakersStatus {
 		match CurrentPhase::<T>::get() {
 			Phase::Off => StakersStatus::Idle,
