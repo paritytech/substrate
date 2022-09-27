@@ -57,6 +57,7 @@ use sp_consensus_sassafras::{
 	AuthorityId, EquivocationProof, Randomness, SassafrasAuthorityWeight,
 	SassafrasEpochConfiguration, Slot, Ticket, SASSAFRAS_ENGINE_ID,
 };
+use sp_io::hashing;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{One, Saturating},
@@ -408,7 +409,6 @@ pub mod pallet {
 				}
 
 				// Check tickets are below threshold
-
 				let next_auth = NextAuthorities::<T>::get();
 				let epoch_config = EpochConfig::<T>::get();
 				let threshold = sp_consensus_sassafras::compute_threshold(
@@ -417,11 +417,6 @@ pub mod pallet {
 					epoch_config.attempts_number,
 					next_auth.len() as u32,
 				);
-
-				// TODO-SASS-P2: if we move this in the `submit_tickets` call then we can
-				// can drop only the invalid tickets.
-				// In this way we don't penalize validators that submit tickets together
-				// with faulty validators.
 				if !tickets
 					.iter()
 					.all(|ticket| sp_consensus_sassafras::check_threshold(ticket, threshold))
@@ -429,15 +424,14 @@ pub mod pallet {
 					return InvalidTransaction::Custom(0).into()
 				}
 
+				let tickets_tag = tickets.using_encoded(|bytes| hashing::blake2_256(bytes));
+				// TODO-SASS-P2: this should be set such that it is discarded after the first half
+				let tickets_longevity = 3_u64;
+
 				ValidTransaction::with_tag_prefix("Sassafras")
-					// We assign the maximum priority for any equivocation report.
 					.priority(TransactionPriority::max_value())
-					// TODO-SASS-P2: if possible use a more efficient way to distinquish
-					// duplicates...
-					.and_provides(tickets)
-					// TODO-SASS-P2: this should be set such that it is discarded after the
-					// first half
-					.longevity(3_u64)
+					.and_provides(tickets_tag)
+					.longevity(tickets_longevity)
 					.propagate(true)
 					.build()
 			} else {
@@ -572,7 +566,7 @@ impl<T: Config> Pallet<T> {
 		s.extend_from_slice(&next_epoch_index.to_le_bytes());
 		s.extend_from_slice(&accumulator);
 
-		let next_randomness = sp_io::hashing::blake2_256(&s);
+		let next_randomness = hashing::blake2_256(&s);
 		NextRandomness::<T>::put(&next_randomness);
 
 		next_randomness
@@ -601,7 +595,7 @@ impl<T: Config> Pallet<T> {
 	fn deposit_randomness(randomness: &Randomness) {
 		let mut s = RandomnessAccumulator::<T>::get().to_vec();
 		s.extend_from_slice(randomness);
-		let accumulator = sp_io::hashing::blake2_256(&s);
+		let accumulator = hashing::blake2_256(&s);
 		RandomnessAccumulator::<T>::put(accumulator);
 	}
 
