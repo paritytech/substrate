@@ -110,18 +110,18 @@ fn on_idle_full_block<T: Config>() {
 benchmarks! {
 	// on_idle, we we don't check anyone, but fully unbond and move them to another pool.
 	on_idle_unstake {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 		));
-		ErasToCheckPerBlock::<T>::put(1);
 
 		// run on_idle once. This will check era 0.
 		assert_eq!(Head::<T>::get(), None);
 		on_idle_full_block::<T>();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap() })
+			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap(), deposit: T::Deposit::get() })
 		);
 	}
 	: {
@@ -162,7 +162,7 @@ benchmarks! {
 		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked })
+			Some(UnstakeRequest { stash: who.clone(), checked, deposit: T::Deposit::get() })
 		);
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
@@ -171,6 +171,7 @@ benchmarks! {
 	}
 
 	register_fast_unstake {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		whitelist_account!(who);
 		assert_eq!(Queue::<T>::count(), 0);
@@ -182,6 +183,7 @@ benchmarks! {
 	}
 
 	deregister {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
