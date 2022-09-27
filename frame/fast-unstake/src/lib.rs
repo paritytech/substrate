@@ -50,7 +50,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use pallet::*;
-use sp_staking::OnStakersUpdate;
+use sp_staking::{OnStakersUpdate, StakersStatus, StakersStatusInterface};
 
 #[cfg(test)]
 mod mock;
@@ -286,10 +286,13 @@ pub mod pallet {
 			let ledger =
 				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
 
-			/// Very important: the new unstaker must still be idle from when they first registered
-			/// as a nominator or validator.
+			// Very important: the new unstaker must still be idle from when they first registered
+			// as a nominator or validator.
 			ensure!(IdleNewStakers::<T>::contains_key(&ctrl), Error::<T>::NotIdleNewStaker);
-			ensure!(T::StakersStatusInterface::status(), StakerListStatus::Idle);
+			ensure!(
+				T::StakersStatusInterface::status() == StakersStatus::Idle,
+				Error::<T>::NotIdleNewStaker
+			);
 
 			// second part of the && is defensive.
 			ensure!(
@@ -509,7 +512,7 @@ pub mod pallet {
 impl<T: Config> OnStakersUpdate<T::AccountId> for Pallet<T> {
 	fn on_new_staker(who: T::AccountId) {
 		// add to idle new stakers if the stakers list is idle
-		if (T::StakersStatusInterface::status() == StakersStatus::Idle) {
+		if T::StakersStatusInterface::status() == StakersStatus::Idle {
 			// insert the new voter into `IdleNewStakers` if they are not already present.
 			match IdleNewStakers::<T>::try_get(&who) {
 				Err(_) => IdleNewStakers::<T>::insert(who, ()),
@@ -520,6 +523,6 @@ impl<T: Config> OnStakersUpdate<T::AccountId> for Pallet<T> {
 
 	fn on_finish_idle() {
 		// remove all new voters. They are now in use in other phases of generating a voter list.
-		IdleNewStakers::<T>::clear(u32::max_value(), None);
+		let _ = IdleNewStakers::<T>::clear(u32::max_value(), None);
 	}
 }
