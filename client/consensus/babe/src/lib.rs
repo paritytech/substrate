@@ -746,11 +746,7 @@ where
 		&mut self.block_import
 	}
 
-	fn aux_data(
-		&self,
-		parent: &B::Header,
-		slot: Slot,
-	) -> Result<Self::AuxData, ConsensusError> {
+	fn aux_data(&self, parent: &B::Header, slot: Slot) -> Result<Self::AuxData, ConsensusError> {
 		self.epoch_changes
 			.shared_data()
 			.epoch_descriptor_for_child_of(
