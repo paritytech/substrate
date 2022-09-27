@@ -220,7 +220,7 @@ mod test {
 			// Call that can be inlined.
 			let small_call =
 				RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 10] });
-			// Call that is already hashed adn can will be converted to `Legacy`.
+			// Call that is already hashed and can will be converted to `Legacy`.
 			let hashed_call =
 				RuntimeCall::System(frame_system::Call::remark { remark: vec![0; 2048] });
 			let bound_hashed_call = Preimage::bound(hashed_call.clone()).unwrap();
@@ -351,6 +351,45 @@ mod test {
 					assert_eq!(x, y, "at index: outer {} inner {}", outer, inner);
 				}
 			}
+			assert_eq_uvec!(x, expected);
+
+			assert_eq!(StorageVersion::get::<Scheduler>(), 4);
+		});
+	}
+
+	#[test]
+	#[allow(deprecated)]
+	fn migration_v3_to_v4_too_large_calls_are_ignored() {
+		new_test_ext().execute_with(|| {
+			// Assume that we are at V3.
+			StorageVersion::new(3).put::<Scheduler>();
+
+			let too_large_call = RuntimeCall::System(frame_system::Call::remark {
+				remark: vec![0; <Test as Config>::Preimages::MAX_LENGTH + 1],
+			});
+
+			let i = 0u64;
+			let k = i.twox_64_concat();
+			let old = vec![Some(ScheduledV3Of::<Test> {
+				maybe_id: None,
+				priority: 1,
+				call: too_large_call.clone().into(),
+				maybe_periodic: None,
+				origin: root(),
+				_phantom: PhantomData::<u64>::default(),
+			})];
+			frame_support::migration::put_storage_value(b"Scheduler", b"Agenda", &k, old);
+
+			// The pre_upgrade hook fails:
+			let err = v3::MigrateToV4::<Test>::pre_upgrade().unwrap_err();
+			assert!(err.contains("Call is too large"));
+			// But the migration itself works:
+			let _w = v3::MigrateToV4::<Test>::on_runtime_upgrade();
+
+			let mut x = Agenda::<Test>::iter().map(|x| (x.0, x.1.into_inner())).collect::<Vec<_>>();
+			x.sort_by_key(|x| x.0);
+			// The call becomes `None`.
+			let expected = vec![(0, vec![None])];
 			assert_eq_uvec!(x, expected);
 
 			assert_eq!(StorageVersion::get::<Scheduler>(), 4);
