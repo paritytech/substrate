@@ -193,7 +193,7 @@ pub const DEFAULT_CPU_EXECUTION_LIMIT: ExecutionLimit =
 	ExecutionLimit::Both { max_iterations: 4 * 1024, max_duration: Duration::from_millis(100) };
 
 // This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in MB/s.
-pub fn benchmark_cpu(limit: ExecutionLimit) -> f64 {
+pub fn benchmark_cpu(limit: ExecutionLimit) -> Throughput {
 	// In general the results of this benchmark are somewhat sensitive to how much
 	// data we hash at the time. The smaller this is the *less* MB/s we can hash,
 	// the bigger this is the *more* MB/s we can hash, up until a certain point
@@ -220,8 +220,10 @@ pub fn benchmark_cpu(limit: ExecutionLimit) -> f64 {
 		Ok(())
 	};
 
-	benchmark("CPU score", SIZE, limit.max_iterations(), limit.max_duration(), run)
-		.expect("benchmark cannot fail; qed")
+	Throughput::MiBs(
+		benchmark("CPU score", SIZE, limit.max_iterations(), limit.max_duration(), run)
+			.expect("benchmark cannot fail; qed"),
+	)
 }
 
 /// A default [`ExecutionLimit`] that can be used to call [`benchmark_memory`].
@@ -233,7 +235,7 @@ pub const DEFAULT_MEMORY_EXECUTION_LIMIT: ExecutionLimit =
 // It doesn't technically measure the absolute maximum memory bandwidth available,
 // but that's fine, because real code most of the time isn't optimized to take
 // advantage of the full memory bandwidth either.
-pub fn benchmark_memory(limit: ExecutionLimit) -> f64 {
+pub fn benchmark_memory(limit: ExecutionLimit) -> Throughput {
 	// Ideally this should be at least as big as the CPU's L3 cache,
 	// and it should be big enough so that the `memcpy` takes enough
 	// time to be actually measurable.
@@ -268,8 +270,10 @@ pub fn benchmark_memory(limit: ExecutionLimit) -> f64 {
 		Ok(())
 	};
 
-	benchmark("memory score", SIZE, limit.max_iterations(), limit.max_duration(), run)
-		.expect("benchmark cannot fail; qed")
+	Throughput::MiBs(
+		benchmark("memory score", SIZE, limit.max_iterations(), limit.max_duration(), run)
+			.expect("benchmark cannot fail; qed"),
+	)
 }
 
 struct TemporaryFile {
@@ -474,8 +478,8 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> f64 {
 pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
-		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) as u64,
-		memory_memcpy_score: benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) as u64,
+		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT),
+		memory_memcpy_score: benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT),
 		disk_sequential_write_score: None,
 		disk_random_write_score: None,
 	};
@@ -484,7 +488,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 		hwbench.disk_sequential_write_score =
 			match benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory)
 			{
-				Ok(score) => Some(score as u64),
+				Ok(score) => Some(Throughput::MiBs(score)),
 				Err(error) => {
 					log::warn!("Failed to run the sequential write disk benchmark: {}", error);
 					None
@@ -493,7 +497,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 
 		hwbench.disk_random_write_score =
 			match benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory) {
-				Ok(score) => Some(score as u64),
+				Ok(score) => Some(Throughput::MiBs(score)),
 				Err(error) => {
 					log::warn!("Failed to run the random write disk benchmark: {}", error);
 					None

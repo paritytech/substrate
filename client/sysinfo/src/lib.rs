@@ -44,13 +44,13 @@ pub const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct HwBench {
 	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
-	pub cpu_hashrate_score: u64,
+	pub cpu_hashrate_score: Throughput,
 	/// Memory bandwidth in MB/s, calculated by measuring the throughput of `memcpy`.
-	pub memory_memcpy_score: u64,
+	pub memory_memcpy_score: Throughput,
 	/// Sequential disk write speed in MB/s.
-	pub disk_sequential_write_score: Option<u64>,
+	pub disk_sequential_write_score: Option<Throughput>,
 	/// Random disk write speed in MB/s.
-	pub disk_random_write_score: Option<u64>,
+	pub disk_random_write_score: Option<Throughput>,
 }
 
 /// Limit the execution time of a benchmark.

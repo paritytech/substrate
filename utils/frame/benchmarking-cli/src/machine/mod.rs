@@ -148,9 +148,9 @@ impl MachineCmd {
 		let memory_limit = ExecutionLimit::from_secs_f32(self.memory_duration);
 
 		let score = match metric {
-			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu(hash_limit) as f64),
+			Metric::Blake2256 => benchmark_cpu(hash_limit),
 			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
-			Metric::MemCopy => Throughput::MiBs(benchmark_memory(memory_limit) as f64),
+			Metric::MemCopy => benchmark_memory(memory_limit),
 			Metric::DiskSeqWrite =>
 				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
 			Metric::DiskRndWrite =>
