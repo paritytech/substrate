@@ -16,10 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{
-	config, error,
-	utils::{interval, LruHashSet},
-};
+use crate::config;
 
 use bytes::Bytes;
 use codec::{Decode, DecodeAll, Encode};
@@ -45,7 +42,8 @@ use sc_consensus::import_queue::{
 	BlockImportError, BlockImportStatus, IncomingBlock, RuntimeOrigin,
 };
 use sc_network_common::{
-	config::ProtocolId,
+	config::{NonReservedPeerMode, ProtocolId},
+	error,
 	protocol::ProtocolName,
 	request_responses::RequestFailure,
 	sync::{
@@ -57,6 +55,7 @@ use sc_network_common::{
 		OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PollBlockAnnounceValidation,
 		SyncStatus,
 	},
+	utils::{interval, LruHashSet},
 };
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_consensus::BlockOrigin;
@@ -341,7 +340,7 @@ where
 				bootnodes,
 				reserved_nodes: default_sets_reserved.clone(),
 				reserved_only: network_config.default_peers_set.non_reserved_mode ==
-					config::NonReservedPeerMode::Deny,
+					NonReservedPeerMode::Deny,
 			});
 
 			for set_cfg in &network_config.extra_sets {
@@ -352,7 +351,7 @@ where
 				}
 
 				let reserved_only =
-					set_cfg.set_config.non_reserved_mode == config::NonReservedPeerMode::Deny;
+					set_cfg.set_config.non_reserved_mode == NonReservedPeerMode::Deny;
 
 				sets.push(sc_peerset::SetConfig {
 					in_peers: set_cfg.set_config.in_peers,
