@@ -723,11 +723,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					// Reintroduce the details, so the asset is not deleted yet.
 					let _ = maybe_details.insert(details.clone());
 
-					Self::deposit_event(Event::PartiallyDestroyed {
-						asset_id: id,
-						accounts_destroyed: dead_accounts.len() as u32,
-						accounts_remaining: accounts_remaining as u32,
-					});
+				// Self::deposit_event(Event::PartiallyDestroyed {
+				// 	asset_id: id,
+				// 	accounts_destroyed: dead_accounts.len() as u32,
+				// 	accounts_remaining: accounts_remaining as u32,
+				// });
 				} else {
 					debug_assert_eq!(details.accounts, 0);
 					debug_assert_eq!(details.sufficients, 0);

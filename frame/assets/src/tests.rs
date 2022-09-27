@@ -316,10 +316,10 @@ fn lifecycle_should_work() {
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
@@ -340,10 +340,10 @@ fn lifecycle_should_work() {
 		assert_eq!(Account::<Test>::iter_prefix(0).count(), 2);
 
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
@@ -366,10 +366,10 @@ fn destroy_should_refund_approvals() {
 
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 
-		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(Balances::reserved_balance(&1), 0);
 
@@ -388,27 +388,40 @@ fn partial_destroy_should_work() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 4, 10));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 5, 10));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 6, 10));
+		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 7, 10));
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 
-		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		// Asset is in use, as all the accounts have not yet been destroyed.
+		// We need to call destroy_accounts or destroy_approvals again until asset is completely
+		// cleaned up.
+		assert_noop!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0), Error::<Test>::InUse);
 
-		System::assert_has_event(RuntimeEvent::Assets(crate::Event::PartiallyDestroyed {
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::DestroyedAccounts {
 			asset_id: 0,
 			accounts_destroyed: 5,
-			accounts_remaining: 1,
+			accounts_remaining: 2,
 		}));
-		// PartiallyDestroyed Asset should continue to exist
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::DestroyedApprovals {
+			asset_id: 0,
+			approvals_destroyed: 0,
+			approvals_remaining: 0,
+		}));
+		// Partially destroyed Asset should continue to exist
 		assert!(Asset::<Test>::contains_key(0));
 
 		// Second call to destroy on PartiallyDestroyed asset
-
-		assert_ok!(Assets::start_destroy(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(0), 0));
-		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(0), 0));
+		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::DestroyedAccounts {
+			asset_id: 0,
+			accounts_destroyed: 2,
+			accounts_remaining: 0,
+		}));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::destroy_approvals(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0));
 
 		System::assert_has_event(RuntimeEvent::Assets(crate::Event::Destroyed { asset_id: 0 }));
 

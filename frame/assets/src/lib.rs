@@ -415,15 +415,14 @@ pub mod pallet {
 		/// Accounts were destroyed for given asset.
 		DestroyedAccounts { asset_id: T::AssetId, accounts_destroyed: u32, accounts_remaining: u32 },
 		/// Approvals were destroyed for given asset.
-		DestroyedApprovals { asset_id: T::AssetId, approvals_destroyed: u32 },
+		DestroyedApprovals {
+			asset_id: T::AssetId,
+			approvals_destroyed: u32,
+			approvals_remaining: u32,
+		},
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
-		/// An asset class was only destroyed. The destroy action should be re-executed.
-		PartiallyDestroyed {
-			asset_id: T::AssetId,
-			accounts_destroyed: u32,
-			accounts_remaining: u32,
-		},
+
 		/// Some asset class was force-created.
 		ForceCreated { asset_id: T::AssetId, owner: T::AccountId },
 		/// New metadata has been set for an asset.
@@ -585,45 +584,18 @@ pub mod pallet {
 			Self::do_force_create(id, owner, is_sufficient, min_balance)
 		}
 
-		/// Destroy a class of fungible assets.
-		/// Due to weight restrictions, this function may need to be called multiple
+		/// Start the process of destroying a class of fungible asset
+		/// start_destroy is the first in a series of extrinsics that should be called, to allow
+		/// destroying an asset.
 		///
 		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
 		/// owner of the asset `id`.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
-		/// asset.
+		///   asset.
 		///
-		/// Emits `Destroyed` event when successful.
-		///
-		/// NOTE: It can be helpful to first freeze an asset before destroying it so that you
-		/// can provide accurate witness information and prevent users from manipulating state
-		/// in a way that can make it harder to destroy.
-		///
-		/// Weight: `O(c + p + a)` where:
-		/// - `c = (witness.accounts - witness.sufficients)`
-		/// - `s = witness.sufficients`
-		/// - `a = witness.approvals`
-		// /// TODO: Change the weights to T::RemoveKeysLimit::get() like in cloudloads
-		// #[pallet::weight(T::WeightInfo::destroy(
-		// 	T::RemoveAccountsLimit::get(),
-		// 	T::RemoveApprovalsLimit::get(),
-		// ))]
-		// pub fn destroy(
-		// 	origin: OriginFor<T>,
-		// 	#[pallet::compact] id: T::AssetId,
-		// 	witness: DestroyWitness,
-		// ) -> DispatchResultWithPostInfo {
-		// 	let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
-		// 		Ok(_) => None,
-		// 		Err(origin) => Some(ensure_signed(origin)?),
-		// 	};
-		// 	let details = Self::do_destroy(id, witness, maybe_check_owner)?;
-		// 	Ok(Some(T::WeightInfo::destroy(details.accounts, details.approvals)).into())
-		// }
-
-		/// Start the process of destroying an asset
-		#[pallet::weight(T::WeightInfo::mint())]
+		/// Assets must be freezed before calling start_destroy.
+		#[pallet::weight(T::WeightInfo::start_destroy())]
 		pub fn start_destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -649,17 +621,32 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Cleanup Accounts
-		#[pallet::weight(T::WeightInfo::mint())]
+		/// Destroy all accounts associated with a given asset.
+		/// `destroy_accounts` should only be called after `start_destroy` has been called, and the
+		/// asset is in a `Destroying` state
+		///
+		/// Due to weight restrictions, this function may need to be called multiple
+		/// times to fully destroy all accounts. It will destroy `RemoveKeysLimit` accounts at a
+		/// time.
+		///
+		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
+		/// owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
+		///   asset.
+		///
+		/// Each call Emits the `Event::DestroyedAccounts` event.
+		#[pallet::weight(T::WeightInfo::destroy_accounts(T::RemoveKeysLimit::get()))]
 		pub fn destroy_accounts(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
 			let mut dead_accounts: Vec<T::AccountId> = vec![];
+			let mut removed_accounts = 0;
 			let _ = Asset::<T, I>::try_mutate_exists(
 				id,
 				|maybe_details| -> Result<(), DispatchError> {
@@ -671,14 +658,13 @@ pub mod pallet {
 					// Should only destroy accounts while the asset is being destroyed
 					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
 
-					let mut removed_accounts = 0;
 					for (who, v) in Account::<T, I>::drain_prefix(id) {
+						let _ = Self::dead_account(&who, &mut details, &v.reason, true);
+						dead_accounts.push(who);
+						removed_accounts = removed_accounts.saturating_add(1);
 						if removed_accounts >= T::RemoveKeysLimit::get() {
 							break
 						}
-						let _ = Self::dead_account(&who, &mut details, &v.reason, true);
-						dead_accounts.push(who);
-						removed_accounts += 1;
 					}
 
 					Self::deposit_event(Event::DestroyedAccounts {
@@ -694,46 +680,80 @@ pub mod pallet {
 			for who in dead_accounts {
 				T::Freezer::died(id, &who);
 			}
-			Ok(())
+			Ok(Some(T::WeightInfo::destroy_accounts(removed_accounts)).into())
 		}
 
-		#[pallet::weight(T::WeightInfo::mint())]
+		/// Destroy all approvals associated with a given asset.
+		/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
+		/// asset is in a `Destroying` state
+		///
+		/// Due to weight restrictions, this function may need to be called multiple
+		/// times to fully destroy all approvals. It will destroy `RemoveKeysLimit` approvals at a
+		/// time.
+		///
+		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
+		/// owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
+		///   asset.
+		///
+		/// Each call Emits the `Event::DestroyedApprovals` event.
+		#[pallet::weight(T::WeightInfo::destroy_approvals(T::RemoveKeysLimit::get()))]
 		pub fn destroy_approvals(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
 
-			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			if let Some(check_owner) = maybe_check_owner {
-				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-			}
-			ensure!(details.is_frozen, Error::<T, I>::BadWitness);
-			// Should only destroy accounts while the asset is being destroyed
-			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
-
 			let mut removed_approvals = 0;
-			for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
-				if removed_approvals >= T::RemoveKeysLimit::get() {
-					break
-				}
-				T::Currency::unreserve(&owner, approval.deposit);
-				removed_approvals += 1;
-			}
+			let _ = Asset::<T, I>::try_mutate_exists(
+				id,
+				|maybe_details| -> Result<(), DispatchError> {
+					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+					if let Some(check_owner) = maybe_check_owner {
+						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+					}
 
-			Self::deposit_event(Event::DestroyedApprovals {
-				asset_id: id,
-				approvals_destroyed: removed_approvals as u32,
-			});
+					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+					// Should only destroy accounts while the asset is being destroyed
+					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
 
-			Ok(())
+					for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
+						T::Currency::unreserve(&owner, approval.deposit);
+						removed_approvals = removed_approvals.saturating_add(1);
+						details.approvals = details.approvals.saturating_sub(1);
+						if removed_approvals >= T::RemoveKeysLimit::get() {
+							break
+						}
+					}
+					Self::deposit_event(Event::DestroyedApprovals {
+						asset_id: id,
+						approvals_destroyed: removed_approvals as u32,
+						approvals_remaining: details.approvals as u32,
+					});
+					Ok(())
+				},
+			)?;
+
+			Ok(Some(T::WeightInfo::destroy_approvals(removed_approvals)).into())
 		}
 
+		/// Complete destroying asset and unreserve currency.
+		/// `finish_destroy` should only be called after `start_destroy` has been called, and the
+		/// asset is in a `Destroying` state. All accounts or approvals should be destroyed before
+		/// hand.
 		///
-		#[pallet::weight(T::WeightInfo::mint())]
+		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
+		/// owner of the asset `id`.
+		///
+		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
+		///   asset.
+		///
+		/// Each successful call Emits the `Event::Destroyed` event.
+		#[pallet::weight(T::WeightInfo::finish_destroy())]
 		pub fn finish_destroy(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -750,8 +770,8 @@ pub mod pallet {
 						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 					}
 					ensure!(details.is_frozen, Error::<T, I>::Unknown);
-					ensure!(details.accounts == 0, Error::<T, I>::Unknown);
-					ensure!(details.approvals == 0, Error::<T, I>::Unknown);
+					ensure!(details.accounts == 0, Error::<T, I>::InUse);
+					ensure!(details.approvals == 0, Error::<T, I>::InUse);
 
 					let metadata = Metadata::<T, I>::take(&id);
 					T::Currency::unreserve(
