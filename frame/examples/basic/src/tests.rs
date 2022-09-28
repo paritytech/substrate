@@ -197,5 +197,6 @@ fn weights_work() {
 	//   should be less.
 	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
-	assert!(info1.weight.all_gt(info2.weight));
+	// TODO: account for proof size weight
+	assert!(info1.weight.ref_time() > info2.weight.ref_time());
 }
