@@ -83,8 +83,8 @@ pub(crate) mod beefy_protocol_name {
 /// For standard protocol name see [`beefy_protocol_name::standard_name`].
 pub fn beefy_peers_set_config(
 	protocol_name: ProtocolName,
-) -> sc_network::config::NonDefaultSetConfig {
-	let mut cfg = sc_network::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024);
+) -> sc_network_common::config::NonDefaultSetConfig {
+	let mut cfg = sc_network_common::config::NonDefaultSetConfig::new(protocol_name, 1024 * 1024);
 
 	cfg.allow_non_reserved(25, 25);
 	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());

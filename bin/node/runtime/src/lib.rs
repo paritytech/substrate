@@ -581,8 +581,9 @@ impl pallet_staking::Config for Runtime {
 
 impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type SlashPerEra = ConstU128<{ DOLLARS }>;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
+	type Deposit = ConstU128<{ DOLLARS }>;
+	type DepositCurrency = Balances;
 	type WeightInfo = ();
 }
 
