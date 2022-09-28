@@ -70,6 +70,11 @@ impl StorageProof {
 		self.into()
 	}
 
+	/// Creates a [`MemoryDB`](crate::MemoryDB) from `Self` reference.
+	pub fn to_memory_db<H: Hasher>(&self) -> crate::MemoryDB<H> {
+		self.into()
+	}
+
 	/// Merges multiple storage proofs covering potentially different sets of keys into one proof
 	/// covering all keys. The merged proof output may be smaller than the aggregate size of the
 	/// input proofs due to deduplication of trie nodes.
@@ -110,6 +115,17 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 		proof.iter_nodes().for_each(|n| {
 			db.insert(crate::EMPTY_PREFIX, &n);
 		});
+		db
+	}
+}
+
+impl<H: Hasher> From<&StorageProof> for crate::MemoryDB<H> {
+	fn from(proof: &StorageProof) -> Self {
+		let mut db = crate::MemoryDB::default();
+		proof.trie_nodes.iter().for_each(|n| {
+			db.insert(crate::EMPTY_PREFIX, &n);
+		});
+
 		db
 	}
 }
