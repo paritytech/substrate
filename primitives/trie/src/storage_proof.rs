@@ -58,13 +58,13 @@ impl StorageProof {
 		self.trie_nodes.is_empty()
 	}
 
-	/// Convert it to an iterator over encoded trie nodes in lexicographical order constructed
+	/// Convert into an iterator over encoded trie nodes in lexicographical order constructed
 	/// from the proof.
 	pub fn iter_nodes(self) -> IntoIter<Vec<u8>> {
 		self.trie_nodes.into_iter()
 	}
 
-	/// Create an new iterator over encoded trie nodes in lexicographical order constructed
+	/// Create an iterator over encoded trie nodes in lexicographical order constructed
 	/// from the proof.
 	pub fn iter(&self) -> Iter<'_, Vec<u8>> {
 		self.trie_nodes.iter()
@@ -104,7 +104,17 @@ impl StorageProof {
 		self,
 		root: H::Out,
 	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
-		crate::encode_compact::<Layout<H>>(self, root)
+		let db = self.into_memory_db();
+		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(db, root)
+	}
+
+	/// Encode as a compact proof with default trie layout.
+	pub fn to_compact_proof<H: Hasher>(
+		self,
+		root: H::Out,
+	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
+		let db = self.to_memory_db();
+		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(db, root)
 	}
 
 	/// Returns the estimated encoded size of the compact proof.

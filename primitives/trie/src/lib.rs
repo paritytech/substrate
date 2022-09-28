@@ -57,10 +57,10 @@ pub use trie_db::{
 pub use trie_stream::TrieStream;
 
 /// substrate trie layout
-pub struct LayoutV0<H>(sp_std::marker::PhantomData<H>);
+pub struct LayoutV0<H>(PhantomData<H>);
 
 /// substrate trie layout, with external value nodes.
-pub struct LayoutV1<H>(sp_std::marker::PhantomData<H>);
+pub struct LayoutV1<H>(PhantomData<H>);
 
 impl<H> TrieLayout for LayoutV0<H>
 where

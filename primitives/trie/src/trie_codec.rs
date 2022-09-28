@@ -20,7 +20,7 @@
 //! This uses compact proof from trie crate and extends
 //! it to substrate specific layout and child trie system.
 
-use crate::{CompactProof, HashDBT, StorageProof, TrieConfiguration, TrieHash, EMPTY_PREFIX};
+use crate::{CompactProof, HashDBT, TrieConfiguration, TrieHash, EMPTY_PREFIX};
 use sp_std::{boxed::Box, vec::Vec};
 use trie_db::{CError, Trie};
 
@@ -149,15 +149,15 @@ where
 /// Then parse all child trie root and compress main trie content first
 /// then all child trie contents.
 /// Child trie are ordered by the order of their roots in the top trie.
-pub fn encode_compact<L>(
-	proof: StorageProof,
+pub fn encode_compact<L, DB>(
+	partial_db: DB,
 	root: TrieHash<L>,
 ) -> Result<CompactProof, Error<TrieHash<L>, CError<L>>>
 where
 	L: TrieConfiguration,
+	DB: HashDBT<L::Hash, trie_db::DBValue> + hash_db::HashDBRef<L::Hash, trie_db::DBValue>,
 {
 	let mut child_tries = Vec::new();
-	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
 		let trie = crate::TrieDBBuilder::<L>::new(&partial_db, &root).build();
 
