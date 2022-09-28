@@ -23,7 +23,6 @@ use jsonrpsee::proc_macros::rpc;
 use sp_core::Bytes;
 
 #[rpc(client, server)]
-// This trait bound is required by serde, see `event`.
 pub trait TransactionApi<Hash: Clone> {
 	/// Submit an extrinsic to watch.
 	///
