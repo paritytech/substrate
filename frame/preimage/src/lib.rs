@@ -97,7 +97,7 @@ pub mod pallet {
 
 		/// An origin that can request a preimage be placed on-chain without a deposit or fee, or
 		/// manage existing preimages.
-		type ManagerOrigin: EnsureOrigin<Self::Origin>;
+		type ManagerOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The base deposit for placing a preimage on chain.
 		type BaseDeposit: Get<BalanceOf<Self>>;
@@ -202,7 +202,9 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Ensure that the origin is either the `ManagerOrigin` or a signed origin.
-	fn ensure_signed_or_manager(origin: T::Origin) -> Result<Option<T::AccountId>, BadOrigin> {
+	fn ensure_signed_or_manager(
+		origin: T::RuntimeOrigin,
+	) -> Result<Option<T::AccountId>, BadOrigin> {
 		if T::ManagerOrigin::ensure_origin(origin.clone()).is_ok() {
 			return Ok(None)
 		}

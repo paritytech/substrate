@@ -882,7 +882,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		&self.id
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", test))]
+	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
 	pub fn set_score(&mut self, s: T::Score) {
 		self.score = s
 	}

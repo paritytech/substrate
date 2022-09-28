@@ -234,11 +234,14 @@ impl ExtrinsicT for Extrinsic {
 }
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Config = ();
 	type Info = ();
 	type PostInfo = ();
-	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
@@ -442,15 +445,15 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
-pub struct Origin;
+pub struct RuntimeOrigin;
 
-impl From<RawOrigin<<Runtime as frame_system::Config>::AccountId>> for Origin {
+impl From<RawOrigin<<Runtime as frame_system::Config>::AccountId>> for RuntimeOrigin {
 	fn from(_: RawOrigin<<Runtime as frame_system::Config>::AccountId>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
 
-impl CallerTrait<<Runtime as frame_system::Config>::AccountId> for Origin {
+impl CallerTrait<<Runtime as frame_system::Config>::AccountId> for RuntimeOrigin {
 	fn into_system(self) -> Option<RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
 		unimplemented!("Not required in tests!")
 	}
@@ -460,15 +463,15 @@ impl CallerTrait<<Runtime as frame_system::Config>::AccountId> for Origin {
 	}
 }
 
-impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
-	fn from(_origin: Origin) -> Result<frame_system::Origin<Runtime>, Origin> {
+impl From<RuntimeOrigin> for Result<frame_system::Origin<Runtime>, RuntimeOrigin> {
+	fn from(_origin: RuntimeOrigin) -> Result<frame_system::Origin<Runtime>, RuntimeOrigin> {
 		unimplemented!("Not required in tests!")
 	}
 }
 
-impl frame_support::traits::OriginTrait for Origin {
+impl frame_support::traits::OriginTrait for RuntimeOrigin {
 	type Call = <Runtime as frame_system::Config>::RuntimeCall;
-	type PalletsOrigin = Origin;
+	type PalletsOrigin = RuntimeOrigin;
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
 	fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
@@ -609,7 +612,7 @@ impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -631,6 +634,8 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
+impl system::Config for Runtime {}
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
