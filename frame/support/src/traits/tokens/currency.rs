@@ -27,7 +27,7 @@ use crate::{
 };
 use codec::{FullCodec, MaxEncodedLen};
 use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member};
-use mangata_primitives::{Balance as BalancePrimitive, TokenId};
+use mangata_types::{Balance as BalancePrimitive, TokenId};
 use sp_std::fmt::Debug;
 use scale_info::TypeInfo;
 use frame_support::Parameter;

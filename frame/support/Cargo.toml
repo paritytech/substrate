@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-mangata-primitives = { git="https://github.com/mangata-finance/mangata-node", branch="develop", default-features = false, version = '0.1.0' }
+mangata-types = { version = "0.1.0", default-features = false, path = "../../primitives/mangata-types" }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
