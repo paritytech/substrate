@@ -662,7 +662,7 @@ pub mod pallet {
 					}
 					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
 					// Should only destroy accounts while the asset is being destroyed
-					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
+					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 
 					for (who, v) in Account::<T, I>::drain_prefix(id) {
 						let _ = Self::dead_account(&who, &mut details, &v.reason, true);
