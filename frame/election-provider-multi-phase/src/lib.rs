@@ -1010,7 +1010,8 @@ pub mod pallet {
 
 			// TODO: account for proof size weight
 			ensure!(
-				Self::solution_weight_of(&raw_solution, size).ref_time() < T::SignedMaxWeight::get().ref_time(),
+				Self::solution_weight_of(&raw_solution, size).ref_time() <
+					T::SignedMaxWeight::get().ref_time(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
