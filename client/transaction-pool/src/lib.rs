@@ -835,16 +835,16 @@ where
 		event: &ChainEvent<Block>,
 	) -> (bool, Option<TreeRoute<Block>>) {
 		let (new_hash, finalized) = match event {
-			ChainEvent::NewBestBlock { hash, .. } => (hash, false),
-			ChainEvent::Finalized { hash, .. } => (hash, true),
+			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
+			ChainEvent::Finalized { hash, .. } => (*hash, true),
 		};
 
 		let best_block = match self.recent_best_block {
 			Some(recent_best_hash) => recent_best_hash,
 			None => {
-				self.recent_best_block = Some(*new_hash);
+				self.recent_best_block = Some(new_hash);
 				if finalized {
-					self.recent_finalized_block = Some(*new_hash);
+					self.recent_finalized_block = Some(new_hash);
 				}
 
 				return (true, None)
@@ -854,13 +854,13 @@ where
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
 		let tree_route =
-			api.tree_route(best_block, *new_hash).unwrap().expect("tree_route exists. qed.");
+			api.tree_route(best_block, new_hash).unwrap().expect("tree_route exists. qed.");
 
 		log::trace!(target: "txpool", "resolve hash:{new_hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{:?}", self.recent_finalized_block);
 
 		// block was already finalized
 		if let Some(finalized_block) = self.recent_finalized_block {
-			if finalized_block == *new_hash {
+			if finalized_block == new_hash {
 				log::trace!(target:"txpool", "handle_enactment: block already finalized: exit 3b");
 				return (false, Some(tree_route))
 			}
@@ -875,7 +875,7 @@ where
 		// If there are no enacted blocks in best_block -> hash tree_route, it means that
 		// block being finalized was already enacted. (This case also covers best_block == hash)
 		if finalized {
-			self.recent_finalized_block = Some(*new_hash);
+			self.recent_finalized_block = Some(new_hash);
 			if tree_route.enacted().len() == 0 {
 				log::trace!(
 				target: "txpool",
@@ -889,10 +889,10 @@ where
 
 			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
 			if best_block_retracted {
-				self.recent_best_block = Some(*new_hash)
+				self.recent_best_block = Some(new_hash)
 			}
 		} else {
-			self.recent_best_block = Some(*new_hash);
+			self.recent_best_block = Some(new_hash);
 		}
 
 		log::trace!(target: "txpool", "handle_enactment: proceed....");
