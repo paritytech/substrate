@@ -29,7 +29,14 @@ use crate::{
 	},
 	SubscriptionTaskExecutor,
 };
-use jsonrpsee::{core::async_trait, types::SubscriptionResult, SubscriptionSink};
+use jsonrpsee::{
+	core::async_trait,
+	types::{
+		error::{CallError, ErrorObject},
+		SubscriptionResult,
+	},
+	SubscriptionSink,
+};
 use sc_transaction_pool_api::{
 	error::IntoPoolError, BlockHash, TransactionFor, TransactionPool, TransactionSource,
 	TransactionStatus,
@@ -43,7 +50,6 @@ use sp_runtime::{generic, traits::Block as BlockT};
 
 use codec::Decode;
 use futures::{FutureExt, StreamExt, TryFutureExt};
-use jsonrpsee::types::error::CallError;
 
 /// An API for transaction RPC calls.
 pub struct Transaction<Pool, Client> {
@@ -69,6 +75,13 @@ impl<Pool, Client> Transaction<Pool, Client> {
 /// some unique transactions via RPC and have them included in the pool.
 const TX_SOURCE: TransactionSource = TransactionSource::External;
 
+/// Extrinsic has an invalid format.
+///
+/// # Note
+///
+/// This is similar to the old `author` API error code.
+const BAD_FORMAT: i32 = 1001;
+
 #[async_trait]
 impl<Pool, Client> TransactionApiServer<BlockHash<Pool>> for Transaction<Pool, Client>
 where
@@ -83,7 +96,11 @@ where
 		let decoded_extrinsic = match TransactionFor::<Pool>::decode(&mut &xt[..]) {
 			Ok(decoded_extrinsic) => decoded_extrinsic,
 			Err(e) => {
-				let err = CallError::Failed(e.into());
+				let err = CallError::Custom(ErrorObject::owned(
+					BAD_FORMAT,
+					format!("Extrinsic has invalid format: {}", e),
+					None::<()>,
+				));
 				let _ = sink.reject(err);
 				return Ok(())
 			},
