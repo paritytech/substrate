@@ -29,10 +29,10 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 	let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-  }: activate(origin)
+  }: _(origin)
   verify {
 		assert_eq!(
-			SafeMode::<T>::activated().unwrap(),
+			SafeMode::<T>::active_until().unwrap(),
 			System::<T>::block_number() + T::ActivateDuration::get()
 		);
   }
