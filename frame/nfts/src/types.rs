@@ -18,6 +18,7 @@
 //! Various basic types for use in the Nfts pallet.
 
 use super::*;
+use crate::features::macros::*;
 use codec::EncodeLike;
 use enumflags2::{bitflags, BitFlags};
 use frame_support::{
@@ -41,6 +42,12 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
+
+pub trait Incrementable {
+	fn increment(&self) -> Self;
+	fn initial_value() -> Self;
+}
+impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -137,44 +144,6 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 	pub(super) receiver: AccountId,
 	/// An amount the sender is willing to tip.
 	pub(super) amount: Amount,
-}
-
-macro_rules! impl_codec_bitflags {
-	($wrapper:ty, $size:ty, $bitflag_enum:ty) => {
-		impl MaxEncodedLen for $wrapper {
-			fn max_encoded_len() -> usize {
-				<$size>::max_encoded_len()
-			}
-		}
-		impl Encode for $wrapper {
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				self.0.bits().using_encoded(f)
-			}
-		}
-		impl EncodeLike for $wrapper {}
-		impl Decode for $wrapper {
-			fn decode<I: codec::Input>(
-				input: &mut I,
-			) -> sp_std::result::Result<Self, codec::Error> {
-				let field = <$size>::decode(input)?;
-				Ok(Self(BitFlags::from_bits(field as $size).map_err(|_| "invalid value")?))
-			}
-		}
-
-		impl TypeInfo for $wrapper {
-			type Identity = Self;
-
-			fn type_info() -> Type {
-				Type::builder()
-					.path(Path::new("BitFlags", module_path!()))
-					.type_params(vec![TypeParameter::new("T", Some(meta_type::<$bitflag_enum>()))])
-					.composite(
-						Fields::unnamed()
-							.field(|f| f.ty::<$size>().type_name(stringify!($bitflag_enum))),
-					)
-			}
-		}
-	};
 }
 
 // Support for up to 64 user-enabled features on a collection.

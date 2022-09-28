@@ -62,29 +62,6 @@ pub use weights::WeightInfo;
 
 type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Source;
 
-pub trait Incrementable {
-	fn increment(&self) -> Self;
-	fn initial_value() -> Self;
-}
-
-macro_rules! impl_incrementable {
-	($($type:ty),+) => {
-		$(
-			impl Incrementable for $type {
-				fn increment(&self) -> Self {
-					self.saturating_add(1)
-				}
-
-				fn initial_value() -> Self {
-					0
-				}
-			}
-		)+
-	};
-}
-
-impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
