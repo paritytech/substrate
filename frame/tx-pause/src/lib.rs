@@ -68,10 +68,11 @@ pub mod pallet {
 		/// The only origin that can un-pause calls.
 		type UnpauseOrigin: EnsureOrigin<Self::Origin>;
 
-		/// Pallets that are safe and can never be paused.
+		/// Contains all calls that cannot be paused.
 		///
-		/// The tx-pause pallet is always assumed to be safe itself.
-		type UnpausableCalls: Contains<<Self as Config>::RuntimeCall>;
+		/// The `TxMode` pallet cannot pause it's own calls, and does not need to be explicitly
+		/// added here.
+		type UnfilterableCalls: Contains<<Self as Config>::RuntimeCall>;
 
 		/// Maximum length for pallet- and function-names.
 		///
@@ -228,7 +229,7 @@ impl<T: Config> Pallet<T> {
 		if pallet == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if T::UnpausableCalls::contains(c) {
+		if T::UnfilterableCalls::contains(c) {
 			return Err(Error::<T>::IsUnpausable)
 		}
 		if Self::is_paused(&pallet, &call) {

@@ -85,11 +85,11 @@ parameter_types! {
 }
 
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
-pub struct MockUnpausableCalls;
+pub struct MockUnfilterableCalls;
 
 /// Filter example with Balances::transfer_keep_alive use as noop call in testing and benchmarking,
 /// accept all others
-impl Contains<RuntimeCall> for MockUnpausableCalls {
+impl Contains<RuntimeCall> for MockUnfilterableCalls {
 	fn contains(c: &RuntimeCall) -> bool {
 		match *c {
 			// set an example noop call in testing and benchmarking, accept all others
@@ -120,7 +120,7 @@ impl Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
-	type UnpausableCalls = MockUnpausableCalls;
+	type UnfilterableCalls = MockUnfilterableCalls;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();

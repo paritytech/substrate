@@ -63,7 +63,7 @@ pub mod pallet {
 		///
 		/// The `SafeMode` pallet cannot disable it's own calls, and does not need to be explicitly
 		/// added here.
-		type SafeModeFilter: Contains<Self::RuntimeCall>;
+		type UnfilterableCalls: Contains<Self::RuntimeCall>;
 
 		/// How long the safe-mode will stay active when activated with [`Pallet::activate`].
 		#[pallet::constant]
@@ -425,7 +425,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if Self::is_activated() {
-			T::SafeModeFilter::contains(call)
+			T::UnfilterableCalls::contains(call)
 		} else {
 			true
 		}

@@ -201,9 +201,9 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-pub struct UnpausableCalls; // TODO move to calls, use (..) to match on pallets like ProxyType
+pub struct UnfilterableCalls; // TODO move to calls, use (..) to match on pallets like ProxyType
 
-impl Contains<RuntimeCall> for UnpausableCalls {
+impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		matches!(call, RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. }))
 	}
@@ -214,15 +214,15 @@ impl pallet_tx_pause::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
-	type UnpausableCalls = UnpausableCalls;
+	type UnfilterableCalls = UnfilterableCalls;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
 }
 
 /// Filter to block balance pallet calls
-pub struct SafeModeFilter;
-impl Contains<RuntimeCall> for SafeModeFilter {
+pub struct UnfilterableCalls;
+impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
@@ -359,7 +359,7 @@ parameter_types! {
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type SafeModeFilter = SafeModeFilter; // TODO add TxPause pallet
+	type UnfilterableCalls = UnfilterableCalls; // TODO add TxPause pallet
 	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
 	type ActivateStakeAmount = ActivateStakeAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
@@ -372,7 +372,7 @@ impl pallet_safe_mode::Config for Runtime {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for UnpausableCalls -> see TheseExcept )
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for UnfilterableCalls -> see TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
