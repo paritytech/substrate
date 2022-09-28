@@ -87,13 +87,13 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 		let mut conn = self.0.lock();
 		pipe.query(conn.deref_mut()).map_err(|e| DatabaseError(Box::new(e)))?;
 
-		for (col, key) in potential_garbages {
-			let refcount: i64 = conn.hget(RefColumn(col), key.as_ref()).map_err(|e| DatabaseError(Box::new(e)))?;
-			if refcount < 1 {
-				redis::pipe().atomic().hdel(RefColumn(col), key.as_ref()).hdel(col, key.as_ref())
-					.query(conn.deref_mut()).map_err(|e| DatabaseError(Box::new(e)))?;
-			}
-		}
+		// for (col, key) in potential_garbages {
+		// 	let refcount: i64 = conn.hget(RefColumn(col), key.as_ref()).map_err(|e| DatabaseError(Box::new(e)))?;
+		// 	if refcount < 1 {
+		// 		redis::pipe().atomic().hdel(RefColumn(col), key.as_ref()).hdel(col, key.as_ref())
+		// 			.query(conn.deref_mut()).map_err(|e| DatabaseError(Box::new(e)))?;
+		// 	}
+		// }
 
 		Ok(())
 	}
