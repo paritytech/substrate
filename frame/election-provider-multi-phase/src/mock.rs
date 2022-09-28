@@ -26,7 +26,7 @@ pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
-	weights::Weight,
+	weights::{constants, Weight},
 	BoundedVec,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
@@ -227,7 +227,10 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-		::with_sensible_defaults(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
+		::with_sensible_defaults(
+			Weight::from_components(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			NORMAL_DISPATCH_RATIO,
+		);
 }
 
 impl pallet_balances::Config for Runtime {
