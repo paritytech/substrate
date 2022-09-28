@@ -2052,7 +2052,7 @@ impl_runtime_apis! {
 		fn generate_batch_proof(block_numbers: Vec<BlockNumber>)
 			-> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error>
 		{
-			Mmr::generate_batch_proof(block_numbers.iter().map(|n| -> u64 {(*n).into()}).collect())
+			Mmr::generate_batch_proof(block_numbers)
 				.map(|(leaves, proof)| (leaves.into_iter().map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf)).collect(), proof))
 		}
 
