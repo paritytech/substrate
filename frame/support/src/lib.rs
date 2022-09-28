@@ -1603,34 +1603,38 @@ pub mod pallet_prelude {
 ///
 /// # Hooks: `#[pallet::hooks]` (optional)
 ///
-/// The `pallet::hooks` attribute allows you to specify a `Hooks` implementation
-/// for `Pallet` that specifies pallet-specific logic.
+/// The `pallet::hooks` attribute allows you to specify a `Hooks` implementation for `Pallet`
+/// that specifies pallet-specific logic.
 ///
 /// The item the attribute attaches to must be defined as follows:
 /// ```ignore
 /// #[pallet::hooks]
 /// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
-/// 	...
+///     ...
 /// }
 /// ```
 /// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
-/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>`
-/// and with an optional where clause.
+/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>` and
+/// with an optional where clause.
 ///
-/// If no `#[pallet::hooks]` exists, then the following default implementation is
-/// automatically generated:
+/// If no `#[pallet::hooks]` exists, then the following default implementation is automatically
+/// generated:
 /// ```ignore
 /// #[pallet::hooks]
 /// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 /// ```
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
-/// `OffchainWorker`, `IntegrityTest` using `Hooks` implementation.
+/// The macro implements the traits [`OnInitialize`](`traits::OnInitialize`),
+/// [`OnIdle`](`traits::OnIdle`), [`OnFinalize`](`traits::OnFinalize`),
+/// [`OnRuntimeUpgrade`](`traits::OnRuntimeUpgrade`),
+/// [`OffchainWorker`](`traits::OffchainWorker`), and
+/// [`IntegrityTest`](`traits::IntegrityTest`) using the provided `Hooks` implementation.
 ///
-/// NOTE: `OnRuntimeUpgrade` is implemented with `Hooks::on_runtime_upgrade` and some additional
-/// logic. E.g. logic to write the pallet version into storage.
+/// NOTE: [`OnRuntimeUpgrade`](`traits::OnRuntimeUpgrade`) is implemented with
+/// `Hooks::on_runtime_upgrade` and some additional logic. E.g. logic to write the pallet
+/// version into storage.
 ///
 /// NOTE: The macro also adds some tracing logic when implementing the above traits. The
 /// following hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
