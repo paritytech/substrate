@@ -424,7 +424,7 @@ pub mod pallet {
 			approvals_remaining: u32,
 		},
 		/// An asset class is in the process of being destroyed.
-		Destroying { asset_id: T::AssetId },
+		DestructionStarted { asset_id: T::AssetId },
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
 
