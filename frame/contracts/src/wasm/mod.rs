@@ -1551,7 +1551,7 @@ mod tests {
 
 		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		// TODO: maybe factor in proof size weight
+		// TODO: account for proof size weight
 		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
 		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
 	}
