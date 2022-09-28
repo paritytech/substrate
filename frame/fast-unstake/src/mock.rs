@@ -104,7 +104,7 @@ parameter_types! {
 }
 
 pub struct MockElection;
-impl frame_election_provider_support::ElectionProvider for MockElection {
+impl frame_election_provider_support::ElectionProviderBase for MockElection {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type DataProvider = Staking;
@@ -113,7 +113,9 @@ impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn ongoing() -> bool {
 		Ongoing::get()
 	}
+}
 
+impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn elect() -> Result<frame_election_provider_support::Supports<AccountId>, Self::Error> {
 		Err(())
 	}
