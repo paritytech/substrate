@@ -134,17 +134,17 @@ impl PalletCmd {
 			};
 		}
 
-		if let Some(override_results) = &self.override_results {
-			let raw_data = match std::fs::read(override_results) {
+		if let Some(json_input) = &self.json_input {
+			let raw_data = match std::fs::read(json_input) {
 				Ok(raw_data) => raw_data,
 				Err(error) =>
-					return Err(format!("Failed to read {:?}: {}", override_results, error).into()),
+					return Err(format!("Failed to read {:?}: {}", json_input, error).into()),
 			};
 			let batches: Vec<BenchmarkBatchSplitResults> = match serde_json::from_slice(&raw_data) {
 				Ok(batches) => batches,
 				Err(error) =>
 					return Err(
-						format!("Failed to deserialize {:?}: {}", override_results, error).into()
+						format!("Failed to deserialize {:?}: {}", json_input, error).into()
 					),
 			};
 			return self.output_from_results(&batches)
