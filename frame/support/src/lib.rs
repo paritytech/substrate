@@ -1448,7 +1448,7 @@ pub mod pallet_prelude {
 /// prelude. The actual "work" for all of these attribute macros can be found in
 /// the macro expansion for `#[pallet]`.
 ///
-/// # Pallet Struct placeholder: `#[pallet::pallet]` (mandatory)
+/// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
 ///
 /// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows
 /// you to specify pallet information.
