@@ -30,7 +30,7 @@ use sp_std::prelude::*;
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
 	primitives::{self, NodeIndex},
-	Config, Nodes, NumberOfLeaves, Pallet,
+	Config, NewLeaf, Nodes, NumberOfLeaves, Pallet,
 };
 
 /// A marker type for runtime-specific storage implementation.
@@ -305,24 +305,9 @@ where
 		let mut leaf_index = leaves;
 		let mut node_index = size;
 
-		// Use parent hash of block adding new nodes (this block) as extra identifier
-		// in offchain DB to avoid DB collisions and overwrites in case of forks.
-		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		for elem in elems {
-			// For now we store this leaf offchain keyed by `(parent_hash, node_index)`
-			// to make it fork-resistant.
-			// Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
-			// later when we are not worried about forks anymore (highly unlikely to have a fork
-			// in the chain that deep).
-			// "Canonicalization" in this case means moving this leaf under a new key based
-			// only on the leaf's `node_index`.
-			let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
-			frame_support::log::debug!(
-				target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
-				node_index, parent_hash, key
-			);
-			// Indexing API is used to store the full node content (both leaf and inner).
-			elem.using_encoded(|elem| offchain_index::set(&key, elem));
+			// We store this leaf offchain keyed by `(block_has, node_index)
+			elem.using_encoded(|elem| NewLeaf::<T, _>::put((node_index, elem)));
 
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {

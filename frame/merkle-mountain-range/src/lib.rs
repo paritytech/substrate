@@ -111,6 +111,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	/// This pallet's configuration trait
@@ -205,6 +206,11 @@ pub mod pallet {
 	pub type Nodes<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
 
+	/// Temporary new-leaf storage item
+	#[pallet::storage]
+	#[pallet::getter(fn new_leaf)]
+	pub type NewLeaf<T, I = ()> = StorageValue<_, (u64, Vec<u8>), OptionQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
@@ -229,25 +235,19 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(n: T::BlockNumber) {
-			use mmr::storage::{OffchainStorage, Storage};
 			// MMR pallet uses offchain storage to hold full MMR and leaves.
-			// The leaves are saved under fork-unique keys `(parent_hash, pos)`.
-			// MMR Runtime depends on `frame_system::block_hash(block_num)` mappings to find
-			// parent hashes for particular nodes or leaves.
-			// This MMR offchain worker function moves a rolling window of the same size
-			// as `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
-			// about to exit the window are "canonicalized" so that their offchain key no longer
-			// depends on `parent_hash` therefore on access to `frame_system::block_hash`.
-			//
-			// This approach works to eliminate fork-induced leaf collisions in offchain db,
-			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
-			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc):
-			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
-			//   solely on block number. The only way to have collisions is if two competing forks
-			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
-			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
-			// other forks are pruned from offchain db.
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
+			// The leaves are saved under fork-unique keys `(block_hash, pos)`.
+      
+			// Copy leaf to offchain db after the block is built
+			if let Some((node_index, elem)) = NewLeaf::<T, _>::get() {
+				let block_hash = <frame_system::Pallet<T>>::block_hash(n);
+				let key = Pallet::<T, I>::node_offchain_key(block_hash, node_index);
+				frame_support::log::debug!(
+				  target: "runtime::mmr::offchain", "offchain db set: pos {} block_hash {:?} key {:?}",
+				  node_index, block_hash, key
+				);
+				sp_io::offchain_index::set(&key, &elem);
+			}
 		}
 	}
 }
