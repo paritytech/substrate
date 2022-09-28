@@ -2188,6 +2188,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "thousands",
+ "zstd",
 ]
 
 [[package]]

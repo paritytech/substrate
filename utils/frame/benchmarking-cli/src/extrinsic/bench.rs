@@ -19,19 +19,20 @@
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{Error, Result};
-use sc_client_api::Backend as ClientBackend;
+use sc_client_api::{Backend as ClientBackend, HeaderBackend};
 use sp_api::{ApiExt, BlockId, Core, ProvideRuntimeApi};
 use sp_blockchain::{
 	ApplyExtrinsicFailed::Validity,
 	Error::{ApplyExtrinsicFailed, RuntimeApiError},
 };
 use sp_runtime::{
-	traits::{Block as BlockT, Zero},
+	traits::{Block as BlockT, Header},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
 	Digest, DigestItem, OpaqueExtrinsic,
 };
 
 use clap::Args;
+use codec::Encode;
 use log::info;
 use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
@@ -73,7 +74,7 @@ impl<Block, BA, C> Benchmark<Block, BA, C>
 where
 	Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 	BA: ClientBackend<Block>,
-	C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+	C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
 	/// Create a new [`Self`] from the arguments.
@@ -167,15 +168,42 @@ where
 	/// Measures the time that it take to execute a block or an extrinsic.
 	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
-		let genesis = BlockId::Number(Zero::zero());
+		let parent_hash = block.header().parent_hash();
+		let parent_header = self
+			.client
+			.header(BlockId::Hash(*parent_hash))?
+			.ok_or_else(|| Error::Input(format!("Parent header {} not found", parent_hash)))?;
+		let parent_state_root = *parent_header.state_root();
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
 			self.client
 				.runtime_api()
-				.execute_block(&genesis, block.clone())
+				.execute_block(&BlockId::Hash(parent_hash.clone()), block.clone())
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
+
+		// One round just for recording the PoV size.
+		let mut runtime_api = self.client.runtime_api();
+		runtime_api.record_proof();
+		runtime_api
+			.execute_block(&BlockId::Hash(parent_hash.clone()), block.clone())
+			.map_err(|e| Error::Client(RuntimeApiError(e)))?;
+		let proof = runtime_api
+			.extract_proof()
+			.expect("We enabled proof recording. A proof must be available; qed");
+		let proof_len = proof.encoded_size() as u64;
+		let compact_proof = proof
+			.clone()
+			.into_compact_proof::<<<Block as BlockT>::Header as Header>::Hashing>(
+				parent_state_root.clone(),
+			)
+			.unwrap();
+		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+
+		info!("Proof size: {} bytes", proof_len);
+		info!("Compact proof size: {} bytes", compact_proof.encoded_size());
+		info!("Compressed proof size: {} byte", compressed_proof.len());
 
 		info!("Executing block {} times", self.params.repeat);
 		// Interesting part here:
@@ -186,7 +214,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&genesis, block)
+				.execute_block(&BlockId::Hash(parent_hash.clone()), block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();

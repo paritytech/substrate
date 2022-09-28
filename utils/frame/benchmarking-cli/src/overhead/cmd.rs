@@ -20,7 +20,7 @@
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_client_api::Backend as ClientBackend;
+use sc_client_api::{Backend as ClientBackend, HeaderBackend};
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
@@ -108,7 +108,7 @@ impl OverheadCmd {
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 		BA: ClientBackend<Block>,
-		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
 		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {

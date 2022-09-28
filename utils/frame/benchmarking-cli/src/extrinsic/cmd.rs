@@ -17,7 +17,7 @@
 
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
-use sc_client_api::Backend as ClientBackend;
+use sc_client_api::{Backend as ClientBackend, HeaderBackend};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
 
@@ -94,7 +94,7 @@ impl ExtrinsicCmd {
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
 		BA: ClientBackend<Block>,
-		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
+		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block> + HeaderBackend<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
 		// Short circuit if --list was specified.
