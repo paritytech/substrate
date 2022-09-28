@@ -35,7 +35,7 @@ use crate::{
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{dispatch::{DispatchError, DispatchResult}, weights::OldWeight};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -274,7 +274,11 @@ mod tests {
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
-	use frame_support::{assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight};
+	use frame_support::{
+		assert_ok,
+		dispatch::DispatchResultWithPostInfo,
+		weights::{OldWeight, Weight},
+	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::{Bytes, H256};
