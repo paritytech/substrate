@@ -18,7 +18,7 @@
 use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
-use sp_std::{collections::btree_set::BTreeSet, iter::IntoIterator, vec::Vec};
+use sp_std::{collections::btree_set::{BTreeSet, Iter, IntoIter}, iter::IntoIterator, vec::Vec};
 // Note that `LayoutV1` usage here (proof compaction) is compatible
 // with `LayoutV0`.
 use crate::LayoutV1 as Layout;
@@ -54,10 +54,16 @@ impl StorageProof {
 		self.trie_nodes.is_empty()
 	}
 
-	/// Create an iterator over encoded trie nodes in lexicographical order constructed
+	/// Convert it to an iterator over encoded trie nodes in lexicographical order constructed
 	/// from the proof.
-	pub fn iter_nodes(self) -> StorageProofNodeIterator {
-		StorageProofNodeIterator::new(self)
+	pub fn iter_nodes(self) -> IntoIter<Vec<u8>> {
+		self.trie_nodes.into_iter()
+	}
+
+	/// Create an new iterator over encoded trie nodes in lexicographical order constructed
+	/// from the proof.
+	pub fn iter(&self) -> Iter<'_, Vec<u8>> {
+		self.trie_nodes.iter()
 	}
 
 	/// Convert into plain node vector.
@@ -122,7 +128,7 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 impl<H: Hasher> From<&StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: &StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
-		proof.trie_nodes.iter().for_each(|n| {
+		proof.iter().for_each(|n| {
 			db.insert(crate::EMPTY_PREFIX, &n);
 		});
 
@@ -183,25 +189,5 @@ impl CompactProof {
 		)?;
 
 		Ok((db, root))
-	}
-}
-
-/// An iterator over trie nodes constructed from a storage proof. The nodes are not guaranteed to
-/// be traversed in any particular order.
-pub struct StorageProofNodeIterator {
-	inner: <BTreeSet<Vec<u8>> as IntoIterator>::IntoIter,
-}
-
-impl StorageProofNodeIterator {
-	fn new(proof: StorageProof) -> Self {
-		StorageProofNodeIterator { inner: proof.trie_nodes.into_iter() }
-	}
-}
-
-impl Iterator for StorageProofNodeIterator {
-	type Item = Vec<u8>;
-
-	fn next(&mut self) -> Option<Self::Item> {
-		self.inner.next()
 	}
 }
