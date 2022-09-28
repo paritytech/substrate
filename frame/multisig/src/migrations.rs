@@ -43,14 +43,14 @@ pub mod v1 {
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 
 			ensure!(onchain < 1, "this migration can be deleted");
 
 			log!(info, "Number of calls to refund and delete: {}", Calls::<T>::iter().count());
 
-			Ok(())
+			Ok(Vec::new())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -72,7 +72,7 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn post_upgrade() -> Result<(), &'static str> {
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 			let onchain = Pallet::<T>::on_chain_storage_version();
 			ensure!(onchain < 2, "this migration needs to be removed");
 			ensure!(onchain == 1, "this migration needs to be run");
