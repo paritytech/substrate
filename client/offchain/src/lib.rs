@@ -35,14 +35,14 @@
 
 #![warn(missing_docs)]
 
-use std::{collections::HashSet, fmt, marker::PhantomData, sync::Arc};
+use std::{fmt, marker::PhantomData, sync::Arc};
 
 use futures::{
 	future::{ready, Future},
 	prelude::*,
 };
 use parking_lot::Mutex;
-use sc_network::{ExHashT, NetworkService, NetworkStateInfo, PeerId};
+use sc_network_common::service::{NetworkPeers, NetworkStateInfo};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_core::{offchain, traits::SpawnNamed, ExecutionContext};
 use sp_runtime::{
@@ -60,27 +60,9 @@ const LOG_TARGET: &str = "offchain-worker";
 
 /// NetworkProvider provides [`OffchainWorkers`] with all necessary hooks into the
 /// underlying Substrate networking.
-pub trait NetworkProvider: NetworkStateInfo {
-	/// Set the authorized peers.
-	fn set_authorized_peers(&self, peers: HashSet<PeerId>);
+pub trait NetworkProvider: NetworkStateInfo + NetworkPeers {}
 
-	/// Set the authorized only flag.
-	fn set_authorized_only(&self, reserved_only: bool);
-}
-
-impl<B, H> NetworkProvider for NetworkService<B, H>
-where
-	B: traits::Block + 'static,
-	H: ExHashT,
-{
-	fn set_authorized_peers(&self, peers: HashSet<PeerId>) {
-		NetworkService::set_authorized_peers(self, peers)
-	}
-
-	fn set_authorized_only(&self, reserved_only: bool) {
-		NetworkService::set_authorized_only(self, reserved_only)
-	}
-}
+impl<T> NetworkProvider for T where T: NetworkStateInfo + NetworkPeers {}
 
 /// Options for [`OffchainWorkers`]
 pub struct OffchainWorkerOptions {
@@ -266,11 +248,11 @@ mod tests {
 	use futures::executor::block_on;
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network::{Multiaddr, PeerId};
+	use sc_network::{Multiaddr, PeerId, ReputationChange};
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
-	use std::sync::Arc;
+	use std::{borrow::Cow, collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
 		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
 		TestClientBuilderExt,
@@ -288,13 +270,81 @@ mod tests {
 		}
 	}
 
-	impl NetworkProvider for TestNetwork {
+	impl NetworkPeers for TestNetwork {
 		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {
-			unimplemented!()
+			unimplemented!();
 		}
 
 		fn set_authorized_only(&self, _reserved_only: bool) {
-			unimplemented!()
+			unimplemented!();
+		}
+
+		fn add_known_address(&self, _peer_id: PeerId, _addr: Multiaddr) {
+			unimplemented!();
+		}
+
+		fn report_peer(&self, _who: PeerId, _cost_benefit: ReputationChange) {
+			unimplemented!();
+		}
+
+		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+			unimplemented!();
+		}
+
+		fn accept_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn deny_unreserved_peers(&self) {
+			unimplemented!();
+		}
+
+		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_reserved_peer(&self, _peer_id: PeerId) {
+			unimplemented!();
+		}
+
+		fn set_reserved_peers(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn add_peers_to_reserved_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_peers_from_reserved_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: Vec<PeerId>,
+		) {
+			unimplemented!();
+		}
+
+		fn add_to_peers_set(
+			&self,
+			_protocol: Cow<'static, str>,
+			_peers: HashSet<Multiaddr>,
+		) -> Result<(), String> {
+			unimplemented!();
+		}
+
+		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+			unimplemented!();
+		}
+
+		fn sync_num_connected(&self) -> usize {
+			unimplemented!();
 		}
 	}
 

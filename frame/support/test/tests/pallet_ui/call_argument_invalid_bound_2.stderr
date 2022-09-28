@@ -19,11 +19,6 @@ error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Co
    |
 20 |         pub fn foo(origin: OriginFor<T>, bar: T::Bar) -> DispatchResultWithPostInfo {
    |                                          ^^^
-   |
-help: consider further restricting this bound
-   |
-17 |     #[pallet::call + std::cmp::PartialEq]
-   |                    +++++++++++++++++++++
 
 error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is not satisfied
   --> tests/pallet_ui/call_argument_invalid_bound_2.rs:20:36
