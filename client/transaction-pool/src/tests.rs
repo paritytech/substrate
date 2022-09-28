@@ -180,8 +180,8 @@ impl ChainApi for TestApi {
 		&self,
 		_from: <Self::Block as BlockT>::Hash,
 		_to: <Self::Block as BlockT>::Hash,
-	) -> Result<TreeRoute<Self::Block>, Self::Error> {
-		todo!()
+	) -> Result<Option<TreeRoute<Self::Block>>, Self::Error> {
+		Ok(None)
 	}
 }
 

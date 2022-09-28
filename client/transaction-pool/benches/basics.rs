@@ -121,6 +121,14 @@ impl ChainApi for TestApi {
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
 		Ok(None)
 	}
+
+    fn tree_route(
+        &self,
+        _from: <Self::Block as BlockT>::Hash,
+        _to: <Self::Block as BlockT>::Hash,
+    ) -> Result<Option<sp_blockchain::TreeRoute<Self::Block>>, Self::Error> {
+        Ok(None)
+    }
 }
 
 fn uxt(transfer: Transfer) -> Extrinsic {
