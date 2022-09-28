@@ -139,6 +139,44 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 	pub(super) amount: Amount,
 }
 
+macro_rules! impl_codec_bitflags {
+	($wrapper:ty, $size:ty, $bitflag_enum:ty) => {
+		impl MaxEncodedLen for $wrapper {
+			fn max_encoded_len() -> usize {
+				<$size>::max_encoded_len()
+			}
+		}
+		impl Encode for $wrapper {
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				self.0.bits().using_encoded(f)
+			}
+		}
+		impl EncodeLike for $wrapper {}
+		impl Decode for $wrapper {
+			fn decode<I: codec::Input>(
+				input: &mut I,
+			) -> sp_std::result::Result<Self, codec::Error> {
+				let field = <$size>::decode(input)?;
+				Ok(Self(BitFlags::from_bits(field as $size).map_err(|_| "invalid value")?))
+			}
+		}
+
+		impl TypeInfo for $wrapper {
+			type Identity = Self;
+
+			fn type_info() -> Type {
+				Type::builder()
+					.path(Path::new("BitFlags", module_path!()))
+					.type_params(vec![TypeParameter::new("T", Some(meta_type::<$bitflag_enum>()))])
+					.composite(
+						Fields::unnamed()
+							.field(|f| f.ty::<$size>().type_name(stringify!($bitflag_enum))),
+					)
+			}
+		}
+	};
+}
+
 // Support for up to 64 user-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
@@ -153,7 +191,6 @@ pub enum CollectionSetting {
 	/// When is set then no deposit needed to hold items of this collection.
 	FreeHolding,
 }
-
 pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 
 /// Wrapper type for `CollectionSettings` that implements `Codec`.
@@ -164,41 +201,11 @@ impl CollectionConfig {
 	pub fn empty() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-
 	pub fn values(&self) -> CollectionSettings {
 		self.0
 	}
 }
-
-impl MaxEncodedLen for CollectionConfig {
-	fn max_encoded_len() -> usize {
-		u64::max_encoded_len()
-	}
-}
-
-impl Encode for CollectionConfig {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.bits().using_encoded(f)
-	}
-}
-impl EncodeLike for CollectionConfig {}
-impl Decode for CollectionConfig {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let field = u64::decode(input)?;
-		Ok(Self(CollectionSettings::from_bits(field as u64).map_err(|_| "invalid value")?))
-	}
-}
-
-impl TypeInfo for CollectionConfig {
-	type Identity = Self;
-
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("BitFlags", module_path!()))
-			.type_params(vec![TypeParameter::new("T", Some(meta_type::<CollectionSetting>()))])
-			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("CollectionSetting")))
-	}
-}
+impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
 
 // Support for up to 64 user-enabled features on an item.
 #[bitflags]
@@ -212,52 +219,20 @@ pub enum ItemSetting {
 	/// Disallow to modify attributes of this item.
 	LockedAttributes,
 }
-
 pub(super) type ItemSettings = BitFlags<ItemSetting>;
 
 /// Wrapper type for `ItemSettings` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct ItemConfig(pub ItemSettings);
-
 impl ItemConfig {
 	pub fn empty() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-
 	pub fn values(&self) -> ItemSettings {
 		self.0
 	}
 }
-
-impl MaxEncodedLen for ItemConfig {
-	fn max_encoded_len() -> usize {
-		u64::max_encoded_len()
-	}
-}
-
-impl Encode for ItemConfig {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.bits().using_encoded(f)
-	}
-}
-impl EncodeLike for ItemConfig {}
-impl Decode for ItemConfig {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let field = u64::decode(input)?;
-		Ok(Self(ItemSettings::from_bits(field as u64).map_err(|_| "invalid value")?))
-	}
-}
-
-impl TypeInfo for ItemConfig {
-	type Identity = Self;
-
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("BitFlags", module_path!()))
-			.type_params(vec![TypeParameter::new("T", Some(meta_type::<ItemSetting>()))])
-			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("ItemSetting")))
-	}
-}
+impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
 
 // Support for up to 64 system-enabled features on a collection.
 #[bitflags]
@@ -275,39 +250,9 @@ pub enum SystemFeature {
 	/// Disallow public mints.
 	NoPublicMints,
 }
-
 pub type SystemFeatureFlags = BitFlags<SystemFeature>;
 
 /// Wrapper type for `SystemFeatureFlags` that implements `Codec`.
 #[derive(Default, RuntimeDebug)]
 pub struct SystemFeatures(pub SystemFeatureFlags);
-
-impl MaxEncodedLen for SystemFeatures {
-	fn max_encoded_len() -> usize {
-		u64::max_encoded_len()
-	}
-}
-
-impl Encode for SystemFeatures {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.bits().using_encoded(f)
-	}
-}
-impl EncodeLike for SystemFeatures {}
-impl Decode for SystemFeatures {
-	fn decode<I: codec::Input>(input: &mut I) -> sp_std::result::Result<Self, codec::Error> {
-		let field = u64::decode(input)?;
-		Ok(Self(SystemFeatureFlags::from_bits(field as u64).map_err(|_| "invalid value")?))
-	}
-}
-
-impl TypeInfo for SystemFeatures {
-	type Identity = Self;
-
-	fn type_info() -> Type {
-		Type::builder()
-			.path(Path::new("BitFlags", module_path!()))
-			.type_params(vec![TypeParameter::new("T", Some(meta_type::<SystemFeature>()))])
-			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("SystemFeature")))
-	}
-}
+impl_codec_bitflags!(SystemFeatures, u64, SystemFeature);
