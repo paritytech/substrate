@@ -1417,7 +1417,6 @@ parameter_types! {
 	pub const StringLimit: u32 = 50;
 	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
 	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
-	pub const RemoveKeysLimit: u32 = 1000;
 }
 
 impl pallet_assets::Config for Runtime {
@@ -1435,7 +1434,7 @@ impl pallet_assets::Config for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
-	type RemoveKeysLimit = RemoveKeysLimit;
+	type RemoveKeysLimit = ConstU32<1000>;
 }
 
 parameter_types! {

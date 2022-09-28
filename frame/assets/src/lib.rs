@@ -496,6 +496,9 @@ pub mod pallet {
 		NoDeposit,
 		/// The operation would result in funds being burned.
 		WouldBurn,
+		/// The asset is a live asset and is actively being used. Usually emit for operations such
+		/// as `start_destroy` which require the asset to be in a destroying state.
+		LiveAsset,
 	}
 
 	#[pallet::call]
@@ -618,9 +621,8 @@ pub mod pallet {
 					}
 					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
 					details.status = AssetStatus::Destroying;
-					// TODO: Remove previlleged roles. How?
 
-					Self::deposit_event(Event::Destroying { asset_id: id });
+					Self::deposit_event(Event::DestructionStarted { asset_id: id });
 					Ok(())
 				},
 			)?;
@@ -725,7 +727,7 @@ pub mod pallet {
 
 					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
 					// Should only destroy accounts while the asset is being destroyed
-					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::Unknown);
+					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 
 					for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
 						T::Currency::unreserve(&owner, approval.deposit);
@@ -776,6 +778,7 @@ pub mod pallet {
 						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 					}
 					ensure!(details.is_frozen, Error::<T, I>::Unknown);
+					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 					ensure!(details.accounts == 0, Error::<T, I>::InUse);
 					ensure!(details.approvals == 0, Error::<T, I>::InUse);
 
