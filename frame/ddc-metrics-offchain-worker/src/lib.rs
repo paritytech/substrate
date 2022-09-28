@@ -32,6 +32,7 @@ use sp_std::vec::Vec;
 extern crate alloc;
 
 use alloc::string::String;
+use sp_runtime::offchain::storage::StorageRetrievalError;
 
 pub const BLOCK_INTERVAL: u32 = 100; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
 
@@ -242,15 +243,15 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
         let value = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::sc_address").get();
 
         match value {
-            None => {
+            Ok(None) => {
                 warn!("[OCW] Smart Contract is not configured. Please configure it using offchain_localStorageSet with key=ddc-metrics-offchain-worker::sc_address");
                 None
             }
-            Some(None) => {
+            Ok(Some(contract_address)) => Some(contract_address),
+            Err(_) => {
                 error!("[OCW] Smart Contract is configured but the value could not be decoded to an account ID");
                 None
             }
-            Some(Some(contract_address)) => Some(contract_address),
         }
     }
 
@@ -258,14 +259,14 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
 		let value = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::block_interval").get::<u32>();
 
 		match value {
-			None => {
+			Ok(None) => {
 				None
 			}
-			Some(None) => {
-				error!("[OCW] Block Interval could not be decoded");
-				None
-			}
-			Some(Some(block_interval)) => Some(block_interval),
+			Ok(Some(block_interval)) => Some(block_interval),
+            Err(_) => {
+                error!("[OCW] Block Interval could not be decoded");
+                None
+            }
 		}
 	}
 

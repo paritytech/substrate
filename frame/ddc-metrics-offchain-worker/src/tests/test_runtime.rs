@@ -55,7 +55,7 @@ frame_support::construct_runtime!(
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 	    Contracts: contracts::{Pallet, Call, Storage, Event<T>},
         Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
-        Randomness: pallet_randomness_collective_flip::{Pallet, Call, Storage},
+        Randomness: pallet_randomness_collective_flip::{Pallet, Storage},
         DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Event<T>},
     }
 );
