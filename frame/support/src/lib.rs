@@ -1437,7 +1437,7 @@ pub mod pallet_prelude {
 /// * [`pallet::generate_store($vis trait Store)`](#palletgenerate_storevis-trait-store)
 /// * [`pallet::generate_storage_info`](#palletgenerate_storage_info)
 /// * [`pallet::storage_version`](#palletstorage_version)
-/// * ['pallet::hooks`](#hooks-pallethooks-optional)
+/// * [`pallet::hooks`](#hooks-pallethooks-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all
 /// of these attributes, ultimately removing their AST nodes before they can be
