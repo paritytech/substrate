@@ -1431,18 +1431,12 @@ pub mod pallet_prelude {
 /// mandatory and some are optional. The full list of `#[pallet::*]` attributes
 /// is shown below:
 ///
-/// |                                           Attribute
-/// | Mandatory |
-/// |:--------------------------------------------------------------------------------------------------|:---------:|
-/// | [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory)
-/// |    ❎     | | [`pallet::config`](#config-trait-palletconfig-mandatory)
-/// |    ❎     | | ↳ [`pallet::constant`](#palletconstant)
-/// |           | | ↳ [`pallet::disable_frame_system_supertrait_check`](#
-/// palletdisable_frame_system_supertrait_check) |           | | [`pallet::generate_store($vis
-/// trait Store)`](#palletgenerate_storevis-trait-store)                |           |
-/// | [`pallet::generate_storage_info`](#palletgenerate_storage_info)
-/// |           | | [`pallet::storage_version`](#palletstorage_version)
-/// |           |
+/// * [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory)
+/// * [`pallet::config`](#config-trait-palletconfig-mandatory)
+/// * [`pallet::disable_frame_system_supertrait_check`](#disable_supertrait_check)
+/// * [`pallet::generate_store($vis trait Store)`](#palletgenerate_storevis-trait-store)
+/// * [`pallet::generate_storage_info`](#palletgenerate_storage_info)
+/// * [`pallet::storage_version`](#palletstorage_version)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all
 /// of these attributes, ultimately removing their AST nodes before they can be
@@ -1502,6 +1496,7 @@ pub mod pallet_prelude {
 /// }
 /// ```
 /// ## `pallet::disable_frame_system_supertrait_check`
+/// <a name="disable_supertrait_check"></a>
 ///
 /// To bypass the `frame_system::Config` supertrait check, use the attribute
 /// `pallet::disable_frame_system_supertrait_check`, e.g.:
