@@ -591,7 +591,7 @@ where
 	fn handle_enactment(
 		&self,
 		hash: Block::Hash,
-		tree_route: Option<Arc<TreeRoute<Block>>>,
+		tree_route: Option<TreeRoute<Block>>,
 	) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		log::trace!(target: "txpool", "handle_enactment hash:{hash:?} tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
@@ -833,7 +833,7 @@ where
 		&mut self,
 		api: &PoolApi,
 		event: &ChainEvent<Block>,
-	) -> (bool, Option<Arc<TreeRoute<Block>>>) {
+	) -> (bool, Option<TreeRoute<Block>>) {
 		let (new_hash, finalized) = match event {
 			ChainEvent::NewBestBlock { hash, .. } => (hash, false),
 			ChainEvent::Finalized { hash, .. } => (hash, true),
@@ -853,9 +853,8 @@ where
 
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
-		let tree_route = Arc::new(
-			api.tree_route(best_block, *new_hash).unwrap().expect("tree_route exists. qed."),
-		);
+		let tree_route =
+			api.tree_route(best_block, *new_hash).unwrap().expect("tree_route exists. qed.");
 
 		log::trace!(target: "txpool", "resolve hash:{new_hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{:?}", self.recent_finalized_block);
 

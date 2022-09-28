@@ -1458,7 +1458,7 @@ fn trigger_new_best_block(
 	pool: &BasicPool<TestApi, <TestApi as ChainApi>::Block>,
 	from: &Header,
 	acted_on: &Header,
-) -> (bool, Option<Arc<TreeRoute<Block>>>) {
+) -> (bool, Option<TreeRoute<Block>>) {
 	let tree_route = Some(Arc::new(
 		pool.api().tree_route(from.hash(), acted_on.hash()).expect("Tree route exists"),
 	));
@@ -1472,7 +1472,7 @@ fn trigger_finalized(
 	pool: &BasicPool<TestApi, <TestApi as ChainApi>::Block>,
 	from: &Header,
 	acted_on: &Header,
-) -> (bool, Option<Arc<TreeRoute<Block>>>) {
+) -> (bool, Option<TreeRoute<Block>>) {
 	let tree_route = Some(Arc::new(
 		pool.api().tree_route(from.hash(), acted_on.hash()).expect("Tree route exists"),
 	));
