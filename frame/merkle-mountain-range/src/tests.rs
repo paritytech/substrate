@@ -86,12 +86,7 @@ fn add_blocks(blocks: usize) {
 fn leaf_indices_to_block_numbers(leaf_indices: &Vec<u64>) -> Vec<u64> {
 	leaf_indices
 		.iter()
-		.map(|l| {
-			if *l == 0 {
-				return 0
-			}
-			*l + 1
-		})
+		.map(|l| *l + 1)
 		.collect()
 }
 
