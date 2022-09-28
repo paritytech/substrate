@@ -67,6 +67,7 @@ parameter_types! {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
+			weights.base_extrinsic = Weight::from_ref_time(10);
 			weights.max_total = Some(MAX_BLOCK_WEIGHT);
 			weights.reserved = Some(
 				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
@@ -93,7 +94,7 @@ impl Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;

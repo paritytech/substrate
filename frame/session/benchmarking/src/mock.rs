@@ -52,7 +52,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -174,7 +174,9 @@ impl pallet_staking::Config for Test {
 	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type HistoryDepth = ConstU32<84>;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();

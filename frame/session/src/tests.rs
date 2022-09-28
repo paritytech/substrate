@@ -21,8 +21,8 @@ use super::*;
 use crate::mock::{
 	authorities, before_session_end_called, force_new_session, new_test_ext,
 	reset_before_session_end_called, session_changed, set_next_validators, set_session_length,
-	Origin, PreUpgradeMockSessionKeys, Session, SessionChanged, System, Test, TestSessionChanged,
-	TestValidatorIdOf,
+	PreUpgradeMockSessionKeys, RuntimeOrigin, Session, SessionChanged, System, Test,
+	TestSessionChanged, TestValidatorIdOf,
 };
 
 use codec::Decode;
@@ -67,7 +67,7 @@ fn keys_cleared_on_kill() {
 		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
 		assert!(System::is_provider_required(&1));
-		assert_ok!(Session::purge_keys(Origin::signed(1)));
+		assert_ok!(Session::purge_keys(RuntimeOrigin::signed(1)));
 		assert!(!System::is_provider_required(&1));
 
 		assert_eq!(Session::load_keys(&1), None);
@@ -87,8 +87,8 @@ fn purge_keys_works_for_stash_id() {
 		let id = DUMMY;
 		assert_eq!(Session::key_owner(id, UintAuthorityId(1).get_raw(id)), Some(1));
 
-		assert_ok!(Session::purge_keys(Origin::signed(10)));
-		assert_ok!(Session::purge_keys(Origin::signed(2)));
+		assert_ok!(Session::purge_keys(RuntimeOrigin::signed(10)));
+		assert_ok!(Session::purge_keys(RuntimeOrigin::signed(2)));
 
 		assert_eq!(Session::load_keys(&10), None);
 		assert_eq!(Session::load_keys(&20), None);
@@ -128,7 +128,7 @@ fn authorities_should_track_validators() {
 		reset_before_session_end_called();
 
 		set_next_validators(vec![1, 2, 4]);
-		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(4).into(), vec![]));
+		assert_ok!(Session::set_keys(RuntimeOrigin::signed(4), UintAuthorityId(4).into(), vec![]));
 		force_new_session();
 		initialize_block(3);
 		assert_eq!(
@@ -194,7 +194,7 @@ fn session_change_should_work() {
 
 		// Block 3: Set new key for validator 2; no visible change.
 		initialize_block(3);
-		assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
+		assert_ok!(Session::set_keys(RuntimeOrigin::signed(2), UintAuthorityId(5).into(), vec![]));
 		assert_eq!(authorities(), vec![UintAuthorityId(1), UintAuthorityId(2), UintAuthorityId(3)]);
 
 		// Block 4: Session rollover; no visible change.
@@ -219,13 +219,13 @@ fn duplicates_are_not_allowed() {
 		System::set_block_number(1);
 		Session::on_initialize(1);
 		assert_noop!(
-			Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]),
+			Session::set_keys(RuntimeOrigin::signed(4), UintAuthorityId(1).into(), vec![]),
 			Error::<Test>::DuplicatedKey,
 		);
-		assert_ok!(Session::set_keys(Origin::signed(1), UintAuthorityId(10).into(), vec![]));
+		assert_ok!(Session::set_keys(RuntimeOrigin::signed(1), UintAuthorityId(10).into(), vec![]));
 
 		// is fine now that 1 has migrated off.
-		assert_ok!(Session::set_keys(Origin::signed(4), UintAuthorityId(1).into(), vec![]));
+		assert_ok!(Session::set_keys(RuntimeOrigin::signed(4), UintAuthorityId(1).into(), vec![]));
 	});
 }
 
@@ -268,7 +268,7 @@ fn session_changed_flag_works() {
 		assert!(before_session_end_called());
 		reset_before_session_end_called();
 
-		assert_ok!(Session::set_keys(Origin::signed(2), UintAuthorityId(5).into(), vec![]));
+		assert_ok!(Session::set_keys(RuntimeOrigin::signed(2), UintAuthorityId(5).into(), vec![]));
 		force_new_session();
 		initialize_block(6);
 		assert!(!session_changed());
@@ -276,7 +276,11 @@ fn session_changed_flag_works() {
 		reset_before_session_end_called();
 
 		// changing the keys of a validator leads to change.
-		assert_ok!(Session::set_keys(Origin::signed(69), UintAuthorityId(69).into(), vec![]));
+		assert_ok!(Session::set_keys(
+			RuntimeOrigin::signed(69),
+			UintAuthorityId(69).into(),
+			vec![]
+		));
 		force_new_session();
 		initialize_block(7);
 		assert!(session_changed());
@@ -355,7 +359,7 @@ fn session_keys_generate_output_works_as_set_keys_input() {
 	new_test_ext().execute_with(|| {
 		let new_keys = mock::MockSessionKeys::generate(None);
 		assert_ok!(Session::set_keys(
-			Origin::signed(2),
+			RuntimeOrigin::signed(2),
 			<mock::Test as Config>::Keys::decode(&mut &new_keys[..]).expect("Decode keys"),
 			vec![],
 		));

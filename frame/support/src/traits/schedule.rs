@@ -135,7 +135,7 @@ pub mod v1 {
 	use super::*;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call, Origin> {
+	pub trait Anon<BlockNumber, Call, RuntimeOrigin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo + MaxEncodedLen;
 
@@ -146,7 +146,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: Origin,
+			origin: RuntimeOrigin,
 			call: Call,
 		) -> Result<Self::Address, DispatchError>;
 
@@ -180,7 +180,7 @@ pub mod v1 {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call, Origin> {
+	pub trait Named<BlockNumber, Call, RuntimeOrigin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug + MaxEncodedLen;
 
@@ -192,7 +192,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: Origin,
+			origin: RuntimeOrigin,
 			call: Call,
 		) -> Result<Self::Address, ()>;
 
@@ -218,9 +218,9 @@ pub mod v1 {
 		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 
-	impl<T, BlockNumber, Call, Origin> Anon<BlockNumber, Call, Origin> for T
+	impl<T, BlockNumber, Call, RuntimeOrigin> Anon<BlockNumber, Call, RuntimeOrigin> for T
 	where
-		T: v2::Anon<BlockNumber, Call, Origin>,
+		T: v2::Anon<BlockNumber, Call, RuntimeOrigin>,
 	{
 		type Address = T::Address;
 
@@ -228,7 +228,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: Origin,
+			origin: RuntimeOrigin,
 			call: Call,
 		) -> Result<Self::Address, DispatchError> {
 			let c = MaybeHashed::<Call, T::Hash>::Value(call);
@@ -251,9 +251,9 @@ pub mod v1 {
 		}
 	}
 
-	impl<T, BlockNumber, Call, Origin> Named<BlockNumber, Call, Origin> for T
+	impl<T, BlockNumber, Call, RuntimeOrigin> Named<BlockNumber, Call, RuntimeOrigin> for T
 	where
-		T: v2::Named<BlockNumber, Call, Origin>,
+		T: v2::Named<BlockNumber, Call, RuntimeOrigin>,
 	{
 		type Address = T::Address;
 
@@ -262,7 +262,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: Origin,
+			origin: RuntimeOrigin,
 			call: Call,
 		) -> Result<Self::Address, ()> {
 			let c = MaybeHashed::<Call, T::Hash>::Value(call);
@@ -291,7 +291,7 @@ pub mod v2 {
 	use super::*;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call, Origin> {
+	pub trait Anon<BlockNumber, Call, RuntimeOrigin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo + MaxEncodedLen;
 		/// A means of expressing a call by the hash of its encoded data.
@@ -304,7 +304,7 @@ pub mod v2 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: Origin,
+			origin: RuntimeOrigin,
 			call: MaybeHashed<Call, Self::Hash>,
 		) -> Result<Self::Address, DispatchError>;
 
@@ -338,7 +338,7 @@ pub mod v2 {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call, Origin> {
+	pub trait Named<BlockNumber, Call, RuntimeOrigin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug + MaxEncodedLen;
 		/// A means of expressing a call by the hash of its encoded data.
@@ -352,7 +352,7 @@ pub mod v2 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: Origin,
+			origin: RuntimeOrigin,
 			call: MaybeHashed<Call, Self::Hash>,
 		) -> Result<Self::Address, ()>;
 

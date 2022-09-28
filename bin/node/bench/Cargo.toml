@@ -11,6 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+array-bytes = "4.1"
 clap = { version = "3.1.18", features = ["derive"] }
 log = "0.4.17"
 node-primitives = { version = "2.0.0", path = "../primitives" }
@@ -34,7 +35,6 @@ sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
-hex = "0.4.0"
 rand = { version = "0.7.2", features = ["small_rng"] }
 lazy_static = "1.4.0"
 parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
