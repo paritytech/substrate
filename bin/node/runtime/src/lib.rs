@@ -34,8 +34,8 @@ use frame_support::{
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
 		EitherOfDiverse, EnsureOrigin, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		SortedMembers, U128CurrencyToVote,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, SortedMembers,
+		U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -45,7 +45,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,EnsureSignedBy, RawOrigin,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, EnsureSignedBy, RawOrigin,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -205,10 +205,7 @@ pub struct UnpausableCalls; // TODO move to calls, use (..) to match on pallets 
 
 impl Contains<RuntimeCall> for UnpausableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
-		matches!(
-			call,
-				RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. })
-		)
+		matches!(call, RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. }))
 	}
 }
 
@@ -222,7 +219,6 @@ impl pallet_tx_pause::Config for Runtime {
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
 }
-
 
 /// Filter to block balance pallet calls
 pub struct SafeModeFilter;

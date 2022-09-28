@@ -26,15 +26,12 @@ mod tests;
 pub mod weights;
 
 use frame_support::{
-	pallet_prelude::*,
-	traits::{CallMetadata, Contains, GetCallMetadata, IsType, IsSubType},
 	dispatch::GetDispatchInfo,
+	pallet_prelude::*,
+	traits::{CallMetadata, Contains, GetCallMetadata, IsSubType, IsType},
 };
 use frame_system::pallet_prelude::*;
-use sp_runtime::{
-	traits::Dispatchable,
-	DispatchResult,
-};
+use sp_runtime::{traits::Dispatchable, DispatchResult};
 use sp_std::{convert::TryInto, prelude::*};
 
 pub use pallet::*;
@@ -166,7 +163,7 @@ pub mod pallet {
 			T::PauseOrigin::ensure_origin(origin)?;
 
 			let (pallet, call) = Self::try_get_bounded_names(&c)?;
-			
+
 			Self::ensure_can_pause(&c)?;
 			PausedCalls::<T>::insert((&pallet, &call), ());
 			Self::deposit_event(Event::CallPaused(pallet, call));
@@ -189,7 +186,10 @@ pub mod pallet {
 		/// Can only be called by [`Config::UnpauseOrigin`].
 		/// Emits an [`Event::CallUnpaused`] event on success.
 		#[pallet::weight(T::WeightInfo::unpause_call())]
-		pub fn unpause_call(origin: OriginFor<T>, c: Box<<T as Config>::RuntimeCall>) -> DispatchResult {
+		pub fn unpause_call(
+			origin: OriginFor<T>,
+			c: Box<<T as Config>::RuntimeCall>,
+		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
 			let (pallet, call) = Self::try_get_bounded_names(&c)?;
@@ -252,9 +252,9 @@ impl<T: Config> Pallet<T> {
 	/// Get bounded names of calls in pallets from runtime call.
 	pub fn try_get_bounded_names(
 		c: &<T as Config>::RuntimeCall,
-	) -> Result<(PalletNameOf<T>, CallNameOf<T>), Error<T>> 
+	) -> Result<(PalletNameOf<T>, CallNameOf<T>), Error<T>>
 	where
-	<T as Config>::RuntimeCall: GetCallMetadata,
+		<T as Config>::RuntimeCall: GetCallMetadata,
 	{
 		let CallMetadata { pallet_name, function_name } = c.get_call_metadata();
 
@@ -263,7 +263,8 @@ impl<T: Config> Pallet<T> {
 
 		match (pallet, call) {
 			(Ok(pallet), Ok(call)) => Ok((pallet, call)),
-			_ => Err(Error::IsTooLong), // TODO consider better method than custom error just for this? 
+			_ => Err(Error::IsTooLong), /* TODO consider better method than custom error just for
+			                             * this? */
 		}
 	}
 }
