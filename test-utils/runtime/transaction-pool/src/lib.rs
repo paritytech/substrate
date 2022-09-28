@@ -348,7 +348,9 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		from: <Self::Block as BlockT>::Hash,
 		to: <Self::Block as BlockT>::Hash,
 	) -> Result<Option<TreeRoute<Self::Block>>, Self::Error> {
-		sp_blockchain::tree_route::<Block, TestApi>(self, from, to).map_err(Into::into).map(Into::into)
+		sp_blockchain::tree_route::<Block, TestApi>(self, from, to)
+			.map_err(Into::into)
+			.map(Into::into)
 	}
 }
 

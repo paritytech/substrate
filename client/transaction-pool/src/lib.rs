@@ -843,7 +843,12 @@ where
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
 		let tree_route = if let Some(best_block) = self.best_block {
-			Some(Arc::new(self.api.tree_route(best_block, *hash).unwrap().expect("tree_route exists. qed.")))
+			Some(Arc::new(
+				self.api
+					.tree_route(best_block, *hash)
+					.unwrap()
+					.expect("tree_route exists. qed."),
+			))
 		} else {
 			None
 		};
