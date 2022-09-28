@@ -4187,16 +4187,6 @@ dependencies = [
 [[package]]
 name = "mangata-primitives"
 version = "0.1.0"
-dependencies = [
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-runtime",
-]
-
-[[package]]
-name = "mangata-primitives"
-version = "0.1.0"
 source = "git+https://github.com/mangata-finance/mangata-node?branch=develop#4de54b50607a5a257d89e8ae6407f8addbdf9fff"
 dependencies = [
  "parity-scale-codec",
@@ -4209,6 +4199,16 @@ dependencies = [
 name = "mangata-primitives"
 version = "0.1.0"
 source = "git+https://github.com/mangata-finance/mangata-node?branch=develop-v0.9.26#c38e65913bbd01e5a8ab641106ad9c694b2bd79d"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+]
+
+[[package]]
+name = "mangata-types"
+version = "0.1.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",

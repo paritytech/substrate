@@ -1,5 +1,5 @@
 [package]
-name = "mangata-primitives"
+name = "mangata-types"
 version = "0.1.0"
 authors = ['Mangata team']
 edition = "2018"
