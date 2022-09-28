@@ -116,7 +116,7 @@ where
 					// We have not created an `Watcher` for the tx. Make sure the
 					// error is still propagated as an event.
 					let event: TransactionEvent<<Pool::Block as BlockT>::Hash> = err.into();
-					sink.pipe_from_stream(futures::stream::iter(vec![event]).boxed()).await;
+					sink.pipe_from_stream(futures::stream::once(async { event }).boxed()).await;
 				},
 			};
 		};
