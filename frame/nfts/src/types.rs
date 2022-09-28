@@ -193,6 +193,7 @@ pub(super) type ItemSettings = BitFlags<ItemSetting>;
 /// Wrapper type for `ItemSettings` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct ItemConfig(pub ItemSettings);
+
 impl ItemConfig {
 	pub fn empty() -> Self {
 		Self(BitFlags::EMPTY)
