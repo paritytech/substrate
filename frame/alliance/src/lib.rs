@@ -120,7 +120,7 @@ use frame_support::{
 		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
 	},
-	weights::Weight,
+	weights::{OldWeight, Weight},
 };
 use pallet_identity::IdentityField;
 
@@ -620,25 +620,22 @@ pub mod pallet {
 				.max(T::WeightInfo::close_early_disapproved(x, y, p2))
 				.max(T::WeightInfo::close_approved(b, x, y, p2))
 				.max(T::WeightInfo::close_disapproved(x, y, p2))
-				.saturating_add(p1)
+				.saturating_add(p1.into())
 		})]
-		pub fn close(
+		#[allow(deprecated)]
+		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to use `close`")]
+		pub fn close_old_weight(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			#[pallet::compact] proposal_weight_bound: OldWeight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
+			let proposal_weight_bound: Weight = proposal_weight_bound.into();
 			let who = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
-			let info = T::ProposalProvider::close_proposal(
-				proposal_hash,
-				index,
-				proposal_weight_bound,
-				length_bound,
-			)?;
-			Ok(info.into())
+			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
 		}
 
 		/// Initialize the Alliance, onboard founders, fellows, and allies.
@@ -985,6 +982,34 @@ pub mod pallet {
 			Self::deposit_event(Event::UnscrupulousItemRemoved { items });
 			Ok(())
 		}
+
+		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
+		///
+		/// Requires the sender to be a founder or fellow.
+		#[pallet::weight({
+			let b = *length_bound;
+			let x = T::MaxFounders::get();
+			let y = T::MaxFellows::get();
+			let p1 = *proposal_weight_bound;
+			let p2 = T::MaxProposals::get();
+			T::WeightInfo::close_early_approved(b, x, y, p2)
+				.max(T::WeightInfo::close_early_disapproved(x, y, p2))
+				.max(T::WeightInfo::close_approved(b, x, y, p2))
+				.max(T::WeightInfo::close_disapproved(x, y, p2))
+				.saturating_add(p1)
+		})]
+		pub fn close(
+			origin: OriginFor<T>,
+			proposal_hash: T::Hash,
+			#[pallet::compact] index: ProposalIndex,
+			proposal_weight_bound: Weight,
+			#[pallet::compact] length_bound: u32,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
+
+			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
+		}
 	}
 }
 
@@ -1196,5 +1221,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 		res
+	}
+
+	fn do_close(
+		proposal_hash: T::Hash,
+		index: ProposalIndex,
+		proposal_weight_bound: Weight,
+		length_bound: u32,
+	) -> DispatchResultWithPostInfo {
+		let info = T::ProposalProvider::close_proposal(
+			proposal_hash,
+			index,
+			proposal_weight_bound,
+			length_bound,
+		)?;
+		Ok(info.into())
 	}
 }
