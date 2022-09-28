@@ -37,8 +37,10 @@ pub fn generate_trie(
 	let (db, overlay) = {
 		let mut overlay = HashMap::new();
 		overlay.insert(
-			hex::decode("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
-				.expect("null key is valid"),
+			array_bytes::hex2bytes(
+				"03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+			)
+			.expect("null key is valid"),
 			Some(vec![0]),
 		);
 		let mut trie = SimpleTrie { db, overlay: &mut overlay };

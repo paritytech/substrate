@@ -90,6 +90,7 @@ pub mod schedule;
 mod storage;
 pub use storage::{
 	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
+	TrackedStorageKey, WhitelistedStorageKeys,
 };
 
 mod dispatch;
@@ -113,4 +114,4 @@ pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, St
 #[cfg(feature = "try-runtime")]
 mod try_runtime;
 #[cfg(feature = "try-runtime")]
-pub use try_runtime::{OnRuntimeUpgradeHelpersExt, Select as TryStateSelect, TryState};
+pub use try_runtime::{Select as TryStateSelect, TryState};

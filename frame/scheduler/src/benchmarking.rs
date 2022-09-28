@@ -33,7 +33,7 @@ const SEED: u32 = 0;
 
 const BLOCK_NUMBER: u32 = 2;
 
-type SystemOrigin<T> = <T as frame_system::Config>::Origin;
+type SystemOrigin<T> = <T as frame_system::Config>::RuntimeOrigin;
 
 /// Add `n` items to the schedule.
 ///

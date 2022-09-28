@@ -67,7 +67,12 @@ substrate-build-script-utils = { version = "3.0.0", path = "../../../utils/build
 
 [features]
 default = []
-runtime-benchmarks = ["node-template-runtime/runtime-benchmarks"]
+# Dependencies that are only required if runtime benchmarking should be build.
+runtime-benchmarks = [
+	"node-template-runtime/runtime-benchmarks",
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking-cli/runtime-benchmarks",
+]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
 try-runtime = ["node-template-runtime/try-runtime", "try-runtime-cli"]

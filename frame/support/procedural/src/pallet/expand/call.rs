@@ -278,10 +278,10 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			for #call_ident<#type_use_gen>
 			#where_clause
 		{
-			type Origin = #frame_system::pallet_prelude::OriginFor<T>;
+			type RuntimeOrigin = #frame_system::pallet_prelude::OriginFor<T>;
 			fn dispatch_bypass_filter(
 				self,
-				origin: Self::Origin
+				origin: Self::RuntimeOrigin
 			) -> #frame_support::dispatch::DispatchResultWithPostInfo {
 				match self {
 					#(

@@ -298,37 +298,37 @@ pub mod pallet {
 
 		/// Origin from which the next tabled referendum may be forced. This is a normal
 		/// "super-majority-required" referendum.
-		type ExternalOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a majority-carries referendum.
-		type ExternalMajorityOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalMajorityOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next tabled referendum may be forced; this allows for the tabling
 		/// of a negative-turnout-bias (default-carries) referendum.
-		type ExternalDefaultOrigin: EnsureOrigin<Self::Origin>;
+		type ExternalDefaultOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote according to the `FastTrackVotingPeriod` asynchronously in a similar
 		/// manner to the emergency origin. It retains its threshold method.
-		type FastTrackOrigin: EnsureOrigin<Self::Origin>;
+		type FastTrackOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which the next majority-carries (or more permissive) referendum may be
 		/// tabled to vote immediately and asynchronously in a similar manner to the emergency
 		/// origin. It retains its threshold method.
-		type InstantOrigin: EnsureOrigin<Self::Origin>;
+		type InstantOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which any referendum may be cancelled in an emergency.
-		type CancellationOrigin: EnsureOrigin<Self::Origin>;
+		type CancellationOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which proposals may be blacklisted.
-		type BlacklistOrigin: EnsureOrigin<Self::Origin>;
+		type BlacklistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin from which a proposal may be cancelled and its backers slashed.
-		type CancelProposalOrigin: EnsureOrigin<Self::Origin>;
+		type CancelProposalOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin for anyone able to veto proposals.
-		type VetoOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type VetoOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 
 		/// Overarching type of all pallets origins.
 		type PalletsOrigin: From<frame_system::RawOrigin<Self::AccountId>>;

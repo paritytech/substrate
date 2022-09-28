@@ -84,7 +84,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;
@@ -120,7 +120,7 @@ impl pallet_preimage::Config for Test {
 
 impl pallet_scheduler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
@@ -233,7 +233,7 @@ fn set_balance_proposal_is_correctly_filtered_out() {
 }
 
 fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(Origin::signed(who), set_balance_proposal(value), delay)
+	Democracy::propose(RuntimeOrigin::signed(who), set_balance_proposal(value), delay)
 }
 
 fn next_block() {

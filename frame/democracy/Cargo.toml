@@ -36,7 +36,7 @@ pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 default = ["std"]
 std = [
 	"codec/std",
-	"frame-benchmarking/std",
+	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",

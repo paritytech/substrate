@@ -135,7 +135,7 @@ pub mod pallet {
 
 		/// A dispatchable call.
 		type RuntimeCall: Parameter
-			+ Dispatchable<Origin = Self::Origin>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ From<frame_system::Call<Self>>;
 
@@ -149,7 +149,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The manager origin.
-		type ManagerOrigin: EnsureOrigin<Self::Origin>;
+		type ManagerOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The max number of calls available in a single lottery.
 		#[pallet::constant]
