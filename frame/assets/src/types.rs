@@ -34,7 +34,7 @@ pub(super) enum AssetStatus {
 	/// The asset is active and able to be used.
 	Live,
 	/// The asset is currently being destroyed, and all actions are no longer permitted on the
-	/// asset
+	/// asset. Once set to `Destroying`, the asset can never transition back to a `Live` state.
 	Destroying,
 }
 
