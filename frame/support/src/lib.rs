@@ -1508,7 +1508,7 @@ pub mod pallet_prelude {
 /// pub trait Config: pallet_timestamp::Config {}
 /// ```
 ///
-/// ## `pallet::config` macro expansion:
+/// ## Macro expansion:
 ///
 /// The macro expands pallet constant metadata with the information given by
 /// `#[pallet::constant]`.
@@ -1610,6 +1610,7 @@ pub mod pallet_prelude {
 /// ```ignore
 /// #[pallet::hooks]
 /// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
+/// 	...
 /// }
 /// ```
 /// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
@@ -1623,7 +1624,7 @@ pub mod pallet_prelude {
 /// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 /// ```
 ///
-/// ### Macro expansion:
+/// ### Macro expansion
 ///
 /// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
 /// `OffchainWorker`, `IntegrityTest` using `Hooks` implementation.
@@ -1788,7 +1789,7 @@ pub mod pallet_prelude {
 ///
 /// NOTE: For instantiable pallet, event must be generic over T and I.
 ///
-/// ### Macro expansion:
+/// ### Macro expansion
 ///
 /// Macro will add on enum `Event` the attributes:
 /// * `#[derive(frame_support::CloneNoBound)]`,
