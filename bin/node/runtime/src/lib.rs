@@ -2018,7 +2018,7 @@ impl_runtime_apis! {
 		fn generate_proof(block_number: BlockNumber)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
-			Mmr::generate_batch_proof(vec![block_number.into()]).and_then(|(leaves, proof)|
+			Mmr::generate_batch_proof(vec![block_number]).and_then(|(leaves, proof)|
 				Ok((
 					mmr::EncodableOpaqueLeaf::from_leaf(&leaves[0]),
 					mmr::BatchProof::into_single_leaf_proof(proof)?

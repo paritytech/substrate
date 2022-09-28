@@ -396,7 +396,7 @@ pub enum Error {
 	GenerateProof,
 	/// Proof verification error.
 	Verify,
-	/// Error while converting a block number to leaf index.
+	/// Error during translation of a block number into a leaf index.
 	BlockNumToLeafIndex,
 	/// Leaf not found in the storage.
 	LeafNotFound,

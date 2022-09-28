@@ -238,8 +238,8 @@ fn should_generate_proofs_correctly() {
 	// to retrieve full leaf data.
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
-		// when generate proofs for all the blocks.
 		let now = frame_system::Pallet::<Test>::block_number();
+		// when generate proofs for all leaves.
 		let proofs = (0_u64..now)
 			.into_iter()
 			.map(|block_num| crate::Pallet::<Test>::generate_batch_proof(vec![block_num]).unwrap())
@@ -264,7 +264,7 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			proofs[5],
 			(
-				// the leaf index is equivalent to the block number(in this case 5) - 1
+				// NOTE: the leaf index is equivalent to the block number(in this case 5) - 1
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
 				BatchProof {
 					leaf_indices: vec![4],

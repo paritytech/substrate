@@ -318,7 +318,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.saturating_add(leaf_index.saturated_into())
 	}
 
-	/// Generate a MMR proof for the given `leaf_indices`.
+	/// Generate a MMR proof for the given `block_numbers`.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
@@ -330,6 +330,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
+		// we need to translate the block_numbers into leaf indices.
 		let leaf_indices = block_numbers
 			.iter()
 			.map(|n| -> Result<LeafIndex, primitives::Error> {
@@ -374,7 +375,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	/// Convert `block_num` into a leaf index.
+	/// Convert a `block_num` into a leaf index.
 	pub fn block_num_to_leaf_index(
 		block_num: <T as frame_system::Config>::BlockNumber,
 	) -> Result<LeafIndex, primitives::Error>

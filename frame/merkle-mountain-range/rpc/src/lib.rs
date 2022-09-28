@@ -100,7 +100,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	/// Generate MMR proof for given block number.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// MMR proof for leaf at given leaf index that was calculated from the `block_number`.
+	/// MMR proof for a block with a specified `block_number`.
 	/// Optionally, a block hash at which the runtime should be queried can be specified.
 	///
 	/// Returns the (full) leaf itself and a proof for this leaf (compact encoding, i.e. hash of
@@ -115,9 +115,8 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	/// Generate MMR proof for the given block numbers.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// MMR proof for a set of leaves at the given leaf indices that are calculated from the
-	/// `block_numbers`. Optionally, a block hash at which the runtime should be queried can be
-	/// specified.
+	/// MMR proof for a set of blocks with the specific `block_numbers`.
+	/// Optionally, a block hash at which the runtime should be queried can be specified.
 	///
 	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
 	/// the leaves). Both parameters are SCALE-encoded.
