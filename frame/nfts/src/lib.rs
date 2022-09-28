@@ -829,12 +829,7 @@ pub mod pallet {
 			item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-
-			let collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
-
-			Self::do_freeze_item(collection, item)
+			Self::do_freeze_item(origin, collection, item)
 		}
 
 		/// Re-allow unprivileged transfer of an item.
@@ -854,12 +849,7 @@ pub mod pallet {
 			item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-
-			let collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
-
-			Self::do_thaw_item(collection, item)
+			Self::do_thaw_item(origin, collection, item)
 		}
 
 		/// Disallows specified settings for the whole collection.
@@ -880,12 +870,7 @@ pub mod pallet {
 			lock_config: CollectionConfig,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-
-			let details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
-
-			Self::do_lock_collection(collection, lock_config)
+			Self::do_lock_collection(origin, collection, lock_config)
 		}
 
 		/// Change the Owner of a collection.
@@ -1224,14 +1209,7 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-
-			Self::do_lock_item(collection, item, lock_metadata, lock_attributes)
+			Self::do_lock_item(maybe_check_owner, collection, item, lock_metadata, lock_attributes)
 		}
 
 		/// Set an attribute for a collection or item.
@@ -1682,10 +1660,6 @@ pub mod pallet {
 			whitelisted_buyer: Option<AccountIdLookupOf<T>>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoTrading),
-				Error::<T, I>::MethodDisabled
-			);
 			let whitelisted_buyer = whitelisted_buyer.map(T::Lookup::lookup).transpose()?;
 			Self::do_set_price(collection, item, origin, price, whitelisted_buyer)
 		}
@@ -1708,10 +1682,6 @@ pub mod pallet {
 			bid_price: ItemPrice<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoTrading),
-				Error::<T, I>::MethodDisabled
-			);
 			Self::do_buy_item(collection, item, origin, bid_price)
 		}
 

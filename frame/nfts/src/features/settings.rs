@@ -20,9 +20,14 @@ use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_lock_collection(
+		origin: T::AccountId,
 		collection: T::CollectionId,
 		lock_config: CollectionConfig,
 	) -> DispatchResult {
+		let details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
+
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut settings = config.values();
@@ -46,11 +51,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn do_lock_item(
+		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
 		item: T::ItemId,
 		lock_metadata: bool,
 		lock_attributes: bool,
 	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+
+		if let Some(check_owner) = &maybe_check_owner {
+			ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
+		}
+
 		ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownItem)?;
 			let mut settings = config.values();
@@ -74,7 +87,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	pub fn do_freeze_item(collection: T::CollectionId, item: T::ItemId) -> DispatchResult {
+	pub fn do_freeze_item(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		item: T::ItemId,
+	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+
 		let mut settings = Self::get_item_settings(&collection, &item)?;
 		if !settings.contains(ItemSetting::NonTransferable) {
 			settings.insert(ItemSetting::NonTransferable);
@@ -85,7 +106,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_thaw_item(collection: T::CollectionId, item: T::ItemId) -> DispatchResult {
+	pub fn do_thaw_item(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		item: T::ItemId,
+	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+
 		let mut settings = Self::get_item_settings(&collection, &item)?;
 		if settings.contains(ItemSetting::NonTransferable) {
 			settings.remove(ItemSetting::NonTransferable);

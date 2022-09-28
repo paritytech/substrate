@@ -242,6 +242,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		price: Option<ItemPrice<T, I>>,
 		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
+		ensure!(
+			!Self::is_feature_flag_set(SystemFeature::NoTrading),
+			Error::<T, I>::MethodDisabled
+		);
+
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
@@ -277,6 +282,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		buyer: T::AccountId,
 		bid_price: ItemPrice<T, I>,
 	) -> DispatchResult {
+		ensure!(
+			!Self::is_feature_flag_set(SystemFeature::NoTrading),
+			Error::<T, I>::MethodDisabled
+		);
+
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
 
