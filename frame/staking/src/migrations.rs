@@ -40,10 +40,14 @@ pub mod v12 {
 				"Expected v11 before upgrading to v12"
 			);
 
-			frame_support::ensure!(
-				T::HistoryDepth::get() == HistoryDepth::<T>::get(),
-				"Provided value of HistoryDepth should be same as the existing storage value"
-			);
+			if HistoryDepth::<T>::exists() {
+				frame_support::ensure!(
+					T::HistoryDepth::get() == HistoryDepth::<T>::get(),
+					"Provided value of HistoryDepth should be same as the existing storage value"
+				);
+			} else {
+				log::info!("No HistoryDepth in storage; nothing to remove");
+			}
 
 			Ok(Default::default())
 		}
