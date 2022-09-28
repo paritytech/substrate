@@ -28,7 +28,7 @@ error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
              <&[(T,)] as EncodeLike<BinaryHeap<LikeT>>>
              <&[(T,)] as EncodeLike<LinkedList<LikeT>>>
              <&[T] as EncodeLike<Vec<U>>>
-           and 278 others
+           and 279 others
    = note: required because of the requirements on the impl of `FullEncode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
    = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
@@ -69,7 +69,7 @@ error[E0277]: the trait bound `Bar: TypeInfo` is not satisfied
              (A, B, C, D)
              (A, B, C, D, E)
              (A, B, C, D, E, F)
-           and 159 others
+           and 160 others
    = note: required because of the requirements on the impl of `StaticTypeInfo` for `Bar`
    = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
 
@@ -103,7 +103,7 @@ error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
              <&[(T,)] as EncodeLike<BinaryHeap<LikeT>>>
              <&[(T,)] as EncodeLike<LinkedList<LikeT>>>
              <&[T] as EncodeLike<Vec<U>>>
-           and 278 others
+           and 279 others
    = note: required because of the requirements on the impl of `FullEncode` for `Bar`
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
    = note: required because of the requirements on the impl of `StorageEntryMetadataBuilder` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
