@@ -99,7 +99,7 @@ impl<H: Clone + AsRef<[u8]>> Database<H> for DbAdapter {
 	}
 
 	fn get(&self, col: ColumnId, key: &[u8]) -> Option<Vec<u8>> {
-		handle_err(self.0.lock().hget(col, key))
+		Some(handle_err::<Option<Vec<u8>>>(self.0.lock().hget(col, key)).unwrap_or_default())
 	}
 
 	fn contains(&self, col: ColumnId, key: &[u8]) -> bool {
