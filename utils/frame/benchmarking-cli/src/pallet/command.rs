@@ -143,9 +143,7 @@ impl PalletCmd {
 			let batches: Vec<BenchmarkBatchSplitResults> = match serde_json::from_slice(&raw_data) {
 				Ok(batches) => batches,
 				Err(error) =>
-					return Err(
-						format!("Failed to deserialize {:?}: {}", json_input, error).into()
-					),
+					return Err(format!("Failed to deserialize {:?}: {}", json_input, error).into()),
 			};
 			return self.output_from_results(&batches)
 		}
