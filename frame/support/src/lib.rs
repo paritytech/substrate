@@ -1673,7 +1673,7 @@ pub mod pallet_prelude {
 ///
 /// If no `#[pallet::call]` exists, then a default implementation corresponding to the
 /// following code is automatically generated:
-/// 
+///
 /// ```ignore
 /// #[pallet::call]
 /// impl<T: Config> Pallet<T> {}
@@ -1700,7 +1700,7 @@ pub mod pallet_prelude {
 /// Allow to define some extra constants to put into constant metadata.
 ///
 /// Item must be defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::extra_constants]
 /// impl<T: Config> Pallet<T> where $optional_where_clause {
@@ -1724,7 +1724,7 @@ pub mod pallet_prelude {
 /// informations are put into metadata.
 ///
 /// Item must be defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::error]
 /// pub enum Error<T> {
@@ -1766,7 +1766,7 @@ pub mod pallet_prelude {
 /// (and removed in next block).
 ///
 /// Item is defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::event]
 /// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
@@ -1776,7 +1776,7 @@ pub mod pallet_prelude {
 /// 	...
 /// }
 /// ```
-/// 
+///
 /// I.e. an enum (with named or unnamed fields variant), named Event, with generic: none or
 /// `T` or `T: Config`, and optional where clause.
 ///
@@ -1811,36 +1811,35 @@ pub mod pallet_prelude {
 /// This attribute can be used multiple times.
 ///
 /// Item is defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::getter(fn $getter_name)] // optional
 /// $vis type $StorageName<$some_generic> $optional_where_clause
 /// 	= $StorageType<$generic_name = $some_generics, $other_name = $some_other, ...>;
 /// ```
-/// 
+///
 /// or with unnamed generic:
-/// 
+///
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::getter(fn $getter_name)] // optional
 /// $vis type $StorageName<$some_generic> $optional_where_clause
 /// 	= $StorageType<_, $some_generics, ...>;
 /// ```
-/// 
+///
 /// I.e. it must be a type alias, with generics: `T` or `T: Config`, aliased type must be one
 /// of `StorageValue`, `StorageMap` or `StorageDoubleMap` (defined in frame_support). The
 /// generic arguments of the storage type can be given in two manner: named and unnamed. For
 /// named generic argument: the name for each argument is the one as define on the storage
 /// struct:
-/// * [`pallet_prelude::StorageValue`] expect `Value` and optionally `QueryKind` and
-///   `OnEmpty`,
-/// * [`pallet_prelude::StorageMap`] expect `Hasher`, `Key`, `Value` and optionally
-///   `QueryKind` and `OnEmpty`,
+/// * [`pallet_prelude::StorageValue`] expect `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * [`pallet_prelude::StorageMap`] expect `Hasher`, `Key`, `Value` and optionally `QueryKind`
+///   and `OnEmpty`,
 /// * [`pallet_prelude::CountedStorageMap`] expect `Hasher`, `Key`, `Value` and optionally
 ///   `QueryKind` and `OnEmpty`,
-/// * [`pallet_prelude::StorageDoubleMap`] expect `Hasher1`, `Key1`, `Hasher2`, `Key2`,
-///   `Value` and optionally `QueryKind` and `OnEmpty`.
+/// * [`pallet_prelude::StorageDoubleMap`] expect `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value`
+///   and optionally `QueryKind` and `OnEmpty`.
 ///
 /// For unnamed generic argument: Their first generic must be `_` as it is replaced by the
 /// macro and other generic must declared as a normal declaration of type generic in rust.
@@ -1857,12 +1856,12 @@ pub mod pallet_prelude {
 /// counter at the prefix: `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
 ///
 /// E.g:
-/// 
+///
 /// ```ignore
 /// #[pallet::storage]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
-/// 
+///
 /// In this case the final prefix used by the map is `Twox128(b"MyExample") ++
 /// Twox128(b"OtherName")`.
 ///
@@ -1873,16 +1872,16 @@ pub mod pallet_prelude {
 /// storage prefix to use, see how `Prefix` generic is implemented above.
 ///
 /// E.g:
-/// 
+///
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::storage_prefix = "foo"]
 /// #[pallet::getter(fn my_storage)]
 /// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
 /// ```
-/// 
+///
 /// or
-/// 
+///
 /// ```ignore
 /// #[pallet::storage]
 /// #[pallet::getter(fn my_storage)]
@@ -1897,7 +1896,7 @@ pub mod pallet_prelude {
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
 ///
 /// E.g:
-/// 
+///
 /// ```ignore
 /// #[cfg(feature = "my-feature")]
 /// #[pallet::storage]
@@ -1959,16 +1958,16 @@ pub mod pallet_prelude {
 /// attribute can be used multiple time.
 ///
 /// Item is defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::type_value]
 /// fn $MyDefaultName<$some_generic>() -> $default_type $optional_where_clause { $expr }
 /// ```
-/// 
+///
 /// I.e.: a function definition with generics none or `T: Config` and a returned type.
 ///
 /// E.g.:
-/// 
+///
 /// ```ignore
 /// #[pallet::type_value]
 /// fn MyDefault<T: Config>() -> T::Balance { 3.into() }
@@ -1992,7 +1991,7 @@ pub mod pallet_prelude {
 /// either none, or `T` or `T: Config`.
 ///
 /// E.g:
-/// 
+///
 /// ```ignore
 /// #[pallet::genesis_config]
 /// pub struct GenesisConfig<T: Config> {
@@ -2015,19 +2014,19 @@ pub mod pallet_prelude {
 /// Allow to define how genesis_configuration is built.
 ///
 /// Item is defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::genesis_build]
 /// impl<T: Config> GenesisBuild<T> for GenesisConfig<$maybe_generics> {
 /// 	fn build(&self) { $expr }
 /// }
 /// ```
-/// 
+///
 /// I.e. a rust trait implementation with generic `T: Config`, of trait `GenesisBuild<T>` on
 /// type `GenesisConfig` with generics none or `T`.
 ///
 /// E.g.:
-/// 
+///
 /// ```ignore
 /// #[pallet::genesis_build]
 /// impl<T: Config> GenesisBuild<T> for GenesisConfig {
@@ -2048,14 +2047,14 @@ pub mod pallet_prelude {
 /// Allow the pallet to provide some inherent:
 ///
 /// Item is defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::inherent]
 /// impl<T: Config> ProvideInherent for Pallet<T> {
 /// 	// ... regular trait implementation
 /// }
 /// ```
-/// 
+///
 /// I.e. a trait implementation with bound `T: Config`, of trait `ProvideInherent` for type
 /// `Pallet<T>`, and some optional where clause.
 ///
@@ -2069,14 +2068,14 @@ pub mod pallet_prelude {
 /// Allow the pallet to validate some unsigned transaction:
 ///
 /// Item is defined as:
-/// 
+///
 /// ```ignore
 /// #[pallet::validate_unsigned]
 /// impl<T: Config> ValidateUnsigned for Pallet<T> {
 /// 	// ... regular trait implementation
 /// }
 /// ```
-/// 
+///
 /// I.e. a trait implementation with bound `T: Config`, of trait `ValidateUnsigned` for type
 /// `Pallet<T>`, and some optional where clause.
 ///
@@ -2095,7 +2094,7 @@ pub mod pallet_prelude {
 /// Item must be either a type alias or an enum or a struct. It needs to be public.
 ///
 /// E.g.:
-/// 
+///
 /// ```ignore
 /// #[pallet::origin]
 /// pub struct Origin<T>(PhantomData<(T)>);
@@ -2589,18 +2588,17 @@ pub mod pallet_prelude {
 ///     * `on_initialize`/`on_finalize`/`on_runtime_upgrade`/`offchain_worker` are moved to
 ///    `Hooks` implementation
 ///     * storages with `config(..)` are converted to `GenesisConfig` field, and their default
-///         is `= $expr;` if the storage have default value
+///       is `= $expr;` if the storage have default value
 ///     * storages with `build($expr)` or `config(..)` are built in `GenesisBuild::build`
 ///     * `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
-///         default if specified
+///       default if specified
 ///     * `add_extra_genesis` build is written into `GenesisBuild::build`
 /// * storage items defined with [`pallet`] use the name of the pallet provided by
-///     [`traits::PalletInfo::name`] as `pallet_prefix` (in `decl_storage`, storage items used
-///     the `pallet_prefix` given as input of `decl_storage` with the syntax `as Example`).
-///     Thus a runtime using the pallet must be careful with this change. To handle this
-///     change:
+///   [`traits::PalletInfo::name`] as `pallet_prefix` (in `decl_storage`, storage items used
+///   the `pallet_prefix` given as input of `decl_storage` with the syntax `as Example`). Thus
+///   a runtime using the pallet must be careful with this change. To handle this change:
 ///     * either ensure that the name of the pallet given to `construct_runtime!` is the same
-///         as the name the pallet was giving to `decl_storage`,
+///       as the name the pallet was giving to `decl_storage`,
 ///     * or do a storage migration from the old prefix used to the new prefix used.
 ///
 ///     NOTE: The prefixes used by storage items are in the metadata. Thus, ensuring the
