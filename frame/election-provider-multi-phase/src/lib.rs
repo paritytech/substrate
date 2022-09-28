@@ -1008,8 +1008,10 @@ pub mod pallet {
 			// unlikely to ever return an error: if phase is signed, snapshot will exist.
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
+			// TODO: account for proof size weight
 			ensure!(
-				Self::solution_weight_of(&raw_solution, size).all_lt(T::SignedMaxWeight::get()),
+				Self::solution_weight_of(&raw_solution, size).ref_time() <
+					T::SignedMaxWeight::get().ref_time(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
@@ -2336,8 +2338,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active)
-			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block) ||
+		// TODO: account for proof size weight
+		while weight_with(active).ref_time() <=
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block.ref_time() ||
 			active == all_voters
 		{
 			active += 1;
