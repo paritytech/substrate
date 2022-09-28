@@ -1575,23 +1575,23 @@ pub mod pallet_prelude {
 /// 	frame_support::RuntimeDebugNoBound,
 /// )]
 /// ```
-/// and replace the type `_` by `PhantomData<T>`.
+/// and replaces the type `_` with `PhantomData<T>`.
 ///
-/// It implements on pallet:
+/// It also implements on pallet:
 /// * [`traits::GetStorageVersion`]
-/// * [`traits::OnGenesis`]: contains some logic to write pallet version into storage.
+/// * [`traits::OnGenesis`]: contains some logic to write the pallet version into storage.
 /// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
 ///
 /// It declares `type Module` type alias for `Pallet`, used by [`construct_runtime`].
 ///
 /// It implements [`traits::PalletInfoAccess`] on `Pallet` to ease access to pallet
-/// informations given by [`frame_support::traits::PalletInfo`].
+/// information given by [`frame_support::traits::PalletInfo`].
 /// (The implementation uses the associated type `frame_system::Config::PalletInfo`).
 ///
 /// It implements [`traits::StorageInfoTrait`] on `Pallet` which give information about all
 /// storages.
 ///
-/// If the attribute generate_store is set then the macro creates the trait `Store` and
+/// If the attribute `generate_store` is set then the macro creates the trait `Store` and
 /// implements it on `Pallet`.
 ///
 /// If the attribute set_storage_max_encoded_len is set then the macro call
