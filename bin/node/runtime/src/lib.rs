@@ -2074,10 +2074,6 @@ impl_runtime_apis! {
 			let nodes = leaves.into_iter().map(|leaf|mmr::DataOrHash::Data(leaf.into_opaque_leaf())).collect();
 			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, proof)
 		}
-
-		fn block_num_to_leaf_index(block_num: &BlockNumber) -> Result<mmr::LeafIndex, mmr::Error> {
-			Mmr::block_num_to_leaf_index(*block_num)
-		}
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {

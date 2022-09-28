@@ -476,9 +476,6 @@ sp_api::decl_runtime_apis! {
 		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
 		fn verify_batch_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
 			-> Result<(), Error>;
-
-		/// Converts `block_num` into a leaf index.
-		fn block_num_to_leaf_index(block_num: &BlockNumber) -> Result<LeafIndex, Error>;
 	}
 }
 
