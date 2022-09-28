@@ -16,4 +16,6 @@
 // limitations under the License.
 
 pub mod buy_sell;
+pub mod freeze;
+pub mod lock;
 pub mod settings;
