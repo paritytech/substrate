@@ -33,9 +33,9 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
-		EitherOfDiverse, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, PalletInfoAccess,
-		U128CurrencyToVote,
+		EitherOfDiverse, EnsureOrigin, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
+		SortedMembers, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -45,7 +45,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,EnsureSignedBy, RawOrigin,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -202,66 +202,181 @@ parameter_types! {
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
 pub struct UnpausableCalls; // TODO move to calls, use (..) to match on pallets like ProxyType
-impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausableCalls {
-	fn contains(pallet: &pallet_tx_pause::PalletNameOf<Runtime>) -> bool {
-		pallet.as_ref() ==
-			<pallet_safe_mode::Pallet<Runtime> as PalletInfoAccess>::name()
-				.as_bytes()
-				.to_vec()
-	}
-}
 
-impl Contains<RuntimeCall> for MockUnpausableCalls {
+impl Contains<RuntimeCall> for UnpausableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		matches!(
 			call,
-			RuntimeCall::TxPause(..) |
 				RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. })
 		)
 	}
 }
 
 impl pallet_tx_pause::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
+	type UnpausableCalls = UnpausableCalls;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
 }
 
-parameter_types! {
-	// signed config
-	pub const ActivateStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
+
+/// Filter to block balance pallet calls
+pub struct SafeModeFilter;
+impl Contains<RuntimeCall> for SafeModeFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		match call {
+			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
+			RuntimeCall::Balances(_) => false,
+		}
+	}
+}
+
+/// An origin that can enable the safe-mode by force.
+pub enum ForceActivateOrigin {
+	Weak,
+	Medium,
+	Strong,
+}
+
+/// An origin that can extend the safe-mode by force.
+pub enum ForceExtendOrigin {
+	Weak,
+	Medium,
+	Strong,
+}
+
+impl ForceActivateOrigin {
+	/// The duration of how long the safe-mode will be activated.
+	pub fn duration(&self) -> u32 {
+		match self {
+			Self::Weak => 5,
+			Self::Medium => 7,
+			Self::Strong => 11,
+		}
+	}
+
+	/// Account id of the origin.
+	pub const fn acc(&self) -> u32 {
+		match self {
+			Self::Weak => 100,
+			Self::Medium => 101,
+			Self::Strong => 102,
+		}
+	}
+
+	/// Signed origin.
+	pub fn signed(&self) -> <Runtime as frame_system::Config>::Origin {
+		RawOrigin::Signed(self.acc()).into()
+	}
+}
+
+impl ForceExtendOrigin {
+	/// The duration of how long the safe-mode will be extended.
+	pub fn duration(&self) -> u32 {
+		match self {
+			Self::Weak => 13,
+			Self::Medium => 17,
+			Self::Strong => 19,
+		}
+	}
+
+	/// Account id of the origin.
+	pub const fn acc(&self) -> u32 {
+		match self {
+			Self::Weak => 200,
+			Self::Medium => 201,
+			Self::Strong => 202,
+		}
+	}
+
+	/// Signed origin.
+	pub fn signed(&self) -> <Runtime as frame_system::Config>::Origin {
+		RawOrigin::Signed(self.acc()).into()
+	}
+}
+
+impl<O: Into<Result<RawOrigin<u32>, O>> + From<RawOrigin<u32>> + std::fmt::Debug> EnsureOrigin<O>
+	for ForceActivateOrigin
+{
+	type Success = u32;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Weak.acc() =>
+				Ok(ForceActivateOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Medium.acc() =>
+				Ok(ForceActivateOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Strong.acc() =>
+				Ok(ForceActivateOrigin::Strong.duration()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+impl<O: Into<Result<RawOrigin<u32>, O>> + From<RawOrigin<u32>> + std::fmt::Debug> EnsureOrigin<O>
+	for ForceExtendOrigin
+{
+	type Success = u32;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Weak.acc() =>
+				Ok(ForceExtendOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Medium.acc() =>
+				Ok(ForceExtendOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Strong.acc() =>
+				Ok(ForceExtendOrigin::Strong.duration()),
+			r => Err(O::from(r)),
+		})
+	}
+}
+
+// Required impl to use some <Configured Origin>::get()
+impl SortedMembers<u32> for DeactivateOrigin {
+	fn sorted_members() -> Vec<u32> {
+		vec![Self::get()]
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u32) {}
+}
+impl SortedMembers<u32> for RepayOrigin {
+	fn sorted_members() -> Vec<u32> {
+		vec![Self::get()]
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add(_m: &u32) {}
 }
 
 parameter_types! {
-	// signed config
-	pub const ActivateStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
+	pub const ActivateDuration: u32 = 3;
+	pub const ExtendDuration: u32 = 30;
+	pub const ActivateStakeAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ExtendStakeAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const DeactivateOrigin: u32 = 3;
+	pub const RepayOrigin: u32 = 4;
 }
 
 impl pallet_safe_mode::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type UnstoppableCalls = Nothing; // TODO add TxPause pallet
+	type SafeModeFilter = SafeModeFilter; // TODO add TxPause pallet
 	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
-	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
-	type EnableOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
-	type ExtendOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
-	type DeactivateOrigin = EnsureRoot<AccountId>;
-	type RepayOrigin = EnsureRoot<AccountId>;
 	type ActivateStakeAmount = ActivateStakeAmount;
+	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type ExtendStakeAmount = ExtendStakeAmount;
+	type ForceActivateOrigin = ForceActivateOrigin;
+	type ForceExtendOrigin = ForceExtendOrigin;
+	type ForceDeactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
+	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = TheseExcept<InsideBoth<SafeMode, TxPause>, UnpausableCalls>; // TODO consider Exclude or NotInside... so no config for UnpausableCalls unneeded ( see
-																				   // TheseExcept )
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for UnpausableCalls -> see TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -322,6 +437,11 @@ parameter_types! {
 	pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
 }
 
+// pub enum PausePresets {
+// 	..., // todo
+
+// }
+
 /// The type used to represent the kinds of proxying allowed.
 #[derive(
 	Copy,
@@ -336,12 +456,6 @@ parameter_types! {
 	MaxEncodedLen,
 	scale_info::TypeInfo,
 )]
-
-// pub enum PausePresets {
-// 	..., // todo
-
-// }
-
 pub enum ProxyType {
 	Any,
 	NonTransfer,

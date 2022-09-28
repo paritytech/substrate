@@ -78,8 +78,8 @@ impl pallet_balances::Config for Test {
 }
 
 /// Filter to block balance pallet calls
-pub struct MockUnstoppableCalls;
-impl Contains<RuntimeCall> for MockUnstoppableCalls {
+pub struct MockSafeModeFilter;
+impl Contains<RuntimeCall> for MockSafeModeFilter {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
@@ -193,7 +193,7 @@ parameter_types! {
 	pub const ExtendDuration: u64 = 30;
 	pub const ActivateStakeAmount: u64 = 100;
 	pub const ExtendStakeAmount: u64 = 100;
-	pub const DeactivateOrigin: u64 =3;
+	pub const DeactivateOrigin: u64 = 3;
 	pub const RepayOrigin: u64 = 4;
 }
 
@@ -216,14 +216,14 @@ impl SortedMembers<u64> for RepayOrigin {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type UnstoppableCalls = MockUnstoppableCalls;
+	type SafeModeFilter = MockSafeModeFilter;
 	type ActivateDuration = ActivateDuration;
-	type ExtendDuration = ExtendDuration;
 	type ActivateStakeAmount = ActivateStakeAmount;
+	type ExtendDuration = ExtendDuration;
+	type ExtendStakeAmount = ExtendStakeAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
-	type ExtendStakeAmount = ExtendStakeAmount;
-	type ForceInactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
+	type ForceDeactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
 	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
 	type WeightInfo = ();
 }

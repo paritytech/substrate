@@ -63,7 +63,7 @@ pub mod pallet {
 		///
 		/// The `SafeMode` pallet cannot disable it's own calls, and does not need to be explicitly
 		/// added here.
-		type UnstoppableCalls: Contains<Self::RuntimeCall>;
+		type SafeModeFilter: Contains<Self::RuntimeCall>;
 
 		/// How long the safe-mode will stay active when activated with [`Pallet::activate`].
 		#[pallet::constant]
@@ -97,8 +97,8 @@ pub mod pallet {
 		/// The `Success` value is the number of blocks that this origin can extend the safe-mode.
 		type ForceExtendOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
 
-		/// The origin that can call [`Pallet::force_inactivate`].
-		type ForceInactivateOrigin: EnsureOrigin<Self::Origin>;
+		/// The origin that can call [`Pallet::force_activate`].
+		type ForceDeactivateOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The origin that can call [`Pallet::repay_stake`] and [`Pallet::slash_stake`].
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
@@ -147,14 +147,14 @@ pub mod pallet {
 		/// The safe-mode was automatically exited after its duration ran out.
 		Timeout,
 
-		/// The safe-mode was forcefully exited by [`Pallet::force_inactivate`].
+		/// The safe-mode was forcefully exited by [`Pallet::force_deactivate`].
 		Force,
 	}
 
 	/// Contains the last block number that the safe-mode will stay activated.
 	///
 	/// This is set to `None` if the safe-mode is inactive.
-	/// The safe-mode is automatically inactivated when the current block number is greater than
+	/// The safe-mode is automatically deactivated when the current block number is greater than
 	/// this.
 	#[pallet::storage]
 	#[pallet::getter(fn active_until)]
@@ -261,20 +261,20 @@ pub mod pallet {
 			Self::do_extend(None, duration)
 		}
 
-		/// Inactivate safe-mode by force.
+		/// deactivate safe-mode by force.
 		///
-		/// Note: safe-mode will be automatically inactivated by [`Pallet::on_initialize`] hook
+		/// Note: safe-mode will be automatically deactivated by [`Pallet::on_initialize`] hook
 		/// after the block height is greater than [`ActiveUntil`] found in storage. Errors with
 		/// [`Error::IsInactive`] if the safe-mode is inactive.
 		///
 		/// ### Safety
 		///
-		/// Can only be called by the [`Config::ForceInactivateOrigin`] origin.
+		/// Can only be called by the [`Config::ForceDeactivateOrigin`] origin.
 		#[pallet::weight(0)]
-		pub fn force_inactivate(origin: OriginFor<T>) -> DispatchResult {
-			T::ForceInactivateOrigin::ensure_origin(origin.clone())?;
+		pub fn force_deactivate(origin: OriginFor<T>) -> DispatchResult {
+			T::ForceDeactivateOrigin::ensure_origin(origin.clone())?;
 
-			Self::do_inactivate(ExitReason::Force)
+			Self::do_deactivate(ExitReason::Force)
 		}
 
 		/// Repay an honest account that activated safe-mode earlier.
@@ -318,13 +318,13 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Automatically inactivates the safe-mode when the period runs out.
+		/// Automatically deactivates the safe-mode when the period runs out.
 		///
 		/// Bypasses any call filters to avoid getting rejected by them.
 		fn on_initialize(current: T::BlockNumber) -> Weight {
 			match ActiveUntil::<T>::get() {
 				Some(limit) if current > limit => {
-					let _ = Self::do_inactivate(ExitReason::Timeout)
+					let _ = Self::do_deactivate(ExitReason::Timeout)
 						.defensive_proof("Must be inactive; qed");
 					T::DbWeight::get().reads_writes(1, 1)
 				},
@@ -363,11 +363,11 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Logic for the [`crate::Pallet::force_inactivate`] call.
+	/// Logic for the [`crate::Pallet::force_deactivate`] call.
 	///
 	/// Errors if the safe-mode is already inactive.
 	/// Does not check the origin.
-	fn do_inactivate(reason: ExitReason) -> DispatchResult {
+	fn do_deactivate(reason: ExitReason) -> DispatchResult {
 		let _limit = ActiveUntil::<T>::take().ok_or(Error::<T>::IsInactive)?;
 		Self::deposit_event(Event::Exited(reason));
 		Ok(())
@@ -425,7 +425,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if Self::is_activated() {
-			T::UnstoppableCalls::contains(call)
+			T::SafeModeFilter::contains(call)
 		} else {
 			true
 		}

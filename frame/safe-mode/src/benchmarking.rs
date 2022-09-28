@@ -64,7 +64,7 @@ benchmarks! {
 //     /* optional verification */
 //   }
 
-// force_inactivate {
+// force_deactivate {
 //     /* code to set the initial state */
 //   }: {
 //     /* code to test the function benchmarked */

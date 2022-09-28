@@ -84,13 +84,22 @@ parameter_types! {
   pub const PauseTooLongNames: bool = false;
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
 pub struct MockUnpausableCalls;
 
+/// Filter example with Balances::transfer_keep_alive use as noop call in testing and benchmarking, accept all others
 impl Contains<RuntimeCall> for MockUnpausableCalls {
-	fn contains(call: &RuntimeCall) -> bool {
-		match *call {
-			// Remark is used as a no-op call in the benchmarking
-			RuntimeCall::System(frame_system::Call::remark { .. }) => true,
+	fn contains(c: &RuntimeCall) -> bool {
+		match *c {
+			// set an example noop call in testing and benchmarking, accept all others
 			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. }) => true,
 			_ => false,
 		}
