@@ -117,7 +117,6 @@ pub fn execution_method_from_cli(
 	execution_method: WasmExecutionMethod,
 	_instantiation_strategy: WasmtimeInstantiationStrategy,
 ) -> sc_service::config::WasmExecutionMethod {
-	println!("execution method: {:?}", execution_method);
 	match execution_method {
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
 		#[cfg(feature = "wasmtime")]
