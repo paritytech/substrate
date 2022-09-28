@@ -973,7 +973,10 @@ mod tests {
 				// default solution will have 5 edges (5 * 5 + 10)
 				assert_eq!(solution_weight, Weight::from_ref_time(35));
 				assert_eq!(raw.solution.voter_count(), 5);
-				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), Weight::from_ref_time(40).set_proof_size(u64::MAX));
+				assert_eq!(
+					<Runtime as Config>::SignedMaxWeight::get(),
+					Weight::from_ref_time(40).set_proof_size(u64::MAX)
+				);
 
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(raw.clone())));
 
