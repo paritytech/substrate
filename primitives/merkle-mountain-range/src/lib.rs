@@ -434,8 +434,8 @@ impl Error {
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
-		/// Generate MMR proof for a leaf under given index.
-		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
+		/// Generate MMR proof for a block with a specified `block_number`.
+		fn generate_proof(block_number: BlockNumber) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
 		///
@@ -456,8 +456,8 @@ sp_api::decl_runtime_apis! {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 
-		/// Generate MMR proof for a series of leaves under given indices.
-		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+		/// Generate MMR proof for a series of blocks with the specified block numbers.
+		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///

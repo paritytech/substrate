@@ -126,7 +126,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	#[method(name = "mmr_generateBatchProof")]
 	fn generate_batch_proof(
 		&self,
-		leaf_indices: Vec<BlockNumber>,
+		block_numbers: Vec<BlockNumber>,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 }
@@ -162,16 +162,11 @@ where
 		let api = self.client.runtime_api();
 		let block_hash = at.unwrap_or_else(|| self.client.info().best_hash);
 
-		let leaf_index = api
-			.block_num_to_leaf_index(&BlockId::hash(block_hash), &block_number)
-			.map_err(runtime_error_into_rpc_error)?
-			.map_err(mmr_error_into_rpc_error)?;
-
 		let (leaf, proof) = api
 			.generate_proof_with_context(
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
-				leaf_index,
+				block_number,
 			)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
@@ -189,22 +184,11 @@ where
 			// If the block hash is not supplied assume the best block.
 			self.client.info().best_hash);
 
-		let leaf_indices = block_numbers
-			.iter()
-			.map(|n| -> Result<u64, CallError> {
-				let leaf_index = api
-					.block_num_to_leaf_index(&BlockId::hash(block_hash), &n)
-					.map_err(runtime_error_into_rpc_error)?
-					.map_err(mmr_error_into_rpc_error)?;
-				Ok(leaf_index)
-			})
-			.collect::<Result<Vec<u64>, _>>()?;
-
 		let (leaves, proof) = api
 			.generate_batch_proof_with_context(
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
-				leaf_indices,
+				block_numbers,
 			)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;

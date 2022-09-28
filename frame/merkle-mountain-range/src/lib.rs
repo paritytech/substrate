@@ -325,11 +325,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_batch_proof(
-		leaf_indices: Vec<LeafIndex>,
+		block_numbers: Vec<T::BlockNumber>,
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
+		let leaf_indices = block_numbers
+			.iter()
+			.map(|n| -> Result<LeafIndex, primitives::Error> {
+				let leaf_index = Self::block_num_to_leaf_index(*n)?;
+				Ok(leaf_index)
+			})
+			.collect::<Result<Vec<LeafIndex>, _>>()?;
+		
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_batch_proof(leaf_indices)
 	}
@@ -372,10 +380,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<LeafIndex, primitives::Error>
 	where
 		T: frame_system::Config,
-		T: pallet::Config,
 	{
 		// leaf_indx = block_num - (current_block_num - leaves_count) - 1;
-		let leaves_count = Pallet::<T>::mmr_leaves();
+		let leaves_count = Self::mmr_leaves();
 		let current_block_num = <frame_system::Pallet<T>>::block_number();
 		let diff = current_block_num.saturating_sub((leaves_count as u32).into());
 
