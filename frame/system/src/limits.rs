@@ -224,7 +224,7 @@ impl BlockWeights {
 		}
 		let mut error = ValidationErrors::default();
 
-		// TODO: Account for proof size weight in the assertions below
+		// TODO: account for proof size weight in the assertions below
 		for class in DispatchClass::all() {
 			let weights = self.per_class.get(*class);
 			let max_for_class = or_max(weights.max_total);
