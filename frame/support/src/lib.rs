@@ -100,7 +100,8 @@ impl TypeId for PalletId {
 }
 
 /// Generate a new type alias for [`storage::types::StorageValue`],
-/// [`storage::types::StorageMap`] and [`storage::types::StorageDoubleMap`].
+/// [`storage::types::StorageMap`], [`storage::types::StorageDoubleMap`]
+/// and [`storage::types::StorageNMap`].
 ///
 /// Useful for creating a *storage-like* struct for test and migrations.
 ///
@@ -154,6 +155,18 @@ macro_rules! generate_storage_alias {
 			>;
 		}
 	};
+	($pallet:ident, $name:ident => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			type $name = $crate::storage::types::StorageNMap<
+				[<$name Instance>],
+				(
+					$( $crate::storage::types::Key<$hasher, $key>, )+
+				),
+				$value,
+			>;
+		}
+	};
 	($pallet:ident, $name:ident => Value<$value:ty>) => {
 		$crate::paste::paste! {
 			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
@@ -189,6 +202,22 @@ macro_rules! generate_storage_alias {
 				$hasher1,
 				$key2,
 				$hasher2,
+				$value,
+			>;
+		}
+	};
+	(
+		$pallet:ident,
+		$name:ident<$t:ident : $bounds:tt> => NMap<$(($key:ty, $hasher:ty),)+ $value:ty>
+	) => {
+		$crate::paste::paste! {
+			$crate::generate_storage_alias!(@GENERATE_INSTANCE_STRUCT $pallet, $name);
+			#[allow(type_alias_bounds)]
+			type $name<$t : $bounds> = $crate::storage::types::StorageNMap<
+				[<$name Instance>],
+				(
+					$( $crate::storage::types::Key<$hasher, $key>, )+
+				),
 				$value,
 			>;
 		}
@@ -501,8 +530,11 @@ pub fn debug(data: &impl sp_std::fmt::Debug) {
 
 #[doc(inline)]
 pub use frame_support_procedural::{
-	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound
+	decl_storage, construct_runtime, transactional, RuntimeDebugNoBound,
 };
+
+#[doc(hidden)]
+pub use frame_support_procedural::__generate_dummy_part_checker;
 
 /// Derive [`Clone`] but do not bound any generic.
 ///
@@ -1005,7 +1037,10 @@ pub mod tests {
 			DoubleMap::insert(&key1, &(key2 + 1), &4u64);
 			DoubleMap::insert(&(key1 + 1), &key2, &4u64);
 			DoubleMap::insert(&(key1 + 1), &(key2 + 1), &4u64);
-			DoubleMap::remove_prefix(&key1);
+			assert!(matches!(
+				DoubleMap::remove_prefix(&key1, None),
+				sp_io::KillStorageResult::AllRemoved(0), // all in overlay
+			));
 			assert_eq!(DoubleMap::get(&key1, &key2), 0u64);
 			assert_eq!(DoubleMap::get(&key1, &(key2 + 1)), 0u64);
 			assert_eq!(DoubleMap::get(&(key1 + 1), &key2), 4u64);

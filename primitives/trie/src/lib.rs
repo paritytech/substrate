@@ -211,7 +211,7 @@ pub fn read_trie_value<L: TrieConfiguration, DB: hash_db::HashDBRef<L::Hash, tri
 	root: &TrieHash<L>,
 	key: &[u8]
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	Ok(TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&*db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the trie with given Query.
@@ -225,7 +225,7 @@ pub fn read_trie_value_with<
 	key: &[u8],
 	query: Q
 ) -> Result<Option<Vec<u8>>, Box<TrieError<L>>> {
-	Ok(TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&*db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Determine the empty trie root.
@@ -279,35 +279,6 @@ pub fn child_delta_trie_root<L: TrieConfiguration, I, A, B, DB, RD, V>(
 	)
 }
 
-/// Call `f` for all keys in a child trie.
-/// Aborts as soon as `f` returns false.
-pub fn for_keys_in_child_trie<L: TrieConfiguration, F: FnMut(&[u8]) -> bool, DB>(
-	keyspace: &[u8],
-	db: &DB,
-	root_slice: &[u8],
-	mut f: F
-) -> Result<(), Box<TrieError<L>>>
-	where
-		DB: hash_db::HashDBRef<L::Hash, trie_db::DBValue>
-{
-	let mut root = TrieHash::<L>::default();
-	// root is fetched from DB, not writable by runtime, so it's always valid.
-	root.as_mut().copy_from_slice(root_slice);
-
-	let db = KeySpacedDB::new(&*db, keyspace);
-	let trie = TrieDB::<L>::new(&db, &root)?;
-	let iter = trie.iter()?;
-
-	for x in iter {
-		let (key, _) = x?;
-		if !f(&key) {
-			break;
-		}
-	}
-
-	Ok(())
-}
-
 /// Record all keys for a given root.
 pub fn record_all_keys<L: TrieConfiguration, DB>(
 	db: &DB,
@@ -346,7 +317,7 @@ pub fn read_child_trie_value<L: TrieConfiguration, DB>(
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	Ok(TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// Read a value from the child trie with given query.
@@ -365,7 +336,7 @@ pub fn read_child_trie_value_with<L: TrieConfiguration, Q: Query<L::Hash, Item=D
 	root.as_mut().copy_from_slice(root_slice);
 
 	let db = KeySpacedDB::new(&*db, keyspace);
-	Ok(TrieDB::<L>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+	TrieDB::<L>::new(&db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))
 }
 
 /// `HashDB` implementation that append a encoded prefix (unique id bytes) in addition to the
@@ -467,7 +438,7 @@ impl<'a, DB, H, T> hash_db::AsHashDB<H, T> for KeySpacedDBMut<'a, DB, H> where
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	pub const EMPTY_TRIE: u8 = 0;
-	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
+	pub const NIBBLE_SIZE_BOUND: usize = u16::MAX as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;

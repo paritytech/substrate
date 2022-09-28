@@ -342,7 +342,7 @@ impl BigUint {
 			// step D3.0 Find an estimate of q[j], named qhat.
 			let (qhat, rhat) = {
 				// PROOF: this always fits into `Double`. In the context of Single = u8, and
-				// Double = u16, think of 255 * 256 + 255 which is just u16::max_value().
+				// Double = u16, think of 255 * 256 + 255 which is just u16::MAX.
 				let dividend =
 					Double::from(self_norm.get(j + n))
 						* B
@@ -668,14 +668,14 @@ pub mod tests {
 	fn can_try_build_numbers_from_types() {
 		use sp_std::convert::TryFrom;
 		assert_eq!(u64::try_from(with_limbs(1)).unwrap(), 1);
-		assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::max_value() as u64 + 2);
+		assert_eq!(u64::try_from(with_limbs(2)).unwrap(), u32::MAX as u64 + 2);
 		assert_eq!(
 			u64::try_from(with_limbs(3)).unwrap_err(),
 			"cannot fit a number into u64",
 		);
 		assert_eq!(
 			u128::try_from(with_limbs(3)).unwrap(),
-			u32::max_value() as u128 + u64::max_value() as u128 + 3
+			u32::MAX as u128 + u64::MAX as u128 + 3
 		);
 	}
 

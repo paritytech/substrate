@@ -97,7 +97,7 @@ impl Era {
 	/// Get the block number of the first block at which the era has ended.
 	pub fn death(self, current: u64) -> u64 {
 		match self {
-			Self::Immortal => u64::max_value(),
+			Self::Immortal => u64::MAX,
 			Self::Mortal(period, _) => self.birth(current) + period,
 		}
 	}
@@ -145,11 +145,11 @@ mod tests {
 	fn immortal_works() {
 		let e = Era::immortal();
 		assert_eq!(e.birth(0), 0);
-		assert_eq!(e.death(0), u64::max_value());
+		assert_eq!(e.death(0), u64::MAX);
 		assert_eq!(e.birth(1), 0);
-		assert_eq!(e.death(1), u64::max_value());
-		assert_eq!(e.birth(u64::max_value()), 0);
-		assert_eq!(e.death(u64::max_value()), u64::max_value());
+		assert_eq!(e.death(1), u64::MAX);
+		assert_eq!(e.birth(u64::MAX), 0);
+		assert_eq!(e.death(u64::MAX), u64::MAX);
 		assert!(e.is_immortal());
 
 		assert_eq!(e.encode(), vec![0u8]);

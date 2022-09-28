@@ -39,7 +39,7 @@ pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
 
 impl<T, S> Decode for BoundedBTreeSet<T, S>
 where
-	BTreeSet<T>: Decode,
+	T: Decode + Ord,
 	S: Get<u32>,
 {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
@@ -103,14 +103,15 @@ where
 		self.0.clear()
 	}
 
-	/// Exactly the same semantics as [`BTreeSet::insert`], but returns an `Err` (and is a noop) if the
-	/// new length of the set exceeds `S`.
-	pub fn try_insert(&mut self, item: T) -> Result<(), ()> {
-		if self.len() < Self::bound() {
-			self.0.insert(item);
-			Ok(())
+	/// Exactly the same semantics as [`BTreeSet::insert`], but returns an `Err` (and is a noop) if
+	/// the new length of the set exceeds `S`.
+	///
+	/// In the `Err` case, returns the inserted item so it can be further used without cloning.
+	pub fn try_insert(&mut self, item: T) -> Result<bool, T> {
+		if self.len() < Self::bound() || self.0.contains(&item) {
+			Ok(self.0.insert(item))
 		} else {
-			Err(())
+			Err(item)
 		}
 	}
 
@@ -392,5 +393,50 @@ pub mod test {
 			BoundedBTreeSet::<u32, Four>::decode(&mut &v.encode()[..]),
 			Err("BoundedBTreeSet exceeds its limit".into()),
 		);
+	}
+
+	#[test]
+	fn unequal_eq_impl_insert_works() {
+		// given a struct with a strange notion of equality
+		#[derive(Debug)]
+		struct Unequal(u32, bool);
+
+		impl PartialEq for Unequal {
+			fn eq(&self, other: &Self) -> bool {
+				self.0 == other.0
+			}
+		}
+		impl Eq for Unequal {}
+
+		impl Ord for Unequal {
+			fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+				self.0.cmp(&other.0)
+			}
+		}
+
+		impl PartialOrd for Unequal {
+			fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+				Some(self.cmp(other))
+			}
+		}
+
+		let mut set = BoundedBTreeSet::<Unequal, Four>::new();
+
+		// when the set is full
+
+		for i in 0..4 {
+			set.try_insert(Unequal(i, false)).unwrap();
+		}
+
+		// can't insert a new distinct member
+		set.try_insert(Unequal(5, false)).unwrap_err();
+
+		// but _can_ insert a distinct member which compares equal, though per the documentation,
+		// neither the set length nor the actual member are changed
+		set.try_insert(Unequal(0, true)).unwrap();
+		assert_eq!(set.len(), 4);
+		let zero_item = set.get(&Unequal(0, true)).unwrap();
+		assert_eq!(zero_item.0, 0);
+		assert_eq!(zero_item.1, false);
 	}
 }

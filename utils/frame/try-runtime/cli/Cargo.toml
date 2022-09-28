@@ -29,6 +29,7 @@ sp-blockchain = { version = "3.0.0", path = "../../../../primitives/blockchain" 
 sp-runtime = { version = "3.0.0", path = "../../../../primitives/runtime" }
 sp-externalities = { version = "0.9.0", path = "../../../../primitives/externalities" }
 sp-core = { version = "3.0.0", path = "../../../../primitives/core" }
+sp-io = { version = "3.0.0", path = "../../../../primitives/io" }
 sp-keystore = { version = "0.9.0", path = "../../../../primitives/keystore" }
 frame-try-runtime = { version = "0.9.0", path = "../../../../frame/try-runtime" }
 

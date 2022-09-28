@@ -24,7 +24,7 @@
 use crate::sp_std::prelude::*;
 use codec::{Codec, Encode, Decode};
 pub use sp_core::storage::{ChildInfo, ChildType};
-pub use crate::sp_io::KillChildStorageResult;
+pub use crate::sp_io::KillStorageResult;
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Decode + Sized>(
@@ -174,7 +174,7 @@ pub fn exists(
 pub fn kill_storage(
 	child_info: &ChildInfo,
 	limit: Option<u32>,
-) -> KillChildStorageResult {
+) -> KillStorageResult {
 	match child_info.child_type() {
 		ChildType::ParentKeyId => sp_io::default_child_storage::storage_kill(
 			child_info.storage_key(),

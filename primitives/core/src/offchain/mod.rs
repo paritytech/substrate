@@ -282,7 +282,7 @@ impl Capabilities {
 
 	/// Return an object representing all capabilities enabled.
 	pub fn all() -> Self {
-		Self(u8::max_value())
+		Self(u8::MAX)
 	}
 
 	/// Return capabilities for rich offchain calls.

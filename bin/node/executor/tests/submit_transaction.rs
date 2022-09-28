@@ -256,12 +256,16 @@ fn submitted_transaction_should_be_valid() {
 		<frame_system::Account<Runtime>>::insert(&address, account);
 
 		// check validity
-		let res = Executive::validate_transaction(source, extrinsic).unwrap();
+		let res = Executive::validate_transaction(
+			source,
+			extrinsic,
+			frame_system::BlockHash::<Runtime>::get(0),
+		).unwrap();
 
 		// We ignore res.priority since this number can change based on updates to weights and such.
 		assert_eq!(res.requires, Vec::<TransactionTag>::new());
 		assert_eq!(res.provides, vec![(address, 0).encode()]);
-		assert_eq!(res.longevity, 2048);
+		assert_eq!(res.longevity, 2047);
 		assert_eq!(res.propagate, true);
 	});
 }

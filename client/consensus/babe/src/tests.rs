@@ -473,6 +473,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			can_author_with: sp_consensus::AlwaysCanAuthor,
 			justification_sync_link: (),
 			block_proposal_slot_portion: SlotProportion::new(0.5),
+			max_block_proposal_slot_portion: None,
 			telemetry: None,
 		}).expect("Starts babe"));
 	}

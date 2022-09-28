@@ -29,7 +29,7 @@ use sp_blockchain::HeaderBackend;
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{traits::Block as BlockT, Justifications, ConsensusEngineId};
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
-use sc_transaction_pool::txpool;
+use sc_transaction_pool::{ChainApi, Pool};
 use std::{sync::Arc, marker::PhantomData};
 use prometheus_endpoint::Registry;
 
@@ -94,7 +94,7 @@ pub fn import_queue<Block, Transaction>(
 }
 
 /// Params required to start the instant sealing authorship task.
-pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC, CS, CIDP> {
+pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: ChainApi, SC, CS, CIDP> {
 	/// Block import instance for well. importing blocks.
 	pub block_import: BI,
 
@@ -105,7 +105,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool
 	pub client: Arc<C>,
 
 	/// Shared reference to the transaction pool.
-	pub pool: Arc<txpool::Pool<A>>,
+	pub pool: Arc<Pool<A>>,
 
 	/// Stream<Item = EngineCommands>, Basically the receiving end of a channel for sending commands to
 	/// the authorship task.
@@ -122,7 +122,7 @@ pub struct ManualSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool
 }
 
 /// Params required to start the manual sealing authorship task.
-pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpool::ChainApi, SC, CIDP> {
+pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: ChainApi, SC, CIDP> {
 	/// Block import instance for well. importing blocks.
 	pub block_import: BI,
 
@@ -133,7 +133,7 @@ pub struct InstantSealParams<B: BlockT, BI, E, C: ProvideRuntimeApi<B>, A: txpoo
 	pub client: Arc<C>,
 
 	/// Shared reference to the transaction pool.
-	pub pool: Arc<txpool::Pool<A>>,
+	pub pool: Arc<Pool<A>>,
 
 	/// SelectChain strategy.
 	pub select_chain: SC,
@@ -159,7 +159,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, A, SC, CS, CIDP>(
 	}: ManualSealParams<B, BI, E, C, A, SC, CS, CIDP>
 )
 	where
-		A: txpool::ChainApi<Block=B> + 'static,
+		A: ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
 		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
 			+ Send + Sync + 'static,
@@ -227,7 +227,7 @@ pub async fn run_instant_seal<B, BI, CB, E, C, A, SC, CIDP>(
 	}: InstantSealParams<B, BI, E, C, A, SC, CIDP>
 )
 	where
-		A: txpool::ChainApi<Block=B> + 'static,
+		A: ChainApi<Block=B> + 'static,
 		B: BlockT + 'static,
 		BI: BlockImport<B, Error = sp_consensus::Error, Transaction = sp_api::TransactionFor<C, B>>
 			+ Send + Sync + 'static,
@@ -275,7 +275,7 @@ mod tests {
 		AccountKeyring::*,
 		TestClientBuilder,
 	};
-	use sc_transaction_pool::{BasicPool, RevalidationType, txpool::Options};
+	use sc_transaction_pool::{BasicPool, RevalidationType, Options};
 	use substrate_test_runtime_transaction_pool::{TestApi, uxt};
 	use sp_transaction_pool::{TransactionPool, MaintainedTransactionPool, TransactionSource};
 	use sp_runtime::generic::BlockId;

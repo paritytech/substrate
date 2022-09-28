@@ -90,8 +90,8 @@ pub enum Error {
 	#[error("Failed to get runtime version: {0}")]
 	VersionInvalid(String),
 
-	#[error("Genesis config provided is invalid")]
-	GenesisInvalid,
+	#[error("Provided state is invalid")]
+	InvalidState,
 
 	#[error("error decoding justification for header")]
 	JustificationDecode,

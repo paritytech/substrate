@@ -30,7 +30,7 @@ use sp_externalities::Extensions;
 use sp_core::{
 	NativeOrEncoded, NeverNativeValue, traits::{CodeExecutor, SpawnNamed, RuntimeCode},
 };
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, StorageTransactionCache};
 use sc_client_api::{backend, call_executor::CallExecutor};
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
 
@@ -173,8 +173,6 @@ where
 	}
 
 	fn contextual_call<
-		'a,
-		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -183,7 +181,6 @@ where
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
-		initialize_block_fn: IB,
 		at: &BlockId<Block>,
 		method: &str,
 		call_data: &[u8],
@@ -191,21 +188,11 @@ where
 		storage_transaction_cache: Option<&RefCell<
 			StorageTransactionCache<Block, B::State>
 		>>,
-		initialize_block: InitializeBlock<'a, Block>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
 	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error> where ExecutionManager<EM>: Clone {
-		match initialize_block {
-			InitializeBlock::Do(ref init_block)
-				if init_block.borrow().as_ref().map(|id| id != at).unwrap_or(true) => {
-				initialize_block_fn()?;
-			},
-			// We don't need to initialize the runtime at a block.
-			_ => {},
-		}
-
 		let changes_trie_state = backend::changes_tries_state_at_block(at, self.backend.changes_trie_storage())?;
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 

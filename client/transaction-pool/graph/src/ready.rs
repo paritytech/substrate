@@ -659,7 +659,7 @@ mod tests {
 			bytes: 1,
 			hash: 5,
 			priority: 1,
-			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			valid_till: u64::MAX,	// use the max here for testing.
 			requires: vec![tx1.provides[0].clone()],
 			provides: vec![],
 			propagate: true,
@@ -692,7 +692,7 @@ mod tests {
 			bytes: 1,
 			hash: 5,
 			priority: 1,
-			valid_till: u64::max_value(),	// use the max_value() here for testing.
+			valid_till: u64::MAX,	// use the max here for testing.
 			requires: vec![],
 			provides: vec![],
 			propagate: true,

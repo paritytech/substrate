@@ -30,7 +30,7 @@ use sc_executor::{RuntimeVersion, NativeVersion};
 use sp_externalities::Extensions;
 use sp_core::NativeOrEncoded;
 
-use sp_api::{ProofRecorder, InitializeBlock, StorageTransactionCache};
+use sp_api::{ProofRecorder, StorageTransactionCache};
 use crate::execution_extensions::ExecutionExtensions;
 
 /// Executor Provider
@@ -71,8 +71,6 @@ pub trait CallExecutor<B: BlockT> {
 	/// Before executing the method, passed header is installed as the current header
 	/// of the execution context.
 	fn contextual_call<
-		'a,
-		IB: Fn() -> sp_blockchain::Result<()>,
 		EM: Fn(
 			Result<NativeOrEncoded<R>, Self::Error>,
 			Result<NativeOrEncoded<R>, Self::Error>
@@ -81,7 +79,6 @@ pub trait CallExecutor<B: BlockT> {
 		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
 	>(
 		&self,
-		initialize_block_fn: IB,
 		at: &BlockId<B>,
 		method: &str,
 		call_data: &[u8],
@@ -89,7 +86,6 @@ pub trait CallExecutor<B: BlockT> {
 		storage_transaction_cache: Option<&RefCell<
 			StorageTransactionCache<B, <Self::Backend as crate::backend::Backend<B>>::State>,
 		>>,
-		initialize_block: InitializeBlock<'a, B>,
 		execution_manager: ExecutionManager<EM>,
 		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,

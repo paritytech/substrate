@@ -141,7 +141,7 @@ impl Encode for Data {
 			Data::Raw(ref x) => {
 				let l = x.len().min(32);
 				let mut r = vec![l as u8 + 1; l + 1];
-				&mut r[1..].copy_from_slice(&x[..l as usize]);
+				r[1..].copy_from_slice(&x[..l as usize]);
 				r
 			}
 			Data::BlakeTwo256(ref h) => once(34u8).chain(h.iter().cloned()).collect(),
@@ -1161,4 +1161,3 @@ impl<T: Config> Pallet<T> {
 			.collect()
 	}
 }
-

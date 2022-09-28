@@ -43,10 +43,12 @@ type KeyPair = (StorageKey, StorageData);
 
 const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io";
-const BATCH_SIZE: usize = 512;
+const BATCH_SIZE: usize = 1000;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	RpcApi<B: BlockT> {
+		#[rpc(method = "state_getStorage", positional_params)]
+		fn get_storage(prefix: StorageKey, hash: Option<B::Hash>) -> StorageData;
 		#[rpc(method = "state_getKeysPaged", positional_params)]
 		fn get_keys_paged(
 			prefix: Option<StorageKey>,
@@ -107,7 +109,7 @@ impl From<String> for Transport {
 /// A state snapshot config may be present and will be written to in that case.
 #[derive(Clone)]
 pub struct OnlineConfig<B: BlockT> {
-	/// The block number at which to connect. Will be latest finalized head if not provided.
+	/// The block hash at which to get the runtime state. Will be latest finalized head if not provided.
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
@@ -159,8 +161,11 @@ impl Default for SnapshotConfig {
 pub struct Builder<B: BlockT> {
 	/// Custom key-pairs to be injected into the externalities.
 	inject: Vec<KeyPair>,
-	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must be given.
+	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
+	/// be given.
 	hashed_prefixes: Vec<Vec<u8>>,
+	/// Storage entry keys to be injected into the externalities. The *hashed* key must be given.
+	hashed_keys: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
 	mode: Mode<B>,
 }
@@ -169,7 +174,12 @@ pub struct Builder<B: BlockT> {
 // that.
 impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
-		Self { inject: Default::default(), mode: Default::default(), hashed_prefixes: Default::default() }
+		Self {
+			inject: Default::default(),
+			mode: Default::default(),
+			hashed_prefixes: Default::default(),
+			hashed_keys: Default::default(),
+		}
 	}
 }
 
@@ -192,6 +202,17 @@ impl<B: BlockT> Builder<B> {
 
 // RPC methods
 impl<B: BlockT> Builder<B> {
+	async fn rpc_get_storage(
+		&self,
+		key: StorageKey,
+		maybe_at: Option<B::Hash>,
+	) -> Result<StorageData, &'static str> {
+		trace!(target: LOG_TARGET, "rpc: get_storage");
+		RpcApi::<B>::get_storage(self.as_online().rpc_client(), key, maybe_at).await.map_err(|e| {
+			error!("Error = {:?}", e);
+			"rpc get_storage failed."
+		})
+	}
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
@@ -281,7 +302,7 @@ impl<B: BlockT> Builder<B> {
 			let values = client.batch_request::<Option<StorageData>>(batch)
 				.await
 				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "failed to execute batch {:?} due to {:?}", chunk_keys, e);
+					log::error!(target: LOG_TARGET, "failed to execute batch: {:?}. Error: {:?}", chunk_keys, e);
 					"batch failed."
 				})?;
 			assert_eq!(chunk_keys.len(), values.len());
@@ -356,9 +377,21 @@ impl<B: BlockT> Builder<B> {
 		};
 
 		for prefix in &self.hashed_prefixes {
-			info!(target: LOG_TARGET, "adding data for hashed prefix: {:?}", HexDisplay::from(prefix));
-			let additional_key_values = self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
+			debug!(
+				target: LOG_TARGET,
+				"adding data for hashed prefix: {:?}",
+				HexDisplay::from(prefix)
+			);
+			let additional_key_values =
+				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
 			keys_and_values.extend(additional_key_values);
+		}
+
+		for key in &self.hashed_keys {
+			let key = StorageKey(key.to_vec());
+			debug!(target: LOG_TARGET, "adding data for hashed key: {:?}", HexDisplay::from(&key));
+			let value = self.rpc_get_storage(key.clone(), Some(at)).await?;
+			keys_and_values.push((key, value));
 		}
 
 		Ok(keys_and_values)
@@ -400,7 +433,7 @@ impl<B: BlockT> Builder<B> {
 
 		info!(
 			target: LOG_TARGET,
-			"extending externalities with {} manually injected keys",
+			"extending externalities with {} manually injected key-values",
 			self.inject.len()
 		);
 		base_kv.extend(self.inject.clone());
@@ -416,16 +449,26 @@ impl<B: BlockT> Builder<B> {
 	}
 
 	/// Inject a manual list of key and values to the storage.
-	pub fn inject(mut self, injections: &[KeyPair]) -> Self {
+	pub fn inject_key_value(mut self, injections: &[KeyPair]) -> Self {
 		for i in injections {
 			self.inject.push(i.clone());
 		}
 		self
 	}
 
-	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed. 
+	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
+	///
+	/// This should be used to inject a "PREFIX", like a storage (double) map.
 	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
 		self.hashed_prefixes.push(hashed.to_vec());
+		self
+	}
+
+	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
+	///
+	/// This should be used to inject a "KEY", like a storage value.
+	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
+		self.hashed_keys.push(hashed.to_vec());
 		self
 	}
 

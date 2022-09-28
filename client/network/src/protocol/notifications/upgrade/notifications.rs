@@ -159,7 +159,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 			}
 
 			let mut codec = UviBytes::default();
-			codec.set_max_len(usize::try_from(self.max_notification_size).unwrap_or(usize::max_value()));
+			codec.set_max_len(usize::try_from(self.max_notification_size).unwrap_or(usize::MAX));
 
 			let substream = NotificationsInSubstream {
 				socket: Framed::new(socket, codec),
@@ -390,7 +390,7 @@ where TSubstream: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 			}
 
 			let mut codec = UviBytes::default();
-			codec.set_max_len(usize::try_from(self.max_notification_size).unwrap_or(usize::max_value()));
+			codec.set_max_len(usize::try_from(self.max_notification_size).unwrap_or(usize::MAX));
 
 			Ok(NotificationsOutOpen {
 				handshake,

@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::params::node_key_params::NodeKeyParams;
+use crate::arg_enums::SyncMode;
 use sc_network::{
 	config::{NetworkConfiguration, NodeKeyConfig, NonReservedPeerMode, SetConfig, TransportConfig},
 	multiaddr::Protocol,
@@ -125,6 +126,13 @@ pub struct NetworkParams {
 	/// Join the IPFS network and serve transactions over bitswap protocol.
 	#[structopt(long)]
 	pub ipfs_server: bool,
+
+	/// Blockchain syncing mode.
+	/// Full - Download and validate full blockchain history (Default).
+	/// Fast - Download blocks and the latest state only.
+	/// FastUnsafe - Same as Fast, but do skips downloading state proofs.
+	#[structopt(long, default_value = "Full")]
+	pub sync: SyncMode,
 }
 
 impl NetworkParams {
@@ -218,6 +226,7 @@ impl NetworkParams {
 			kademlia_disjoint_query_paths: self.kademlia_disjoint_query_paths,
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
+			sync_mode: self.sync.into(),
 		}
 	}
 }

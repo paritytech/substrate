@@ -167,15 +167,6 @@ where
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
-	/// Refund previously charged gas back to the gas meter.
-	///
-	/// This can be used if a gas worst case estimation must be charged before
-	/// performing a certain action. This way the difference can be refundend when
-	/// the worst case did not happen.
-	pub fn refund(&mut self, amount: ChargedAmount) {
-		self.gas_left = self.gas_left.saturating_add(amount.0).min(self.gas_limit)
-	}
-
 	/// Returns how much gas was used.
 	pub fn gas_spent(&self) -> Weight {
 		self.gas_limit - self.gas_left

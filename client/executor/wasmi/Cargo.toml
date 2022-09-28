@@ -18,7 +18,7 @@ log = "0.4.8"
 wasmi = "0.9.0"
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 sc-executor-common = { version = "0.9.0", path = "../common" }
+sc-allocator = { version = "3.0.0", path = "../../allocator" }
 sp-wasm-interface = { version = "3.0.0", path = "../../../primitives/wasm-interface" }
 sp-runtime-interface = { version = "3.0.0", path = "../../../primitives/runtime-interface" }
 sp-core = { version = "3.0.0", path = "../../../primitives/core" }
-sp-allocator = { version = "3.0.0", path = "../../../primitives/allocator" }

@@ -60,8 +60,11 @@
 //!   fail.
 //!
 //! - Sizes of allocations are rounded up to the nearest order. That is, an allocation of 2,00001 MiB
-//!   will be put into the bucket of 4 MiB. Therefore, typically more than half of the space in allocation
-//!   will be wasted. This is more pronounced with larger allocation sizes.
+//!   will be put into the bucket of 4 MiB. Therefore, any allocation of size `(N, 2N]` will take
+//!   up to `2N`, thus assuming a uniform distribution of allocation sizes, the average amount in use
+//!   of a `2N` space on the heap will be `(3N + ε) / 2`. So average utilisation is going to be around
+//!   75% (`(3N + ε) / 2 / 2N`) meaning that around 25% of the space in allocation will be wasted.
+//!   This is more pronounced (in terms of absolute heap amounts) with larger allocation sizes.
 
 use crate::Error;
 use sp_std::{mem, convert::{TryFrom, TryInto}, ops::{Range, Index, IndexMut}};
@@ -176,7 +179,7 @@ impl Order {
 }
 
 /// A special magic value for a pointer in a link that denotes the end of the linked list.
-const NIL_MARKER: u32 = u32::max_value();
+const NIL_MARKER: u32 = u32::MAX;
 
 /// A link between headers in the free list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -492,7 +495,7 @@ impl Memory for [u8] {
 		let range =
 			heap_range(ptr, 8, self.len()).ok_or_else(|| error("write out of heap bounds"))?;
 		let bytes = val.to_le_bytes();
-		&mut self[range].copy_from_slice(&bytes[..]);
+		self[range].copy_from_slice(&bytes[..]);
 		Ok(())
 	}
 	fn size(&self) -> u32 {

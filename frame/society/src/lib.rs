@@ -871,7 +871,7 @@ decl_module! {
 			Founder::<T, I>::kill();
 			Rules::<T, I>::kill();
 			Candidates::<T, I>::kill();
-			SuspendedCandidates::<T, I>::remove_all();
+			SuspendedCandidates::<T, I>::remove_all(None);
 			Self::deposit_event(RawEvent::Unfounded(founder));
 		}
 
@@ -1402,7 +1402,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 			}).collect::<Vec<_>>();
 
 			// Clean up all votes.
-			<Votes<T, I>>::remove_all();
+			<Votes<T, I>>::remove_all(None);
 
 			// Reward one of the voters who voted the right way.
 			if !total_slash.is_zero() {
@@ -1570,7 +1570,7 @@ impl<T: Config<I>, I: Instance> Module<T, I> {
 				}
 
 				// Clean up all votes.
-				<DefenderVotes<T, I>>::remove_all();
+				<DefenderVotes<T, I>>::remove_all(None);
 			}
 
 			// Avoid challenging if there's only two members since we never challenge the Head or

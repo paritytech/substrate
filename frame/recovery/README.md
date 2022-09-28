@@ -1,6 +1,6 @@
 # Recovery Pallet
 
-- [`recovery::Trait`](https://docs.rs/pallet-recovery/latest/pallet_recovery/trait.Trait.html)
+- [`recovery::Config`](https://docs.rs/pallet-recovery/latest/pallet_recovery/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-recovery/latest/pallet_recovery/enum.Call.html)
 
 ## Overview

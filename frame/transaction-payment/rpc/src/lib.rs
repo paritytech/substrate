@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! RPC interface for the transaction payment module.
+//! RPC interface for the transaction payment pallet.
 
 use std::sync::Arc;
 use std::convert::TryInto;

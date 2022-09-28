@@ -28,6 +28,25 @@ pub struct StorageValueRef<'a> {
 	kind: StorageKind,
 }
 
+/// Reason for not being able to provide the stored value
+#[derive(Debug, PartialEq, Eq)]
+pub enum StorageRetrievalError {
+	/// Value found but undecodable
+	Undecodable,
+}
+
+/// Possible errors when mutating a storage value.
+#[derive(Debug, PartialEq, Eq)]
+pub enum MutateStorageError<T, E> {
+	/// The underlying db failed to update due to a concurrent modification.
+	/// Contains the new value that was not stored.
+	ConcurrentModification(T),
+	/// The function given to us to create the value to be stored failed.
+	/// May be used to signal that having looked at the existing value,
+	/// they don't want to mutate it.
+	ValueFunctionFailed(E)
+}
+
 impl<'a> StorageValueRef<'a> {
 	/// Create a new reference to a value in the persistent local storage.
 	pub fn persistent(key: &'a [u8]) -> Self {
@@ -58,30 +77,40 @@ impl<'a> StorageValueRef<'a> {
 	/// Retrieve & decode the value from storage.
 	///
 	/// Note that if you want to do some checks based on the value
-	/// and write changes after that you should rather be using `mutate`.
+	/// and write changes after that, you should rather be using `mutate`.
 	///
-	/// The function returns `None` if the value was not found in storage,
-	/// otherwise a decoding of the value to requested type.
-	pub fn get<T: codec::Decode>(&self) -> Option<Option<T>> {
+	/// Returns the value if stored.
+	/// Returns an error if the value could not be decoded.
+	pub fn get<T: codec::Decode>(&self) -> Result<Option<T>, StorageRetrievalError> {
 		sp_io::offchain::local_storage_get(self.kind, self.key)
-			.map(|val| T::decode(&mut &*val).ok())
+			.map(|val| T::decode(&mut &*val)
+			.map_err(|_| StorageRetrievalError::Undecodable))
+			.transpose()
 	}
 
-	/// Retrieve & decode the value and set it to a new one atomically.
+	/// Retrieve & decode the current value and set it to a new value atomically.
 	///
-	/// Function `f` should return a new value that we should attempt to write to storage.
+	/// Function `mutate_val` takes as input the current value and should
+	/// return a new value that is attempted to be written to storage.
+	///
 	/// This function returns:
-	/// 1. `Ok(Ok(T))` in case the value has been successfully set.
-	/// 2. `Ok(Err(T))` in case the value was calculated by the passed closure `f`,
-	///    but it could not be stored.
-	/// 3. `Err(_)` in case `f` returns an error.
-	pub fn mutate<T, E, F>(&self, f: F) -> Result<Result<T, T>, E> where
+	/// 1. `Ok(T)` in case the value has been successfully set.
+	/// 2. `Err(MutateStorageError::ConcurrentModification(T))` in case the value was calculated
+	/// by the passed closure `mutate_val`, but it could not be stored.
+	/// 3. `Err(MutateStorageError::ValueFunctionFailed(_))` in case `mutate_val` returns an error.
+	pub fn mutate<T, E, F>(&self, mutate_val: F) -> Result<T, MutateStorageError<T,E>> where
 		T: codec::Codec,
-		F: FnOnce(Option<Option<T>>) -> Result<T, E>
+		F: FnOnce(Result<Option<T>, StorageRetrievalError>) -> Result<T, E>
 	{
 		let value = sp_io::offchain::local_storage_get(self.kind, self.key);
-		let decoded = value.as_deref().map(|mut v| T::decode(&mut v).ok());
-		let val = f(decoded)?;
+		let decoded = value.as_deref()
+			.map(|mut bytes| {
+				T::decode(&mut bytes)
+					.map_err(|_| StorageRetrievalError::Undecodable)
+			}).transpose();
+
+		let val = mutate_val(decoded).map_err(|err| MutateStorageError::ValueFunctionFailed(err))?;
+
 		let set = val.using_encoded(|new_val| {
 			sp_io::offchain::local_storage_compare_and_set(
 				self.kind,
@@ -90,11 +119,10 @@ impl<'a> StorageValueRef<'a> {
 				new_val,
 			)
 		});
-
 		if set {
-			Ok(Ok(val))
+			Ok(val)
 		} else {
-			Ok(Err(val))
+			Err(MutateStorageError::ConcurrentModification(val))
 		}
 	}
 }
@@ -117,12 +145,12 @@ mod tests {
 		t.execute_with(|| {
 			let val = StorageValue::persistent(b"testval");
 
-			assert_eq!(val.get::<u32>(), None);
+			assert_eq!(val.get::<u32>(), Ok(None));
 
 			val.set(&15_u32);
 
-			assert_eq!(val.get::<u32>(), Some(Some(15_u32)));
-			assert_eq!(val.get::<Vec<u8>>(), Some(None));
+			assert_eq!(val.get::<u32>(), Ok(Some(15_u32)));
+			assert_eq!(val.get::<Vec<u8>>(), Err(StorageRetrievalError::Undecodable));
 			assert_eq!(
 				state.read().persistent_storage.get(b"testval"),
 				Some(vec![15_u8, 0, 0, 0])
@@ -140,12 +168,12 @@ mod tests {
 			let val = StorageValue::persistent(b"testval");
 
 			let result = val.mutate::<u32, (), _>(|val| {
-				assert_eq!(val, None);
+				assert_eq!(val, Ok(None));
 
 				Ok(16_u32)
 			});
-			assert_eq!(result, Ok(Ok(16_u32)));
-			assert_eq!(val.get::<u32>(), Some(Some(16_u32)));
+			assert_eq!(result, Ok(16_u32));
+			assert_eq!(val.get::<u32>(), Ok(Some(16_u32)));
 			assert_eq!(
 				state.read().persistent_storage.get(b"testval"),
 				Some(vec![16_u8, 0, 0, 0])
@@ -153,10 +181,10 @@ mod tests {
 
 			// mutate again, but this time early-exit.
 			let res = val.mutate::<u32, (), _>(|val| {
-				assert_eq!(val, Some(Some(16_u32)));
+				assert_eq!(val, Ok(Some(16_u32)));
 				Err(())
 			});
-			assert_eq!(res, Err(()));
+			assert_eq!(res, Err(MutateStorageError::ValueFunctionFailed(())));
 		})
 	}
 }

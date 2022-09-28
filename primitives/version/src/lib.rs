@@ -198,6 +198,11 @@ impl RuntimeVersion {
 	) -> bool {
 		self.apis.iter().any(|(s, v)| s == id && predicate(*v))
 	}
+
+	/// Returns the api version found for api with `id`.
+	pub fn api_version(&self, id: &ApiId) -> Option<u32> {
+		self.apis.iter().find_map(|a| (a.0 == *id).then(|| a.1))
+	}
 }
 
 #[cfg(feature = "std")]

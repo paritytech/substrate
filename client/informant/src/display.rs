@@ -93,10 +93,19 @@ impl<B: BlockT> InformantDisplay<B> {
 				(diff_bytes_inbound, diff_bytes_outbound)
 			};
 
-		let (level, status, target) = match (net_status.sync_state, net_status.best_seen_block) {
-			(SyncState::Idle, _) => ("💤", "Idle".into(), "".into()),
-			(SyncState::Downloading, None) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
-			(SyncState::Downloading, Some(n)) => (
+		let (level, status, target) = match (
+			net_status.sync_state,
+			net_status.best_seen_block,
+			net_status.state_sync
+		) {
+			(_, _, Some(state)) => (
+				"⚙️ ",
+				"Downloading state".into(),
+				format!(", {}%, ({:.2}) Mib", state.percentage, (state.size as f32) / (1024f32 * 1024f32)),
+			),
+			(SyncState::Idle, _, _) => ("💤", "Idle".into(), "".into()),
+			(SyncState::Downloading, None, _) => ("⚙️ ", format!("Preparing{}", speed), "".into()),
+			(SyncState::Downloading, Some(n), None) => (
 				"⚙️ ",
 				format!("Syncing{}", speed),
 				format!(", target=#{}", n),
@@ -170,7 +179,7 @@ fn speed<B: BlockT>(
 		// algebraic approach and we stay within the realm of integers.
 		let one_thousand = NumberFor::<B>::from(1_000u32);
 		let elapsed = NumberFor::<B>::from(
-			<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::max_value())
+			<u32 as TryFrom<_>>::try_from(elapsed_ms).unwrap_or(u32::MAX)
 		);
 
 		let speed = diff.saturating_mul(one_thousand).checked_div(&elapsed)

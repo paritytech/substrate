@@ -84,7 +84,7 @@ trait ChainBackend<Client, Block: BlockT>: Send + Sync + 'static
 				// FIXME <2329>: Database seems to limit the block number to u32 for no reason
 				let block_num: u32 = num_or_hex.try_into().map_err(|_| {
 					Error::from(format!(
-						"`{:?}` > u32::max_value(), the max block number is u32.",
+						"`{:?}` > u32::MAX, the max block number is u32.",
 						num_or_hex
 					))
 				})?;

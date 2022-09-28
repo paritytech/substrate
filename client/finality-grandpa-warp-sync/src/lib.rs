@@ -40,7 +40,8 @@ pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBloc
 	backend: Arc<TBackend>,
 	authority_set: SharedAuthoritySet<TBlock::Hash, NumberFor<TBlock>>,
 ) -> RequestResponseConfig
-	where NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
+where
+	NumberFor<TBlock>: sc_finality_grandpa::BlockNumberOps,
 {
 	let protocol_id = config.protocol_id();
 
@@ -54,7 +55,7 @@ pub fn request_response_config_for_chain<TBlock: BlockT, TBackend: Backend<TBloc
 			backend.clone(),
 			authority_set,
 		);
-		spawn_handle.spawn("grandpa_warp_sync_request_handler", handler.run());
+		spawn_handle.spawn("grandpa-warp-sync", handler.run());
 		request_response_config
 	}
 }

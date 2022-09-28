@@ -46,7 +46,7 @@ Copy and paste this template from frame/example/src/lib.rs into file
 // Include the following links that shows what trait needs to be implemented to use the pallet
 // and the supported dispatchables that are documented in the Call enum.
 
-- \[`<INSERT_CUSTOM_PALLET_NAME>::Trait`](https://docs.rs/pallet-example/latest/pallet_example/trait.Trait.html)
+- \[`<INSERT_CUSTOM_PALLET_NAME>::Config`](https://docs.rs/pallet-example/latest/pallet_example/trait.Config.html)
 - \[`Call`](https://docs.rs/pallet-example/latest/pallet_example/enum.Call.html)
 - \[`Module`](https://docs.rs/pallet-example/latest/pallet_example/struct.Module.html)
 

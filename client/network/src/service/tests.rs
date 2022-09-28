@@ -18,6 +18,7 @@
 
 use crate::{config, Event, NetworkService, NetworkWorker};
 use crate::block_request_handler::BlockRequestHandler;
+use crate::state_request_handler::StateRequestHandler;
 use crate::light_client_requests::handler::LightClientRequestHandler;
 
 use libp2p::PeerId;
@@ -107,6 +108,16 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		protocol_config
 	};
 
+	let state_request_protocol_config = {
+		let (handler, protocol_config) = StateRequestHandler::new(
+			&protocol_id,
+			client.clone(),
+			50,
+		);
+		async_std::task::spawn(handler.run().boxed());
+		protocol_config
+	};
+
 	let light_client_request_protocol_config = {
 		let (handler, protocol_config) = LightClientRequestHandler::new(
 			&protocol_id,
@@ -131,6 +142,7 @@ fn build_test_full_node(config: config::NetworkConfiguration)
 		),
 		metrics_registry: None,
 		block_request_protocol_config,
+		state_request_protocol_config,
 		light_client_request_protocol_config,
 	})
 	.unwrap();
@@ -333,7 +345,7 @@ fn lots_of_incoming_peers_works() {
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
 				set_config: config::SetConfig {
-					in_peers: u32::max_value(),
+					in_peers: u32::MAX,
 					.. Default::default()
 				},
 			}

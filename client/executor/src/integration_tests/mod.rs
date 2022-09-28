@@ -15,6 +15,9 @@
 
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#[cfg(target_os = "linux")]
+mod linux;
 mod sandbox;
 
 use std::sync::Arc;
@@ -583,6 +586,25 @@ fn returns_mutable_static(wasm_method: WasmExecutionMethod) {
 	// a sign that the wasm runtime preserves the memory content.
 	let res = instance.call_export("returns_mutable_static", &[0]).unwrap();
 	assert_eq!(33, u64::decode(&mut &res[..]).unwrap());
+}
+
+test_wasm_execution!(returns_mutable_static_bss);
+fn returns_mutable_static_bss(wasm_method: WasmExecutionMethod) {
+	let runtime = mk_test_runtime(wasm_method, 1024);
+
+	let instance = runtime.new_instance().unwrap();
+	let res = instance
+		.call_export("returns_mutable_static_bss", &[0])
+		.unwrap();
+	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
+
+	// We expect that every invocation will need to return the initial
+	// value plus one. If the value increases more than that then it is
+	// a sign that the wasm runtime preserves the memory content.
+	let res = instance
+		.call_export("returns_mutable_static_bss", &[0])
+		.unwrap();
+	assert_eq!(1, u64::decode(&mut &res[..]).unwrap());
 }
 
 // If we didn't restore the wasm instance properly, on a trap the stack pointer would not be

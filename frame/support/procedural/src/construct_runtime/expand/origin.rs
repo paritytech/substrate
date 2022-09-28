@@ -36,20 +36,23 @@ pub fn expand_outer_origin(
 
 	let mut caller_variants = TokenStream::new();
 	let mut pallet_conversions = TokenStream::new();
+	let mut query_origin_part_macros = Vec::new();
 
 	for pallet_decl in pallets.iter().filter(|pallet| pallet.name != SYSTEM_PALLET_NAME) {
 		if let Some(pallet_entry) = pallet_decl.find_part("Origin") {
 			let instance = pallet_decl.instance.as_ref();
 			let index = pallet_decl.index;
 			let generics = &pallet_entry.generics;
+			let name = &pallet_decl.name;
+			let path = &pallet_decl.path;
 
 			if instance.is_some() && generics.params.is_empty() {
 				let msg = format!(
 					"Instantiable pallet with no generic `Origin` cannot \
 					 be constructed: pallet `{}` must have generic `Origin`",
-					pallet_decl.name
+					name
 				);
-				return Err(syn::Error::new(pallet_decl.name.span(), msg));
+				return Err(syn::Error::new(name.span(), msg));
 			}
 
 			caller_variants.extend(
@@ -58,13 +61,18 @@ pub fn expand_outer_origin(
 			pallet_conversions.extend(
 				expand_origin_pallet_conversions(scrate, runtime, pallet_decl, instance, generics),
 			);
+			query_origin_part_macros.push(quote! {
+				#path::__substrate_origin_check::is_origin_part_defined!(#name);
+			});
 		}
 	}
 
 	let system_path = &system_pallet.path;
 	let system_index = system_pallet.index;
 
-	Ok(quote!{
+	Ok(quote! {
+		#( #query_origin_part_macros )*
+
 		// WARNING: All instance must hold the filter `frame_system::Config::BaseCallFilter`, except
 		// when caller is system Root. One can use `OriginTrait::reset_filter` to do so.
 		#[derive(Clone)]
