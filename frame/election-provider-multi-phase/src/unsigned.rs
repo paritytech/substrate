@@ -638,7 +638,8 @@ impl<T: MinerConfig> Miner<T> {
 		};
 
 		let next_voters = |current_weight: Weight, voters: u32, step: u32| -> Result<u32, ()> {
-			if current_weight.all_lt(max_weight) {
+			// TODO: account for proof size weight
+			if current_weight.ref_time() < max_weight.ref_time() {
 				let next_voters = voters.checked_add(step);
 				match next_voters {
 					Some(voters) if voters < max_voters => Ok(voters),
@@ -673,7 +674,8 @@ impl<T: MinerConfig> Miner<T> {
 
 		// Time to finish. We might have reduced less than expected due to rounding error. Increase
 		// one last time if we have any room left, the reduce until we are sure we are below limit.
-		while voters < max_voters && weight_with(voters + 1).all_lt(max_weight) {
+		// TODO: account for proof size weight
+		while voters < max_voters && weight_with(voters + 1).ref_time() < max_weight.ref_time() {
 			voters += 1;
 		}
 		while voters.checked_sub(1).is_some() && weight_with(voters).any_gt(max_weight) {
@@ -681,8 +683,9 @@ impl<T: MinerConfig> Miner<T> {
 		}
 
 		let final_decision = voters.min(size.voters);
+		// TODO: account for proof size weight
 		debug_assert!(
-			weight_with(final_decision).all_lte(max_weight),
+			weight_with(final_decision).ref_time() <= max_weight.ref_time(),
 			"weight_with({}) <= {}",
 			final_decision,
 			max_weight,
@@ -856,7 +859,7 @@ mod tests {
 	use crate::{
 		mock::{
 			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
-			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall as OuterCall, RuntimeOrigin, System,
+			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall, RuntimeOrigin, System,
 			TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
@@ -1070,8 +1073,8 @@ mod tests {
 				raw_solution: Box::new(solution.clone()),
 				witness: witness(),
 			};
-			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(RuntimeOrigin::none());
+			let runtime_call: RuntimeCall = call.into();
+			let _ = runtime_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1096,8 +1099,8 @@ mod tests {
 				raw_solution: Box::new(solution.clone()),
 				witness: correct_witness,
 			};
-			let outer_call: OuterCall = call.into();
-			let _ = outer_call.dispatch(RuntimeOrigin::none());
+			let runtime_call: RuntimeCall = call.into();
+			let _ = runtime_call.dispatch(RuntimeOrigin::none());
 		})
 	}
 
@@ -1560,7 +1563,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic: Extrinsic = codec::Decode::decode(&mut &*encoded).unwrap();
 			let call = extrinsic.call;
-			assert!(matches!(call, OuterCall::MultiPhase(Call::submit_unsigned { .. })));
+			assert!(matches!(call, RuntimeCall::MultiPhase(Call::submit_unsigned { .. })));
 		})
 	}
 
@@ -1577,7 +1580,7 @@ mod tests {
 			let encoded = pool.read().transactions[0].clone();
 			let extrinsic = Extrinsic::decode(&mut &*encoded).unwrap();
 			let call = match extrinsic.call {
-				OuterCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
+				RuntimeCall::MultiPhase(call @ Call::submit_unsigned { .. }) => call,
 				_ => panic!("bad call: unexpected submission"),
 			};
 

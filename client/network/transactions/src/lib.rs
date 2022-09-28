@@ -26,27 +26,22 @@
 //! - Use [`TransactionsHandlerPrototype::build`] then [`TransactionsHandler::run`] to obtain a
 //! `Future` that processes transactions.
 
-use crate::{
-	config::{self, TransactionImport, TransactionImportFuture, TransactionPool},
-	error,
-	protocol::message,
-	service::NetworkService,
-	utils::{interval, LruHashSet},
-	ExHashT,
-};
-
+use crate::config::*;
 use codec::{Decode, Encode};
 use futures::{channel::mpsc, prelude::*, stream::FuturesUnordered};
 use libp2p::{multiaddr, PeerId};
 use log::{debug, trace, warn};
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::{
-	config::ProtocolId,
+	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
+	error,
 	protocol::{
 		event::{Event, ObservedRole},
 		ProtocolName,
 	},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
+	utils::{interval, LruHashSet},
+	ExHashT,
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -54,27 +49,14 @@ use std::{
 	iter,
 	num::NonZeroUsize,
 	pin::Pin,
-	sync::{
-		atomic::{AtomicBool, Ordering},
-		Arc,
-	},
+	sync::Arc,
 	task::Poll,
-	time,
 };
 
-/// Interval at which we propagate transactions;
-const PROPAGATE_TIMEOUT: time::Duration = time::Duration::from_millis(2900);
+pub mod config;
 
-/// Maximum number of known transaction hashes to keep for a peer.
-///
-/// This should be approx. 2 blocks full of transactions for the network to function properly.
-const MAX_KNOWN_TRANSACTIONS: usize = 10240; // ~300kb per peer + overhead.
-
-/// Maximum allowed size for a transactions notification.
-const MAX_TRANSACTIONS_SIZE: u64 = 16 * 1024 * 1024;
-
-/// Maximum number of transaction validation request we keep at any moment.
-const MAX_PENDING_TRANSACTIONS: usize = 8192;
+/// A set of transactions.
+pub type Transactions<E> = Vec<E>;
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -141,7 +123,7 @@ impl TransactionsHandlerPrototype {
 	pub fn new<Hash: AsRef<[u8]>>(
 		protocol_id: ProtocolId,
 		genesis_hash: Hash,
-		fork_id: Option<String>,
+		fork_id: Option<&str>,
 	) -> Self {
 		let genesis_hash = genesis_hash.as_ref();
 		let protocol_name = if let Some(fork_id) = fork_id {
@@ -158,16 +140,16 @@ impl TransactionsHandlerPrototype {
 	}
 
 	/// Returns the configuration of the set to put in the network configuration.
-	pub fn set_config(&self) -> config::NonDefaultSetConfig {
-		config::NonDefaultSetConfig {
+	pub fn set_config(&self) -> NonDefaultSetConfig {
+		NonDefaultSetConfig {
 			notifications_protocol: self.protocol_name.clone(),
 			fallback_names: self.fallback_protocol_names.clone(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
-			set_config: config::SetConfig {
+			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,
 				reserved_nodes: Vec::new(),
-				non_reserved_mode: config::NonReservedPeerMode::Deny,
+				non_reserved_mode: NonReservedPeerMode::Deny,
 			},
 		}
 	}
@@ -176,23 +158,25 @@ impl TransactionsHandlerPrototype {
 	/// the behaviour of the handler while it's running.
 	///
 	/// Important: the transactions handler is initially disabled and doesn't gossip transactions.
-	/// You must call [`TransactionsHandlerController::set_gossip_enabled`] to enable it.
-	pub fn build<B: BlockT + 'static, H: ExHashT>(
+	/// Gossiping is enabled when major syncing is done.
+	pub fn build<
+		B: BlockT + 'static,
+		H: ExHashT,
+		S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+	>(
 		self,
-		service: Arc<NetworkService<B, H>>,
+		service: S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
-	) -> error::Result<(TransactionsHandler<B, H>, TransactionsHandlerController<H>)> {
+	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
 		let event_stream = service.event_stream("transactions-handler");
 		let (to_handler, from_controller) = mpsc::unbounded();
-		let gossip_enabled = Arc::new(AtomicBool::new(false));
 
 		let handler = TransactionsHandler {
 			protocol_name: self.protocol_name,
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
-			gossip_enabled: gossip_enabled.clone(),
 			service,
 			event_stream,
 			peers: HashMap::new(),
@@ -205,7 +189,7 @@ impl TransactionsHandlerPrototype {
 			},
 		};
 
-		let controller = TransactionsHandlerController { to_handler, gossip_enabled };
+		let controller = TransactionsHandlerController { to_handler };
 
 		Ok((handler, controller))
 	}
@@ -214,15 +198,9 @@ impl TransactionsHandlerPrototype {
 /// Controls the behaviour of a [`TransactionsHandler`] it is connected to.
 pub struct TransactionsHandlerController<H: ExHashT> {
 	to_handler: mpsc::UnboundedSender<ToHandler<H>>,
-	gossip_enabled: Arc<AtomicBool>,
 }
 
 impl<H: ExHashT> TransactionsHandlerController<H> {
-	/// Controls whether transactions are being gossiped on the network.
-	pub fn set_gossip_enabled(&mut self, enabled: bool) {
-		self.gossip_enabled.store(enabled, Ordering::Relaxed);
-	}
-
 	/// You may call this when new transactions are imported by the transaction pool.
 	///
 	/// All transactions will be fetched from the `TransactionPool` that was passed at
@@ -246,7 +224,11 @@ enum ToHandler<H: ExHashT> {
 }
 
 /// Handler for transactions. Call [`TransactionsHandler::run`] to start the processing.
-pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
+pub struct TransactionsHandler<
+	B: BlockT + 'static,
+	H: ExHashT,
+	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+> {
 	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
 	propagate_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
@@ -258,13 +240,12 @@ pub struct TransactionsHandler<B: BlockT + 'static, H: ExHashT> {
 	/// multiple times concurrently.
 	pending_transactions_peers: HashMap<H, Vec<PeerId>>,
 	/// Network service to use to send messages and manage peers.
-	service: Arc<NetworkService<B, H>>,
+	service: S,
 	/// Stream of networking events.
 	event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
-	gossip_enabled: Arc<AtomicBool>,
 	from_controller: mpsc::UnboundedReceiver<ToHandler<H>>,
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
@@ -278,7 +259,12 @@ struct Peer<H: ExHashT> {
 	role: ObservedRole,
 }
 
-impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
+impl<B, H, S> TransactionsHandler<B, H, S>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+{
 	/// Turns the [`TransactionsHandler`] into a future that should run forever and not be
 	/// interrupted.
 	pub async fn run(mut self) {
@@ -360,9 +346,9 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 						continue
 					}
 
-					if let Ok(m) = <message::Transactions<B::Extrinsic> as Decode>::decode(
-						&mut message.as_ref(),
-					) {
+					if let Ok(m) =
+						<Transactions<B::Extrinsic> as Decode>::decode(&mut message.as_ref())
+					{
 						self.on_transactions(remote, m);
 					} else {
 						warn!(target: "sub-libp2p", "Failed to decode transactions list");
@@ -376,10 +362,10 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 	}
 
 	/// Called when peer sends us new transactions
-	fn on_transactions(&mut self, who: PeerId, transactions: message::Transactions<B::Extrinsic>) {
-		// Accept transactions only when enabled
-		if !self.gossip_enabled.load(Ordering::Relaxed) {
-			trace!(target: "sync", "{} Ignoring transactions while disabled", who);
+	fn on_transactions(&mut self, who: PeerId, transactions: Transactions<B::Extrinsic>) {
+		// Accept transactions only when node is not major syncing
+		if self.service.is_major_syncing() {
+			trace!(target: "sync", "{} Ignoring transactions while major syncing", who);
 			return
 		}
 
@@ -428,10 +414,11 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Propagate one transaction.
 	pub fn propagate_transaction(&mut self, hash: &H) {
-		// Accept transactions only when enabled
-		if !self.gossip_enabled.load(Ordering::Relaxed) {
+		// Accept transactions only when node is not major syncing
+		if self.service.is_major_syncing() {
 			return
 		}
+
 		debug!(target: "sync", "Propagating transaction [{:?}]", hash);
 		if let Some(transaction) = self.transaction_pool.transaction(hash) {
 			let propagated_to = self.do_propagate_transactions(&[(hash.clone(), transaction)]);
@@ -479,10 +466,11 @@ impl<B: BlockT + 'static, H: ExHashT> TransactionsHandler<B, H> {
 
 	/// Call when we must propagate ready transactions to peers.
 	fn propagate_transactions(&mut self) {
-		// Accept transactions only when enabled
-		if !self.gossip_enabled.load(Ordering::Relaxed) {
+		// Accept transactions only when node is not major syncing
+		if self.service.is_major_syncing() {
 			return
 		}
+
 		debug!(target: "sync", "Propagating transactions");
 		let transactions = self.transaction_pool.transactions();
 		let propagated_to = self.do_propagate_transactions(&transactions);

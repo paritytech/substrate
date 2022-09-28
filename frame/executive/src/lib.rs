@@ -287,15 +287,7 @@ where
 	///
 	/// This should only be used for testing.
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		// ensure both `pre_upgrade` and `post_upgrade` won't change the storage root
-		let state = {
-			let _guard = frame_support::StorageNoopGuard::default();
-			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap()
-		};
 		let weight = Self::execute_on_runtime_upgrade();
-		let _guard = frame_support::StorageNoopGuard::default();
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(state)
-			.unwrap();
 		Ok(weight)
 	}
 }
@@ -467,7 +459,8 @@ where
 		let max_weight = <System::BlockWeights as frame_support::traits::Get<_>>::get().max_block;
 		let remaining_weight = max_weight.saturating_sub(weight.total());
 
-		if remaining_weight.all_gt(Weight::zero()) {
+		// TODO: account for proof size weight
+		if remaining_weight.ref_time() > 0 {
 			let used_weight = <AllPalletsWithSystem as OnIdle<System::BlockNumber>>::on_idle(
 				block_number,
 				remaining_weight,
@@ -946,13 +939,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5",
+				"0d786e24c1f9e6ce237806a22c005bbbc7dee4edd6692b6c5442843d164392de",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5",
+				"348485a4ab856467b440167e45f99b491385e8528e09b0e51f85f814a3021c93",
 			),
 		);
 	}
