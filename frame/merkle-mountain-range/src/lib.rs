@@ -337,7 +337,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Ok(leaf_index)
 			})
 			.collect::<Result<Vec<LeafIndex>, _>>()?;
-		
+
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
 		mmr.generate_batch_proof(leaf_indices)
 	}

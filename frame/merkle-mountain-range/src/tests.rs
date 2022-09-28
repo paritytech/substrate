@@ -83,6 +83,18 @@ fn add_blocks(blocks: usize) {
 	}
 }
 
+fn leaf_indices_to_block_numbers(leaf_indices: &Vec<u64>) -> Vec<u64> {
+	leaf_indices
+		.iter()
+		.map(|l| {
+			if *l == 0 {
+				return 0
+			}
+			*l + 1
+		})
+		.collect()
+}
+
 #[test]
 fn should_start_empty() {
 	let _ = env_logger::try_init();
@@ -234,12 +246,11 @@ fn should_generate_proofs_correctly() {
 	// to retrieve full leaf data.
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
-		// when generate proofs for all leaves
-		let proofs = (0_u64..crate::NumberOfLeaves::<Test>::get())
+		// when generate proofs for all the blocks.
+		let now = frame_system::Pallet::<Test>::block_number();
+		let proofs = (0_u64..now)
 			.into_iter()
-			.map(|leaf_index| {
-				crate::Pallet::<Test>::generate_batch_proof(vec![leaf_index]).unwrap()
-			})
+			.map(|block_num| crate::Pallet::<Test>::generate_batch_proof(vec![block_num]).unwrap())
 			.collect::<Vec<_>>();
 
 		// then
@@ -259,8 +270,9 @@ fn should_generate_proofs_correctly() {
 			)
 		);
 		assert_eq!(
-			proofs[4],
+			proofs[5],
 			(
+				// the leaf index is equivalent to the block number(in this case 5) - 1
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
 				BatchProof {
 					leaf_indices: vec![4],
@@ -276,13 +288,14 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			proofs[6],
 			(
-				vec![Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),))],
+				vec![Compact::new(((5, H256::repeat_byte(6)).into(), LeafData::new(6).into(),))],
 				BatchProof {
-					leaf_indices: vec![6],
+					leaf_indices: vec![5],
 					leaf_count: 7,
 					items: vec![
 						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
-						hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da"),
+						hex("3b031d22e24f1126c8f7d2f394b663f9b960ed7abbedb7152e17ce16112656d0"),
+						hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
 					],
 				}
 			)
@@ -303,12 +316,13 @@ fn should_generate_batch_proof_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for all leaves
-		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap();
+		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 5, 6]).unwrap();
 
 		// then
 		assert_eq!(
 			proof,
 			BatchProof {
+				// the leaf indices are equivalent to the above specified block numbers - 1.
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 7,
 				items: vec![
@@ -350,11 +364,12 @@ fn should_verify() {
 fn should_verify_batch_proofs() {
 	fn generate_and_verify_batch_proof(
 		ext: &mut sp_io::TestExternalities,
-		leaves: &Vec<u64>,
+		block_numbers: &Vec<u64>,
 		blocks_to_add: usize,
 	) {
-		let (leaves, proof) = ext
-			.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap());
+		let (leaves, proof) = ext.execute_with(|| {
+			crate::Pallet::<Test>::generate_batch_proof(block_numbers.to_vec()).unwrap()
+		});
 
 		ext.execute_with(|| {
 			add_blocks(blocks_to_add);
@@ -381,7 +396,8 @@ fn should_verify_batch_proofs() {
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
+			let block_numbers = leaf_indices_to_block_numbers(leaves_subset);
+			generate_and_verify_batch_proof(&mut ext, &block_numbers, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
@@ -396,15 +412,16 @@ fn should_verify_batch_proofs() {
 		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
+			let block_numbers = leaf_indices_to_block_numbers(leaves_subset);
+			generate_and_verify_batch_proof(&mut ext, &block_numbers, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
 
-	generate_and_verify_batch_proof(&mut ext, &vec![7, 11], 20);
+	generate_and_verify_batch_proof(&mut ext, &vec![8, 12], 20);
 	ext.execute_with(|| add_blocks(1000));
 	ext.persist_offchain_overlay();
-	generate_and_verify_batch_proof(&mut ext, &vec![7, 11, 100, 800], 100);
+	generate_and_verify_batch_proof(&mut ext, &vec![8, 12, 100, 800], 100);
 }
 
 #[test]
