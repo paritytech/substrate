@@ -1462,9 +1462,10 @@ fn trigger_new_best_block(
 	let tree_route = Some(Arc::new(
 		pool.api().tree_route(from.hash(), acted_on.hash()).expect("Tree route exists"),
 	));
-	pool.enactment_helper()
-		.lock()
-		.should_handle_enactment(&ChainEvent::NewBestBlock { hash: acted_on.hash(), tree_route })
+	pool.enactment_state().lock().update_and_check_if_new_enactment_is_valid(
+		pool.api(),
+		&ChainEvent::NewBestBlock { hash: acted_on.hash(), tree_route },
+	)
 }
 
 fn trigger_finalized(
@@ -1476,10 +1477,10 @@ fn trigger_finalized(
 		pool.api().tree_route(from.hash(), acted_on.hash()).expect("Tree route exists"),
 	));
 	let v = tree_route.unwrap().enacted().iter().map(|h| h.hash).collect::<Vec<_>>();
-	pool.enactment_helper().lock().should_handle_enactment(&ChainEvent::Finalized {
-		hash: acted_on.hash(),
-		tree_route: v.into(),
-	})
+	pool.enactment_state().lock().update_and_check_if_new_enactment_is_valid(
+		pool.api(),
+		&ChainEvent::Finalized { hash: acted_on.hash(), tree_route: v.into() },
+	)
 }
 
 #[test]

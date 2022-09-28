@@ -88,7 +88,7 @@ where
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
 	metrics: PrometheusMetrics,
 
-	enactment_helper: Arc<Mutex<EnactmentHelper<Block, PoolApi>>>,
+	enactment_state: Arc<Mutex<EnactmentState<Block>>>,
 }
 
 struct ReadyPoll<T, Block: BlockT> {
@@ -179,7 +179,7 @@ where
 				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
 				ready_poll: Default::default(),
 				metrics: Default::default(),
-				enactment_helper: Arc::new(Mutex::new(EnactmentHelper::new(pool_api.clone()))),
+				enactment_state: Arc::new(Mutex::new(EnactmentState::new())),
 			},
 			background_task,
 		)
@@ -222,7 +222,7 @@ where
 			})),
 			ready_poll: Arc::new(Mutex::new(ReadyPoll::new(best_block_number))),
 			metrics: PrometheusMetrics::new(prometheus),
-			enactment_helper: Arc::new(Mutex::new(EnactmentHelper::new(pool_api))),
+			enactment_state: Arc::new(Mutex::new(EnactmentState::new())),
 		}
 	}
 
@@ -576,9 +576,10 @@ where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	/// enactment_helper getter, intended for tests only
-	pub fn enactment_helper(&self) -> Arc<Mutex<dyn EnactmentPolicy<Block>>> {
-		self.enactment_helper.clone()
+	/// enactment_state getter, intended for tests only
+	#[doc(hidden)]
+	pub fn enactment_state(&self) -> Arc<Mutex<EnactmentState<Block>>> {
+		self.enactment_state.clone()
 	}
 }
 
@@ -745,7 +746,10 @@ where
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
-		let (proceed, tree_route) = self.enactment_helper.lock().should_handle_enactment(&event);
+		let (proceed, tree_route) = self
+			.enactment_state
+			.lock()
+			.update_and_check_if_new_enactment_is_valid(&*self.api, &event);
 
 		let hash = match event {
 			ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } => hash,
@@ -806,33 +810,26 @@ where
 /// nbb(B1), nbb(B2) -> true
 /// nbb(B1), nbb(C1), f(C1) -> false (handle_enactment was already performed in nbb(B1)
 /// nbb(C1), f(B1) -> false (handle_enactment was already performed in nbb(B2)
-pub trait EnactmentPolicy<Block: BlockT> {
-	/// Basing on provided ChainEvent returns true if maintainance/enactment procedure for evented
-	/// header shall be performed. Otherwise returns false.
-	/// Additionally tree_route from recent best_block to event's hash is returned.
-	fn should_handle_enactment(
-		&mut self,
-		event: &ChainEvent<Block>,
-	) -> (bool, Option<Arc<TreeRoute<Block>>>);
-}
-
-struct EnactmentHelper<Block, PoolApi>
+#[doc(hidden)]
+pub struct EnactmentState<Block>
 where
 	Block: BlockT,
-	PoolApi: graph::ChainApi<Block = Block>,
 {
 	best_block: Option<Block::Hash>,
 	finalized_block: Option<Block::Hash>,
-	api: Arc<PoolApi>,
 }
 
-impl<Block, PoolApi> EnactmentPolicy<Block> for EnactmentHelper<Block, PoolApi>
+impl<Block> EnactmentState<Block>
 where
 	Block: BlockT,
-	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	fn should_handle_enactment(
+	fn new() -> Self {
+		EnactmentState { best_block: None, finalized_block: None }
+	}
+
+	pub fn update_and_check_if_new_enactment_is_valid<PoolApi: graph::ChainApi<Block = Block>>(
 		&mut self,
+		api: &PoolApi,
 		event: &ChainEvent<Block>,
 	) -> (bool, Option<Arc<TreeRoute<Block>>>) {
 		let (hash, finalized) = match event {
@@ -844,10 +841,7 @@ where
 		// tree_route provided with event
 		let tree_route = if let Some(best_block) = self.best_block {
 			Some(Arc::new(
-				self.api
-					.tree_route(best_block, *hash)
-					.unwrap()
-					.expect("tree_route exists. qed."),
+				api.tree_route(best_block, *hash).unwrap().expect("tree_route exists. qed."),
 			))
 		} else {
 			None
@@ -855,16 +849,6 @@ where
 
 		let result = self.resolve(*hash, tree_route.clone(), finalized);
 		(result, tree_route)
-	}
-}
-
-impl<Block, PoolApi> EnactmentHelper<Block, PoolApi>
-where
-	Block: BlockT,
-	PoolApi: 'static + graph::ChainApi<Block = Block>,
-{
-	fn new(api: Arc<PoolApi>) -> Self {
-		EnactmentHelper { best_block: None, finalized_block: None, api }
 	}
 
 	fn resolve(
@@ -888,7 +872,7 @@ where
 		// check if recently finalized block is on retracted path...
 		let was_finalized_retracted = if let Some(finalized_block) = *finalized_block {
 			match tree_route {
-				Some(ref tr) => tr.retracted().iter().map(|x| x.hash).any(|x| x == finalized_block),
+				Some(ref tr) => tr.retracted().iter().any(|x| x.hash == finalized_block),
 				None => false,
 			}
 		} else {
@@ -923,7 +907,7 @@ where
 			// check if the recent best_block was retracted
 			let best_block_retracted = if let Some(best_block) = *best_block {
 				match tree_route {
-					Some(tr) => tr.retracted().iter().map(|x| x.hash).any(|x| x == best_block),
+					Some(tr) => tr.retracted().iter().any(|x| x.hash == best_block),
 					None => false,
 				}
 			} else {
