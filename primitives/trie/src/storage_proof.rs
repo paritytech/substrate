@@ -110,7 +110,7 @@ impl StorageProof {
 
 	/// Encode as a compact proof with default trie layout.
 	pub fn to_compact_proof<H: Hasher>(
-		self,
+		&self,
 		root: H::Out,
 	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
 		let db = self.to_memory_db();
