@@ -310,7 +310,7 @@ mod tests {
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
 			assert_eq!(System::block_weight().total(), Weight::MAX);
-			assert!(System::block_weight().total().all_gt(block_weight_limit()));
+			assert!(System::block_weight().total().ref_time() > block_weight_limit().ref_time());
 		});
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
@@ -367,7 +367,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(Weight::MAX, DispatchClass::Normal);
 			assert_eq!(System::block_weight().total(), Weight::MAX);
-			assert!(System::block_weight().total().all_gt(block_weight_limit()));
+			assert!(System::block_weight().total().ref_time() > block_weight_limit().ref_time());
 		});
 	}
 
@@ -392,8 +392,8 @@ mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(768));
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024));
-			assert_eq!(System::block_weight().total(), block_weight_limit());
+			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024).set_proof_size(u64::MAX));
+			assert_eq!(System::block_weight().total(), block_weight_limit().set_proof_size(0));
 			// Checking single extrinsic should not take current block weight into account.
 			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&rest_operational), Ok(()));
 		});
@@ -669,7 +669,7 @@ mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(768));
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&mandatory, len));
-			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024));
+			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024).set_proof_size(u64::MAX));
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(1024 + 768));
 			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&mandatory), Ok(()));
 		});
