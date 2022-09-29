@@ -20,42 +20,43 @@
 use super::{Pallet as TxPause, *};
 
 use frame_benchmarking::benchmarks;
-use frame_support::traits::UnfilteredDispatchable;
-use frame_system::RawOrigin;
+// use frame_support::traits::UnfilteredDispatchable;
+// use frame_system::RawOrigin;
 
 benchmarks! {
   pause_call {
-	let pallet: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
-	let function: CallNameOf<T> = b"some_fn_name".to_vec().try_into().unwrap();
+	// TODO: @Dan I think this shows the weakness of the approach. (in the complicated setup for the extrinsic inputs)
+	let call: Box<<T as Config>::RuntimeCall> = Box::new(frame_system::Call::<T>::remark { remark: Default::default() }.into());
+	let CallMetadata { pallet_name, function_name } = &call.get_call_metadata();
+	let pallet_name = PalletNameOf::<T>::try_from(pallet_name.as_bytes().to_vec()).unwrap();
+	let call_name = CallNameOf::<T>::try_from(function_name.as_bytes().to_vec()).unwrap();
 	let origin = T::PauseOrigin::successful_origin();
-	// TODO: @Dan I think this shows the weakness of the approach.
-	let call = Box::new(frame_system::Call::<T>::remark { remark: Default::default() }.into());
 
   }: _<T::Origin>(origin, call)
   verify {
-		//assert!(TxPause::<T>::paused_calls((pallet.clone(),function.clone())).is_some())
+		assert!(TxPause::<T>::paused_calls((pallet_name.clone(),call_name.clone())).is_some())
   }
-/*
-  TODO I commented this one but should be similar to the one above.
-  unpause_call {
-	let pallet: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
-	let function: CallNameOf<T> = b"some_fn_name".to_vec().try_into().unwrap();
-	let pause_origin = T::PauseOrigin::successful_origin();
 
-	  // Set
-	TxPause::<T>::pause_call(
-	  pause_origin,
-	  pallet.clone(),
-	  function.clone(),
-	  )?;
+	unpause_call {
+		// TODO: @Dan I think this shows the weakness of the approach. (in the complicated setup for the extrinsic inputs)
+		let call: Box<<T as Config>::RuntimeCall> = Box::new(frame_system::Call::<T>::remark { remark: Default::default() }.into());
+		let CallMetadata { pallet_name, function_name } = &call.get_call_metadata();
+		let pallet_name = PalletNameOf::<T>::try_from(pallet_name.as_bytes().to_vec()).unwrap();
+		let call_name = CallNameOf::<T>::try_from(function_name.as_bytes().to_vec()).unwrap();
+		let pause_origin = T::PauseOrigin::successful_origin();
 
-	let unpause_origin = T::UnpauseOrigin::successful_origin();
-	let call = Call::<T>::unpause_call { pallet: pallet.clone(), function: function.clone() };
+		TxPause::<T>::pause_call(
+			pause_origin,
+			call.clone(),
+			)?;
 
-  }: { call.dispatch_bypass_filter(unpause_origin)?}
-  verify {
-		assert![TxPause::<T>::paused_calls((pallet.clone(),function.clone())).is_none()]
-  } */
+		assert!(TxPause::<T>::paused_calls((pallet_name.clone(),call_name.clone())).is_some());
+
+		let unpause_origin = T::UnpauseOrigin::successful_origin();
+	}: _<T::Origin>(unpause_origin, call)
+	verify {
+		assert!(TxPause::<T>::paused_calls((pallet_name.clone(),call_name.clone())).is_none())
+	}
 
   impl_benchmark_test_suite!(TxPause, crate::mock::new_test_ext(), crate::mock::Test);
 }

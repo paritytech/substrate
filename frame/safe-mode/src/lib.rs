@@ -28,7 +28,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, PalletInfoAccess,
-		ReservableCurrency,
+		ReservableCurrency, NamedReservableCurrency
 	},
 	weights::Weight,
 };
@@ -56,7 +56,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: NamedReservableCurrency<Self::AccountId>;
 
 		/// Contains all calls that can be dispatched even when the safe-mode is activated.
 		///
@@ -125,19 +125,19 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// The safe-mode was activated until inclusively this \[block\].
-		Activated(T::BlockNumber),
+		Activated { block: T::BlockNumber },
 
 		/// The safe-mode was extended until inclusively this \[block\].
-		Extended(T::BlockNumber),
+		Extended { block: T::BlockNumber},
 
 		/// Exited safe-mode for a specific \[reason\].
-		Exited(ExitReason),
+		Exited { reason: ExitReason },
 
 		/// An account got repaid its stake. \[account, amount\]
-		StakeRepaid(T::AccountId, BalanceOf<T>),
+		StakeRepaid { account: T::AccountId, amount: BalanceOf<T> },
 
 		/// An account got slashed its stake. \[account, amount\]
-		StakeSlashed(T::AccountId, BalanceOf<T>),
+		StakeSlashed { account: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	/// The reason why the safe-mode was exited.
@@ -271,7 +271,7 @@ pub mod pallet {
 		/// Can only be called by the [`Config::ForceDeactivateOrigin`] origin.
 		#[pallet::weight(0)]
 		pub fn force_deactivate(origin: OriginFor<T>) -> DispatchResult {
-			T::ForceDeactivateOrigin::ensure_origin(origin.clone())?;
+			T::ForceDeactivateOrigin::ensure_origin(origin)?;
 
 			Self::do_deactivate(ExitReason::Force)
 		}
@@ -290,7 +290,7 @@ pub mod pallet {
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
-			T::RepayOrigin::ensure_origin(origin.clone())?;
+			T::RepayOrigin::ensure_origin(origin)?;
 
 			Self::do_repay_stake(account, block)
 		}
@@ -309,7 +309,7 @@ pub mod pallet {
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
-			T::RepayOrigin::ensure_origin(origin.clone())?;
+			T::RepayOrigin::ensure_origin(origin)?;
 
 			Self::do_slash_stake(account, block)
 		}
@@ -344,7 +344,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(!ActiveUntil::<T>::exists(), Error::<T>::IsActive);
 		let limit = <frame_system::Pallet<T>>::block_number().saturating_add(duration);
 		ActiveUntil::<T>::put(limit);
-		Self::deposit_event(Event::Activated(limit));
+		Self::deposit_event(Event::Activated{block: limit});
 		Ok(())
 	}
 
@@ -358,7 +358,7 @@ impl<T: Config> Pallet<T> {
 		let limit =
 			ActiveUntil::<T>::take().ok_or(Error::<T>::IsInactive)?.saturating_add(duration);
 		ActiveUntil::<T>::put(limit);
-		Self::deposit_event(Event::<T>::Extended(limit));
+		Self::deposit_event(Event::<T>::Extended{block: limit});
 		Ok(())
 	}
 
@@ -368,7 +368,7 @@ impl<T: Config> Pallet<T> {
 	/// Does not check the origin.
 	fn do_deactivate(reason: ExitReason) -> DispatchResult {
 		let _limit = ActiveUntil::<T>::take().ok_or(Error::<T>::IsInactive)?;
-		Self::deposit_event(Event::Exited(reason));
+		Self::deposit_event(Event::Exited{reason});
 		Ok(())
 	}
 
@@ -381,7 +381,7 @@ impl<T: Config> Pallet<T> {
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
 		T::Currency::unreserve(&account, stake);
-		Self::deposit_event(Event::<T>::StakeRepaid(account, stake));
+		Self::deposit_event(Event::<T>::StakeRepaid{account, amount: stake});
 		Ok(())
 	}
 
@@ -394,13 +394,13 @@ impl<T: Config> Pallet<T> {
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
 		T::Currency::slash_reserved(&account, stake);
-		Self::deposit_event(Event::<T>::StakeSlashed(account, stake));
+		Self::deposit_event(Event::<T>::StakeSlashed{account, amount: stake});
 		Ok(())
 	}
 
 	/// Reserve `stake` amount from `who` and store it in `Stakes`.
-	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
-		T::Currency::reserve(&who, stake)?;
+	fn reserve(id: T::ReserveIdentifier, who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
+		T::Currency::reserve_named(id, &who, stake)?;
 		let block = <frame_system::Pallet<T>>::block_number();
 		let current_stake = Stakes::<T>::get(&who, block).unwrap_or_default();
 		Stakes::<T>::insert(&who, block, current_stake.saturating_add(stake));

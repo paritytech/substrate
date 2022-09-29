@@ -73,7 +73,7 @@ pub mod pallet {
 		/// added here.
 		type UnfilterableCalls: Contains<<Self as Config>::RuntimeCall>;
 
-		/// Maximum length for pallet- and function-names.
+		/// Maximum length for pallet and call SCALE encoded string names.
 		///
 		/// Too long names will not be truncated but handled like
 		/// [`Self::PauseTooLongNames`] specifies.
@@ -111,10 +111,10 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// This call got paused.
-		CallPaused(PalletNameOf<T>, CallNameOf<T>),
-		/// This call got un-paused.
-		CallUnpaused(PalletNameOf<T>, CallNameOf<T>),
+		/// This call is now paused. \[pallet_name, call_name\]
+		CallPaused { pallet_name: PalletNameOf<T>, call_name: CallNameOf<T> },
+		/// This call is now unpaused. \[pallet_name, call_name\]
+		CallUnpaused { pallet_name: PalletNameOf<T>, call_name: CallNameOf<T> },
 	}
 
 	/// The set of calls that are explicitly paused.
@@ -143,8 +143,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			for (pallet, function) in &self.paused {
-				PausedCalls::<T>::insert((pallet, function), ());
+			for (pallet_name, call_name) in &self.paused {
+				PausedCalls::<T>::insert((pallet_name, call_name), ());
 			}
 		}
 	}
@@ -158,15 +158,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::pause_call())]
 		pub fn pause_call(
 			origin: OriginFor<T>,
-			c: Box<<T as Config>::RuntimeCall>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			let (pallet, call) = Self::try_get_bounded_names(&c)?;
+			let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
 
-			Self::ensure_can_pause(&c)?;
-			PausedCalls::<T>::insert((&pallet, &call), ());
-			Self::deposit_event(Event::CallPaused(pallet, call));
+			Self::ensure_can_pause(&call)?;
+			PausedCalls::<T>::insert((&pallet_name, &call_name), ());
+			Self::deposit_event(Event::CallPaused{pallet_name, call_name});
 
 			Ok(())
 		}
@@ -188,15 +188,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unpause_call())]
 		pub fn unpause_call(
 			origin: OriginFor<T>,
-			c: Box<<T as Config>::RuntimeCall>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			let (pallet, call) = Self::try_get_bounded_names(&c)?;
+			let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
 
-			Self::ensure_can_unpause(&c)?;
-			PausedCalls::<T>::remove((&pallet, &call));
-			Self::deposit_event(Event::CallUnpaused(pallet, call));
+			Self::ensure_can_unpause(&call)?;
+			PausedCalls::<T>::remove((&pallet_name, &call_name));
+			Self::deposit_event(Event::CallUnpaused{pallet_name, call_name});
 
 			Ok(())
 		}
@@ -205,43 +205,43 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
-	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
-		let pallet = PalletNameOf::<T>::try_from(pallet);
-		let call = CallNameOf::<T>::try_from(call);
+	pub fn is_paused_unbound(pallet_name: Vec<u8>, call_name: Vec<u8>) -> bool {
+		let pallet_name = PalletNameOf::<T>::try_from(pallet_name);
+		let call_name = CallNameOf::<T>::try_from(call_name);
 
-		match (pallet, call) {
-			(Ok(pallet), Ok(call)) => Self::is_paused(&pallet, &call),
+		match (pallet_name, call_name) {
+			(Ok(pallet_name), Ok(call_name)) => Self::is_paused(&pallet_name, &call_name),
 			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
 	/// Return whether this call is paused.
-	pub fn is_paused(pallet: &PalletNameOf<T>, call: &CallNameOf<T>) -> bool {
-		<PausedCalls<T>>::contains_key((pallet, call))
+	pub fn is_paused(pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T>) -> bool {
+		<PausedCalls<T>>::contains_key((pallet_name, call_name))
 	}
 
 	/// Ensure that this call can be paused.
-	pub fn ensure_can_pause(c: &<T as Config>::RuntimeCall) -> Result<(), Error<T>> {
-		let (pallet, call) = Self::try_get_bounded_names(&c)?;
+	pub fn ensure_can_pause(call: &<T as Config>::RuntimeCall) -> Result<(), Error<T>> {
+		let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
 
 		// The `TxPause` pallet can never be paused.
-		if pallet == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+		if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if T::UnfilterableCalls::contains(c) {
+		if T::UnfilterableCalls::contains(call) {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if Self::is_paused(&pallet, &call) {
+		if Self::is_paused(&pallet_name, &call_name) {
 			return Err(Error::<T>::IsPaused)
 		}
 		Ok(())
 	}
 
 	/// Ensure that this call can be un-paused.
-	pub fn ensure_can_unpause(c: &<T as Config>::RuntimeCall) -> Result<(), Error<T>> {
-		let (pallet, call) = Self::try_get_bounded_names(&c)?;
+	pub fn ensure_can_unpause(call: &<T as Config>::RuntimeCall) -> Result<(), Error<T>> {
+		let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
 
-		if Self::is_paused(&pallet, &call) {
+		if Self::is_paused(&pallet_name, &call_name) {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {
@@ -249,20 +249,20 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Get bounded names of calls in pallets from runtime call.
+	/// Get bounded pallet and call names from a runtime call.
 	pub fn try_get_bounded_names(
-		c: &<T as Config>::RuntimeCall,
+		call: &<T as Config>::RuntimeCall,
 	) -> Result<(PalletNameOf<T>, CallNameOf<T>), Error<T>>
 	where
 		<T as Config>::RuntimeCall: GetCallMetadata,
 	{
-		let CallMetadata { pallet_name, function_name } = c.get_call_metadata();
+		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
 
-		let pallet = PalletNameOf::<T>::try_from(pallet_name.as_bytes().to_vec());
-		let call = CallNameOf::<T>::try_from(function_name.as_bytes().to_vec());
+		let pallet_name = PalletNameOf::<T>::try_from(pallet_name.as_bytes().to_vec());
+		let call_name = CallNameOf::<T>::try_from(function_name.as_bytes().to_vec());
 
-		match (pallet, call) {
-			(Ok(pallet), Ok(call)) => Ok((pallet, call)),
+		match (pallet_name, call_name) {
+			(Ok(pallet_name), Ok(call_name)) => Ok((pallet_name, call_name)),
 			_ => Err(Error::IsTooLong), /* TODO consider better method than custom error just for
 			                             * this? */
 		}

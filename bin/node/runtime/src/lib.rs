@@ -201,7 +201,6 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-
 /// Filter to block balance pallet calls
 /// Used for both SafeMode and TxPause pallets
 /// Therefor we include both so they cannot affect each other

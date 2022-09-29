@@ -68,7 +68,7 @@ fn can_unpause_specific_call() {
 fn fails_to_pause_self() {
 	new_test_ext().execute_with(|| {
 		let call =
-			RuntimeCall::TxPause(crate::Call::pause_call { c: Box::new(call_transfer(3, 1)) });
+			RuntimeCall::TxPause(crate::Call::pause_call { call: Box::new(call_transfer(3, 1)) });
 
 		assert_noop!(
 			TxPause::pause_call(Origin::signed(mock::PauseOrigin::get()), Box::new(call),),
