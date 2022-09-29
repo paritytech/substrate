@@ -641,9 +641,6 @@ pub mod pallet {
 		/// times to fully destroy all accounts. It will destroy `RemoveKeysLimit` accounts at a
 		/// time.
 		///
-		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
-		/// owner of the asset `id`.
-		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
@@ -741,9 +738,6 @@ pub mod pallet {
 		/// `finish_destroy` should only be called after `start_destroy` has been called, and the
 		/// asset is in a `Destroying` state. All accounts or approvals should be destroyed before
 		/// hand.
-		///
-		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
-		/// owner of the asset `id`.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
