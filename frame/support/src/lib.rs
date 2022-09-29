@@ -1454,6 +1454,7 @@ pub mod pallet_prelude {
 /// * [`pallet::genesis_config`](#genesis-config-palletgenesis_config-optional)
 /// * [`pallet::genesis_build`](#genesis-build-palletgenesis_build-optional)
 /// * [`pallet::inherent`](#inherent-palletinherent-optional)
+/// * [`pallet::validate_unsigned`](#validate-unsigned-palletvalidate_unsigned-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2114,11 +2115,11 @@ pub mod pallet_prelude {
 /// The macro currently makes no use of this information, but it might use this information in
 /// the future to give information directly to `construct_runtime`.
 ///
-/// # Validate unsigned: `#[pallet::validate_unsigned]` optional
+/// # Validate unsigned: `#[pallet::validate_unsigned]` (optional)
 ///
-/// Allow the pallet to validate some unsigned transaction:
+/// Allows the pallet to validate some unsigned transaction:
 ///
-/// Item is defined as:
+/// Item must be defined as:
 ///
 /// ```ignore
 /// #[pallet::validate_unsigned]
@@ -2127,16 +2128,17 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// I.e. a trait implementation with bound `T: Config`, of trait `ValidateUnsigned` for type
-/// `Pallet<T>`, and some optional where clause.
+/// I.e. a trait implementation with bound `T: Config`, of trait
+/// [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`) for type `Pallet<T>`, and some
+/// optional where clause.
 ///
-/// NOTE: There is also `sp_runtime::traits::SignedExtension` that can be used to add some
+/// NOTE: There is also [`sp_runtime::traits::SignedExtension`] that can be used to add some
 /// specific logic for transaction validation.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// Macro make currently no use of this information, but it might use this information in the
-/// future to give information directly to construct_runtime.
+/// The macro currently makes no use of this information, but it might use this information in
+/// the future to give information directly to `construct_runtime`.
 ///
 /// # Origin: `#[pallet::origin]` optional
 ///
