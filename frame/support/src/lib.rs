@@ -2160,16 +2160,17 @@ pub mod pallet_prelude {
 ///
 /// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
 ///
-/// # General notes on instantiable pallet
+/// # General notes on instantiable pallets
 ///
-/// An instantiable pallet is one where Config is generic, i.e. `Config<I>`. This allow
-/// runtime to implement multiple instance of the pallet, by using different type for the
-/// generic. This is the sole purpose of the generic `I`. But because `PalletInfo` requires
-/// `Pallet` placeholder to be static it is important to bound `'static` whenever `PalletInfo`
-/// can be used. And in order to have instantiable pallet usable as a regular pallet without
-/// instance, it is important to bound `= ()` on every types.
+/// An instantiable pallet is one where Config is generic, i.e. `Config<I>`. This allows
+/// runtime to implement multiple instances of the pallet, by using different types for the
+/// generic. This is the sole purpose of the generic `I`, but because
+/// [`PalletInfo`](`traits::PalletInfo`) requires the `Pallet` placeholder to be static, it is
+/// important to bound by `'static` whenever [`PalletInfo`](`traits::PalletInfo`) can be used.
+/// Additionally, in order to make an instantiable pallet usable as a regular pallet without an
+/// instance, it is important to bound by `= ()` on every type.
 ///
-/// Thus impl bound look like `impl<T: Config<I>, I: 'static>`, and types look like
+/// Thus impl bound looks like `impl<T: Config<I>, I: 'static>`, and types look like
 /// `SomeType<T, I=()>` or `SomeType<T: Config<I>, I: 'static = ()>`.
 ///
 /// # Example for pallet without instance.
