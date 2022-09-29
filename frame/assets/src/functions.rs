@@ -205,6 +205,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keep_alive: bool,
 	) -> Result<T::Balance, DispatchError> {
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
 
 		let account = Account::<T, I>::get(id, who).ok_or(Error::<T, I>::NoAccount)?;
@@ -300,6 +301,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(!Account::<T, I>::contains_key(id, &who), Error::<T, I>::AlreadyExists);
 		let deposit = T::AssetAccountDeposit::get();
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		let reason = Self::new_account(&who, &mut details, Some(deposit))?;
 		T::Currency::reserve(&who, deposit)?;
 		Asset::<T, I>::insert(&id, details);
@@ -390,7 +392,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::can_increase(id, beneficiary, amount, true).into_result()?;
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-
+			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			check(details)?;
 
 			Account::<T, I>::try_mutate(id, beneficiary, |maybe_account| -> DispatchResult {
@@ -436,6 +438,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ensure!(check_admin == details.admin, Error::<T, I>::NoPermission);
 			}
 
+			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			debug_assert!(details.supply >= actual, "checked in prep; qed");
 			details.supply = details.supply.saturating_sub(actual);
 
@@ -472,6 +475,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 			check(actual, details)?;
 
@@ -551,6 +555,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+
+			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 			// Check admin rights.
 			if let Some(need_admin) = maybe_need_admin {
@@ -670,6 +676,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 	) -> DispatchResult {
 		let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		ensure!(!d.is_frozen, Error::<T, I>::Frozen);
 		Approvals::<T, I>::try_mutate(
 			(id, &owner, &delegate),
@@ -766,6 +773,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
 
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		ensure!(from == &d.owner, Error::<T, I>::NoPermission);
 
 		Metadata::<T, I>::try_mutate_exists(id, |metadata| {

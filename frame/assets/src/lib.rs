@@ -499,6 +499,8 @@ pub mod pallet {
 		/// The asset is a live asset and is actively being used. Usually emit for operations such
 		/// as `start_destroy` which require the asset to be in a destroying state.
 		LiveAsset,
+		/// The asset is not live, and likely being destroyed.
+		AssetNotLive,
 		/// The asset should be frozen before the given operation.
 		NotFrozen,
 	}
@@ -651,19 +653,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResultWithPostInfo {
-			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
-				Ok(_) => None,
-				Err(origin) => Some(ensure_signed(origin)?),
-			};
+			let _ = ensure_signed(origin)?;
 			let mut dead_accounts: Vec<T::AccountId> = vec![];
 			let mut removed_accounts = 0;
 			let _ = Asset::<T, I>::try_mutate_exists(
 				id,
 				|maybe_details| -> Result<(), DispatchError> {
 					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-					if let Some(check_owner) = maybe_check_owner {
-						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-					}
 					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 					// Should only destroy accounts while the asset is being destroyed
 					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
@@ -710,6 +706,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
 			let mut removed_approvals = 0;
 			let _ = Asset::<T, I>::try_mutate_exists(
 				id,
@@ -757,17 +754,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResult {
-			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
-				Ok(_) => None,
-				Err(origin) => Some(ensure_signed(origin)?),
-			};
+			let _ = ensure_signed(origin)?;
 			let _ = Asset::<T, I>::try_mutate_exists(
 				id,
 				|maybe_details| -> Result<(), DispatchError> {
 					let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-					if let Some(check_owner) = maybe_check_owner {
-						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-					}
 					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 					ensure!(details.accounts == 0, Error::<T, I>::InUse);
@@ -959,6 +950,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
@@ -990,6 +982,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			ensure!(origin == details.admin, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
@@ -1308,6 +1301,7 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
+				ensure!(asset.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 				asset.owner = T::Lookup::lookup(owner)?;
 				asset.issuer = T::Lookup::lookup(issuer)?;
 				asset.admin = T::Lookup::lookup(admin)?;
@@ -1376,6 +1370,7 @@ pub mod pallet {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			let approval =
 				Approvals::<T, I>::take((id, &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
@@ -1408,6 +1403,7 @@ pub mod pallet {
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			T::ForceOrigin::try_origin(origin)
 				.map(|_| ())
 				.or_else(|origin| -> DispatchResult {

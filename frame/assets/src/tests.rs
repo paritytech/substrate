@@ -624,18 +624,6 @@ fn origin_guards_should_work() {
 			Assets::start_destroy(RuntimeOrigin::signed(2), 0),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(
-			Assets::destroy_accounts(RuntimeOrigin::signed(2), 0),
-			Error::<Test>::NoPermission
-		);
-		assert_noop!(
-			Assets::destroy_approvals(RuntimeOrigin::signed(2), 0),
-			Error::<Test>::NoPermission
-		);
-		assert_noop!(
-			Assets::finish_destroy(RuntimeOrigin::signed(2), 0),
-			Error::<Test>::NoPermission
-		);
 	});
 }
 
