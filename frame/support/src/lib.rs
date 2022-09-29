@@ -1440,6 +1440,7 @@ pub mod pallet_prelude {
 /// * [`pallet::weight($expr)`](#palletweightexpr)
 /// * [`pallet::call_index($idx)`](#palletcall_indexidx)
 /// * [`pallet::extra_constants`](#extra-constants-palletextra_constants-optional)
+/// * [`pallet::error`](#error-palleterror-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1733,8 +1734,8 @@ pub mod pallet_prelude {
 ///
 /// # Error: `#[pallet::error]` (optional)
 ///
-/// Allow to define an error type to be return from dispatchable on error. This error type
-/// informations are put into metadata.
+/// Allows you to define an error type that will be return from the dispatchable when an error
+/// occurs. The information for this error type is then stored in metadata/
 ///
 /// Item must be defined as:
 ///
@@ -1748,7 +1749,7 @@ pub mod pallet_prelude {
 /// 	...
 /// }
 /// ```
-/// I.e. a regular rust enum named `Error`, with generic `T` and fieldless or multiple-field
+/// I.e. a regular enum named `Error`, with generic `T` and fieldless or multiple-field
 /// variants.
 ///
 /// Any field type in the enum variants must implement [`scale_info::TypeInfo`] in order to be
@@ -1759,19 +1760,19 @@ pub mod pallet_prelude {
 /// Field types in enum variants must also implement [`PalletError`](traits::PalletError),
 /// otherwise the pallet will fail to compile. Rust primitive types have already implemented
 /// the [`PalletError`](traits::PalletError) trait along with some commonly used stdlib types
-/// such as `Option` and `PhantomData`, and hence in most use cases, a manual implementation
-/// is not necessary and is discouraged.
+/// such as [`Option`] and [`PhantomData`](`frame_support::dispatch::marker::PhantomData`), and
+/// hence in most use cases, a manual implementation is not necessary and is discouraged.
 ///
-/// The generic `T` mustn't bound anything and where clause is not allowed. But bounds and
-/// where clause shouldn't be needed for any usecase.
+/// The generic `T` must not bound anything and the where clause is not allowed. That said,
+/// bounds and/or a where clause should not needed for any use-case.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// The macro implements `Debug` trait and functions `as_u8` using variant position, and
+/// The macro implements the [`Debug`] trait and functions `as_u8` using variant position, and
 /// `as_str` using variant doc.
 ///
-/// The macro implements `From<Error<T>>` for `&'static str`. The macro implements
-/// `From<Error<T>>` for `DispatchError`.
+/// The macro also implements `From<Error<T>>` for `&'static str` and `From<Error<T>>` for
+/// [`DispatchError`](`frame_support::dispatch::DispatchError`).
 ///
 /// # Event: `#[pallet::event]` optional
 ///
