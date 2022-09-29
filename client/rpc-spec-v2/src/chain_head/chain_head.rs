@@ -96,6 +96,13 @@ where
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Initialized<Hash> {
+	/// The hash of the imported block.
+	pub finalized_block_hash: Hash,
+}
+
 /// The transaction was included in a block of the chain.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,7 +130,9 @@ pub struct Finalized<Hash> {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "event")]
 pub enum FollowEvent<Hash> {
+	Initialized(Initialized<Hash>),
 	NewBlock(NewBlock<Hash>),
 	BestBlockChanged(BestBlockChanged<Hash>),
 	Finalized(Finalized<Hash>),
+	Stop,
 }
