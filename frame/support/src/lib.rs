@@ -1453,6 +1453,7 @@ pub mod pallet_prelude {
 /// * [`pallet::type_value`](#type-value-pallettype_value-optional)
 /// * [`pallet::genesis_config`](#genesis-config-palletgenesis_config-optional)
 /// * [`pallet::genesis_build`](#genesis-build-palletgenesis_build-optional)
+/// * [`pallet::inherent`](#inherent-palletinherent-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2091,9 +2092,9 @@ pub mod pallet_prelude {
 /// The macro will implement [`sp_runtime::BuildModuleGenesisStorage`] using `()` as a second
 /// generic for non-instantiable pallets.
 ///
-/// # Inherent: `#[pallet::inherent]` optional
+/// # Inherent: `#[pallet::inherent]` (optional)
 ///
-/// Allow the pallet to provide some inherent:
+/// Allows the pallet to provide some inherent:
 ///
 /// Item is defined as:
 ///
@@ -2104,13 +2105,14 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// I.e. a trait implementation with bound `T: Config`, of trait `ProvideInherent` for type
-/// `Pallet<T>`, and some optional where clause.
+/// I.e. a trait implementation with bound `T: Config`, of trait
+/// [`ProvideInherent`](`pallet_prelude::ProvideInherent`) for type `Pallet<T>`, and some
+/// optional where clause.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// Macro make currently no use of this information, but it might use this information in the
-/// future to give information directly to construct_runtime.
+/// The macro currently makes no use of this information, but it might use this information in
+/// the future to give information directly to `construct_runtime`.
 ///
 /// # Validate unsigned: `#[pallet::validate_unsigned]` optional
 ///
