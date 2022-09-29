@@ -1795,7 +1795,7 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// I.e. an enum (with named or unnamed fields variant), named `Event`, with generic: none or
-/// `T` or `T: Config`, and optional where clause.
+/// `T` or `T: Config`, and optional w here clause.
 ///
 /// Each field must implement [`Clone`], [`Eq`], [`PartialEq`], [`Encode`], [`Decode`], and
 /// [`Debug`] (on std only). For ease of use, bound by the trait
