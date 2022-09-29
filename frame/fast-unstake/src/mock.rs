@@ -32,7 +32,9 @@ pub type T = Runtime;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+		);
 }
 
 impl frame_system::Config for Runtime {
