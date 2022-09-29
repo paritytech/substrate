@@ -526,12 +526,12 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_cpu() {
-		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > 0.0);
+		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT).to_bs() > 0.0);
 	}
 
 	#[test]
 	fn test_benchmark_memory() {
-		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > 0.0);
+		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT).to_bs() > 0.0);
 	}
 
 	#[test]
