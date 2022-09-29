@@ -94,11 +94,13 @@ impl clap::ValueEnum for WasmExecutionMethod {
 	///
 	/// The value is `None` for skipped variants.
 	fn to_possible_value<'a>(&self) -> Option<PossibleValue<'a>> {
-		Some(match self {
+		match self {
 			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => PossibleValue::new("compiled"),
-			WasmExecutionMethod::Interpreted => PossibleValue::new(INTERPRETED_NAME),
-		})
+			WasmExecutionMethod::Compiled => Some(PossibleValue::new("compiled")),
+			#[cfg(not(feature = "wasmtime"))]
+			WasmExecutionMethod::Compiled => None,
+			WasmExecutionMethod::Interpreted => Some(PossibleValue::new(INTERPRETED_NAME)),
+		}
 	}
 }
 
