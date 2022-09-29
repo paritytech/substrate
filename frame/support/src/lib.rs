@@ -1451,6 +1451,7 @@ pub mod pallet_prelude {
 /// * [`pallet::whitelist_storage`](#palletwhitelist_storage-optional)
 /// * [`cfg(..)`](#cfg-for-storage) (on storage items)
 /// * [`pallet::type_value`](#type-value-pallettype_value-optional)
+/// * [`pallet::genesis_config`](#genesis-config-palletgenesis_config-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2028,13 +2029,14 @@ pub mod pallet_prelude {
 /// name of the function and its generic, and implements `Get<$ReturnType>` by calling the user
 /// defined function.
 ///
-/// # Genesis config: `#[pallet::genesis_config]` optional
+/// # Genesis config: `#[pallet::genesis_config]` (optional)
 ///
-/// Allow to define the genesis configuration of the pallet.
+/// Allows you to define the genesis configuration for the pallet.
 ///
-/// Item is defined as either an enum or a struct. It needs to be public and implement trait
-/// GenesisBuild with `#[pallet::genesis_build]`. The type generics is constrained to be
-/// either none, or `T` or `T: Config`.
+/// Item is defined as either an enum or a struct. It needs to be public and implement the
+/// trait [`GenesisBuild`](`traits::GenesisBuild`) with
+/// [`#[pallet::genesis_build]`](#genesis-build-palletgenesis_build-optional). The type
+/// generics are constrained to be either none, or `T` or `T: Config`.
 ///
 /// E.g:
 ///
@@ -2045,9 +2047,9 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// Macro will add the following attribute on it:
+/// The macro will add the following attributes:
 /// * `#[cfg(feature = "std")]`
 /// * `#[derive(Serialize, Deserialize)]`
 /// * `#[serde(rename_all = "camelCase")]`
