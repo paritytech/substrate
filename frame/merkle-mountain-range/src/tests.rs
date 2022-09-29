@@ -510,14 +510,6 @@ fn should_verify_batch_proofs() {
 		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
 		let min_mmr_size = leaf_indices.iter().max().unwrap() + 1;
 
-		let (simple_historical_leaves, simple_historical_proof) = ext.execute_with(|| {
-			crate::Pallet::<Test>::generate_historical_batch_proof(
-				leaf_indices.to_vec(),
-				min_mmr_size,
-			)
-			.unwrap()
-		});
-
 		// generate historical proofs for all possible mmr sizes,
 		// lower bound being index of highest leaf to be proven
 		let historical_proofs = (min_mmr_size..=mmr_size)
@@ -536,13 +528,6 @@ fn should_verify_batch_proofs() {
 			add_blocks(blocks_to_add);
 			// then
 			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
-			assert_eq!(
-				crate::Pallet::<Test>::verify_leaves(
-					simple_historical_leaves,
-					simple_historical_proof
-				),
-				Ok(())
-			);
 			historical_proofs.iter().for_each(|(leaves, proof)| {
 				assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves.clone(), proof.clone()), Ok(()));
 			});
@@ -971,6 +956,12 @@ fn does_not_panic_when_generating_historical_proofs() {
 		// when leaves count is invalid
 		assert_eq!(
 			crate::Pallet::<Test>::generate_historical_batch_proof(vec![3], 100),
+			Err(Error::InvalidLeavesCount),
+		);
+
+		// when both leaf index and leaves count are invalid
+		assert_eq!(
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 100),
 			Err(Error::InvalidLeavesCount),
 		);
 	});
