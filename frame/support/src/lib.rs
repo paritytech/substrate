@@ -1452,6 +1452,7 @@ pub mod pallet_prelude {
 /// * [`cfg(..)`](#cfg-for-storage) (on storage items)
 /// * [`pallet::type_value`](#type-value-pallettype_value-optional)
 /// * [`pallet::genesis_config`](#genesis-config-palletgenesis_config-optional)
+/// * [`pallet::genesis_build`](#genesis-build-palletgenesis_build-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2057,11 +2058,11 @@ pub mod pallet_prelude {
 /// * `#[serde(bound(serialize = ""))]`
 /// * `#[serde(bound(deserialize = ""))]`
 ///
-/// # Genesis build: `#[pallet::genesis_build]` optional
+/// # Genesis build: `#[pallet::genesis_build]` (optional)
 ///
-/// Allow to define how genesis_configuration is built.
+/// Allows you to define how `genesis_configuration` is built.
 ///
-/// Item is defined as:
+/// Item must be defined as:
 ///
 /// ```ignore
 /// #[pallet::genesis_build]
@@ -2070,7 +2071,7 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// I.e. a rust trait implementation with generic `T: Config`, of trait `GenesisBuild<T>` on
+/// I.e. a trait implementation with generic `T: Config`, of trait `GenesisBuild<T>` on
 /// type `GenesisConfig` with generics none or `T`.
 ///
 /// E.g.:
@@ -2082,13 +2083,13 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// Macro will add the following attribute on it:
+/// The macro will add the following attribute:
 /// * `#[cfg(feature = "std")]`
 ///
-/// Macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as second generic
-/// for non-instantiable pallets.
+/// The macro will implement [`sp_runtime::BuildModuleGenesisStorage`] using `()` as a second
+/// generic for non-instantiable pallets.
 ///
 /// # Inherent: `#[pallet::inherent]` optional
 ///
