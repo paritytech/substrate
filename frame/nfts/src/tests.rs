@@ -972,19 +972,45 @@ fn create_cancel_swap_should_work() {
 		assert_ok!(Nfts::mint(Origin::signed(user_id), collection_id, item_1, user_id));
 		assert_ok!(Nfts::mint(Origin::signed(user_id), collection_id, item_2, user_id));
 
+		// validate desired item and the collection exists
+		assert_noop!(
+			Nfts::create_swap(
+				Origin::signed(user_id),
+				collection_id,
+				item_1,
+				collection_id,
+				Some(item_2 + 1),
+				Some(price),
+				Some(duration),
+			),
+			Error::<Test>::UnknownItem
+		);
+		assert_noop!(
+			Nfts::create_swap(
+				Origin::signed(user_id),
+				collection_id,
+				item_1,
+				collection_id + 1,
+				None,
+				Some(price),
+				Some(duration),
+			),
+			Error::<Test>::UnknownCollection
+		);
+
 		assert_ok!(Nfts::create_swap(
 			Origin::signed(user_id),
 			collection_id,
 			item_1,
 			collection_id,
-			item_2,
+			Some(item_2),
 			Some(price),
 			Some(duration),
 		));
 
 		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
 		assert_eq!(swap.desired_collection, collection_id);
-		assert_eq!(swap.desired_item, item_2);
+		assert_eq!(swap.desired_item, Some(item_2));
 		assert_eq!(swap.price, Some(price));
 		assert_eq!(swap.deadline, Some(expect_deadline));
 
@@ -992,7 +1018,7 @@ fn create_cancel_swap_should_work() {
 			collection: collection_id,
 			item: item_1,
 			desired_collection: collection_id,
-			desired_item: item_2,
+			desired_item: Some(item_2),
 			price: Some(price),
 			deadline: Some(expect_deadline),
 		}));
@@ -1003,7 +1029,7 @@ fn create_cancel_swap_should_work() {
 			collection: collection_id,
 			item: item_1,
 			desired_collection: collection_id,
-			desired_item: item_2,
+			desired_item: Some(item_2),
 			price: Some(price),
 			deadline: Some(expect_deadline),
 		}));
@@ -1015,7 +1041,7 @@ fn create_cancel_swap_should_work() {
 			collection_id,
 			item_1,
 			collection_id,
-			item_2,
+			Some(item_2),
 			Some(price),
 			Some(duration),
 		));
@@ -1025,6 +1051,20 @@ fn create_cancel_swap_should_work() {
 		);
 		System::set_block_number(expect_deadline + 1);
 		assert_ok!(Nfts::cancel_swap(Origin::signed(user_id + 1), collection_id, item_1));
+
+		// validate optional desired_item param
+		assert_ok!(Nfts::create_swap(
+			Origin::signed(user_id),
+			collection_id,
+			item_1,
+			collection_id,
+			None,
+			Some(price),
+			Some(duration),
+		));
+
+		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(swap.desired_item, None);
 	});
 }
 
@@ -1061,7 +1101,7 @@ fn claim_swap_should_work() {
 			collection_id,
 			item_1,
 			collection_id,
-			item_2,
+			Some(item_2),
 			Some(price),
 			Some(duration),
 		));
@@ -1160,5 +1200,28 @@ fn claim_swap_should_work() {
 			price: Some(price),
 			deadline: Some(deadline),
 		}));
+
+		// validate the optional desired_item param
+		assert_ok!(Nfts::create_swap(
+			Origin::signed(user_1),
+			collection_id,
+			item_4,
+			collection_id,
+			None,
+			Some(price),
+			Some(duration),
+		));
+		assert_ok!(Nfts::claim_swap(
+			Origin::signed(user_2),
+			collection_id,
+			item_1,
+			collection_id,
+			item_4,
+			Some(price),
+		));
+		let item = Item::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.owner, user_1);
+		let item = Item::<Test>::get(collection_id, item_4).unwrap();
+		assert_eq!(item.owner, user_2);
 	});
 }

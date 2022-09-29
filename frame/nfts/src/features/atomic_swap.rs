@@ -27,15 +27,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection_id: T::CollectionId,
 		item_id: T::ItemId,
 		desired_collection_id: T::CollectionId,
-		desired_item_id: T::ItemId,
+		maybe_desired_item_id: Option<T::ItemId>,
 		maybe_price: Option<ItemPrice<T, I>>,
 		maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
 	) -> DispatchResult {
 		let item = Item::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(item.owner == sender, Error::<T, I>::NoPermission);
 
-		Item::<T, I>::get(&desired_collection_id, &desired_item_id)
-			.ok_or(Error::<T, I>::UnknownItem)?;
+		match maybe_desired_item_id {
+			Some(desired_item_id) => {
+				if !(Item::<T, I>::contains_key(&desired_collection_id, &desired_item_id)) {
+					return Err(Error::<T, I>::UnknownItem.into())
+				}
+			},
+			None =>
+				if !(Collection::<T, I>::contains_key(&desired_collection_id)) {
+					return Err(Error::<T, I>::UnknownCollection.into())
+				},
+		};
 
 		let now = frame_system::Pallet::<T>::block_number();
 		let deadline = maybe_duration.map(|d| d.saturating_add(now));
@@ -45,7 +54,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			&item_id,
 			PendingSwap {
 				desired_collection: desired_collection_id,
-				desired_item: desired_item_id,
+				desired_item: maybe_desired_item_id,
 				price: maybe_price,
 				deadline,
 			},
@@ -55,7 +64,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			collection: collection_id,
 			item: item_id,
 			desired_collection: desired_collection_id,
-			desired_item: desired_item_id,
+			desired_item: maybe_desired_item_id,
 			price: maybe_price,
 			deadline,
 		});
@@ -114,8 +123,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ensure!(send_item.owner == sender, Error::<T, I>::NoPermission);
 		ensure!(swap.desired_collection == send_collection_id, Error::<T, I>::UnknownSwap);
-		ensure!(swap.desired_item == send_item_id, Error::<T, I>::UnknownSwap);
 		ensure!(swap.price == maybe_receive_amount, Error::<T, I>::UnknownSwap);
+
+		if let Some(desired_item) = swap.desired_item {
+			ensure!(desired_item == send_item_id, Error::<T, I>::UnknownSwap);
+		}
 
 		if let Some(deadline) = swap.deadline {
 			let now = frame_system::Pallet::<T>::block_number();

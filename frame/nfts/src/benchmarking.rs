@@ -464,13 +464,13 @@ benchmarks_instance_pallet! {
 		let (item2, ..) = mint_item::<T, I>(1);
 		let price = ItemPrice::<T, I>::from(100u32);
 		let duration = T::BlockNumber::max_value();
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, item2, Some(price), Some(duration))
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price), Some(duration))
 	verify {
 		assert_last_event::<T, I>(Event::SwapCreated {
 			collection,
 			item: item1,
 			desired_collection: collection,
-			desired_item: item2,
+			desired_item: Some(item2),
 			price: Some(price),
 			deadline: Some(duration),
 		}.into());
@@ -483,14 +483,14 @@ benchmarks_instance_pallet! {
 		let price = ItemPrice::<T, I>::from(100u32);
 		let duration = T::BlockNumber::max_value();
 		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Nfts::<T, I>::create_swap(origin, collection, item1, collection, item2, Some(price), Some(duration))?;
+		Nfts::<T, I>::create_swap(origin, collection, item1, collection, Some(item2), Some(price), Some(duration))?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1)
 	verify {
 		assert_last_event::<T, I>(Event::SwapCancelled {
 			collection,
 			item: item1,
 			desired_collection: collection,
-			desired_item: item2,
+			desired_item: Some(item2),
 			price: Some(price),
 			deadline: Some(duration),
 		}.into());
@@ -506,7 +506,7 @@ benchmarks_instance_pallet! {
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		let origin = SystemOrigin::Signed(caller.clone());
 		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;
-		Nfts::<T, I>::create_swap(origin.clone().into(), collection, item1, collection, item2, Some(price), Some(duration))?;
+		Nfts::<T, I>::create_swap(origin.clone().into(), collection, item1, collection, Some(item2), Some(price), Some(duration))?;
 	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::SwapClaimed {

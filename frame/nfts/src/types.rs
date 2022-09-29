@@ -131,7 +131,7 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 pub struct PendingSwap<CollectionId, ItemId, ItemPrice, Deadline> {
 	pub(super) desired_collection: CollectionId,
-	pub(super) desired_item: ItemId,
+	pub(super) desired_item: Option<ItemId>,
 	pub(super) price: Option<ItemPrice>,
 	pub(super) deadline: Option<Deadline>,
 }
