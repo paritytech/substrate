@@ -2367,7 +2367,7 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// # Example for pallet with instance.
+/// # Example of an instantiable pallet
 ///
 /// ```
 /// pub use pallet::*;
