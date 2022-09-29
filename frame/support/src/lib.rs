@@ -1441,6 +1441,9 @@ pub mod pallet_prelude {
 /// * [`pallet::call_index($idx)`](#palletcall_indexidx)
 /// * [`pallet::extra_constants`](#extra-constants-palletextra_constants-optional)
 /// * [`pallet::error`](#error-palleterror-optional)
+/// * [`pallet::event`](#event-palletevent-optional)
+/// * [`pallet::generate_deposit($visibility fn
+///   deposit_event)`](#palletgenerate_depositvisibility-fn-deposit_event)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1774,12 +1777,12 @@ pub mod pallet_prelude {
 /// The macro also implements `From<Error<T>>` for `&'static str` and `From<Error<T>>` for
 /// [`DispatchError`](`frame_support::dispatch::DispatchError`).
 ///
-/// # Event: `#[pallet::event]` optional
+/// # Event: `#[pallet::event]` (optional)
 ///
-/// Allow to define pallet events, pallet events are stored in the block when they deposited
-/// (and removed in next block).
+/// Allows you to define pallet events. Pallet events are stored in the block when they are
+/// applied (and then removed in next block).
 ///
-/// Item is defined as:
+/// Item must be defined as follows:
 ///
 /// ```ignore
 /// #[pallet::event]
@@ -1791,33 +1794,37 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// I.e. an enum (with named or unnamed fields variant), named Event, with generic: none or
+/// I.e. an enum (with named or unnamed fields variant), named `Event`, with generic: none or
 /// `T` or `T: Config`, and optional where clause.
 ///
-/// Each field must implement `Clone`, `Eq`, `PartialEq`, `Encode`, `Decode`, and `Debug` (on
-/// std only). For ease of use, bound the trait `Member` available in
+/// Each field must implement [`Clone`], [`Eq`], [`PartialEq`], [`Encode`], [`Decode`], and
+/// [`Debug`] (on std only). For ease of use, bound by the trait
+/// [`Member`](`frame_support::pallet_prelude::Member`), available in
 /// frame_support::pallet_prelude.
 ///
-/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generate a
+/// ## `#[pallet::generate_deposit($visibility fn deposit_event)]`
+///
+/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generates a
 /// helper function on `Pallet` to deposit event.
 ///
-/// NOTE: For instantiable pallet, event must be generic over T and I.
+/// NOTE: For instantiable pallets, the event must be generic over `T` and `I`.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// Macro will add on enum `Event` the attributes:
-/// * `#[derive(frame_support::CloneNoBound)]`,
-/// * `#[derive(frame_support::EqNoBound)]`,
-/// * `#[derive(frame_support::PartialEqNoBound)]`,
-/// * `#[derive(codec::Encode)]`,
-/// * `#[derive(codec::Decode)]`,
+/// The macro will add on enum `Event` the attributes:
+/// * `#[derive(frame_support::CloneNoBound)]`
+/// * `#[derive(frame_support::EqNoBound)]`
+/// * `#[derive(frame_support::PartialEqNoBound)]`
+/// * `#[derive(codec::Encode)]`
+/// * `#[derive(codec::Decode)]`
 /// * `#[derive(frame_support::RuntimeDebugNoBound)]`
 ///
-/// Macro implements `From<Event<..>>` for ().
+/// The macro implements `From<Event<..>>` for ().
 ///
-/// Macro implements metadata function on `Event` returning the `EventMetadata`.
+/// The macro implements a metadata function on `Event` returning the `EventMetadata`.
 ///
-/// If `#[pallet::generate_deposit]` then macro implement `fn deposit_event` on `Pallet`.
+/// If `#[pallet::generate_deposit]` is present then the macro implements `fn deposit_event` on
+/// `Pallet`.
 ///
 /// # Storage: `#[pallet::storage]` optional
 ///
