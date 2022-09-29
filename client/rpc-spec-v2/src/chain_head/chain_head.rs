@@ -61,30 +61,17 @@ where
 	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 {
 	fn follow(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
-		let stream_import =
-			self.client.import_notification_stream().filter_map(|notification| async move {
-				let event = if notification.is_new_best {
-					FollowEvent::BestBlockChanged(BestBlockChanged {
-						best_block_hash: notification.hash,
-					})
-				} else {
-					FollowEvent::NewBlock(NewBlock {
-						block_hash: notification.hash,
-						parent_hash: *notification.header.parent_hash(),
-					})
-				};
-				Some(event)
-			});
-
-		let blocks_import =
-			self.client.import_notification_stream().flat_map(|notification| async move {
+		let stream_import = self
+			.client
+			.import_notification_stream()
+			.map(|notification| {
 				let new_block = FollowEvent::NewBlock(NewBlock {
 					block_hash: notification.hash,
 					parent_hash: *notification.header.parent_hash(),
 				});
 
 				if !notification.is_new_best {
-					return stream::once(async { new_block });
+					return stream::iter(vec![new_block])
 				}
 
 				// If this is the new best block, then we need to generate two events.
@@ -92,14 +79,12 @@ where
 					best_block_hash: notification.hash,
 				});
 				stream::iter(vec![new_block, best_block])
-			});
+			})
+			.flatten();
 
-		let stream_finalized =
-			self.client
-				.finality_notification_stream()
-				.filter_map(|notification| async move {
-					Some(FollowEvent::Finalized(Finalized { block_hash: notification.hash }))
-				});
+		let stream_finalized = self.client.finality_notification_stream().map(|notification| {
+			FollowEvent::Finalized(Finalized { block_hash: notification.hash })
+		});
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 
