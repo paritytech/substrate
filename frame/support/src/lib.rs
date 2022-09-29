@@ -1436,6 +1436,9 @@ pub mod pallet_prelude {
 /// * [`pallet::generate_storage_info`](#palletgenerate_storage_info)
 /// * [`pallet::storage_version`](#palletstorage_version)
 /// * [`pallet::hooks`](#hooks-pallethooks-optional)
+/// * [`pallet::call`](#call-palletcall-optional)
+/// * [`pallet::weight($expr)`](#palletweightexpr)
+/// * [`pallet::call_index($idx)`](#palletcall_indexidx)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1630,7 +1633,7 @@ pub mod pallet_prelude {
 /// NOTE: The macro also adds some tracing logic when implementing the above traits. The
 /// following hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
 ///
-/// # Call: `#[pallet::call]` optional
+/// # Call: `#[pallet::call]` (optional)
 ///
 /// Implementation of pallet dispatchables.
 ///
@@ -1652,12 +1655,16 @@ pub mod pallet_prelude {
 /// }
 /// ```
 /// I.e. a regular type implementation, with generic `T: Config`, on type `Pallet<T>`, with
-/// optional where clause.
+/// an optional where clause.
+///
+/// ## `#[pallet::weight($expr)]`
 ///
 /// Each dispatchable needs to define a weight with `#[pallet::weight($expr)]` attribute, the
-/// first argument must be `origin: OriginFor<T>`, compact encoding for argument can be used
-/// using `#[pallet::compact]`, function must return `DispatchResultWithPostInfo` or
+/// first argument must be `origin: OriginFor<T>`. Compact encoding for argument can be used
+/// via `#[pallet::compact]`. The function must return a `DispatchResultWithPostInfo` or
 /// `DispatchResult`.
+///
+/// ## `#[pallet::call_index($idx)]`
 ///
 /// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
 /// which defines and sets the codec index for the dispatchable function in the `Call` enum.
@@ -1668,8 +1675,10 @@ pub mod pallet_prelude {
 /// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar`
 /// has a call index of 10, then `fn qux` will have an index of 11, instead of 1.
 ///
-/// All arguments must implement `Debug`, `PartialEq`, `Eq`, `Decode`, `Encode`, `Clone`. For
-/// ease of use, bound the trait `Member` available in frame_support::pallet_prelude.
+/// All arguments must implement [`Debug`], [`PartialEq`], [`Eq`], [`Decode`], [`Encode`], and
+/// [`Clone`]. For ease of use, bound by the trait
+/// [`Member`](`frame_support::pallet_prelude::Member`) available in
+/// [`frame_support::pallet_prelude`].
 ///
 /// If no `#[pallet::call]` exists, then a default implementation corresponding to the
 /// following code is automatically generated:
@@ -1679,21 +1688,24 @@ pub mod pallet_prelude {
 /// impl<T: Config> Pallet<T> {}
 /// ```
 ///
-/// **WARNING**: modifying dispatchables, changing their order, removing some must be done
-/// with care. Indeed this will change the outer runtime call type (which is an enum with one
+/// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
+/// care. Indeed this will change the outer runtime call type (which is an enum with one
 /// variant per pallet), this outer runtime call can be stored on-chain (e.g. in
-/// pallet-scheduler). Thus migration might be needed. To mitigate against some of this, the
-/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable
-/// so that the `Call` enum encoding does not change after modification.
+/// `pallet-scheduler`). Thus migration might be needed. To mitigate against some of this, the
+/// [`#[pallet::call_index($idx)]`](#palletcall_indexidx) attribute can be used to fix the
+/// order of the dispatchable so that the `Call` enum encoding does not change after
+/// modification.
 ///
 /// ### Macro expansion
 ///
 /// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
-/// `Clone`, `Eq`, `PartialEq`, `Debug` (with stripped implementation in `not("std")`),
-/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, `UnfilteredDispatchable`.
+/// [`Clone`], [`Eq`], [`PartialEq`], [`Debug`] (with stripped implementation in `not("std")`),
+/// [`Encode`], [`Decode`], [`GetDispatchInfo`](`frame_support::dispatch::GetDispatchInfo`),
+/// [`GetCallName`](`frame_support::dispatch::GetCallName`), and
+/// [`UnfilteredDispatchable`](`frame_support::dispatch::UnfilteredDispatchable`).
 ///
-/// The macro implement the `Callable` trait on `Pallet` and a function `call_functions` which
-/// returns the dispatchable metadata.
+/// The macro implements the [`Callable`] trait on `Pallet` and a function `call_functions`
+/// which returns the dispatchable metadata.
 ///
 /// # Extra constants: `#[pallet::extra_constants]` optional
 ///
