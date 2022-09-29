@@ -2173,7 +2173,7 @@ pub mod pallet_prelude {
 /// Thus impl bound looks like `impl<T: Config<I>, I: 'static>`, and types look like
 /// `SomeType<T, I=()>` or `SomeType<T: Config<I>, I: 'static = ()>`.
 ///
-/// # Example for pallet without instance.
+/// # Example of a non-instantiable pallet
 ///
 /// ```
 /// pub use pallet::*; // reexport in crate namespace for `construct_runtime!`
