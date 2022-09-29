@@ -1133,7 +1133,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_collection_status())]
 		pub fn force_collection_status(
 			origin: OriginFor<T>,
-			collection_id: T::CollectionId,
+			collection: T::CollectionId,
 			owner: AccountIdLookupOf<T>,
 			issuer: AccountIdLookupOf<T>,
 			admin: AccountIdLookupOf<T>,
@@ -1142,21 +1142,21 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
-			Collection::<T, I>::try_mutate(collection_id, |maybe_collection| {
-				let mut collection =
+			Collection::<T, I>::try_mutate(collection, |maybe_collection| {
+				let mut collection_info =
 					maybe_collection.take().ok_or(Error::<T, I>::UnknownCollection)?;
-				let old_owner = collection.owner;
+				let old_owner = collection_info.owner;
 				let new_owner = T::Lookup::lookup(owner)?;
-				collection.owner = new_owner.clone();
-				collection.issuer = T::Lookup::lookup(issuer)?;
-				collection.admin = T::Lookup::lookup(admin)?;
-				collection.freezer = T::Lookup::lookup(freezer)?;
-				*maybe_collection = Some(collection);
-				CollectionAccount::<T, I>::remove(&old_owner, &collection_id);
-				CollectionAccount::<T, I>::insert(&new_owner, &collection_id, ());
-				CollectionConfigOf::<T, I>::insert(&collection_id, config);
+				collection_info.owner = new_owner.clone();
+				collection_info.issuer = T::Lookup::lookup(issuer)?;
+				collection_info.admin = T::Lookup::lookup(admin)?;
+				collection_info.freezer = T::Lookup::lookup(freezer)?;
+				*maybe_collection = Some(collection_info);
+				CollectionAccount::<T, I>::remove(&old_owner, &collection);
+				CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
+				CollectionConfigOf::<T, I>::insert(&collection, config);
 
-				Self::deposit_event(Event::CollectionStatusChanged { collection: collection_id });
+				Self::deposit_event(Event::CollectionStatusChanged { collection });
 				Ok(())
 			})
 		}
