@@ -1450,6 +1450,7 @@ pub mod pallet_prelude {
 /// * [`pallet::unbounded`](#palletunbounded-optional)
 /// * [`pallet::whitelist_storage`](#palletwhitelist_storage-optional)
 /// * [`cfg(..)`](#cfg-for-storage) (on storage items)
+/// * [`pallet::type_value`](#type-value-pallettype_value-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1494,8 +1495,8 @@ pub mod pallet_prelude {
 ///
 /// ## `pallet::constant`
 ///
-/// The `#[pallet::constant]` attribute can be used to add the `Get` associated type from
-/// [`pallet::config`](#palletconfig) into metadata, e.g.:
+/// The `#[pallet::constant]` attribute can be used to add the [`Get`](crate::traits::Get)
+/// associated type from [`pallet::config`](#palletconfig) into metadata, e.g.:
 ///
 /// ```ignore
 /// #[pallet::config]
@@ -1954,19 +1955,20 @@ pub mod pallet_prelude {
 /// Any type placed as the `QueryKind` parameter must implement
 /// [`frame_support::storage::types::QueryKindTrait`]. There are 3 implementations of this
 /// trait by default:
+///
 /// 1. [`OptionQuery`](`frame_support::storage::types::OptionQuery`), the default `QueryKind`
-/// used when this    type parameter is omitted. Specifying this as the `QueryKind` would cause
-/// storage map    APIs that return a `QueryKind` to instead return an [`Option`], returning
-/// `Some` when a    value does exist under a specified storage key, and `None` otherwise.
+///    used when this type parameter is omitted. Specifying this as the `QueryKind` would cause
+///    storage map APIs that return a `QueryKind` to instead return an [`Option`], returning
+///    `Some` when a value does exist under a specified storage key, and `None` otherwise.
 /// 2. [`ValueQuery`](`frame_support::storage::types::ValueQuery`) causes storage map APIs that
-/// return a    `QueryKind` to instead return the value type. In cases where a value does not
-/// exist    under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is
-/// used    to return an appropriate value.
+///    return a `QueryKind` to instead return the value type. In cases where a value does not
+///    exist under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is
+///    used to return an appropriate value.
 /// 3. [`ResultQuery`](`frame_support::storage::types::ResultQuery`) causes storage map APIs
-/// that return a    `QueryKind` to instead return a `Result<T, E>`, with `T` being the value
-/// type and `E`    being the pallet error type specified by the `#[pallet::error]` attribute.
-/// In cases    where a value does not exist under a specified storage key, an `Err` with the
-/// specified    pallet error variant is returned.
+///    that return a `QueryKind` to instead return a `Result<T, E>`, with `T` being the value
+///    type and `E` being the pallet error type specified by the `#[pallet::error]` attribute.
+///    In cases where a value does not exist under a specified storage key, an `Err` with the
+///    specified pallet error variant is returned.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some
 /// type alias then the generation of the getter might fail. In this case the getter can be
@@ -1995,10 +1997,10 @@ pub mod pallet_prelude {
 /// * for a storage double map, the type of the values, and the types of `key1` and `key2` are
 ///   copied into the metadata.
 ///
-/// # Type value: `#[pallet::type_value]` optional
+/// # Type value: `#[pallet::type_value]` (optional)
 ///
-/// Helper to define a struct implementing `Get` trait. To ease use of storage types. This
-/// attribute can be used multiple time.
+/// Helper to define a struct implementing the [`Get`](crate::traits::Get) trait. To ease use
+/// of storage types. This attribute can be used multiple times.
 ///
 /// Item must be defined as:
 ///
@@ -2016,13 +2018,14 @@ pub mod pallet_prelude {
 /// fn MyDefault<T: Config>() -> T::Balance { 3.into() }
 /// ```
 ///
-/// NOTE: This attribute is meant to be used alongside `#[pallet::storage]` to defined some
-/// specific default value in storage.
+/// NOTE: This attribute is meant to be used alongside
+/// [`#[pallet::storage]`](#storage-palletstorage-optional) to define some specific default
+/// value in storage.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// Macro renames the function to some internal name, generate a struct with the original name
-/// of the function and its generic, and implement `Get<$ReturnType>` by calling the user
+/// The macro renames the function to some internal name, generates a struct with the original
+/// name of the function and its generic, and implements `Get<$ReturnType>` by calling the user
 /// defined function.
 ///
 /// # Genesis config: `#[pallet::genesis_config]` optional
