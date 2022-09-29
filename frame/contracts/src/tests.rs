@@ -279,7 +279,9 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+		);
 	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {
