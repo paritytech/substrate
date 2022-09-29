@@ -415,7 +415,7 @@ benchmarks! {
 
 	// No launch no maturing referenda.
 	on_initialize_base {
-		let r in 1 .. MAX_REFERENDUMS;
+		let r in 0 .. MAX_REFERENDUMS;
 
 		for i in 0..r {
 			add_referendum::<T>(i)?;
@@ -445,7 +445,7 @@ benchmarks! {
 	}
 
 	on_initialize_base_with_launch_period {
-		let r in 1 .. MAX_REFERENDUMS;
+		let r in 0 .. MAX_REFERENDUMS;
 
 		for i in 0..r {
 			add_referendum::<T>(i)?;
@@ -477,7 +477,7 @@ benchmarks! {
 	}
 
 	delegate {
-		let r in 1 .. MAX_REFERENDUMS;
+		let r in 0 .. MAX_REFERENDUMS;
 
 		let initial_balance: BalanceOf<T> = 100u32.into();
 		let delegated_balance: BalanceOf<T> = 1000u32.into();
@@ -529,7 +529,7 @@ benchmarks! {
 	}
 
 	undelegate {
-		let r in 1 .. MAX_REFERENDUMS;
+		let r in 0 .. MAX_REFERENDUMS;
 
 		let initial_balance: BalanceOf<T> = 100u32.into();
 		let delegated_balance: BalanceOf<T> = 1000u32.into();

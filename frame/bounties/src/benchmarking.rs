@@ -197,7 +197,7 @@ benchmarks_instance_pallet! {
 	}
 
 	spend_funds {
-		let b in 1 .. 100;
+		let b in 0 .. 100;
 		setup_pot_account::<T, I>();
 		create_approved_bounties::<T, I>(b)?;
 
@@ -216,7 +216,9 @@ benchmarks_instance_pallet! {
 	verify {
 		ensure!(budget_remaining < BalanceOf::<T, I>::max_value(), "Budget not used");
 		ensure!(missed_any == false, "Missed some");
-		assert_last_event::<T, I>(Event::BountyBecameActive { index: b - 1 }.into())
+		if b > 0 {
+			assert_last_event::<T, I>(Event::BountyBecameActive { index: b - 1 }.into())
+		}
 	}
 
 	impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test)

@@ -86,7 +86,7 @@ fn call_and_hash<T: Config>(i: u32) -> (<T as Config>::RuntimeCall, T::Hash) {
 
 benchmarks! {
 	on_initialize_periodic_named_resolved {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, true, true, Some(true))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -98,7 +98,7 @@ benchmarks! {
 	}
 
 	on_initialize_named_resolved {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, false, true, Some(true))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -108,7 +108,7 @@ benchmarks! {
 	}
 
 	on_initialize_periodic_resolved {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, true, false, Some(true))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -120,7 +120,7 @@ benchmarks! {
 	}
 
 	on_initialize_resolved {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, false, false, Some(true))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -130,7 +130,7 @@ benchmarks! {
 	}
 
 	on_initialize_named_aborted {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, false, true, None)?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -144,7 +144,7 @@ benchmarks! {
 	}
 
 	on_initialize_aborted {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, false, false, None)?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -158,7 +158,7 @@ benchmarks! {
 	}
 
 	on_initialize_periodic_named {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, true, true, Some(false))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -170,7 +170,7 @@ benchmarks! {
 	}
 
 	on_initialize_periodic {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, true, false, Some(false))?;
 	}: { Scheduler::<T>::on_initialize(when); }
@@ -182,7 +182,7 @@ benchmarks! {
 	}
 
 	on_initialize_named {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, false, true, Some(false))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
@@ -192,7 +192,7 @@ benchmarks! {
 	}
 
 	on_initialize {
-		let s in 1 .. T::MaxScheduledPerBlock::get();
+		let s in 0 .. T::MaxScheduledPerBlock::get();
 		let when = BLOCK_NUMBER.into();
 		fill_schedule::<T>(when, s, false, false, Some(false))?;
 	}: { Scheduler::<T>::on_initialize(BLOCK_NUMBER.into()); }
