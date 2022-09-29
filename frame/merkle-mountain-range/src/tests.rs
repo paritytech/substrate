@@ -513,13 +513,6 @@ fn should_verify_batch_proofs() {
 			)
 			.unwrap()
 		});
-		let (advanced_historical_leaves, advanced_historical_proof) = ext.execute_with(|| {
-			crate::Pallet::<Test>::generate_historical_batch_proof(
-				leaf_indices.to_vec(),
-				leaf_indices.iter().max().unwrap() + 2,
-			)
-			.unwrap()
-		});
 
 		ext.execute_with(|| {
 			add_blocks(blocks_to_add);
@@ -529,13 +522,6 @@ fn should_verify_batch_proofs() {
 				crate::Pallet::<Test>::verify_leaves(
 					simple_historical_leaves,
 					simple_historical_proof
-				),
-				Ok(())
-			);
-			assert_eq!(
-				crate::Pallet::<Test>::verify_leaves(
-					advanced_historical_leaves,
-					advanced_historical_proof
 				),
 				Ok(())
 			);
@@ -557,7 +543,7 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
+		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
@@ -572,7 +558,7 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate all possible 2-leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
+		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
