@@ -94,7 +94,7 @@ pub struct TransactionDropped {
 /// to unsubscribe at any moment.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 // We need to manually specify the trait bounds for the `Hash` trait to ensure `into` and
-// `form` still work.
+// `from` still work.
 #[serde(bound(
 	serialize = "Hash: Serialize + Clone",
 	deserialize = "Hash: Deserialize<'de> + Clone"
