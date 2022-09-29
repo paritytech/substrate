@@ -1327,3 +1327,70 @@ fn collection_locking_should_work() {
 		assert_eq!(stored_config, full_lock_config);
 	});
 }
+
+#[test]
+fn pallet_level_feature_flags_should_work() {
+	new_test_ext().execute_with(|| {
+		FeatureFlags::set(&SystemFeatures(
+			SystemFeature::NoTrading | SystemFeature::NoApprovals | SystemFeature::NoAttributes,
+		));
+
+		let user_id = 1;
+		let collection_id = 0;
+		let item_id = 1;
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
+
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_id,
+			user_id,
+			default_item_config(),
+		));
+
+		// SystemFeature::NoTrading
+		assert_noop!(
+			Nfts::set_price(RuntimeOrigin::signed(user_id), collection_id, item_id, Some(1), None),
+			Error::<Test>::MethodDisabled
+		);
+		assert_noop!(
+			Nfts::buy_item(RuntimeOrigin::signed(user_id), collection_id, item_id, 1),
+			Error::<Test>::MethodDisabled
+		);
+
+		// SystemFeature::NoApprovals
+		assert_noop!(
+			Nfts::approve_transfer(RuntimeOrigin::signed(user_id), collection_id, item_id, 2, None),
+			Error::<Test>::MethodDisabled
+		);
+		assert_noop!(
+			Nfts::cancel_approval(RuntimeOrigin::signed(user_id), collection_id, item_id, 2),
+			Error::<Test>::MethodDisabled
+		);
+		assert_noop!(
+			Nfts::clear_all_transfer_approvals(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				item_id,
+			),
+			Error::<Test>::MethodDisabled
+		);
+
+		// SystemFeature::NoAttributes
+		assert_noop!(
+			Nfts::set_attribute(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				None,
+				bvec![0],
+				bvec![0]
+			),
+			Error::<Test>::MethodDisabled
+		);
+		assert_noop!(
+			Nfts::clear_attribute(RuntimeOrigin::signed(user_id), collection_id, None, bvec![0]),
+			Error::<Test>::MethodDisabled
+		);
+	})
+}

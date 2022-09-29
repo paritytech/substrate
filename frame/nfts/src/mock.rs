@@ -86,7 +86,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub FeatureFlags: SystemFeatures = SystemFeatures(SystemFeature::empty());
+	pub storage FeatureFlags: SystemFeatures = SystemFeatures(SystemFeature::empty());
 }
 
 impl Config for Test {
