@@ -76,6 +76,24 @@ where
 				Some(event)
 			});
 
+		let blocks_import =
+			self.client.import_notification_stream().flat_map(|notification| async move {
+				let new_block = FollowEvent::NewBlock(NewBlock {
+					block_hash: notification.hash,
+					parent_hash: *notification.header.parent_hash(),
+				});
+
+				if !notification.is_new_best {
+					return stream::once(async { new_block });
+				}
+
+				// If this is the new best block, then we need to generate two events.
+				let best_block = FollowEvent::BestBlockChanged(BestBlockChanged {
+					best_block_hash: notification.hash,
+				});
+				stream::iter(vec![new_block, best_block])
+			});
+
 		let stream_finalized =
 			self.client
 				.finality_notification_stream()
