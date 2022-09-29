@@ -201,11 +201,17 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-pub struct UnfilterableCalls; // TODO move to calls, use (..) to match on pallets like ProxyType
 
+/// Filter to block balance pallet calls
+/// Used for both SafeMode and TxPause pallets
+/// Therefor we include both so they cannot affect each other
+pub struct UnfilterableCalls;
 impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
-		matches!(call, RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. }))
+		match call {
+			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause() => true,
+			RuntimeCall::Balances(_) => false,
+		}
 	}
 }
 
@@ -218,17 +224,6 @@ impl pallet_tx_pause::Config for Runtime {
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
-}
-
-/// Filter to block balance pallet calls
-pub struct UnfilterableCalls;
-impl Contains<RuntimeCall> for UnfilterableCalls {
-	fn contains(call: &RuntimeCall) -> bool {
-		match call {
-			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
-			RuntimeCall::Balances(_) => false,
-		}
-	}
 }
 
 /// An origin that can enable the safe-mode by force.
@@ -359,7 +354,7 @@ parameter_types! {
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type UnfilterableCalls = UnfilterableCalls; // TODO add TxPause pallet
+	type UnfilterableCalls = UnfilterableCalls;
 	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
 	type ActivateStakeAmount = ActivateStakeAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
