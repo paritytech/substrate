@@ -1455,6 +1455,7 @@ pub mod pallet_prelude {
 /// * [`pallet::genesis_build`](#genesis-build-palletgenesis_build-optional)
 /// * [`pallet::inherent`](#inherent-palletinherent-optional)
 /// * [`pallet::validate_unsigned`](#validate-unsigned-palletvalidate_unsigned-optional)
+/// * [`pallet::origin`](#origin-palletorigin-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2140,11 +2141,11 @@ pub mod pallet_prelude {
 /// The macro currently makes no use of this information, but it might use this information in
 /// the future to give information directly to `construct_runtime`.
 ///
-/// # Origin: `#[pallet::origin]` optional
+/// # Origin: `#[pallet::origin]` (optional)
 ///
-/// Allow to define some origin for the pallet.
+/// Allows you to define some origin for the pallet.
 ///
-/// Item must be either a type alias or an enum or a struct. It needs to be public.
+/// Item must be either a type alias, an enum, or a struct. It needs to be public.
 ///
 /// E.g.:
 ///
@@ -2154,10 +2155,10 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// **WARNING**: modifying origin changes the outer runtime origin. This outer runtime origin
-/// can be stored on-chain (e.g. in pallet-scheduler), thus any change must be done with care
+/// can be stored on-chain (e.g. in `pallet-scheduler`), thus any change must be done with care
 /// as it might require some migration.
 ///
-/// NOTE: for instantiable pallet, origin must be generic over T and I.
+/// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
 ///
 /// # General notes on instantiable pallet
 ///
