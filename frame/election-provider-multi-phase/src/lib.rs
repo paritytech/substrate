@@ -231,7 +231,7 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	ElectionDataProvider, ElectionProvider, ElectionProviderBase, BoundedElectionProvider, BoundedSupportsOf, InstantElectionProvider,
 	NposSolution,
 };
 use frame_support::{
@@ -247,7 +247,8 @@ use sp_arithmetic::{
 	UpperOf,
 };
 use sp_npos_elections::{
-	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
+	assignment_ratio_to_staked_normalized, BoundedSupports, ElectionScore, EvaluateSupport,
+	Supports, VoteWeight,
 };
 use sp_runtime::{
 	transaction_validity::{
@@ -445,12 +446,12 @@ impl<C: Default> Default for RawSolution<C> {
 
 /// A checked solution, ready to be enacted.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct ReadySolution<A> {
+pub struct ReadySolution<A, B> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: Supports<A>,
+	pub supports: BoundedSupports<A, B>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -560,6 +561,8 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Comparison against `MinimumUntrustedScore` failed.
 	UntrustedScoreTooLow,
+	/// A bound was not satisfied.
+	BoundNotMet,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -672,6 +675,10 @@ pub mod pallet {
 		/// The maximum number of electable targets to put in the snapshot.
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
+		
+		/// The maximum number of winners that can be elected from the electable targets. 
+		#[pallet::constant]
+		type MaxWinners: Get<u32>;
 
 		/// Handler for the slashed deposits.
 		type SlashHandler: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -971,7 +978,7 @@ pub mod pallet {
 			// `ElectionProvider::elect` will succeed and take care of that.
 
 			let solution = ReadySolution {
-				supports,
+				supports: supports.try_into().map_err(|_| "BoundNotMet")?,
 				score: Default::default(),
 				compute: ElectionCompute::Emergency,
 			};
@@ -1084,8 +1091,9 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
+			// TODO: sort and truncate supports with MaxWinners 
 			let solution = ReadySolution {
-				supports,
+				supports: supports.try_into().unwrap(),
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
@@ -1226,7 +1234,7 @@ pub mod pallet {
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId>>;
+	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1238,9 +1246,12 @@ pub mod pallet {
 	/// Desired number of targets to elect for this round.
 	///
 	/// Only exists when [`Snapshot`] is present.
+	// WIP: call desired winners
 	#[pallet::storage]
 	#[pallet::getter(fn desired_targets)]
 	pub type DesiredTargets<T> = StorageValue<_, u32>;
+
+	// WIP: desired_targets < MaxWinners
 
 	/// The metadata of the [`RoundSnapshot`]
 	///
@@ -1460,7 +1471,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolution<T::AccountId>, FeasibilityError> {
+	) -> Result<ReadySolution<T::AccountId, T::MaxWinners>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
@@ -1533,6 +1544,7 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
+		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundNotMet);
 		Ok(ReadySolution { supports, compute, score })
 	}
 
@@ -1552,7 +1564,7 @@ impl<T: Config> Pallet<T> {
 		Self::kill_snapshot();
 	}
 
-	fn do_elect() -> Result<Supports<T::AccountId>, ElectionError<T>> {
+	fn do_elect() -> Result<BoundedSupportsOf<Self>, ElectionError<T>> {
 		// We have to unconditionally try finalizing the signed phase here. There are only two
 		// possibilities:
 		//
@@ -1562,14 +1574,15 @@ impl<T: Config> Pallet<T> {
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
+		// TODO: fix to one statement
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
 				<T::Fallback as ElectionProvider>::elect()
-					.map(|supports| ReadySolution {
-						supports,
+				.and_then(|supports| Ok(ReadySolution {
+						supports: supports.try_into().map_err(|_| ElectionError::Feasibility(FeasibilityError::BoundNotMet))?,
 						score: Default::default(),
 						compute: ElectionCompute::Fallback,
-					})
+					}))
 					.map_err(|fe| ElectionError::Fallback(fe))
 			})
 			.map(|ReadySolution { compute, score, supports }| {
@@ -1620,6 +1633,25 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
+				Ok(supports)
+			},
+			Err(why) => {
+				log!(error, "Entering emergency mode: {:?}", why);
+				<CurrentPhase<T>>::put(Phase::Emergency);
+				Err(why)
+			},
+		}
+	}
+}
+
+impl<T: Config> BoundedElectionProvider for Pallet<T> {
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		match Self::do_elect() {
+			Ok(supports) => {
+				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
+				Self::weigh_supports(&supports);
+				Self::rotate_round();
+				// WIP: Fix unwrap
 				Ok(supports)
 			},
 			Err(why) => {

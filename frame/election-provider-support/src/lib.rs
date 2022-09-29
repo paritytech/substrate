@@ -379,6 +379,12 @@ pub trait ElectionProviderBase {
 	fn ongoing() -> bool;
 }
 
+/// Same as `BoundedSupports` but parameterized by a `BoundedElectionProvider`.
+pub type BoundedSupportsOf<E> = BoundedSupports<
+	<E as ElectionProviderBase>::AccountId,
+	<E as BoundedElectionProvider>::MaxWinners,
+>;
+
 /// Elect a new set of winners, bounded by `MaxWinners`.
 ///
 /// Returns a result in bounded, target major format, namely as
@@ -389,7 +395,7 @@ pub trait BoundedElectionProvider: ElectionProviderBase {
 	/// Performs the election. This should be implemented as a self-weighing function. The
 	/// implementor should register its appropriate weight at the end of execution with the
 	/// system pallet directly.
-	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
 /// Same a [`BoundedElectionProvider`], but no bounds are imposed on the number
