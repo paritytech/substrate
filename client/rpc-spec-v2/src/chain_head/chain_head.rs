@@ -88,10 +88,18 @@ where
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 
+		// The initialized event is the first one sent.
+		let finalized_block_hash = self.client.info().finalized_hash;
+		let stream =
+			stream::once(
+				async move { FollowEvent::Initialized(Initialized { finalized_block_hash }) },
+			)
+			.chain(merged);
+
 		// TODO: client().runtime_version_at()
 
 		let fut = async move {
-			sink.pipe_from_stream(merged.boxed()).await;
+			sink.pipe_from_stream(stream.boxed()).await;
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
