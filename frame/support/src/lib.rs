@@ -1439,6 +1439,7 @@ pub mod pallet_prelude {
 /// * [`pallet::call`](#call-palletcall-optional)
 /// * [`pallet::weight($expr)`](#palletweightexpr)
 /// * [`pallet::call_index($idx)`](#palletcall_indexidx)
+/// * [`pallet::extra_constants`](#extra-constants-palletextra_constants-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1707,9 +1708,9 @@ pub mod pallet_prelude {
 /// The macro implements the [`Callable`] trait on `Pallet` and a function `call_functions`
 /// which returns the dispatchable metadata.
 ///
-/// # Extra constants: `#[pallet::extra_constants]` optional
+/// # Extra constants: `#[pallet::extra_constants]` (optional)
 ///
-/// Allow to define some extra constants to put into constant metadata.
+/// Allows you to define some extra constants to be added into constant metadata.
 ///
 /// Item must be defined as:
 ///
@@ -1723,14 +1724,14 @@ pub mod pallet_prelude {
 /// 	...
 /// }
 /// ```
-/// I.e. a regular rust implement block with some optional where clause and functions with 0
-/// args, 0 generics, and some return type.
+/// I.e. a regular rust `impl` block with some optional where clause and functions with 0 args,
+/// 0 generics, and some return type.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
-/// The macro add some extra constant to pallet constant metadata.
+/// The macro add some extra constants to pallet constant metadata.
 ///
-/// # Error: `#[pallet::error]` optional
+/// # Error: `#[pallet::error]` (optional)
 ///
 /// Allow to define an error type to be return from dispatchable on error. This error type
 /// informations are put into metadata.
