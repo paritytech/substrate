@@ -35,72 +35,59 @@ use std::{
 
 /// Throughput as measured in bytes per second.
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub enum Throughput {
-	/// KiB/s
-	KiBs(f64),
-	/// MiB/s
-	MiBs(f64),
-	/// GiB/s
-	GiBs(f64),
-}
+pub struct Throughput(f64);
 
 const KIBIBYTE: f64 = 1024.0;
 
 impl Throughput {
-	/// The unit of the metric.
-	pub fn unit(&self) -> &'static str {
-		match self {
-			Self::KiBs(_) => "KiB/s",
-			Self::MiBs(_) => "MiB/s",
-			Self::GiBs(_) => "GiB/s",
-		}
+	/// `f64` kibibyte/s to byte/s.
+	pub fn from_kibs(mibs: f64) -> Throughput {
+		Throughput(mibs * KIBIBYTE)
 	}
 
-	/// [`Self`] as number of byte/s.
-	pub fn to_bs(&self) -> f64 {
-		self.to_kibs() * KIBIBYTE
+	/// `f64` mebibyte/s to byte/s.
+	pub fn from_mibs(mibs: f64) -> Throughput {
+		Throughput(mibs * KIBIBYTE * KIBIBYTE)
+	}
+
+	/// `f64` gibibyte/s to byte/s.
+	pub fn from_gibs(mibs: f64) -> Throughput {
+		Throughput(mibs * KIBIBYTE * KIBIBYTE * KIBIBYTE)
 	}
 
 	/// [`Self`] as number of kibibyte/s.
-	pub fn to_kibs(&self) -> f64 {
-		self.to_mibs() * KIBIBYTE
+	fn to_kibs(&self) -> Throughput {
+		Throughput(self.0 / KIBIBYTE)
 	}
 
 	/// [`Self`] as number of mebibyte/s.
-	pub fn to_mibs(&self) -> f64 {
-		self.to_gibs() * KIBIBYTE
+	fn to_mibs(&self) -> Throughput {
+		Throughput(self.0 / (KIBIBYTE * KIBIBYTE))
 	}
 
 	/// [`Self`] as number of gibibyte/s.
-	pub fn to_gibs(&self) -> f64 {
-		match self {
-			Self::KiBs(k) => *k / (KIBIBYTE * KIBIBYTE),
-			Self::MiBs(m) => *m / KIBIBYTE,
-			Self::GiBs(g) => *g,
-		}
+	fn to_gibs(&self) -> Throughput {
+		Throughput(self.0 / (KIBIBYTE * KIBIBYTE * KIBIBYTE))
 	}
 
 	/// Normalizes [`Self`] to use the larges unit possible.
-	pub fn normalize(&self) -> Self {
-		let bs = self.to_bs();
+	pub fn normalize(&self) -> (Throughput, &'static str) {
+		let bs = self.0;
 
 		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
-			Self::GiBs(self.to_gibs())
+			(self.to_gibs(), "GiB/s")
 		} else if bs >= KIBIBYTE * KIBIBYTE {
-			Self::MiBs(self.to_mibs())
+			(self.to_mibs(), "MiB/s")
 		} else {
-			Self::KiBs(self.to_kibs())
+			(self.to_kibs(), "KiB/s")
 		}
 	}
 }
 
 impl fmt::Display for Throughput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let normalized = self.normalize();
-		match normalized {
-			Self::KiBs(s) | Self::MiBs(s) | Self::GiBs(s) =>
-				write!(f, "{:.2?} {}", s, normalized.unit()),
-		}
+		let (value, unit) = self.normalize();
+		write!(f, "{:.2?} {}", value, unit)
 	}
 }
 
@@ -220,7 +207,7 @@ pub fn benchmark_cpu(limit: ExecutionLimit) -> Throughput {
 		Ok(())
 	};
 
-	Throughput::MiBs(
+	Throughput::from_mibs(
 		benchmark("CPU score", SIZE, limit.max_iterations(), limit.max_duration(), run)
 			.expect("benchmark cannot fail; qed"),
 	)
@@ -270,7 +257,7 @@ pub fn benchmark_memory(limit: ExecutionLimit) -> Throughput {
 		Ok(())
 	};
 
-	Throughput::MiBs(
+	Throughput::from_mibs(
 		benchmark("memory score", SIZE, limit.max_iterations(), limit.max_duration(), run)
 			.expect("benchmark cannot fail; qed"),
 	)
@@ -488,7 +475,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 		hwbench.disk_sequential_write_score =
 			match benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory)
 			{
-				Ok(score) => Some(Throughput::MiBs(score)),
+				Ok(score) => Some(Throughput::from_mibs(score)),
 				Err(error) => {
 					log::warn!("Failed to run the sequential write disk benchmark: {}", error);
 					None
@@ -497,7 +484,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 
 		hwbench.disk_random_write_score =
 			match benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, scratch_directory) {
-				Ok(score) => Some(Throughput::MiBs(score)),
+				Ok(score) => Some(Throughput::from_mibs(score)),
 				Err(error) => {
 					log::warn!("Failed to run the random write disk benchmark: {}", error);
 					None
