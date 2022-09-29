@@ -1174,7 +1174,7 @@ pub mod pallet {
 		/// Emits `ItemLocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::lock_item())]
 		pub fn lock_item(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,

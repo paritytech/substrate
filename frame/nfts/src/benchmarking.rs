@@ -287,6 +287,16 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
 	}
 
+	lock_item {
+		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let lock_metadata = true;
+		let lock_attributes = true;
+	}: _(SystemOrigin::Signed(caller), collection, item, lock_metadata, lock_attributes)
+	verify {
+		assert_last_event::<T, I>(Event::ItemLocked { collection, item, lock_metadata, lock_attributes }.into());
+	}
+
 	set_attribute {
 		let key: BoundedVec<_, _> = vec![0u8; T::KeyLimit::get() as usize].try_into().unwrap();
 		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
