@@ -21,7 +21,6 @@
 
 use bitflags::bitflags;
 use codec::{Decode, Encode};
-use sp_core::Bytes;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchError, RuntimeDebug,
@@ -109,7 +108,7 @@ pub struct ExecReturnValue {
 	/// Flags passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub flags: ReturnFlags,
 	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
-	pub data: Bytes,
+	pub data: Vec<u8>,
 }
 
 impl ExecReturnValue {
@@ -141,14 +140,14 @@ pub struct CodeUploadReturnValue<CodeHash, Balance> {
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub enum Code<Hash> {
 	/// A wasm module as raw bytes.
-	Upload(Bytes),
+	Upload(Vec<u8>),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
 }
 
 impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
 	fn from(from: T) -> Self {
-		Code::Upload(Bytes(from.into()))
+		Code::Upload(from.into())
 	}
 }
 
