@@ -506,13 +506,31 @@ fn should_verify_batch_proofs() {
 		let (leaves, proof) = ext.execute_with(|| {
 			crate::Pallet::<Test>::generate_batch_proof(leaf_indices.to_vec()).unwrap()
 		});
+
+		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
+		let min_mmr_size = leaf_indices.iter().max().unwrap() + 1;
+
 		let (simple_historical_leaves, simple_historical_proof) = ext.execute_with(|| {
 			crate::Pallet::<Test>::generate_historical_batch_proof(
 				leaf_indices.to_vec(),
-				leaf_indices.iter().max().unwrap() + 1,
+				min_mmr_size,
 			)
 			.unwrap()
 		});
+
+		// generate historical proofs for all possible mmr sizes,
+		// lower bound being index of highest leaf to be proven
+		let historical_proofs = (min_mmr_size..=mmr_size)
+			.map(|mmr_size| {
+				ext.execute_with(|| {
+					crate::Pallet::<Test>::generate_historical_batch_proof(
+						leaf_indices.to_vec(),
+						mmr_size,
+					)
+					.unwrap()
+				})
+			})
+			.collect::<Vec<_>>();
 
 		ext.execute_with(|| {
 			add_blocks(blocks_to_add);
@@ -525,6 +543,9 @@ fn should_verify_batch_proofs() {
 				),
 				Ok(())
 			);
+			historical_proofs.iter().for_each(|(leaves, proof)| {
+				assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves.clone(), proof.clone()), Ok(()));
+			});
 		})
 	}
 
