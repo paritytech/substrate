@@ -231,7 +231,8 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
+	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -289,7 +290,7 @@ pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex
 pub type SolutionAccuracyOf<T> =
 	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
-pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
+pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProviderBase>::Error;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -312,7 +313,7 @@ pub trait BenchmarkingConfig {
 /// A fallback implementation that transitions the pallet to the emergency phase.
 pub struct NoFallback<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> ElectionProvider for NoFallback<T> {
+impl<T: Config> ElectionProviderBase for NoFallback<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
@@ -321,7 +322,9 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	fn ongoing() -> bool {
 		false
 	}
+}
 
+impl<T: Config> ElectionProvider for NoFallback<T> {
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
@@ -1008,8 +1011,10 @@ pub mod pallet {
 			// unlikely to ever return an error: if phase is signed, snapshot will exist.
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
+			// TODO: account for proof size weight
 			ensure!(
-				Self::solution_weight_of(&raw_solution, size).all_lt(T::SignedMaxWeight::get()),
+				Self::solution_weight_of(&raw_solution, size).ref_time() <
+					T::SignedMaxWeight::get().ref_time(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
@@ -1561,7 +1566,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				T::Fallback::elect()
+				<T::Fallback as ElectionProvider>::elect()
 					.map(|supports| ReadySolution {
 						supports,
 						score: Default::default(),
@@ -1596,7 +1601,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider for Pallet<T> {
+impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
@@ -1608,7 +1613,9 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 			_ => true,
 		}
 	}
+}
 
+impl<T: Config> ElectionProvider for Pallet<T> {
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
@@ -1625,7 +1632,6 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 		}
 	}
 }
-
 /// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
@@ -2336,8 +2342,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active)
-			.all_lte(<Runtime as frame_system::Config>::BlockWeights::get().max_block) ||
+		// TODO: account for proof size weight
+		while weight_with(active).ref_time() <=
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block.ref_time() ||
 			active == all_voters
 		{
 			active += 1;
