@@ -274,7 +274,10 @@ impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u
         let s_next_at = StorageValueRef::persistent(b"ddc-metrics-offchain-worker::next-at");
 
         match s_next_at.mutate(|current_next_at| {
-            let current_next_at = current_next_at.unwrap_or(Some(T::BlockNumber::default()));
+            let current_next_at = match current_next_at {
+                Ok(Some(val)) => Some(val),
+                _ => Some(T::BlockNumber::default()),
+            };
 
             if let Some(current_next_at) = current_next_at {
                 if current_next_at > block_number {
