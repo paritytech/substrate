@@ -1444,6 +1444,12 @@ pub mod pallet_prelude {
 /// * [`pallet::event`](#event-palletevent-optional)
 /// * [`pallet::generate_deposit($visibility fn
 ///   deposit_event)`](#palletgenerate_depositvisibility-fn-deposit_event)
+/// * [`pallet::storage`](#storage-palletstorage-optional)
+/// * [`pallet::getter(fn $my_getter_fn_name)`](#palletgetterfn-my_getter_fn_name-optional)
+/// * [`pallet::storage_prefix = "SomeName"`](#palletstorage_prefix--somename-optional)
+/// * [`pallet::unbounded`](#palletunbounded-optional)
+/// * [`pallet::whitelist_storage`](#palletwhitelist_storage-optional)
+/// * [`cfg(..)`](#cfg-for-storage) (on storage items)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -1826,12 +1832,12 @@ pub mod pallet_prelude {
 /// If `#[pallet::generate_deposit]` is present then the macro implements `fn deposit_event` on
 /// `Pallet`.
 ///
-/// # Storage: `#[pallet::storage]` optional
+/// # Storage: `#[pallet::storage]` (optional)
 ///
-/// Allow to define some abstract storage inside runtime storage and also set its metadata.
+/// Lets you define some abstract storage inside of runtime storage and also set its metadata.
 /// This attribute can be used multiple times.
 ///
-/// Item is defined as:
+/// Item should be defined as:
 ///
 /// ```ignore
 /// #[pallet::storage]
@@ -1850,31 +1856,36 @@ pub mod pallet_prelude {
 /// ```
 ///
 /// I.e. it must be a type alias, with generics: `T` or `T: Config`, aliased type must be one
-/// of `StorageValue`, `StorageMap` or `StorageDoubleMap` (defined in frame_support). The
-/// generic arguments of the storage type can be given in two manner: named and unnamed. For
-/// named generic argument: the name for each argument is the one as define on the storage
-/// struct:
-/// * [`pallet_prelude::StorageValue`] expect `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * [`pallet_prelude::StorageMap`] expect `Hasher`, `Key`, `Value` and optionally `QueryKind`
-///   and `OnEmpty`,
-/// * [`pallet_prelude::CountedStorageMap`] expect `Hasher`, `Key`, `Value` and optionally
+/// of [`StorageValue`](`pallet_prelude::StorageValue`),
+/// [`StorageMap`](`pallet_prelude::StorageMap`) or
+/// [`StorageDoubleMap`](`pallet_prelude::StorageDoubleMap`). The generic arguments of the
+/// storage type can be given in two manners: named and unnamed. For named generic arguments,
+/// the name for each argument should match the name defined for it on the storage struct:
+/// * [`StorageValue`](`pallet_prelude::StorageValue`) expect `Value` and optionally
 ///   `QueryKind` and `OnEmpty`,
-/// * [`pallet_prelude::StorageDoubleMap`] expect `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value`
-///   and optionally `QueryKind` and `OnEmpty`.
+/// * [`StorageMap`](`pallet_prelude::StorageMap`) expect `Hasher`, `Key`, `Value` and
+///   optionally `QueryKind` and `OnEmpty`,
+/// * [`CountedStorageMap`](`pallet_prelude::CountedStorageMap`) expect `Hasher`, `Key`,
+///   `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * [`StorageDoubleMap`](`pallet_prelude::StorageDoubleMap`) expect `Hasher1`, `Key1`,
+///   `Hasher2`, `Key2`, `Value` and optionally `QueryKind` and `OnEmpty`.
 ///
-/// For unnamed generic argument: Their first generic must be `_` as it is replaced by the
-/// macro and other generic must declared as a normal declaration of type generic in rust.
+/// For unnamed generic arguments: Their first generic must be `_` as it is replaced by the
+/// macro and other generic must declared as a normal generic type declaration.
 ///
-/// The Prefix generic written by the macro is generated using
+/// The `Prefix` generic written by the macro is generated using
 /// `PalletInfo::name::<Pallet<..>>()` and the name of the storage type. E.g. if runtime names
-/// the pallet "MyExample" then the storage `type Foo<T> = ...` use the prefix:
+/// the pallet "MyExample" then the storage `type Foo<T> = ...` should use the prefix:
 /// `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
 ///
-/// For the `CountedStorageMap` variant, the Prefix also implements
-/// `CountedStorageMapInstance`. It associate a `CounterPrefix`, which is implemented same as
-/// above, but the storage prefix is prepend with `"CounterFor"`. E.g. if runtime names the
-/// pallet "MyExample" then the storage `type Foo<T> = CountedStorageaMap<...>` will store its
-/// counter at the prefix: `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
+/// For the [`CountedStorageMap`](`pallet_prelude::CountedStorageMap`) variant, the `Prefix`
+/// also implements
+/// [`CountedStorageMapInstance`](`frame_support::storage::types::CountedStorageMapInstance`).
+/// It also associates a [`CounterPrefix`](`pallet_prelude::CounterPrefix'), which is
+/// implemented the same as above, but the storage prefix is prepend with `"CounterFor"`. E.g.
+/// if runtime names the pallet "MyExample" then the storage `type Foo<T> =
+/// CountedStorageaMap<...>` will store its counter at the prefix: `Twox128(b"MyExample") ++
+/// Twox128(b"CounterForFoo")`.
 ///
 /// E.g:
 ///
@@ -1886,10 +1897,14 @@ pub mod pallet_prelude {
 /// In this case the final prefix used by the map is `Twox128(b"MyExample") ++
 /// Twox128(b"OtherName")`.
 ///
-/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows to define a
+/// ## `#[pallet::getter(fn $my_getter_fn_name)]` (optional)
+///
+/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows you to define a
 /// getter function on `Pallet`.
 ///
-/// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allow to define the
+/// ## `#[pallet::storage_prefix = "SomeName"]` (optional)
+///
+/// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
 /// storage prefix to use, see how `Prefix` generic is implemented above.
 ///
 /// E.g:
@@ -1909,11 +1924,20 @@ pub mod pallet_prelude {
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
 ///
-/// The optional attribute `#[pallet::unbounded]` allows to declare the storage as unbounded.
-/// When implementating the storage info (when `#[pallet::generate_storage_info]` is specified
-/// on the pallet struct placeholder), the size of the storage will be declared as unbounded.
-/// This can be useful for storage which can never go into PoV (Proof of Validity).
+/// ## `#[pallet::unbounded]` (optional)
 ///
+/// The optional attribute `#[pallet::unbounded]` declares the storage as unbounded. When
+/// implementating the storage info (when `#[pallet::generate_storage_info]` is specified on
+/// the pallet struct placeholder), the size of the storage will be declared as unbounded. This
+/// can be useful for storage which can never go into PoV (Proof of Validity).
+///
+/// ## `#[pallet::whitelist_storage]` (optional)
+///
+/// The optional attribute `#[pallet::whitelist_storage]` will declare the storage as
+/// whitelisted from benchmarking. See
+/// [`pallet::whitelist_storage`](`pallet_macros::whitelist_storage`) for more info.
+///
+///	## `#[cfg(..)]` (for storage)
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.
 ///
 /// E.g:
@@ -1924,29 +1948,25 @@ pub mod pallet_prelude {
 /// pub(super) type MyStorage<T> = StorageValue<Value = u32>;
 /// ```
 ///
-/// The optional attribute `#[pallet::whitelist_storage]` will declare the storage as
-/// whitelisted from benchmarking. See
-/// [`pallet::whitelist_storage`](`pallet_macros::whitelist_storage`) for more info.
-///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
 /// i.e. the getter, storage prefix, and the metadata element etc.
 ///
 /// Any type placed as the `QueryKind` parameter must implement
 /// [`frame_support::storage::types::QueryKindTrait`]. There are 3 implementations of this
 /// trait by default:
-/// 1. [`frame_support::storage::types::OptionQuery`], the default `QueryKind` used when this
-///    type parameter is omitted. Specifying this as the `QueryKind` would cause storage map
-///    APIs that return a `QueryKind` to instead return an `Option`, returning `Some` when a
-///    value does exist under a specified storage key, and `None` otherwise.
-/// 2. [`frame_support::storage::types::ValueQuery`] causes storage map APIs that return a
-///    `QueryKind` to instead return the value type. In cases where a value does not exist
-///    under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is used
-///    to return an appropriate value.
-/// 3. [`frame_support::storage::types::ResultQuery`] causes storage map APIs that return a
-///    `QueryKind` to instead return a `Result<T, E>`, with `T` being the value type and `E`
-///    being the pallet error type specified by the `#[pallet::error]` attribute. In cases
-///    where a value does not exist under a specified storage key, an `Err` with the specified
-///    pallet error variant is returned.
+/// 1. [`OptionQuery`](`frame_support::storage::types::OptionQuery`), the default `QueryKind`
+/// used when this    type parameter is omitted. Specifying this as the `QueryKind` would cause
+/// storage map    APIs that return a `QueryKind` to instead return an [`Option`], returning
+/// `Some` when a    value does exist under a specified storage key, and `None` otherwise.
+/// 2. [`ValueQuery`](`frame_support::storage::types::ValueQuery`) causes storage map APIs that
+/// return a    `QueryKind` to instead return the value type. In cases where a value does not
+/// exist    under a specified storage key, the `OnEmpty` type parameter on `QueryKindTrait` is
+/// used    to return an appropriate value.
+/// 3. [`ResultQuery`](`frame_support::storage::types::ResultQuery`) causes storage map APIs
+/// that return a    `QueryKind` to instead return a `Result<T, E>`, with `T` being the value
+/// type and `E`    being the pallet error type specified by the `#[pallet::error]` attribute.
+/// In cases    where a value does not exist under a specified storage key, an `Err` with the
+/// specified    pallet error variant is returned.
 ///
 /// NOTE: If the `QueryKind` generic parameter is still generic at this stage or is using some
 /// type alias then the generation of the getter might fail. In this case the getter can be
@@ -1956,21 +1976,23 @@ pub mod pallet_prelude {
 /// usable at all). We use [`StorageHasher::METADATA`] for the metadata of the hasher of the
 /// storage item. Thus generic hasher is supported.
 ///
-/// ### Macro expansion
+/// ## Macro expansion
 ///
 /// For each storage item the macro generates a struct named
 /// `_GeneratedPrefixForStorage$NameOfStorage`, and implements
 /// [`StorageInstance`](traits::StorageInstance) on it using the pallet and storage name. It
-/// then uses it as the first generic of the aliased type. For `CountedStorageMap`,
-/// `CountedStorageMapInstance` is implemented, and another similar struct is generated.
+/// then uses it as the first generic of the aliased type. For
+/// [`CountedStorageMap`](`pallet_prelude::CountedStorageMap`),
+/// [`CountedStorageMapInstance`](`frame_support::storage::types::CountedStorageMapInstance`)
+/// is implemented, and another similar struct is generated.
 ///
-/// For named generic, the macro will reorder the generics, and remove the names.
+/// For a named generic, the macro will reorder the generics, and remove the names.
 ///
-/// The macro implements the function `storage_metadata` on `Pallet` implementing the metadata
-/// for all storage items based on their kind:
+/// The macro implements the function `storage_metadata` on the `Pallet` implementing the
+/// metadata for all storage items based on their kind:
 /// * for a storage value, the type of the value is copied into the metadata
 /// * for a storage map, the type of the values and the key's type is copied into the metadata
-/// * for a storage double map, the type of the values, and the types of key1 and key2 are
+/// * for a storage double map, the type of the values, and the types of `key1` and `key2` are
 ///   copied into the metadata.
 ///
 /// # Type value: `#[pallet::type_value]` optional
@@ -1978,7 +2000,7 @@ pub mod pallet_prelude {
 /// Helper to define a struct implementing `Get` trait. To ease use of storage types. This
 /// attribute can be used multiple time.
 ///
-/// Item is defined as:
+/// Item must be defined as:
 ///
 /// ```ignore
 /// #[pallet::type_value]
