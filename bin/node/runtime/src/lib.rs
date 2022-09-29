@@ -53,7 +53,7 @@ use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
-use pallet_nfts::{SystemFeature, SystemFeatures};
+use pallet_nfts::SystemFeatures;
 use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
@@ -1498,7 +1498,7 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
-	pub FeatureFlags: SystemFeatures = SystemFeatures(SystemFeature::empty());
+	pub FeatureFlags: SystemFeatures = SystemFeatures::empty();
 }
 
 impl pallet_nfts::Config for Runtime {

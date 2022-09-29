@@ -225,4 +225,10 @@ pub type SystemFeatureFlags = BitFlags<SystemFeature>;
 /// Wrapper type for `SystemFeatureFlags` that implements `Codec`.
 #[derive(Default, RuntimeDebug)]
 pub struct SystemFeatures(pub SystemFeatureFlags);
+
+impl SystemFeatures {
+	pub fn empty() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+}
 impl_codec_bitflags!(SystemFeatures, u64, SystemFeature);
