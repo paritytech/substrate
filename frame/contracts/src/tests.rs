@@ -2615,7 +2615,7 @@ fn gas_estimation_call_runtime() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::from_ref_time(result.gas_required),
+				Weight::from_ref_time(result.gas_required).set_proof_size(u64::MAX),
 				None,
 				call.encode(),
 				false,
