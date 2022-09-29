@@ -297,7 +297,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 }
 
 pub struct MockFallback;
-impl ElectionProvider for MockFallback {
+impl ElectionProviderBase for MockFallback {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type Error = &'static str;
@@ -306,7 +306,8 @@ impl ElectionProvider for MockFallback {
 	fn ongoing() -> bool {
 		false
 	}
-
+}
+impl ElectionProvider for MockFallback {
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
 	}

@@ -257,7 +257,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 	SyncOracle = SO,
 	JustificationSyncLink = L,
 	Claim = P::Public,
-	EpochData = Vec<AuthorityId<P>>,
+	AuxData = Vec<AuthorityId<P>>,
 >
 where
 	B: BlockT,
@@ -330,7 +330,7 @@ where
 		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
-	type EpochData = Vec<AuthorityId<P>>;
+	type AuxData = Vec<AuthorityId<P>>;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"
@@ -340,15 +340,15 @@ where
 		&mut self.block_import
 	}
 
-	fn epoch_data(
+	fn aux_data(
 		&self,
 		header: &B::Header,
 		_slot: Slot,
-	) -> Result<Self::EpochData, sp_consensus::Error> {
+	) -> Result<Self::AuxData, sp_consensus::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
+	fn authorities_len(&self, epoch_data: &Self::AuxData) -> Option<usize> {
 		Some(epoch_data.len())
 	}
 
@@ -356,7 +356,7 @@ where
 		&self,
 		_header: &B::Header,
 		slot: Slot,
-		epoch_data: &Self::EpochData,
+		epoch_data: &Self::AuxData,
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
@@ -382,7 +382,7 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		_epoch: Self::EpochData,
+		_epoch: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
