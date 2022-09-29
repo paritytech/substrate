@@ -19,7 +19,7 @@
 
 use super::*;
 use frame_support::{
-	traits::{tokens::nonfungibles::*, Get},
+	traits::{tokens::nonfungibles_v2::*, Get},
 	BoundedSlice,
 };
 use sp_runtime::{DispatchError, DispatchResult};
