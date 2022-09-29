@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use codec::{Decode, Encode, Error, Input};
+use scale_info::TypeInfo;
 use sp_std::{cmp, prelude::*};
 
 use crate::ValidatorSetId;
@@ -39,7 +40,7 @@ pub mod known_payload_ids {
 /// Identifiers MUST be sorted by the [`BeefyPayloadId`] to allow efficient lookup of expected
 /// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
 /// support a subset of possible values.
-#[derive(Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Hash)]
+#[derive(Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Hash, TypeInfo)]
 pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
@@ -80,7 +81,7 @@ impl Payload {
 /// height [block_number](Commitment::block_number).
 /// GRANDPA validators collect signatures on commitments and a stream of such signed commitments
 /// (see [SignedCommitment]) forms the BEEFY protocol.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct Commitment<TBlockNumber> {
 	///  A collection of payloads to be signed, see [`Payload`] for details.
 	///
@@ -138,7 +139,7 @@ where
 /// Note that SCALE-encoding of the structure is optimized for size efficiency over the wire,
 /// please take a look at custom [`Encode`] and [`Decode`] implementations and
 /// `CompactSignedCommitment` struct.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo)]
 pub struct SignedCommitment<TBlockNumber, TSignature> {
 	/// The commitment signatures are collected for.
 	pub commitment: Commitment<TBlockNumber>,
