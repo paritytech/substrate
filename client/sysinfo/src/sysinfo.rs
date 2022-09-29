@@ -56,30 +56,30 @@ impl Throughput {
 	}
 
 	/// [`Self`] as number of kibibyte/s.
-	fn to_kibs(&self) -> Throughput {
-		Throughput(self.0 / KIBIBYTE)
+	fn as_kibs(&self) -> f64 {
+		self.0 / KIBIBYTE
 	}
 
 	/// [`Self`] as number of mebibyte/s.
-	fn to_mibs(&self) -> Throughput {
-		Throughput(self.0 / (KIBIBYTE * KIBIBYTE))
+	fn as_mibs(&self) -> f64 {
+		self.0 / (KIBIBYTE * KIBIBYTE)
 	}
 
 	/// [`Self`] as number of gibibyte/s.
-	fn to_gibs(&self) -> Throughput {
-		Throughput(self.0 / (KIBIBYTE * KIBIBYTE * KIBIBYTE))
+	fn as_gibs(&self) -> f64 {
+		self.0 / (KIBIBYTE * KIBIBYTE * KIBIBYTE)
 	}
 
 	/// Normalizes [`Self`] to use the larges unit possible.
-	pub fn normalize(&self) -> (Throughput, &'static str) {
+	pub fn normalize(&self) -> (f64, &'static str) {
 		let bs = self.0;
 
 		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
-			(self.to_gibs(), "GiB/s")
+			(self.as_gibs(), "GiB/s")
 		} else if bs >= KIBIBYTE * KIBIBYTE {
-			(self.to_mibs(), "MiB/s")
+			(self.as_mibs(), "MiB/s")
 		} else {
-			(self.to_kibs(), "KiB/s")
+			(self.as_kibs(), "KiB/s")
 		}
 	}
 }
@@ -513,12 +513,12 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_cpu() {
-		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT).to_bs() > 0.0);
+		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT).as_bs() > 0.0);
 	}
 
 	#[test]
 	fn test_benchmark_memory() {
-		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT).to_bs() > 0.0);
+		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT).as_bs() > 0.0);
 	}
 
 	#[test]
