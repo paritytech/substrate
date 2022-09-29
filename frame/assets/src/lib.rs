@@ -499,6 +499,8 @@ pub mod pallet {
 		/// The asset is a live asset and is actively being used. Usually emit for operations such
 		/// as `start_destroy` which require the asset to be in a destroying state.
 		LiveAsset,
+		/// The asset should be frozen before the given operation.
+		NotFrozen,
 	}
 
 	#[pallet::call]
@@ -619,7 +621,7 @@ pub mod pallet {
 					if let Some(check_owner) = maybe_check_owner {
 						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 					}
-					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 					details.status = AssetStatus::Destroying;
 
 					Self::deposit_event(Event::DestructionStarted { asset_id: id });
@@ -662,7 +664,7 @@ pub mod pallet {
 					if let Some(check_owner) = maybe_check_owner {
 						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 					}
-					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 					// Should only destroy accounts while the asset is being destroyed
 					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 
@@ -699,9 +701,6 @@ pub mod pallet {
 		/// times to fully destroy all approvals. It will destroy `RemoveKeysLimit` approvals at a
 		/// time.
 		///
-		/// The origin must conform to `ForceOrigin` or must be Signed and the sender must be the
-		/// owner of the asset `id`.
-		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
@@ -711,21 +710,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResultWithPostInfo {
-			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
-				Ok(_) => None,
-				Err(origin) => Some(ensure_signed(origin)?),
-			};
-
 			let mut removed_approvals = 0;
 			let _ = Asset::<T, I>::try_mutate_exists(
 				id,
 				|maybe_details| -> Result<(), DispatchError> {
 					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-					if let Some(check_owner) = maybe_check_owner {
-						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-					}
 
-					ensure!(details.is_frozen, Error::<T, I>::BadWitness);
+					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 					// Should only destroy accounts while the asset is being destroyed
 					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 
@@ -777,7 +768,7 @@ pub mod pallet {
 					if let Some(check_owner) = maybe_check_owner {
 						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 					}
-					ensure!(details.is_frozen, Error::<T, I>::Unknown);
+					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 					ensure!(details.accounts == 0, Error::<T, I>::InUse);
 					ensure!(details.approvals == 0, Error::<T, I>::InUse);
