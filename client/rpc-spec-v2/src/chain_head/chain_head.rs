@@ -28,11 +28,13 @@ use futures::{
 };
 use jsonrpsee::{core::async_trait, types::SubscriptionResult, SubscriptionSink};
 use sc_client_api::{BlockBackend, BlockchainEvents};
+use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
 };
+use sp_version::RuntimeVersion;
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<Block: BlockT, Client> {
@@ -58,16 +60,44 @@ impl<Block, Client>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
-	Client: BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
+	Client: BlockBackend<Block>
+		+ HeaderBackend<Block>
+		+ BlockchainEvents<Block>
+		+ CallApiAt<Block>
+		+ 'static,
 {
-	fn follow(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
+	fn follow(&self, mut sink: SubscriptionSink, runtime_updates: bool) -> SubscriptionResult {
+		let client = self.client.clone();
+
 		let stream_import = self
 			.client
 			.import_notification_stream()
-			.map(|notification| {
+			.map(move |notification| {
+				let new_runtime = if runtime_updates {
+					match (
+						client.runtime_version_at(&BlockId::Hash(notification.hash)),
+						client
+							.runtime_version_at(&BlockId::Hash(*notification.header.parent_hash())),
+					) {
+						(Ok(spec), Ok(parent_spec)) =>
+							if spec != parent_spec {
+								Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec }))
+							} else {
+								None
+							},
+						(Err(err), _) | (_, Err(err)) =>
+							Some(RuntimeEvent::Invalid(RuntimeErrorEvent {
+								error: format!("Api error: {}", err),
+							})),
+					}
+				} else {
+					None
+				};
+
 				let new_block = FollowEvent::NewBlock(NewBlock {
 					block_hash: notification.hash,
 					parent_hash: *notification.header.parent_hash(),
+					new_runtime,
 				});
 
 				if !notification.is_new_best {
@@ -90,13 +120,21 @@ where
 
 		// The initialized event is the first one sent.
 		let finalized_block_hash = self.client.info().finalized_hash;
-		let stream =
-			stream::once(
-				async move { FollowEvent::Initialized(Initialized { finalized_block_hash }) },
-			)
-			.chain(merged);
+		let finalized_block_runtime = if runtime_updates {
+			Some(match self.client.runtime_version_at(&BlockId::Hash(finalized_block_hash)) {
+				Ok(spec) => RuntimeEvent::Valid(RuntimeVersionEvent { spec }),
+				Err(err) => RuntimeEvent::Invalid(RuntimeErrorEvent {
+					error: format!("Api error: {}", err),
+				}),
+			})
+		} else {
+			None
+		};
 
-		// TODO: client().runtime_version_at()
+		let stream = stream::once(async move {
+			FollowEvent::Initialized(Initialized { finalized_block_hash, finalized_block_runtime })
+		})
+		.chain(merged);
 
 		let fut = async move {
 			sink.pipe_from_stream(stream.boxed()).await;
@@ -107,11 +145,36 @@ where
 	}
 }
 
+/// The transaction could not be processed due to an error.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeErrorEvent {
+	/// Reason of the error.
+	pub error: String,
+}
+
+/// The transaction could not be processed due to an error.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeVersionEvent {
+	/// Reason of the error.
+	pub spec: RuntimeVersion,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "type")]
+pub enum RuntimeEvent {
+	Valid(RuntimeVersionEvent),
+	Invalid(RuntimeErrorEvent),
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Initialized<Hash> {
 	/// The hash of the imported block.
 	pub finalized_block_hash: Hash,
+	pub finalized_block_runtime: Option<RuntimeEvent>,
 }
 
 /// The transaction was included in a block of the chain.
@@ -122,6 +185,7 @@ pub struct NewBlock<Hash> {
 	pub block_hash: Hash,
 	/// The parent hash of the imported block.
 	pub parent_hash: Hash,
+	pub new_runtime: Option<RuntimeEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

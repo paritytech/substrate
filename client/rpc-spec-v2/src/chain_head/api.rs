@@ -32,5 +32,5 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Header>,
 	)]
-	fn follow(&self);
+	fn follow(&self, runtime_updates: bool);
 }

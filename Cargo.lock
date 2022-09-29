@@ -8788,6 +8788,7 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "sp-version",
  "thiserror",
  "tokio",
  "tokio-stream",
