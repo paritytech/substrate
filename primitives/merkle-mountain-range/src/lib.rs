@@ -404,6 +404,8 @@ pub enum Error {
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
 	InvalidLeafIndex,
+	/// The provided leaves count is larger than the actual leaves count.
+	InvalidLeavesCount,
 }
 
 impl Error {
@@ -458,6 +460,12 @@ sp_api::decl_runtime_apis! {
 
 		/// Generate MMR proof for a series of blocks with the specified block numbers.
 		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+
+		/// Generate MMR proof for a series of leaves under given indices, using MMR at given `leaves_count` size.
+		fn generate_historical_batch_proof(
+			leaf_indices: Vec<LeafIndex>,
+			leaves_count: LeafIndex
+		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///

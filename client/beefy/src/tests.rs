@@ -277,6 +277,13 @@ macro_rules! create_test_api {
 						unimplemented!()
 					}
 
+					fn generate_historical_batch_proof(
+						_leaf_indices: Vec<LeafIndex>,
+						_leaves_count: LeafIndex
+					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
+						unimplemented!()
+					}
+
 					fn verify_batch_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
 						unimplemented!()
 					}

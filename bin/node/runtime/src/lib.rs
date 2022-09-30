@@ -170,8 +170,8 @@ const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 /// We allow `Normal` extrinsics to fill up the block up to 75%, the rest can be used
 /// by  Operational  extrinsics.
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-/// We allow for 2 seconds of compute with a 6 second average block time.
-const MAXIMUM_BLOCK_WEIGHT: Weight = WEIGHT_PER_SECOND.saturating_mul(2);
+/// We allow for 2 seconds of compute with a 6 second average block time, with maximum proof size.
+const MAXIMUM_BLOCK_WEIGHT: Weight = WEIGHT_PER_SECOND.saturating_mul(2).set_proof_size(u64::MAX);
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -2050,11 +2050,35 @@ impl_runtime_apis! {
 			Ok(Mmr::mmr_root())
 		}
 
-		fn generate_batch_proof(block_numbers: Vec<BlockNumber>)
-			-> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error>
-		{
-			Mmr::generate_batch_proof(block_numbers)
-				.map(|(leaves, proof)| (leaves.into_iter().map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf)).collect(), proof))
+		fn generate_batch_proof(
+			block_numbers: Vec<BlockNumber>,
+		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
+			Mmr::generate_batch_proof(block_numbers).map(|(leaves, proof)| {
+				(
+					leaves
+						.into_iter()
+						.map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf))
+						.collect(),
+					proof,
+				)
+			})
+		}
+
+		fn generate_historical_batch_proof(
+			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
+			leaves_count: pallet_mmr::primitives::LeafIndex,
+		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
+			Mmr::generate_historical_batch_proof(leaf_indices, leaves_count).map(
+				|(leaves, proof)| {
+					(
+						leaves
+							.into_iter()
+							.map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf))
+							.collect(),
+						proof,
+					)
+				},
+			)
 		}
 
 		fn verify_batch_proof(leaves: Vec<mmr::EncodableOpaqueLeaf>, proof: mmr::BatchProof<mmr::Hash>)
