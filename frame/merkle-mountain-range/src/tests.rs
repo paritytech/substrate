@@ -246,7 +246,7 @@ fn should_generate_proofs_correctly() {
 			.map(|block_num| crate::Pallet::<Test>::generate_batch_proof(vec![block_num]).unwrap())
 			.collect::<Vec<_>>();
 		// when generate historical proofs for all leaves
-		let historical_proofs = (0_u64..crate::NumberOfLeaves::<Test>::get())
+		let historical_proofs = (1_u64..now)
 			.into_iter()
 			.map(|leaf_index| {
 				let mut proofs = vec![];
@@ -283,7 +283,13 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[0][0],
 			(
 				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
-				BatchProof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
+				BatchProof {
+					leaf_indices: vec![0],
+					leaf_count: 2,
+					items: vec![hex(
+						"ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"
+					)]
+				}
 			)
 		);
 
@@ -321,10 +327,11 @@ fn should_generate_proofs_correctly() {
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
 				BatchProof {
 					leaf_indices: vec![2],
-					leaf_count: 3,
-					items: vec![hex(
-						"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
-					),],
+					leaf_count: 4,
+					items: vec![
+						hex("1b14c1dc7d3e4def11acdf31be0584f4b85c3673f1ff72a3af467b69a3b0d9d0"),
+						hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854")
+					],
 				}
 			)
 		);
@@ -341,28 +348,28 @@ fn should_generate_proofs_correctly() {
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
 				BatchProof {
 					leaf_indices: vec![2],
-					leaf_count: 5,
+					leaf_count: 6,
 					items: vec![
 						hex("1b14c1dc7d3e4def11acdf31be0584f4b85c3673f1ff72a3af467b69a3b0d9d0"),
 						hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
-						hex("3b031d22e24f1126c8f7d2f394b663f9b960ed7abbedb7152e17ce16112656d0")
+						hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da")
 					],
 				}
 			)
 		);
-		assert_eq!(historical_proofs[2][4], proofs[2]);
+		assert_eq!(historical_proofs[2][3], proofs[2]);
 
 		assert_eq!(
 			proofs[4],
 			(
 				// NOTE: the leaf index is equivalent to the block number(in this case 5) - 1
-				vec![Compact::new(((5, H256::repeat_byte(6)).into(), LeafData::new(6).into(),))],
+				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
 				BatchProof {
-					leaf_indices: vec![5],
+					leaf_indices: vec![4],
 					leaf_count: 7,
 					items: vec![
 						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
-						hex("3b031d22e24f1126c8f7d2f394b663f9b960ed7abbedb7152e17ce16112656d0"),
+						hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe"),
 						hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
 					],
 				}
@@ -374,14 +381,15 @@ fn should_generate_proofs_correctly() {
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
 				BatchProof {
 					leaf_indices: vec![4],
-					leaf_count: 5,
-					items: vec![hex(
-						"ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"
-					),],
+					leaf_count: 6,
+					items: vec![
+						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
+						hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe")
+					],
 				}
 			)
 		);
-		assert_eq!(historical_proofs[4][2], proofs[4]);
+		assert_eq!(historical_proofs[4][1], proofs[4]);
 
 		assert_eq!(
 			proofs[6],
@@ -397,7 +405,7 @@ fn should_generate_proofs_correctly() {
 				}
 			)
 		);
-		assert_eq!(historical_proofs[6][0], proofs[6]);
+		assert_eq!(historical_proofs[5][0], proofs[5]);
 	});
 }
 
@@ -414,17 +422,18 @@ fn should_generate_batch_proof_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for a batch of leaves
-		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap();
+		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![1, 4, 5]).unwrap();
 		// then
 		assert_eq!(
 			proof,
 			BatchProof {
 				// the leaf indices are equivalent to the above specified block numbers - 1.
-				leaf_indices: vec![0, 4, 5],
+				leaf_indices: vec![0, 3, 4],
 				leaf_count: 7,
 				items: vec![
 					hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
-					hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
+					hex("9ba3bd51dcd2547a0155cf13411beeed4e2b640163bbea02806984f3fcbf822e"),
+					hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe"),
 					hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
 				],
 			}
@@ -432,23 +441,24 @@ fn should_generate_batch_proof_correctly() {
 
 		// when generate historical proofs for a batch of leaves
 		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![0, 4, 5], 6).unwrap();
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 4, 5], 6).unwrap();
 		// then
 		assert_eq!(
 			historical_proof,
 			BatchProof {
-				leaf_indices: vec![0, 4, 5],
+				leaf_indices: vec![0, 3, 4],
 				leaf_count: 6,
 				items: vec![
 					hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
-					hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
+					hex("9ba3bd51dcd2547a0155cf13411beeed4e2b640163bbea02806984f3fcbf822e"),
+					hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe"),
 				],
 			}
 		);
 
 		// when generate historical proofs for a batch of leaves
 		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![0, 4, 5], 7).unwrap();
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 4, 5], 7).unwrap();
 		// then
 		assert_eq!(historical_proof, proof);
 	});
@@ -661,7 +671,7 @@ fn should_verify_batch_proof_statelessly() {
 	});
 	let (historical_leaves, historical_proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![0, 4, 5], 6).unwrap()
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 4, 5], 6).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
