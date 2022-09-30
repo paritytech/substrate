@@ -26,7 +26,7 @@ pub fn expand_hooks(def: &mut Def) -> proc_macro2::TokenStream {
 			let has_runtime_upgrade = hooks.has_runtime_upgrade;
 			(where_clause, span, has_runtime_upgrade)
 		},
-		None => (None, def.pallet_struct.attr_span, false),
+		None => (def.config.where_clause.clone(), def.pallet_struct.attr_span, false),
 	};
 
 	let frame_support = &def.frame_support;
