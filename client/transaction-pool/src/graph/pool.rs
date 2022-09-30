@@ -19,8 +19,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{channel::mpsc::Receiver, Future};
-use sp_blockchain::TreeRoute;
 use sc_transaction_pool_api::error;
+use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, Block as BlockT, SaturatedConversion},

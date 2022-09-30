@@ -857,8 +857,8 @@ where
 
 		log::trace!(target: "txpool", "resolve hash:{new_hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{:?}", self.recent_finalized_block);
 
-		// block was already finalized
 		if let Some(finalized_block) = self.recent_finalized_block {
+			// block was already finalized
 			if finalized_block == new_hash {
 				log::trace!(target:"txpool", "handle_enactment: block already finalized: exit 3b");
 				return (false, Some(tree_route))

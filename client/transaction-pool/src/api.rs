@@ -39,7 +39,6 @@ use sp_runtime::{
 };
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 
-
 use crate::{
 	error::{self, Error},
 	graph,
