@@ -378,7 +378,7 @@ impl<T: Config> Pallet<T> {
 	/// Does not check the origin.
 	fn do_repay_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
 		ensure!(!Self::is_activated(), Error::<T>::IsActive);
-		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
+		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?; 
 
 		T::Currency::unreserve(&account, stake);
 		Self::deposit_event(Event::<T>::StakeRepaid{account, amount: stake});
@@ -399,8 +399,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Reserve `stake` amount from `who` and store it in `Stakes`.
-	fn reserve(id: T::ReserveIdentifier, who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
-		T::Currency::reserve_named(id, &who, stake)?;
+	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
+		T::Currency::reserve(&who, stake)?;
 		let block = <frame_system::Pallet<T>>::block_number();
 		let current_stake = Stakes::<T>::get(&who, block).unwrap_or_default();
 		Stakes::<T>::insert(&who, block, current_stake.saturating_add(stake));
