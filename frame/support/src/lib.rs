@@ -2498,26 +2498,28 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// ## Upgrade guidelines:
+/// # Upgrade guidelines
 ///
 /// 1. Export the metadata of the pallet for later checks
 ///     - run your node with the pallet active
 ///     - query the metadata using the `state_getMetadata` RPC and curl, or use `subsee -p
 ///       <PALLET_NAME> > meta.json`
-/// 2. generate the template upgrade for the pallet provided by decl_storage with environment
-///     variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p my_pallet`
-///     This template can be used as information it contains all information for storages,
+/// 2. Generate the template upgrade for the pallet provided by `decl_storage` with the
+///     environment variable `PRINT_PALLET_UPGRADE`: `PRINT_PALLET_UPGRADE=1 cargo check -p
+///     my_pallet`. This template can be used as it contains all information for storages,
 ///     genesis config and genesis build.
-/// 3. reorganize pallet to have trait `Config`, `decl_*` macros, `ValidateUnsigned`,
-///     `ProvideInherent`, `Origin` all together in one file. Suggested order:
-///     * Config,
-///     * decl_module,
-///     * decl_event,
-///     * decl_error,
-///     * decl_storage,
-///     * origin,
-///     * validate_unsigned,
-///     * provide_inherent, so far it should compile and all be correct.
+/// 3. Reorganize the pallet to have the trait `Config`, `decl_*` macros,
+///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`),
+///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`), and Origin` all together in one
+///     file. Suggested order:
+///     * `Config`,
+///     * `decl_module`,
+///     * `decl_event`,
+///     * `decl_error`,
+///     * `decl_storage`,
+///     * `origin`,
+///     * `validate_unsigned`,
+///     * `provide_inherent`, so far it should compile and all be correct.
 /// 4. start writing the new pallet module
 /// 	```ignore
 /// 	pub use pallet::*;
@@ -2619,9 +2621,11 @@ pub mod pallet_prelude {
 ///     `GenesisBuild` implementation.
 ///
 /// 10. **migrate origin**: move the origin to the pallet module under `#[pallet::origin]`
-/// 11. **migrate validate_unsigned**: move the `ValidateUnsigned` implementation to the
-///     pallet module under `#[pallet::validate_unsigned]`
-/// 12. **migrate provide_inherent**: move the `ProvideInherent` implementation to the pallet
+/// 11. **migrate validate_unsigned**: move the
+///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`) implementation to the pallet
+///     module under `#[pallet::validate_unsigned]`
+/// 12. **migrate provide_inherent**: move the
+///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`) implementation to the pallet
 ///     module under `#[pallet::inherent]`
 /// 13. rename the usage of `Module` to `Pallet` inside the crate.
 /// 14. migration is done, now double check migration with the checking migration guidelines.
@@ -2637,11 +2641,12 @@ pub mod pallet_prelude {
 ///     * error , error, constant,
 /// * manually check that:
 ///     * `Origin` is moved inside the macro under `#[pallet::origin]` if it exists
-///     * `ValidateUnsigned` is moved inside the macro under `#[pallet::validate_unsigned)]`
-///    if it exists
-///     * `ProvideInherent` is moved inside macro under `#[pallet::inherent)]` if it exists
+///     * [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`)  is moved inside the macro
+///       under `#[pallet::validate_unsigned)]` if it exists
+///     * [`ProvideInherent`](`pallet_prelude::ProvideInherent`) is moved inside macro under
+///       `#[pallet::inherent)]` if it exists
 ///     * `on_initialize`/`on_finalize`/`on_runtime_upgrade`/`offchain_worker` are moved to
-///    `Hooks` implementation
+///       `Hooks` implementation
 ///     * storages with `config(..)` are converted to `GenesisConfig` field, and their default
 ///       is `= $expr;` if the storage have default value
 ///     * storages with `build($expr)` or `config(..)` are built in `GenesisBuild::build`
@@ -2656,7 +2661,7 @@ pub mod pallet_prelude {
 ///       as the name the pallet was giving to `decl_storage`,
 ///     * or do a storage migration from the old prefix used to the new prefix used.
 ///
-///     NOTE: The prefixes used by storage items are in the metadata. Thus, ensuring the
+/// NOTE: The prefixes used by storage items are in the metadata. Thus, ensuring the
 /// metadata hasn't  changed does ensure that the `pallet_prefix`s used by the storage items
 /// haven't changed.
 ///
