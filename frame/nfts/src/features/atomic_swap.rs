@@ -78,8 +78,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		offered_collection_id: T::CollectionId,
 		offered_item_id: T::ItemId,
 	) -> DispatchResult {
-		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
-			.ok_or(Error::<T, I>::UnknownItem)?;
 		let swap = PendingSwapOf::<T, I>::get(&offered_collection_id, &offered_item_id)
 			.ok_or(Error::<T, I>::UnknownSwap)?;
 
@@ -91,6 +89,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if !is_past_deadline {
+			let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
+				.ok_or(Error::<T, I>::UnknownItem)?;
 			ensure!(item.owner == caller, Error::<T, I>::NoPermission);
 		}
 
