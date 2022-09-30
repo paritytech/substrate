@@ -111,14 +111,14 @@ where
 ///
 /// The structure contains all necessary data to later on verify the proof and the leaf itself.
 #[derive(Debug, PartialEq, Eq)]
-pub struct MerkleProof<T> {
+pub struct MerkleProof<H, L> {
 	/// Root hash of generated merkle tree.
-	pub root: Hash,
+	pub root: H,
 	/// Proof items (does not contain the leaf hash, nor the root obviously).
 	///
 	/// This vec contains all inner node hashes necessary to reconstruct the root hash given the
 	/// leaf hash.
-	pub proof: Vec<Hash>,
+	pub proof: Vec<H>,
 	/// Number of leaves in the original tree.
 	///
 	/// This is needed to detect a case where we have an odd number of leaves that "get promoted"
@@ -127,7 +127,7 @@ pub struct MerkleProof<T> {
 	/// Index of the leaf the proof is for (0-based).
 	pub leaf_index: usize,
 	/// Leaf content.
-	pub leaf: T,
+	pub leaf: L,
 }
 
 /// A trait of object inspecting merkle root creation.
@@ -163,7 +163,7 @@ impl<T> Visitor<T> for () {
 /// # Panic
 ///
 /// The function will panic if given `leaf_index` is greater than the number of leaves.
-pub fn merkle_proof<H, Out, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<T>
+pub fn merkle_proof<H, Out, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<Out, T>
 where
 	H: HashT<Output = Out>,
 	Out: Default + Copy + Into<Hash> + AsRef<[u8]>,
@@ -229,13 +229,7 @@ where
 			.collect::<Vec<_>>()
 	);
 
-	MerkleProof {
-		root: root.into(),
-		proof: collect_proof.proof.iter().cloned().map(|s| s.into()).collect::<Vec<_>>(),
-		number_of_leaves,
-		leaf_index,
-		leaf,
-	}
+	MerkleProof { root, proof: collect_proof.proof, number_of_leaves, leaf_index, leaf }
 }
 
 /// Leaf node for proof verification.
@@ -243,22 +237,16 @@ where
 /// Can be either a value that needs to be hashed first,
 /// or the hash itself.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Leaf<'a> {
+pub enum Leaf<'a, H> {
 	/// Leaf content.
 	Value(&'a [u8]),
 	/// Hash of the leaf content.
-	Hash(Hash),
+	Hash(H),
 }
 
-impl<'a, T: AsRef<[u8]>> From<&'a T> for Leaf<'a> {
+impl<'a, H, T: AsRef<[u8]>> From<&'a T> for Leaf<'a, H> {
 	fn from(v: &'a T) -> Self {
 		Leaf::Value(v.as_ref())
-	}
-}
-
-impl<'a> From<Hash> for Leaf<'a> {
-	fn from(v: Hash) -> Self {
-		Leaf::Hash(v)
 	}
 }
 
@@ -269,46 +257,48 @@ impl<'a> From<Hash> for Leaf<'a> {
 /// concatenating and hashing end up with given root hash.
 ///
 /// The proof must not contain the root hash.
-pub fn verify_proof<'a, H, P, L>(
-	root: &'a Hash,
+pub fn verify_proof<'a, H, Out, P, L>(
+	root: &'a Out,
 	proof: P,
 	number_of_leaves: usize,
 	leaf_index: usize,
 	leaf: L,
 ) -> bool
 where
-	H: Hasher,
-	P: IntoIterator<Item = Hash>,
-	L: Into<Leaf<'a>>,
+	H: HashT<Output = Out>,
+	Out: AsRef<[u8]> + PartialEq,
+	P: IntoIterator<Item = Out>,
+	L: Into<Leaf<'a, Out>>,
 {
 	if leaf_index >= number_of_leaves {
 		return false
 	}
 
 	let leaf_hash = match leaf.into() {
-		Leaf::Value(content) => H::hash(content),
+		Leaf::Value(content) => <H as HashT>::hash(content),
 		Leaf::Hash(hash) => hash,
 	};
 
-	let mut combined = [0_u8; 64];
+	let hash_len = <H as sp_core::Hasher>::LENGTH;
+	let mut combined = vec![0_u8; hash_len * 2];
 	let mut position = leaf_index;
 	let mut width = number_of_leaves;
 	let computed = proof.into_iter().fold(leaf_hash, |a, b| {
 		if position % 2 == 1 || position + 1 == width {
-			combined[0..32].copy_from_slice(&b);
-			combined[32..64].copy_from_slice(&a);
+			combined[..hash_len].copy_from_slice(&b.as_ref());
+			combined[hash_len..].copy_from_slice(&a.as_ref());
 		} else {
-			combined[0..32].copy_from_slice(&a);
-			combined[32..64].copy_from_slice(&b);
+			combined[..hash_len].copy_from_slice(&a.as_ref());
+			combined[hash_len..].copy_from_slice(&b.as_ref());
 		}
-		let hash = H::hash(&combined);
+		let hash = <H as HashT>::hash(&combined);
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
-			array_bytes::bytes2hex("", &a),
-			array_bytes::bytes2hex("", &b),
-			array_bytes::bytes2hex("", &hash),
-			array_bytes::bytes2hex("", &combined)
+			array_bytes::bytes2hex("", &a.as_ref()),
+			array_bytes::bytes2hex("", &b.as_ref()),
+			array_bytes::bytes2hex("", &hash.as_ref()),
+			array_bytes::bytes2hex("", &combined.as_ref())
 		);
 		position /= 2;
 		width = ((width - 1) / 2) + 1;
@@ -398,6 +388,7 @@ sp_api::decl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::sp_core::H256;
 
 	#[test]
 	fn should_generate_empty_root() {
@@ -488,7 +479,7 @@ mod tests {
 
 		// when
 		let proof0 = merkle_proof::<Keccak256, _, _, _>(data.clone(), 0);
-		assert!(verify_proof::<Keccak256, _, _>(
+		assert!(verify_proof::<Keccak256, _, _, _>(
 			&proof0.root,
 			proof0.proof.clone(),
 			data.len(),
@@ -497,7 +488,7 @@ mod tests {
 		));
 
 		let proof1 = merkle_proof::<Keccak256, _, _, _>(data.clone(), 1);
-		assert!(verify_proof::<Keccak256, _, _>(
+		assert!(verify_proof::<Keccak256, _, _, _>(
 			&proof1.root,
 			proof1.proof,
 			data.len(),
@@ -506,7 +497,7 @@ mod tests {
 		));
 
 		let proof2 = merkle_proof::<Keccak256, _, _, _>(data.clone(), 2);
-		assert!(verify_proof::<Keccak256, _, _>(
+		assert!(verify_proof::<Keccak256, _, _, _>(
 			&proof2.root,
 			proof2.proof,
 			data.len(),
@@ -516,26 +507,27 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof0.root),
-			array_bytes::bytes2hex("", &proof1.root)
+			array_bytes::bytes2hex("", &proof0.root.as_ref()),
+			array_bytes::bytes2hex("", &proof1.root.as_ref())
 		);
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof2.root),
-			array_bytes::bytes2hex("", &proof1.root)
+			array_bytes::bytes2hex("", &proof2.root.as_ref()),
+			array_bytes::bytes2hex("", &proof1.root.as_ref())
 		);
 
-		assert!(!verify_proof::<Keccak256, _, _>(
+		assert!(!verify_proof::<Keccak256, _, _, _>(
 			&array_bytes::hex2array_unchecked(
 				"fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239"
-			),
+			)
+			.into(),
 			proof0.proof,
 			data.len(),
 			proof0.leaf_index,
 			&proof0.leaf
 		));
 
-		assert!(!verify_proof::<Keccak256, _, _>(
-			&proof0.root,
+		assert!(!verify_proof::<Keccak256, _, _, _>(
+			&proof0.root.into(),
 			vec![],
 			data.len(),
 			proof0.leaf_index,
@@ -553,7 +545,7 @@ mod tests {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
 			// then
-			assert!(verify_proof::<Keccak256, _, _>(
+			assert!(verify_proof::<Keccak256, _, _, _>(
 				&proof.root,
 				proof.proof,
 				data.len(),
@@ -579,7 +571,7 @@ mod tests {
 				// when
 				let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
 				// then
-				assert!(verify_proof::<Keccak256, _, _>(
+				assert!(verify_proof::<Keccak256, _, _, _>(
 					&proof.root,
 					proof.proof,
 					data.len(),
@@ -603,7 +595,7 @@ mod tests {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
 			// then
-			assert!(verify_proof::<Keccak256, _, _>(
+			assert!(verify_proof::<Keccak256, _, _, _>(
 				&proof.root,
 				proof.proof,
 				data.len(),
@@ -791,9 +783,10 @@ mod tests {
 			"0xA4cDc98593CE52d01Fe5Ca47CB3dA5320e0D7592",
 			"0xc26B34D375533fFc4c5276282Fa5D660F3d8cbcB",
 		];
-		let root = array_bytes::hex2array_unchecked(
+		let root: H256 = array_bytes::hex2array_unchecked(
 			"72b0acd7c302a84f1f6b6cefe0ba7194b7398afb440e1b44a9dbbe270394ca53",
-		);
+		)
+		.into();
 
 		let data = addresses
 			.into_iter()
@@ -803,12 +796,15 @@ mod tests {
 		for l in 0..data.len() {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
-			assert_eq!(array_bytes::bytes2hex("", &proof.root), array_bytes::bytes2hex("", &root));
+			assert_eq!(
+				array_bytes::bytes2hex("", &proof.root.as_ref()),
+				array_bytes::bytes2hex("", &root.as_ref())
+			);
 			assert_eq!(proof.leaf_index, l);
 			assert_eq!(&proof.leaf, &data[l]);
 
 			// then
-			assert!(verify_proof::<Keccak256, _, _>(
+			assert!(verify_proof::<Keccak256, _, _, _>(
 				&proof.root,
 				proof.proof,
 				data.len(),
@@ -826,16 +822,20 @@ mod tests {
 				proof: vec![
 					array_bytes::hex2array_unchecked(
 						"340bcb1d49b2d82802ddbcf5b85043edb3427b65d09d7f758fbc76932ad2da2f"
-					),
+					)
+					.into(),
 					array_bytes::hex2array_unchecked(
 						"ba0580e5bd530bc93d61276df7969fb5b4ae8f1864b4a28c280249575198ff1f"
-					),
+					)
+					.into(),
 					array_bytes::hex2array_unchecked(
 						"d02609d2bbdb28aa25f58b85afec937d5a4c85d37925bce6d0cf802f9d76ba79"
-					),
+					)
+					.into(),
 					array_bytes::hex2array_unchecked(
 						"ae3f8991955ed884613b0a5f40295902eea0e0abe5858fc520b72959bc016d4e"
-					),
+					)
+					.into(),
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,
