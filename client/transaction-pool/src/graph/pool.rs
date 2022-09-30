@@ -19,6 +19,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{channel::mpsc::Receiver, Future};
+use sp_blockchain::TreeRoute;
 use sc_transaction_pool_api::error;
 use sp_runtime::{
 	generic::BlockId,
@@ -34,8 +35,6 @@ use super::{
 	validated_pool::{IsValidator, ValidatedPool, ValidatedTransaction},
 	watcher::Watcher,
 };
-
-use sp_blockchain::TreeRoute;
 
 /// Modification notification event stream type;
 pub type EventStream<H> = Receiver<H>;
