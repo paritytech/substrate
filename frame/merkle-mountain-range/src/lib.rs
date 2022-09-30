@@ -387,7 +387,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let current_block_num = <frame_system::Pallet<T>>::block_number();
 		let diff = current_block_num.saturating_sub((leaves_count as u32).into());
 
-		if block_num < diff {
+		if block_num <= diff {
 			return Err(
 				primitives::Error::BlockNumToLeafIndex.log_debug("The block_number is incorrect.")
 			)
