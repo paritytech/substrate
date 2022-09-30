@@ -75,7 +75,7 @@ impl Throughput {
 	}
 
 	/// Normalizes [`Self`] to use the larges unit possible.
-	pub fn normalize(&self) -> (f64, &'static str) {
+	fn normalize(&self) -> (f64, &'static str) {
 		let bs = self.0;
 
 		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
@@ -123,7 +123,7 @@ pub(crate) fn benchmark<E>(
 
 	let score = Throughput((size * count) as f64 / elapsed.as_secs_f64());
 	log::trace!(
-		"Calculated {} of {:.2}B/s in {} iterations in {}ms",
+		"Calculated {} of {:.2} in {} iterations in {}ms",
 		name,
 		score,
 		count,
@@ -183,14 +183,14 @@ fn clobber_value<T>(input: &mut T) {
 pub const DEFAULT_CPU_EXECUTION_LIMIT: ExecutionLimit =
 	ExecutionLimit::Both { max_iterations: 4 * 1024, max_duration: Duration::from_millis(100) };
 
-// This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in MB/s.
+// This benchmarks the CPU speed as measured by calculating BLAKE2b-256 hashes, in bytes per second.
 pub fn benchmark_cpu(limit: ExecutionLimit) -> Throughput {
 	// In general the results of this benchmark are somewhat sensitive to how much
-	// data we hash at the time. The smaller this is the *less* MB/s we can hash,
-	// the bigger this is the *more* MB/s we can hash, up until a certain point
+	// data we hash at the time. The smaller this is the *less* B/s we can hash,
+	// the bigger this is the *more* B/s we can hash, up until a certain point
 	// where we can achieve roughly ~100% of what the hasher can do. If we'd plot
 	// this on a graph with the number of bytes we want to hash on the X axis
-	// and the speed in MB/s on the Y axis then we'd essentially see it grow
+	// and the speed in B/s on the Y axis then we'd essentially see it grow
 	// logarithmically.
 	//
 	// In practice however we might not always have enough data to hit the maximum
@@ -219,7 +219,7 @@ pub fn benchmark_cpu(limit: ExecutionLimit) -> Throughput {
 pub const DEFAULT_MEMORY_EXECUTION_LIMIT: ExecutionLimit =
 	ExecutionLimit::Both { max_iterations: 32, max_duration: Duration::from_millis(100) };
 
-// This benchmarks the effective `memcpy` memory bandwidth available in MB/s.
+// This benchmarks the effective `memcpy` memory bandwidth available in bytes per second.
 //
 // It doesn't technically measure the absolute maximum memory bandwidth available,
 // but that's fine, because real code most of the time isn't optimized to take
@@ -498,6 +498,7 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use sp_runtime::assert_eq_error_rate_float;
 
 	#[cfg(target_os = "linux")]
 	#[test]
@@ -540,5 +541,21 @@ mod tests {
 	#[test]
 	fn test_benchmark_sr25519_verify() {
 		assert!(benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > Throughput(0.0));
+	}
+
+	/// Test the [`Throughput`].
+	#[test]
+	fn throughput_works() {
+		/// Float precision.
+		const EPS: f64 = 0.1;
+		let gib = Throughput::from_gibs(14.324);
+
+		assert_eq_error_rate_float!(14.324, gib.as_gibs(), EPS);
+		assert_eq_error_rate_float!(14667.776, gib.as_mibs(), EPS);
+		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.as_kibs(), EPS);
+		assert_eq!("14.32 GiB/s", gib.to_string());
+
+		let mib = Throughput::from_mibs(1029.0);
+		assert_eq!("1.00 GiB/s", mib.to_string());
 	}
 }

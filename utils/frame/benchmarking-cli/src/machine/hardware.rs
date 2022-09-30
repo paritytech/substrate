@@ -90,7 +90,6 @@ impl Metric {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::assert_eq_error_rate_float;
 
 	/// `SUBSTRATE_REFERENCE_HARDWARE` can be en- and decoded.
 	#[test]
@@ -99,22 +98,5 @@ mod tests {
 		let decoded: Requirements = serde_json::from_str(&raw).unwrap();
 
 		assert_eq!(decoded, SUBSTRATE_REFERENCE_HARDWARE.clone());
-	}
-
-	/// Test the [`Throughput`].
-	#[test]
-	fn throughput_works() {
-		/// Float precision.
-		const EPS: f64 = 0.1;
-		let gib = Throughput::from_gibs(14.324);
-
-		assert_eq_error_rate_float!(14.324, gib.as_gibs(), EPS);
-		assert_eq_error_rate_float!(14667.776, gib.as_mibs(), EPS);
-		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.as_kibs(), EPS);
-		assert_eq!("14.32 GiB/s", gib.to_string());
-		assert_eq!("14.32 GiB/s", gib.normalize().0.to_string());
-
-		let mib = Throughput::from_mibs(1029.0);
-		assert_eq!("1.00 GiB/s", mib.to_string());
 	}
 }

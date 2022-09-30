@@ -151,10 +151,8 @@ impl MachineCmd {
 			Metric::Blake2256 => benchmark_cpu(hash_limit),
 			Metric::Sr25519Verify => benchmark_sr25519_verify(verify_limit),
 			Metric::MemCopy => benchmark_memory(memory_limit),
-			Metric::DiskSeqWrite =>
-				benchmark_disk_sequential_writes(disk_limit, dir)?,
-			Metric::DiskRndWrite =>
-				benchmark_disk_random_writes(disk_limit, dir)?,
+			Metric::DiskSeqWrite => benchmark_disk_sequential_writes(disk_limit, dir)?,
+			Metric::DiskRndWrite => benchmark_disk_random_writes(disk_limit, dir)?,
 		};
 		Ok(score)
 	}
