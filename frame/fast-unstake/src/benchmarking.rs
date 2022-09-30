@@ -43,10 +43,12 @@ fn l<T: Config>(
 	T::Lookup::unlookup(who)
 }
 
-fn create_unexposed_nominator<T: Config>() -> T::AccountId {
-	let account = frame_benchmarking::account::<T::AccountId>("nominator_42", 0, USER_SEED);
-	fund_and_bond_account::<T>(&account);
-	account
+fn create_unexposed_nominators<T: Config>() -> Vec<T::AccountId> {
+	(0..T::BatchSize::get()).map(|_| {
+		let account = frame_benchmarking::account::<T::AccountId>("nominator_42", 0, USER_SEED);
+		fund_and_bond_account::<T>(&account);
+		account
+	}).collect()
 }
 
 fn fund_and_bond_account<T: Config>(account: &T::AccountId) {
@@ -108,21 +110,27 @@ fn on_idle_full_block<T: Config>() {
 }
 
 benchmarks! {
-	// on_idle, we we don't check anyone, but fully unbond and move them to another pool.
+	// on_idle, we we don't check anyone, but fully unbond them.
 	on_idle_unstake {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominator::<T>();
-		assert_ok!(FastUnstake::<T>::register_fast_unstake(
-			RawOrigin::Signed(who.clone()).into(),
-		));
+		for who in create_unexposed_nominators::<T>() {
+			assert_ok!(FastUnstake::<T>::register_fast_unstake(
+				RawOrigin::Signed(who.clone()).into(),
+			));
+		}
 
 		// run on_idle once. This will check era 0.
 		assert_eq!(Head::<T>::get(), None);
 		on_idle_full_block::<T>();
-		assert_eq!(
+
+		assert!(matches!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap(), deposit: T::Deposit::get() })
-		);
+			Some(UnstakeRequest {
+				checked,
+				stashes,
+				..
+			}) if checked.len() == 1 && stashes.len() as u32 == T::BatchSize::get()
+		));
 	}
 	: {
 		on_idle_full_block::<T>();
@@ -130,7 +138,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::Unstaked { .. })
+			Some(Event::Terminated)
 		));
 	}
 
@@ -147,10 +155,13 @@ benchmarks! {
 
 		// setup staking with v validators and u eras of data (0..=u)
 		setup_staking::<T>(v, u);
-		let who = create_unexposed_nominator::<T>();
-		assert_ok!(FastUnstake::<T>::register_fast_unstake(
-			RawOrigin::Signed(who.clone()).into(),
-		));
+
+		let stashes = create_unexposed_nominators::<T>().into_iter().map(|s| {
+			assert_ok!(FastUnstake::<T>::register_fast_unstake(
+				RawOrigin::Signed(s.clone()).into(),
+			));
+			(s, T::Deposit::get())
+		}).collect::<Vec<_>>().try_into().unwrap();
 
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
@@ -162,7 +173,7 @@ benchmarks! {
 		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked, deposit: T::Deposit::get() })
+			Some(UnstakeRequest { stashes, checked })
 		);
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
@@ -172,7 +183,7 @@ benchmarks! {
 
 	register_fast_unstake {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominator::<T>();
+		let who = create_unexposed_nominators::<T>().get(0).cloned().unwrap();
 		whitelist_account!(who);
 		assert_eq!(Queue::<T>::count(), 0);
 
@@ -184,7 +195,7 @@ benchmarks! {
 
 	deregister {
 		ErasToCheckPerBlock::<T>::put(1);
-		let who = create_unexposed_nominator::<T>();
+		let who = create_unexposed_nominators::<T>().get(0).cloned().unwrap();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
 		));
