@@ -2623,7 +2623,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::storage]
 /// 		pub(super) type MyStorage<T> = StorageValue<_, u32, ValueQuery, MyStorageOnEmpty>;
 /// 		```
-/// 
+///
 ///       NOTE: `decl_storage` also generates the functions `assimilate_storage` and
 ///       `build_storage` directly on `GenesisConfig`, and these are sometimes used in tests.
 ///       In order not to break they can be implemented manually, one can implement those
@@ -2646,25 +2646,28 @@ pub mod pallet_prelude {
 ///
 /// * compare metadata. Use [subsee](https://github.com/ascjones/subsee) to fetch the metadata
 ///   and do a diff of the resulting json before and after migration. This checks for:
-///		* call, names, signature, docs
+/// 		* call, names, signature, docs
 ///     * event names, docs
 ///     * error names, docs
 ///     * storage names, hasher, prefixes, default value
 ///     * error, error, constant
 /// * manually check that:
-///     * `Origin` is moved inside the macro under `#[pallet::origin]` if it exists
-///     * [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`)  is moved inside the macro
-///       under `#[pallet::validate_unsigned)]` if it exists
-///     * [`ProvideInherent`](`pallet_prelude::ProvideInherent`) is moved inside macro under
-///       `#[pallet::inherent)]` if it exists
-///     * `on_initialize`/`on_finalize`/`on_runtime_upgrade`/`offchain_worker` are moved to
-///       `Hooks` implementation
-///     * storages with `config(..)` are converted to `GenesisConfig` field, and their default
-///       is `= $expr;` if the storage have default value
-///     * storages with `build($expr)` or `config(..)` are built in `GenesisBuild::build`
-///     * `add_extra_genesis` fields are converted to `GenesisConfig` field with their correct
+///     * `Origin` was moved inside the macro under
+///       [`#[pallet::origin]`](#origin-palletorigin-optional) if it exists
+///     * [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`) was moved inside the macro
+///       under
+/// 	  [`#[pallet::validate_unsigned)]`](#validate-unsigned-palletvalidate_unsigned-optional)
+/// 	  if it exists
+///     * [`ProvideInherent`](`pallet_prelude::ProvideInherent`) was moved inside the macro
+///       under [`#[pallet::inherent)]`](#inherent-palletinherent-optional) if it exists
+///     * `on_initialize` / `on_finalize` / `on_runtime_upgrade` / `offchain_worker` were moved to
+///       the `Hooks` implementation
+///     * storages with `config(..)` were converted to `GenesisConfig` field, and their default
+///       is `= $expr;` if the storage has a default value
+///     * storages with `build($expr)` or `config(..)` were built in `GenesisBuild::build`
+///     * `add_extra_genesis` fields were converted to `GenesisConfig` field with their correct
 ///       default if specified
-///     * `add_extra_genesis` build is written into `GenesisBuild::build`
+///     * `add_extra_genesis` build was written into `GenesisBuild::build`
 /// * storage items defined with [`pallet`] use the name of the pallet provided by
 ///   [`traits::PalletInfo::name`] as `pallet_prefix` (in `decl_storage`, storage items used
 ///   the `pallet_prefix` given as input of `decl_storage` with the syntax `as Example`). Thus
@@ -2673,9 +2676,8 @@ pub mod pallet_prelude {
 ///       as the name the pallet was giving to `decl_storage`,
 ///     * or do a storage migration from the old prefix used to the new prefix used.
 ///
-/// NOTE: The prefixes used by storage items are in the metadata. Thus, ensuring the
-/// metadata hasn't  changed does ensure that the `pallet_prefix`s used by the storage items
-/// haven't changed.
+/// NOTE: The prefixes used by storage items are in metadata. Thus, ensuring the metadata
+/// hasn't changed ensures that the `pallet_prefix`s used by the storage items haven't changed.
 ///
 /// # Notes when macro fails to show proper error message spans:
 ///
