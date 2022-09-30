@@ -149,8 +149,12 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 pub struct PendingSwap<CollectionId, ItemId, ItemPrice, Deadline> {
+	/// A collection of the item user wants to receive.
 	pub(super) desired_collection: CollectionId,
+	/// An item user wants to receive.
 	pub(super) desired_item: Option<ItemId>,
+	/// A price the user is willing to pay for the desired `item`.
 	pub(super) price: Option<ItemPrice>,
+	/// An optional deadline for the swap.
 	pub(super) deadline: Option<Deadline>,
 }
