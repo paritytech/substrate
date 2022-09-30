@@ -467,8 +467,8 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price), Some(duration))
 	verify {
 		assert_last_event::<T, I>(Event::SwapCreated {
-			collection,
-			item: item1,
+			offered_collection: collection,
+			offered_item: item1,
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price),
@@ -487,8 +487,8 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1)
 	verify {
 		assert_last_event::<T, I>(Event::SwapCancelled {
-			collection,
-			item: item1,
+			offered_collection: collection,
+			offered_item: item1,
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price),

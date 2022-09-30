@@ -24,14 +24,15 @@ use frame_support::{
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_create_swap(
 		caller: T::AccountId,
-		collection_id: T::CollectionId,
-		item_id: T::ItemId,
+		offered_collection_id: T::CollectionId,
+		offered_item_id: T::ItemId,
 		desired_collection_id: T::CollectionId,
 		maybe_desired_item_id: Option<T::ItemId>,
 		maybe_price: Option<ItemPrice<T, I>>,
 		maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
 	) -> DispatchResult {
-		let item = Item::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownItem)?;
+		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
+			.ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(item.owner == caller, Error::<T, I>::NoPermission);
 
 		match maybe_desired_item_id {
@@ -50,8 +51,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let deadline = maybe_duration.map(|d| d.saturating_add(now));
 
 		PendingSwapOf::<T, I>::insert(
-			&collection_id,
-			&item_id,
+			&offered_collection_id,
+			&offered_item_id,
 			PendingSwap {
 				desired_collection: desired_collection_id,
 				desired_item: maybe_desired_item_id,
@@ -61,8 +62,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		);
 
 		Self::deposit_event(Event::SwapCreated {
-			collection: collection_id,
-			item: item_id,
+			offered_collection: offered_collection_id,
+			offered_item: offered_item_id,
 			desired_collection: desired_collection_id,
 			desired_item: maybe_desired_item_id,
 			price: maybe_price,
@@ -74,11 +75,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn do_cancel_swap(
 		caller: T::AccountId,
-		collection_id: T::CollectionId,
-		item_id: T::ItemId,
+		offered_collection_id: T::CollectionId,
+		offered_item_id: T::ItemId,
 	) -> DispatchResult {
-		let item = Item::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownItem)?;
-		let swap = PendingSwapOf::<T, I>::get(&collection_id, &item_id)
+		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
+			.ok_or(Error::<T, I>::UnknownItem)?;
+		let swap = PendingSwapOf::<T, I>::get(&offered_collection_id, &offered_item_id)
 			.ok_or(Error::<T, I>::UnknownSwap)?;
 
 		let is_past_deadline = if let Some(deadline) = swap.deadline {
@@ -92,11 +94,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(item.owner == caller, Error::<T, I>::NoPermission);
 		}
 
-		PendingSwapOf::<T, I>::remove(&collection_id, &item_id);
+		PendingSwapOf::<T, I>::remove(&offered_collection_id, &offered_item_id);
 
 		Self::deposit_event(Event::SwapCancelled {
-			collection: collection_id,
-			item: item_id,
+			offered_collection: offered_collection_id,
+			offered_item: offered_item_id,
 			desired_collection: swap.desired_collection,
 			desired_item: swap.desired_item,
 			price: swap.price,

@@ -1015,8 +1015,8 @@ fn create_cancel_swap_should_work() {
 		assert_eq!(swap.deadline, Some(expect_deadline));
 
 		assert!(events().contains(&Event::<Test>::SwapCreated {
-			collection: collection_id,
-			item: item_1,
+			offered_collection: collection_id,
+			offered_item: item_1,
 			desired_collection: collection_id,
 			desired_item: Some(item_2),
 			price: Some(price),
@@ -1026,8 +1026,8 @@ fn create_cancel_swap_should_work() {
 		// validate we can cancel the swap
 		assert_ok!(Nfts::cancel_swap(Origin::signed(user_id), collection_id, item_1));
 		assert!(events().contains(&Event::<Test>::SwapCancelled {
-			collection: collection_id,
-			item: item_1,
+			offered_collection: collection_id,
+			offered_item: item_1,
 			desired_collection: collection_id,
 			desired_item: Some(item_2),
 			price: Some(price),

@@ -404,8 +404,8 @@ pub mod pallet {
 		},
 		/// An `item` swap intent was created.
 		SwapCreated {
-			collection: T::CollectionId,
-			item: T::ItemId,
+			offered_collection: T::CollectionId,
+			offered_item: T::ItemId,
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<ItemPrice<T, I>>,
@@ -413,8 +413,8 @@ pub mod pallet {
 		},
 		/// The swap was cancelled.
 		SwapCancelled {
-			collection: T::CollectionId,
-			item: T::ItemId,
+			offered_collection: T::CollectionId,
+			offered_item: T::ItemId,
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<ItemPrice<T, I>>,
@@ -1644,8 +1644,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create_swap())]
 		pub fn create_swap(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
-			item: T::ItemId,
+			offered_collection: T::CollectionId,
+			offered_item: T::ItemId,
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<ItemPrice<T, I>>,
@@ -1654,8 +1654,8 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			Self::do_create_swap(
 				origin,
-				collection,
-				item,
+				offered_collection,
+				offered_item,
 				desired_collection,
 				maybe_desired_item,
 				maybe_price,
@@ -1674,11 +1674,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::cancel_swap())]
 		pub fn cancel_swap(
 			origin: OriginFor<T>,
-			collection: T::CollectionId,
-			item: T::ItemId,
+			offered_collection: T::CollectionId,
+			offered_item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_cancel_swap(origin, collection, item)
+			Self::do_cancel_swap(origin, offered_collection, offered_item)
 		}
 
 		/// Claim an atomic swap.
