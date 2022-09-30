@@ -140,6 +140,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::transfer(&receive_item.owner, &send_item.owner, amount, KeepAlive)?;
 		}
 
+		// This also removes the swap.
 		Self::do_transfer(send_collection_id, send_item_id, receive_item.owner.clone(), |_, _| {
 			Ok(())
 		})?;
