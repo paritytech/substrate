@@ -463,7 +463,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Generate MMR proof for a series of leaves under given indices, using MMR at given `leaves_count` size.
 		fn generate_historical_batch_proof(
-			leaf_indices: Vec<LeafIndex>,
+			block_numbers: Vec<BlockNumber>,
 			leaves_count: LeafIndex
 		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 

@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_mmr_primitives::{BatchProof, Error as MmrError, Proof};
+use sp_mmr_primitives::{BatchProof, Error as MmrError, LeafIndex, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
@@ -149,7 +149,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	#[method(name = "mmr_generateHistoricalBatchProof")]
 	fn generate_historical_batch_proof(
 		&self,
-		leaf_indices: Vec<LeafIndex>,
+		block_numbers: Vec<BlockNumber>,
 		leaves_count: LeafIndex,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
@@ -222,7 +222,7 @@ where
 
 	fn generate_historical_batch_proof(
 		&self,
-		leaf_indices: Vec<LeafIndex>,
+		block_numbers: Vec<BlockNumber>,
 		leaves_count: LeafIndex,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
@@ -235,7 +235,7 @@ where
 			.generate_historical_batch_proof_with_context(
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
-				leaf_indices,
+				block_numbers,
 				leaves_count,
 			)
 			.map_err(runtime_error_into_rpc_error)?
