@@ -1423,11 +1423,25 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
+/// Note that various types can be automatically imported using
+/// [`frame_support::pallet_prelude`] and `frame_system::pallet_prelude`:
+///
+/// ```ignore
+/// #[pallet]
+/// pub mod pallet {
+/// 	use frame_support::pallet_prelude::*;
+/// 	use frame_system::pallet_prelude::*;
+/// 	...
+/// }
+/// ```
+///
 /// # pallet::* Attributes
 ///
-/// The `pallet` macro will parse any items within your `pallet` module that are annotated
-/// with `#[pallet::*]` attributes. Some of these attributes are mandatory and some are
-/// optional. The full list of `#[pallet::*]` attributes is shown below:
+/// The `pallet` macro will parse any items within your `pallet` module that are annotated with
+/// `#[pallet::*]` attributes. Some of these attributes are mandatory and some are optional,
+/// and they can attach to different types of items within your pallet depending on the
+/// attribute in question. The full list of `#[pallet::*]` attributes is shown below in the
+/// order in which they are mentioned in this document:
 ///
 /// * [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory)
 /// * [`pallet::constant`](#palletconstant)
@@ -1467,6 +1481,10 @@ pub mod pallet_prelude {
 /// the [`pallet_macros`] module which is automatically included in all pallets as part of the
 /// pallet prelude. The actual "work" for all of these attribute macros can be found in the
 /// macro expansion for `#[pallet]`.
+///
+/// Also note that in this document, pallet attributes are explained using the syntax of
+/// non-instantiable pallets. For an example of an instantiable pallet, see [this
+/// example](#example-of-an-instantiable-pallet).
 ///
 /// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
 ///
@@ -2660,8 +2678,8 @@ pub mod pallet_prelude {
 /// 	  if it exists
 ///     * [`ProvideInherent`](`pallet_prelude::ProvideInherent`) was moved inside the macro
 ///       under [`#[pallet::inherent)]`](#inherent-palletinherent-optional) if it exists
-///     * `on_initialize` / `on_finalize` / `on_runtime_upgrade` / `offchain_worker` were moved to
-///       the `Hooks` implementation
+///     * `on_initialize` / `on_finalize` / `on_runtime_upgrade` / `offchain_worker` were moved
+///       to the `Hooks` implementation
 ///     * storages with `config(..)` were converted to `GenesisConfig` field, and their default
 ///       is `= $expr;` if the storage has a default value
 ///     * storages with `build($expr)` or `config(..)` were built in `GenesisBuild::build`
