@@ -163,8 +163,6 @@ impl<T: Config> LeafDataProvider for Pallet<T> {
 impl<T> beefy_primitives::OnNewValidatorSet<<T as pallet_beefy::Config>::BeefyId> for Pallet<T>
 where
 	T: pallet::Config,
-	<T as pallet_mmr::Config>::Hashing: beefy_merkle_tree::Hasher,
-	beefy_merkle_tree::Hash: Into<MerkleRootOf<T>>,
 {
 	/// Compute and cache BEEFY authority sets based on updated BEEFY validator sets.
 	fn on_new_validator_set(
@@ -179,11 +177,7 @@ where
 	}
 }
 
-impl<T: Config> Pallet<T>
-where
-	<T as pallet_mmr::Config>::Hashing: beefy_merkle_tree::Hasher,
-	beefy_merkle_tree::Hash: Into<MerkleRootOf<T>>,
-{
+impl<T: Config> Pallet<T> {
 	/// Return the currently active BEEFY authority set proof.
 	pub fn authority_set_proof() -> BeefyAuthoritySet<MerkleRootOf<T>> {
 		Pallet::<T>::beefy_authorities()
@@ -210,7 +204,7 @@ where
 			.map(T::BeefyAuthorityToMerkleLeaf::convert)
 			.collect::<Vec<_>>();
 		let len = beefy_addresses.len() as u32;
-		let root = beefy_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _, _>(
+		let root = beefy_merkle_tree::merkle_root::<<T as pallet_mmr::Config>::Hashing, _, _, _>(
 			beefy_addresses,
 		)
 		.into();

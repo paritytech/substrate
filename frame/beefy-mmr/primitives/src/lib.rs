@@ -40,37 +40,15 @@ use beefy_primitives::mmr::{BeefyAuthoritySet, BeefyNextAuthoritySet};
 pub use sp_runtime::traits::Keccak256;
 use sp_runtime::{app_crypto::sp_core, traits::Hash as HashT};
 
-/// Supported hashing output size.
-///
-/// The size is restricted to 32 bytes to allow for a more optimised implementation.
-pub type Hash = [u8; 32];
-
-/// Generic hasher trait.
-///
-/// Implement the function to support custom way of hashing data.
-/// The implementation must return a [Hash](type@Hash) type, so only 32-byte output hashes are
-/// supported.
-pub trait Hasher {
-	/// Hash given arbitrary-length piece of data.
-	fn hash(data: &[u8]) -> Hash;
-}
-
-/// Keccak256 hasher implementation.
-impl Hasher for Keccak256 {
-	fn hash(data: &[u8]) -> Hash {
-		<Self as HashT>::hash(data).into()
-	}
-}
-
 /// Construct a root hash of a Binary Merkle Tree created from given leaves.
 ///
 /// See crate-level docs for details about Merkle Tree construction.
 ///
 /// In case an empty list of leaves is passed the function returns a 0-filled hash.
-pub fn merkle_root<H, I, T>(leaves: I) -> Hash
+pub fn merkle_root<H, Out, I, T>(leaves: I) -> Out
 where
-	H: HashT,
-	<H as HashT>::Output: Into<Hash>,
+	H: HashT<Output = Out>,
+	Out: Default + AsRef<[u8]>,
 	I: IntoIterator<Item = T>,
 	T: AsRef<[u8]>,
 {
@@ -166,7 +144,7 @@ impl<T> Visitor<T> for () {
 pub fn merkle_proof<H, Out, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<Out, T>
 where
 	H: HashT<Output = Out>,
-	Out: Default + Copy + Into<Hash> + AsRef<[u8]>,
+	Out: Default + Copy + AsRef<[u8]>,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
@@ -374,7 +352,6 @@ sp_api::decl_runtime_apis! {
 	/// API useful for BEEFY light clients.
 	pub trait BeefyMmrApi<H>
 	where
-		H: From<Hash> + Into<Hash>,
 		BeefyAuthoritySet<H>: sp_api::Decode,
 	{
 		/// Return the currently active BEEFY authority set proof.
@@ -397,11 +374,11 @@ mod tests {
 		let data: Vec<[u8; 1]> = Default::default();
 
 		// when
-		let out = merkle_root::<Keccak256, _, _>(data);
+		let out = merkle_root::<Keccak256, _, _, _>(data);
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &out),
+			array_bytes::bytes2hex("", out.as_ref()),
 			"0000000000000000000000000000000000000000000000000000000000000000"
 		);
 	}
@@ -415,11 +392,11 @@ mod tests {
 		)];
 
 		// when
-		let out = merkle_root::<Keccak256, _, _>(data);
+		let out = merkle_root::<Keccak256, _, _, _>(data);
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &out),
+			array_bytes::bytes2hex("", out.as_ref()),
 			"aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"
 		);
 	}
@@ -434,11 +411,11 @@ mod tests {
 		];
 
 		// when
-		let out = merkle_root::<Keccak256, _, _>(data);
+		let out = merkle_root::<Keccak256, _, _, _>(data);
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &out),
+			array_bytes::bytes2hex("", out.as_ref()),
 			"697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"
 		);
 	}
@@ -447,7 +424,10 @@ mod tests {
 	fn should_generate_root_complex() {
 		let _ = env_logger::try_init();
 		let test = |root, data| {
-			assert_eq!(array_bytes::bytes2hex("", &merkle_root::<Keccak256, _, _>(data)), root);
+			assert_eq!(
+				array_bytes::bytes2hex("", &merkle_root::<Keccak256, _, _, _>(data).as_ref()),
+				root
+			);
 		};
 
 		test(
