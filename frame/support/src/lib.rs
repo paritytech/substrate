@@ -743,7 +743,7 @@ macro_rules! assert_err {
 
 /// Assert an expression returns an error specified.
 ///
-/// This can be used on`DispatchResultWithPostInfo` when the post info should
+/// This can be used on `DispatchResultWithPostInfo` when the post info should
 /// be ignored.
 #[macro_export]
 macro_rules! assert_err_ignore_postinfo {
@@ -1430,6 +1430,7 @@ pub mod pallet_prelude {
 /// optional. The full list of `#[pallet::*]` attributes is shown below:
 ///
 /// * [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory)
+/// * [`pallet::constant`](#palletconstant)
 /// * [`pallet::config`](#config-trait-palletconfig-mandatory)
 /// * [`pallet::disable_frame_system_supertrait_check`](#disable_supertrait_check)
 /// * [`pallet::generate_store($vis trait Store)`](#palletgenerate_storevis-trait-store)
@@ -1438,6 +1439,7 @@ pub mod pallet_prelude {
 /// * [`pallet::hooks`](#hooks-pallethooks-optional)
 /// * [`pallet::call`](#call-palletcall-optional)
 /// * [`pallet::weight($expr)`](#palletweightexpr)
+/// * [`pallet::compact`](#palletcompact-some_arg-some_type)
 /// * [`pallet::call_index($idx)`](#palletcall_indexidx)
 /// * [`pallet::extra_constants`](#extra-constants-palletextra_constants-optional)
 /// * [`pallet::error`](#error-palleterror-optional)
@@ -1677,9 +1679,12 @@ pub mod pallet_prelude {
 /// ## `#[pallet::weight($expr)]`
 ///
 /// Each dispatchable needs to define a weight with `#[pallet::weight($expr)]` attribute, the
-/// first argument must be `origin: OriginFor<T>`. Compact encoding for argument can be used
-/// via `#[pallet::compact]`. The function must return a `DispatchResultWithPostInfo` or
-/// `DispatchResult`.
+/// first argument must be `origin: OriginFor<T>`.
+///
+/// ### `#[pallet::compact] $some_arg: $some_type`
+///
+/// Compact encoding for argument can be used via `#[pallet::compact]`. The function must
+/// return a `DispatchResultWithPostInfo` or `DispatchResult`.
 ///
 /// ## `#[pallet::call_index($idx)]`
 ///
@@ -2539,8 +2544,8 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
-///     * all const in decl_module to `#[pallet::constant]`
-///     * add bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type
+///     * all const in `decl_module` to [`#[pallet::constant]`](#palletconstant)
+///     * add the bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type
 ///       RuntimeEvent`
 /// 7. **migrate decl_module**: write:
 /// 	```ignore
@@ -2549,7 +2554,7 @@ pub mod pallet_prelude {
 /// 	}
 /// 	```
 ///     and write inside `on_initialize`, `on_finalize`, `on_runtime_upgrade`,
-///     `offchain_worker`, `integrity_test`.
+///     `offchain_worker`, and `integrity_test`.
 ///
 /// 	then write:
 /// 	```ignore
@@ -2557,18 +2562,20 @@ pub mod pallet_prelude {
 /// 	impl<T: Config> Pallet<T> {
 /// 	}
 /// 	```
-///     and write inside all the calls in decl_module with a few changes in the signature:
+///     and write inside all the calls in `decl_module` with a few changes in the signature:
 ///     - origin must now be written completely, e.g. `origin: OriginFor<T>`
 ///     - result type must be `DispatchResultWithPostInfo`, you need to write it and also you
 ///    might need to put `Ok(().into())` at the end or the function.
-///     - `#[compact]` must now be written `#[pallet::compact]`
-///     - `#[weight = ..]` must now be written `#[pallet::weight(..)]`
+///     - `#[compact]` must now be written
+///       [`#[pallet::compact]`](#palletcompact-some_arg-some_type)
+///     - `#[weight = ..]` must now be written [`#[pallet::weight(..)]`](#palletweightexpr)
 ///
-/// 7. **migrate event**: rewrite as a simple enum under with the attribute
-///     `#[pallet::event]`, use `#[pallet::generate_deposit($vis fn deposit_event)]` to
-///     generate deposit_event,
-/// 8. **migrate error**: rewrite it with attribute `#[pallet::error]`.
-/// 9. **migrate storage**: decl_storage provide an upgrade template (see 3.). All storages,
+/// 7. **migrate event**: rewrite as a simple enum with the attribute
+///    [`#[pallet::event]`](#event-palletevent-optional), use [`#[pallet::generate_deposit($vis
+///    fn deposit_event)]`](#event-palletevent-optional) to generate `deposit_event`,
+/// 8. **migrate error**: rewrite it with attribute
+///    [`#[pallet::error]`](#error-palleterror-optional).
+/// 9. **migrate storage**: `decl_storage` provide an upgrade template (see 3.). All storages,
 ///     genesis config, genesis build and default implementation of genesis config can be
 ///     taken from it directly.
 ///
@@ -2592,53 +2599,58 @@ pub mod pallet_prelude {
 /// 		}
 /// 	}
 /// 	```
-///     for each storages, if it contains config(..) then add a fields, and make its default
-///     to the value in `= ..;` or the type default if none, if it contains no build then also
-///     add the logic to build the value. for each storages if it contains build(..) then add
-///     the logic to genesis_build.
+///     for each storage, if it contains `config(..)` then add fields, and make it default to
+///     the value in `= ..;` or the type default if none, if it contains no build then also add
+///     the logic to build the value. for each storage if it contains `build(..)` then add the
+///     logic to `genesis_build`.
 ///
-///     NOTE: in decl_storage: is executed first the individual config and build and at the
-///     end the add_extra_genesis build
+///     NOTE: within `decl_storage`: the individual config is executed first, followed by the
+///     build and finally the `add_extra_genesis` build.
 ///
-///     Once this is done you can migrate storage individually, a few notes:
+///     Once this is done you can migrate storages individually, a few notes:
 ///     - for private storage use `pub(crate) type ` or `pub(super) type` or nothing,
-///     - for storage with `get(fn ..)` use `#[pallet::getter(fn ...)]`
-///     - for storage with value being `Option<$something>` make generic `Value` being
-///    `$something` and generic `QueryKind` being `OptionQuery` (note: this is default).
-///         Otherwise make `Value` the complete value type and `QueryKind` being `ValueQuery`.
-///     - for storage with default value: `= $expr;` provide some specific OnEmpty generic. To
-///    do so use of `#[pallet::type_value]` to generate the wanted struct to put. example:
-///         `MyStorage: u32 = 3u32` would be written:
-/// 		```ignore
+///     - for storages with `get(fn ..)` use [`#[pallet::getter(fn
+///       ...)]`](#palletgetterfn-my_getter_fn_name-optional)
+///     - for storages with value being `Option<$something>` make generic `Value` being
+///       `$something` and generic `QueryKind` being `OptionQuery` (note: this is default).
+///       Otherwise make `Value` the complete value type and `QueryKind` being `ValueQuery`.
+///     - for storages with default value: `= $expr;` provide some specific `OnEmpty` generic.
+///       To do so use of `#[pallet::type_value]` to generate the wanted struct to put.
+///       example: `MyStorage: u32 = 3u32` would be written:
+///
+/// 	  	```ignore
 /// 		#[pallet::type_value] fn MyStorageOnEmpty() -> u32 { 3u32 }
 /// 		#[pallet::storage]
 /// 		pub(super) type MyStorage<T> = StorageValue<_, u32, ValueQuery, MyStorageOnEmpty>;
 /// 		```
-///
-///     NOTE: `decl_storage` also generates functions `assimilate_storage` and `build_storage`
-///     directly on GenesisConfig, those are sometimes used in tests. In order not to break
-///     they can be implemented manually, one can implement those functions by calling
-///     `GenesisBuild` implementation.
-///
-/// 10. **migrate origin**: move the origin to the pallet module under `#[pallet::origin]`
+/// 
+///       NOTE: `decl_storage` also generates the functions `assimilate_storage` and
+///       `build_storage` directly on `GenesisConfig`, and these are sometimes used in tests.
+///       In order not to break they can be implemented manually, one can implement those
+///       functions by calling the `GenesisBuild` implementation.
+/// 10. **migrate origin**: move the origin to the pallet module to be under a
+///     [`#[pallet::origin]`](#origin-palletorigin-optional) attribute
 /// 11. **migrate validate_unsigned**: move the
 ///     [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`) implementation to the pallet
-///     module under `#[pallet::validate_unsigned]`
+///     module under a
+///     [`#[pallet::validate_unsigned]`](#validate-unsigned-palletvalidate_unsigned-optional)
+///     attribute
 /// 12. **migrate provide_inherent**: move the
 ///     [`ProvideInherent`](`pallet_prelude::ProvideInherent`) implementation to the pallet
-///     module under `#[pallet::inherent]`
+///     module under a [`#[pallet::inherent]`](#inherent-palletinherent-optional) attribute
 /// 13. rename the usage of `Module` to `Pallet` inside the crate.
-/// 14. migration is done, now double check migration with the checking migration guidelines.
+/// 14. migration is done, now double check the migration with the checking migration
+///     guidelines shown below.
 ///
-/// ## Checking upgrade guidelines:
+/// # Checking upgrade guidelines:
 ///
 /// * compare metadata. Use [subsee](https://github.com/ascjones/subsee) to fetch the metadata
-/// and do a diff of the resulting json before and after migration. This checks for:
-///     * call, names, signature, docs
+///   and do a diff of the resulting json before and after migration. This checks for:
+///		* call, names, signature, docs
 ///     * event names, docs
 ///     * error names, docs
 ///     * storage names, hasher, prefixes, default value
-///     * error , error, constant,
+///     * error, error, constant
 /// * manually check that:
 ///     * `Origin` is moved inside the macro under `#[pallet::origin]` if it exists
 ///     * [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`)  is moved inside the macro
