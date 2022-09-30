@@ -44,8 +44,8 @@ fn l<T: Config>(
 }
 
 fn create_unexposed_nominators<T: Config>() -> Vec<T::AccountId> {
-	(0..T::BatchSize::get()).map(|_| {
-		let account = frame_benchmarking::account::<T::AccountId>("nominator_42", 0, USER_SEED);
+	(0..T::BatchSize::get()).map(|i| {
+		let account = frame_benchmarking::account::<T::AccountId>("nominator_42", i, USER_SEED);
 		fund_and_bond_account::<T>(&account);
 		account
 	}).collect()
@@ -161,7 +161,7 @@ benchmarks! {
 				RawOrigin::Signed(s.clone()).into(),
 			));
 			(s, T::Deposit::get())
-		}).collect::<Vec<_>>().try_into().unwrap();
+		}).collect::<Vec<_>>();
 
 		// no one is queued thus far.
 		assert_eq!(Head::<T>::get(), None);
@@ -170,11 +170,10 @@ benchmarks! {
 		on_idle_full_block::<T>();
 	}
 	verify {
-		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
-		assert_eq!(
-			Head::<T>::get(),
-			Some(UnstakeRequest { stashes, checked })
-		);
+		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();
+		let request = Head::<T>::get().unwrap();
+		assert_eq!(checked, request.checked.into_inner());
+		assert!(stashes.iter().all(|(s, _)| request.stashes.iter().find(|(ss, _)| ss == s).is_some()));
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
 			Some(Event::Checking { .. })
