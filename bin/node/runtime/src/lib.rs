@@ -77,6 +77,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use static_assertions::const_assert;
+use sp_keyring::AccountKeyring;
 
 #[cfg(any(feature = "std", test))]
 pub use frame_system::Call as SystemCall;
@@ -208,8 +209,9 @@ pub struct UnfilterableCalls;
 impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
-			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause() => true,
+			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
 			RuntimeCall::Balances(_) => false,
+			_ => false,
 		}
 	}
 }
@@ -250,11 +252,11 @@ impl ForceActivateOrigin {
 	}
 
 	/// Account id of the origin.
-	pub const fn acc(&self) -> u32 {
+	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak => 100,
-			Self::Medium => 101,
-			Self::Strong => 102,
+			Self::Weak => sp_keyring::AccountKeyring::Alice.into(),
+			Self::Medium => sp_keyring::AccountKeyring::Bob.into(),
+			Self::Strong => sp_keyring::AccountKeyring::Charlie.into(),
 		}
 	}
 
@@ -275,11 +277,11 @@ impl ForceExtendOrigin {
 	}
 
 	/// Account id of the origin.
-	pub const fn acc(&self) -> u32 {
+	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak => 200,
-			Self::Medium => 201,
-			Self::Strong => 202,
+			Self::Weak => sp_keyring::AccountKeyring::Alice.into(),
+			Self::Medium => sp_keyring::AccountKeyring::Bob.into(),
+			Self::Strong => sp_keyring::AccountKeyring::Charlie.into(),
 		}
 	}
 
@@ -289,7 +291,7 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u32>, O>> + From<RawOrigin<u32>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug> EnsureOrigin<O>
 	for ForceActivateOrigin
 {
 	type Success = u32;
@@ -307,7 +309,7 @@ impl<O: Into<Result<RawOrigin<u32>, O>> + From<RawOrigin<u32>> + std::fmt::Debug
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u32>, O>> + From<RawOrigin<u32>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug> EnsureOrigin<O>
 	for ForceExtendOrigin
 {
 	type Success = u32;
@@ -325,29 +327,12 @@ impl<O: Into<Result<RawOrigin<u32>, O>> + From<RawOrigin<u32>> + std::fmt::Debug
 	}
 }
 
-// Required impl to use some <Configured Origin>::get()
-impl SortedMembers<u32> for DeactivateOrigin {
-	fn sorted_members() -> Vec<u32> {
-		vec![Self::get()]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u32) {}
-}
-impl SortedMembers<u32> for RepayOrigin {
-	fn sorted_members() -> Vec<u32> {
-		vec![Self::get()]
-	}
-	#[cfg(feature = "runtime-benchmarks")]
-	fn add(_m: &u32) {}
-}
 
 parameter_types! {
 	pub const ActivateDuration: u32 = 3;
 	pub const ExtendDuration: u32 = 30;
 	pub const ActivateStakeAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 	pub const ExtendStakeAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const DeactivateOrigin: u32 = 3;
-	pub const RepayOrigin: u32 = 4;
 }
 
 impl pallet_safe_mode::Config for Runtime {
@@ -360,8 +345,8 @@ impl pallet_safe_mode::Config for Runtime {
 	type ExtendStakeAmount = ExtendStakeAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
-	type ForceDeactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
-	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
+	type ForceDeactivateOrigin = EnsureRoot<Self::AccountId>;
+	type RepayOrigin = EnsureRoot<Self::AccountId>;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 

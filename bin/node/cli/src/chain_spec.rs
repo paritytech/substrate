@@ -373,8 +373,6 @@ pub fn testnet_genesis(
 			min_join_bond: 1 * DOLLARS,
 			..Default::default()
 		},
-		safe_mode: Default::default(),
-		tx_pause: Default::default(),
 	}
 }
 
