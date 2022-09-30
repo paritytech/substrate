@@ -1724,7 +1724,8 @@ pub mod pallet {
 
 		/// Cancel an atomic swap.
 		///
-		/// Origin must be Signed and must be an owner of the `item` if the deadline hasn't expired.
+		/// Origin must be Signed.
+		/// Origin must be an owner of the `item` if the deadline hasn't expired.
 		///
 		/// - `collection`: The collection of the item.
 		/// - `item`: The item an owner wants to give.
@@ -1741,6 +1742,7 @@ pub mod pallet {
 		}
 
 		/// Claim an atomic swap.
+		/// This method executes a pending swap, that was created by a counterpart before.
 		///
 		/// Origin must be Signed and must be an owner of the `item`.
 		///
