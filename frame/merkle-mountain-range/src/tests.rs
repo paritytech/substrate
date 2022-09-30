@@ -240,7 +240,7 @@ fn should_generate_proofs_correctly() {
 	ext.execute_with(|| {
 		let now = frame_system::Pallet::<Test>::block_number();
 		// when generate proofs for all leaves.
-		let proofs = (0_u64..now)
+		let proofs = (1_u64..=now)
 			.into_iter()
 			.map(|block_num| crate::Pallet::<Test>::generate_batch_proof(vec![block_num]).unwrap())
 			.collect::<Vec<_>>();
@@ -265,21 +265,6 @@ fn should_generate_proofs_correctly() {
 			proofs[5],
 			(
 				// NOTE: the leaf index is equivalent to the block number(in this case 5) - 1
-				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
-				BatchProof {
-					leaf_indices: vec![4],
-					leaf_count: 7,
-					items: vec![
-						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
-						hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe"),
-						hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
-					],
-				}
-			)
-		);
-		assert_eq!(
-			proofs[6],
-			(
 				vec![Compact::new(((5, H256::repeat_byte(6)).into(), LeafData::new(6).into(),))],
 				BatchProof {
 					leaf_indices: vec![5],
@@ -288,6 +273,20 @@ fn should_generate_proofs_correctly() {
 						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
 						hex("3b031d22e24f1126c8f7d2f394b663f9b960ed7abbedb7152e17ce16112656d0"),
 						hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
+					],
+				}
+			)
+		);
+		assert_eq!(
+			proofs[6],
+			(
+				vec![Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),))],
+				BatchProof {
+					leaf_indices: vec![6],
+					leaf_count: 7,
+					items: vec![
+						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
+						hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da"),
 					],
 				}
 			)
@@ -308,7 +307,7 @@ fn should_generate_batch_proof_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for all leaves
-		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 5, 6]).unwrap();
+		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![1, 5, 6]).unwrap();
 
 		// then
 		assert_eq!(
@@ -458,7 +457,7 @@ fn should_verify_batch_proof_statelessly() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
+		crate::Pallet::<Test>::generate_batch_proof(vec![1, 4, 5]).unwrap()
 	});
 	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
 
@@ -714,7 +713,7 @@ fn should_verify_canonicalized() {
 
 	// Generate proofs for some blocks.
 	let (leaves, proofs) =
-		ext.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5, 7]).unwrap());
+		ext.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(vec![1, 4, 5, 7]).unwrap());
 	// Verify all previously generated proofs.
 	ext.execute_with(|| {
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
