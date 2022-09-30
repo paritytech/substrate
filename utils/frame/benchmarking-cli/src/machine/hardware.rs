@@ -106,15 +106,15 @@ mod tests {
 	fn throughput_works() {
 		/// Float precision.
 		const EPS: f64 = 0.1;
-		let gib = Throughput::GiBs(14.324);
+		let gib = Throughput::from_gibs(14.324);
 
-		assert_eq_error_rate_float!(14.324, gib.to_gibs(), EPS);
-		assert_eq_error_rate_float!(14667.776, gib.to_mibs(), EPS);
-		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.to_kibs(), EPS);
+		assert_eq_error_rate_float!(14.324, gib.as_gibs(), EPS);
+		assert_eq_error_rate_float!(14667.776, gib.as_mibs(), EPS);
+		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.as_kibs(), EPS);
 		assert_eq!("14.32 GiB/s", gib.to_string());
-		assert_eq!("14.32 GiB/s", gib.normalize().to_string());
+		assert_eq!("14.32 GiB/s", gib.normalize().0.to_string());
 
-		let mib = Throughput::MiBs(1029.0);
+		let mib = Throughput::from_mibs(1029.0);
 		assert_eq!("1.00 GiB/s", mib.to_string());
 	}
 }

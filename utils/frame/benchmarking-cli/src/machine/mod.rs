@@ -130,7 +130,7 @@ impl MachineCmd {
 		// Dispatch the concrete function from `sc-sysinfo`.
 
 		let score = self.measure(&requirement.metric, dir)?;
-		let rel_score = score.to_bs() / requirement.minimum.to_bs();
+		let rel_score = score.as_f64() / requirement.minimum.as_f64();
 
 		// Sanity check if the result is off by factor >100x.
 		if rel_score >= 100.0 || rel_score <= 0.01 {
@@ -149,12 +149,12 @@ impl MachineCmd {
 
 		let score = match metric {
 			Metric::Blake2256 => benchmark_cpu(hash_limit),
-			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
+			Metric::Sr25519Verify => benchmark_sr25519_verify(verify_limit),
 			Metric::MemCopy => benchmark_memory(memory_limit),
 			Metric::DiskSeqWrite =>
-				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
+				benchmark_disk_sequential_writes(disk_limit, dir)?,
 			Metric::DiskRndWrite =>
-				Throughput::MiBs(benchmark_disk_random_writes(disk_limit, dir)? as f64),
+				benchmark_disk_random_writes(disk_limit, dir)?,
 		};
 		Ok(score)
 	}
