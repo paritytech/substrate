@@ -100,6 +100,7 @@ impl Serialize for Throughput {
 	where
 		S: Serializer,
 	{
+		// NOTE I will replace 4 with the actual length.
 		let mut state = serializer.serialize_tuple(4)?;
 		let (value, unit) = self.normalize();
 		state.serialize_element(&(unit, value))?;
