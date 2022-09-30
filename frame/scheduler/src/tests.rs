@@ -407,7 +407,7 @@ fn scheduler_respects_weight_limits() {
 fn scheduler_does_not_delete_permanently_overweight_call() {
 	let max_weight: Weight = <Test as Config>::MaximumWeight::get();
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: max_weight * 2 });
+		let call = RuntimeCall::Logger(LoggerCall::log { i: 42, weight: max_weight });
 		assert_ok!(Scheduler::do_schedule(
 			DispatchTime::At(4),
 			None,
