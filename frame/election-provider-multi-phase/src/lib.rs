@@ -445,8 +445,9 @@ impl<C: Default> Default for RawSolution<C> {
 }
 
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-pub struct ReadySolution<A, B> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(B))]
+pub struct ReadySolution<A, B: Get<u32>> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
@@ -465,7 +466,6 @@ pub struct ReadySolution<A, B> {
 ///
 /// These are stored together because they are often accessed together.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo)]
-#[codec(mel_bound())]
 #[scale_info(skip_type_params(T))]
 pub struct RoundSnapshot<T: Config> {
 	/// All of the voters.
@@ -1544,7 +1544,7 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundNotMet);
+		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundNotMet)?;
 		Ok(ReadySolution { supports, compute, score })
 	}
 
@@ -1578,12 +1578,14 @@ impl<T: Config> Pallet<T> {
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
 				<T::Fallback as ElectionProvider>::elect()
-				.and_then(|supports| Ok(ReadySolution {
-						supports: supports.try_into().map_err(|_| ElectionError::Feasibility(FeasibilityError::BoundNotMet))?,
-						score: Default::default(),
-						compute: ElectionCompute::Fallback,
-					}))
 					.map_err(|fe| ElectionError::Fallback(fe))
+					.and_then(|supports| {
+						Ok(ReadySolution {
+							supports: supports.try_into().map_err(|_| FeasibilityError::BoundNotMet)?,
+							score: Default::default(),
+							compute: ElectionCompute::Fallback,
+						})
+					})	
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
@@ -1626,25 +1628,9 @@ impl<T: Config> ElectionProviderBase for Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider for Pallet<T> {
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
-		match Self::do_elect() {
-			Ok(supports) => {
-				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
-				Self::weigh_supports(&supports);
-				Self::rotate_round();
-				Ok(supports)
-			},
-			Err(why) => {
-				log!(error, "Entering emergency mode: {:?}", why);
-				<CurrentPhase<T>>::put(Phase::Emergency);
-				Err(why)
-			},
-		}
-	}
-}
-
 impl<T: Config> BoundedElectionProvider for Pallet<T> {
+	type MaxWinners = T::MaxWinners;
+
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
