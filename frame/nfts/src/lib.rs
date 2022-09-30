@@ -422,12 +422,12 @@ pub mod pallet {
 		},
 		/// The swap has been claimed.
 		SwapClaimed {
-			send_collection: T::CollectionId,
-			send_item: T::ItemId,
-			send_item_owner: T::AccountId,
-			receive_collection: T::CollectionId,
-			receive_item: T::ItemId,
-			receive_item_owner: T::AccountId,
+			sent_collection: T::CollectionId,
+			sent_item: T::ItemId,
+			sent_item_owner: T::AccountId,
+			received_collection: T::CollectionId,
+			received_item: T::ItemId,
+			received_item_owner: T::AccountId,
 			price: Option<ItemPrice<T, I>>,
 			deadline: Option<<T as SystemConfig>::BlockNumber>,
 		},

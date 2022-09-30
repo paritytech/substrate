@@ -1191,12 +1191,12 @@ fn claim_swap_should_work() {
 
 		// validate the event
 		assert!(events().contains(&Event::<Test>::SwapClaimed {
-			send_collection: collection_id,
-			send_item: item_2,
-			send_item_owner: user_2,
-			receive_collection: collection_id,
-			receive_item: item_1,
-			receive_item_owner: user_1,
+			sent_collection: collection_id,
+			sent_item: item_2,
+			sent_item_owner: user_2,
+			received_collection: collection_id,
+			received_item: item_1,
+			received_item_owner: user_1,
 			price: Some(price),
 			deadline: Some(deadline),
 		}));

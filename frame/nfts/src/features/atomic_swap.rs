@@ -23,7 +23,7 @@ use frame_support::{
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_create_swap(
-		sender: T::AccountId,
+		caller: T::AccountId,
 		collection_id: T::CollectionId,
 		item_id: T::ItemId,
 		desired_collection_id: T::CollectionId,
@@ -32,7 +32,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
 	) -> DispatchResult {
 		let item = Item::<T, I>::get(&collection_id, &item_id).ok_or(Error::<T, I>::UnknownItem)?;
-		ensure!(item.owner == sender, Error::<T, I>::NoPermission);
+		ensure!(item.owner == caller, Error::<T, I>::NoPermission);
 
 		match maybe_desired_item_id {
 			Some(desired_item_id) => {
@@ -73,7 +73,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn do_cancel_swap(
-		sender: T::AccountId,
+		caller: T::AccountId,
 		collection_id: T::CollectionId,
 		item_id: T::ItemId,
 	) -> DispatchResult {
@@ -89,7 +89,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		if !is_past_deadline {
-			ensure!(item.owner == sender, Error::<T, I>::NoPermission);
+			ensure!(item.owner == caller, Error::<T, I>::NoPermission);
 		}
 
 		PendingSwapOf::<T, I>::remove(&collection_id, &item_id);
@@ -107,7 +107,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn do_claim_swap(
-		sender: T::AccountId,
+		caller: T::AccountId,
 		send_collection_id: T::CollectionId,
 		send_item_id: T::ItemId,
 		receive_collection_id: T::CollectionId,
@@ -121,7 +121,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let swap = PendingSwapOf::<T, I>::get(&receive_collection_id, &receive_item_id)
 			.ok_or(Error::<T, I>::UnknownSwap)?;
 
-		ensure!(send_item.owner == sender, Error::<T, I>::NoPermission);
+		ensure!(send_item.owner == caller, Error::<T, I>::NoPermission);
 		ensure!(swap.desired_collection == send_collection_id, Error::<T, I>::UnknownSwap);
 		ensure!(swap.price == maybe_receive_amount, Error::<T, I>::UnknownSwap);
 
@@ -149,12 +149,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)?;
 
 		Self::deposit_event(Event::SwapClaimed {
-			send_collection: send_collection_id,
-			send_item: send_item_id,
-			send_item_owner: send_item.owner,
-			receive_collection: receive_collection_id,
-			receive_item: receive_item_id,
-			receive_item_owner: receive_item.owner,
+			sent_collection: send_collection_id,
+			sent_item: send_item_id,
+			sent_item_owner: send_item.owner,
+			received_collection: receive_collection_id,
+			received_item: receive_item_id,
+			received_item_owner: receive_item.owner,
 			price: swap.price,
 			deadline: swap.deadline,
 		});

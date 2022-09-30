@@ -510,12 +510,12 @@ benchmarks_instance_pallet! {
 	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::SwapClaimed {
-			send_collection: collection,
-			send_item: item2,
-			send_item_owner: target,
-			receive_collection: collection,
-			receive_item: item1,
-			receive_item_owner: caller,
+			sent_collection: collection,
+			sent_item: item2,
+			sent_item_owner: target,
+			received_collection: collection,
+			received_item: item1,
+			received_item_owner: caller,
 			price: Some(price),
 			deadline: Some(duration),
 		}.into());
