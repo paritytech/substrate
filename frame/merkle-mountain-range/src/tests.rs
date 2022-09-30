@@ -529,7 +529,10 @@ fn should_verify_batch_proofs() {
 			// then
 			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
 			historical_proofs.iter().for_each(|(leaves, proof)| {
-				assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves.clone(), proof.clone()), Ok(()));
+				assert_eq!(
+					crate::Pallet::<Test>::verify_leaves(leaves.clone(), proof.clone()),
+					Ok(())
+				);
 			});
 		})
 	}
