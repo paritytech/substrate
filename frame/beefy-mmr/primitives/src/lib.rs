@@ -37,6 +37,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use beefy_primitives::mmr::{BeefyAuthoritySet, BeefyNextAuthoritySet};
+use sp_runtime::traits::Hash as HashT;
+pub use sp_runtime::traits::Keccak256;
 
 /// Supported hashing output size.
 ///
@@ -53,30 +55,12 @@ pub trait Hasher {
 	fn hash(data: &[u8]) -> Hash;
 }
 
-#[cfg(feature = "keccak")]
-mod keccak256 {
-	use tiny_keccak::{Hasher as _, Keccak};
-
-	/// Keccak256 hasher implementation.
-	pub struct Keccak256;
-	impl Keccak256 {
-		/// Hash given data.
-		pub fn hash(data: &[u8]) -> super::Hash {
-			<Keccak256 as super::Hasher>::hash(data)
-		}
-	}
-	impl super::Hasher for Keccak256 {
-		fn hash(data: &[u8]) -> super::Hash {
-			let mut keccak = Keccak::v256();
-			keccak.update(data);
-			let mut output = [0_u8; 32];
-			keccak.finalize(&mut output);
-			output
-		}
+/// Keccak256 hasher implementation.
+impl Hasher for Keccak256 {
+	fn hash(data: &[u8]) -> Hash {
+		<Self as HashT>::hash(data).into()
 	}
 }
-#[cfg(feature = "keccak")]
-pub use keccak256::Keccak256;
 
 /// Construct a root hash of a Binary Merkle Tree created from given leaves.
 ///

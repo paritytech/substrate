@@ -525,7 +525,7 @@ dependencies = [
  "env_logger",
  "log",
  "sp-api",
- "tiny-keccak",
+ "sp-runtime",
 ]
 
 [[package]]

@@ -147,7 +147,7 @@ impl BeefyDataProvider<Vec<u8>> for DummyDataProvider {
 	fn extra_data() -> Vec<u8> {
 		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
 		col.sort();
-		beefy_merkle_tree::merkle_root::<crate::Pallet<Test>, _, _>(
+		beefy_merkle_tree::merkle_root::<<Test as pallet_mmr::Config>::Hashing, _, _>(
 			col.into_iter().map(|pair| pair.encode()),
 		)
 		.to_vec()
