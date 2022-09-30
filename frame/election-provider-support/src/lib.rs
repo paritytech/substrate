@@ -409,6 +409,12 @@ pub trait ElectionProvider: ElectionProviderBase {
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
+impl<E: BoundedElectionProvider> ElectionProvider for E {
+	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
+		Self::elect().map(|supports| supports.into_inner())
+	}
+}
+
 /// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure
 /// an election needs to happen instantly, not asynchronously.
 ///
