@@ -87,7 +87,6 @@ where
 	revalidation_queue: Arc<revalidation::RevalidationQueue<PoolApi>>,
 	ready_poll: Arc<Mutex<ReadyPoll<ReadyIteratorFor<PoolApi>, Block>>>,
 	metrics: PrometheusMetrics,
-
 	enactment_state: Arc<Mutex<EnactmentState<Block>>>,
 }
 
@@ -173,7 +172,7 @@ where
 			revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
 		(
 			Self {
-				api: pool_api.clone(),
+				api: pool_api,
 				pool,
 				revalidation_queue: Arc::new(revalidation_queue),
 				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
@@ -212,7 +211,7 @@ where
 		}
 
 		Self {
-			api: pool_api.clone(),
+			api: pool_api,
 			pool,
 			revalidation_queue: Arc::new(revalidation_queue),
 			revalidation_strategy: Arc::new(Mutex::new(match revalidation_type {
