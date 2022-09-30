@@ -85,7 +85,7 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type RuntimeCall = RuntimeCall;
@@ -111,7 +111,7 @@ parameter_types! {
 }
 impl pallet_scheduler::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
 	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaximumSchedulerWeight;
@@ -240,7 +240,7 @@ fn set_balance_proposal_hash(value: u64) -> H256 {
 fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 	let p = set_balance_proposal(value);
 	let h = BlakeTwo256::hash(&p[..]);
-	match Democracy::note_preimage(Origin::signed(6), p) {
+	match Democracy::note_preimage(RuntimeOrigin::signed(6), p) {
 		Ok(_) => (),
 		Err(x) if x == Error::<Test>::DuplicatePreimage.into() => (),
 		Err(x) => panic!("{:?}", x),
@@ -249,11 +249,11 @@ fn set_balance_proposal_hash_and_note(value: u64) -> H256 {
 }
 
 fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(Origin::signed(who), set_balance_proposal_hash(value), delay)
+	Democracy::propose(RuntimeOrigin::signed(who), set_balance_proposal_hash(value), delay)
 }
 
 fn propose_set_balance_and_note(who: u64, value: u64, delay: u64) -> DispatchResult {
-	Democracy::propose(Origin::signed(who), set_balance_proposal_hash_and_note(value), delay)
+	Democracy::propose(RuntimeOrigin::signed(who), set_balance_proposal_hash_and_note(value), delay)
 }
 
 fn next_block() {

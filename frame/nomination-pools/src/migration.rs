@@ -119,7 +119,7 @@ pub mod v2 {
 		ExtBuilder::default().build_and_execute(|| {
 			let join = |x| {
 				Balances::make_free_balance_be(&x, Balances::minimum_balance() + 10);
-				frame_support::assert_ok!(Pools::join(Origin::signed(x), 10, 1));
+				frame_support::assert_ok!(Pools::join(RuntimeOrigin::signed(x), 10, 1));
 			};
 
 			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().points, 10);
