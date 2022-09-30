@@ -41,5 +41,3 @@ pub struct UnstakeRequest<T: Config> {
 	/// The list of eras for which they have been checked.
 	pub(crate) checked: BoundedVec<EraIndex, MaxChecking<T>>,
 }
-
-// TODO: If we fail at reading the head, we should just remove it.
