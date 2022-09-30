@@ -31,7 +31,7 @@ const SEED: u32 = 0;
 fn setup_multi<T: Config>(
 	s: u32,
 	z: u32,
-) -> Result<(Vec<T::AccountId>, Box<<T as Config>::Call>), &'static str> {
+) -> Result<(Vec<T::AccountId>, Box<<T as Config>::RuntimeCall>), &'static str> {
 	let mut signatories: Vec<T::AccountId> = Vec::new();
 	for i in 0..s {
 		let signatory = account("signatory", i, SEED);

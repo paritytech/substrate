@@ -129,8 +129,8 @@ fn now() -> Timepoint<u64> {
 	Multisig::timepoint()
 }
 
-fn call_transfer(dest: u64, value: u64) -> Box<Call> {
-	Box::new(Call::Balances(BalancesCall::transfer { dest, value }))
+fn call_transfer(dest: u64, value: u64) -> Box<RuntimeCall> {
+	Box::new(RuntimeCall::Balances(BalancesCall::transfer { dest, value }))
 }
 
 #[test]
@@ -241,7 +241,14 @@ fn timepoint_checking_works() {
 		);
 		let later = Timepoint { index: 1, ..now() };
 		assert_noop!(
-			Multisig::as_multi(RuntimeOrigin::signed(2), 2, vec![1, 3], Some(later), call, Weight::zero()),
+			Multisig::as_multi(
+				RuntimeOrigin::signed(2),
+				2,
+				vec![1, 3],
+				Some(later),
+				call,
+				Weight::zero()
+			),
 			Error::<Test>::WrongTimepoint,
 		);
 	});
@@ -498,11 +505,25 @@ fn minimum_threshold_check_works() {
 	new_test_ext().execute_with(|| {
 		let call = call_transfer(6, 15);
 		assert_noop!(
-			Multisig::as_multi(RuntimeOrigin::signed(1), 0, vec![2], None, call.clone(), Weight::zero()),
+			Multisig::as_multi(
+				RuntimeOrigin::signed(1),
+				0,
+				vec![2],
+				None,
+				call.clone(),
+				Weight::zero()
+			),
 			Error::<Test>::MinimumThreshold,
 		);
 		assert_noop!(
-			Multisig::as_multi(RuntimeOrigin::signed(1), 1, vec![2], None, call.clone(), Weight::zero()),
+			Multisig::as_multi(
+				RuntimeOrigin::signed(1),
+				1,
+				vec![2],
+				None,
+				call.clone(),
+				Weight::zero()
+			),
 			Error::<Test>::MinimumThreshold,
 		);
 	});
@@ -604,11 +625,10 @@ fn multisig_1_of_3_works() {
 			),
 			Error::<Test>::MinimumThreshold,
 		);
-		let boxed_call = Box::new(call_transfer(6, 15));
 		assert_ok!(Multisig::as_multi_threshold_1(
 			RuntimeOrigin::signed(1),
 			vec![2, 3],
-			boxed_call
+			call_transfer(6, 15)
 		));
 
 		assert_eq!(Balances::free_balance(6), 15);
@@ -646,7 +666,14 @@ fn weight_check_works() {
 		assert_eq!(Balances::free_balance(6), 0);
 
 		assert_noop!(
-			Multisig::as_multi(RuntimeOrigin::signed(2), 2, vec![1, 3], Some(now()), call, Weight::zero()),
+			Multisig::as_multi(
+				RuntimeOrigin::signed(2),
+				2,
+				vec![1, 3],
+				Some(now()),
+				call,
+				Weight::zero()
+			),
 			Error::<Test>::MaxWeightTooLow,
 		);
 	});
