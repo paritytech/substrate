@@ -582,6 +582,7 @@ impl pallet_staking::Config for Runtime {
 impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
+	type BatchSize = ConstU32<{ 128 }>;
 	type Deposit = ConstU128<{ DOLLARS }>;
 	type DepositCurrency = Balances;
 	type WeightInfo = ();

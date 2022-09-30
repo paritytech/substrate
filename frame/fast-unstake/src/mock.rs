@@ -169,6 +169,7 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 
 parameter_types! {
 	pub static DepositAmount: u128 = 7;
+	pub static BatchSize: u32 = 1;
 }
 
 impl fast_unstake::Config for Runtime {
@@ -176,6 +177,7 @@ impl fast_unstake::Config for Runtime {
 	type Deposit = DepositAmount;
 	type DepositCurrency = Balances;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type BatchSize = BatchSize;
 	type WeightInfo = ();
 }
 

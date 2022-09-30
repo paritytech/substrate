@@ -125,14 +125,18 @@ pub mod pallet {
 		/// The origin that can control this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// Batch size.
+		///
+		/// This many stashes are processed in each unstake request.
+		type BatchSize: Get<u32>;
+
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
 	}
 
 	/// The current "head of the queue" being unstaked.
 	#[pallet::storage]
-	pub type Head<T: Config> =
-		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecking<T>, BalanceOf<T>>, OptionQuery>;
+	pub type Head<T: Config> = StorageValue<_, UnstakeRequest<T>, OptionQuery>;
 
 	/// The map of all accounts wishing to be unstaked.
 	///
@@ -157,13 +161,18 @@ pub mod pallet {
 		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
-		/// A staker was partially checked for the given eras, but the process did not finish.
-		Checking { stash: T::AccountId, eras: Vec<EraIndex> },
 		/// Some internal error happened while migrating stash. They are removed as head as a
 		/// consequence.
 		Errored { stash: T::AccountId },
 		/// An internal error happened. Operations will be paused now.
 		InternalError,
+		/// A batch was partially checked for the given eras, but the process did not finish.
+		Checking { eras: Vec<EraIndex> },
+		/// A batch was terminated.
+		///
+		/// This is always follows by a number of `Unstaked` or `Slashed` events, marking the end
+		/// of the batch. A new batch will be created upon next block.
+		Terminated,
 	}
 
 	#[pallet::error]
@@ -225,10 +234,7 @@ pub mod pallet {
 			let ledger =
 				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
 			ensure!(!Queue::<T>::contains_key(&ledger.stash), Error::<T>::AlreadyQueued);
-			ensure!(
-				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != ledger.stash),
-				Error::<T>::AlreadyHead
-			);
+			ensure!(!Self::is_head(&ledger.stash), Error::<T>::AlreadyHead);
 			// second part of the && is defensive.
 			ensure!(
 				ledger.active == ledger.total && ledger.unlocking.is_empty(),
@@ -263,10 +269,7 @@ pub mod pallet {
 				.map(|l| l.stash)
 				.ok_or(Error::<T>::NotController)?;
 			ensure!(Queue::<T>::contains_key(&stash), Error::<T>::NotQueued);
-			ensure!(
-				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
-				Error::<T>::AlreadyHead
-			);
+			ensure!(!Self::is_head(&stash), Error::<T>::AlreadyHead);
 			let deposit = Queue::<T>::take(stash.clone());
 
 			if let Some(deposit) = deposit.defensive() {
@@ -293,6 +296,20 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Returns `true` if `staker` is anywhere to be found in the `head`.
+		pub(crate) fn is_head(staker: &T::AccountId) -> bool {
+			Head::<T>::get().map_or(false, |UnstakeRequest { stashes, .. }| {
+				stashes.iter().any(|(stash, _)| stash == staker)
+			})
+		}
+
+		/// Halt the operations of this pallet.
+		pub(crate) fn halt(reason: &'static str) {
+			frame_support::defensive!(reason);
+			ErasToCheckPerBlock::<T>::put(0);
+			Self::deposit_event(Event::<T>::InternalError)
+		}
+
 		/// process up to `remaining_weight`.
 		///
 		/// Returns the actual weight consumed.
@@ -339,28 +356,30 @@ pub mod pallet {
 				return T::DbWeight::get().reads(2)
 			}
 
-			let UnstakeRequest { stash, mut checked, deposit } =
-				match Head::<T>::take().or_else(|| {
-					// NOTE: there is no order guarantees in `Queue`.
-					Queue::<T>::drain()
-						.map(|(stash, deposit)| UnstakeRequest {
-							stash,
-							deposit,
-							checked: Default::default(),
-						})
-						.next()
-				}) {
-					None => {
-						// There's no `Head` and nothing in the `Queue`, nothing to do here.
-						return T::DbWeight::get().reads(4)
-					},
-					Some(head) => head,
-				};
+			let UnstakeRequest { stashes, mut checked } = match Head::<T>::take().or_else(|| {
+				// NOTE: there is no order guarantees in `Queue`.
+				let stashes: BoundedVec<_, T::BatchSize> = Queue::<T>::drain()
+					.take(T::BatchSize::get() as usize)
+					.collect::<Vec<_>>()
+					.try_into()
+					.expect("take ensures bound is met; qed");
+				if stashes.is_empty() {
+					None
+				} else {
+					Some(UnstakeRequest { stashes, checked: Default::default() })
+				}
+			}) {
+				None => {
+					// There's no `Head` and nothing in the `Queue`, nothing to do here.
+					return T::DbWeight::get().reads(4)
+				},
+				Some(head) => head,
+			};
 
 			log!(
 				debug,
 				"checking {:?}, eras_to_check_per_block = {:?}, remaining_weight = {:?}",
-				stash,
+				stashes,
 				eras_to_check_per_block,
 				remaining_weight
 			);
@@ -368,9 +387,11 @@ pub mod pallet {
 			// the range that we're allowed to check in this round.
 			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
 			let bonding_duration = <T as pallet_staking::Config>::BondingDuration::get();
+
 			// prune all the old eras that we don't care about. This will help us keep the bound
 			// of `checked`.
 			checked.retain(|e| *e >= current_era.saturating_sub(bonding_duration));
+
 			let unchecked_eras_to_check = {
 				// get the last available `bonding_duration` eras up to current era in reverse
 				// order.
@@ -400,10 +421,8 @@ pub mod pallet {
 				unchecked_eras_to_check
 			);
 
-			if unchecked_eras_to_check.is_empty() {
-				// `stash` is not exposed in any era now -- we can let go of them now.
+			let unstake_stash = |stash: T::AccountId, deposit| {
 				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
-
 				let result = pallet_staking::Pallet::<T>::force_unstake(
 					RawOrigin::Root.into(),
 					stash.clone(),
@@ -412,61 +431,71 @@ pub mod pallet {
 
 				let remaining = T::DepositCurrency::unreserve(&stash, deposit);
 				if !remaining.is_zero() {
-					frame_support::defensive!("`not enough balance to unreserve`");
-					ErasToCheckPerBlock::<T>::put(0);
-					Self::deposit_event(Event::<T>::InternalError)
+					Self::halt("not enough balance to unreserve");
 				} else {
 					log!(info, "unstaked {:?}, outcome: {:?}", stash, result);
 					Self::deposit_event(Event::<T>::Unstaked { stash, result });
 				}
+			};
 
-				<T as Config>::WeightInfo::on_idle_unstake()
-			} else {
-				// eras remaining to be checked.
-				let mut eras_checked = 0u32;
+			let check_stash = |stash, deposit, eras_checked: &mut u32| {
 				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
 					eras_checked.saturating_inc();
 					Self::is_exposed_in_era(&stash, e)
 				});
 
-				log!(
-					debug,
-					"checked {:?} eras, exposed? {}, (v: {:?}, u: {:?})",
-					eras_checked,
-					is_exposed,
-					validator_count,
-					unchecked_eras_to_check.len()
-				);
-
-				// NOTE: you can be extremely unlucky and get slashed here: You are not exposed in
-				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
-				// you are exposed.
 				if is_exposed {
 					T::DepositCurrency::slash_reserved(&stash, deposit);
 					log!(info, "slashed {:?} by {:?}", stash, deposit);
 					Self::deposit_event(Event::<T>::Slashed { stash, amount: deposit });
+					false
 				} else {
-					// Not exposed in these eras.
-					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
-						Ok(_) => {
-							Head::<T>::put(UnstakeRequest {
-								stash: stash.clone(),
-								checked,
-								deposit,
-							});
+					true
+				}
+			};
+
+			if unchecked_eras_to_check.is_empty() {
+				// `stash` is not exposed in any era now -- we can let go of them now.
+				stashes.into_iter().for_each(|(stash, deposit)| unstake_stash(stash, deposit));
+				Self::deposit_event(Event::<T>::Terminated);
+				<T as Config>::WeightInfo::on_idle_unstake()
+			} else {
+				// eras checked so far.
+				let mut eras_checked = 0u32;
+
+				let pre_length = stashes.len();
+				let stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize> = stashes
+					.into_iter()
+					.filter(|(stash, deposit)| {
+						check_stash(stash.clone(), *deposit, &mut eras_checked)
+					})
+					.collect::<Vec<_>>()
+					.try_into()
+					.expect("filter can only lesson the length; still in bound; qed");
+				let post_length = stashes.len();
+
+				log!(
+					debug,
+					"checked {:?} eras, pre stashes: {:?}, post: {:?}",
+					eras_checked,
+					pre_length,
+					post_length,
+				);
+
+				match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
+					Ok(_) =>
+						if stashes.is_empty() {
+							Self::deposit_event(Event::<T>::Terminated);
+						} else {
+							Head::<T>::put(UnstakeRequest { stashes, checked });
 							Self::deposit_event(Event::<T>::Checking {
-								stash,
 								eras: unchecked_eras_to_check,
 							});
 						},
-						Err(_) => {
-							// don't put the head back in -- there is an internal error in the
-							// pallet.
-							frame_support::defensive!("`checked is pruned via retain above`");
-							ErasToCheckPerBlock::<T>::put(0);
-							Self::deposit_event(Event::<T>::InternalError);
-						},
-					}
+					Err(_) => {
+						// don't put the head back in -- there is an internal error in the pallet.
+						Self::halt("checked is pruned via retain above")
+					},
 				}
 
 				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked)

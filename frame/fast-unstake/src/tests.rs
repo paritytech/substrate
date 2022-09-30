@@ -107,9 +107,8 @@ fn cannot_register_if_head() {
 		ErasToCheckPerBlock::<T>::put(1);
 		// Insert some Head item for stash
 		Head::<T>::put(UnstakeRequest {
-			stash: 1,
+			stashes: bounded_vec![(1, DepositAmount::get())],
 			checked: bounded_vec![],
-			deposit: DepositAmount::get(),
 		});
 		// Controller attempts to regsiter
 		assert_noop!(
@@ -191,9 +190,8 @@ fn cannot_deregister_already_head() {
 		assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(2)));
 		// Insert some Head item for stash.
 		Head::<T>::put(UnstakeRequest {
-			stash: 1,
+			stashes: bounded_vec![(1, DepositAmount::get())],
 			checked: bounded_vec![],
-			deposit: DepositAmount::get(),
 		});
 		// Controller attempts to deregister
 		assert_noop!(FastUnstake::deregister(RuntimeOrigin::signed(2)), Error::<T>::AlreadyHead);
@@ -262,13 +260,12 @@ mod on_idle {
 			// then
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checking { stash: 1, eras: vec![3] }]
+				vec![Event::Checking { eras: vec![3] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3]
 				})
 			);
@@ -282,13 +279,12 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checking { stash: 1, eras: bounded_vec![2] }]
+				vec![Event::Checking { eras: bounded_vec![2] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -308,13 +304,12 @@ mod on_idle {
 			// then:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Checking { stash: 1, eras: vec![1, 0] }]
+				vec![Event::Checking { eras: vec![1, 0] }]
 			);
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -329,8 +324,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -348,7 +342,7 @@ mod on_idle {
 			// then we finish the unbonding:
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Unstaked { stash: 1, result: Ok(()) }]
+				vec![Event::Unstaked { stash: 1, result: Ok(()) }, Event::Terminated],
 			);
 			assert_eq!(Head::<T>::get(), None,);
 
@@ -383,8 +377,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -404,8 +397,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 5,
+					stashes: bounded_vec![(5, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				}),
 			);
@@ -416,9 +408,10 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::Checking { stash: 5, eras: vec![3, 2, 1, 0] }
+					Event::Terminated,
+					Event::Checking { eras: vec![3, 2, 1, 0] }
 				]
 			);
 		});
@@ -463,10 +456,12 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 1, result: Ok(()) },
-					Event::Checking { stash: 3, eras: vec![3, 2, 1, 0] },
+					Event::Terminated,
+					Event::Checking { eras: vec![3, 2, 1, 0] },
 					Event::Unstaked { stash: 3, result: Ok(()) },
+					Event::Terminated,
 				]
 			);
 
@@ -495,8 +490,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -507,8 +501,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
-					Event::Unstaked { stash: 1, result: Ok(()) }
+					Event::Checking { eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 1, result: Ok(()) },
+					Event::Terminated
 				]
 			);
 			assert_unstaked(&1);
@@ -537,8 +532,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -549,8 +543,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3, 2, 1, 0] },
-					Event::Unstaked { stash: 1, result: Ok(()) }
+					Event::Checking { eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 1, result: Ok(()) },
+					Event::Terminated
 				]
 			);
 			assert_unstaked(&1);
@@ -578,8 +573,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3]
 				})
 			);
@@ -589,8 +583,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -600,8 +593,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1]
 				})
 			);
@@ -611,8 +603,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -624,11 +615,12 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3] },
-					Event::Checking { stash: 1, eras: vec![2] },
-					Event::Checking { stash: 1, eras: vec![1] },
-					Event::Checking { stash: 1, eras: vec![0] },
-					Event::Unstaked { stash: 1, result: Ok(()) }
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Checking { eras: vec![1] },
+					Event::Checking { eras: vec![0] },
+					Event::Unstaked { stash: 1, result: Ok(()) },
+					Event::Terminated
 				]
 			);
 			assert_unstaked(&1);
@@ -653,8 +645,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3]
 				})
 			);
@@ -663,8 +654,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -673,8 +663,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1]
 				})
 			);
@@ -683,8 +672,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -698,10 +686,9 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					// note era 0 is pruned to keep the vector length sane.
 					checked: bounded_vec![3, 2, 1, 4],
-					deposit: DepositAmount::get(),
 				})
 			);
 
@@ -711,12 +698,13 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3] },
-					Event::Checking { stash: 1, eras: vec![2] },
-					Event::Checking { stash: 1, eras: vec![1] },
-					Event::Checking { stash: 1, eras: vec![0] },
-					Event::Checking { stash: 1, eras: vec![4] },
-					Event::Unstaked { stash: 1, result: Ok(()) }
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Checking { eras: vec![1] },
+					Event::Checking { eras: vec![0] },
+					Event::Checking { eras: vec![4] },
+					Event::Unstaked { stash: 1, result: Ok(()) },
+					Event::Terminated
 				]
 			);
 			assert_unstaked(&1);
@@ -738,8 +726,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3]
 				})
 			);
@@ -748,8 +735,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -762,8 +748,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -772,8 +757,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -788,8 +772,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 4]
 				})
 			);
@@ -799,8 +782,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 1,
+					stashes: bounded_vec![(1, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 4, 1]
 				})
 			);
@@ -812,11 +794,12 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 1, eras: vec![3] },
-					Event::Checking { stash: 1, eras: vec![2] },
-					Event::Checking { stash: 1, eras: vec![4] },
-					Event::Checking { stash: 1, eras: vec![1] },
-					Event::Unstaked { stash: 1, result: Ok(()) }
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Checking { eras: vec![4] },
+					Event::Checking { eras: vec![1] },
+					Event::Unstaked { stash: 1, result: Ok(()) },
+					Event::Terminated
 				]
 			);
 
@@ -853,8 +836,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: exposed,
+					stashes: bounded_vec![(exposed, DepositAmount::get())],
 					checked: bounded_vec![3]
 				})
 			);
@@ -862,8 +844,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: exposed,
+					stashes: bounded_vec![(exposed, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -873,9 +854,10 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: exposed, eras: vec![3] },
-					Event::Checking { stash: exposed, eras: vec![2] },
-					Event::Slashed { stash: exposed, amount: DepositAmount::get() }
+					Event::Checking { eras: vec![3] },
+					Event::Checking { eras: vec![2] },
+					Event::Slashed { stash: exposed, amount: DepositAmount::get() },
+					Event::Terminated
 				]
 			);
 		});
@@ -911,8 +893,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: exposed,
+					stashes: bounded_vec![(exposed, DepositAmount::get())],
 					checked: bounded_vec![3, 2]
 				})
 			);
@@ -923,8 +904,9 @@ mod on_idle {
 				fast_unstake_events_since_last_call(),
 				// we slash them
 				vec![
-					Event::Checking { stash: exposed, eras: vec![3, 2] },
-					Event::Slashed { stash: exposed, amount: DepositAmount::get() }
+					Event::Checking { eras: vec![3, 2] },
+					Event::Slashed { stash: exposed, amount: DepositAmount::get() },
+					Event::Terminated
 				]
 			);
 		});
@@ -955,7 +937,7 @@ mod on_idle {
 
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
-				vec![Event::Slashed { stash: 100, amount: DepositAmount::get() }]
+				vec![Event::Slashed { stash: 100, amount: DepositAmount::get() }, Event::Terminated]
 			);
 		});
 	}
@@ -979,8 +961,7 @@ mod on_idle {
 			assert_eq!(
 				Head::<T>::get(),
 				Some(UnstakeRequest {
-					deposit: DepositAmount::get(),
-					stash: 42,
+					stashes: bounded_vec![(42, DepositAmount::get())],
 					checked: bounded_vec![3, 2, 1, 0]
 				})
 			);
@@ -990,8 +971,9 @@ mod on_idle {
 			assert_eq!(
 				fast_unstake_events_since_last_call(),
 				vec![
-					Event::Checking { stash: 42, eras: vec![3, 2, 1, 0] },
-					Event::Unstaked { stash: 42, result: Ok(()) }
+					Event::Checking { eras: vec![3, 2, 1, 0] },
+					Event::Unstaked { stash: 42, result: Ok(()) },
+					Event::Terminated
 				]
 			);
 		});
