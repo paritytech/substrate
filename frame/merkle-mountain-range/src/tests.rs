@@ -513,7 +513,7 @@ fn should_verify_batch_proofs() {
 		});
 
 		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
-		let min_mmr_size = leaf_indices.iter().max().unwrap() + 1;
+		let min_mmr_size = block_numbers.iter().max().unwrap() + 1;
 
 		// generate historical proofs for all possible mmr sizes,
 		// lower bound being index of highest leaf to be proven
@@ -521,7 +521,7 @@ fn should_verify_batch_proofs() {
 			.map(|mmr_size| {
 				ext.execute_with(|| {
 					crate::Pallet::<Test>::generate_historical_batch_proof(
-						leaf_indices.to_vec(),
+						block_numbers.to_vec(),
 						mmr_size,
 					)
 					.unwrap()
