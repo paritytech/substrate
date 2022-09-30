@@ -48,7 +48,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		let now = frame_system::Pallet::<T>::block_number();
-		let deadline = maybe_duration.map(|d| d.saturating_add(now));
+		let maybe_deadline = maybe_duration.map(|d| d.saturating_add(now));
 
 		PendingSwapOf::<T, I>::insert(
 			&offered_collection_id,
@@ -57,7 +57,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				desired_collection: desired_collection_id,
 				desired_item: maybe_desired_item_id,
 				price: maybe_price,
-				deadline,
+				deadline: maybe_deadline,
 			},
 		);
 
@@ -67,7 +67,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			desired_collection: desired_collection_id,
 			desired_item: maybe_desired_item_id,
 			price: maybe_price,
-			deadline,
+			deadline: maybe_deadline,
 		});
 
 		Ok(())
