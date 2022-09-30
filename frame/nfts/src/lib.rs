@@ -452,6 +452,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<ItemPrice<T, I>>,
+			price_direction: Option<PriceDirection>,
 			deadline: Option<<T as SystemConfig>::BlockNumber>,
 		},
 		/// The swap was cancelled.
@@ -461,6 +462,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<ItemPrice<T, I>>,
+			price_direction: Option<PriceDirection>,
 			deadline: Option<<T as SystemConfig>::BlockNumber>,
 		},
 		/// The swap has been claimed.
@@ -472,6 +474,7 @@ pub mod pallet {
 			received_item: T::ItemId,
 			received_item_owner: T::AccountId,
 			price: Option<ItemPrice<T, I>>,
+			price_direction: Option<PriceDirection>,
 			deadline: Option<<T as SystemConfig>::BlockNumber>,
 		},
 	}
@@ -522,6 +525,10 @@ pub mod pallet {
 		ReachedApprovalLimit,
 		/// The deadline has already expired.
 		DeadlineExpired,
+		/// Price direction should be set.
+		PriceDirectionNotSet,
+		/// Price direction can't be set.
+		PriceDirectionCannotBeSet,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1695,7 +1702,9 @@ pub mod pallet {
 		/// - `item`: The item an owner wants to give.
 		/// - `desired_collection`: The collection of the desired item.
 		/// - `desired_item`: The desired item an owner wants to receive.
-		/// - `maybe_price`: The price an owner is willing to pay for the desired `item`.
+		/// - `maybe_price`: The price an owner is willing to pay or receive for the desired `item`.
+		/// - `maybe_price_direction`: Specifies whether a user is willing to pay or receive a
+		///   `price`. Should be set when the `maybe_price` is not None.
 		/// - `maybe_duration`: Optional deadline for the swap. Specified by providing the
 		/// 	number of blocks after which the swap will expire.
 		///
@@ -1708,6 +1717,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<ItemPrice<T, I>>,
+			maybe_price_direction: Option<PriceDirection>,
 			maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -1718,6 +1728,7 @@ pub mod pallet {
 				desired_collection,
 				maybe_desired_item,
 				maybe_price,
+				maybe_price_direction,
 				maybe_duration,
 			)
 		}
@@ -1760,7 +1771,8 @@ pub mod pallet {
 			send_item: T::ItemId,
 			receive_collection: T::CollectionId,
 			receive_item: T::ItemId,
-			maybe_receive_amount: Option<ItemPrice<T, I>>,
+			maybe_price: Option<ItemPrice<T, I>>,
+			maybe_price_direction: Option<PriceDirection>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_claim_swap(
@@ -1769,7 +1781,8 @@ pub mod pallet {
 				send_item,
 				receive_collection,
 				receive_item,
-				maybe_receive_amount,
+				maybe_price,
+				maybe_price_direction,
 			)
 		}
 	}

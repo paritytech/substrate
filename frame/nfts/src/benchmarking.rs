@@ -481,8 +481,9 @@ benchmarks_instance_pallet! {
 		let (item1, ..) = mint_item::<T, I>(0);
 		let (item2, ..) = mint_item::<T, I>(1);
 		let price = ItemPrice::<T, I>::from(100u32);
+		let price_direction = PriceDirection::Receive;
 		let duration = T::BlockNumber::max_value();
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price), Some(duration))
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price), Some(price_direction.clone()), Some(duration))
 	verify {
 		assert_last_event::<T, I>(Event::SwapCreated {
 			offered_collection: collection,
@@ -490,6 +491,7 @@ benchmarks_instance_pallet! {
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price),
+			price_direction: Some(price_direction),
 			deadline: Some(duration),
 		}.into());
 	}
@@ -499,9 +501,10 @@ benchmarks_instance_pallet! {
 		let (item1, ..) = mint_item::<T, I>(0);
 		let (item2, ..) = mint_item::<T, I>(1);
 		let price = ItemPrice::<T, I>::from(100u32);
-		let duration = T::BlockNumber::max_value();
 		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Nfts::<T, I>::create_swap(origin, collection, item1, collection, Some(item2), Some(price), Some(duration))?;
+		let duration = T::BlockNumber::max_value();
+		let price_direction = PriceDirection::Receive;
+		Nfts::<T, I>::create_swap(origin, collection, item1, collection, Some(item2), Some(price), Some(price_direction.clone()), Some(duration))?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1)
 	verify {
 		assert_last_event::<T, I>(Event::SwapCancelled {
@@ -510,6 +513,7 @@ benchmarks_instance_pallet! {
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price),
+			price_direction: Some(price_direction),
 			deadline: Some(duration),
 		}.into());
 	}
@@ -519,13 +523,23 @@ benchmarks_instance_pallet! {
 		let (item1, ..) = mint_item::<T, I>(0);
 		let (item2, ..) = mint_item::<T, I>(1);
 		let price = ItemPrice::<T, I>::from(0u32);
+		let price_direction = PriceDirection::Receive;
 		let duration = T::BlockNumber::max_value();
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		let origin = SystemOrigin::Signed(caller.clone());
 		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;
-		Nfts::<T, I>::create_swap(origin.clone().into(), collection, item1, collection, Some(item2), Some(price), Some(duration))?;
-	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price.clone()))
+		Nfts::<T, I>::create_swap(
+			origin.clone().into(),
+			collection,
+			item1,
+			collection,
+			Some(item2),
+			Some(price),
+			Some(price_direction.clone()),
+			Some(duration),
+		)?;
+	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price.clone()), Some(price_direction.clone()))
 	verify {
 		assert_last_event::<T, I>(Event::SwapClaimed {
 			sent_collection: collection,
@@ -535,6 +549,7 @@ benchmarks_instance_pallet! {
 			received_item: item1,
 			received_item_owner: caller,
 			price: Some(price),
+			price_direction: Some(price_direction),
 			deadline: Some(duration),
 		}.into());
 	}

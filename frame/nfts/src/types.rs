@@ -41,6 +41,12 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 >;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum PriceDirection {
+	Send,
+	Receive,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
@@ -153,8 +159,10 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPrice, Deadline> {
 	pub(super) desired_collection: CollectionId,
 	/// An item user wants to receive.
 	pub(super) desired_item: Option<ItemId>,
-	/// A price the user is willing to pay for the desired `item`.
+	/// A price for the desired `item`.
 	pub(super) price: Option<ItemPrice>,
+	/// Specifies whether a user is willing to pay or receive a `price`.
+	pub(super) price_direction: Option<PriceDirection>,
 	/// An optional deadline for the swap.
 	pub(super) deadline: Option<Deadline>,
 }
