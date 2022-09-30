@@ -131,7 +131,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if let Some(deadline) = swap.deadline {
 			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(deadline >= now, Error::<T, I>::DeadlineExpired);
+			ensure!(now <= deadline, Error::<T, I>::DeadlineExpired);
 		}
 
 		if let Some(amount) = swap.price {
