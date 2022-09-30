@@ -24,7 +24,7 @@ use sp_io::crypto::sr25519_verify;
 use sp_std::{fmt, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeTuple, Deserialize, Serialize, Serializer};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -34,7 +34,7 @@ use std::{
 };
 
 /// Throughput as measured in bytes per second.
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Throughput(f64);
 
 const KIBIBYTE: f64 = 1024.0;
@@ -79,11 +79,11 @@ impl Throughput {
 		let bs = self.0;
 
 		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
-			(self.as_gibs(), "GiB/s")
+			(self.as_gibs(), "GiBs")
 		} else if bs >= KIBIBYTE * KIBIBYTE {
-			(self.as_mibs(), "MiB/s")
+			(self.as_mibs(), "MiBs")
 		} else {
-			(self.as_kibs(), "KiB/s")
+			(self.as_kibs(), "KiBs")
 		}
 	}
 }
@@ -92,6 +92,18 @@ impl fmt::Display for Throughput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let (value, unit) = self.normalize();
 		write!(f, "{:.2?} {}", value, unit)
+	}
+}
+
+impl Serialize for Throughput {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let mut state = serializer.serialize_tuple(4)?;
+		let (value, unit) = self.normalize();
+		state.serialize_element(&(unit, value))?;
+		state.end()
 	}
 }
 
@@ -553,9 +565,9 @@ mod tests {
 		assert_eq_error_rate_float!(14.324, gib.as_gibs(), EPS);
 		assert_eq_error_rate_float!(14667.776, gib.as_mibs(), EPS);
 		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.as_kibs(), EPS);
-		assert_eq!("14.32 GiB/s", gib.to_string());
+		assert_eq!("14.32 GiBs", gib.to_string());
 
 		let mib = Throughput::from_mibs(1029.0);
-		assert_eq!("1.00 GiB/s", mib.to_string());
+		assert_eq!("1.00 GiBs", mib.to_string());
 	}
 }
