@@ -1963,8 +1963,11 @@ pub mod pallet_prelude {
 /// ## `#[pallet::whitelist_storage]` (optional)
 ///
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the storage as
-/// whitelisted from benchmarking. See
-/// [`pallet::whitelist_storage`](`pallet_macros::whitelist_storage`) for more info.
+/// whitelisted from benchmarking.
+///
+/// See
+/// [`pallet::whitelist_storage`](frame_support::pallet_macros::whitelist_storage)
+/// for more info.
 ///
 ///	## `#[cfg(..)]` (for storage)
 /// The optional attributes `#[cfg(..)]` allow conditional compilation for the storage.

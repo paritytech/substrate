@@ -36,6 +36,7 @@ mod transactional;
 mod tt_macro;
 
 use proc_macro::TokenStream;
+use quote::quote;
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
@@ -584,7 +585,10 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 		.into()
 }
 
-/// # `#[pallet::whitelist_storage]`
+fn pallet_macro_stub() -> TokenStream {
+	quote!(compile_error!("This attribute can only be used within a `pallet` module")).into()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
@@ -599,9 +603,11 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 /// #[pallet::whitelist_storage]
 /// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 /// ```
-/// Note: this attribute macro _must_ be written as `#[pallet::whitelist_storage]`
-/// for it to work properly and should not be written any other way.
+///
+/// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
+/// `#[pallet::whitelist_storage]` and can only be placed inside a `pallet` module in order for
+/// it to work properly.
 #[proc_macro_attribute]
-pub fn whitelist_storage(_: TokenStream, input: TokenStream) -> TokenStream {
-	input
+pub fn whitelist_storage(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
 }
