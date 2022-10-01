@@ -318,7 +318,7 @@ impl Zero for Weight {
 	}
 
 	fn is_zero(&self) -> bool {
-		self.ref_time == 0
+		self == &Self::zero()
 	}
 }
 
