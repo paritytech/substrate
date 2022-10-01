@@ -875,7 +875,7 @@ where
 		// block being finalized was already enacted. (This case also covers best_block == hash)
 		if finalized {
 			self.recent_finalized_block = Some(new_hash);
-			if tree_route.enacted().len() == 0 {
+			if tree_route.enacted().is_empty() {
 				log::trace!(
 				target: "txpool",
 				"handle_enactment: no newly enacted blocks since recent best block: exit 2"
@@ -884,7 +884,7 @@ where
 			}
 
 			// check if the recent best_block was retracted
-			let best_block_retracted = tree_route.retracted().iter().any(|x| x.hash == best_block);
+			let best_block_retracted = tree_route.retracted().first().map(|x| x.hash == best_block).unwrap_or_default();
 
 			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
 			if best_block_retracted {
