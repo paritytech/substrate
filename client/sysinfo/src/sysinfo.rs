@@ -113,8 +113,6 @@ impl<'de> Deserialize<'de> for Throughput {
     where
         D: Deserializer<'de>,
     {
-        //let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
-		//println!("ALLLOO: {}", s);
 		Ok(Throughput(1 as f64))
     }
 }
