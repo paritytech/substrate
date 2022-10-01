@@ -1444,8 +1444,8 @@ pub mod pallet_prelude {
 /// order in which they are mentioned in this document:
 ///
 /// * [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory)
-/// * [`pallet::constant`](#palletconstant)
 /// * [`pallet::config`](#config-trait-palletconfig-mandatory)
+/// * [`pallet::constant`](#palletconstant)
 /// * [`pallet::disable_frame_system_supertrait_check`](#disable_supertrait_check)
 /// * [`pallet::generate_store($vis trait Store)`](#palletgenerate_storevis-trait-store)
 /// * [`pallet::generate_storage_info`](#palletgenerate_storage_info)
