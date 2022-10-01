@@ -447,3 +447,16 @@ impl SubAssign for Weight {
 		};
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn is_zero_works() {
+		assert!(Weight::zero().is_zero());
+		assert!(!Weight::from_components(1, 0).is_zero());
+		assert!(!Weight::from_components(0, 1).is_zero());
+		assert!(!Weight::MAX.is_zero());
+	}
+}
