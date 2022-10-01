@@ -884,7 +884,8 @@ where
 			}
 
 			// check if the recent best_block was retracted
-			let best_block_retracted = tree_route.retracted().first().map(|x| x.hash == best_block).unwrap_or_default();
+			let best_block_retracted =
+				tree_route.retracted().first().map(|x| x.hash == best_block).unwrap_or_default();
 
 			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
 			if best_block_retracted {
