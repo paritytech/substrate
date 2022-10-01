@@ -24,7 +24,7 @@ use sp_io::crypto::sr25519_verify;
 use sp_std::{fmt, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
-use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
+use serde::{ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -34,7 +34,7 @@ use std::{
 };
 
 /// Throughput as measured in bytes per second.
-#[derive(Deserialize, Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Throughput(f64);
 
 const KIBIBYTE: f64 = 1024.0;
@@ -106,6 +106,17 @@ impl Serialize for Throughput {
 		seq.serialize_entry(unit, &value)?;
 		seq.end()
 	}
+}
+
+impl<'de> Deserialize<'de> for Throughput {
+    fn deserialize<D>(deserializer: D) -> Result<Throughput, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        //let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
+		//println!("ALLLOO: {}", s);
+		Ok(Throughput(1 as f64))
+    }
 }
 
 #[inline(always)]
