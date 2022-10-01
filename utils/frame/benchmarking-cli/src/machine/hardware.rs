@@ -30,6 +30,8 @@ lazy_static! {
 	/// The reference hardware is describe here:
 	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
 	pub static ref SUBSTRATE_REFERENCE_HARDWARE: Requirements = {
+		let res = serde_json::to_string(&Throughput::from_kibs(3 as f64)).unwrap();
+		println!("REZULTAT: {}", res);
 		let raw = include_bytes!("reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
 	};

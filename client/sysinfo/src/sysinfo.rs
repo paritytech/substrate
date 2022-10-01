@@ -24,7 +24,7 @@ use sp_io::crypto::sr25519_verify;
 use sp_std::{fmt, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
-use serde::{ser::SerializeTuple, Deserialize, Serialize, Serializer};
+use serde::{ser::SerializeMap, Deserialize, Serialize, Serializer};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -101,10 +101,10 @@ impl Serialize for Throughput {
 		S: Serializer,
 	{
 		// NOTE I will replace 4 with the actual length.
-		let mut state = serializer.serialize_tuple(4)?;
+		let mut seq = serializer.serialize_map(Some(4))?;
 		let (value, unit) = self.normalize();
-		state.serialize_element(&(unit, value))?;
-		state.end()
+		seq.serialize_entry(unit, &value)?;
+		seq.end()
 	}
 }
 
