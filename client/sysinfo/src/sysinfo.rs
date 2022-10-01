@@ -142,7 +142,7 @@ impl<'de> Deserialize<'de> for Throughput {
 	where
 		D: Deserializer<'de>,
 	{
-		Ok(deserializer.deserialize_map(ThroughputVisitor)?)
+		Ok(deserializer.deserialize_map(ThroughputVisitor))?
 	}
 }
 
