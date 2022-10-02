@@ -730,6 +730,42 @@ pub fn storage_version(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The `pallet::hooks` attribute allows you to specify a `Hooks` implementation for `Pallet`
+/// that specifies pallet-specific logic.
+///
+/// The item the attribute attaches to must be defined as follows:
+/// ```ignore
+/// #[pallet::hooks]
+/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
+///     ...
+/// }
+/// ```
+/// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
+/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>` and
+/// with an optional where clause.
+///
+/// If no `#[pallet::hooks]` exists, then the following default implementation is
+/// automatically generated:
+/// ```ignore
+/// #[pallet::hooks]
+/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+/// ```
+///
+/// ## Macro expansion
+///
+/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
+/// `OffchainWorker`, and `IntegrityTest` using the provided `Hooks` implementation.
+///
+/// NOTE: `OnRuntimeUpgrade` is implemented with `Hooks::on_runtime_upgrade` and some
+/// additional logic. E.g. logic to write the pallet version into storage.
+///
+/// NOTE: The macro also adds some tracing logic when implementing the above traits. The
+/// following hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
+#[proc_macro_attribute]
+pub fn hooks(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during

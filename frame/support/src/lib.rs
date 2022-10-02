@@ -1634,20 +1634,7 @@ pub mod pallet_prelude {
 /// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
 /// ```
 ///
-/// ## Macro expansion
-///
-/// The macro implements the traits [`OnInitialize`](`traits::OnInitialize`),
-/// [`OnIdle`](`traits::OnIdle`), [`OnFinalize`](`traits::OnFinalize`),
-/// [`OnRuntimeUpgrade`](`traits::OnRuntimeUpgrade`),
-/// [`OffchainWorker`](`traits::OffchainWorker`), and
-/// [`IntegrityTest`](`traits::IntegrityTest`) using the provided `Hooks` implementation.
-///
-/// NOTE: [`OnRuntimeUpgrade`](`traits::OnRuntimeUpgrade`) is implemented with
-/// `Hooks::on_runtime_upgrade` and some additional logic. E.g. logic to write the pallet
-/// version into storage.
-///
-/// NOTE: The macro also adds some tracing logic when implementing the above traits. The
-/// following hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
+/// Also see [`pallet::hooks`](`frame_support::pallet_macros::hooks`)
 ///
 /// # Call: `#[pallet::call]` (optional)
 ///
@@ -2697,6 +2684,6 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		config, constant, disable_frame_system_supertrait_check, generate_storage_info,
-		generate_store, storage_version, whitelist_storage,
+		generate_store, hooks, storage_version, whitelist_storage,
 	};
 }
