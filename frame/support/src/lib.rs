@@ -1500,17 +1500,41 @@ pub mod pallet_prelude {
 ///
 /// # Config trait: `#[pallet::config]` (mandatory)
 ///
-/// The mandatory attribute `#[pallet::config]` defines the generics of the pallet.
+/// Item must be defined as:
 ///
-/// See [`pallet::config`](`frame_support::pallet_macros::config`) for more info and examples.
+/// ```ignore
+/// #[pallet::config]
+/// pub trait Config: frame_system::Config + $optionally_some_other_supertraits
+/// $optional_where_clause
+/// {
+/// ...
+/// }
+/// ```
+///
+/// I.e. a regular trait definition named `Config`, with the supertrait
+/// `frame_system::pallet::Config`, and optionally other supertraits and a where clause.
+///
+/// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
+///
+/// See [`pallet::event`](`event`) for more information.
+///
+/// Also see [`pallet::config`](`frame_support::pallet_macros::config`).
 ///
 /// ## `pallet::constant`
 ///
 /// The `#[pallet::constant]` attribute can be used to add the [`Get`](crate::traits::Get)
-/// associated type from [`pallet::config`](#palletconfig) into metadata.
+/// associated type from [`pallet::config`](#palletconfig) into metadata, e.g.:
 ///
-/// See [`pallet::constant`](`frame_support::pallet_macros::constant`) for more info and
-/// examples.
+/// ```ignore
+/// #[pallet::config]
+/// pub trait Config: frame_system::Config {
+/// 	#[pallet::constant]
+/// 	type Foo: Get<u32>;
+/// }
+/// ```
+///
+/// Also see [`pallet::constant`](`frame_support::pallet_macros::constant`).
 ///
 /// ## `pallet::disable_frame_system_supertrait_check`
 /// <a name="disable_supertrait_check"></a>
@@ -1544,6 +1568,8 @@ pub mod pallet_prelude {
 ///
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
+///
+/// Also see [`pallet::generate_store`](`frame_support::pallet_macros::generate_store`).
 ///
 /// # `pallet::generate_storage_info`
 ///
@@ -2698,5 +2724,5 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	pub use frame_support_procedural::{config, constant, whitelist_storage};
+	pub use frame_support_procedural::{config, constant, generate_store, whitelist_storage};
 }

@@ -631,6 +631,24 @@ pub fn constant(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// To generate a `Store` trait associating all storages, use the attribute
+/// `#[pallet::generate_store($vis trait Store)]`, e.g.:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// #[pallet::generate_store(pub(super) trait Store)]
+/// pub struct Pallet<T>(_);
+/// ```
+/// More precisely, the `Store` trait contains an associated type for each storage. It is
+/// implemented for `Pallet` allowing access to the storage from pallet struct.
+///
+/// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
+/// `<Pallet as Store>::Foo`.
+#[proc_macro_attribute]
+pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
