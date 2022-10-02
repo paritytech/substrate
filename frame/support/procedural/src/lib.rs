@@ -610,14 +610,14 @@ fn pallet_macro_stub() -> TokenStream {
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
 /// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
 ///
-/// See [`pallet::event`](`event`) for more information.
+/// See [`pallet::event`](`macro@event`) for more information.
 #[proc_macro_attribute]
 pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::constant]` attribute can be used to add the `Get`
-/// associated type from [`pallet::config`](`macro@config`) into metadata, e.g.:
+/// The `#[pallet::constant]` attribute can be used to add the `Get` associated type from
+/// [`pallet::config`](`macro@config`) into metadata, e.g.:
 ///
 /// ```ignore
 /// #[pallet::config]
@@ -659,6 +659,24 @@ pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> 
 /// `<Pallet as Store>::Foo`.
 #[proc_macro_attribute]
 pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// To generate the full storage info (used for PoV calculation) use the attribute
+/// `#[pallet::generate_storage_info]`, e.g.:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// #[pallet::generate_storage_info]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// This requires all storage items to implement the trait `StorageInfoTrait`, thus all keys
+/// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
+/// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
+/// [`#[pallet::storage]`](`macro@storage`) for more info).
+#[proc_macro_attribute]
+pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 

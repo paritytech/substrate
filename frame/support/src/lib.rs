@@ -1590,6 +1590,8 @@ pub mod pallet_prelude {
 /// storages can opt-out from this constraint by using `#[pallet::unbounded]` (see
 /// `#[pallet::storage]` for more info).
 ///
+/// Also see [`pallet::generate_storage_info`](`frame_support::pallet_macros::generate_storage_info`)
+///
 /// # `pallet::storage_version`
 ///
 /// Because the [`pallet::pallet`](#pallet-struct-placeholder-palletpallet-mandatory) macro
@@ -2728,6 +2730,7 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		config, constant, disable_frame_system_supertrait_check, generate_store, whitelist_storage,
+		config, constant, disable_frame_system_supertrait_check, generate_storage_info,
+		generate_store, whitelist_storage,
 	};
 }
