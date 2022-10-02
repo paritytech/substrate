@@ -133,8 +133,12 @@ where
 	}
 
 	/// Store or remove the value to be associated with `key` so that `get` returns the `query`.
-	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, q: QueryKind::Query) {
-		<Self as MapWrapper>::Map::set(key, q)
+	pub fn set<KeyArg: EncodeLike<Key>>(key: KeyArg, query: QueryKind::Query) {
+		let option = QueryKind::from_query_to_optional_value(query);
+		if option.is_none() {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+		}
+		<Self as MapWrapper>::Map::set(key, QueryKind::from_optional_value_to_query(option))
 	}
 
 	/// Swap the values of two keys.

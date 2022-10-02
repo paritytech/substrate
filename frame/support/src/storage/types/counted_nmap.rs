@@ -174,7 +174,11 @@ where
 		key: KArg,
 		query: QueryKind::Query,
 	) {
-		<Self as MapWrapper>::Map::set(key, query)
+		let option = QueryKind::from_query_to_optional_value(query);
+		if option.is_none() {
+			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
+		}
+		<Self as MapWrapper>::Map::set(key, QueryKind::from_optional_value_to_query(option))
 	}
 
 	/// Take a value from storage, removing it afterwards.
