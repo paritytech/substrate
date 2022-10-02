@@ -616,6 +616,21 @@ pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The `#[pallet::constant]` attribute can be used to add the `Get`
+/// associated type from [`pallet::config`](`macro@config`) into metadata, e.g.:
+///
+/// ```ignore
+/// #[pallet::config]
+/// pub trait Config: frame_system::Config {
+/// 	#[pallet::constant]
+/// 	type Foo: Get<u32>;
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn constant(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during

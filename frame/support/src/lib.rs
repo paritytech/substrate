@@ -1507,15 +1507,11 @@ pub mod pallet_prelude {
 /// ## `pallet::constant`
 ///
 /// The `#[pallet::constant]` attribute can be used to add the [`Get`](crate::traits::Get)
-/// associated type from [`pallet::config`](#palletconfig) into metadata, e.g.:
+/// associated type from [`pallet::config`](#palletconfig) into metadata.
 ///
-/// ```ignore
-/// #[pallet::config]
-/// pub trait Config: frame_system::Config {
-/// 	#[pallet::constant]
-/// 	type Foo: Get<u32>;
-/// }
-/// ```
+/// See [`pallet::constant`](`frame_support::pallet_macros::constant`) for more info and
+/// examples.
+///
 /// ## `pallet::disable_frame_system_supertrait_check`
 /// <a name="disable_supertrait_check"></a>
 ///
@@ -2702,5 +2698,5 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	pub use frame_support_procedural::{config, whitelist_storage};
+	pub use frame_support_procedural::{config, constant, whitelist_storage};
 }
