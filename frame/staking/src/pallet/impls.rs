@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, BoundedElectionProvider, ScoreProvider, SortedListProvider,
-	BoundedSupportsOf, VoteWeight, VoterOf,
+	data_provider, BoundedElectionProvider, BoundedSupportsOf, ElectionDataProvider,
+	ElectionProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -44,8 +44,8 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
-	SessionInterface, StakingLedger, ValidatorPrefs, MaxWinnersOf,
+	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
+	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
 use super::{pallet::*, STAKING_ID};
@@ -267,7 +267,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
+	fn new_session(
+		session_index: SessionIndex,
+		is_genesis: bool,
+	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -426,7 +429,10 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), MaxWinnersOf<T>>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			MaxWinnersOf<T>,
+		>,
 	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
@@ -454,23 +460,26 @@ impl<T: Config> Pallet<T> {
 		start_session_index: SessionIndex,
 		is_genesis: bool,
 	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
-		
 		let election_result: BoundedVec<_, MaxWinnersOf<T>> = if is_genesis {
-			let result = <T::GenesisElectionProvider as BoundedElectionProvider>::elect()
-				.map_err(|e| {
+			let result =
+				<T::GenesisElectionProvider as BoundedElectionProvider>::elect().map_err(|e| {
 					log!(warn, "genesis election provider failed due to {:?}", e);
 					Self::deposit_event(Event::StakingElectionFailed);
-			});
-			result.ok()?.into_inner().try_into().map_err(|e| {
-				// AKON: Bounds not met if genesis_max_winners > election_provider_max_winners
-				log!(warn, "genesis election provider failed due to {:?}", e);
-				Self::deposit_event(Event::StakingElectionFailed);
-		}).ok()?
-		} else {
-			let result = <T::ElectionProvider as BoundedElectionProvider>::elect()
+				});
+			result
+				.ok()?
+				.into_inner()
+				.try_into()
 				.map_err(|e| {
-					log!(warn, "election provider failed due to {:?}", e);
+					// AKON: Bounds not met if genesis_max_winners > election_provider_max_winners
+					log!(warn, "genesis election provider failed due to {:?}", e);
 					Self::deposit_event(Event::StakingElectionFailed);
+				})
+				.ok()?
+		} else {
+			let result = <T::ElectionProvider as BoundedElectionProvider>::elect().map_err(|e| {
+				log!(warn, "election provider failed due to {:?}", e);
+				Self::deposit_event(Event::StakingElectionFailed);
 			});
 			result.ok()?
 		};
@@ -510,7 +519,10 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), MaxWinnersOf<T>>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			MaxWinnersOf<T>,
+		>,
 		new_planned_era: EraIndex,
 	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
 		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
@@ -586,7 +598,9 @@ impl<T: Config> Pallet<T> {
 				(validator, exposure)
 			})
 			// AKON: return result here?
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>().try_into().unwrap()
+			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.try_into()
+			.unwrap()
 	}
 
 	/// Remove all associated data of a stash account from the staking system.

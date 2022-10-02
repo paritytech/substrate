@@ -20,8 +20,8 @@
 //! careful when using it onchain.
 
 use crate::{
-	Debug, ElectionDataProvider, ElectionProviderBase, BoundedElectionProvider, InstantElectionProvider,
-	NposSolver, WeightInfo, BoundedSupportsOf,
+	BoundedElectionProvider, BoundedSupportsOf, Debug, ElectionDataProvider, ElectionProviderBase,
+	InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
@@ -138,8 +138,10 @@ fn elect_with<T: Config>(
 		weight,
 		DispatchClass::Mandatory,
 	);
-	
-	let supports = to_supports(&staked).try_into().map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?; 
+
+	let supports = to_supports(&staked)
+		.try_into()
+		.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?;
 	Ok(supports)
 }
 
@@ -213,7 +215,7 @@ impl<T: BoundedConfig> InstantElectionProvider for BoundedExecution<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{PhragMMS, SequentialPhragmen, ElectionProvider};
+	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
 	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;

@@ -231,8 +231,8 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, ElectionProviderBase, BoundedElectionProvider, BoundedSupportsOf, InstantElectionProvider,
-	NposSolution,
+	BoundedElectionProvider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	ElectionProviderBase, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -675,8 +675,8 @@ pub mod pallet {
 		/// The maximum number of electable targets to put in the snapshot.
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
-		
-		/// The maximum number of winners that can be elected from the electable targets. 
+
+		/// The maximum number of winners that can be elected from the electable targets.
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
@@ -1091,7 +1091,7 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			// TODO: sort and truncate supports with MaxWinners 
+			// TODO: sort and truncate supports with MaxWinners
 			let solution = ReadySolution {
 				supports: supports.try_into().unwrap(),
 				score: Default::default(),
@@ -1234,7 +1234,8 @@ pub mod pallet {
 	/// Current best solution, signed or unsigned, queued to be returned upon `elect`.
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
-	pub type QueuedSolution<T: Config> = StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
+	pub type QueuedSolution<T: Config> =
+		StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1574,18 +1575,20 @@ impl<T: Config> Pallet<T> {
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
-		// TODO: fix to one statement
+			// TODO: fix to one statement
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
 				<T::Fallback as ElectionProvider>::elect()
 					.map_err(|fe| ElectionError::Fallback(fe))
 					.and_then(|supports| {
 						Ok(ReadySolution {
-							supports: supports.try_into().map_err(|_| FeasibilityError::BoundNotMet)?,
+							supports: supports
+								.try_into()
+								.map_err(|_| FeasibilityError::BoundNotMet)?,
 							score: Default::default(),
 							compute: ElectionCompute::Fallback,
 						})
-					})	
+					})
 			})
 			.map(|ReadySolution { compute, score, supports }| {
 				Self::deposit_event(Event::ElectionFinalized { compute, score });
