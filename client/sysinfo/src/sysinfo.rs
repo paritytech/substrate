@@ -633,7 +633,7 @@ mod tests {
 
 	/// Test the [`HwBench`].
 	#[test]
-	fn hw_serialize_works() {
+	fn hwbench_serialize_works() {
 		let hwbench = HwBench {
 			cpu_hashrate_score: Throughput::from_gibs(1.32),
 			memory_memcpy_score: Throughput::from_kibs(1342.432),
