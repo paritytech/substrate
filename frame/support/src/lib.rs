@@ -1499,24 +1499,10 @@ pub mod pallet_prelude {
 /// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
 ///
 /// # Config trait: `#[pallet::config]` (mandatory)
-/// The `#[pallet::config]` attribute defines the generics of the pallet.
 ///
-/// Item must be defined as
-/// ```ignore
-/// #[pallet::config]
-/// pub trait Config: frame_system::Config + $optionally_some_other_supertraits
-/// $optional_where_clause
-/// {
-/// ...
-/// }
-/// ```
-/// I.e. a regular trait definition named `Config`, with the supertrait
-/// `frame_system::pallet::Config`, and optionally other supertraits and a where clause.
+/// The mandatory attribute `#[pallet::config]` defines the generics of the pallet.
 ///
-/// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
-/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
-///
-/// See [`pallet::event`](#palletevent) for more information.
+/// See [`pallet::config`](`frame_support::pallet_macros::config`) for more info and examples.
 ///
 /// ## `pallet::constant`
 ///
@@ -2716,5 +2702,5 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	pub use frame_support_procedural::whitelist_storage;
+	pub use frame_support_procedural::{config, whitelist_storage};
 }

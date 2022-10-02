@@ -591,6 +591,31 @@ fn pallet_macro_stub() -> TokenStream {
 	quote!(compile_error!("This attribute can only be used within a `pallet` module")).into()
 }
 
+/// The mandatory attribute `#[pallet::config]` defines the generics of the pallet.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::config]
+/// pub trait Config: frame_system::Config + $optionally_some_other_supertraits
+/// $optional_where_clause
+/// {
+/// ...
+/// }
+/// ```
+///
+/// I.e. a regular trait definition named `Config`, with the supertrait
+/// `frame_system::pallet::Config`, and optionally other supertraits and a where clause.
+///
+/// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
+///
+/// See [`pallet::event`](`event`) for more information.
+#[proc_macro_attribute]
+pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
