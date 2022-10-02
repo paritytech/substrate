@@ -630,4 +630,19 @@ mod tests {
 		let mib = Throughput::from_mibs(1029.0);
 		assert_eq!("1.00 GiBs", mib.to_string());
 	}
+
+	/// Test the [`HwBench`].
+	#[test]
+	fn hw_serialize_works() {
+		let hwbench = HwBench {
+			cpu_hashrate_score: Throughput::from_gibs(1.32),
+			memory_memcpy_score: Throughput::from_kibs(1342.432),
+			disk_sequential_write_score: Some(Throughput::from_kibs(432.12)),
+			disk_random_write_score: None,
+		};
+
+		let serialized = serde_json::to_string(&hwbench).unwrap();
+		// All the throughput should be converted to MiBs.
+		assert_eq!(serialized, "{\"cpu_hashrate_score\":{\"MiBs\":1351.68},\"memory_memcpy_score\":{\"MiBs\":1.31096875},\"disk_sequential_write_score\":{\"MiBs\":0.4219921875},\"disk_random_write_score\":{}}");
+	}
 }
