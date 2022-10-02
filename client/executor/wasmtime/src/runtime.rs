@@ -567,10 +567,10 @@ pub struct Config {
 // left for the stack; this is, of course, overridable at link time when compiling the runtime)
 // plus the number of pages specified in the `extra_heap_pages` passed to the executor.
 //
-// By default, rustc (or `lld` specifically) should allocate 1 MiB for the shadow stack, or 16 pages.
-// The data section for runtimes are typically rather small and can fit in a single digit number of
-// WASM pages, so let's say an extra 16 pages. Thus let's assume that 32 pages or 2 MiB are used for
-// these needs by default.
+// By default, rustc (or `lld` specifically) should allocate 1 MiB for the shadow stack, or 16
+// pages. The data section for runtimes are typically rather small and can fit in a single digit
+// number of WASM pages, so let's say an extra 16 pages. Thus let's assume that 32 pages or 2 MiB
+// are used for these needs by default.
 const DEFAULT_HEAP_PAGES_ESTIMATE: u64 = 32;
 const EXTRA_HEAP_PAGES: u64 = 2048;
 
@@ -586,34 +586,35 @@ impl Default for Config {
 				extra_heap_pages: EXTRA_HEAP_PAGES,
 
 				// NOTE: This is specified in bytes, so we multiply by WASM page size.
-				max_memory_size: Some(((DEFAULT_HEAP_PAGES_ESTIMATE + EXTRA_HEAP_PAGES) * 65536) as usize),
+				max_memory_size: Some(
+					((DEFAULT_HEAP_PAGES_ESTIMATE + EXTRA_HEAP_PAGES) * 65536) as usize,
+				),
 
-				instantiation_strategy:
-					InstantiationStrategy::RecreateInstanceCopyOnWrite,
+				instantiation_strategy: InstantiationStrategy::RecreateInstanceCopyOnWrite,
 
-				// Enable deterministic stack limit to pin down the exact number of items the wasmtime stack
-				// can contain before it traps with stack overflow.
+				// Enable deterministic stack limit to pin down the exact number of items the
+				// wasmtime stack can contain before it traps with stack overflow.
 				//
 				// Here is how the values below were chosen.
 				//
-				// At the moment of writing, the default native stack size limit is 1 MiB. Assuming a logical item
-				// (see the docs about the field and the instrumentation algorithm) is 8 bytes, 1 MiB can
-				// fit 2x 65536 logical items.
+				// At the moment of writing, the default native stack size limit is 1 MiB. Assuming
+				// a logical item (see the docs about the field and the instrumentation algorithm)
+				// is 8 bytes, 1 MiB can fit 2x 65536 logical items.
 				//
-				// Since reaching the native stack limit is undesirable, we halve the logical item limit and
-				// also increase the native 256x. This hopefully should preclude wasm code from reaching
-				// the stack limit set by the wasmtime.
+				// Since reaching the native stack limit is undesirable, we halve the logical item
+				// limit and also increase the native 256x. This hopefully should preclude wasm code
+				// from reaching the stack limit set by the wasmtime.
 				deterministic_stack_limit: Some(DeterministicStackLimit {
 					logical_max: 65536,
 					native_stack_max: NATIVE_STACK_MAX,
 				}),
 				canonicalize_nans: true,
-				// Rationale for turning the multi-threaded compilation off is to make the preparation time
-				// easily reproducible and as deterministic as possible.
+				// Rationale for turning the multi-threaded compilation off is to make the
+				// preparation time easily reproducible and as deterministic as possible.
 				//
-				// Currently the prepare queue doesn't distinguish between precheck and prepare requests.
-				// On the one hand, it simplifies the code, on the other, however, slows down compile times
-				// for execute requests. This behavior may change in future.
+				// Currently the prepare queue doesn't distinguish between precheck and prepare
+				// requests. On the one hand, it simplifies the code, on the other, however, slows
+				// down compile times for execute requests. This behavior may change in future.
 				parallel_compilation: false,
 			},
 		}
