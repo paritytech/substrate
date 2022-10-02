@@ -107,7 +107,7 @@ pub mod pallet {
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
-		type ElectionProvider: frame_election_provider_support::ElectionProvider<
+		type ElectionProvider: frame_election_provider_support::BoundedElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
@@ -115,7 +115,7 @@ pub mod pallet {
 		>;
 
 		/// Something that provides the election functionality at genesis.
-		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
+		type GenesisElectionProvider: frame_election_provider_support::BoundedElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
