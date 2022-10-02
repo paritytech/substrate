@@ -1519,7 +1519,7 @@ pub mod pallet_prelude {
 ///
 /// See [`pallet::event`](`event`) for more information.
 ///
-/// Also see [`pallet::config`](`frame_support::pallet_macros::config`).
+/// Also see [`pallet::config`](`frame_support::pallet_macros::config`)
 ///
 /// ## `pallet::constant`
 ///
@@ -1534,7 +1534,7 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// Also see [`pallet::constant`](`frame_support::pallet_macros::constant`).
+/// Also see [`pallet::constant`](`frame_support::pallet_macros::constant`)
 ///
 /// ## `pallet::disable_frame_system_supertrait_check`
 /// <a name="disable_supertrait_check"></a>
@@ -1547,6 +1547,9 @@ pub mod pallet_prelude {
 /// #[pallet::disable_frame_system_supertrait_check]
 /// pub trait Config: pallet_timestamp::Config {}
 /// ```
+///
+/// Also see
+/// [`pallet::disable_frame_system_supertrait_check`](`frame_support::pallet_macros::disable_frame_system_supertrait_check`)
 ///
 /// ## Macro expansion:
 ///
@@ -2724,5 +2727,7 @@ pub use frame_support_procedural::pallet;
 
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
-	pub use frame_support_procedural::{config, constant, generate_store, whitelist_storage};
+	pub use frame_support_procedural::{
+		config, constant, disable_frame_system_supertrait_check, generate_store, whitelist_storage,
+	};
 }

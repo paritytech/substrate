@@ -631,6 +631,19 @@ pub fn constant(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// To bypass the `frame_system::Config` supertrait check, use the attribute
+/// `pallet::disable_frame_system_supertrait_check`, e.g.:
+///
+/// ```ignore
+/// #[pallet::config]
+/// #[pallet::disable_frame_system_supertrait_check]
+/// pub trait Config: pallet_timestamp::Config {}
+/// ```
+#[proc_macro_attribute]
+pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// To generate a `Store` trait associating all storages, use the attribute
 /// `#[pallet::generate_store($vis trait Store)]`, e.g.:
 ///
