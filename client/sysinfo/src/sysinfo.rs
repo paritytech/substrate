@@ -27,7 +27,7 @@ use rand::{seq::SliceRandom, Rng, RngCore};
 use serde::{
 	de::{MapAccess, Visitor},
 	ser::SerializeMap,
-	Deserialize, Deserializer, Serialize, Serializer,
+	Deserialize, Deserializer, Serializer,
 };
 use std::{
 	fs::File,
@@ -99,17 +99,38 @@ impl fmt::Display for Throughput {
 	}
 }
 
-impl Serialize for Throughput {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		// NOTE I will replace 4 with the actual length.
-		let mut map = serializer.serialize_map(Some(4))?;
-		let (value, unit) = self.normalize();
-		map.serialize_entry(unit, &value)?;
-		map.end()
+pub fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	// NOTE I will replace 4 with the actual length.
+	let mut map = serializer.serialize_map(Some(4))?;
+	let (value, unit) = t.normalize();
+	map.serialize_entry(unit, &value)?;
+	map.end()
+}
+
+pub fn serialize_throughput_as_mibs<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	let mut map = serializer.serialize_map(Some(4))?;
+	map.serialize_entry("MiBs", &t.as_mibs())?;
+	map.end()
+}
+
+pub fn serialize_throughput_option_as_mibs<S>(
+	maybe_t: &Option<Throughput>,
+	serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	let mut map = serializer.serialize_map(Some(4))?;
+	if let Some(t) = maybe_t {
+		map.serialize_entry("MiBs", &t.as_mibs())?;
 	}
+	map.end()
 }
 
 struct ThroughputVisitor;
@@ -118,7 +139,7 @@ impl<'de> Visitor<'de> for ThroughputVisitor {
 	type Value = Throughput;
 
 	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-		formatter.write_str("A very usefull message")
+		formatter.write_str("A f64")
 	}
 
 	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>

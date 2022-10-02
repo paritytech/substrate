@@ -18,7 +18,7 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use sc_sysinfo::Throughput;
+use sc_sysinfo::{serialize_throughput, Throughput};
 use serde::{Deserialize, Serialize};
 
 lazy_static! {
@@ -45,6 +45,7 @@ pub struct Requirement {
 	/// The metric to measure.
 	pub metric: Metric,
 	/// The minimal throughput that needs to be archived for this requirement.
+	#[serde(serialize_with = "serialize_throughput")]
 	pub minimum: Throughput,
 }
 
