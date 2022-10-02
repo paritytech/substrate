@@ -44,7 +44,6 @@ use frame_support::{
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
-use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
@@ -1722,7 +1721,7 @@ fn chain_extension_works() {
 		let result =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
-		assert_eq!(result.result.unwrap().data, Bytes(input));
+		assert_eq!(result.result.unwrap().data, input);
 
 		// 1 = treat inputs as integer primitives and store the supplied integers
 		Contracts::bare_call(
@@ -1787,7 +1786,7 @@ fn chain_extension_works() {
 		.result
 		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
-		assert_eq!(result.data, Bytes(vec![42, 99]));
+		assert_eq!(result.data, vec![42, 99]);
 
 		// diverging to second chain extension that sets flags to 0x1 and returns a fixed buffer
 		// We set the MSB part to 1 (instead of 0) which routes the request into the second
@@ -1804,7 +1803,7 @@ fn chain_extension_works() {
 		.result
 		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
-		assert_eq!(result.data, Bytes(vec![0x4B, 0x1D]));
+		assert_eq!(result.data, vec![0x4B, 0x1D]);
 
 		// Diverging to third chain extension that is disabled
 		// We set the MSB part to 2 (instead of 0) which routes the request into the third extension
@@ -2672,7 +2671,7 @@ fn ecdsa_recover() {
 				.result
 				.unwrap();
 		assert!(!result.did_revert());
-		assert_eq!(result.data.as_ref(), &EXPECTED_COMPRESSED_PUBLIC_KEY);
+		assert_eq!(result.data, EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
 }
 
@@ -3503,7 +3502,7 @@ fn contract_reverted() {
 		.result
 		.unwrap();
 		assert_eq!(result.result.flags, flags);
-		assert_eq!(result.result.data.0, buffer);
+		assert_eq!(result.result.data, buffer);
 		assert!(!<ContractInfoOf<Test>>::contains_key(result.account_id));
 
 		// Pass empty flags and therefore successfully instantiate the contract for later use.
@@ -3539,7 +3538,7 @@ fn contract_reverted() {
 			.result
 			.unwrap();
 		assert_eq!(result.flags, flags);
-		assert_eq!(result.data.0, buffer);
+		assert_eq!(result.data, buffer);
 	});
 }
 
@@ -3559,7 +3558,7 @@ fn code_rejected_error_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			Code::Upload(Bytes(wasm)),
+			Code::Upload(wasm),
 			vec![],
 			vec![],
 			true,
