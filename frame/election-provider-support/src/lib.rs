@@ -422,7 +422,7 @@ impl<E: BoundedElectionProvider> ElectionProvider for E {
 ///
 /// Consequently, allows for control over the amount of data that is being
 /// fetched from the [`ElectionProviderBase::DataProvider`].
-pub trait InstantElectionProvider: ElectionProvider {
+pub trait InstantElectionProvider: BoundedElectionProvider {
 	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
 	/// bounds, this trait method can enforce bounds on the amount of data provided by the
 	/// `DataProvider`.
@@ -434,7 +434,7 @@ pub trait InstantElectionProvider: ElectionProvider {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error>;
+	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
 /// An election provider to be used only for testing.

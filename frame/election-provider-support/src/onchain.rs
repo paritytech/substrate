@@ -20,8 +20,8 @@
 //! careful when using it onchain.
 
 use crate::{
-	Debug, ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
-	NposSolver, WeightInfo,
+	Debug, ElectionDataProvider, ElectionProviderBase, BoundedElectionProvider, InstantElectionProvider,
+	NposSolver, WeightInfo, BoundedSupportsOf,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
@@ -85,6 +85,9 @@ pub trait Config {
 	>;
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
+
+	/// Upper bound on maximum winners from electable targets
+	type MaxWinners: Get<u32>;
 }
 
 pub trait BoundedConfig: Config {
@@ -94,10 +97,16 @@ pub trait BoundedConfig: Config {
 	type TargetsBound: Get<u32>;
 }
 
+/// Same as `BoundedSupportsOf` but for `onchain::Config`.
+pub type OnChainBoundedSupportsOf<E> = BoundedSupports<
+	<<E as Config>::System as frame_system::Config>::AccountId,
+	<E as Config>::MaxWinners,
+>;
+
 fn elect_with<T: Config>(
 	maybe_max_voters: Option<usize>,
 	maybe_max_targets: Option<usize>,
-) -> Result<Supports<<T::System as frame_system::Config>::AccountId>, Error> {
+) -> Result<OnChainBoundedSupportsOf<T>, Error> {
 	let voters = T::DataProvider::electing_voters(maybe_max_voters).map_err(Error::DataProvider)?;
 	let targets =
 		T::DataProvider::electable_targets(maybe_max_targets).map_err(Error::DataProvider)?;
@@ -129,12 +138,15 @@ fn elect_with<T: Config>(
 		weight,
 		DispatchClass::Mandatory,
 	);
-
-	Ok(to_supports(&staked))
+	
+	let supports = to_supports(&staked).try_into().map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?; 
+	Ok(supports)
 }
 
-impl<T: Config> ElectionProvider for UnboundedExecution<T> {
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
+impl<T: Config> BoundedElectionProvider for UnboundedExecution<T> {
+	type MaxWinners = T::MaxWinners;
+
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
 		if cfg!(not(feature = "std")) {
@@ -163,7 +175,7 @@ impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(Some(max_voters), Some(max_targets))
 	}
 }
@@ -179,8 +191,9 @@ impl<T: BoundedConfig> ElectionProviderBase for BoundedExecution<T> {
 	}
 }
 
-impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
+impl<T: BoundedConfig> BoundedElectionProvider for BoundedExecution<T> {
+	type MaxWinners = T::MaxWinners;
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
 	}
 }
@@ -189,7 +202,7 @@ impl<T: BoundedConfig> InstantElectionProvider for BoundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
 		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error> {
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		elect_with::<T>(
 			Some(max_voters.min(T::VotersBound::get() as usize)),
 			Some(max_targets.min(T::TargetsBound::get() as usize)),
@@ -200,7 +213,7 @@ impl<T: BoundedConfig> InstantElectionProvider for BoundedExecution<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{PhragMMS, SequentialPhragmen};
+	use crate::{PhragMMS, SequentialPhragmen, ElectionProvider};
 	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
@@ -256,6 +269,7 @@ mod tests {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
+		type MaxWinners = ConstU32<50>;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -268,6 +282,7 @@ mod tests {
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
+		type MaxWinners = ConstU32<50>;
 	}
 
 	impl BoundedConfig for PhragMMSParams {
@@ -312,7 +327,7 @@ mod tests {
 	fn onchain_seq_phragmen_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				BoundedExecution::<PhragmenParams>::elect().unwrap(),
+				<BoundedExecution::<PhragmenParams> as ElectionProvider>::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
@@ -325,7 +340,7 @@ mod tests {
 	fn onchain_phragmms_works() {
 		sp_io::TestExternalities::new_empty().execute_with(|| {
 			assert_eq!(
-				BoundedExecution::<PhragMMSParams>::elect().unwrap(),
+				<BoundedExecution::<PhragMMSParams> as ElectionProvider>::elect().unwrap(),
 				vec![
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
