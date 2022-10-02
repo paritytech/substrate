@@ -31,7 +31,6 @@ use crate::{
 	Never,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use sp_arithmetic::traits::Zero;
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -251,14 +250,12 @@ where
 	where
 		Key: HasKeyPrefix<KP>,
 	{
-		let mut on_remove = 0;
-		Self::iter_prefix_values(partial_key.clone()).for_each(|_| {
-			on_remove += 1;
-		});
-		CounterFor::<Prefix>::mutate(|value| {
-			*value = value.saturating_sub(on_remove);
-		});
-		<Self as MapWrapper>::Map::clear_prefix(partial_key, limit, maybe_cursor)
+		let result = <Self as MapWrapper>::Map::clear_prefix(partial_key, limit, maybe_cursor);
+		match result.maybe_cursor {
+			None => CounterFor::<Prefix>::kill(),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
+		}
+		result
 	}
 
 	/// Iterate over values that share the first key.
@@ -408,14 +405,12 @@ where
 	/// operating on the same map should always pass `Some`, and this should be equal to the
 	/// previous call result's `maybe_cursor` field.
 	pub fn clear(limit: u32, maybe_cursor: Option<&[u8]>) -> sp_io::MultiRemovalResults {
-		let mut current = CounterFor::<Prefix>::get();
-		current = current.saturating_sub(limit);
-		if current.is_zero() {
-			CounterFor::<Prefix>::kill();
-		} else {
-			CounterFor::<Prefix>::set(current);
+		let result = <Self as MapWrapper>::Map::clear(limit, maybe_cursor);
+		match result.maybe_cursor {
+			None => CounterFor::<Prefix>::kill(),
+			Some(_) => CounterFor::<Prefix>::mutate(|x| x.saturating_reduce(result.unique)),
 		}
-		<Self as MapWrapper>::Map::clear(limit, maybe_cursor)
+		result
 	}
 
 	/// Iter over all value of the storage.
@@ -825,15 +820,8 @@ mod test {
 			A::insert((3,), 10);
 			A::insert((4,), 10);
 			assert_eq!(A::count(), 3);
-			let _ = A::clear(1, None);
-			// one of the item has been removed
-			assert!(!A::contains_key((2,)) || !A::contains_key((3,)) || !A::contains_key((4,)));
-			assert!(A::contains_key((2,)) || A::contains_key((3,)) || A::contains_key((4,)));
-			assert_eq!(A::count(), 2);
-
 			let _ = A::clear(u32::max_value(), None);
-			assert_eq!(A::contains_key((3,)), false);
-			assert_eq!(A::contains_key((4,)), false);
+			assert!(!A::contains_key((2,)) && !A::contains_key((3,)) && !A::contains_key((4,)));
 			assert_eq!(A::count(), 0);
 
 			A::insert((3,), 10);
@@ -882,7 +870,7 @@ mod test {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 					StorageEntryMetadata {
 						name: "Foo",
@@ -900,7 +888,7 @@ mod test {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 				]
 			);
@@ -1068,16 +1056,13 @@ mod test {
 			A::insert((3, 30), 10);
 			A::insert((4, 40), 10);
 			assert_eq!(A::count(), 3);
-			let _ = A::clear(1, None);
+			let _ = A::clear(u32::max_value(), None);
 			// one of the item has been removed
 			assert!(
-				!A::contains_key((2, 20)) || !A::contains_key((3, 30)) || !A::contains_key((4, 40))
+				!A::contains_key((2, 20)) && !A::contains_key((3, 30)) && !A::contains_key((4, 40))
 			);
-			assert_eq!(A::count(), 2);
+			assert_eq!(A::count(), 0);
 
-			let _ = A::clear(u32::max_value(), None);
-			assert_eq!(A::contains_key((3, 30)), false);
-			assert_eq!(A::contains_key((4, 40)), false);
 			assert_eq!(A::count(), 0);
 
 			A::insert((3, 30), 10);
@@ -1129,7 +1114,7 @@ mod test {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 					StorageEntryMetadata {
 						name: "Foo",
@@ -1150,7 +1135,7 @@ mod test {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 				]
 			);
@@ -1344,23 +1329,13 @@ mod test {
 			A::insert((3, 30, 300), 10);
 			A::insert((4, 40, 400), 10);
 			assert_eq!(A::count(), 3);
-			let _ = A::clear(1, None);
+			let _ = A::clear(u32::max_value(), None);
 			// one of the item has been removed
 			assert!(
-				!A::contains_key((2, 20, 200)) ||
-					!A::contains_key((3, 30, 300)) ||
+				!A::contains_key((2, 20, 200)) &&
+					!A::contains_key((3, 30, 300)) &&
 					!A::contains_key((4, 40, 400))
 			);
-			assert!(
-				A::contains_key((2, 20, 200)) ||
-					A::contains_key((3, 30, 300)) ||
-					A::contains_key((4, 40, 400))
-			);
-			assert_eq!(A::count(), 2);
-
-			let _ = A::clear(u32::max_value(), None);
-			assert_eq!(A::contains_key((3, 30, 300)), false);
-			assert_eq!(A::contains_key((4, 40, 400)), false);
 			assert_eq!(A::count(), 0);
 
 			A::insert((3, 30, 300), 10);
@@ -1418,7 +1393,7 @@ mod test {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 					StorageEntryMetadata {
 						name: "Foo",
@@ -1440,7 +1415,7 @@ mod test {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(scale_info::meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec![],
+						docs: vec!["Counter for the related counted storage map"],
 					},
 				]
 			);
