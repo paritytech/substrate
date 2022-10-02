@@ -61,8 +61,8 @@ pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../../frame/contracts/common/" }
-pallet-contracts-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
+pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../../frame/contracts/primitives/" }
+pallet-contracts-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/runtime-api/" }
 pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/conviction-voting" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
@@ -139,7 +139,7 @@ std = [
 	"pallet-collective/std",
 	"pallet-contracts/std",
 	"pallet-contracts-primitives/std",
-	"pallet-contracts-rpc-runtime-api/std",
+	"pallet-contracts-runtime-api/std",
 	"pallet-conviction-voting/std",
 	"pallet-democracy/std",
 	"pallet-elections-phragmen/std",

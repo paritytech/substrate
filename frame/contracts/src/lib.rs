@@ -123,7 +123,7 @@ use pallet_contracts_primitives::{
 	StorageDeposit,
 };
 use scale_info::TypeInfo;
-use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::{Convert, Hash, Saturating, StaticLookup};
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
@@ -512,7 +512,7 @@ pub mod pallet {
 				value,
 				gas_limit,
 				storage_deposit_limit.map(Into::into),
-				Code::Upload(Bytes(code)),
+				Code::Upload(code),
 				data,
 				salt,
 				None,
@@ -743,7 +743,7 @@ pub mod pallet {
 				value,
 				gas_limit,
 				storage_deposit_limit.map(Into::into),
-				Code::Upload(Bytes(code)),
+				Code::Upload(code),
 				data,
 				salt,
 				None,
@@ -1234,7 +1234,7 @@ where
 		let try_exec = || {
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match code {
-				Code::Upload(Bytes(binary)) => {
+				Code::Upload(binary) => {
 					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
 						.map_err(|(err, msg)| {
 							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
