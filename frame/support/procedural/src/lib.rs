@@ -1153,3 +1153,26 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
+
+/// The `#[pallet::inherent]` attribute allows the pallet to provide some inherent:
+///
+/// Item is defined as:
+///
+/// ```ignore
+/// #[pallet::inherent]
+/// impl<T: Config> ProvideInherent for Pallet<T> {
+/// 	// ... regular trait implementation
+/// }
+/// ```
+///
+/// I.e. a trait implementation with bound `T: Config`, of trait `ProvideInherent` for type
+/// `Pallet<T>`, and some optional where clause.
+///
+/// ## Macro expansion
+///
+/// The macro currently makes no use of this information, but it might use this information in
+/// the future to give information directly to `construct_runtime`.
+#[proc_macro_attribute]
+pub fn inherent(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}

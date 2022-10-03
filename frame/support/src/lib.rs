@@ -2039,7 +2039,7 @@ pub mod pallet_prelude {
 ///
 /// # Inherent: `#[pallet::inherent]` (optional)
 ///
-/// Allows the pallet to provide some inherent:
+/// The `#[pallet::inherent]` attribute allows the pallet to provide some inherent:
 ///
 /// Item is defined as:
 ///
@@ -2054,10 +2054,7 @@ pub mod pallet_prelude {
 /// [`ProvideInherent`](`pallet_prelude::ProvideInherent`) for type `Pallet<T>`, and some
 /// optional where clause.
 ///
-/// ## Macro expansion
-///
-/// The macro currently makes no use of this information, but it might use this information in
-/// the future to give information directly to `construct_runtime`.
+/// Also see [`pallet::inherent`](`frame_support::pallet_macros::inherent`)
 ///
 /// # Validate unsigned: `#[pallet::validate_unsigned]` (optional)
 ///
@@ -2636,7 +2633,7 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
-		genesis_config, getter, hooks, storage, storage_prefix, storage_version, type_value,
-		unbounded, weight, whitelist_storage,
+		genesis_config, getter, hooks, inherent, storage, storage_prefix, storage_version,
+		type_value, unbounded, weight, whitelist_storage,
 	};
 }
