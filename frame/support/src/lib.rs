@@ -1779,26 +1779,11 @@ pub mod pallet_prelude {
 /// ## `#[pallet::generate_deposit($visibility fn deposit_event)]`
 ///
 /// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generates a
-/// helper function on `Pallet` to deposit event.
+/// helper function on `Pallet` that handles deposit events.
 ///
 /// NOTE: For instantiable pallets, the event must be generic over `T` and `I`.
 ///
-/// ## Macro expansion
-///
-/// The macro will add on enum `Event` the attributes:
-/// * `#[derive(frame_support::CloneNoBound)]`
-/// * `#[derive(frame_support::EqNoBound)]`
-/// * `#[derive(frame_support::PartialEqNoBound)]`
-/// * `#[derive(codec::Encode)]`
-/// * `#[derive(codec::Decode)]`
-/// * `#[derive(frame_support::RuntimeDebugNoBound)]`
-///
-/// The macro implements `From<Event<..>>` for ().
-///
-/// The macro implements a metadata function on `Event` returning the `EventMetadata`.
-///
-/// If `#[pallet::generate_deposit]` is present then the macro implements `fn deposit_event` on
-/// `Pallet`.
+/// Also see [`pallet::generate_deposit`](`frame_support::pallet_macros::generate_deposit`)
 ///
 /// # Storage: `#[pallet::storage]` (optional)
 ///
@@ -2657,7 +2642,7 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_storage_info, generate_store, hooks, storage_version, weight,
-		whitelist_storage,
+		extra_constants, generate_deposit, generate_storage_info, generate_store, hooks,
+		storage_version, weight, whitelist_storage,
 	};
 }

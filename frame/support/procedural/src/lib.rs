@@ -915,6 +915,32 @@ pub fn event(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generates a
+/// helper function on `Pallet` that handles deposit events.
+///
+/// NOTE: For instantiable pallets, the event must be generic over `T` and `I`.
+///
+/// ## Macro expansion
+///
+/// The macro will add on enum `Event` the attributes:
+/// * `#[derive(frame_support::CloneNoBound)]`
+/// * `#[derive(frame_support::EqNoBound)]`
+/// * `#[derive(frame_support::PartialEqNoBound)]`
+/// * `#[derive(codec::Encode)]`
+/// * `#[derive(codec::Decode)]`
+/// * `#[derive(frame_support::RuntimeDebugNoBound)]`
+///
+/// The macro implements `From<Event<..>>` for ().
+///
+/// The macro implements a metadata function on `Event` returning the `EventMetadata`.
+///
+/// If `#[pallet::generate_deposit]` is present then the macro implements `fn deposit_event` on
+/// `Pallet`.
+#[proc_macro_attribute]
+pub fn generate_deposit(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
