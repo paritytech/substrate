@@ -67,10 +67,41 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 }
 
 #[test]
+fn fails_to_activate_if_activated() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_noop!(SafeMode::activate(Origin::signed(2)), Error::<Test>::IsActive);
+	});
+}
+
+#[test]
 fn fails_to_extend_if_not_activated() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(SafeMode::active_until(), None);
 		assert_noop!(SafeMode::extend(Origin::signed(2)), Error::<Test>::IsInactive);
+	});
+}
+
+#[test]
+fn fails_to_repay_stakes_with_wrong_block() {
+	new_test_ext().execute_with(|| {
+		let activated_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		run_to(mock::ActivateDuration::get() + activated_at_block + 1);
+
+		assert_err!(SafeMode::repay_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_at_block + 1),
+			Error::<Test>::NotStaked
+		);
+
+		assert_err!(SafeMode::slash_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_at_block + 1),
+			Error::<Test>::NotStaked
+		);
 	});
 }
 
@@ -82,7 +113,7 @@ fn can_automatically_deactivate_after_timeout() {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
 		run_to(ForceActivateOrigin::Weak.duration() + activated_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
+
 		assert_eq!(SafeMode::active_until(), None);
 	});
 }
@@ -99,6 +130,33 @@ fn can_filter_balance_calls_when_activated() {
 			frame_system::Error::<Test>::CallFiltered
 		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
+	});
+}
+
+#[test]
+fn can_repay_independent_stakes_by_block() {
+	new_test_ext().execute_with(|| {
+		let activated_at_block_0 = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		run_to(mock::ActivateDuration::get() + activated_at_block_0 + 1);
+
+		let activated_at_block_1 = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		run_to(mock::ActivateDuration::get() + activated_at_block_1 + 1);
+
+		assert_ok!(SafeMode::repay_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_at_block_0
+		));
+		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateStakeAmount::get()); // accounts set in mock genesis
+
+		assert_ok!(SafeMode::slash_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_at_block_1
+		));
+		assert_eq!(Balances::total_balance(&0), 1234 - mock::ActivateStakeAmount::get()); // accounts set in mock genesis
 	});
 }
 
@@ -232,13 +290,31 @@ fn can_repay_stake_with_config_origin() {
 			Error::<Test>::IsActive
 		);
 		run_to(mock::ActivateDuration::get() + activated_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
+
 		assert_ok!(SafeMode::repay_stake(
 			Origin::signed(mock::RepayOrigin::get()),
 			0,
 			activated_at_block
 		));
-		// TODO: test accounting is correct
+		assert_eq!(Balances::free_balance(&0), 1234); // accounts set in mock genesis
+
+		Balances::make_free_balance_be(&0, 1234);
+		let activated_and_extended_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_ok!(SafeMode::extend(Origin::signed(0)));
+		run_to(
+			mock::ActivateDuration::get() +
+				mock::ExtendDuration::get() +
+				activated_and_extended_at_block +
+				1,
+		);
+
+		assert_ok!(SafeMode::repay_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_and_extended_at_block
+		));
+		assert_eq!(Balances::free_balance(&0), 1234); // accounts set in mock genesis
 	});
 }
 
@@ -252,15 +328,37 @@ fn can_slash_stake_with_config_origin() {
 			Error::<Test>::IsActive
 		);
 		run_to(mock::ActivateDuration::get() + activated_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
+
 		assert_ok!(SafeMode::slash_stake(
 			Origin::signed(mock::RepayOrigin::get()),
 			0,
 			activated_at_block
 		));
-		// TODO: test accounting is correct
+		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateStakeAmount::get()); // accounts set in mock genesis
+
+		Balances::make_free_balance_be(&0, 1234);
+		let activated_and_extended_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_ok!(SafeMode::extend(Origin::signed(0)));
+		run_to(
+			mock::ActivateDuration::get() +
+				mock::ExtendDuration::get() +
+				activated_and_extended_at_block +
+				1,
+		);
+
+		assert_ok!(SafeMode::slash_stake(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_and_extended_at_block
+		));
+		assert_eq!(
+			Balances::free_balance(&0),
+			1234 - mock::ActivateStakeAmount::get() - mock::ExtendStakeAmount::get()
+		); // accounts set in mock genesis
 	});
 }
+
 
 #[test]
 fn fails_when_explicit_origin_required() {
