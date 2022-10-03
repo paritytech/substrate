@@ -24,9 +24,7 @@ use super::*;
 use crate as proxy;
 use codec::{Decode, Encode};
 use frame_support::{
-	assert_noop, assert_ok,
-	dispatch::DispatchError,
-	parameter_types,
+	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64, Contains},
 	RuntimeDebug,
 };
@@ -567,43 +565,33 @@ fn pure_works() {
 		// other calls to pure allowed as long as they're not exactly the same.
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::JustTransfer, 0, 0));
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 1));
-		let anon2 = Proxy::pure_account(&2, &ProxyType::Any, 0, None);
+
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(2), ProxyType::Any, 0, 0));
 		assert_noop!(
 			Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0),
 			Error::<Test>::Duplicate
 		);
-		System::set_extrinsic_index(1);
-		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
-		System::set_extrinsic_index(0);
-		System::set_block_number(2);
-		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 2));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 3));
 
 		let call = Box::new(call_transfer(6, 1));
 		assert_ok!(Balances::transfer(RuntimeOrigin::signed(3), anon, 5));
-		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call));
+		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()));
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(RuntimeCall::Proxy(ProxyCall::new_call_variant_kill_pure(
-			1,
-			ProxyType::Any,
-			0,
-			1,
-			0,
-		)));
-		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), anon2, None, call.clone()));
-		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
-		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Err(de) }.into());
 		assert_noop!(
-			Proxy::kill_pure(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, 1, 0),
-			Error::<Test>::NoPermission
+			Proxy::kill_pure(RuntimeOrigin::signed(3), ProxyType::Any, 0, None),
+			Error::<Test>::NotFound
 		);
+		assert_ok!(Proxy::kill_pure(RuntimeOrigin::signed(2), ProxyType::Any, 0, None));
+
 		assert_eq!(Balances::free_balance(1), 0);
-		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()));
+		assert_ok!(Proxy::kill_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, None));
 		assert_eq!(Balances::free_balance(1), 2);
 		assert_noop!(
-			Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call.clone()),
+			Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call),
 			Error::<Test>::NotProxy
 		);
 	});

@@ -324,34 +324,28 @@ pub mod pallet {
 		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
 		/// inaccessible.
 		///
-		/// Requires a `Signed` origin, and the sender account must have been created by a call to
-		/// `pure` with corresponding parameters.
+		/// Requires a `Signed` origin.
 		///
-		/// - `spawner`: The account that originally called `pure` to create this account.
-		/// - `index`: The disambiguation index originally passed to `pure`. Probably `0`.
+		/// - `origin`: The account that called `create_pure` (aka `spawner`).
 		/// - `proxy_type`: The proxy type originally passed to `pure`.
-		/// - `height`: The height of the chain when the call to `pure` was processed.
-		/// - `ext_index`: The extrinsic index in which the call to `pure` was processed.
+		/// - `index`: The disambiguation index originally passed to `pure`. Probably `0`.
+		/// - (`height`, `ext_index`): An Optional tuple with:
+		/// 	- The height of the chain when the call to `pure` was processed and;
+		/// 	- The extrinsic index in which the call to `pure` was processed.
 		///
-		/// Fails with `NoPermission` in case the caller is not a previously created pure
-		/// account whose `pure` call has corresponding parameters.
+		/// Fails with `NotFound` in case the `pure` proxy does not exist.
 		#[pallet::weight(T::WeightInfo::kill_pure(T::MaxProxies::get()))]
 		pub fn kill_pure(
 			origin: OriginFor<T>,
-			spawner: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			index: u16,
-			#[pallet::compact] height: T::BlockNumber,
-			#[pallet::compact] ext_index: u32,
+			when: Option<(T::BlockNumber, u32)>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let spawner = T::Lookup::lookup(spawner)?;
+			let spawner = ensure_signed(origin)?;
+			let pure = Self::pure_account(&spawner, &proxy_type, index, when);
+			ensure!(Proxies::<T>::contains_key(&pure), Error::<T>::NotFound);
 
-			let when = (height, ext_index);
-			let proxy = Self::pure_account(&spawner, &proxy_type, index, Some(when));
-			ensure!(proxy == who, Error::<T>::NoPermission);
-
-			let (_, deposit) = Proxies::<T>::take(&who);
+			let (_, deposit) = Proxies::<T>::take(&pure);
 			T::Currency::unreserve(&spawner, deposit);
 
 			Ok(())
@@ -610,14 +604,11 @@ impl<T: Config> Pallet<T> {
 		index: u16,
 		maybe_when: Option<(T::BlockNumber, u32)>,
 	) -> T::AccountId {
-		let (height, ext_index) = maybe_when.unwrap_or_else(|| {
-			(
-				system::Pallet::<T>::block_number(),
-				system::Pallet::<T>::extrinsic_index().unwrap_or_default(),
-			)
-		});
-		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
-			.using_encoded(blake2_256);
+		let mut entropy = (b"modlpy/proxy____", who, proxy_type, index).using_encoded(blake2_256);
+		if let Some((height, ext_index)) = maybe_when {
+			entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
+				.using_encoded(blake2_256);
+		};
 		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
 			.expect("infinite length input; no invalid inputs for type; qed")
 	}

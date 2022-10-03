@@ -249,13 +249,11 @@ benchmarks! {
 			T::BlockNumber::zero(),
 			0
 		)?;
-		let height = system::Pallet::<T>::block_number();
-		let ext_index = system::Pallet::<T>::extrinsic_index().unwrap_or(0);
 		let pure_account = Pallet::<T>::pure_account(&caller, &T::ProxyType::default(), 0, None);
 
 		add_proxies::<T>(p, Some(pure_account.clone()))?;
 		ensure!(Proxies::<T>::contains_key(&pure_account), "pure proxy not created");
-	}: _(RawOrigin::Signed(pure_account.clone()), caller_lookup, T::ProxyType::default(), 0, height, ext_index)
+	}: _(RawOrigin::Signed(caller), T::ProxyType::default(), 0, None)
 	verify {
 		assert!(!Proxies::<T>::contains_key(&pure_account));
 	}
