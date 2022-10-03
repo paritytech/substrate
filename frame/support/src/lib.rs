@@ -1787,8 +1787,8 @@ pub mod pallet_prelude {
 ///
 /// # Storage: `#[pallet::storage]` (optional)
 ///
-/// Lets you define some abstract storage inside of runtime storage and also set its metadata.
-/// This attribute can be used multiple times.
+/// The `#[pallet::storage]` attribute lets you define some abstract storage inside of runtime
+/// storage and also set its metadata. This attribute can be used multiple times.
 ///
 /// Item should be defined as:
 ///
@@ -1849,6 +1849,8 @@ pub mod pallet_prelude {
 ///
 /// In this case the final prefix used by the map is `Twox128(b"MyExample") ++
 /// Twox128(b"OtherName")`.
+///
+/// Also see [`pallet::storage`](`frame_support::pallet_macros::storage`)
 ///
 /// ## `#[pallet::getter(fn $my_getter_fn_name)]` (optional)
 ///
@@ -2642,7 +2644,7 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, hooks,
+		extra_constants, generate_deposit, generate_storage_info, generate_store, hooks, storage,
 		storage_version, weight, whitelist_storage,
 	};
 }
