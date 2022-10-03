@@ -509,7 +509,6 @@ mod test_iterators {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::hash::{Blake2_128Concat, Twox64Concat};
 
-			type System = self::frame_system::Pallet<Runtime>;
 			type NMap = self::frame_system::NMap<Runtime>;
 
 			NMap::insert((1, 2), 50);
