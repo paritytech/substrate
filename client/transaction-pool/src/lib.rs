@@ -746,10 +746,17 @@ where
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block;
-		let (proceed, tree_route) = self
+		let (proceed, tree_route) = match self
 			.enactment_state
 			.lock()
-			.update_and_check_if_new_enactment_is_valid(&*self.api, &event);
+			.update_and_check_if_new_enactment_is_valid(&*self.api, &event)
+		{
+			Err(msg) => {
+				log::warn!(target:"txpool", "{msg}");
+				return Box::pin(ready(()))
+			},
+			Ok(r) => r,
+		};
 
 		let hash = match event {
 			ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } => hash,
@@ -767,11 +774,13 @@ where
 				let pool = self.pool.clone();
 
 				let enacted = if let Some(prev_finalized_block) = prev_finalized_block {
-					let tree_route = self
-						.api
-						.tree_route(prev_finalized_block, hash)
-						.unwrap()
-						.expect("tree_route exists. qed.");
+					let tree_route = match self.api.tree_route(prev_finalized_block, hash) {
+						Ok(tree_route) => tree_route.expect("tree_route exists. qed."),
+						Err(e) => {
+							log::warn!(target:"txpool", "Error [{e}] occured while computing tree_route from {hash:?} to previously finalized: {prev_finalized_block:?}");
+							return Box::pin(ready(()))
+						},
+					};
 					tree_route.enacted().to_vec().iter().map(|b| b.hash).collect()
 				} else {
 					vec![hash]
@@ -840,7 +849,7 @@ where
 		&mut self,
 		api: &PoolApi,
 		event: &ChainEvent<Block>,
-	) -> (bool, Option<TreeRoute<Block>>) {
+	) -> Result<(bool, Option<TreeRoute<Block>>), String> {
 		let (new_hash, finalized) = match event {
 			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
 			ChainEvent::Finalized { hash, .. } => (*hash, true),
@@ -854,14 +863,20 @@ where
 					self.recent_finalized_block = Some(new_hash);
 				}
 
-				return (true, None)
+				return Ok((true, None))
 			},
 		};
 
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
-		let tree_route =
-			api.tree_route(best_block, new_hash).unwrap().expect("tree_route exists. qed.");
+		let tree_route = match api.tree_route(best_block, new_hash) {
+            Ok(tree_route) => {
+                tree_route .expect("tree_route exists. qed.")
+            }
+            Err(e) => {
+                return Err(format!("Error [{e}] occured while computin tree_route from {new_hash:?} to previously finalized: {best_block:?}"))
+            }
+        };
 
 		log::trace!(target: "txpool", "resolve hash:{new_hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{:?}", self.recent_finalized_block);
 
@@ -869,7 +884,7 @@ where
 			// block was already finalized
 			if finalized_block == new_hash {
 				log::trace!(target:"txpool", "handle_enactment: block already finalized: exit 3b");
-				return (false, Some(tree_route))
+				return Ok((false, Some(tree_route)))
 			}
 
 			// check if recently finalized block is on retracted path...
@@ -880,7 +895,7 @@ where
 				finalized_block, new_hash
 				);
 				log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path: exit 1");
-				return (false, Some(tree_route))
+				return Ok((false, Some(tree_route)))
 			}
 		}
 
@@ -893,7 +908,7 @@ where
 				target: "txpool",
 				"handle_enactment: no newly enacted blocks since recent best block: exit 2"
 				);
-				return (false, Some(tree_route))
+				return Ok((false, Some(tree_route)))
 			}
 
 			// check if the recent best_block was retracted
@@ -909,7 +924,7 @@ where
 		}
 
 		log::trace!(target: "txpool", "handle_enactment: proceed....");
-		return (true, Some(tree_route))
+		return Ok((true, Some(tree_route)))
 	}
 }
 
