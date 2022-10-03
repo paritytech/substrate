@@ -586,7 +586,7 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 /// Used internally to decorate pallet attribute macro stubs when they are erroneously used
-/// outsof a pallet module
+/// outside of a pallet module
 fn pallet_macro_stub() -> TokenStream {
 	quote!(compile_error!("This attribute can only be used within a `pallet` module")).into()
 }
