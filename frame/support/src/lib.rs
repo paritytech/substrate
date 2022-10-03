@@ -1714,8 +1714,9 @@ pub mod pallet_prelude {
 ///
 /// # Error: `#[pallet::error]` (optional)
 ///
-/// Allows you to define an error type that will be return from the dispatchable when an error
-/// occurs. The information for this error type is then stored in metadata/
+/// The `#[pallet::error]` attribute allows you to define an error type that will be returned
+/// from the dispatchable when an error occurs. The information for this error type is then
+/// stored in metadata.
 ///
 /// Item must be defined as:
 ///
@@ -1746,13 +1747,7 @@ pub mod pallet_prelude {
 /// The generic `T` must not bound anything and the where clause is not allowed. That said,
 /// bounds and/or a where clause should not needed for any use-case.
 ///
-/// ## Macro expansion
-///
-/// The macro implements the [`Debug`] trait and functions `as_u8` using variant position, and
-/// `as_str` using variant doc.
-///
-/// The macro also implements `From<Error<T>>` for `&'static str` and `From<Error<T>>` for
-/// [`DispatchError`](`frame_support::dispatch::DispatchError`).
+/// Also see: [`pallet::error`](`frame_support::pallet_macros::error`)
 ///
 /// # Event: `#[pallet::event]` (optional)
 ///
@@ -2659,7 +2654,7 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		call_index, compact, config, constant, disable_frame_system_supertrait_check,
+		call_index, compact, config, constant, disable_frame_system_supertrait_check, error,
 		extra_constants, generate_storage_info, generate_store, hooks, storage_version, weight,
 		whitelist_storage,
 	};

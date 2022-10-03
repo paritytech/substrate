@@ -845,6 +845,50 @@ pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The `#[pallet::error]` attribute allows you to define an error type that will be returned
+/// from the dispatchable when an error occurs. The information for this error type is then
+/// stored in metadata.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::error]
+/// pub enum Error<T> {
+/// 	/// $some_optional_doc
+/// 	$SomeFieldLessVariant,
+/// 	/// $some_more_optional_doc
+/// 	$SomeVariantWithOneField(FieldType),
+/// 	...
+/// }
+/// ```
+/// I.e. a regular enum named `Error`, with generic `T` and fieldless or multiple-field
+/// variants.
+///
+/// Any field type in the enum variants must implement `TypeInfo` in order to be properly used
+/// in the metadata, and its encoded size should be as small as possible, preferably 1 byte in
+/// size in order to reduce storage size. The error enum itself has an absolute maximum encoded
+/// size specified by `MAX_MODULE_ERROR_ENCODED_SIZE`.
+///
+/// Field types in enum variants must also implement `PalletError`, otherwise the pallet will
+/// fail to compile. Rust primitive types have already implemented the `PalletError` trait
+/// along with some commonly used stdlib types such as [`Option`] and `PhantomData`, and hence
+/// in most use cases, a manual implementation is not necessary and is discouraged.
+///
+/// The generic `T` must not bound anything and the where clause is not allowed. That said,
+/// bounds and/or a where clause should not needed for any use-case.
+///
+/// ## Macro expansion
+///
+/// The macro implements the [`Debug`] trait and functions `as_u8` using variant position, and
+/// `as_str` using variant doc.
+///
+/// The macro also implements `From<Error<T>>` for `&'static str` and `From<Error<T>>` for
+/// `DispatchError`.
+#[proc_macro_attribute]
+pub fn error(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
