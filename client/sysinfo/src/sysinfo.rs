@@ -591,6 +591,6 @@ mod tests {
 
 		let serialized = serde_json::to_string(&hwbench).unwrap();
 		// All the throughput should be converted to MiBs.
-		assert_eq!(serialized, "{\"cpu_hashrate_score\":1351,\"memory_memcpy_score\":9,\"disk_sequential_write_score\":4,\"disk_random_write_score\":0}");
+		assert_eq!(serialized, "{\"cpu_hashrate_score\":1351,\"memory_memcpy_score\":9,\"disk_sequential_write_score\":4}");
 	}
 }

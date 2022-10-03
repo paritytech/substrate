@@ -51,10 +51,16 @@ pub struct HwBench {
 	#[serde(serialize_with = "serialize_throughput_as_mibs")]
 	pub memory_memcpy_score: Throughput,
 	/// Sequential disk write speed in MB/s.
-	#[serde(serialize_with = "serialize_throughput_option_as_mibs")]
+	#[serde(
+		serialize_with = "serialize_throughput_option_as_mibs",
+		skip_serializing_if = "Option::is_none"
+	)]
 	pub disk_sequential_write_score: Option<Throughput>,
 	/// Random disk write speed in MB/s.
-	#[serde(serialize_with = "serialize_throughput_option_as_mibs")]
+	#[serde(
+		serialize_with = "serialize_throughput_option_as_mibs",
+		skip_serializing_if = "Option::is_none"
+	)]
 	pub disk_random_write_score: Option<Throughput>,
 }
 
