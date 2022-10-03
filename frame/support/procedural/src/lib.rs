@@ -820,6 +820,31 @@ pub fn call_index(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// Allows you to define some extra constants to be added into constant metadata.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::extra_constants]
+/// impl<T: Config> Pallet<T> where $optional_where_clause {
+/// 	/// $some_doc
+/// 	$vis fn $fn_name() -> $some_return_type {
+/// 		...
+/// 	}
+/// 	...
+/// }
+/// ```
+/// I.e. a regular rust `impl` block with some optional where clause and functions with 0 args,
+/// 0 generics, and some return type.
+///
+/// ## Macro expansion
+///
+/// The macro add some extra constants to pallet constant metadata.
+#[proc_macro_attribute]
+pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during

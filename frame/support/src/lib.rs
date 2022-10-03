@@ -1710,6 +1710,8 @@ pub mod pallet_prelude {
 ///
 /// The macro add some extra constants to pallet constant metadata.
 ///
+/// Also see: [`pallet::extra_constants`](`frame_support::pallet_macros::extra_constants`)
+///
 /// # Error: `#[pallet::error]` (optional)
 ///
 /// Allows you to define an error type that will be return from the dispatchable when an error
@@ -2657,7 +2659,8 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		compact, config, constant, disable_frame_system_supertrait_check, generate_storage_info,
-		generate_store, hooks, storage_version, weight, call_index, whitelist_storage,
+		call_index, compact, config, constant, disable_frame_system_supertrait_check,
+		extra_constants, generate_storage_info, generate_store, hooks, storage_version, weight,
+		whitelist_storage,
 	};
 }
