@@ -42,28 +42,28 @@ use beefy_primitives::mmr::{BeefyAuthoritySet, BeefyNextAuthoritySet};
 /// See crate-level docs for details about Merkle Tree construction.
 ///
 /// In case an empty list of leaves is passed the function returns a 0-filled hash.
-pub fn merkle_root<H, Out, I, T>(leaves: I) -> Out
+pub fn merkle_root<H, I>(leaves: I) -> H::Output
 where
-	H: HashT<Output = Out>,
-	Out: Default + AsRef<[u8]>,
-	I: IntoIterator<Item = T>,
-	T: AsRef<[u8]>,
+	H: HashT,
+	H::Output: Default + AsRef<[u8]>,
+	I: IntoIterator,
+	I::Item: AsRef<[u8]>,
 {
 	let iter = leaves.into_iter().map(|l| <H as HashT>::hash(l.as_ref()));
-	merkelize::<H, _, _, _>(iter, &mut ()).into()
+	merkelize::<H, _, _>(iter, &mut ()).into()
 }
 
-fn merkelize<H, Out, V, I>(leaves: I, visitor: &mut V) -> Out
+fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Output
 where
-	H: HashT<Output = Out>,
-	Out: AsRef<[u8]> + Default,
-	V: Visitor<Out>,
-	I: Iterator<Item = Out>,
+	H: HashT,
+	H::Output: Default + AsRef<[u8]>,
+	V: Visitor<H::Output>,
+	I: Iterator<Item = H::Output>,
 {
-	let upper = Vec::with_capacity(leaves.size_hint().0);
-	let mut next = match merkelize_row::<H, _, _, _>(leaves, upper, visitor) {
+	let upper = Vec::with_capacity(leaves.size_hint().1.unwrap());
+	let mut next = match merkelize_row::<H, _, _>(leaves, upper, visitor) {
 		Ok(root) => return root,
-		Err(next) if next.is_empty() => return Out::default(),
+		Err(next) if next.is_empty() => return H::Output::default(),
 		Err(next) => next,
 	};
 
@@ -71,7 +71,7 @@ where
 	loop {
 		visitor.move_up();
 
-		match merkelize_row::<H, _, _, _>(next.drain(..), upper, visitor) {
+		match merkelize_row::<H, _, _>(next.drain(..), upper, visitor) {
 			Ok(root) => return root,
 			Err(t) => {
 				// swap collections to avoid allocations
@@ -138,10 +138,10 @@ impl<T> Visitor<T> for () {
 /// # Panic
 ///
 /// The function will panic if given `leaf_index` is greater than the number of leaves.
-pub fn merkle_proof<H, Out, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<Out, T>
+pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Output, T>
 where
-	H: HashT<Output = Out>,
-	Out: Default + Copy + AsRef<[u8]>,
+	H: HashT,
+	H::Output: Default + Copy + AsRef<[u8]>,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
@@ -191,7 +191,7 @@ where
 	let number_of_leaves = iter.len();
 	let mut collect_proof = ProofCollection::new(leaf_index);
 
-	let root = merkelize::<H, _, _, _>(iter, &mut collect_proof);
+	let root = merkelize::<H, _, _>(iter, &mut collect_proof);
 	let leaf = leaf.expect("Requested `leaf_index` is greater than number of leaves.");
 
 	#[cfg(feature = "debug")]
@@ -232,18 +232,18 @@ impl<'a, H, T: AsRef<[u8]>> From<&'a T> for Leaf<'a, H> {
 /// concatenating and hashing end up with given root hash.
 ///
 /// The proof must not contain the root hash.
-pub fn verify_proof<'a, H, Out, P, L>(
-	root: &'a Out,
+pub fn verify_proof<'a, H, P, L>(
+	root: &'a H::Output,
 	proof: P,
 	number_of_leaves: usize,
 	leaf_index: usize,
 	leaf: L,
 ) -> bool
 where
-	H: HashT<Output = Out>,
-	Out: AsRef<[u8]> + PartialEq,
-	P: IntoIterator<Item = Out>,
-	L: Into<Leaf<'a, Out>>,
+	H: HashT,
+	H::Output: PartialEq + AsRef<[u8]>,
+	P: IntoIterator<Item = H::Output>,
+	L: Into<Leaf<'a, H::Output>>,
 {
 	if leaf_index >= number_of_leaves {
 		return false
@@ -288,16 +288,16 @@ where
 ///
 /// In case only one element is provided it is returned via `Ok` result, in any other case (also an
 /// empty iterator) an `Err` with the inner nodes of upper layer is returned.
-fn merkelize_row<H, Out, V, I>(
+fn merkelize_row<H, V, I>(
 	mut iter: I,
-	mut next: Vec<Out>,
+	mut next: Vec<H::Output>,
 	visitor: &mut V,
-) -> Result<Out, Vec<Out>>
+) -> Result<H::Output, Vec<H::Output>>
 where
-	H: HashT<Output = Out>,
-	Out: AsRef<[u8]>,
-	V: Visitor<Out>,
-	I: Iterator<Item = Out>,
+	H: HashT,
+	H::Output: AsRef<[u8]>,
+	V: Visitor<H::Output>,
+	I: Iterator<Item = H::Output>,
 {
 	#[cfg(feature = "debug")]
 	log::debug!("[merkelize_row]");
@@ -371,7 +371,7 @@ mod tests {
 		let data: Vec<[u8; 1]> = Default::default();
 
 		// when
-		let out = merkle_root::<Keccak256, _, _, _>(data);
+		let out = merkle_root::<Keccak256, _>(data);
 
 		// then
 		assert_eq!(
@@ -389,7 +389,7 @@ mod tests {
 		)];
 
 		// when
-		let out = merkle_root::<Keccak256, _, _, _>(data);
+		let out = merkle_root::<Keccak256, _>(data);
 
 		// then
 		assert_eq!(
@@ -408,7 +408,7 @@ mod tests {
 		];
 
 		// when
-		let out = merkle_root::<Keccak256, _, _, _>(data);
+		let out = merkle_root::<Keccak256, _>(data);
 
 		// then
 		assert_eq!(
@@ -422,7 +422,7 @@ mod tests {
 		let _ = env_logger::try_init();
 		let test = |root, data| {
 			assert_eq!(
-				array_bytes::bytes2hex("", &merkle_root::<Keccak256, _, _, _>(data).as_ref()),
+				array_bytes::bytes2hex("", &merkle_root::<Keccak256, _>(data).as_ref()),
 				root
 			);
 		};
@@ -455,8 +455,8 @@ mod tests {
 		let data = vec!["a", "b", "c"];
 
 		// when
-		let proof0 = merkle_proof::<Keccak256, _, _, _>(data.clone(), 0);
-		assert!(verify_proof::<Keccak256, _, _, _>(
+		let proof0 = merkle_proof::<Keccak256, _, _>(data.clone(), 0);
+		assert!(verify_proof::<Keccak256, _, _>(
 			&proof0.root,
 			proof0.proof.clone(),
 			data.len(),
@@ -464,8 +464,8 @@ mod tests {
 			&proof0.leaf,
 		));
 
-		let proof1 = merkle_proof::<Keccak256, _, _, _>(data.clone(), 1);
-		assert!(verify_proof::<Keccak256, _, _, _>(
+		let proof1 = merkle_proof::<Keccak256, _, _>(data.clone(), 1);
+		assert!(verify_proof::<Keccak256, _, _>(
 			&proof1.root,
 			proof1.proof,
 			data.len(),
@@ -473,8 +473,8 @@ mod tests {
 			&proof1.leaf,
 		));
 
-		let proof2 = merkle_proof::<Keccak256, _, _, _>(data.clone(), 2);
-		assert!(verify_proof::<Keccak256, _, _, _>(
+		let proof2 = merkle_proof::<Keccak256, _, _>(data.clone(), 2);
+		assert!(verify_proof::<Keccak256, _, _>(
 			&proof2.root,
 			proof2.proof,
 			data.len(),
@@ -492,7 +492,7 @@ mod tests {
 			array_bytes::bytes2hex("", &proof1.root.as_ref())
 		);
 
-		assert!(!verify_proof::<Keccak256, _, _, _>(
+		assert!(!verify_proof::<Keccak256, _, _>(
 			&array_bytes::hex2array_unchecked(
 				"fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239"
 			)
@@ -503,7 +503,7 @@ mod tests {
 			&proof0.leaf
 		));
 
-		assert!(!verify_proof::<Keccak256, _, _, _>(
+		assert!(!verify_proof::<Keccak256, _, _>(
 			&proof0.root.into(),
 			vec![],
 			data.len(),
@@ -520,9 +520,9 @@ mod tests {
 
 		for l in 0..data.len() {
 			// when
-			let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
+			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
 			// then
-			assert!(verify_proof::<Keccak256, _, _, _>(
+			assert!(verify_proof::<Keccak256, _, _>(
 				&proof.root,
 				proof.proof,
 				data.len(),
@@ -546,9 +546,9 @@ mod tests {
 
 			for l in 0..data.len() {
 				// when
-				let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
+				let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
 				// then
-				assert!(verify_proof::<Keccak256, _, _, _>(
+				assert!(verify_proof::<Keccak256, _, _>(
 					&proof.root,
 					proof.proof,
 					data.len(),
@@ -570,9 +570,9 @@ mod tests {
 
 		for l in (0..data.len()).step_by(13) {
 			// when
-			let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
+			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
 			// then
-			assert!(verify_proof::<Keccak256, _, _, _>(
+			assert!(verify_proof::<Keccak256, _, _>(
 				&proof.root,
 				proof.proof,
 				data.len(),
@@ -586,7 +586,7 @@ mod tests {
 	#[should_panic]
 	fn should_panic_on_invalid_leaf_index() {
 		let _ = env_logger::try_init();
-		merkle_proof::<Keccak256, _, _, _>(vec!["a"], 5);
+		merkle_proof::<Keccak256, _, _>(vec!["a"], 5);
 	}
 
 	#[test]
@@ -772,7 +772,7 @@ mod tests {
 
 		for l in 0..data.len() {
 			// when
-			let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), l);
+			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
 			assert_eq!(
 				array_bytes::bytes2hex("", &proof.root.as_ref()),
 				array_bytes::bytes2hex("", &root.as_ref())
@@ -781,7 +781,7 @@ mod tests {
 			assert_eq!(&proof.leaf, &data[l]);
 
 			// then
-			assert!(verify_proof::<Keccak256, _, _, _>(
+			assert!(verify_proof::<Keccak256, _, _>(
 				&proof.root,
 				proof.proof,
 				data.len(),
@@ -790,7 +790,7 @@ mod tests {
 			));
 		}
 
-		let proof = merkle_proof::<Keccak256, _, _, _>(data.clone(), data.len() - 1);
+		let proof = merkle_proof::<Keccak256, _, _>(data.clone(), data.len() - 1);
 
 		assert_eq!(
 			proof,
