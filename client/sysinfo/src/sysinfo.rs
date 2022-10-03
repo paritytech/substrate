@@ -155,13 +155,11 @@ impl<'de> Visitor<'de> for ThroughputVisitor {
 	}
 }
 
-impl<'de> Deserialize<'de> for Throughput {
-	fn deserialize<D>(deserializer: D) -> Result<Throughput, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		Ok(deserializer.deserialize_map(ThroughputVisitor))?
-	}
+pub fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Ok(deserializer.deserialize_map(ThroughputVisitor))?
 }
 
 #[inline(always)]
