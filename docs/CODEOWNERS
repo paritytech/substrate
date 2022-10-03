@@ -36,11 +36,13 @@
 /client/consensus/pow/ @sorpaas
 /primitives/consensus/pow/ @sorpaas
 
-# BEEFY
+# BEEFY, MMR
 /client/beefy/ @acatangiu
 /frame/beefy/ @acatangiu
 /frame/beefy-mmr/ @acatangiu
+/frame/merkle-mountain-range/ @acatangiu
 /primitives/beefy/ @acatangiu
+/primitives/merkle-mountain-range/ @acatangiu
 
 # Contracts
 /frame/contracts/ @athei
