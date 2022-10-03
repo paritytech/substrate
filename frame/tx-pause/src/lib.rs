@@ -166,7 +166,7 @@ pub mod pallet {
 
 			Self::ensure_can_pause(&call)?;
 			PausedCalls::<T>::insert((&pallet_name, &call_name), ());
-			Self::deposit_event(Event::CallPaused{pallet_name, call_name});
+			Self::deposit_event(Event::CallPaused { pallet_name, call_name });
 
 			Ok(())
 		}
@@ -196,7 +196,7 @@ pub mod pallet {
 
 			Self::ensure_can_unpause(&call)?;
 			PausedCalls::<T>::remove((&pallet_name, &call_name));
-			Self::deposit_event(Event::CallUnpaused{pallet_name, call_name});
+			Self::deposit_event(Event::CallUnpaused { pallet_name, call_name });
 
 			Ok(())
 		}
@@ -263,8 +263,7 @@ impl<T: Config> Pallet<T> {
 
 		match (pallet_name, call_name) {
 			(Ok(pallet_name), Ok(call_name)) => Ok((pallet_name, call_name)),
-			_ => Err(Error::IsTooLong), /* TODO consider better method than custom error just for
-			                             * this? */
+			_ => Err(Error::IsTooLong), /* TODO consider better method than custom error? */
 		}
 	}
 }

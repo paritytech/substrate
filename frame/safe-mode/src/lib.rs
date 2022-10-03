@@ -27,8 +27,8 @@ pub mod weights;
 use frame_support::{
 	pallet_prelude::*,
 	traits::{
-		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, PalletInfoAccess,
-		ReservableCurrency, NamedReservableCurrency
+		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, NamedReservableCurrency,
+		PalletInfoAccess, ReservableCurrency,
 	},
 	weights::Weight,
 };
@@ -86,20 +86,20 @@ pub mod pallet {
 		#[pallet::constant]
 		type ExtendStakeAmount: Get<Option<BalanceOf<Self>>>;
 
-		/// The origin that can call [`Pallet::force_activate`].
+		/// The origin that may call [`Pallet::force_activate`].
 		///
 		/// The `Success` value is the number of blocks that this origin can activate safe-mode for.
 		type ForceActivateOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
 
-		/// The origin that can call [`Pallet::force_extend`].
+		/// The origin that may call [`Pallet::force_extend`].
 		///
 		/// The `Success` value is the number of blocks that this origin can extend the safe-mode.
 		type ForceExtendOrigin: EnsureOrigin<Self::Origin, Success = Self::BlockNumber>;
 
-		/// The origin that can call [`Pallet::force_activate`].
+		/// The origin that may call [`Pallet::force_activate`].
 		type ForceDeactivateOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The origin that can call [`Pallet::repay_stake`] and [`Pallet::slash_stake`].
+		/// The origin that may call [`Pallet::repay_stake`] and [`Pallet::slash_stake`].
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
@@ -128,7 +128,7 @@ pub mod pallet {
 		Activated { block: T::BlockNumber },
 
 		/// The safe-mode was extended until inclusively this \[block\].
-		Extended { block: T::BlockNumber},
+		Extended { block: T::BlockNumber },
 
 		/// Exited safe-mode for a specific \[reason\].
 		Exited { reason: ExitReason },
@@ -344,7 +344,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(!ActiveUntil::<T>::exists(), Error::<T>::IsActive);
 		let limit = <frame_system::Pallet<T>>::block_number().saturating_add(duration);
 		ActiveUntil::<T>::put(limit);
-		Self::deposit_event(Event::Activated{block: limit});
+		Self::deposit_event(Event::Activated { block: limit });
 		Ok(())
 	}
 
@@ -358,7 +358,7 @@ impl<T: Config> Pallet<T> {
 		let limit =
 			ActiveUntil::<T>::take().ok_or(Error::<T>::IsInactive)?.saturating_add(duration);
 		ActiveUntil::<T>::put(limit);
-		Self::deposit_event(Event::<T>::Extended{block: limit});
+		Self::deposit_event(Event::<T>::Extended { block: limit });
 		Ok(())
 	}
 
@@ -368,7 +368,7 @@ impl<T: Config> Pallet<T> {
 	/// Does not check the origin.
 	fn do_deactivate(reason: ExitReason) -> DispatchResult {
 		let _limit = ActiveUntil::<T>::take().ok_or(Error::<T>::IsInactive)?;
-		Self::deposit_event(Event::Exited{reason});
+		Self::deposit_event(Event::Exited { reason });
 		Ok(())
 	}
 
@@ -378,10 +378,10 @@ impl<T: Config> Pallet<T> {
 	/// Does not check the origin.
 	fn do_repay_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
 		ensure!(!Self::is_activated(), Error::<T>::IsActive);
-		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?; 
+		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
 		T::Currency::unreserve(&account, stake);
-		Self::deposit_event(Event::<T>::StakeRepaid{account, amount: stake});
+		Self::deposit_event(Event::<T>::StakeRepaid { account, amount: stake });
 		Ok(())
 	}
 
@@ -394,7 +394,7 @@ impl<T: Config> Pallet<T> {
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
 		T::Currency::slash_reserved(&account, stake);
-		Self::deposit_event(Event::<T>::StakeSlashed{account, amount: stake});
+		Self::deposit_event(Event::<T>::StakeSlashed { account, amount: stake });
 		Ok(())
 	}
 

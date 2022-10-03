@@ -41,7 +41,6 @@ sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = 
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../../primitives/io" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
-sp-keyring = { version = "6.0.0", default-features = false, path = "../../../primitives/keyring" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
@@ -206,7 +205,6 @@ std = [
 	"sp-io/std",
 	"pallet-child-bounties/std",
 	"pallet-alliance/std",
-	"sp-keyring/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

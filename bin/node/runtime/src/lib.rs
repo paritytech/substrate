@@ -61,6 +61,7 @@ use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
+use sp_keyring::AccountKeyring;
 use sp_runtime::{
 	create_runtime_str,
 	curve::PiecewiseLinear,
@@ -77,7 +78,6 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 use static_assertions::const_assert;
-use sp_keyring::AccountKeyring;
 
 #[cfg(any(feature = "std", test))]
 pub use frame_system::Call as SystemCall;
@@ -291,8 +291,8 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug> EnsureOrigin<O>
-	for ForceActivateOrigin
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug>
+	EnsureOrigin<O> for ForceActivateOrigin
 {
 	type Success = u32;
 
@@ -309,8 +309,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug> EnsureOrigin<O>
-	for ForceExtendOrigin
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug>
+	EnsureOrigin<O> for ForceExtendOrigin
 {
 	type Success = u32;
 
@@ -326,7 +326,6 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std
 		})
 	}
 }
-
 
 parameter_types! {
 	pub const ActivateDuration: u32 = 3;
