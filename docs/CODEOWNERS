@@ -24,8 +24,19 @@
 /.gitlab-ci.yml @paritytech/ci
 
 # Sandboxing capability of Substrate Runtime
-/primitives/sr-sandbox/ @pepyakin
-/primitives/core/src/sandbox.rs @pepyakin
+/primitives/sandbox/ @pepyakin @koute
+
+# WASM executor, low-level client <-> WASM interface and other WASM-related code
+/client/executor/ @koute
+/client/allocator/ @koute
+/primitives/wasm-interface/ @koute
+/primitives/runtime-interface/ @koute
+/primitives/panic-handler/ @koute
+/utils/wasm-builder/ @koute
+
+# Systems-related bits and bobs on the client side
+/client/sysinfo/ @koute
+/client/tracing/ @koute
 
 # GRANDPA, BABE, consensus stuff
 /frame/babe/ @andresilva
