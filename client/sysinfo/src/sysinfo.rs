@@ -21,14 +21,10 @@ use crate::{ExecutionLimit, HwBench};
 use sc_telemetry::SysInfo;
 use sp_core::{sr25519, Pair};
 use sp_io::crypto::sr25519_verify;
-use sp_std::{fmt, fmt::Formatter, prelude::*};
+use sp_std::{fmt, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
-use serde::{
-	de::{MapAccess, Visitor},
-	ser::SerializeMap,
-	Deserializer, Serializer,
-};
+use serde::Serializer;
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -79,7 +75,7 @@ impl Throughput {
 	}
 
 	/// Normalizes [`Self`] to use the larges unit possible.
-	fn normalize(&self) -> (f64, &'static str) {
+	pub fn normalize(&self) -> (f64, &'static str) {
 		let bs = self.0;
 
 		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
@@ -97,17 +93,6 @@ impl fmt::Display for Throughput {
 		let (value, unit) = self.normalize();
 		write!(f, "{:.2?} {}", value, unit)
 	}
-}
-
-pub fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
-where
-	S: Serializer,
-{
-	// NOTE I will replace 4 with the actual length.
-	let mut map = serializer.serialize_map(Some(4))?;
-	let (value, unit) = t.normalize();
-	map.serialize_entry(unit, &value)?;
-	map.end()
 }
 
 pub fn serialize_throughput_as_mibs<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
@@ -128,38 +113,6 @@ where
 		return serializer.serialize_u64(t.as_mibs() as u64)
 	}
 	serializer.serialize_u64(0)
-}
-
-struct ThroughputVisitor;
-
-impl<'de> Visitor<'de> for ThroughputVisitor {
-	type Value = Throughput;
-
-	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-		formatter.write_str("A f64")
-	}
-
-	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-	where
-		M: MapAccess<'de>,
-	{
-		let (key, value): (&str, f64) =
-			if let Some((key, value)) = access.next_entry()? { (key, value) } else { todo!() };
-		if key == "KiBs" {
-			return Ok(Throughput(value * KIBIBYTE))
-		} else if key == "MiBs" {
-			return Ok(Throughput(value * KIBIBYTE * KIBIBYTE))
-		} else {
-			return Ok(Throughput(value * KIBIBYTE * KIBIBYTE * KIBIBYTE))
-		}
-	}
-}
-
-pub fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	Ok(deserializer.deserialize_map(ThroughputVisitor))?
 }
 
 #[inline(always)]

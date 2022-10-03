@@ -18,8 +18,56 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use sc_sysinfo::{deserialize_throughput, serialize_throughput, Throughput};
-use serde::{Deserialize, Serialize};
+use sc_sysinfo::Throughput;
+use serde::{
+	de::{MapAccess, Visitor},
+	ser::SerializeMap,
+	Deserialize, Deserializer, Serialize, Serializer,
+};
+use sp_std::{fmt, fmt::Formatter};
+
+pub fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	// NOTE I will replace 4 with the actual length.
+	let mut map = serializer.serialize_map(Some(4))?;
+	let (value, unit) = t.normalize();
+	map.serialize_entry(unit, &value)?;
+	map.end()
+}
+
+struct ThroughputVisitor;
+
+impl<'de> Visitor<'de> for ThroughputVisitor {
+	type Value = Throughput;
+
+	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+		formatter.write_str("A f64")
+	}
+
+	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+	where
+		M: MapAccess<'de>,
+	{
+		let (key, value): (&str, f64) =
+			if let Some((key, value)) = access.next_entry()? { (key, value) } else { todo!() };
+		if key == "KiBs" {
+			return Ok(Throughput::from_kibs(value))
+		} else if key == "MiBs" {
+			return Ok(Throughput::from_mibs(value))
+		} else {
+			return Ok(Throughput::from_gibs(value))
+		}
+	}
+}
+
+pub fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Ok(deserializer.deserialize_map(ThroughputVisitor))?
+}
 
 lazy_static! {
 	/// The hardware requirements as measured on reference hardware.
