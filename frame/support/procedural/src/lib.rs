@@ -1042,6 +1042,39 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The `#[pallet::type_value]` attribute lets you define a struct implementing the
+/// `Get` trait to ease the use of storage types. This attribute can be used
+/// multiple times.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::type_value]
+/// fn $MyDefaultName<$some_generic>() -> $default_type $optional_where_clause { $expr }
+/// ```
+///
+/// I.e.: a function definition with generics none or `T: Config` and a returned type.
+///
+/// E.g.:
+///
+/// ```ignore
+/// #[pallet::type_value]
+/// fn MyDefault<T: Config>() -> T::Balance { 3.into() }
+/// ```
+///
+/// NOTE: This attribute is meant to be used alongside [`#[pallet::storage]`](`macro@storage`)
+/// to define some specific default value in storage.
+///
+/// ## Macro expansion
+///
+/// The macro renames the function to some internal name, generates a struct with the original
+/// name of the function and its generic, and implements `Get<$ReturnType>` by calling the user
+/// defined function.
+#[proc_macro_attribute]
+pub fn type_value(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during

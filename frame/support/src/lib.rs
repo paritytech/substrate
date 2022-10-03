@@ -1962,8 +1962,9 @@ pub mod pallet_prelude {
 ///
 /// # Type value: `#[pallet::type_value]` (optional)
 ///
-/// Helper to define a struct implementing the [`Get`](crate::traits::Get) trait. To ease use
-/// of storage types. This attribute can be used multiple times.
+/// The `#[pallet::type_value]` attribute lets you define a struct implementing the
+/// [`Get`](crate::traits::Get) trait to ease use of storage types. This attribute can be used
+/// multiple times.
 ///
 /// Item must be defined as:
 ///
@@ -1985,11 +1986,7 @@ pub mod pallet_prelude {
 /// [`#[pallet::storage]`](#storage-palletstorage-optional) to define some specific default
 /// value in storage.
 ///
-/// ## Macro expansion
-///
-/// The macro renames the function to some internal name, generates a struct with the original
-/// name of the function and its generic, and implements `Get<$ReturnType>` by calling the user
-/// defined function.
+/// Also see [`pallet::type_value`](`frame_support::pallet_macros::type_value`)
 ///
 /// # Genesis config: `#[pallet::genesis_config]` (optional)
 ///
@@ -2651,6 +2648,6 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_deposit, generate_storage_info, generate_store, getter, hooks,
-		storage, storage_prefix, storage_version, unbounded, weight, whitelist_storage,
+		storage, storage_prefix, storage_version, type_value, unbounded, weight, whitelist_storage,
 	};
 }
