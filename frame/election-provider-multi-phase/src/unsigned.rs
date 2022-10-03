@@ -1050,9 +1050,9 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
-			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall, RuntimeOrigin, System,
-			TestNposSolution, TrimHelpers, UnsignedPhase,
+			multi_phase_events, roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber,
+			ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Runtime, RuntimeCall, RuntimeOrigin,
+			System, TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
 		CurrentPhase, Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
