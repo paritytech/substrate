@@ -85,12 +85,15 @@ fn add_blocks(blocks: usize) {
 
 fn leaf_indices_to_block_numbers(
 	ext: &mut sp_io::TestExternalities,
-	leaf_indices: &Vec<LeafIndex>
+	leaf_indices: &Vec<LeafIndex>,
 ) -> Vec<u64> {
-	leaf_indices.iter().map(|l| {
-		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
-		ext.execute_with(|| crate::Pallet::<Test>::leaf_index_to_parent_block_num(*l, mmr_size))
-	}).collect()
+	leaf_indices
+		.iter()
+		.map(|l| {
+			let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
+			ext.execute_with(|| crate::Pallet::<Test>::leaf_index_to_parent_block_num(*l, mmr_size))
+		})
+		.collect()
 }
 
 #[test]
@@ -565,10 +568,10 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().powerset().skip(1).collect();
+		let leaves_set: Vec<Vec<u64>> = (1..=n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			let block_numbers = leaf_indices_to_block_numbers(leaves_subset);
+			let block_numbers = leaf_indices_to_block_numbers(&mut ext, leaves_subset);
 			generate_and_verify_batch_proof(&mut ext, &block_numbers, 0);
 			ext.persist_offchain_overlay();
 		});
@@ -581,10 +584,10 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate all possible 2-leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().combinations(2).collect();
+		let leaves_set: Vec<Vec<u64>> = (1..=n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
-			let block_numbers = leaf_indices_to_block_numbers(leaves_subset);
+			let block_numbers = leaf_indices_to_block_numbers(&mut ext, leaves_subset);
 			generate_and_verify_batch_proof(&mut ext, &block_numbers, 0);
 			ext.persist_offchain_overlay();
 		});

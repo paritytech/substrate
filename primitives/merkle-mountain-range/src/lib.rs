@@ -386,6 +386,8 @@ impl<Hash> Proof<Hash> {
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
+	/// Error during translation of a block number into a leaf index.
+	BlockNumToLeafIndex,
 	/// Error while pushing new node.
 	Push,
 	/// Error getting the new root.
@@ -396,8 +398,6 @@ pub enum Error {
 	GenerateProof,
 	/// Proof verification error.
 	Verify,
-	/// Error during translation of a block number into a leaf index.
-	BlockNumToLeafIndex,
 	/// Leaf not found in the storage.
 	LeafNotFound,
 	/// Mmr Pallet not included in runtime
