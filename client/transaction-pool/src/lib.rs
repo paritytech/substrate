@@ -745,6 +745,7 @@ where
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block;
 		let (proceed, tree_route) = self
 			.enactment_state
 			.lock()
@@ -765,16 +766,23 @@ where
 			ChainEvent::Finalized { hash, .. } => {
 				let pool = self.pool.clone();
 
+				let enacted = if let Some(prev_finalized_block) = prev_finalized_block {
+					let tree_route = self
+						.api
+						.tree_route(prev_finalized_block, hash)
+						.unwrap()
+						.expect("tree_route exists. qed.");
+					tree_route.enacted().to_vec().iter().map(|b| b.hash).collect()
+				} else {
+					vec![hash]
+				};
+
 				async move {
 					handle_enactment.await;
-					let enacted = if let Some(tree_route) = tree_route {
-						tree_route.enacted().to_vec()
-					} else {
-						vec![]
-					};
 
-					for hash in enacted.iter().map(|b| b.hash).chain(std::iter::once(hash)) {
-						if let Err(e) = pool.validated_pool().on_block_finalized(hash).await {
+					log::trace!(target:"txpool", "on-finalized enacted: {enacted:?}, previously finalized: {prev_finalized_block:?}");
+					for hash in enacted.iter() {
+						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
 							log::warn!(
 							target: "txpool",
 							"Error [{}] occurred while attempting to notify watchers of finalization {}",
@@ -866,6 +874,11 @@ where
 
 			// check if recently finalized block is on retracted path...
 			if tree_route.retracted().iter().any(|x| x.hash == finalized_block) {
+				log::warn!(
+				target: "txpool",
+				"Recently finalized block {} would be retracted by Finalized event {}",
+				finalized_block, new_hash
+				);
 				log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path: exit 1");
 				return (false, Some(tree_route))
 			}
