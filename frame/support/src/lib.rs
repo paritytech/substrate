@@ -2081,7 +2081,7 @@ pub mod pallet_prelude {
 ///
 /// # Origin: `#[pallet::origin]` (optional)
 ///
-/// Allows you to define some origin for the pallet.
+/// The `#[pallet::origin]` attribute allows you to define some origin for the pallet.
 ///
 /// Item must be either a type alias, an enum, or a struct. It needs to be public.
 ///
@@ -2097,6 +2097,8 @@ pub mod pallet_prelude {
 /// as it might require some migration.
 ///
 /// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
+///
+/// Also see [`pallet::origin`](`frame_support::pallet_macros::origin`)
 ///
 /// # General notes on instantiable pallets
 ///
@@ -2631,7 +2633,7 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
-		genesis_config, getter, hooks, inherent, storage, storage_prefix, storage_version,
+		genesis_config, getter, hooks, inherent, origin, storage, storage_prefix, storage_version,
 		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
