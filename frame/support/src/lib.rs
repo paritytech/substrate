@@ -1665,6 +1665,8 @@ pub mod pallet_prelude {
 /// Each dispatchable needs to define a weight with `#[pallet::weight($expr)]` attribute, the
 /// first argument must be `origin: OriginFor<T>`.
 ///
+/// Also see [`pallet::weight`](`frame_support::pallet_macros::weight`)
+///
 /// ### `#[pallet::compact] $some_arg: $some_type`
 ///
 /// Compact encoding for argument can be used via `#[pallet::compact]`. The function must
@@ -2684,6 +2686,6 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		config, constant, disable_frame_system_supertrait_check, generate_storage_info,
-		generate_store, hooks, storage_version, whitelist_storage,
+		generate_store, hooks, storage_version, weight, whitelist_storage,
 	};
 }

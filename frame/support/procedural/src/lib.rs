@@ -766,6 +766,13 @@ pub fn hooks(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// Each dispatchable needs to define a weight with `#[pallet::weight($expr)]` attribute, the
+/// first argument must be `origin: OriginFor<T>`.
+#[proc_macro_attribute]
+pub fn weight(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
