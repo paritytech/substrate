@@ -1042,6 +1042,29 @@ pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The optional attribute `#[pallet::whitelist_storage]` will declare the
+/// storage as whitelisted from benchmarking. Doing so will exclude reads of
+/// that value's storage key from counting towards weight calculations during
+/// benchmarking.
+///
+/// This attribute should only be attached to storages that are known to be
+/// read/used in every block. This will result in a more accurate benchmarking weight.
+///
+/// ### Example
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::whitelist_storage]
+/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// ```
+///
+/// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
+/// `#[pallet::whitelist_storage]` and can only be placed inside a `pallet` module in order for
+/// it to work properly.
+#[proc_macro_attribute]
+pub fn whitelist_storage(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The `#[pallet::type_value]` attribute lets you define a struct implementing the
 /// `Get` trait to ease the use of storage types. This attribute can be used
 /// multiple times.
@@ -1075,25 +1098,22 @@ pub fn type_value(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The optional attribute `#[pallet::whitelist_storage]` will declare the
-/// storage as whitelisted from benchmarking. Doing so will exclude reads of
-/// that value's storage key from counting towards weight calculations during
-/// benchmarking.
+/// The `#[pallet::genesis_config]` attribute allows you to define the genesis configuration
+/// for the pallet.
 ///
-/// This attribute should only be attached to storages that are known to be
-/// read/used in every block. This will result in a more accurate benchmarking weight.
+/// Item is defined as either an enum or a struct. It needs to be public and implement the
+/// trait `GenesisBuild` with [`#[pallet::genesis_build]`](`macro@genesis_build`). The type
+/// generics are constrained to be either none, or `T` or `T: Config`.
 ///
-/// ### Example
+/// E.g:
+///
 /// ```ignore
-/// #[pallet::storage]
-/// #[pallet::whitelist_storage]
-/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// #[pallet::genesis_config]
+/// pub struct GenesisConfig<T: Config> {
+/// 	_myfield: BalanceOf<T>,
+/// }
 /// ```
-///
-/// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
-/// `#[pallet::whitelist_storage]` and can only be placed inside a `pallet` module in order for
-/// it to work properly.
 #[proc_macro_attribute]
-pub fn whitelist_storage(_: TokenStream, _: TokenStream) -> TokenStream {
+pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }

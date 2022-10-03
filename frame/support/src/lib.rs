@@ -1990,7 +1990,8 @@ pub mod pallet_prelude {
 ///
 /// # Genesis config: `#[pallet::genesis_config]` (optional)
 ///
-/// Allows you to define the genesis configuration for the pallet.
+/// The `#[pallet::genesis_config]` attribute allows you to define the genesis configuration
+/// for the pallet.
 ///
 /// Item is defined as either an enum or a struct. It needs to be public and implement the
 /// trait [`GenesisBuild`](`traits::GenesisBuild`) with
@@ -2006,15 +2007,7 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// ## Macro expansion
-///
-/// The macro will add the following attributes:
-/// * `#[cfg(feature = "std")]`
-/// * `#[derive(Serialize, Deserialize)]`
-/// * `#[serde(rename_all = "camelCase")]`
-/// * `#[serde(deny_unknown_fields)]`
-/// * `#[serde(bound(serialize = ""))]`
-/// * `#[serde(bound(deserialize = ""))]`
+/// Also see [`pallet::genesis_config`](`frame_support::pallet_macros::genesis_config`)
 ///
 /// # Genesis build: `#[pallet::genesis_build]` (optional)
 ///
@@ -2647,7 +2640,8 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, getter, hooks,
-		storage, storage_prefix, storage_version, type_value, unbounded, weight, whitelist_storage,
+		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_config,
+		getter, hooks, storage, storage_prefix, storage_version, type_value, unbounded, weight,
+		whitelist_storage,
 	};
 }
