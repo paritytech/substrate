@@ -2011,7 +2011,8 @@ pub mod pallet_prelude {
 ///
 /// # Genesis build: `#[pallet::genesis_build]` (optional)
 ///
-/// Allows you to define how `genesis_configuration` is built.
+/// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
+/// is built.
 ///
 /// Item must be defined as:
 ///
@@ -2034,13 +2035,7 @@ pub mod pallet_prelude {
 /// }
 /// ```
 ///
-/// ## Macro expansion
-///
-/// The macro will add the following attribute:
-/// * `#[cfg(feature = "std")]`
-///
-/// The macro will implement [`sp_runtime::BuildModuleGenesisStorage`] using `()` as a second
-/// generic for non-instantiable pallets.
+/// Also see [`pallet::genesis_build`](`frame_support::pallet_macros::genesis_build`)
 ///
 /// # Inherent: `#[pallet::inherent]` (optional)
 ///
@@ -2640,8 +2635,8 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_config,
-		getter, hooks, storage, storage_prefix, storage_version, type_value, unbounded, weight,
-		whitelist_storage,
+		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
+		genesis_config, getter, hooks, storage, storage_prefix, storage_version, type_value,
+		unbounded, weight, whitelist_storage,
 	};
 }

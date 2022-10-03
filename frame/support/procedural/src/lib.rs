@@ -1117,3 +1117,39 @@ pub fn type_value(_: TokenStream, _: TokenStream) -> TokenStream {
 pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
+
+/// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
+/// is built.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::genesis_build]
+/// impl<T: Config> GenesisBuild<T> for GenesisConfig<$maybe_generics> {
+/// 	fn build(&self) { $expr }
+/// }
+/// ```
+///
+/// I.e. a trait implementation with generic `T: Config`, of trait `GenesisBuild<T>` on
+/// type `GenesisConfig` with generics none or `T`.
+///
+/// E.g.:
+///
+/// ```ignore
+/// #[pallet::genesis_build]
+/// impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	fn build(&self) {}
+/// }
+/// ```
+///
+/// ## Macro expansion
+///
+/// The macro will add the following attribute:
+/// * `#[cfg(feature = "std")]`
+///
+/// The macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as a second
+/// generic for non-instantiable pallets.
+#[proc_macro_attribute]
+pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
