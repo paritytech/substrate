@@ -20,7 +20,7 @@
 use super::{Pallet as SafeMode, *};
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::traits::Currency;
+use frame_support::traits::{Currency, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin};
 use sp_runtime::traits::Bounded;
 
@@ -37,13 +37,16 @@ benchmarks! {
 		);
 	}
 
- force_activate {
+	force_activate {
 		let origin = T::ForceActivateOrigin::successful_origin();
-	}: _<T::Origin>(origin)
+		let call = Call::<T>::force_activate {};
+	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
+		let o = T::ForceActivateOrigin::Strong;
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::ActivateDuration::get()
+			System::<T>::block_number() + 
+			o.duration()
 		);
 	}
 
