@@ -325,15 +325,17 @@ impl<T: Config> ElectionProviderBase for NoFallback<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider for NoFallback<T> {
-	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
+impl<T: Config> BoundedElectionProvider for NoFallback<T> {
+	// AKON: Can probably be 0 but verify later
+	type MaxWinners = T::MaxWinners;
+	fn elect() -> Result<BoundedSupports<T::AccountId, Self::MaxWinners>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
 	}
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn elect_with_bounds(_: usize, _: usize) -> Result<Supports<T::AccountId>, Self::Error> {
+	fn elect_with_bounds(_: usize, _: usize) -> Result<BoundedSupports<T::AccountId, <Self as BoundedElectionProvider>::MaxWinners>, Self::Error> {
 		Err("NoFallback.")
 	}
 }
@@ -1091,9 +1093,12 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			// TODO: sort and truncate supports with MaxWinners
+			// AKON: This is a hack to convert a BoundedVec<A,B> to
+			// BoundedVec<A,C>. May be there is a more elegant solution.
+			let supports: BoundedVec<_, T::MaxWinners> = supports.into_inner().try_into().unwrap();
+			// AKON: sort and truncate supports with MaxWinners
 			let solution = ReadySolution {
-				supports: supports.try_into().unwrap(),
+				supports,
 				score: Default::default(),
 				compute: ElectionCompute::Fallback,
 			};
