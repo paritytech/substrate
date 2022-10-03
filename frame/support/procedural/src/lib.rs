@@ -1009,6 +1009,30 @@ pub fn getter(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
+/// storage prefix to use.
+///
+/// E.g:
+///
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::storage_prefix = "foo"]
+/// #[pallet::getter(fn my_storage)]
+/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// ```
+///
+/// or
+///
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::getter(fn my_storage)]
+/// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
+/// ```
+#[proc_macro_attribute]
+pub fn storage_prefix(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during

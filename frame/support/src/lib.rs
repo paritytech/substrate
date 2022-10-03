@@ -1881,6 +1881,8 @@ pub mod pallet_prelude {
 /// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
 /// ```
 ///
+/// Also see [`pallet::storage_prefix`](`frame_support::pallet_macros::storage_prefix`)
+///
 /// ## `#[pallet::unbounded]` (optional)
 ///
 /// The optional attribute `#[pallet::unbounded]` declares the storage as unbounded. When
@@ -2647,6 +2649,6 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_deposit, generate_storage_info, generate_store, getter, hooks,
-		storage, storage_version, weight, whitelist_storage,
+		storage, storage_prefix, storage_version, weight, whitelist_storage,
 	};
 }
