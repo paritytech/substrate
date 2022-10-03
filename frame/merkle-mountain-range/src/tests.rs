@@ -83,8 +83,14 @@ fn add_blocks(blocks: usize) {
 	}
 }
 
-fn leaf_indices_to_block_numbers(leaf_indices: &Vec<u64>) -> Vec<u64> {
-	leaf_indices.iter().map(|l| *l + 1).collect()
+fn leaf_indices_to_block_numbers(
+	ext: &mut sp_io::TestExternalities,
+	leaf_indices: &Vec<LeafIndex>
+) -> Vec<u64> {
+	leaf_indices.iter().map(|l| {
+		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
+		ext.execute_with(|| crate::Pallet::<Test>::leaf_index_to_parent_block_num(*l, mmr_size))
+	}).collect()
 }
 
 #[test]
