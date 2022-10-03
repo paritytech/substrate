@@ -1940,7 +1940,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_contracts_rpc_runtime_api::ContractsApi<
+	impl pallet_contracts_runtime_api::ContractsApi<
 		Block, AccountId, Balance, BlockNumber, Hash,
 	>
 		for Runtime
@@ -2009,10 +2009,7 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_mmr::primitives::MmrApi<
-		Block,
-		mmr::Hash,
-	> for Runtime {
+	impl pallet_mmr::primitives::MmrApi<Block, mmr::Hash> for Runtime {
 		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
@@ -2047,11 +2044,35 @@ impl_runtime_apis! {
 			Ok(Mmr::mmr_root())
 		}
 
-		fn generate_batch_proof(leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>)
-			-> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error>
-		{
-			Mmr::generate_batch_proof(leaf_indices)
-				.map(|(leaves, proof)| (leaves.into_iter().map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf)).collect(), proof))
+		fn generate_batch_proof(
+			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
+		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
+			Mmr::generate_batch_proof(leaf_indices).map(|(leaves, proof)| {
+				(
+					leaves
+						.into_iter()
+						.map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf))
+						.collect(),
+					proof,
+				)
+			})
+		}
+
+		fn generate_historical_batch_proof(
+			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
+			leaves_count: pallet_mmr::primitives::LeafIndex,
+		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
+			Mmr::generate_historical_batch_proof(leaf_indices, leaves_count).map(
+				|(leaves, proof)| {
+					(
+						leaves
+							.into_iter()
+							.map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf))
+							.collect(),
+						proof,
+					)
+				},
+			)
 		}
 
 		fn verify_batch_proof(leaves: Vec<mmr::EncodableOpaqueLeaf>, proof: mmr::BatchProof<mmr::Hash>)

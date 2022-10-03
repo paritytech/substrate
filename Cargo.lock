@@ -3371,7 +3371,7 @@ dependencies = [
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
- "pallet-contracts-rpc-runtime-api",
+ "pallet-contracts-runtime-api",
  "pallet-conviction-voting",
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
@@ -4825,7 +4825,6 @@ version = "3.0.0-dev"
 dependencies = [
  "jsonrpsee",
  "node-primitives",
- "pallet-contracts-rpc",
  "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
@@ -5530,10 +5529,6 @@ version = "6.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-core",
- "sp-rpc",
  "sp-runtime",
  "sp-std",
 ]
@@ -5548,24 +5543,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-contracts-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "jsonrpsee",
- "pallet-contracts-primitives",
- "pallet-contracts-rpc-runtime-api",
- "parity-scale-codec",
- "serde",
- "serde_json",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
-]
-
-[[package]]
-name = "pallet-contracts-rpc-runtime-api"
+name = "pallet-contracts-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
  "pallet-contracts-primitives",
