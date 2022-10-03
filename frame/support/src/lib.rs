@@ -1857,6 +1857,8 @@ pub mod pallet_prelude {
 /// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows you to define a
 /// getter function on `Pallet`.
 ///
+/// Also see [`pallet::getter`](`frame_support::pallet_macros::getter`)
+///
 /// ## `#[pallet::storage_prefix = "SomeName"]` (optional)
 ///
 /// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
@@ -2644,7 +2646,7 @@ pub use frame_support_procedural::pallet;
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
-		extra_constants, generate_deposit, generate_storage_info, generate_store, hooks, storage,
-		storage_version, weight, whitelist_storage,
+		extra_constants, generate_deposit, generate_storage_info, generate_store, getter, hooks,
+		storage, storage_version, weight, whitelist_storage,
 	};
 }
