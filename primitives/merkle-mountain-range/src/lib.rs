@@ -402,6 +402,8 @@ pub enum Error {
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
 	InvalidLeafIndex,
+	/// The provided leaves count is larger than the actual leaves count.
+	InvalidLeavesCount,
 }
 
 impl Error {
@@ -455,7 +457,14 @@ sp_api::decl_runtime_apis! {
 		fn mmr_root() -> Result<Hash, Error>;
 
 		/// Generate MMR proof for a series of leaves under given indices.
-		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>)
+			-> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+
+		/// Generate MMR proof for a series of leaves under given indices, using MMR at given `leaves_count` size.
+		fn generate_historical_batch_proof(
+			leaf_indices: Vec<LeafIndex>,
+			leaves_count: LeafIndex
+		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///
@@ -535,11 +544,16 @@ mod tests {
 			cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>()
 		);
 		// check encoding correctness
-		assert_eq!(&encoded[0], &hex_literal::hex!("00343048656c6c6f20576f726c6421"));
+		assert_eq!(
+			&encoded[0],
+			&array_bytes::hex2bytes_unchecked("00343048656c6c6f20576f726c6421")
+		);
 		assert_eq!(
 			encoded[1].as_slice(),
-			hex_literal::hex!("01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")
-				.as_ref()
+			array_bytes::hex2bytes_unchecked(
+				"01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"
+			)
+			.as_slice()
 		);
 	}
 

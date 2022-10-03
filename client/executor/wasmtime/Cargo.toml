@@ -21,7 +21,7 @@ parity-wasm = "0.45"
 
 # When bumping wasmtime do not forget to also bump rustix
 # to exactly the same version as used by wasmtime!
-wasmtime = { version = "0.40.1", default-features = false, features = [
+wasmtime = { version = "1.0.0", default-features = false, features = [
 	"cache",
 	"cranelift",
 	"jitdump",
@@ -35,7 +35,8 @@ sp-runtime-interface = { version = "6.0.0", path = "../../../primitives/runtime-
 sp-sandbox = { version = "0.10.0-dev", path = "../../../primitives/sandbox" }
 sp-wasm-interface = { version = "6.0.0", features = ["wasmtime"], path = "../../../primitives/wasm-interface" }
 
-# Here we include the rustix crate used by wasmtime just to enable its 'use-libc' flag.
+# Here we include the rustix crate in the exactly same semver-compatible version as used by
+# wasmtime and enable its 'use-libc' flag.
 #
 # By default rustix directly calls the appropriate syscalls completely bypassing libc;
 # this doesn't have any actual benefits for us besides making it harder to debug memory

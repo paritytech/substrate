@@ -16,14 +16,16 @@
 // limitations under the License.
 
 use frame_support::{
-	dispatch::{Parameter, UnfilteredDispatchable},
+	dispatch::{
+		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
+	},
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight, Weight},
+	weights::{RuntimeDbWeight, Weight},
 };
 use scale_info::{meta_type, TypeInfo};
 use sp_io::{
@@ -550,8 +552,10 @@ pub mod pallet2 {
 #[frame_support::pallet]
 pub mod pallet3 {
 	#[pallet::config]
-	pub trait Config: frame_system::Config<Origin = <Self as Config>::Origin> {
-		type Origin;
+	pub trait Config:
+		frame_system::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
+	{
+		type RuntimeOrigin;
 	}
 
 	#[pallet::pallet]
@@ -576,7 +580,7 @@ frame_support::parameter_types!(
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;
@@ -616,7 +620,7 @@ impl pallet4::Config for Runtime {}
 
 #[cfg(feature = "frame-feature-testing")]
 impl pallet3::Config for Runtime {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;

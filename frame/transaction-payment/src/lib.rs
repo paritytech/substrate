@@ -63,11 +63,11 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 use frame_support::{
-	dispatch::DispatchResult,
-	traits::{EstimateCallFee, Get},
-	weights::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight, WeightToFee,
+	dispatch::{
+		DispatchClass, DispatchInfo, DispatchResult, GetDispatchInfo, Pays, PostDispatchInfo,
 	},
+	traits::{EstimateCallFee, Get},
+	weights::{Weight, WeightToFee},
 };
 
 mod payment;
@@ -849,12 +849,11 @@ mod tests {
 	};
 
 	use frame_support::{
-		assert_noop, assert_ok, parameter_types,
+		assert_noop, assert_ok,
+		dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo},
+		parameter_types,
 		traits::{ConstU32, ConstU64, Currency, GenesisBuild, Imbalance, OnUnbalanced},
-		weights::{
-			DispatchClass, DispatchInfo, GetDispatchInfo, PostDispatchInfo, Weight,
-			WeightToFee as WeightToFeeT,
-		},
+		weights::{Weight, WeightToFee as WeightToFeeT},
 	};
 	use frame_system as system;
 	use pallet_balances::Call as BalancesCall;
@@ -890,7 +889,7 @@ mod tests {
 					weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 				})
 				.for_class(DispatchClass::non_mandatory(), |weights| {
-					weights.max_total = Weight::from_ref_time(1024).into();
+					weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
 				})
 				.build_or_panic()
 		}
@@ -907,7 +906,7 @@ mod tests {
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type RuntimeCall = RuntimeCall;

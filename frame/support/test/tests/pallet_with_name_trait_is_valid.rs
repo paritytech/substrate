@@ -43,7 +43,7 @@ frame_support::decl_error!(
 );
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::RuntimeOrigin {
 		fn deposit_event() = default;
 		type Error = Error<T>;
 		const Foo: u32 = u32::MAX;
@@ -126,7 +126,7 @@ mod tests {
 
 	impl frame_system::Config for Runtime {
 		type BaseCallFilter = frame_support::traits::Everything;
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;

@@ -129,7 +129,10 @@ mod multiplier_tests {
 		AdjustmentVariable, MinimumMultiplier, Runtime, RuntimeBlockWeights as BlockWeights,
 		System, TargetBlockFullness, TransactionPayment,
 	};
-	use frame_support::weights::{DispatchClass, Weight, WeightToFee};
+	use frame_support::{
+		dispatch::DispatchClass,
+		weights::{Weight, WeightToFee},
+	};
 
 	fn max_normal() -> Weight {
 		BlockWeights::get()
@@ -221,7 +224,7 @@ mod multiplier_tests {
 	fn multiplier_can_grow_from_zero() {
 		// if the min is too small, then this will not change, and we are doomed forever.
 		// the weight is 1/100th bigger than target.
-		run_with_system_weight(target() * 101 / 100, || {
+		run_with_system_weight(target().set_ref_time(target().ref_time() * 101 / 100), || {
 			let next = runtime_multiplier_update(min_multiplier());
 			assert!(next > min_multiplier(), "{:?} !>= {:?}", next, min_multiplier());
 		})

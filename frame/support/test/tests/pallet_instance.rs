@@ -16,11 +16,10 @@
 // limitations under the License.
 
 use frame_support::{
-	dispatch::UnfilteredDispatchable,
+	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, UnfilteredDispatchable},
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
-	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
@@ -287,7 +286,7 @@ pub mod pallet2 {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u32;
 	type RuntimeCall = RuntimeCall;

@@ -33,7 +33,8 @@ pub type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 pub type CallOf<T, I> = <T as Config<I>>::RuntimeCall;
 pub type VotesOf<T, I> = <T as Config<I>>::Votes;
 pub type TallyOf<T, I> = <T as Config<I>>::Tally;
-pub type PalletsOriginOf<T> = <<T as frame_system::Config>::Origin as OriginTrait>::PalletsOrigin;
+pub type PalletsOriginOf<T> =
+	<<T as frame_system::Config>::RuntimeOrigin as OriginTrait>::PalletsOrigin;
 pub type ReferendumInfoOf<T, I> = ReferendumInfo<
 	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
@@ -139,13 +140,13 @@ pub trait TracksInfo<Balance, Moment> {
 	type Id: Copy + Parameter + Ord + PartialOrd + Send + Sync + 'static + MaxEncodedLen;
 
 	/// The origin type from which a track is implied.
-	type Origin;
+	type RuntimeOrigin;
 
 	/// Return the array of known tracks and their information.
 	fn tracks() -> &'static [(Self::Id, TrackInfo<Balance, Moment>)];
 
 	/// Determine the voting track for the given `origin`.
-	fn track_for(origin: &Self::Origin) -> Result<Self::Id, ()>;
+	fn track_for(origin: &Self::RuntimeOrigin) -> Result<Self::Id, ()>;
 
 	/// Return the track info for track `id`, by default this just looks it up in `Self::tracks()`.
 	fn info(id: Self::Id) -> Option<&'static TrackInfo<Balance, Moment>> {
@@ -157,7 +158,7 @@ pub trait TracksInfo<Balance, Moment> {
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ReferendumStatus<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
 	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
@@ -168,7 +169,7 @@ pub struct ReferendumStatus<
 	/// The track of this referendum.
 	pub(crate) track: TrackId,
 	/// The origin for this referendum.
-	pub(crate) origin: Origin,
+	pub(crate) origin: RuntimeOrigin,
 	/// The hash of the proposal up for referendum.
 	pub(crate) proposal_hash: Hash,
 	/// The time the proposal should be scheduled for enactment.
@@ -194,7 +195,7 @@ pub struct ReferendumStatus<
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum ReferendumInfo<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Moment: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
 	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
@@ -204,7 +205,16 @@ pub enum ReferendumInfo<
 > {
 	/// Referendum has been submitted and is being voted on.
 	Ongoing(
-		ReferendumStatus<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>,
+		ReferendumStatus<
+			TrackId,
+			RuntimeOrigin,
+			Moment,
+			Hash,
+			Balance,
+			Tally,
+			AccountId,
+			ScheduleAddress,
+		>,
 	),
 	/// Referendum finished with approval. Submission deposit is held.
 	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
@@ -220,14 +230,14 @@ pub enum ReferendumInfo<
 
 impl<
 		TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		Origin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
 		Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	> ReferendumInfo<TrackId, Origin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>
+	> ReferendumInfo<TrackId, RuntimeOrigin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>
 {
 	/// Take the Decision Deposit from `self`, if there is one. Returns an `Err` if `self` is not
 	/// in a valid state for the Decision Deposit to be refunded.
