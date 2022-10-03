@@ -780,6 +780,46 @@ pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
+/// which defines and sets the codec index for the dispatchable function in the `Call` enum.
+///
+/// All call indexes start from 0, until it encounters a dispatchable function with a defined
+/// call index. The dispatchable function that lexically follows the function with a defined
+/// call index will have that call index, but incremented by 1, e.g. if there are 3
+/// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar`
+/// has a call index of 10, then `fn qux` will have an index of 11, instead of 1.
+///
+/// All arguments must implement [`Debug`], [`PartialEq`], [`Eq`], `Decode`, `Encode`, and
+/// [`Clone`]. For ease of use, bound by the trait `frame_support::pallet_prelude::Member`.
+///
+/// If no `#[pallet::call]` exists, then a default implementation corresponding to the
+/// following code is automatically generated:
+///
+/// ```ignore
+/// #[pallet::call]
+/// impl<T: Config> Pallet<T> {}
+/// ```
+///
+/// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
+/// care. Indeed this will change the outer runtime call type (which is an enum with one
+/// variant per pallet), this outer runtime call can be stored on-chain (e.g. in
+/// `pallet-scheduler`). Thus migration might be needed. To mitigate against some of this, the
+/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
+/// that the `Call` enum encoding does not change after modification.
+///
+/// ### Macro expansion
+///
+/// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
+/// [`Clone`], [`Eq`], [`PartialEq`], [`Debug`] (with stripped implementation in `not("std")`),
+/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, and `UnfilteredDispatchable`.
+///
+/// The macro implements the `Callable` trait on `Pallet` and a function `call_functions`
+/// which returns the dispatchable metadata.
+#[proc_macro_attribute]
+pub fn call_index(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
