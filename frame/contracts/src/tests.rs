@@ -44,7 +44,6 @@ use frame_support::{
 };
 use frame_system::{self as system, EventRecord, Phase};
 use pretty_assertions::{assert_eq, assert_ne};
-use sp_core::Bytes;
 use sp_io::hashing::blake2_256;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
@@ -279,7 +278,9 @@ impl RegisteredChainExtension<Test> for TempStorageExtension {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+		);
 	pub static ExistentialDeposit: u64 = 1;
 }
 impl frame_system::Config for Test {
@@ -413,7 +414,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::from_ref_time(100_000_000_000);
+pub const GAS_LIMIT: Weight = Weight::from_ref_time(100_000_000_000).set_proof_size(u64::MAX);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -628,7 +629,7 @@ fn deposit_event_max_value_limit() {
 			RuntimeOrigin::signed(ALICE),
 			addr.clone(),
 			0,
-			GAS_LIMIT * 2, // we are copying a huge buffer,
+			GAS_LIMIT.set_ref_time(GAS_LIMIT.ref_time() * 2), // we are copying a huge buffer,
 			None,
 			<Test as Config>::Schedule::get().limits.payload_len.encode(),
 		));
@@ -769,7 +770,7 @@ fn storage_max_value_limit() {
 			RuntimeOrigin::signed(ALICE),
 			addr.clone(),
 			0,
-			GAS_LIMIT * 2, // we are copying a huge buffer
+			GAS_LIMIT.set_ref_time(GAS_LIMIT.ref_time() * 2), // we are copying a huge buffer
 			None,
 			<Test as Config>::Schedule::get().limits.payload_len.encode(),
 		));
@@ -1720,7 +1721,7 @@ fn chain_extension_works() {
 		let result =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
 		assert_eq!(TestExtension::last_seen_buffer(), input);
-		assert_eq!(result.result.unwrap().data, Bytes(input));
+		assert_eq!(result.result.unwrap().data, input);
 
 		// 1 = treat inputs as integer primitives and store the supplied integers
 		Contracts::bare_call(
@@ -1785,7 +1786,7 @@ fn chain_extension_works() {
 		.result
 		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
-		assert_eq!(result.data, Bytes(vec![42, 99]));
+		assert_eq!(result.data, vec![42, 99]);
 
 		// diverging to second chain extension that sets flags to 0x1 and returns a fixed buffer
 		// We set the MSB part to 1 (instead of 0) which routes the request into the second
@@ -1802,7 +1803,7 @@ fn chain_extension_works() {
 		.result
 		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
-		assert_eq!(result.data, Bytes(vec![0x4B, 0x1D]));
+		assert_eq!(result.data, vec![0x4B, 0x1D]);
 
 		// Diverging to third chain extension that is disabled
 		// We set the MSB part to 2 (instead of 0) which routes the request into the third extension
@@ -2543,7 +2544,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::from_ref_time(result.gas_required),
+				Weight::from_ref_time(result.gas_required).set_proof_size(u64::MAX),
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,
@@ -2613,7 +2614,7 @@ fn gas_estimation_call_runtime() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::from_ref_time(result.gas_required),
+				Weight::from_ref_time(result.gas_required).set_proof_size(u64::MAX),
 				None,
 				call.encode(),
 				false,
@@ -2670,7 +2671,7 @@ fn ecdsa_recover() {
 				.result
 				.unwrap();
 		assert!(!result.did_revert());
-		assert_eq!(result.data.as_ref(), &EXPECTED_COMPRESSED_PUBLIC_KEY);
+		assert_eq!(result.data, EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
 }
 
@@ -3501,7 +3502,7 @@ fn contract_reverted() {
 		.result
 		.unwrap();
 		assert_eq!(result.result.flags, flags);
-		assert_eq!(result.result.data.0, buffer);
+		assert_eq!(result.result.data, buffer);
 		assert!(!<ContractInfoOf<Test>>::contains_key(result.account_id));
 
 		// Pass empty flags and therefore successfully instantiate the contract for later use.
@@ -3537,7 +3538,7 @@ fn contract_reverted() {
 			.result
 			.unwrap();
 		assert_eq!(result.flags, flags);
-		assert_eq!(result.data.0, buffer);
+		assert_eq!(result.data, buffer);
 	});
 }
 
@@ -3557,7 +3558,7 @@ fn code_rejected_error_works() {
 			0,
 			GAS_LIMIT,
 			None,
-			Code::Upload(Bytes(wasm)),
+			Code::Upload(wasm),
 			vec![],
 			vec![],
 			true,
