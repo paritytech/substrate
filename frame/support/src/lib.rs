@@ -1517,7 +1517,7 @@ pub mod pallet_prelude {
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
 /// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
 ///
-/// See [`pallet::event`](`event`) for more information.
+/// See [`pallet::event`](`frame_support::pallet_macros::event`) for more information.
 ///
 /// Also see [`pallet::config`](`frame_support::pallet_macros::config`)
 ///
@@ -1773,6 +1773,8 @@ pub mod pallet_prelude {
 /// [`Debug`] (on std only). For ease of use, bound by the trait
 /// [`Member`](`frame_support::pallet_prelude::Member`), available in
 /// frame_support::pallet_prelude.
+///
+/// Also see [`pallet::event`](`frame_support::pallet_macros::event`)
 ///
 /// ## `#[pallet::generate_deposit($visibility fn deposit_event)]`
 ///
@@ -2654,7 +2656,7 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		call_index, compact, config, constant, disable_frame_system_supertrait_check, error,
+		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_storage_info, generate_store, hooks, storage_version, weight,
 		whitelist_storage,
 	};

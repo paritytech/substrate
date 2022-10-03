@@ -889,6 +889,32 @@ pub fn error(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// The `#[pallet::event]` attribute allows you to define pallet events. Pallet events are
+/// stored in the block when they are applied (and then removed in next block).
+///
+/// Item must be defined as follows:
+///
+/// ```ignore
+/// #[pallet::event]
+/// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
+/// pub enum Event<$some_generic> $optional_where_clause {
+/// 	/// Some doc
+/// 	$SomeName($SomeType, $YetanotherType, ...),
+/// 	...
+/// }
+/// ```
+///
+/// I.e. an enum (with named or unnamed fields variant), named `Event`, with generic: none or
+/// `T` or `T: Config`, and optional w here clause.
+///
+/// Each field must implement [`Clone`], [`Eq`], [`PartialEq`], `Encode`, `Decode`, and
+/// [`Debug`] (on std only). For ease of use, bound by the trait `Member`, available in
+/// `frame_support::pallet_prelude`.
+#[proc_macro_attribute]
+pub fn event(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
