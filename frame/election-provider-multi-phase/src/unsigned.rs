@@ -855,11 +855,11 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber, ExtBuilder, Extrinsic,
-			MinerMaxWeight, MultiPhase, Runtime, RuntimeCall as OuterCall, RuntimeOrigin, System,
-			TestNposSolution, TrimHelpers, UnsignedPhase,
+			multi_phase_events, roll_to, roll_to_with_ocw, trim_helpers, witness, BlockNumber,
+			ExtBuilder, Extrinsic, MinerMaxWeight, MultiPhase, Runtime, RuntimeCall as OuterCall,
+			RuntimeOrigin, System, TestNposSolution, TrimHelpers, UnsignedPhase,
 		},
-		CurrentPhase, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
+		CurrentPhase, Event, InvalidTransaction, Phase, QueuedSolution, TransactionSource,
 		TransactionValidityError,
 	};
 	use codec::Decode;
@@ -1122,6 +1122,17 @@ mod tests {
 				witness
 			));
 			assert!(MultiPhase::queued_solution().is_some());
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::SolutionStored {
+						compute: ElectionCompute::Unsigned,
+						prev_ejected: false
+					}
+				]
+			);
 		})
 	}
 
@@ -1463,6 +1474,21 @@ mod tests {
 
 			// the submitted solution changes because the cache was cleared.
 			assert_eq!(tx_cache_1, tx_cache_3);
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		})
 	}
 
