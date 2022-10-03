@@ -27,7 +27,7 @@ use rand::{seq::SliceRandom, Rng, RngCore};
 use serde::{
 	de::{MapAccess, Visitor},
 	ser::SerializeMap,
-	Deserialize, Deserializer, Serializer,
+	Deserializer, Serializer,
 };
 use std::{
 	fs::File,
