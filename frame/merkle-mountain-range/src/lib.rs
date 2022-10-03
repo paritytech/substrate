@@ -333,7 +333,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::generate_historical_batch_proof(block_numbers, Self::mmr_leaves())
 	}
 
-	/// Generate a MMR proof for the given `leaf_indices` for the MMR of `leaves_count` size.
+	/// Generate a MMR proof for the given `block_numbers` for the MMR of `leaves_count` size.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
