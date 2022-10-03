@@ -528,10 +528,11 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
-			Runtime, RuntimeOrigin, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
+			balances, multi_phase_events, raw_solution, roll_to, Balances, ExtBuilder,
+			MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxRefunds,
+			SignedMaxSubmissions, SignedMaxWeight,
 		},
-		Error, Perbill, Phase,
+		Error, Event, Perbill, Phase,
 	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
@@ -565,6 +566,14 @@ mod tests {
 
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false }
+				]
+			);
 		})
 	}
 
@@ -582,6 +591,15 @@ mod tests {
 
 			assert!(MultiPhase::finalize_signed_phase());
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
@@ -604,6 +622,15 @@ mod tests {
 			assert!(!MultiPhase::finalize_signed_phase());
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 99, value: 5 }
+				]
+			);
 		})
 	}
 
@@ -633,6 +660,15 @@ mod tests {
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 gets everything back, including the call fee.
 			assert_eq!(balances(&999), (100 + 8, 0));
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
@@ -699,6 +735,18 @@ mod tests {
 					assert_eq!(balances(&account), (100, 0));
 				}
 			}
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		});
 	}
 
@@ -747,6 +795,20 @@ mod tests {
 				};
 
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(solution)));
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::SignedPhaseStarted { round: 1 },
+						Event::SolutionStored {
+							compute: ElectionCompute::Signed,
+							prev_ejected: false
+						},
+						Event::SolutionStored {
+							compute: ElectionCompute::Signed,
+							prev_ejected: true
+						}
+					]
+				);
 			})
 	}
 
@@ -951,6 +1013,17 @@ mod tests {
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back, including the call fee.
 			assert_eq!(balances(&9999), (100 + 8, 0));
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 999, value: 5 },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
@@ -1070,6 +1143,15 @@ mod tests {
 
 			// calling it again doesn't change anything
 			assert_storage_noop!(MultiPhase::finalize_signed_phase());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 }
