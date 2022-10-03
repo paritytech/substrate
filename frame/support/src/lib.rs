@@ -1890,6 +1890,8 @@ pub mod pallet_prelude {
 /// the pallet struct placeholder), the size of the storage will be declared as unbounded. This
 /// can be useful for storage which can never go into PoV (Proof of Validity).
 ///
+/// Also see [`pallet::unbounded`](`frame_support::pallet_macros::unbounded`)
+///
 /// ## `#[pallet::whitelist_storage]` (optional)
 ///
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the storage as
@@ -2649,6 +2651,6 @@ pub mod pallet_macros {
 	pub use frame_support_procedural::{
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_deposit, generate_storage_info, generate_store, getter, hooks,
-		storage, storage_prefix, storage_version, weight, whitelist_storage,
+		storage, storage_prefix, storage_version, unbounded, weight, whitelist_storage,
 	};
 }
