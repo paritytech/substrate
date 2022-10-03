@@ -21,32 +21,16 @@
 
 use bitflags::bitflags;
 use codec::{Decode, Encode};
-use sp_core::Bytes;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	DispatchError, RuntimeDebug,
 };
 use sp_std::prelude::*;
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "std")]
-use sp_rpc::number::NumberOrHex;
-
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
 /// It contains the execution result together with some auxiliary information.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(
-		rename_all = "camelCase",
-		bound(serialize = "R: Serialize, Balance: Copy + Into<NumberOrHex>"),
-		bound(deserialize = "R: Deserialize<'de>, Balance: TryFrom<NumberOrHex>")
-	)
-)]
 pub struct ContractResult<R, Balance> {
 	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
@@ -80,7 +64,6 @@ pub struct ContractResult<R, Balance> {
 	///
 	/// The debug message is never generated during on-chain execution. It is reserved for
 	/// RPC calls.
-	#[cfg_attr(feature = "std", serde(with = "as_string"))]
 	pub debug_message: Vec<u8>,
 	/// The execution result of the wasm code.
 	pub result: R,
@@ -113,8 +96,6 @@ pub enum ContractAccessError {
 bitflags! {
 	/// Flags used by a contract to customize exit behaviour.
 	#[derive(Encode, Decode)]
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	#[cfg_attr(feature = "std", serde(rename_all = "camelCase", transparent))]
 	pub struct ReturnFlags: u32 {
 		/// If this bit is set all changes made by the contract execution are rolled back.
 		const REVERT = 0x0000_0001;
@@ -123,13 +104,11 @@ bitflags! {
 
 /// Output of a contract call or instantiation which ran to completion.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct ExecReturnValue {
 	/// Flags passed along by `seal_return`. Empty when `seal_return` was never called.
 	pub flags: ReturnFlags,
 	/// Buffer passed along by `seal_return`. Empty when `seal_return` was never called.
-	pub data: Bytes,
+	pub data: Vec<u8>,
 }
 
 impl ExecReturnValue {
@@ -141,8 +120,6 @@ impl ExecReturnValue {
 
 /// The result of a successful contract instantiation.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub struct InstantiateReturnValue<AccountId> {
 	/// The output of the called constructor.
 	pub result: ExecReturnValue,
@@ -152,63 +129,40 @@ pub struct InstantiateReturnValue<AccountId> {
 
 /// The result of succesfully uploading a contract.
 #[derive(PartialEq, Eq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(
-		rename_all = "camelCase",
-		bound(serialize = "CodeHash: Serialize, Balance: Copy + Into<NumberOrHex>"),
-		bound(deserialize = "CodeHash: Deserialize<'de>, Balance: TryFrom<NumberOrHex>")
-	)
-)]
 pub struct CodeUploadReturnValue<CodeHash, Balance> {
 	/// The key under which the new code is stored.
 	pub code_hash: CodeHash,
 	/// The deposit that was reserved at the caller. Is zero when the code already existed.
-	#[cfg_attr(feature = "std", serde(with = "as_hex"))]
 	pub deposit: Balance,
 }
 
 /// Reference to an existing code hash or a new wasm module.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 pub enum Code<Hash> {
 	/// A wasm module as raw bytes.
-	Upload(Bytes),
+	Upload(Vec<u8>),
 	/// The code hash of an on-chain wasm blob.
 	Existing(Hash),
 }
 
 impl<T: Into<Vec<u8>>, Hash> From<T> for Code<Hash> {
 	fn from(from: T) -> Self {
-		Code::Upload(Bytes(from.into()))
+		Code::Upload(from.into())
 	}
 }
 
 /// The amount of balance that was either charged or refunded in order to pay for storage.
 #[derive(Eq, PartialEq, Ord, PartialOrd, Encode, Decode, RuntimeDebug, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-#[cfg_attr(
-	feature = "std",
-	serde(
-		rename_all = "camelCase",
-		bound(serialize = "Balance: Copy + Into<NumberOrHex>"),
-		bound(deserialize = "Balance: TryFrom<NumberOrHex>")
-	)
-)]
 pub enum StorageDeposit<Balance> {
 	/// The transaction reduced storage consumption.
 	///
 	/// This means that the specified amount of balance was transferred from the involved
 	/// contracts to the call origin.
-	#[cfg_attr(feature = "std", serde(with = "as_hex"))]
 	Refund(Balance),
 	/// The transaction increased overall storage usage.
 	///
 	/// This means that the specified amount of balance was transferred from the call origin
 	/// to the contracts involved.
-	#[cfg_attr(feature = "std", serde(with = "as_hex"))]
 	Charge(Balance),
 }
 
@@ -293,44 +247,5 @@ where
 			Charge(amount) => limit.saturating_sub(*amount),
 			Refund(amount) => limit.saturating_add(*amount),
 		}
-	}
-}
-
-#[cfg(feature = "std")]
-mod as_string {
-	use super::*;
-	use serde::{ser::Error, Deserializer, Serializer};
-
-	pub fn serialize<S: Serializer>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
-		std::str::from_utf8(bytes)
-			.map_err(|e| S::Error::custom(format!("Debug buffer contains invalid UTF8: {}", e)))?
-			.serialize(serializer)
-	}
-
-	pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
-		Ok(String::deserialize(deserializer)?.into_bytes())
-	}
-}
-
-#[cfg(feature = "std")]
-mod as_hex {
-	use super::*;
-	use serde::{de::Error as _, Deserializer, Serializer};
-
-	pub fn serialize<S, Balance>(balance: &Balance, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-		Balance: Copy + Into<NumberOrHex>,
-	{
-		Into::<NumberOrHex>::into(*balance).serialize(serializer)
-	}
-
-	pub fn deserialize<'de, D, Balance>(deserializer: D) -> Result<Balance, D::Error>
-	where
-		D: Deserializer<'de>,
-		Balance: TryFrom<NumberOrHex>,
-	{
-		Balance::try_from(NumberOrHex::deserialize(deserializer)?)
-			.map_err(|_| D::Error::custom("Cannot decode NumberOrHex to Balance"))
 	}
 }
