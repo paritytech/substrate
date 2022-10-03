@@ -518,7 +518,6 @@ mod test_iterators {
 	fn double_map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::hash::Identity;
-			type MyModule = self::frame_system::Pallet<Runtime>;
 			#[crate::storage_alias]
 			type MyDoubleMap = StorageDoubleMap<MyModule, Identity, u64, Identity, u64, u64>;
 

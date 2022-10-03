@@ -466,8 +466,6 @@ mod test_iterators {
 	fn n_map_iter_from() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			use crate::{hash::Identity, storage::Key as NMapKey};
-
-			type MyModule = self::frame_system::Pallet<Runtime>;
 			#[crate::storage_alias]
 			type MyNMap = StorageNMap<
 				MyModule,
