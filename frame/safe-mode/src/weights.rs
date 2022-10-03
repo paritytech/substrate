@@ -56,6 +56,12 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_safe_mode.
 pub trait WeightInfo {
 	fn activate() -> Weight;
+	fn force_activate() -> Weight;
+	fn extend() -> Weight;
+	fn force_extend() -> Weight;
+	fn force_deactivate() -> Weight;
+	fn repay_stake() -> Weight;
+	fn slash_stake() -> Weight;
 }
 
 /// Weights for pallet_safe_mode using the Substrate node and recommended hardware.
@@ -68,6 +74,54 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn force_activate() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+	
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn extend() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+	
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn force_extend() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn force_deactivate() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn repay_stake() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn slash_stake() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -75,6 +129,54 @@ impl WeightInfo for () {
 	// Storage: SafeMode Stakes (r:1 w:1)
 	// Storage: SafeMode Enabled (r:1 w:1)
 	fn activate() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn force_activate() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn extend() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn force_extend() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn force_deactivate() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn repay_stake() -> Weight {
+		Weight::from_ref_time(51_688_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+
+	// Storage: SafeMode Stakes (r:1 w:1)
+	// Storage: SafeMode Enabled (r:1 w:1)
+	fn slash_stake() -> Weight {
 		Weight::from_ref_time(51_688_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))

@@ -212,7 +212,6 @@ pub mod pallet {
 		///
 		/// Can be permanently disabled by configuring [`Config::ActivateStakeAmount`] to `None`.
 		#[pallet::weight(T::WeightInfo::activate())]
-		// #[pallet::weight(0)]
 		pub fn activate(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -227,7 +226,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceActivateOrigin`] origin.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_activate())]
 		pub fn force_activate(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::ForceActivateOrigin::ensure_origin(origin)?;
 
@@ -242,7 +241,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can be permanently disabled by configuring [`Config::ActivateStakeAmount`] to `None`.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::extend())]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
@@ -256,7 +255,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceExtendOrigin`] origin.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_extend())]
 		pub fn force_extend(origin: OriginFor<T>) -> DispatchResult {
 			let duration = T::ForceExtendOrigin::ensure_origin(origin)?;
 
@@ -272,7 +271,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::ForceDeactivateOrigin`] origin.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::force_deactivate())]
 		pub fn force_deactivate(origin: OriginFor<T>) -> DispatchResult {
 			T::ForceDeactivateOrigin::ensure_origin(origin)?;
 
@@ -287,7 +286,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::RepayOrigin`] origin.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::repay_stake())]
 		pub fn repay_stake(
 			origin: OriginFor<T>,
 			account: T::AccountId,
@@ -306,7 +305,7 @@ pub mod pallet {
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::RepayOrigin`] origin.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::slash_stake())]
 		pub fn slash_stake(
 			origin: OriginFor<T>,
 			account: T::AccountId,

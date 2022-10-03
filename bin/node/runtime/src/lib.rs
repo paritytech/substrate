@@ -34,7 +34,7 @@ use frame_support::{
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
 		EitherOfDiverse, EnsureOrigin, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, SortedMembers,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
 		U128CurrencyToVote,
 	},
 	weights::{
@@ -45,7 +45,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, EnsureSignedBy, RawOrigin,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, RawOrigin,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -61,7 +61,6 @@ use sp_api::impl_runtime_apis;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
-use sp_keyring::AccountKeyring;
 use sp_runtime::{
 	create_runtime_str,
 	curve::PiecewiseLinear,
@@ -254,9 +253,9 @@ impl ForceActivateOrigin {
 	/// Account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak => sp_keyring::AccountKeyring::Alice.into(),
-			Self::Medium => sp_keyring::AccountKeyring::Bob.into(),
-			Self::Strong => sp_keyring::AccountKeyring::Charlie.into(),
+			Self::Weak   => sp_core::ed25519::Public::from_raw([0;32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1;32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2;32]).into(),
 		}
 	}
 
@@ -279,9 +278,9 @@ impl ForceExtendOrigin {
 	/// Account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak => sp_keyring::AccountKeyring::Alice.into(),
-			Self::Medium => sp_keyring::AccountKeyring::Bob.into(),
-			Self::Strong => sp_keyring::AccountKeyring::Charlie.into(),
+			Self::Weak   => sp_core::ed25519::Public::from_raw([0;32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1;32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2;32]).into(),
 		}
 	}
 
@@ -291,7 +290,7 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
 	EnsureOrigin<O> for ForceActivateOrigin
 {
 	type Success = u32;
@@ -309,7 +308,7 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>> + std::fmt::Debug>
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
 	EnsureOrigin<O> for ForceExtendOrigin
 {
 	type Success = u32;
@@ -586,7 +585,7 @@ parameter_types! {
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
 	type MaxReserves = MaxReserves;
-	type ReserveIdentifier = [u8; 8];
+	type ReserveIdentifier = Self::BlockNumber;
 	type Balance = Balance;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
