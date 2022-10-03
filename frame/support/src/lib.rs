@@ -2058,7 +2058,8 @@ pub mod pallet_prelude {
 ///
 /// # Validate unsigned: `#[pallet::validate_unsigned]` (optional)
 ///
-/// Allows the pallet to validate some unsigned transaction:
+/// The `#[pallet::validate_unsigned]` attribute allows the pallet to validate some unsigned
+/// transaction:
 ///
 /// Item must be defined as:
 ///
@@ -2073,13 +2074,10 @@ pub mod pallet_prelude {
 /// [`ValidateUnsigned`](`pallet_prelude::ValidateUnsigned`) for type `Pallet<T>`, and some
 /// optional where clause.
 ///
-/// NOTE: There is also [`sp_runtime::traits::SignedExtension`] that can be used to add some
-/// specific logic for transaction validation.
+/// NOTE: There is also the [`sp_runtime::traits::SignedExtension`] trait that can be used to
+/// add some specific logic for transaction validation.
 ///
-/// ## Macro expansion
-///
-/// The macro currently makes no use of this information, but it might use this information in
-/// the future to give information directly to `construct_runtime`.
+/// Also see [`pallet::validate_unsigned`](`frame_support::pallet_macros::validate_unsigned`)
 ///
 /// # Origin: `#[pallet::origin]` (optional)
 ///
@@ -2634,6 +2632,6 @@ pub mod pallet_macros {
 		call_index, compact, config, constant, disable_frame_system_supertrait_check, error, event,
 		extra_constants, generate_deposit, generate_storage_info, generate_store, genesis_build,
 		genesis_config, getter, hooks, inherent, storage, storage_prefix, storage_version,
-		type_value, unbounded, weight, whitelist_storage,
+		type_value, unbounded, validate_unsigned, weight, whitelist_storage,
 	};
 }
