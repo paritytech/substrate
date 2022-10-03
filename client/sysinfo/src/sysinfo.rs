@@ -114,9 +114,7 @@ pub fn serialize_throughput_as_mibs<S>(t: &Throughput, serializer: S) -> Result<
 where
 	S: Serializer,
 {
-	let mut map = serializer.serialize_map(Some(4))?;
-	map.serialize_entry("MiBs", &t.as_mibs())?;
-	map.end()
+	serializer.serialize_u64(t.as_mibs() as u64)
 }
 
 pub fn serialize_throughput_option_as_mibs<S>(
@@ -126,11 +124,10 @@ pub fn serialize_throughput_option_as_mibs<S>(
 where
 	S: Serializer,
 {
-	let mut map = serializer.serialize_map(Some(4))?;
 	if let Some(t) = maybe_t {
-		map.serialize_entry("MiBs", &t.as_mibs())?;
+		return serializer.serialize_u64(t.as_mibs() as u64)
 	}
-	map.end()
+	serializer.serialize_u64(0)
 }
 
 struct ThroughputVisitor;
@@ -636,13 +633,13 @@ mod tests {
 	fn hwbench_serialize_works() {
 		let hwbench = HwBench {
 			cpu_hashrate_score: Throughput::from_gibs(1.32),
-			memory_memcpy_score: Throughput::from_kibs(1342.432),
-			disk_sequential_write_score: Some(Throughput::from_kibs(432.12)),
+			memory_memcpy_score: Throughput::from_kibs(9342.432),
+			disk_sequential_write_score: Some(Throughput::from_kibs(4332.12)),
 			disk_random_write_score: None,
 		};
 
 		let serialized = serde_json::to_string(&hwbench).unwrap();
 		// All the throughput should be converted to MiBs.
-		assert_eq!(serialized, "{\"cpu_hashrate_score\":{\"MiBs\":1351.68},\"memory_memcpy_score\":{\"MiBs\":1.31096875},\"disk_sequential_write_score\":{\"MiBs\":0.4219921875},\"disk_random_write_score\":{}}");
+		assert_eq!(serialized, "{\"cpu_hashrate_score\":1351,\"memory_memcpy_score\":9,\"disk_sequential_write_score\":4,\"disk_random_write_score\":0}");
 	}
 }
