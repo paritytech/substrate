@@ -30,7 +30,6 @@ pub fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S
 where
 	S: Serializer,
 {
-	// NOTE I will replace 4 with the actual length.
 	let mut map = serializer.serialize_map(Some(1))?;
 	let (value, unit) = t.normalize();
 	map.serialize_entry(unit, &value)?;
