@@ -38,62 +38,118 @@ benchmarks! {
 	}
 
 	force_activate {
-		let origin = T::ForceActivateOrigin::successful_origin();
+		let force_origin = T::ForceActivateOrigin::successful_origin();
+		let duration = T::ForceActivateOrigin::ensure_origin(force_origin.clone()).unwrap();
 		let call = Call::<T>::force_activate {};
-	}: { call.dispatch_bypass_filter(origin)? }
+	}: { call.dispatch_bypass_filter(force_origin)? }
 	verify {
-		let o = T::ForceActivateOrigin::Strong;
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + 
-			o.duration()
+			System::<T>::block_number() +
+			duration
 		);
 	}
 
-// extend {
-//	 /* code to set the initial state */
-//	 }: {
-//		 /* code to test the function benchmarked */
-//	 }
-//	 verify {
-//		 /* optional verification */
-//	 }
+	extend {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-// force_extend {
-//		 /* code to set the initial state */
-//	 }: {
-//		 /* code to test the function benchmarked */
-//	 }
-//	 verify {
-//		 /* optional verification */
-//	 }
+		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+	}: _(origin)
+	verify {
+		assert_eq!(
+			SafeMode::<T>::active_until().unwrap(),
+			System::<T>::block_number() + T::ActivateDuration::get() + T::ExtendDuration::get()
+		);
+	}
 
-// force_deactivate {
-//		 /* code to set the initial state */
-//	 }: {
-//		 /* code to test the function benchmarked */
-//	 }
-//	 verify {
-//		 /* optional verification */
-//	 }
+	force_extend {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
-// repay_stake {
-//		 /* code to set the initial state */
-//	 }: {
-//		 /* code to test the function benchmarked */
-//	 }
-//	 verify {
-//		 /* optional verification */
-//	 }
+		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
 
-// slash_stake {
-//		 /* code to set the initial state */
-//	 }: {
-//		 /* code to test the function benchmarked */
-//	 }
-//	 verify {
-//		 /* optional verification */
-//	 }
+		let force_origin = T::ForceExtendOrigin::successful_origin();
+		let extension = T::ForceExtendOrigin::ensure_origin(force_origin.clone()).unwrap();
+		let call = Call::<T>::force_extend {};
+	}: { call.dispatch_bypass_filter(force_origin)? }
+	verify {
+		assert_eq!(
+			SafeMode::<T>::active_until().unwrap(),
+			System::<T>::block_number() +  T::ActivateDuration::get() + extension
+		);
+	}
+
+	force_deactivate {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+
+		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		let call = Call::<T>::force_deactivate {};
+	}: { call.dispatch_bypass_filter(force_origin)? }
+	verify {
+		assert_eq!(
+			SafeMode::<T>::active_until(),
+			None
+		);
+	}
+
+	repay_stake {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		let activated_at_block: T::BlockNumber = System::<T>::block_number();
+		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+		let current_stake = Stakes::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			BalanceOf::<T>::max_value() - T::ActivateStakeAmount::get().unwrap()
+		);
+
+		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
+
+		let repay_origin = T::RepayOrigin::successful_origin();
+		let call = Call::<T>::repay_stake { account: caller.clone(), block: activated_at_block.clone()};
+	}: { call.dispatch_bypass_filter(repay_origin)? }
+	verify {
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			BalanceOf::<T>::max_value()
+		);
+	}
+
+	slash_stake {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		let activated_at_block: T::BlockNumber = System::<T>::block_number();
+		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+		let current_stake = Stakes::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			BalanceOf::<T>::max_value() - T::ActivateStakeAmount::get().unwrap()
+		);
+
+		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
+
+		let repay_origin = T::RepayOrigin::successful_origin();
+		let call = Call::<T>::slash_stake { account: caller.clone(), block: activated_at_block.clone()};
+	}: { call.dispatch_bypass_filter(repay_origin)? }
+	verify {
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			BalanceOf::<T>::max_value() - T::ActivateStakeAmount::get().unwrap()
+		);
+	}
 
 	impl_benchmark_test_suite!(SafeMode, crate::mock::new_test_ext(), crate::mock::Test);
 }
