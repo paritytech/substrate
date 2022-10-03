@@ -28,7 +28,7 @@
 //!
 //! ## Key terms
 //!
-//!  * pool id: A unique identifier of each pool. Set to u12
+//!  * pool id: A unique identifier of each pool. Set to u32
 //!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
 //! [`BondedPoolInner`].
 //! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
@@ -47,7 +47,7 @@
 //!   exactly the same rules and conditions as a normal staker. Its bond increases or decreases as
 //!   members join, it can `nominate` or `chill`, and might not even earn staking rewards if it is
 //!   not nominating proper validators.
-//! * reward account: A similar key-less account, that is set as the `Payee` account fo the bonded
+//! * reward account: A similar key-less account, that is set as the `Payee` account for the bonded
 //!   account for all staking rewards.
 //!
 //! ## Usage
@@ -1942,6 +1942,26 @@ pub mod pallet {
 
 			Ok(())
 		}
+
+		/*
+		/// Create a new delegation pool with a previously used pool id
+		/// 
+		/// # Arguments
+		/// 
+		/// same as `create` with the inclusion of
+		/// * `pool_id` - `Option<PoolId>`, if `None` this is similar to `create`.
+		///    if `Some(claim)` the caller is claiming that `claim` A.K.A PoolId is not in use. 
+		pub fn create_with_pool_id() {
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+			root: AccountIdLookupOf<T>,
+			nominator: AccountIdLookupOf<T>,
+			state_toggler: AccountIdLookupOf<T>,
+			pool_id: Option<PoolId>,
+		} -> DispatchResult {
+			
+		}
+		*/
 
 		/// Nominate on behalf of the pool.
 		///
