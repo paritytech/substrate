@@ -330,7 +330,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
-		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(Self::mmr_leaves());
+		Self::generate_historical_batch_proof(leaf_indices, Self::mmr_leaves())
+	}
+
+	/// Generate a MMR proof for the given `leaf_indices` for the MMR of `leaves_count` size.
+	///
+	/// Note this method can only be used from an off-chain context
+	/// (Offchain Worker or Runtime API call), since it requires
+	/// all the leaves to be present.
+	/// It may return an error or panic if used incorrectly.
+	pub fn generate_historical_batch_proof(
+		leaf_indices: Vec<LeafIndex>,
+		leaves_count: LeafIndex,
+	) -> Result<
+		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
+		primitives::Error,
+	> {
+		if leaves_count > Self::mmr_leaves() {
+			return Err(Error::InvalidLeavesCount)
+		}
+
+		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(leaves_count);
 		mmr.generate_batch_proof(leaf_indices)
 	}
 

@@ -1,12 +1,12 @@
 [package]
-name = "pallet-contracts-rpc-runtime-api"
+name = "pallet-contracts-runtime-api"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
-description = "Runtime API definition required by Contracts RPC extensions."
+description = "Runtime API definition used to provide dry-run capabilities"
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -17,10 +17,10 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
 # Substrate Dependencies
-pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../common" }
-sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../../../primitives/std" }
+pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../primitives" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 
 [features]
 default = ["std"]
