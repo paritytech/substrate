@@ -1669,8 +1669,10 @@ pub mod pallet_prelude {
 ///
 /// ### `#[pallet::compact] $some_arg: $some_type`
 ///
-/// Compact encoding for argument can be used via `#[pallet::compact]`. The function must
+/// Compact encoding for arguments can be achieved via `#[pallet::compact]`. The function must
 /// return a `DispatchResultWithPostInfo` or `DispatchResult`.
+///
+/// Also see [`pallet::compact`](`frame_support::pallet_macros::compact`)
 ///
 /// ## `#[pallet::call_index($idx)]`
 ///
@@ -2685,7 +2687,7 @@ pub use frame_support_procedural::pallet;
 /// Contains macro stubs for all of the pallet:: macros
 pub mod pallet_macros {
 	pub use frame_support_procedural::{
-		config, constant, disable_frame_system_supertrait_check, generate_storage_info,
+		compact, config, constant, disable_frame_system_supertrait_check, generate_storage_info,
 		generate_store, hooks, storage_version, weight, whitelist_storage,
 	};
 }

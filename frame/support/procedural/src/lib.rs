@@ -773,6 +773,13 @@ pub fn weight(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
+/// Compact encoding for arguments can be achieved via `#[pallet::compact]`. The function must
+/// return a `DispatchResultWithPostInfo` or `DispatchResult`.
+#[proc_macro_attribute]
+pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
 /// The optional attribute `#[pallet::whitelist_storage]` will declare the
 /// storage as whitelisted from benchmarking. Doing so will exclude reads of
 /// that value's storage key from counting towards weight calculations during
