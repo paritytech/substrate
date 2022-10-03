@@ -28,7 +28,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		CallMetadata, Contains, Currency, Defensive, GetCallMetadata, NamedReservableCurrency,
-		PalletInfoAccess, ReservableCurrency,
+		PalletInfoAccess,
 	},
 	weights::Weight,
 };
@@ -56,7 +56,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type for this pallet.
-		type Currency: NamedReservableCurrency<Self::AccountId>;
+		type Currency: NamedReservableCurrency<Self::AccountId, ReserveIdentifier = Self::BlockNumber>;
 
 		/// Contains all calls that can be dispatched even when the safe-mode is activated.
 		///
@@ -133,11 +133,11 @@ pub mod pallet {
 		/// Exited safe-mode for a specific \[reason\].
 		Exited { reason: ExitReason },
 
-		/// An account got repaid its stake. \[account, amount\]
-		StakeRepaid { account: T::AccountId, amount: BalanceOf<T> },
+		/// An account had stake repaid previously reserved at a block. \[block, account, amount\]
+		StakeRepaid { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
 
-		/// An account got slashed its stake. \[account, amount\]
-		StakeSlashed { account: T::AccountId, amount: BalanceOf<T> },
+		/// An account had stake slashed previously reserved at a block. \[account, amount\]
+		StakeSlashed { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	/// The reason why the safe-mode was exited.
@@ -380,8 +380,8 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Self::is_activated(), Error::<T>::IsActive);
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
-		T::Currency::unreserve(&account, stake);
-		Self::deposit_event(Event::<T>::StakeRepaid { account, amount: stake });
+		T::Currency::unreserve_named(&block, &account, stake);
+		Self::deposit_event(Event::<T>::StakeRepaid { block , account, amount: stake });
 		Ok(())
 	}
 
@@ -393,16 +393,20 @@ impl<T: Config> Pallet<T> {
 		ensure!(!Self::is_activated(), Error::<T>::IsActive);
 		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
 
-		T::Currency::slash_reserved(&account, stake);
-		Self::deposit_event(Event::<T>::StakeSlashed { account, amount: stake });
+		T::Currency::slash_reserved_named(&block, &account, stake);
+		Self::deposit_event(Event::<T>::StakeSlashed { block , account, amount: stake });
 		Ok(())
 	}
 
 	/// Reserve `stake` amount from `who` and store it in `Stakes`.
+	/// 
 	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
-		T::Currency::reserve(&who, stake)?;
 		let block = <frame_system::Pallet<T>>::block_number();
+		T::Currency::reserve_named(&block, &who, stake)?;
 		let current_stake = Stakes::<T>::get(&who, block).unwrap_or_default();
+		// Stake is mapped to the block that an extrinsic calls activate or extend,
+		// therefore we prevent abuse in a block by adding to present value in the same block. TODO: should we? Why not just fail?
+		// Calls in other blocks to activate or extend are stored in a new Stakes item.
 		Stakes::<T>::insert(&who, block, current_stake.saturating_add(stake));
 		Ok(())
 	}

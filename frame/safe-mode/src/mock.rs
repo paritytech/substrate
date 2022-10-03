@@ -63,7 +63,7 @@ impl frame_system::Config for Test {
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxLocks: u32 = 10;
+	pub const MaxReserves: u32 = 10;
 }
 impl pallet_balances::Config for Test {
 	type Balance = u64;
@@ -72,9 +72,9 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
-	type MaxLocks = MaxLocks;
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
+	type MaxLocks = ();
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = Self::BlockNumber;
 }
 
 /// Filter to block balance pallet calls
