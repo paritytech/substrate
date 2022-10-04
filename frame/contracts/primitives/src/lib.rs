@@ -41,7 +41,7 @@ pub struct ContractResult<R, Balance> {
 	///
 	/// # Note
 	///
-	/// This can only different from [`Self::weight_consumed`] when weight pre charging
+	/// This can only different from [`Self::gas_consumed`] when weight pre charging
 	/// is used. Currently, only `seal_call_runtime` makes use of pre charging.
 	/// Additionally, any `seal_call` or `seal_instantiate` makes use of pre-charging
 	/// when a non-zero `gas_limit` argument is supplied.
