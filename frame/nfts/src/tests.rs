@@ -1116,8 +1116,7 @@ fn create_cancel_swap_should_work() {
 		let item_2 = 2;
 		let price = 1;
 		let price_direction = PriceDirection::Receive;
-		let price_with_direction =
-			PriceWithDirection { amount: price, direction: price_direction.clone() };
+		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
 		let duration = 2;
 		let expect_deadline = 3;
 
@@ -1371,8 +1370,7 @@ fn claim_swap_should_work() {
 
 		// validate the optional desired_item param and another price direction
 		let price_direction = PriceDirection::Send;
-		let price_with_direction =
-			PriceWithDirection { amount: price, direction: price_direction.clone() };
+		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
