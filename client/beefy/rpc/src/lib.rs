@@ -84,7 +84,7 @@ impl From<Error> for JsonRpseeError {
 // Provides RPC methods for interacting with BEEFY.
 #[rpc(client, server)]
 pub trait BeefyApi<Notification, Hash> {
-	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
+	/// Returns the block most recently finalized by BEEFY, alongside its justification.
 	#[subscription(
 		name = "beefy_subscribeJustifications" => "beefy_justifications",
 		unsubscribe = "beefy_unsubscribeJustifications",
