@@ -322,21 +322,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error>
 	where
 		T: frame_system::Config,
+		T::BlockNumber: From<LeafIndex>,
 	{
 		// leaf_indx = block_num - (current_block_num - leaves_count) - 1;
-		let leaves_count = Self::mmr_leaves().saturated_into::<u64>();
-		let current_block_num = <frame_system::Pallet<T>>::block_number().saturated_into::<u64>();
-		let diff = current_block_num.saturating_sub(leaves_count);
+		let leaves_count = Self::mmr_leaves();
+		let current_block_num = <frame_system::Pallet<T>>::block_number();
+		let diff = current_block_num.saturating_sub(leaves_count.into());
 
-		let block_num_as_u64 = block_num.saturated_into::<u64>();
-
-		if block_num_as_u64 <= diff {
+		if block_num <= diff {
 			return Err(
 				primitives::Error::BlockNumToLeafIndex.log_debug("The block_number is incorrect.")
 			)
 		}
 
-		let leaf_index = (block_num_as_u64.saturating_sub(diff).saturating_sub(1u32.into()))
+		let leaf_index = (block_num.saturating_sub(diff).saturating_sub(1u32.into()))
 			.saturated_into::<LeafIndex>();
 		Ok(leaf_index)
 	}
@@ -352,7 +351,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
-	> {
+	>
+	where
+		T::BlockNumber: From<LeafIndex>,
+	{
 		Self::generate_historical_batch_proof(block_numbers, Self::mmr_leaves())
 	}
 
@@ -368,7 +370,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
-	> {
+	>
+	where
+		T::BlockNumber: From<LeafIndex>,
+	{
 		if leaves_count > Self::mmr_leaves() {
 			return Err(Error::InvalidLeavesCount)
 		}
