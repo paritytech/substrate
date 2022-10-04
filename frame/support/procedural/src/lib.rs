@@ -784,7 +784,7 @@ pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
-/// which defines and sets the codec index for the dispatchable function in the `Call` enum.
+/// which explicitly defines the codec index for the dispatchable function in the `Call` enum.
 ///
 /// All call indexes start from 0, until it encounters a dispatchable function with a defined
 /// call index. The dispatchable function that lexically follows the function with a defined
