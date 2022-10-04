@@ -973,10 +973,10 @@ pub fn generate_deposit(_: TokenStream, _: TokenStream) -> TokenStream {
 /// of `StorageValue`, `StorageMap` or `StorageDoubleMap`. The generic arguments of the storage
 /// type can be given in two manners: named and unnamed. For named generic arguments, the name
 /// for each argument should match the name defined for it on the storage struct:
-/// * `StorageValue` expect `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * `StorageMap` expect `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * `CountedStorageMap` expect `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * `StorageDoubleMap` expect `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value` and optionally
+/// * `StorageValue` expects `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * `StorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * `CountedStorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * `StorageDoubleMap` expects `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value` and optionally
 ///   `QueryKind` and `OnEmpty`.
 ///
 /// For unnamed generic arguments: Their first generic must be `_` as it is replaced by the
