@@ -1528,8 +1528,8 @@ pub mod pallet_prelude {
 ///
 /// ## `pallet::constant`
 ///
-/// The `#[pallet::constant]` attribute can be used to add the [`Get`](crate::traits::Get)
-/// associated type from [`pallet::config`](#palletconfig) into metadata, e.g.:
+/// The `#[pallet::constant]` attribute can be used to add an associated type trait bounded by
+/// [`Get`](crate::traits::Get) from [`pallet::config`](#palletconfig) into metadata, e.g.:
 ///
 /// ```ignore
 /// #[pallet::config]
