@@ -619,7 +619,7 @@ pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::constant]` attribute can be used to add the `Get` associated type from
+/// The `#[pallet::constant]` attribute can be used to add an associated type trait bounded by `Get` from
 /// [`pallet::config`](`macro@config`) into metadata, e.g.:
 ///
 /// ```ignore
