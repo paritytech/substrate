@@ -1753,7 +1753,7 @@ pub mod pallet_prelude {
 /// such as [`Option`] and [`PhantomData`](`frame_support::dispatch::marker::PhantomData`), and
 /// hence in most use cases, a manual implementation is not necessary and is discouraged.
 ///
-/// The generic `T` must not bound anything and the where clause is not allowed. That said,
+/// The generic `T` must not bound anything and a `where` clause is not allowed. That said,
 /// bounds and/or a where clause should not needed for any use-case.
 ///
 /// Also see: [`pallet::error`](`frame_support::pallet_macros::error`)
