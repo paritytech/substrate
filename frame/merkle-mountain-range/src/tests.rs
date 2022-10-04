@@ -584,7 +584,7 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate all possible 2-leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (1..=n).into_iter().combinations(2).collect();
+		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			let block_numbers = leaf_indices_to_block_numbers(&mut ext, leaves_subset);
