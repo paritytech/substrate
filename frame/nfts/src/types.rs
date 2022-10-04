@@ -41,12 +41,6 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 >;
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub enum PriceDirection {
-	Send,
-	Receive,
-}
-
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
@@ -154,15 +148,27 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
-pub struct PendingSwap<CollectionId, ItemId, ItemPrice, Deadline> {
+pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 	/// A collection of the item user wants to receive.
 	pub(super) desired_collection: CollectionId,
 	/// An item user wants to receive.
 	pub(super) desired_item: Option<ItemId>,
-	/// A price for the desired `item`.
-	pub(super) price: Option<ItemPrice>,
-	/// Specifies whether a user is willing to pay or receive a `price`.
-	pub(super) price_direction: Option<PriceDirection>,
+	/// A price for the desired `item` with the direction.
+	pub(super) price: Option<ItemPriceWithDirection>,
 	/// An optional deadline for the swap.
 	pub(super) deadline: Option<Deadline>,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum PriceDirection {
+	Send,
+	Receive,
+}
+
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct PriceWithDirection<Amount> {
+	/// An amount.
+	pub(super) amount: Amount,
+	/// A direction (send or receive).
+	pub(super) direction: PriceDirection,
 }

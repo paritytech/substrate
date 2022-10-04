@@ -28,8 +28,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		offered_item_id: T::ItemId,
 		desired_collection_id: T::CollectionId,
 		maybe_desired_item_id: Option<T::ItemId>,
-		maybe_price: Option<ItemPrice<T, I>>,
-		maybe_price_direction: Option<PriceDirection>,
+		maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 		maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
 	) -> DispatchResult {
 		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
@@ -48,13 +47,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				},
 		};
 
-		if maybe_price.is_some() && maybe_price_direction.is_none() {
-			return Err(Error::<T, I>::PriceDirectionNotSet.into())
-		}
-		if maybe_price.is_none() && maybe_price_direction.is_some() {
-			return Err(Error::<T, I>::PriceDirectionCannotBeSet.into())
-		}
-
 		let now = frame_system::Pallet::<T>::block_number();
 		let maybe_deadline = maybe_duration.map(|d| d.saturating_add(now));
 
@@ -64,8 +56,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingSwap {
 				desired_collection: desired_collection_id,
 				desired_item: maybe_desired_item_id,
-				price: maybe_price,
-				price_direction: maybe_price_direction.clone(),
+				price: maybe_price.clone(),
 				deadline: maybe_deadline,
 			},
 		);
@@ -76,7 +67,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			desired_collection: desired_collection_id,
 			desired_item: maybe_desired_item_id,
 			price: maybe_price,
-			price_direction: maybe_price_direction,
 			deadline: maybe_deadline,
 		});
 
@@ -112,7 +102,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			desired_collection: swap.desired_collection,
 			desired_item: swap.desired_item,
 			price: swap.price,
-			price_direction: swap.price_direction,
 			deadline: swap.deadline,
 		});
 
@@ -125,8 +114,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		send_item_id: T::ItemId,
 		receive_collection_id: T::CollectionId,
 		receive_item_id: T::ItemId,
-		maybe_price: Option<ItemPrice<T, I>>,
-		maybe_price_direction: Option<PriceDirection>,
+		witness_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 	) -> DispatchResult {
 		let send_item = Item::<T, I>::get(&send_collection_id, &send_item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
@@ -137,9 +125,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ensure!(send_item.owner == caller, Error::<T, I>::NoPermission);
 		ensure!(
-			swap.desired_collection == send_collection_id &&
-				swap.price == maybe_price &&
-				swap.price_direction == maybe_price_direction,
+			swap.desired_collection == send_collection_id && swap.price == witness_price,
 			Error::<T, I>::UnknownSwap
 		);
 
@@ -152,13 +138,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(now <= deadline, Error::<T, I>::DeadlineExpired);
 		}
 
-		if let Some(amount) = swap.price {
-			match swap.price_direction {
-				Some(PriceDirection::Send) =>
-					T::Currency::transfer(&receive_item.owner, &send_item.owner, amount, KeepAlive)?,
-				Some(PriceDirection::Receive) =>
-					T::Currency::transfer(&send_item.owner, &receive_item.owner, amount, KeepAlive)?,
-				_ => {},
+		if let Some(ref price) = swap.price {
+			match price.direction {
+				PriceDirection::Send => T::Currency::transfer(
+					&receive_item.owner,
+					&send_item.owner,
+					price.amount,
+					KeepAlive,
+				)?,
+				PriceDirection::Receive => T::Currency::transfer(
+					&send_item.owner,
+					&receive_item.owner,
+					price.amount,
+					KeepAlive,
+				)?,
 			};
 		}
 
@@ -181,7 +174,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			received_item: receive_item_id,
 			received_item_owner: receive_item.owner,
 			price: swap.price,
-			price_direction: swap.price_direction,
 			deadline: swap.deadline,
 		});
 

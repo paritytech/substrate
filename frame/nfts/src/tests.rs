@@ -1115,9 +1115,11 @@ fn create_cancel_swap_should_work() {
 		let item_1 = 1;
 		let item_2 = 2;
 		let price = 1;
+		let price_direction = PriceDirection::Receive;
+		let price_with_direction =
+			PriceWithDirection { amount: price, direction: price_direction.clone() };
 		let duration = 2;
 		let expect_deadline = 3;
-		let price_direction = PriceDirection::Receive;
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, true));
 
@@ -1132,8 +1134,7 @@ fn create_cancel_swap_should_work() {
 				item_1,
 				collection_id,
 				Some(item_2 + 1),
-				Some(price),
-				Some(price_direction.clone()),
+				Some(price_with_direction.clone()),
 				Some(duration),
 			),
 			Error::<Test>::UnknownItem
@@ -1145,8 +1146,7 @@ fn create_cancel_swap_should_work() {
 				item_1,
 				collection_id + 1,
 				None,
-				Some(price),
-				Some(price_direction.clone()),
+				Some(price_with_direction.clone()),
 				Some(duration),
 			),
 			Error::<Test>::UnknownCollection
@@ -1158,16 +1158,14 @@ fn create_cancel_swap_should_work() {
 			item_1,
 			collection_id,
 			Some(item_2),
-			Some(price),
-			Some(price_direction.clone()),
+			Some(price_with_direction.clone()),
 			Some(duration),
 		));
 
 		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
 		assert_eq!(swap.desired_collection, collection_id);
 		assert_eq!(swap.desired_item, Some(item_2));
-		assert_eq!(swap.price, Some(price));
-		assert_eq!(swap.price_direction, Some(price_direction.clone()));
+		assert_eq!(swap.price, Some(price_with_direction.clone()));
 		assert_eq!(swap.deadline, Some(expect_deadline));
 
 		assert!(events().contains(&Event::<Test>::SwapCreated {
@@ -1175,8 +1173,7 @@ fn create_cancel_swap_should_work() {
 			offered_item: item_1,
 			desired_collection: collection_id,
 			desired_item: Some(item_2),
-			price: Some(price),
-			price_direction: Some(price_direction.clone()),
+			price: Some(price_with_direction.clone()),
 			deadline: Some(expect_deadline),
 		}));
 
@@ -1187,8 +1184,7 @@ fn create_cancel_swap_should_work() {
 			offered_item: item_1,
 			desired_collection: collection_id,
 			desired_item: Some(item_2),
-			price: Some(price),
-			price_direction: Some(price_direction.clone()),
+			price: Some(price_with_direction.clone()),
 			deadline: Some(expect_deadline),
 		}));
 		assert!(!PendingSwapOf::<Test>::contains_key(collection_id, item_1));
@@ -1200,8 +1196,7 @@ fn create_cancel_swap_should_work() {
 			item_1,
 			collection_id,
 			Some(item_2),
-			Some(price),
-			Some(price_direction.clone()),
+			Some(price_with_direction.clone()),
 			Some(duration),
 		));
 		assert_noop!(
@@ -1218,8 +1213,7 @@ fn create_cancel_swap_should_work() {
 			item_1,
 			collection_id,
 			None,
-			Some(price),
-			Some(price_direction),
+			Some(price_with_direction),
 			Some(duration),
 		));
 
@@ -1241,10 +1235,12 @@ fn claim_swap_should_work() {
 		let item_4 = 4;
 		let item_5 = 5;
 		let price = 100;
+		let price_direction = PriceDirection::Receive;
+		let price_with_direction =
+			PriceWithDirection { amount: price, direction: price_direction.clone() };
 		let duration = 2;
 		let initial_balance = 1000;
 		let deadline = 1 + duration;
-		let price_direction = PriceDirection::Receive;
 
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
@@ -1263,8 +1259,7 @@ fn claim_swap_should_work() {
 			item_1,
 			collection_id,
 			Some(item_2),
-			Some(price),
-			Some(price_direction.clone()),
+			Some(price_with_direction.clone()),
 			Some(duration),
 		));
 
@@ -1277,8 +1272,7 @@ fn claim_swap_should_work() {
 				item_2,
 				collection_id,
 				item_1,
-				Some(price),
-				Some(price_direction.clone()),
+				Some(price_with_direction.clone()),
 			),
 			Error::<Test>::DeadlineExpired
 		);
@@ -1292,8 +1286,7 @@ fn claim_swap_should_work() {
 				item_2,
 				collection_id,
 				item_4, // no swap was created for that asset
-				Some(price),
-				Some(price_direction.clone()),
+				Some(price_with_direction.clone()),
 			),
 			Error::<Test>::UnknownSwap
 		);
@@ -1304,8 +1297,7 @@ fn claim_swap_should_work() {
 				item_4, // not my item
 				collection_id,
 				item_1,
-				Some(price),
-				Some(price_direction.clone()),
+				Some(price_with_direction.clone()),
 			),
 			Error::<Test>::NoPermission
 		);
@@ -1316,8 +1308,7 @@ fn claim_swap_should_work() {
 				item_5, // my item, but not the one another part wants
 				collection_id,
 				item_1,
-				Some(price),
-				Some(price_direction.clone()),
+				Some(price_with_direction.clone()),
 			),
 			Error::<Test>::UnknownSwap
 		);
@@ -1328,8 +1319,7 @@ fn claim_swap_should_work() {
 				item_2,
 				collection_id,
 				item_1,
-				Some(price + 1), // wrong price
-				Some(price_direction.clone()),
+				Some(PriceWithDirection { amount: price + 1, direction: price_direction.clone() }), // wrong price
 			),
 			Error::<Test>::UnknownSwap
 		);
@@ -1340,8 +1330,7 @@ fn claim_swap_should_work() {
 				item_2,
 				collection_id,
 				item_1,
-				Some(price),
-				Some(PriceDirection::Send), // wrong direction
+				Some(PriceWithDirection { amount: price, direction: PriceDirection::Send }), // wrong direction
 			),
 			Error::<Test>::UnknownSwap
 		);
@@ -1352,8 +1341,7 @@ fn claim_swap_should_work() {
 			item_2,
 			collection_id,
 			item_1,
-			Some(price),
-			Some(price_direction.clone()),
+			Some(price_with_direction.clone()),
 		));
 
 		// validate the new owner
@@ -1377,13 +1365,14 @@ fn claim_swap_should_work() {
 			received_collection: collection_id,
 			received_item: item_1,
 			received_item_owner: user_1,
-			price: Some(price),
-			price_direction: Some(price_direction.clone()),
+			price: Some(price_with_direction.clone()),
 			deadline: Some(deadline),
 		}));
 
 		// validate the optional desired_item param and another price direction
 		let price_direction = PriceDirection::Send;
+		let price_with_direction =
+			PriceWithDirection { amount: price, direction: price_direction.clone() };
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
@@ -1393,8 +1382,7 @@ fn claim_swap_should_work() {
 			item_4,
 			collection_id,
 			None,
-			Some(price),
-			Some(price_direction.clone()),
+			Some(price_with_direction.clone()),
 			Some(duration),
 		));
 		assert_ok!(Nfts::claim_swap(
@@ -1403,8 +1391,7 @@ fn claim_swap_should_work() {
 			item_1,
 			collection_id,
 			item_4,
-			Some(price),
-			Some(price_direction),
+			Some(price_with_direction),
 		));
 		let item = Item::<Test>::get(collection_id, item_1).unwrap();
 		assert_eq!(item.owner, user_1);
