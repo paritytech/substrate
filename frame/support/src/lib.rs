@@ -1760,10 +1760,10 @@ pub mod pallet_prelude {
 ///
 /// # Event: `#[pallet::event]` (optional)
 ///
-/// Allows you to define pallet events. Pallet events are stored in the block when they are
-/// applied (and then removed in next block).
+/// Allows you to define pallet events. Pallet events are stored under the `system` / `events`
+/// key when the block is applied (and then replaced when the next block writes it's events).
 ///
-/// Item must be defined as follows:
+/// The Event enum must be defined as follows:
 ///
 /// ```ignore
 /// #[pallet::event]
