@@ -1894,7 +1894,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
-			roll_to(15);
+			roll_to(30);
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
