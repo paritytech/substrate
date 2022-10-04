@@ -619,8 +619,8 @@ pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::constant]` attribute can be used to add an associated type trait bounded by `Get` from
-/// [`pallet::config`](`macro@config`) into metadata, e.g.:
+/// The `#[pallet::constant]` attribute can be used to add an associated type trait bounded by `Get`
+/// from [`pallet::config`](`macro@config`) into metadata, e.g.:
 ///
 /// ```ignore
 /// #[pallet::config]
@@ -872,7 +872,7 @@ pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
 /// size in order to reduce storage size. The error enum itself has an absolute maximum encoded
 /// size specified by `MAX_MODULE_ERROR_ENCODED_SIZE`.
 ///
-/// (1 byte can still be 256 different errors. The more specific the error, 
+/// (1 byte can still be 256 different errors. The more specific the error,
 /// the easier it is to diagnose problems and give a better experience to the user.
 /// Don't skimp on having lots of individual error conditions.)
 ///
@@ -897,7 +897,8 @@ pub fn error(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The `#[pallet::event]` attribute allows you to define pallet events. Pallet events are
-/// stored under the `system` / `events` key when the block is applied (and then replaced when the next block writes it's events).
+/// stored under the `system` / `events` key when the block is applied (and then replaced when the
+/// next block writes it's events).
 ///
 /// The Event enum must be defined as follows:
 ///
@@ -1017,7 +1018,7 @@ pub fn getter(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
-/// storage prefix to use. This is helpful if you wish to rename the storage 
+/// storage prefix to use. This is helpful if you wish to rename the storage
 /// field but don't want to perform a migration.
 ///
 /// E.g:
@@ -1127,7 +1128,8 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
-/// is built. This takes as input the `GenesisConfig` type (as `self`) and constructs the pallet's initial state.
+/// is built. This takes as input the `GenesisConfig` type (as `self`) and constructs the pallet's
+/// initial state.
 ///
 /// The impl must be defined as:
 ///
