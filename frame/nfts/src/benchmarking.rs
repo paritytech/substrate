@@ -484,6 +484,7 @@ benchmarks_instance_pallet! {
 		let price_direction = PriceDirection::Receive;
 		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
 		let duration = T::MaxDeadlineDuration::get();
+		let current_block = frame_system::Pallet::<T>::block_number();
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price_with_direction.clone()), duration)
 	verify {
 		let expect_deadline = duration.saturating_add(frame_system::Pallet::<T>::block_number());
@@ -493,7 +494,7 @@ benchmarks_instance_pallet! {
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price_with_direction),
-			deadline: expect_deadline,
+			deadline: duration.saturating_add(current_block),
 		}.into());
 	}
 
@@ -506,17 +507,17 @@ benchmarks_instance_pallet! {
 		let duration = T::MaxDeadlineDuration::get();
 		let price_direction = PriceDirection::Receive;
 		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
+		let current_block = frame_system::Pallet::<T>::block_number();
 		Nfts::<T, I>::create_swap(origin, collection, item1, collection, Some(item2), Some(price_with_direction.clone()), duration)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1)
 	verify {
-		let expect_deadline = duration.saturating_add(frame_system::Pallet::<T>::block_number());
 		assert_last_event::<T, I>(Event::SwapCancelled {
 			offered_collection: collection,
 			offered_item: item1,
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price_with_direction),
-			deadline: expect_deadline,
+			deadline: duration.saturating_add(current_block),
 		}.into());
 	}
 
@@ -531,6 +532,7 @@ benchmarks_instance_pallet! {
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
 		let origin = SystemOrigin::Signed(caller.clone());
+		let current_block = frame_system::Pallet::<T>::block_number();
 		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;
 		Nfts::<T, I>::create_swap(
 			origin.clone().into(),
@@ -552,7 +554,7 @@ benchmarks_instance_pallet! {
 			received_item: item1,
 			received_item_owner: caller,
 			price: Some(price_with_direction),
-			deadline: expect_deadline,
+			deadline: duration.saturating_add(current_block),
 		}.into());
 	}
 
