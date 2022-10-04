@@ -848,7 +848,7 @@ pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::error]` attribute allows you to define an error type that will be returned
+/// The `#[pallet::error]` attribute allows you to define an error enum that will be returned
 /// from the dispatchable when an error occurs. The information for this error type is then
 /// stored in metadata.
 ///
