@@ -897,7 +897,7 @@ pub fn error(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The `#[pallet::event]` attribute allows you to define pallet events. Pallet events are
-/// stored in the block when they are applied (and then removed in next block).
+/// stored under the `system` / `events` key when the block is applied (and then replaced when the next block writes it's events).
 ///
 /// Item must be defined as follows:
 ///
