@@ -19,8 +19,8 @@ use codec::{Decode, Encode};
 use hash_db::{HashDB, Hasher};
 use scale_info::TypeInfo;
 use sp_std::{
-	collections::btree_set::{BTreeSet, IntoIter, Iter},
-	iter::IntoIterator,
+	collections::btree_set::BTreeSet,
+	iter::{DoubleEndedIterator, IntoIterator},
 	vec::Vec,
 };
 // Note that `LayoutV1` usage here (proof compaction) is compatible
@@ -60,13 +60,13 @@ impl StorageProof {
 
 	/// Convert into an iterator over encoded trie nodes in lexicographical order constructed
 	/// from the proof.
-	pub fn iter_nodes(self) -> IntoIter<Vec<u8>> {
+	pub fn into_iter_nodes(self) -> impl Sized + DoubleEndedIterator<Item = Vec<u8>> {
 		self.trie_nodes.into_iter()
 	}
 
 	/// Create an iterator over encoded trie nodes in lexicographical order constructed
 	/// from the proof.
-	pub fn iter(&self) -> Iter<'_, Vec<u8>> {
+	pub fn iter_nodes(&self) -> impl Sized + DoubleEndedIterator<Item = &Vec<u8>> {
 		self.trie_nodes.iter()
 	}
 
@@ -91,8 +91,8 @@ impl StorageProof {
 	pub fn merge(proofs: impl IntoIterator<Item = Self>) -> Self {
 		let trie_nodes = proofs
 			.into_iter()
-			.flat_map(|proof| proof.iter_nodes())
-			.collect::<sp_std::collections::btree_set::BTreeSet<_>>()
+			.flat_map(|proof| proof.into_iter_nodes())
+			.collect::<BTreeSet<_>>()
 			.into_iter()
 			.collect();
 
@@ -105,7 +105,7 @@ impl StorageProof {
 		root: H::Out,
 	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
 		let db = self.into_memory_db();
-		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(db, root)
+		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(&db, &root)
 	}
 
 	/// Encode as a compact proof with default trie layout.
@@ -114,7 +114,7 @@ impl StorageProof {
 		root: H::Out,
 	) -> Result<CompactProof, crate::CompactProofError<H::Out, crate::Error<H::Out>>> {
 		let db = self.to_memory_db();
-		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(db, root)
+		crate::encode_compact::<Layout<H>, crate::MemoryDB<H>>(&db, &root)
 	}
 
 	/// Returns the estimated encoded size of the compact proof.
@@ -132,7 +132,7 @@ impl StorageProof {
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
 		let mut db = crate::MemoryDB::default();
-		proof.iter_nodes().for_each(|n| {
+		proof.into_iter_nodes().for_each(|n| {
 			db.insert(crate::EMPTY_PREFIX, &n);
 		});
 		db
@@ -141,12 +141,7 @@ impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 
 impl<H: Hasher> From<&StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: &StorageProof) -> Self {
-		let mut db = crate::MemoryDB::default();
-		proof.iter().for_each(|n| {
-			db.insert(crate::EMPTY_PREFIX, &n);
-		});
-
-		db
+		From::from(proof.clone())
 	}
 }
 

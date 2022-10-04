@@ -150,8 +150,8 @@ where
 /// then all child trie contents.
 /// Child trie are ordered by the order of their roots in the top trie.
 pub fn encode_compact<L, DB>(
-	partial_db: DB,
-	root: TrieHash<L>,
+	partial_db: &DB,
+	root: &TrieHash<L>,
 ) -> Result<CompactProof, Error<TrieHash<L>, CError<L>>>
 where
 	L: TrieConfiguration,
@@ -159,7 +159,7 @@ where
 {
 	let mut child_tries = Vec::new();
 	let mut compact_proof = {
-		let trie = crate::TrieDBBuilder::<L>::new(&partial_db, &root).build();
+		let trie = crate::TrieDBBuilder::<L>::new(partial_db, root).build();
 
 		let mut iter = trie.iter()?;
 
@@ -191,13 +191,13 @@ where
 	};
 
 	for child_root in child_tries {
-		if !HashDBT::<L::Hash, _>::contains(&partial_db, &child_root, EMPTY_PREFIX) {
+		if !HashDBT::<L::Hash, _>::contains(partial_db, &child_root, EMPTY_PREFIX) {
 			// child proof are allowed to be missing (unused root can be included
 			// due to trie structure modification).
 			continue
 		}
 
-		let trie = crate::TrieDBBuilder::<L>::new(&partial_db, &child_root).build();
+		let trie = crate::TrieDBBuilder::<L>::new(partial_db, &child_root).build();
 		let child_proof = trie_db::encode_compact::<L>(&trie)?;
 
 		compact_proof.extend(child_proof);
