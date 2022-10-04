@@ -253,7 +253,7 @@ benchmarks! {
 
 		add_proxies::<T>(p, Some(pure_account.clone()))?;
 		ensure!(Proxies::<T>::contains_key(&pure_account), "pure proxy not created");
-	}: _(RawOrigin::Signed(caller), T::ProxyType::default(), 0, None)
+	}: _(RawOrigin::Signed(pure_account.clone()), caller_lookup, T::ProxyType::default(), 0, None)
 	verify {
 		assert!(!Proxies::<T>::contains_key(&pure_account));
 	}

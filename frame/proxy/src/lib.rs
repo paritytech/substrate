@@ -324,28 +324,33 @@ pub mod pallet {
 		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
 		/// inaccessible.
 		///
-		/// Requires a `Signed` origin.
+		/// Requires a `Signed` origin, and the sender account must have been created by a call to
+		/// `pure` with corresponding parameters.
 		///
-		/// - `origin`: The account that called `create_pure` (aka `spawner`).
-		/// - `proxy_type`: The proxy type originally passed to `pure`.
+		/// - `spawner`: The account that originally called `pure` to create this account.
 		/// - `index`: The disambiguation index originally passed to `pure`. Probably `0`.
+		/// - `proxy_type`: The proxy type originally passed to `pure`.
 		/// - (`height`, `ext_index`): An Optional tuple with:
 		/// 	- The height of the chain when the call to `pure` was processed and;
 		/// 	- The extrinsic index in which the call to `pure` was processed.
 		///
-		/// Fails with `NotFound` in case the `pure` proxy does not exist.
+		/// Fails with `NoPermission` in case the caller is not a previously created pure
+		/// account whose `pure` call has corresponding parameters.
 		#[pallet::weight(T::WeightInfo::kill_pure(T::MaxProxies::get()))]
 		pub fn kill_pure(
 			origin: OriginFor<T>,
+			spawner: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			index: u16,
 			when: Option<(T::BlockNumber, u32)>,
 		) -> DispatchResult {
-			let spawner = ensure_signed(origin)?;
-			let pure = Self::pure_account(&spawner, &proxy_type, index, when);
-			ensure!(Proxies::<T>::contains_key(&pure), Error::<T>::NotFound);
+			let who = ensure_signed(origin)?;
+			let spawner = T::Lookup::lookup(spawner)?;
 
-			let (_, deposit) = Proxies::<T>::take(&pure);
+			let proxy = Self::pure_account(&spawner, &proxy_type, index, when);
+			ensure!(proxy == who, Error::<T>::NoPermission);
+
+			let (_, deposit) = Proxies::<T>::take(&who);
 			T::Currency::unreserve(&spawner, deposit);
 
 			Ok(())
