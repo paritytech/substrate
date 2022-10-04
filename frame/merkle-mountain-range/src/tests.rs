@@ -91,7 +91,7 @@ fn leaf_indices_to_block_numbers(
 		.iter()
 		.map(|l| {
 			let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
-			ext.execute_with(|| crate::Pallet::<Test>::leaf_index_to_parent_block_num(*l, mmr_size))
+			ext.execute_with(|| crate::Pallet::<Test>::leaf_index_to_parent_block_num(*l, mmr_size)).saturating_add(1u32.into())
 		})
 		.collect()
 }
