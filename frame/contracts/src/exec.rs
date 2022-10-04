@@ -1384,7 +1384,6 @@ mod tests {
 	use frame_system::{EventRecord, Phase};
 	use pallet_contracts_primitives::ReturnFlags;
 	use pretty_assertions::assert_eq;
-	use sp_core::Bytes;
 	use sp_runtime::{traits::Hash, DispatchError};
 	use std::{
 		cell::RefCell,
@@ -1517,7 +1516,7 @@ mod tests {
 	}
 
 	fn exec_success() -> ExecResult {
-		Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+		Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 	}
 
 	fn exec_trapped() -> ExecResult {
@@ -1586,7 +1585,7 @@ mod tests {
 
 		let success_ch = MockLoader::insert(Call, move |ctx, _| {
 			assert_eq!(ctx.ext.value_transferred(), value);
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1621,13 +1620,13 @@ mod tests {
 
 		let success_ch = MockLoader::insert(Call, move |ctx, _| {
 			assert_eq!(ctx.ext.value_transferred(), value);
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 		});
 
 		let delegate_ch = MockLoader::insert(Call, move |ctx, _| {
 			assert_eq!(ctx.ext.value_transferred(), value);
 			let _ = ctx.ext.delegate_call(success_ch, Vec::new())?;
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1662,7 +1661,7 @@ mod tests {
 		let dest = BOB;
 
 		let return_ch = MockLoader::insert(Call, |_, _| {
-			Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Bytes(Vec::new()) })
+			Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Vec::new() })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1715,7 +1714,7 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 		let return_ch = MockLoader::insert(Call, |_, _| {
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(vec![1, 2, 3, 4]) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1736,7 +1735,7 @@ mod tests {
 
 			let output = result.unwrap();
 			assert!(!output.did_revert());
-			assert_eq!(output.data, Bytes(vec![1, 2, 3, 4]));
+			assert_eq!(output.data, vec![1, 2, 3, 4]);
 		});
 	}
 
@@ -1747,7 +1746,7 @@ mod tests {
 		let origin = ALICE;
 		let dest = BOB;
 		let return_ch = MockLoader::insert(Call, |_, _| {
-			Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Bytes(vec![1, 2, 3, 4]) })
+			Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![1, 2, 3, 4] })
 		});
 
 		ExtBuilder::default().build().execute_with(|| {
@@ -1768,7 +1767,7 @@ mod tests {
 
 			let output = result.unwrap();
 			assert!(output.did_revert());
-			assert_eq!(output.data, Bytes(vec![1, 2, 3, 4]));
+			assert_eq!(output.data, vec![1, 2, 3, 4]);
 		});
 	}
 
@@ -2115,7 +2114,7 @@ mod tests {
 	#[test]
 	fn instantiation_work_with_success_output() {
 		let dummy_ch = MockLoader::insert(Constructor, |_, _| {
-			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(vec![80, 65, 83, 83]) })
+			Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: vec![80, 65, 83, 83] })
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
@@ -2140,7 +2139,7 @@ mod tests {
 					&[],
 					None,
 				),
-				Ok((address, ref output)) if output.data == Bytes(vec![80, 65, 83, 83]) => address
+				Ok((address, ref output)) if output.data == vec![80, 65, 83, 83] => address
 			);
 
 			// Check that the newly created account has the expected code hash and
@@ -2159,7 +2158,7 @@ mod tests {
 	#[test]
 	fn instantiation_fails_with_failing_output() {
 		let dummy_ch = MockLoader::insert(Constructor, |_, _| {
-			Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: Bytes(vec![70, 65, 73, 76]) })
+			Ok(ExecReturnValue { flags: ReturnFlags::REVERT, data: vec![70, 65, 73, 76] })
 		});
 
 		ExtBuilder::default().existential_deposit(15).build().execute_with(|| {
@@ -2184,7 +2183,7 @@ mod tests {
 					&[],
 					None,
 				),
-				Ok((address, ref output)) if output.data == Bytes(vec![70, 65, 73, 76]) => address
+				Ok((address, ref output)) if output.data == vec![70, 65, 73, 76] => address
 			);
 
 			// Check that the account has not been created.
