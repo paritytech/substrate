@@ -27,8 +27,7 @@ use sc_executor_common::{
 };
 use sp_wasm_interface::{Pointer, Value, WordSize};
 use wasmtime::{
-	AsContext, AsContextMut, Engine, Extern, Func, Global, Instance, InstancePre, Memory, Table,
-	Val,
+	AsContext, AsContextMut, Engine, Extern, Instance, InstancePre, Memory, Table, Val,
 };
 
 /// Invoked entrypoint format.
@@ -159,6 +158,10 @@ impl<C: AsContextMut> MemoryT for MemoryWrapper<'_, C> {
 	}
 }
 
+pub(crate) fn create_store(engine: &wasmtime::Engine) -> Store {
+	Store::new(engine, StoreData { host_state: None, memory: None, table: None })
+}
+
 /// Wrap the given WebAssembly Instance of a wasm module with Substrate-runtime.
 ///
 /// This struct is a handy wrapper around a wasmtime `Instance` that provides substrate specific
@@ -175,8 +178,7 @@ pub struct InstanceWrapper {
 
 impl InstanceWrapper {
 	pub(crate) fn new(engine: &Engine, instance_pre: &InstancePre<StoreData>) -> Result<Self> {
-		let mut store =
-			Store::new(engine, StoreData { host_state: None, memory: None, table: None });
+		let mut store = create_store(engine);
 		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(format!(
 				"failed to instantiate a new WASM module instance: {:#}",
@@ -208,7 +210,7 @@ impl InstanceWrapper {
 				let func = export
 					.into_func()
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
-				EntryPoint::direct(*func, &self.store).map_err(|_| {
+				EntryPoint::direct(func, &self.store).map_err(|_| {
 					Error::from(format!("Exported function '{}' has invalid signature.", method))
 				})?
 			},

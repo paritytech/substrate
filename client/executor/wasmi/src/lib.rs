@@ -21,7 +21,7 @@
 use std::{cell::RefCell, rc::Rc, str, sync::Arc};
 
 use codec::{Decode, Encode};
-use log::{debug, error, trace};
+use log::{error, trace};
 use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator, Memory as MemoryT};
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
@@ -37,7 +37,7 @@ use sp_wasm_interface::{
 };
 use wasmi::{
 	memory_units::Pages,
-	FuncInstance, ImportsBuilder, MemoryInstance, MemoryRef, Module, ModuleInstance, ModuleRef,
+	FuncInstance, ImportsBuilder, MemoryRef, Module, ModuleInstance, ModuleRef,
 	RuntimeValue::{self, I32, I64},
 	TableRef,
 };
@@ -673,12 +673,9 @@ pub struct WasmiRuntime {
 impl WasmModule for WasmiRuntime {
 	fn new_instance(&self) -> Result<Box<dyn WasmInstance>, Error> {
 		// Instantiate this module.
-		let (instance, missing_functions, memory) = instantiate_module(
-			&self.module,
-			&self.host_functions,
-			self.allow_missing_func_imports,
-		)
-		.map_err(|e| WasmError::Instantiation(e.to_string()))?;
+		let (instance, missing_functions, memory) =
+			instantiate_module(&self.module, &self.host_functions, self.allow_missing_func_imports)
+				.map_err(|e| WasmError::Instantiation(e.to_string()))?;
 
 		Ok(Box::new(WasmiInstance {
 			instance,

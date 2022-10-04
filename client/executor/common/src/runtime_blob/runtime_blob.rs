@@ -173,9 +173,9 @@ impl RuntimeBlob {
 		for memory_ty in memory_section.entries_mut() {
 			let initial = memory_ty.limits().initial();
 			let (min, max) = match heap_pages {
-				HeapPages::Dynamic => (initial + 1024, None),
+				HeapPages::Dynamic => (initial, None),
 				HeapPages::Max(max) => (max as u32, Some(max as _)),
-				HeapPages::Extra(extra) => (initial + extra as u32, Some(initial + extra as u32)),
+				HeapPages::ExtraMax(extra) => (initial + extra as u32, Some(initial + extra as u32)),
 			};
 			*memory_ty = MemoryType::new(min, max);
 		}

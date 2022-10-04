@@ -75,7 +75,7 @@ fn memory_consumption(wasm_method: WasmExecutionMethod) {
 	// For that we make a series of runtime calls, probing the RSS for the VMA matching the linear
 	// memory. After the call we expect RSS to be equal to 0.
 
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Extra(1024));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::ExtraMax(1024));
 
 	let mut instance = runtime.new_instance().unwrap();
 	let heap_base = instance

@@ -71,6 +71,7 @@ use crate::{Error, Memory};
 pub use sp_core::MAX_POSSIBLE_ALLOCATION;
 use sp_wasm_interface::{Pointer, WordSize};
 use std::{
+	cmp::{max, min},
 	mem,
 	ops::{Index, IndexMut, Range},
 };
@@ -446,7 +447,7 @@ impl FreeingBumpHeapAllocator {
 		self.stats.bytes_allocated += order.size() + HEADER_SIZE;
 		self.stats.bytes_allocated_sum += u128::from(order.size() + HEADER_SIZE);
 		self.stats.bytes_allocated_peak =
-			std::cmp::max(self.stats.bytes_allocated_peak, self.stats.bytes_allocated);
+			max(self.stats.bytes_allocated_peak, self.stats.bytes_allocated);
 		self.stats.address_space_used = self.bumper - self.original_heap_base;
 
 		log::trace!(target: LOG_TARGET, "after allocation: {:?}", self.stats);
@@ -509,12 +510,12 @@ impl FreeingBumpHeapAllocator {
 	/// Returns the `bumper` from before the increase. Returns an `Error::AllocatorOutOfSpace` if
 	/// the operation would exhaust the heap.
 	fn bump(bumper: &mut u32, size: u32, memory: &mut impl Memory) -> Result<u32, Error> {
-		let required_size = dbg!(u64::from(*bumper) + u64::from(size));
+		let required_size = u64::from(*bumper) + u64::from(size);
 
-		if required_size > dbg!(memory.size()) {
+		if required_size > memory.size() {
 			let required_pages =
-				dbg!(u32::try_from((required_size + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64)
-					.map_err(|_| Error::Other("Number of required wasm pages is above u32")))?;
+				u32::try_from((required_size + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64)
+					.map_err(|_| Error::Other("Number of required wasm pages is above u32"))?;
 
 			let pages = memory.pages();
 			let max_pages = memory.max_pages().unwrap_or(MAX_WASM_PAGES);
@@ -524,19 +525,22 @@ impl FreeingBumpHeapAllocator {
 
 				return Err(Error::AllocatorOutOfSpace)
 			} else {
-				// Let us growth by at least pages * 2, but in maximum we can allocate
-				// `MAX_WASM_PAGES`
-				let next_pages =
-					std::cmp::min(std::cmp::max(pages * 2, dbg!(required_pages)), max_pages);
+				// Let us growth by at least pages * 2, but ensure we stay in the allowed maximum
+				// number of pages.
+				let min_grow = min(pages * 2, max_pages);
+				let next_pages = max(min_grow, required_pages);
 
-				if dbg!(next_pages) == dbg!(pages) {
+				if required_pages > max_pages {
+					log::debug!(
+						target: LOG_TARGET,
+						"Number of required pages({required_pages}) is greater \
+						 than the maximum number of pages({max_pages}).",
+					);
 					return Err(Error::AllocatorOutOfSpace)
 				} else if memory.grow(next_pages - pages).is_err() {
 					log::error!(
 						target: LOG_TARGET,
-						"Failed to grow memory from {} pages to {} pages",
-						pages,
-						next_pages,
+						"Failed to grow memory from {pages} pages to {next_pages} pages",
 					);
 
 					return Err(Error::AllocatorOutOfSpace)

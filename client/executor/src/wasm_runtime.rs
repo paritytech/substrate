@@ -237,7 +237,7 @@ impl RuntimeCache {
 		let code_hash = &runtime_code.hash;
 		let heap_pages = runtime_code
 			.heap_pages
-			.map(|h| HeapPages::Max(h as _))
+			.map(|h| HeapPages::ExtraMax(h as _))
 			.unwrap_or(default_heap_pages);
 
 		let versioned_runtime_id =
@@ -413,7 +413,7 @@ where
 	// Use the runtime blob to scan if there is any metadata embedded into the wasm binary
 	// pertaining to runtime version. We do it before consuming the runtime blob for creating the
 	// runtime.
-	let mut version: Option<_> = read_embedded_version(&blob)?;
+	let mut version = read_embedded_version(&blob)?;
 
 	let runtime = create_wasm_runtime_with_code::<H>(
 		wasm_method,

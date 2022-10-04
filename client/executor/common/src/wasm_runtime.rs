@@ -120,19 +120,15 @@ pub trait WasmInstance: Send {
 	}
 }
 
+/// Defines the number of heap pages a wasm runtime should support.
 #[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
 pub enum HeapPages {
+	/// Allow in maximum the given number of heap pages.
 	Max(usize),
-	Extra(usize),
+	/// Allow in maximum the given number of heap pages plus the initial number of heap pages
+	/// requested by the wasm file.
+	ExtraMax(usize),
+	/// The maximum number is dynamic and is only restricted by the upper maximum of heap pages
+	/// supported by wasm.
 	Dynamic,
-}
-
-impl HeapPages {
-	pub fn maximum(&self) -> Option<usize> {
-		match self {
-			Self::Max(max) => Some(*max),
-			Self::Extra(_) |
-			Self::Dynamic => None,
-		}
-	}
 }

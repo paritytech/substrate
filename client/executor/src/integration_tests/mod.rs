@@ -21,7 +21,6 @@ mod linux;
 mod sandbox;
 
 use codec::{Decode, Encode};
-use hex_literal::hex;
 use sc_executor_common::{
 	error::Error,
 	runtime_blob::RuntimeBlob,
@@ -662,7 +661,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 	// to our allocator algorithm there are inefficiencies.
 	const REQUIRED_MEMORY_PAGES: usize = 32;
 
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Extra(REQUIRED_MEMORY_PAGES));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::ExtraMax(REQUIRED_MEMORY_PAGES));
 	let mut instance = runtime.new_instance().unwrap();
 
 	// On the first invocation we allocate approx. 768KB (75%) of stack and then trap.
@@ -676,7 +675,7 @@ fn restoration_of_globals(wasm_method: WasmExecutionMethod) {
 
 test_wasm_execution!(interpreted_only heap_is_reset_between_calls);
 fn heap_is_reset_between_calls(wasm_method: WasmExecutionMethod) {
-	let runtime = mk_test_runtime(wasm_method, HeapPages::Extra(1024));
+	let runtime = mk_test_runtime(wasm_method, HeapPages::ExtraMax(1024));
 	let mut instance = runtime.new_instance().unwrap();
 
 	let heap_base = instance

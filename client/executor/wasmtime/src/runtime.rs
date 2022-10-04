@@ -347,21 +347,17 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 	const WASM_PAGE_SIZE: u64 = 65536;
 
 	config.memory_init_cow(use_cow);
-	config.memory_guaranteed_dense_image_size(
-		semantics
-			.heap_pages
-			.maximum()
-			.map(|max| max as u64 * WASM_PAGE_SIZE)
-			.unwrap_or(u64::MAX),
-	);
+	config.memory_guaranteed_dense_image_size(match semantics.heap_pages {
+		HeapPages::Max(max) => max as u64 * WASM_PAGE_SIZE,
+		_ => u64::MAX,
+	});
 
 	if use_pooling {
 		const MAX_WASM_PAGES: u64 = 0x10000;
 
 		let memory_pages = match semantics.heap_pages {
-			HeapPages::Extra(extra) => MAX_WASM_PAGES,
 			HeapPages::Max(max) => max as u64,
-			HeapPages::Dynamic => MAX_WASM_PAGES,
+			_ => MAX_WASM_PAGES,
 		};
 
 		config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
@@ -670,11 +666,7 @@ where
 		.instantiate_pre(&mut store, &module)
 		.map_err(|e| WasmError::Other(format!("cannot pre-instantiate module: {:#}", e)))?;
 
-	Ok(WasmtimeRuntime {
-		engine,
-		instance_pre: Arc::new(instance_pre),
-		instantiation_strategy,
-	})
+	Ok(WasmtimeRuntime { engine, instance_pre: Arc::new(instance_pre), instantiation_strategy })
 }
 
 fn prepare_blob_for_compilation(
