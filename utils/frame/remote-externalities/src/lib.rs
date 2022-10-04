@@ -995,6 +995,31 @@ mod remote_tests {
 		}
 	}
 
+	// TODO: maybe remove before merge, although, it is an okay example :shrug:
+	#[tokio::test]
+	async fn example_staking_slashing_spans() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				pallets: vec!["because_empty_vec_is_treated_as_all_pallets_:(".to_string()],
+				transport: env!("WS").to_owned().into(),
+				..Default::default()
+			}))
+			// Staking::SlashingSpans
+			.inject_hashed_prefix(&hex_literal::hex![
+				"5f3e4907f716ac89b6347d15ececedcaab6a212bc08a5603828f33f90ec4a139"
+			])
+			.build()
+			.await
+			.unwrap()
+			.execute_with(|| {
+				use codec::Encode;
+				let x = pallet_staking::SlashingSpans::<kitchensink_runtime::Runtime>::iter()
+					.collect::<Vec<_>>();
+				println!("Len = {:?} / encoded_size = {:?}", x.len(), x.encoded_size());
+			});
+	}
+
 	#[tokio::test]
 	#[ignore = "too slow"]
 	async fn can_build_one_big_pallet() {
