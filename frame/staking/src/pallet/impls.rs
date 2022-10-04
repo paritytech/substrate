@@ -40,7 +40,7 @@ use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	EraIndex, SessionIndex, StakingInterface,
 };
-use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use sp_std::prelude::*;
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
@@ -348,6 +348,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Start a new era. It does:
 	///
 	/// * Increment `active_era.index`,
 	/// * reset `active_era.start`,
@@ -696,7 +697,6 @@ impl<T: Config> Pallet<T> {
 
 		// cache a few things.
 		let weight_of = Self::weight_of_fn();
-		let slashing_spans = <SlashingSpans<T>>::iter().collect::<BTreeMap<_, _>>();
 
 		let mut voters_seen = 0u32;
 		let mut validators_taken = 0u32;
@@ -714,18 +714,12 @@ impl<T: Config> Pallet<T> {
 				None => break,
 			};
 
-			if let Some(Nominations { submitted_in, mut targets, suppressed: _ }) =
-				<Nominators<T>>::get(&voter)
-			{
-				// if this voter is a nominator:
-				targets.retain(|stash| {
-					slashing_spans
-						.get(stash)
-						.map_or(true, |spans| submitted_in >= spans.last_nonzero_slash())
-				});
-				if !targets.len().is_zero() {
+			if let Some(Nominations { targets, .. }) = <Nominators<T>>::get(&voter) {
+				if !targets.is_empty() {
 					all_voters.push((voter.clone(), weight_of(&voter), targets));
 					nominators_taken.saturating_inc();
+				} else {
+					// A nominator's nominations might become empty due to slashing.
 				}
 			} else if Validators::<T>::contains_key(&voter) {
 				// if this voter is a validator:
@@ -748,7 +742,7 @@ impl<T: Config> Pallet<T> {
 					warn,
 					"DEFENSIVE: invalid item in `VoterList`: {:?}, this nominator probably has too many nominations now",
 					voter
-				)
+				);
 			}
 		}
 
@@ -758,7 +752,7 @@ impl<T: Config> Pallet<T> {
 		Self::register_weight(T::WeightInfo::get_npos_voters(
 			validators_taken,
 			nominators_taken,
-			slashing_spans.len() as u32,
+			0,
 		));
 
 		log!(
@@ -1260,6 +1254,12 @@ where
 				now: active_era,
 				reward_proportion,
 				disable_strategy,
+			});
+
+			Self::deposit_event(Event::<T>::SlashReported {
+				validator: stash.clone(),
+				fraction: slash_fraction.clone(),
+				slash_era,
 			});
 
 			if let Some(mut unapplied) = unapplied {

@@ -297,7 +297,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		key: StorageKey,
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
-		trace!(target: LOG_TARGET, "rpc: get_storage");
+		trace!(target: LOG_TARGET, "rpc: get_storage {:?} {:?}", key, maybe_at);
 		self.as_online().rpc_client().get_storage(key, maybe_at).await.map_err(|e| {
 			error!(target: LOG_TARGET, "Error = {:?}", e);
 			"rpc get_storage failed."
@@ -765,6 +765,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
 	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
+	///
 	/// This should be used to inject a "PREFIX", like a storage (double) map.
 	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
 		self.hashed_prefixes.push(hashed.to_vec());
@@ -773,6 +775,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Just a utility wrapper of [`Self::inject_hashed_prefix`] that injects
 	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
+	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
 	///
 	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
 	///
@@ -788,6 +792,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
+	///
+	/// Only relevant is `Mode::Online` is being used. Noop otherwise.
 	///
 	/// This should be used to inject a "KEY", like a storage value.
 	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
@@ -934,7 +940,6 @@ mod tests {
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
-	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
 	async fn offline_else_online_works() {
@@ -953,7 +958,7 @@ mod remote_tests {
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		// this shows that in the second run, we are not using the remote
@@ -971,7 +976,7 @@ mod remote_tests {
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1001,7 +1006,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1016,7 +1021,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		Builder::<Block>::new()
@@ -1027,7 +1032,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1042,7 +1047,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		Builder::<Block>::new()
@@ -1053,7 +1058,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1068,7 +1073,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1109,7 +1114,7 @@ mod remote_tests {
 			.inject_default_child_tree_prefix()
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1147,7 +1152,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1186,7 +1191,7 @@ mod remote_tests {
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 }

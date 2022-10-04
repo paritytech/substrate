@@ -515,7 +515,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn slashing_spans)]
 	#[pallet::unbounded]
-	pub(crate) type SlashingSpans<T: Config> =
+	pub type SlashingSpans<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
 
 	/// Records information about the maximum slash of a stash within a slashing span,
@@ -545,6 +545,7 @@ pub mod pallet {
 	/// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
+	// TODO: invariant test for the above.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn offending_validators)]
@@ -665,8 +666,11 @@ pub mod pallet {
 		EraPaid { era_index: EraIndex, validator_payout: BalanceOf<T>, remainder: BalanceOf<T> },
 		/// The nominator has been rewarded by this amount.
 		Rewarded { stash: T::AccountId, amount: BalanceOf<T> },
-		/// One staker (and potentially its nominators) has been slashed by the given amount.
+		/// A staker (validator or nominator) has been slashed by the given amount.
 		Slashed { staker: T::AccountId, amount: BalanceOf<T> },
+		/// A slash for the given validator, for the given percentage of their stake, at the given
+		/// era as been reporter
+		SlashReported { validator: T::AccountId, fraction: Perbill, slash_era: EraIndex },
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.
 		OldSlashingReportDiscarded { session_index: SessionIndex },
