@@ -36,15 +36,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(item.owner == caller, Error::<T, I>::NoPermission);
 
 		match maybe_desired_item_id {
-			Some(desired_item_id) => {
-				if !(Item::<T, I>::contains_key(&desired_collection_id, &desired_item_id)) {
-					return Err(Error::<T, I>::UnknownItem.into())
-				}
-			},
-			None =>
-				if !(Collection::<T, I>::contains_key(&desired_collection_id)) {
-					return Err(Error::<T, I>::UnknownCollection.into())
-				},
+			Some(desired_item_id) => ensure!(
+				Item::<T, I>::contains_key(&desired_collection_id, &desired_item_id),
+				Error::<T, I>::UnknownItem
+			),
+			None => ensure!(
+				Collection::<T, I>::contains_key(&desired_collection_id),
+				Error::<T, I>::UnknownCollection
+			),
 		};
 
 		let now = frame_system::Pallet::<T>::block_number();
