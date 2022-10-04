@@ -881,7 +881,7 @@ pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
 /// along with some commonly used stdlib types such as [`Option`] and `PhantomData`, and hence
 /// in most use cases, a manual implementation is not necessary and is discouraged.
 ///
-/// The generic `T` must not bound anything and the where clause is not allowed. That said,
+/// The generic `T` must not bound anything and a `where` clause is not allowed. That said,
 /// bounds and/or a where clause should not needed for any use-case.
 ///
 /// ## Macro expansion
