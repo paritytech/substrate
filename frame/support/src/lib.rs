@@ -2022,9 +2022,10 @@ pub mod pallet_prelude {
 /// # Genesis build: `#[pallet::genesis_build]` (optional)
 ///
 /// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
-/// is built.
+/// is built. This takes as input the `GenesisConfig` type (as `self`) and constructs the
+/// pallet's initial state.
 ///
-/// Item must be defined as:
+/// The impl must be defined as:
 ///
 /// ```ignore
 /// #[pallet::genesis_build]
