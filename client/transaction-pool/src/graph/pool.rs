@@ -99,7 +99,7 @@ pub trait ChainApi: Send + Sync {
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
 
-	/// Returns a tree route
+	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
 	fn tree_route(
 		&self,
 		from: <Self::Block as BlockT>::Hash,

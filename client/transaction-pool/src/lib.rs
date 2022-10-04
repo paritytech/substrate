@@ -863,14 +863,16 @@ where
 			Ok(tree_route) => tree_route,
 			Err(e) =>
 				return Err(format!(
-					"Error [{e}] occured while computin tree_route from {new_hash:?} to \
+					"Error [{e}] occured while computing tree_route from {new_hash:?} to \
 									previously finalized: {best_block:?}"
 				)),
 		};
 
-		log::trace!(target: "txpool", "resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} \
-					finalized_block:{:?}",
-					new_hash, finalized, tree_route,best_block, self.recent_finalized_block);
+		log::trace!(
+			target: "txpool", 
+			"resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} finalized_block:{:?}",
+			new_hash, finalized, tree_route, best_block, self.recent_finalized_block
+		);
 
 		if let Some(finalized_block) = self.recent_finalized_block {
 			// block was already finalized
@@ -886,7 +888,6 @@ where
 					"Recently finalized block {} would be retracted by Finalized event {}",
 					finalized_block, new_hash
 				);
-				log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path");
 				return Ok((false, None))
 			}
 		}
@@ -915,7 +916,6 @@ where
 			self.recent_best_block = Some(new_hash);
 		}
 
-		log::trace!(target: "txpool", "handle_enactment: proceed....");
 		return Ok((true, Some(tree_route)))
 	}
 }

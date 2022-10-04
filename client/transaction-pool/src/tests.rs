@@ -175,7 +175,6 @@ impl ChainApi for TestApi {
 		Ok(None)
 	}
 
-	/// Returns a tree route
 	fn tree_route(
 		&self,
 		_from: <Self::Block as BlockT>::Hash,

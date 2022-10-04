@@ -336,7 +336,6 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		})
 	}
 
-	/// Returns a tree route
 	fn tree_route(
 		&self,
 		from: <Self::Block as BlockT>::Hash,
