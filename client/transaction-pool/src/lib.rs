@@ -770,27 +770,14 @@ where
 
 		match event {
 			ChainEvent::NewBestBlock { .. } => handle_enactment,
-			ChainEvent::Finalized { hash, .. } => {
+			ChainEvent::Finalized { hash, tree_route } => {
 				let pool = self.pool.clone();
-
-				let enacted = if let Some(prev_finalized_block) = prev_finalized_block {
-					let tree_route = match self.api.tree_route(prev_finalized_block, hash) {
-						Ok(tree_route) => tree_route.expect("tree_route exists. qed."),
-						Err(e) => {
-							log::warn!(target:"txpool", "Error [{e}] occured while computing tree_route from {hash:?} to previously finalized: {prev_finalized_block:?}");
-							return ready(()).boxed()
-						},
-					};
-					tree_route.enacted().iter().map(|b| b.hash).collect()
-				} else {
-					vec![hash]
-				};
 
 				async move {
 					handle_enactment.await;
 
-					log::trace!(target:"txpool", "on-finalized enacted: {enacted:?}, previously finalized: {prev_finalized_block:?}");
-					for hash in enacted.iter() {
+					log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized: {prev_finalized_block:?}");
+					for hash in tree_route.iter().chain(std::iter::once(&hash)) {
 						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
 							log::warn!(
 							target: "txpool",

@@ -1328,7 +1328,10 @@ fn two_blocks_delayed_finalization_works() {
 	}
 
 	{
-		let event = ChainEvent::Finalized { hash: c1_header.hash(), tree_route: Arc::from(vec![]) };
+		let event = ChainEvent::Finalized {
+			hash: c1_header.hash(),
+			tree_route: Arc::from(vec![a_header.hash(), b1_header.hash()]),
+		};
 		block_on(pool.maintain(event));
 	}
 
@@ -1497,7 +1500,10 @@ fn best_block_after_finalization_does_not_retract() {
 	}
 
 	{
-		let event = ChainEvent::Finalized { hash: c1_header.hash(), tree_route: Arc::from(vec![]) };
+		let event = ChainEvent::Finalized {
+			hash: c1_header.hash(),
+			tree_route: Arc::from(vec![a_header.hash(), b1_header.hash()]),
+		};
 		block_on(pool.maintain(event));
 		assert_eq!(pool.status().ready, 0);
 	}
