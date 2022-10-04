@@ -1719,7 +1719,7 @@ pub mod pallet_prelude {
 ///
 /// # Error: `#[pallet::error]` (optional)
 ///
-/// The `#[pallet::error]` attribute allows you to define an error type that will be returned
+/// The `#[pallet::error]` attribute allows you to define an error enum that will be returned
 /// from the dispatchable when an error occurs. The information for this error type is then
 /// stored in metadata.
 ///
