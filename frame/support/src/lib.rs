@@ -1871,7 +1871,8 @@ pub mod pallet_prelude {
 /// ## `#[pallet::storage_prefix = "SomeName"]` (optional)
 ///
 /// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
-/// storage prefix to use, see how `Prefix` generic is implemented above.
+/// storage prefix to use, see how `Prefix` generic is implemented above. This is helpful if
+/// you wish to rename the storage field but don't want to perform a migration.
 ///
 /// E.g:
 ///

@@ -1018,8 +1018,8 @@ pub fn getter(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
-/// storage prefix to use. This is helpful if you wish to rename the storage
-/// field but don't want to perform a migration.
+/// storage prefix to use. This is helpful if you wish to rename the storage field but don't
+/// want to perform a migration.
 ///
 /// E.g:
 ///
