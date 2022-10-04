@@ -719,7 +719,7 @@ mod tests {
 				assert_eq!(balances(&account), (95, 5));
 			}
 
-			assert!(MultiPhase::finalize_signed_phase());
+			assert_ok!(MultiPhase::do_elect());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				let account = 99 + s as u64;
@@ -739,12 +739,20 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
-					Event::Rewarded { account: 99, value: 7 }
+					Event::SolutionStored { compute: Signed, prev_ejected: false },
+					Event::SolutionStored { compute: Signed, prev_ejected: false },
+					Event::SolutionStored { compute: Signed, prev_ejected: false },
+					Event::SolutionStored { compute: Signed, prev_ejected: false },
+					Event::SolutionStored { compute: Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 },
+					Event::ElectionFinalized {
+						compute: Signed,
+						score: ElectionScore {
+							minimal_stake: 40,
+							sum_stake: 100,
+							sum_stake_squared: 5200
+						}
+					}
 				]
 			);
 		});
