@@ -869,7 +869,7 @@ where
 		};
 
 		log::trace!(
-			target: "txpool", 
+			target: "txpool",
 			"resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} finalized_block:{:?}",
 			new_hash, finalized, tree_route, best_block, self.recent_finalized_block
 		);
@@ -883,7 +883,7 @@ where
 
 			// check if recently finalized block is on retracted path...
 			if tree_route.retracted().iter().any(|x| x.hash == finalized_block) {
-				log::warn!(
+				log::debug!(
 					target: "txpool",
 					"Recently finalized block {} would be retracted by Finalized event {}",
 					finalized_block, new_hash
@@ -905,8 +905,7 @@ where
 			}
 
 			// check if the recent best_block was retracted
-			let best_block_retracted =
-				tree_route.retracted().any(|x| x.hash == best_block);
+			let best_block_retracted = tree_route.retracted().any(|x| x.hash == best_block);
 
 			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
 			if best_block_retracted {
