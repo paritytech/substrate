@@ -1951,7 +1951,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 			assert!(MultiPhase::snapshot().is_some());
 
-			roll_to(15);
+			roll_to(30);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
 			assert_ok!(MultiPhase::elect());
@@ -1989,7 +1989,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 
-			roll_to(15);
+			roll_to(30);
 			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_ok!(MultiPhase::elect());
@@ -2026,7 +2026,7 @@ mod tests {
 			roll_to(20);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(15);
+			roll_to(30);
 			assert!(MultiPhase::current_phase().is_off());
 
 			// This module is now only capable of doing on-chain backup.
@@ -2161,7 +2161,7 @@ mod tests {
 				Box::new(solution)
 			));
 
-			roll_to(15);
+			roll_to(30);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
@@ -2205,7 +2205,7 @@ mod tests {
 			));
 			assert!(MultiPhase::queued_solution().is_some());
 
-			roll_to(15);
+			roll_to(30);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
