@@ -26,8 +26,8 @@ use crate::{
 	tests::test_utils::{get_contract, get_contract_checked},
 	wasm::{PrefabWasmModule, ReturnCode as RuntimeReturnCode},
 	weights::WeightInfo,
-	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator,
-	DefaultContractAccessWeight, DeletionQueue, Error, Pallet, Schedule,
+	BalanceOf, Code, CodeStorage, Config, ContractInfoOf, DefaultAddressGenerator, DeletionQueue,
+	Error, Pallet, Schedule,
 };
 use assert_matches::assert_matches;
 use codec::Encode;
@@ -404,7 +404,6 @@ impl Config for Test {
 	type DepositPerByte = DepositPerByte;
 	type DepositPerItem = DepositPerItem;
 	type AddressGenerator = DefaultAddressGenerator;
-	type ContractAccessWeight = DefaultContractAccessWeight<BlockWeights>;
 	type MaxCodeLen = ConstU32<{ 128 * 1024 }>;
 	type MaxStorageKeyLen = ConstU32<128>;
 }
@@ -414,7 +413,7 @@ pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-pub const GAS_LIMIT: Weight = Weight::from_ref_time(100_000_000_000).set_proof_size(u64::MAX);
+pub const GAS_LIMIT: Weight = Weight::from_ref_time(100_000_000_000).set_proof_size(256 * 1024);
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -674,7 +673,7 @@ fn run_out_of_gas() {
 				RuntimeOrigin::signed(ALICE),
 				addr, // newly created account
 				0,
-				Weight::from_ref_time(1_000_000_000_000),
+				Weight::from_ref_time(1_000_000_000_000).set_proof_size(u64::MAX),
 				None,
 				vec![],
 			),
@@ -2557,6 +2556,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 #[test]
 #[cfg(feature = "unstable-interface")]
 fn gas_estimation_call_runtime() {
+	use codec::Decode;
 	let (caller_code, caller_hash) = compile_module::<Test>("call_runtime").unwrap();
 	let (callee_code, callee_hash) = compile_module::<Test>("dummy").unwrap();
 	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
@@ -2591,7 +2591,7 @@ fn gas_estimation_call_runtime() {
 		let call = RuntimeCall::Contracts(crate::Call::call {
 			dest: addr_callee,
 			value: 0,
-			gas_limit: GAS_LIMIT / 3,
+			gas_limit: GAS_LIMIT.set_ref_time(GAS_LIMIT.ref_time() / 3),
 			storage_deposit_limit: None,
 			data: vec![],
 		});
@@ -2604,8 +2604,9 @@ fn gas_estimation_call_runtime() {
 			call.encode(),
 			false,
 		);
-		assert_ok!(&result.result);
-
+		// contract encodes the result of the dispatch runtime
+		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
+		assert_eq!(outcome, 0);
 		assert!(result.gas_required > result.gas_consumed);
 
 		// Make the same call using the required gas. Should succeed.
