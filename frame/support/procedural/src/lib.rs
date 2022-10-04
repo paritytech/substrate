@@ -1127,7 +1127,7 @@ pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
 }
 
 /// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
-/// is built.
+/// is built. This takes as input the `GenesisConfig` type (as `self`) and constructs the pallet's initial state.
 ///
 /// Item must be defined as:
 ///
