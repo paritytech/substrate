@@ -26,25 +26,26 @@ use sp_runtime::{
 	DispatchError, RuntimeDebug,
 };
 use sp_std::prelude::*;
+use sp_weights::Weight;
 
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
 /// It contains the execution result together with some auxiliary information.
 #[derive(Eq, PartialEq, Encode, Decode, RuntimeDebug)]
 pub struct ContractResult<R, Balance> {
-	/// How much gas was consumed during execution.
-	pub gas_consumed: u64,
-	/// How much gas is required as gas limit in order to execute this call.
+	/// How much weight was consumed during execution.
+	pub gas_consumed: Weight,
+	/// How much weight is required as gas limit in order to execute this call.
 	///
-	/// This value should be used to determine the gas limit for on-chain execution.
+	/// This value should be used to determine the weight limit for on-chain execution.
 	///
 	/// # Note
 	///
-	/// This can only different from [`Self::gas_consumed`] when weight pre charging
+	/// This can only different from [`Self::weight_consumed`] when weight pre charging
 	/// is used. Currently, only `seal_call_runtime` makes use of pre charging.
 	/// Additionally, any `seal_call` or `seal_instantiate` makes use of pre-charging
 	/// when a non-zero `gas_limit` argument is supplied.
-	pub gas_required: u64,
+	pub gas_required: Weight,
 	/// How much balance was deposited and reserved during execution in order to pay for storage.
 	///
 	/// The storage deposit is never actually charged from the caller in case of [`Self::result`]

@@ -1759,7 +1759,7 @@ fn chain_extension_works() {
 			false,
 		);
 		assert_ok!(result.result);
-		assert_eq!(result.gas_consumed, gas_consumed + 42);
+		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 42);
 		let result = Contracts::bare_call(
 			ALICE,
 			addr.clone(),
@@ -1770,7 +1770,7 @@ fn chain_extension_works() {
 			false,
 		);
 		assert_ok!(result.result);
-		assert_eq!(result.gas_consumed, gas_consumed + 95);
+		assert_eq!(result.gas_consumed.ref_time(), gas_consumed.ref_time() + 95);
 
 		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
 		let result = Contracts::bare_call(
@@ -2408,10 +2408,10 @@ fn reinstrument_does_charge() {
 		let result2 =
 			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, zero.clone(), false);
 		assert!(!result2.result.unwrap().did_revert());
-		assert!(result2.gas_consumed > result1.gas_consumed);
+		assert!(result2.gas_consumed.ref_time() > result1.gas_consumed.ref_time());
 		assert_eq!(
-			result2.gas_consumed,
-			result1.gas_consumed + <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
+			result2.gas_consumed.ref_time(),
+			result1.gas_consumed.ref_time() + <Test as Config>::WeightInfo::reinstrument(code_len).ref_time(),
 		);
 	});
 }
@@ -2535,7 +2535,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 		assert_ok!(&result.result);
 
 		// We have a subcall with a fixed gas limit. This constitutes precharging.
-		assert!(result.gas_required > result.gas_consumed);
+		assert!(result.gas_required.ref_time() > result.gas_consumed.ref_time());
 
 		// Make the same call using the estimated gas. Should succeed.
 		assert_ok!(
@@ -2543,7 +2543,7 @@ fn gas_estimation_nested_call_fixed_limit() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::from_ref_time(result.gas_required).set_proof_size(u64::MAX),
+				result.gas_required,
 				Some(result.storage_deposit.charge_or_zero()),
 				input,
 				false,
@@ -2607,7 +2607,7 @@ fn gas_estimation_call_runtime() {
 		// contract encodes the result of the dispatch runtime
 		let outcome = u32::decode(&mut result.result.unwrap().data.as_ref()).unwrap();
 		assert_eq!(outcome, 0);
-		assert!(result.gas_required > result.gas_consumed);
+		assert!(result.gas_required.ref_time() > result.gas_consumed.ref_time());
 
 		// Make the same call using the required gas. Should succeed.
 		assert_ok!(
@@ -2615,7 +2615,7 @@ fn gas_estimation_call_runtime() {
 				ALICE,
 				addr_caller,
 				0,
-				Weight::from_ref_time(result.gas_required).set_proof_size(u64::MAX),
+				result.gas_required,
 				None,
 				call.encode(),
 				false,

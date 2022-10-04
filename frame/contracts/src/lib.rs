@@ -1015,8 +1015,8 @@ where
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
-			gas_consumed: output.gas_meter.gas_consumed().ref_time(),
-			gas_required: output.gas_meter.gas_required().ref_time(),
+			gas_consumed: output.gas_meter.gas_consumed(),
+			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
@@ -1060,8 +1060,8 @@ where
 				.result
 				.map(|(account_id, result)| InstantiateReturnValue { result, account_id })
 				.map_err(|e| e.error),
-			gas_consumed: output.gas_meter.gas_consumed().ref_time(),
-			gas_required: output.gas_meter.gas_required().ref_time(),
+			gas_consumed: output.gas_meter.gas_consumed(),
+			gas_required: output.gas_meter.gas_required(),
 			storage_deposit: output.storage_deposit,
 			debug_message: debug_message.unwrap_or_default(),
 		}
