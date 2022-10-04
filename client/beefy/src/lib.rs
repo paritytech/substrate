@@ -153,11 +153,7 @@ where
 }
 
 /// BEEFY gadget network parameters.
-pub struct BeefyNetworkParams<B, N>
-where
-	B: Block,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
-{
+pub struct BeefyNetworkParams<B: Block, N> {
 	/// Network implementing gossip, requests and sync-oracle.
 	pub network: Arc<N>,
 	/// Chain specific BEEFY gossip protocol name. See
@@ -171,15 +167,7 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N, R>
-where
-	B: Block,
-	BE: Backend<B>,
-	C: Client<B, BE>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
-{
+pub struct BeefyParams<B: Block, BE, C, N, R> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
