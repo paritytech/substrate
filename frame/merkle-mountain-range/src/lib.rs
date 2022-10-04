@@ -352,10 +352,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
-	>
-	where
-		T::BlockNumber: From<LeafIndex>,
-	{
+	> {
 		Self::generate_historical_batch_proof(block_numbers, Self::mmr_leaves())
 	}
 
@@ -371,10 +368,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
-	>
-	where
-		T::BlockNumber: From<LeafIndex>,
-	{
+	> {
 		if leaves_count > Self::mmr_leaves() {
 			return Err(Error::InvalidLeavesCount)
 		}
