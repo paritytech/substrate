@@ -739,14 +739,14 @@ mod tests {
 				multi_phase_events(),
 				vec![
 					Event::SignedPhaseStarted { round: 1 },
-					Event::SolutionStored { compute: Signed, prev_ejected: false },
-					Event::SolutionStored { compute: Signed, prev_ejected: false },
-					Event::SolutionStored { compute: Signed, prev_ejected: false },
-					Event::SolutionStored { compute: Signed, prev_ejected: false },
-					Event::SolutionStored { compute: Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
 					Event::Rewarded { account: 99, value: 7 },
 					Event::ElectionFinalized {
-						compute: Signed,
+						compute: ElectionCompute::Signed,
 						score: ElectionScore {
 							minimal_stake: 40,
 							sum_stake: 100,

@@ -2049,8 +2049,6 @@ mod tests {
 		// An early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
 			// Signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
@@ -2058,7 +2056,6 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			// An unexpected call to elect.
-			roll_to(20);
 			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
@@ -2087,8 +2084,6 @@ mod tests {
 		// an early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
 			// signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
@@ -2108,7 +2103,6 @@ mod tests {
 			}
 
 			// an unexpected call to elect.
-			roll_to(20);
 			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
@@ -2149,9 +2143,6 @@ mod tests {
 	#[test]
 	fn check_events_with_compute_signed() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
 			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
@@ -2206,7 +2197,6 @@ mod tests {
 			));
 			assert!(MultiPhase::queued_solution().is_some());
 
-			roll_to(30);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
@@ -2349,7 +2339,6 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// On-chain backup works though.
-			roll_to(29);
 			let supports = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
 
