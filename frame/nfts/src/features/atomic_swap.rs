@@ -58,7 +58,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				desired_collection: desired_collection_id,
 				desired_item: maybe_desired_item_id,
 				price: maybe_price.clone(),
-				deadline: deadline.clone(),
+				deadline,
 			},
 		);
 
