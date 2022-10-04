@@ -31,6 +31,7 @@ mod revalidation;
 mod tests;
 
 pub use crate::api::FullChainApi;
+use async_trait::async_trait;
 use futures::{
 	channel::oneshot,
 	future::{self, ready},
@@ -587,11 +588,7 @@ where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	fn handle_enactment(
-		&self,
-		hash: Block::Hash,
-		tree_route: Option<TreeRoute<Block>>,
-	) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+	async fn handle_enactment(&self, hash: Block::Hash, tree_route: Option<TreeRoute<Block>>) {
 		log::trace!(target: "txpool", "handle_enactment hash:{hash:?} tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
 		let api = self.api.clone();
@@ -605,7 +602,7 @@ where
 				"Skipping chain event - no number for that block {:?}",
 				id,
 				);
-				return Box::pin(ready(()))
+				return
 			},
 		};
 
@@ -619,126 +616,122 @@ where
 		let ready_poll = self.ready_poll.clone();
 		let metrics = self.metrics.clone();
 
-		async move {
-			// We keep track of everything we prune so that later we won't add
-			// transactions with those hashes from the retracted blocks.
-			let mut pruned_log = HashSet::<ExtrinsicHash<PoolApi>>::new();
+		// We keep track of everything we prune so that later we won't add
+		// transactions with those hashes from the retracted blocks.
+		let mut pruned_log = HashSet::<ExtrinsicHash<PoolApi>>::new();
 
-			// If there is a tree route, we use this to prune known tx based on the enacted
-			// blocks. Before pruning enacted transactions, we inform the listeners about
-			// retracted blocks and their transactions. This order is important, because
-			// if we enact and retract the same transaction at the same time, we want to
-			// send first the retract and than the prune event.
-			if let Some(ref tree_route) = tree_route {
-				for retracted in tree_route.retracted() {
-					// notify txs awaiting finality that it has been retracted
-					pool.validated_pool().on_block_retracted(retracted.hash);
-				}
+		// If there is a tree route, we use this to prune known tx based on the enacted
+		// blocks. Before pruning enacted transactions, we inform the listeners about
+		// retracted blocks and their transactions. This order is important, because
+		// if we enact and retract the same transaction at the same time, we want to
+		// send first the retract and than the prune event.
+		if let Some(ref tree_route) = tree_route {
+			for retracted in tree_route.retracted() {
+				// notify txs awaiting finality that it has been retracted
+				pool.validated_pool().on_block_retracted(retracted.hash);
+			}
 
-				future::join_all(
-					tree_route
-						.enacted()
-						.iter()
-						.map(|h| prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)),
+			future::join_all(
+				tree_route
+					.enacted()
+					.iter()
+					.map(|h| prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)),
+			)
+			.await
+			.into_iter()
+			.for_each(|enacted_log| {
+				pruned_log.extend(enacted_log);
+			});
+		} else {
+			pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
+		}
+
+		metrics.report(|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64));
+
+		if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
+			let mut resubmit_transactions = Vec::new();
+
+			for retracted in tree_route.retracted() {
+				let hash = retracted.hash;
+
+				let block_transactions = api
+					.block_body(&BlockId::hash(hash))
+					.await
+					.unwrap_or_else(|e| {
+						log::warn!("Failed to fetch block body: {}", e);
+						None
+					})
+					.unwrap_or_default()
+					.into_iter()
+					.filter(|tx| tx.is_signed().unwrap_or(true));
+
+				let mut resubmitted_to_report = 0;
+
+				resubmit_transactions.extend(block_transactions.into_iter().filter(|tx| {
+					let tx_hash = pool.hash_of(tx);
+					let contains = pruned_log.contains(&tx_hash);
+
+					// need to count all transactions, not just filtered, here
+					resubmitted_to_report += 1;
+
+					if !contains {
+						log::debug!(
+						target: "txpool",
+						"[{:?}]: Resubmitting from retracted block {:?}",
+						tx_hash,
+						hash,
+						);
+					}
+					!contains
+				}));
+
+				metrics.report(|metrics| {
+					metrics.block_transactions_resubmitted.inc_by(resubmitted_to_report)
+				});
+			}
+
+			if let Err(e) = pool
+				.resubmit_at(
+					&id,
+					// These transactions are coming from retracted blocks, we should
+					// simply consider them external.
+					TransactionSource::External,
+					resubmit_transactions,
 				)
 				.await
-				.into_iter()
-				.for_each(|enacted_log| {
-					pruned_log.extend(enacted_log);
-				});
-			} else {
-				pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
-			}
-
-			metrics.report(|metrics| {
-				metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
-			});
-
-			if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
-				let mut resubmit_transactions = Vec::new();
-
-				for retracted in tree_route.retracted() {
-					let hash = retracted.hash;
-
-					let block_transactions = api
-						.block_body(&BlockId::hash(hash))
-						.await
-						.unwrap_or_else(|e| {
-							log::warn!("Failed to fetch block body: {}", e);
-							None
-						})
-						.unwrap_or_default()
-						.into_iter()
-						.filter(|tx| tx.is_signed().unwrap_or(true));
-
-					let mut resubmitted_to_report = 0;
-
-					resubmit_transactions.extend(block_transactions.into_iter().filter(|tx| {
-						let tx_hash = pool.hash_of(tx);
-						let contains = pruned_log.contains(&tx_hash);
-
-						// need to count all transactions, not just filtered, here
-						resubmitted_to_report += 1;
-
-						if !contains {
-							log::debug!(
-							target: "txpool",
-							"[{:?}]: Resubmitting from retracted block {:?}",
-							tx_hash,
-							hash,
-							);
-						}
-						!contains
-					}));
-
-					metrics.report(|metrics| {
-						metrics.block_transactions_resubmitted.inc_by(resubmitted_to_report)
-					});
-				}
-
-				if let Err(e) = pool
-					.resubmit_at(
-						&id,
-						// These transactions are coming from retracted blocks, we should
-						// simply consider them external.
-						TransactionSource::External,
-						resubmit_transactions,
-					)
-					.await
-				{
-					log::debug!(
-					target: "txpool",
-					"[{:?}] Error re-submitting transactions: {}",
-					id,
-					e,
-					)
-				}
-			}
-
-			let extra_pool = pool.clone();
-			// After #5200 lands, this arguably might be moved to the
-			// handler of "all blocks notification".
-			ready_poll
-				.lock()
-				.trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
-
-			if next_action.revalidate {
-				let hashes = pool.validated_pool().ready().map(|tx| tx.hash).collect();
-				revalidation_queue.revalidate_later(block_number, hashes).await;
-
-				revalidation_strategy.lock().clear();
+			{
+				log::debug!(
+				target: "txpool",
+				"[{:?}] Error re-submitting transactions: {}",
+				id,
+				e,
+				)
 			}
 		}
-		.boxed()
+
+		let extra_pool = pool.clone();
+		// After #5200 lands, this arguably might be moved to the
+		// handler of "all blocks notification".
+		ready_poll
+			.lock()
+			.trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
+
+		if next_action.revalidate {
+			let hashes = pool.validated_pool().ready().map(|tx| tx.hash).collect();
+			revalidation_queue.revalidate_later(block_number, hashes).await;
+
+			revalidation_strategy.lock().clear();
+		}
 	}
 }
 
+#[async_trait]
 impl<PoolApi, Block> MaintainedTransactionPool for BasicPool<PoolApi, Block>
 where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+	async fn maintain(&self, event: ChainEvent<Self::Block>) {
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block;
 		let (proceed, tree_route) = match self
 			.enactment_state
@@ -747,7 +740,7 @@ where
 		{
 			Err(msg) => {
 				log::warn!(target:"txpool", "{msg}");
-				return Box::pin(ready(()))
+				return
 			},
 			Ok(r) => r,
 		};
@@ -756,33 +749,22 @@ where
 			ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } => hash,
 		};
 
-		let handle_enactment = if proceed {
-			self.handle_enactment(hash, tree_route.clone())
-		} else {
-			ready(()).boxed()
-		};
+		if proceed {
+			self.handle_enactment(hash, tree_route).await;
+		}
 
-		match event {
-			ChainEvent::NewBestBlock { .. } => handle_enactment,
-			ChainEvent::Finalized { hash, tree_route } => {
-				let pool = self.pool.clone();
-
-				async move {
-					handle_enactment.await;
-
-					log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized: {prev_finalized_block:?}");
-					for hash in tree_route.iter().chain(std::iter::once(&hash)) {
-						if let Err(e) = pool.validated_pool().on_block_finalized(*hash).await {
-							log::warn!(
-							target: "txpool",
-							"Error [{}] occurred while attempting to notify watchers of finalization {}",
-							e, hash
-							)
-						}
-					}
+		if let ChainEvent::Finalized { hash, tree_route } = event {
+			log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized:
+		{prev_finalized_block:?}");
+			for hash in tree_route.iter().chain(std::iter::once(&hash)) {
+				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
+					log::warn!(
+						target: "txpool",
+						"Error [{}] occurred while attempting to notify watchers of finalization {}",
+						e, hash
+					)
 				}
-				.boxed()
-			},
+			}
 		}
 	}
 }

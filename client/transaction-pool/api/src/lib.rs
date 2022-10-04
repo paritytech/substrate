@@ -21,6 +21,7 @@
 
 pub mod error;
 
+use async_trait::async_trait;
 use futures::{Future, Stream};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_runtime::{
@@ -180,10 +181,7 @@ pub trait TransactionPool: Send + Sync {
 	/// Transaction hash type.
 	type Hash: Hash + Eq + Member + Serialize + DeserializeOwned;
 	/// In-pool transaction type.
-	type InPoolTransaction: InPoolTransaction<
-		Transaction = TransactionFor<Self>,
-		Hash = TxHash<Self>,
-	>;
+	type InPoolTransaction: InPoolTransaction<Transaction = TransactionFor<Self>, Hash = TxHash<Self>>;
 	/// Error type.
 	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
 
@@ -298,9 +296,10 @@ pub enum ChainEvent<B: BlockT> {
 }
 
 /// Trait for transaction pool maintenance.
+#[async_trait]
 pub trait MaintainedTransactionPool: TransactionPool {
 	/// Perform maintenance
-	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+	async fn maintain(&self, event: ChainEvent<Self::Block>);
 }
 
 /// Transaction pool interface for submitting local transactions that exposes a
