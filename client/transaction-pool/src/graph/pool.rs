@@ -104,7 +104,7 @@ pub trait ChainApi: Send + Sync {
 		&self,
 		from: <Self::Block as BlockT>::Hash,
 		to: <Self::Block as BlockT>::Hash,
-	) -> Result<Option<TreeRoute<Self::Block>>, Self::Error>;
+	) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.

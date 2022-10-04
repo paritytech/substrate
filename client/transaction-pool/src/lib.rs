@@ -857,15 +857,17 @@ where
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
 		let tree_route = match api.tree_route(best_block, new_hash) {
-            Ok(tree_route) => {
-                tree_route .expect("tree_route exists. qed.")
-            }
-            Err(e) => {
-                return Err(format!("Error [{e}] occured while computin tree_route from {new_hash:?} to previously finalized: {best_block:?}"))
-            }
-        };
+			Ok(tree_route) => tree_route,
+			Err(e) =>
+				return Err(format!(
+					"Error [{e}] occured while computin tree_route from {new_hash:?} to \
+									previously finalized: {best_block:?}"
+				)),
+		};
 
-		log::trace!(target: "txpool", "resolve hash:{new_hash:?} finalized:{finalized:?} tree_route:{tree_route:?}, best_block:{best_block:?}, finalized_block:{:?}", self.recent_finalized_block);
+		log::trace!(target: "txpool", "resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} \
+					finalized_block:{:?}",
+					new_hash, finalized, tree_route,best_block, self.recent_finalized_block);
 
 		if let Some(finalized_block) = self.recent_finalized_block {
 			// block was already finalized
@@ -877,9 +879,9 @@ where
 			// check if recently finalized block is on retracted path...
 			if tree_route.retracted().iter().any(|x| x.hash == finalized_block) {
 				log::warn!(
-				target: "txpool",
-				"Recently finalized block {} would be retracted by Finalized event {}",
-				finalized_block, new_hash
+					target: "txpool",
+					"Recently finalized block {} would be retracted by Finalized event {}",
+					finalized_block, new_hash
 				);
 				log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path: exit 1");
 				return Ok((false, Some(tree_route)))

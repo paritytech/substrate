@@ -126,8 +126,8 @@ impl ChainApi for TestApi {
 		&self,
 		_from: <Self::Block as BlockT>::Hash,
 		_to: <Self::Block as BlockT>::Hash,
-	) -> Result<Option<sp_blockchain::TreeRoute<Self::Block>>, Self::Error> {
-		Ok(None)
+	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
+		unimplemented!()
 	}
 }
 
