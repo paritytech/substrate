@@ -307,9 +307,10 @@ impl Bitmap {
 	pub fn decode(mut data: &[u8]) -> Result<Self, codec::Error> {
 		let value = u16::decode(&mut &data[..])?;
 		if value == 0 {
-			return Err(Error::BadFormat)
+			Err(Error::BadFormat)
+		} else {
+			Ok(Bitmap(value))
 		}
-		Ok(Bitmap(value))
 	}
 
 	pub fn value_at(&self, i: usize) -> bool {
