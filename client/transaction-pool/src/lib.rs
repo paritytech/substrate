@@ -662,7 +662,7 @@ where
 				metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
 			});
 
-			if let true = next_action.resubmit {
+			if next_action.resubmit {
 				let mut resubmit_transactions = Vec::new();
 
 				for hash in retracted.iter() {
@@ -765,7 +765,7 @@ where
 		let handle_enactment = if proceed {
 			self.handle_enactment(hash, tree_route.clone())
 		} else {
-			Box::pin(ready(()))
+			ready(()).boxed()
 		};
 
 		match event {
@@ -778,10 +778,10 @@ where
 						Ok(tree_route) => tree_route.expect("tree_route exists. qed."),
 						Err(e) => {
 							log::warn!(target:"txpool", "Error [{e}] occured while computing tree_route from {hash:?} to previously finalized: {prev_finalized_block:?}");
-							return Box::pin(ready(()))
+							return ready(()).boxed()
 						},
 					};
-					tree_route.enacted().to_vec().iter().map(|b| b.hash).collect()
+					tree_route.enacted().iter().map(|b| b.hash).collect()
 				} else {
 					vec![hash]
 				};
