@@ -165,52 +165,18 @@ impl<C: AsContextMut> MemoryT for MemoryWrapper<'_, C> {
 /// routines.
 pub struct InstanceWrapper {
 	instance: Instance,
-	// The memory instance of the `instance`.
-	//
-	// It is important to make sure that we don't make any copies of this to make it easier to
-	// proof
+	/// The memory instance of the `instance`.
+	///
+	/// It is important to make sure that we don't make any copies of this to make it easier to
+	/// proof
 	memory: Memory,
 	store: Store,
 }
 
-fn extern_memory(extern_: &Extern) -> Option<&Memory> {
-	match extern_ {
-		Extern::Memory(mem) => Some(mem),
-		_ => None,
-	}
-}
-
-fn extern_global(extern_: &Extern) -> Option<&Global> {
-	match extern_ {
-		Extern::Global(glob) => Some(glob),
-		_ => None,
-	}
-}
-
-fn extern_table(extern_: &Extern) -> Option<&Table> {
-	match extern_ {
-		Extern::Table(table) => Some(table),
-		_ => None,
-	}
-}
-
-fn extern_func(extern_: &Extern) -> Option<&Func> {
-	match extern_ {
-		Extern::Func(func) => Some(func),
-		_ => None,
-	}
-}
-
-pub(crate) fn create_store(engine: &wasmtime::Engine) -> Store {
-	Store::new(engine, StoreData { host_state: None, memory: None, table: None })
-}
-
 impl InstanceWrapper {
-	pub(crate) fn new(
-		engine: &Engine,
-		instance_pre: &InstancePre<StoreData>,
-	) -> Result<Self> {
-		let mut store = create_store(engine);
+	pub(crate) fn new(engine: &Engine, instance_pre: &InstancePre<StoreData>) -> Result<Self> {
+		let mut store =
+			Store::new(engine, StoreData { host_state: None, memory: None, table: None });
 		let instance = instance_pre.instantiate(&mut store).map_err(|error| {
 			WasmError::Other(format!(
 				"failed to instantiate a new WASM module instance: {:#}",
@@ -239,7 +205,8 @@ impl InstanceWrapper {
 					self.instance.get_export(&mut self.store, method).ok_or_else(|| {
 						Error::from(format!("Exported method {} is not found", method))
 					})?;
-				let func = extern_func(&export)
+				let func = export
+					.into_func()
 					.ok_or_else(|| Error::from(format!("Export {} is not a function", method)))?;
 				EntryPoint::direct(*func, &self.store).map_err(|_| {
 					Error::from(format!("Exported function '{}' has invalid signature.", method))
@@ -297,7 +264,8 @@ impl InstanceWrapper {
 			.get_export(&mut self.store, "__heap_base")
 			.ok_or_else(|| Error::from("__heap_base is not found"))?;
 
-		let heap_base_global = extern_global(&heap_base_export)
+		let heap_base_global = heap_base_export
+			.into_global()
 			.ok_or_else(|| Error::from("__heap_base is not a global"))?;
 
 		let heap_base = heap_base_global
@@ -315,7 +283,7 @@ impl InstanceWrapper {
 			None => return Ok(None),
 		};
 
-		let global = extern_global(&global).ok_or_else(|| format!("`{}` is not a global", name))?;
+		let global = global.into_global().ok_or_else(|| format!("`{}` is not a global", name))?;
 
 		match global.get(&mut self.store) {
 			Val::I32(val) => Ok(Some(Value::I32(val))),
@@ -338,7 +306,8 @@ fn get_linear_memory(instance: &Instance, ctx: impl AsContextMut) -> Result<Memo
 		.get_export(ctx, "memory")
 		.ok_or_else(|| Error::from("memory is not exported under `memory` name"))?;
 
-	let memory = *extern_memory(&memory_export)
+	let memory = memory_export
+		.into_memory()
 		.ok_or_else(|| Error::from("the `memory` export should have memory type"))?;
 
 	Ok(memory)
@@ -349,8 +318,8 @@ fn get_table(instance: &Instance, ctx: &mut Store) -> Option<Table> {
 	instance
 		.get_export(ctx, "__indirect_function_table")
 		.as_ref()
-		.and_then(extern_table)
 		.cloned()
+		.and_then(Extern::into_table)
 }
 
 /// Functions related to memory.
