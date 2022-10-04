@@ -15,11 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Runtime API definition required by Contracts RPC extensions.
+//! Runtime API definition used to provide dry-run capabilities.
 //!
 //! This API should be imported and implemented by the runtime,
-//! of a node that wants to use the custom RPC extension
-//! adding Contracts access methods.
+//! of a node that wants to provide clients with dry-run
+//! capabilities.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

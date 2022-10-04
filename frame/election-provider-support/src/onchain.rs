@@ -20,7 +20,8 @@
 //! careful when using it onchain.
 
 use crate::{
-	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
+	Debug, ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
@@ -133,15 +134,6 @@ fn elect_with<T: Config>(
 }
 
 impl<T: Config> ElectionProvider for UnboundedExecution<T> {
-	type AccountId = <T::System as frame_system::Config>::AccountId;
-	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
-	type Error = Error;
-	type DataProvider = T::DataProvider;
-
-	fn ongoing() -> bool {
-		false
-	}
-
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
@@ -156,6 +148,17 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 	}
 }
 
+impl<T: Config> ElectionProviderBase for UnboundedExecution<T> {
+	type AccountId = <T::System as frame_system::Config>::AccountId;
+	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
+	type Error = Error;
+	type DataProvider = T::DataProvider;
+
+	fn ongoing() -> bool {
+		false
+	}
+}
+
 impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
@@ -165,7 +168,7 @@ impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	}
 }
 
-impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
+impl<T: BoundedConfig> ElectionProviderBase for BoundedExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
@@ -174,7 +177,9 @@ impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	fn ongoing() -> bool {
 		false
 	}
+}
 
+impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
 	}
