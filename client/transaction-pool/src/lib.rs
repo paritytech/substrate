@@ -596,15 +596,6 @@ where
 		let pool = self.pool.clone();
 		let api = self.api.clone();
 
-		let (enacted, retracted) = if let Some(tree_route) = tree_route {
-			(
-				tree_route.enacted().iter().map(|block| block.hash).collect(),
-				tree_route.retracted().iter().map(|block| block.hash).collect(),
-			)
-		} else {
-			(vec![], vec![])
-		};
-
 		let id = BlockId::hash(hash);
 		let block_number = match api.block_id_to_number(&id) {
 			Ok(Some(number)) => number,
@@ -638,23 +629,24 @@ where
 			// retracted blocks and their transactions. This order is important, because
 			// if we enact and retract the same transaction at the same time, we want to
 			// send first the retract and than the prune event.
-			for retracted_hash in retracted.iter() {
-				// notify txs awaiting finality that it has been retracted
-				pool.validated_pool().on_block_retracted(*retracted_hash);
-			}
+			if let Some(ref tree_route) = tree_route {
+				for retracted in tree_route.retracted() {
+					// notify txs awaiting finality that it has been retracted
+					pool.validated_pool().on_block_retracted(retracted.hash);
+				}
 
-			future::join_all(
-				enacted
-					.iter()
-					.map(|hash| prune_known_txs_for_block(BlockId::Hash(*hash), &*api, &*pool)),
-			)
-			.await
-			.into_iter()
-			.for_each(|enacted_log| {
-				pruned_log.extend(enacted_log);
-			});
-
-			if enacted.iter().all(|h| *h != hash) {
+				future::join_all(
+					tree_route
+						.enacted()
+						.iter()
+						.map(|h| prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)),
+				)
+				.await
+				.into_iter()
+				.for_each(|enacted_log| {
+					pruned_log.extend(enacted_log);
+				});
+			} else {
 				pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
 			}
 
@@ -662,12 +654,14 @@ where
 				metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64)
 			});
 
-			if next_action.resubmit {
+			if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
 				let mut resubmit_transactions = Vec::new();
 
-				for hash in retracted.iter() {
+				for retracted in tree_route.retracted() {
+					let hash = retracted.hash;
+
 					let block_transactions = api
-						.block_body(&BlockId::hash(*hash))
+						.block_body(&BlockId::hash(hash))
 						.await
 						.unwrap_or_else(|e| {
 							log::warn!("Failed to fetch block body: {}", e);
