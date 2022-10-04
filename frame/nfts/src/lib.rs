@@ -182,6 +182,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxTips: Get<u32>;
 
+		/// The max duration in blocks for deadlines.
+		#[pallet::constant]
+		type MaxDeadlineDuration: Get<<Self as SystemConfig>::BlockNumber>;
+
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
 		type Helper: BenchmarkHelper<Self::CollectionId, Self::ItemId>;
@@ -457,7 +461,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: Option<<T as SystemConfig>::BlockNumber>,
+			deadline: <T as SystemConfig>::BlockNumber,
 		},
 		/// The swap was cancelled.
 		SwapCancelled {
@@ -466,7 +470,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			desired_item: Option<T::ItemId>,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: Option<<T as SystemConfig>::BlockNumber>,
+			deadline: <T as SystemConfig>::BlockNumber,
 		},
 		/// The swap has been claimed.
 		SwapClaimed {
@@ -477,7 +481,7 @@ pub mod pallet {
 			received_item: T::ItemId,
 			received_item_owner: T::AccountId,
 			price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			deadline: Option<<T as SystemConfig>::BlockNumber>,
+			deadline: <T as SystemConfig>::BlockNumber,
 		},
 	}
 
@@ -527,6 +531,8 @@ pub mod pallet {
 		ReachedApprovalLimit,
 		/// The deadline has already expired.
 		DeadlineExpired,
+		/// The duration provided should be less or equal to MaxDeadlineDuration.
+		WrongDuration,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1713,7 +1719,7 @@ pub mod pallet {
 			desired_collection: T::CollectionId,
 			maybe_desired_item: Option<T::ItemId>,
 			maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-			maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
+			duration: <T as SystemConfig>::BlockNumber,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			Self::do_create_swap(
@@ -1723,7 +1729,7 @@ pub mod pallet {
 				desired_collection,
 				maybe_desired_item,
 				maybe_price,
-				maybe_duration,
+				duration,
 			)
 		}
 

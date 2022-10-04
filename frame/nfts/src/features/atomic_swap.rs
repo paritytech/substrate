@@ -29,8 +29,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		desired_collection_id: T::CollectionId,
 		maybe_desired_item_id: Option<T::ItemId>,
 		maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
-		maybe_duration: Option<<T as SystemConfig>::BlockNumber>,
+		duration: <T as SystemConfig>::BlockNumber,
 	) -> DispatchResult {
+		ensure!(duration <= T::MaxDeadlineDuration::get(), Error::<T, I>::WrongDuration);
+
 		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(item.owner == caller, Error::<T, I>::NoPermission);
@@ -47,7 +49,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 
 		let now = frame_system::Pallet::<T>::block_number();
-		let maybe_deadline = maybe_duration.map(|d| d.saturating_add(now));
+		let deadline = duration.saturating_add(now);
 
 		PendingSwapOf::<T, I>::insert(
 			&offered_collection_id,
@@ -56,7 +58,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				desired_collection: desired_collection_id,
 				desired_item: maybe_desired_item_id,
 				price: maybe_price.clone(),
-				deadline: maybe_deadline,
+				deadline: deadline.clone(),
 			},
 		);
 
@@ -66,7 +68,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			desired_collection: desired_collection_id,
 			desired_item: maybe_desired_item_id,
 			price: maybe_price,
-			deadline: maybe_deadline,
+			deadline,
 		});
 
 		Ok(())
@@ -80,14 +82,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let swap = PendingSwapOf::<T, I>::get(&offered_collection_id, &offered_item_id)
 			.ok_or(Error::<T, I>::UnknownSwap)?;
 
-		let is_past_deadline = if let Some(deadline) = swap.deadline {
-			let now = frame_system::Pallet::<T>::block_number();
-			now > deadline
-		} else {
-			false
-		};
-
-		if !is_past_deadline {
+		let now = frame_system::Pallet::<T>::block_number();
+		if swap.deadline > now {
 			let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
 				.ok_or(Error::<T, I>::UnknownItem)?;
 			ensure!(item.owner == caller, Error::<T, I>::NoPermission);
@@ -132,10 +128,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(desired_item == send_item_id, Error::<T, I>::UnknownSwap);
 		}
 
-		if let Some(deadline) = swap.deadline {
-			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(now <= deadline, Error::<T, I>::DeadlineExpired);
-		}
+		let now = frame_system::Pallet::<T>::block_number();
+		ensure!(now <= swap.deadline, Error::<T, I>::DeadlineExpired);
 
 		if let Some(ref price) = swap.price {
 			match price.direction {

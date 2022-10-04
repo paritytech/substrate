@@ -156,7 +156,7 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 	/// A price for the desired `item` with the direction.
 	pub(super) price: Option<ItemPriceWithDirection>,
 	/// An optional deadline for the swap.
-	pub(super) deadline: Option<Deadline>,
+	pub(super) deadline: Deadline,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]

@@ -18,7 +18,11 @@
 //! Tests for Nfts pallet.
 
 use crate::{mock::*, Event, *};
-use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Currency};
+use frame_support::{
+	assert_noop, assert_ok,
+	dispatch::Dispatchable,
+	traits::{Currency, Get},
+};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
 
@@ -1134,7 +1138,7 @@ fn create_cancel_swap_should_work() {
 				collection_id,
 				Some(item_2 + 1),
 				Some(price_with_direction.clone()),
-				Some(duration),
+				duration,
 			),
 			Error::<Test>::UnknownItem
 		);
@@ -1146,9 +1150,23 @@ fn create_cancel_swap_should_work() {
 				collection_id + 1,
 				None,
 				Some(price_with_direction.clone()),
-				Some(duration),
+				duration,
 			),
 			Error::<Test>::UnknownCollection
+		);
+
+		let max_duration: u64 = <Test as Config>::MaxDeadlineDuration::get();
+		assert_noop!(
+			Nfts::create_swap(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				item_1,
+				collection_id,
+				Some(item_2),
+				Some(price_with_direction.clone()),
+				max_duration.saturating_add(1),
+			),
+			Error::<Test>::WrongDuration
 		);
 
 		assert_ok!(Nfts::create_swap(
@@ -1158,14 +1176,14 @@ fn create_cancel_swap_should_work() {
 			collection_id,
 			Some(item_2),
 			Some(price_with_direction.clone()),
-			Some(duration),
+			duration,
 		));
 
 		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
 		assert_eq!(swap.desired_collection, collection_id);
 		assert_eq!(swap.desired_item, Some(item_2));
 		assert_eq!(swap.price, Some(price_with_direction.clone()));
-		assert_eq!(swap.deadline, Some(expect_deadline));
+		assert_eq!(swap.deadline, expect_deadline);
 
 		assert!(events().contains(&Event::<Test>::SwapCreated {
 			offered_collection: collection_id,
@@ -1173,7 +1191,7 @@ fn create_cancel_swap_should_work() {
 			desired_collection: collection_id,
 			desired_item: Some(item_2),
 			price: Some(price_with_direction.clone()),
-			deadline: Some(expect_deadline),
+			deadline: expect_deadline,
 		}));
 
 		// validate we can cancel the swap
@@ -1184,7 +1202,7 @@ fn create_cancel_swap_should_work() {
 			desired_collection: collection_id,
 			desired_item: Some(item_2),
 			price: Some(price_with_direction.clone()),
-			deadline: Some(expect_deadline),
+			deadline: expect_deadline,
 		}));
 		assert!(!PendingSwapOf::<Test>::contains_key(collection_id, item_1));
 
@@ -1196,7 +1214,7 @@ fn create_cancel_swap_should_work() {
 			collection_id,
 			Some(item_2),
 			Some(price_with_direction.clone()),
-			Some(duration),
+			duration,
 		));
 		assert_noop!(
 			Nfts::cancel_swap(RuntimeOrigin::signed(user_id + 1), collection_id, item_1),
@@ -1213,7 +1231,7 @@ fn create_cancel_swap_should_work() {
 			collection_id,
 			None,
 			Some(price_with_direction),
-			Some(duration),
+			duration,
 		));
 
 		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
@@ -1259,7 +1277,7 @@ fn claim_swap_should_work() {
 			collection_id,
 			Some(item_2),
 			Some(price_with_direction.clone()),
-			Some(duration),
+			duration,
 		));
 
 		// validate the deadline
@@ -1365,7 +1383,7 @@ fn claim_swap_should_work() {
 			received_item: item_1,
 			received_item_owner: user_1,
 			price: Some(price_with_direction.clone()),
-			deadline: Some(deadline),
+			deadline,
 		}));
 
 		// validate the optional desired_item param and another price direction
@@ -1381,7 +1399,7 @@ fn claim_swap_should_work() {
 			collection_id,
 			None,
 			Some(price_with_direction.clone()),
-			Some(duration),
+			duration,
 		));
 		assert_ok!(Nfts::claim_swap(
 			RuntimeOrigin::signed(user_2),
