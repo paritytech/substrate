@@ -852,8 +852,7 @@ fn valid_equivocation_reports_dont_pay_fees() {
 		.get_dispatch_info();
 
 		// it should have non-zero weight and the fee has to be paid.
-		// TODO: account for proof size weight
-		assert!(info.weight.ref_time() > 0);
+		assert!(info.weight.all_gt(Weight::zero()));
 		assert_eq!(info.pays_fee, Pays::Yes);
 
 		// report the equivocation.
