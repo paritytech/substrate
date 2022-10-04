@@ -15,10 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use frame_support_procedural_tools::generate_crate_access_2018;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{ItemFn, Result};
-use frame_support_procedural_tools::generate_crate_access_2018;
 
 pub fn transactional(_attr: TokenStream, input: TokenStream) -> Result<TokenStream> {
 	let ItemFn { attrs, vis, sig, block } = syn::parse(input)?;

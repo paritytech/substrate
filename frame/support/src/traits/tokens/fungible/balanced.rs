@@ -18,12 +18,16 @@
 //! The trait and associated types for sets of fungible tokens that manage total issuance without
 //! requiring atomic balanced operations.
 
-use super::*;
+use super::{super::Imbalance as ImbalanceT, *};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::misc::{SameOrOther, TryDrop},
+};
+use sp_runtime::{
+	traits::{CheckedAdd, Zero},
+	ArithmeticError, TokenError,
+};
 use sp_std::marker::PhantomData;
-use sp_runtime::{TokenError, ArithmeticError, traits::{CheckedAdd, Zero}};
-use super::super::Imbalance as ImbalanceT;
-use crate::traits::misc::{SameOrOther, TryDrop};
-use crate::dispatch::{DispatchResult, DispatchError};
 
 /// A fungible token class where any creation and deletion of tokens is semi-explicit and where the
 /// total supply is maintained automatically.
@@ -65,10 +69,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
 	/// then a non-zero second item will be returned.
-	fn slash(
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> (CreditOf<AccountId, Self>, Self::Balance);
+	fn slash(who: &AccountId, amount: Self::Balance) -> (CreditOf<AccountId, Self>, Self::Balance);
 
 	/// Mints exactly `value` into the account of `who`.
 	///
@@ -90,7 +91,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
-		//TODO: liveness: ExistenceRequirement,
+		// TODO: liveness: ExistenceRequirement,
 	) -> Result<CreditOf<AccountId, Self>, DispatchError>;
 
 	/// The balance of `who` is increased in order to counter `credit`. If the whole of `credit`
@@ -119,7 +120,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	fn settle(
 		who: &AccountId,
 		debt: DebtOf<AccountId, Self>,
-		//TODO: liveness: ExistenceRequirement,
+		// TODO: liveness: ExistenceRequirement,
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let credit = match Self::withdraw(who, amount) {
@@ -132,7 +133,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 			SameOrOther::Other(rest) => {
 				debug_assert!(false, "ok withdraw return must be at least debt value; qed");
 				Err(rest)
-			}
+			},
 		}
 	}
 }
@@ -158,9 +159,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	///
 	/// Minimum balance will be respected and the returned imbalance may be up to
 	/// `Self::minimum_balance() - 1` greater than `amount`.
-	fn decrease_balance(who: &AccountId, amount: Self::Balance)
-		-> Result<Self::Balance, DispatchError>
-	{
+	fn decrease_balance(
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(who);
 		let (mut new_balance, mut amount) = if old_balance < amount {
 			Err(TokenError::NoFunds)?
@@ -182,9 +184,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// `Self::minimum_balance() - 1` greater than `amount`.
 	///
 	/// Return the imbalance by which the account was reduced.
-	fn decrease_balance_at_most(who: &AccountId, amount: Self::Balance)
-		-> Self::Balance
-	{
+	fn decrease_balance_at_most(who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let old_balance = Self::balance(who);
 		let (mut new_balance, mut amount) = if old_balance < amount {
 			(Zero::zero(), old_balance)
@@ -217,9 +217,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	///
 	/// Minimum balance will be respected and an error will be returned if
 	/// `amount < Self::minimum_balance()` when the account of `who` is zero.
-	fn increase_balance(who: &AccountId, amount: Self::Balance)
-		-> Result<Self::Balance, DispatchError>
-	{
+	fn increase_balance(
+		who: &AccountId,
+		amount: Self::Balance,
+	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(who);
 		let new_balance = old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
 		if new_balance < Self::minimum_balance() {
@@ -237,9 +238,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// `amount < Self::minimum_balance()`.
 	///
 	/// Return the imbalance by which the account was increased.
-	fn increase_balance_at_most(who: &AccountId, amount: Self::Balance)
-		-> Self::Balance
-	{
+	fn increase_balance_at_most(who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let old_balance = Self::balance(who);
 		let mut new_balance = old_balance.saturating_add(amount);
 		let mut amount = new_balance - old_balance;
@@ -300,16 +299,12 @@ type Debt<AccountId, U> = Imbalance<
 >;
 
 /// Create some `Credit` item. Only for internal use.
-fn credit<AccountId, U: Unbalanced<AccountId>>(
-	amount: U::Balance,
-) -> Credit<AccountId, U> {
+fn credit<AccountId, U: Unbalanced<AccountId>>(amount: U::Balance) -> Credit<AccountId, U> {
 	Imbalance::new(amount)
 }
 
 /// Create some `Debt` item. Only for internal use.
-fn debt<AccountId, U: Unbalanced<AccountId>>(
-	amount: U::Balance,
-) -> Debt<AccountId, U> {
+fn debt<AccountId, U: Unbalanced<AccountId>>(amount: U::Balance) -> Debt<AccountId, U> {
 	Imbalance::new(amount)
 }
 
@@ -328,10 +323,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		U::set_total_issuance(new);
 		credit(new - old)
 	}
-	fn slash(
-		who: &AccountId,
-		amount: Self::Balance,
-	) -> (Credit<AccountId, Self>, Self::Balance) {
+	fn slash(who: &AccountId, amount: Self::Balance) -> (Credit<AccountId, Self>, Self::Balance) {
 		let slashed = U::decrease_balance_at_most(who, amount);
 		// `slashed` could be less than, greater than or equal to `amount`.
 		// If slashed == amount, it means the account had at least amount in it and it could all be
@@ -344,7 +336,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	}
 	fn deposit(
 		who: &AccountId,
-		amount: Self::Balance
+		amount: Self::Balance,
 	) -> Result<Debt<AccountId, Self>, DispatchError> {
 		let increase = U::increase_balance(who, amount)?;
 		Ok(debt(increase))
@@ -352,7 +344,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	fn withdraw(
 		who: &AccountId,
 		amount: Self::Balance,
-		//TODO: liveness: ExistenceRequirement,
+		// TODO: liveness: ExistenceRequirement,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
 		let decrease = U::decrease_balance(who, amount)?;
 		Ok(credit(decrease))

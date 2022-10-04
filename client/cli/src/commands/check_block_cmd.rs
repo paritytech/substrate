@@ -17,7 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-	CliConfiguration, error, params::{ImportParams, SharedParams, BlockNumberOrHash},
+	error,
+	params::{BlockNumberOrHash, ImportParams, SharedParams},
+	CliConfiguration,
 };
 use sc_client_api::{BlockBackend, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -48,11 +50,7 @@ pub struct CheckBlockCmd {
 
 impl CheckBlockCmd {
 	/// Run the check-block command
-	pub async fn run<B, C, IQ>(
-		&self,
-		client: Arc<C>,
-		import_queue: IQ,
-	) -> error::Result<()>
+	pub async fn run<B, C, IQ>(&self, client: Arc<C>, import_queue: IQ) -> error::Result<()>
 	where
 		B: BlockT + for<'de> serde::Deserialize<'de>,
 		C: BlockBackend<B> + UsageProvider<B> + Send + Sync + 'static,

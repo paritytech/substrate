@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
 use sp_core::RuntimeDebug;
 use sp_std::vec::Vec;
 
@@ -46,7 +46,6 @@ macro_rules! format_runtime_string {
 		}
 	}};
 }
-
 
 impl From<&'static str> for RuntimeString {
 	fn from(data: &'static str) -> Self {
@@ -130,5 +129,7 @@ impl<'de> serde::Deserialize<'de> for RuntimeString {
 /// Create a const [`RuntimeString`].
 #[macro_export]
 macro_rules! create_runtime_str {
-	( $y:expr ) => {{ $crate::RuntimeString::Borrowed($y) }}
+	( $y:expr ) => {{
+		$crate::RuntimeString::Borrowed($y)
+	}};
 }

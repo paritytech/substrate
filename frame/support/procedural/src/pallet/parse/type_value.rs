@@ -50,28 +50,31 @@ impl TypeValueDef {
 			item
 		} else {
 			let msg = "Invalid pallet::type_value, expected item fn";
-			return Err(syn::Error::new(item.span(), msg));
+			return Err(syn::Error::new(item.span(), msg))
 		};
-
 
 		if !item.attrs.is_empty() {
 			let msg = "Invalid pallet::type_value, unexpected attribute";
-			return Err(syn::Error::new(item.attrs[0].span(), msg));
+			return Err(syn::Error::new(item.attrs[0].span(), msg))
 		}
 
-		if let Some(span) = item.sig.constness.as_ref().map(|t| t.span())
+		if let Some(span) = item
+			.sig
+			.constness
+			.as_ref()
+			.map(|t| t.span())
 			.or_else(|| item.sig.asyncness.as_ref().map(|t| t.span()))
 			.or_else(|| item.sig.unsafety.as_ref().map(|t| t.span()))
 			.or_else(|| item.sig.abi.as_ref().map(|t| t.span()))
 			.or_else(|| item.sig.variadic.as_ref().map(|t| t.span()))
 		{
 			let msg = "Invalid pallet::type_value, unexpected token";
-			return Err(syn::Error::new(span, msg));
+			return Err(syn::Error::new(span, msg))
 		}
 
 		if !item.sig.inputs.is_empty() {
 			let msg = "Invalid pallet::type_value, unexpected argument";
-			return Err(syn::Error::new(item.sig.inputs[0].span(), msg));
+			return Err(syn::Error::new(item.sig.inputs[0].span(), msg))
 		}
 
 		let vis = item.vis.clone();
@@ -81,7 +84,7 @@ impl TypeValueDef {
 			syn::ReturnType::Type(_, type_) => type_,
 			syn::ReturnType::Default => {
 				let msg = "Invalid pallet::type_value, expected return type";
-				return Err(syn::Error::new(item.sig.span(), msg));
+				return Err(syn::Error::new(item.sig.span(), msg))
 			},
 		};
 

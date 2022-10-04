@@ -24,10 +24,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Codec;
-use sp_std::vec::Vec;
 use pallet_contracts_primitives::{
-	ContractExecResult, GetStorageResult, RentProjectionResult, Code, ContractInstantiateResult,
+	Code, ContractExecResult, ContractInstantiateResult, GetStorageResult, RentProjectionResult,
 };
+use sp_std::vec::Vec;
 
 sp_api::decl_runtime_apis! {
 	/// The API to interact with contracts without using executive.
@@ -39,7 +39,7 @@ sp_api::decl_runtime_apis! {
 	{
 		/// Perform a call from a specified account to a given contract.
 		///
-		/// See [`pallet_contracts::Pallet::call`].
+		/// See `pallet_contracts::Pallet::call`.
 		fn call(
 			origin: AccountId,
 			dest: AccountId,
@@ -50,7 +50,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Instantiate a new contract.
 		///
-		/// See [`pallet_contracts::Pallet::instantiate`].
+		/// See `pallet_contracts::Pallet::instantiate`.
 		fn instantiate(
 			origin: AccountId,
 			endowment: Balance,

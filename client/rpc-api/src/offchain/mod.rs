@@ -20,9 +20,9 @@
 
 pub mod error;
 
-use jsonrpc_derive::rpc;
 use self::error::Result;
-use sp_core::{Bytes, offchain::StorageKind};
+use jsonrpc_derive::rpc;
+use sp_core::{offchain::StorageKind, Bytes};
 
 pub use self::gen_client::Client as OffchainClient;
 

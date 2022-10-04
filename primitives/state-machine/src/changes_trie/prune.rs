@@ -17,16 +17,20 @@
 
 //! Changes trie pruning-related functions.
 
+use crate::{
+	changes_trie::{
+		input::{ChildIndex, InputKey},
+		storage::TrieBackendAdapter,
+		AnchorBlockId, BlockNumber, Storage,
+	},
+	proving_backend::ProvingBackendRecorder,
+	trie_backend_essence::TrieBackendEssence,
+};
+use codec::{Codec, Decode};
 use hash_db::Hasher;
-use sp_trie::Recorder;
 use log::warn;
 use num_traits::One;
-use crate::proving_backend::ProvingBackendRecorder;
-use crate::trie_backend_essence::TrieBackendEssence;
-use crate::changes_trie::{AnchorBlockId, Storage, BlockNumber};
-use crate::changes_trie::storage::TrieBackendAdapter;
-use crate::changes_trie::input::{ChildIndex, InputKey};
-use codec::{Decode, Codec};
+use sp_trie::Recorder;
 
 /// Prune obsolete changes tries. Pruning happens at the same block, where highest
 /// level digest is created. Pruning guarantees to save changes tries for last
@@ -38,12 +42,14 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	last: Number,
 	current_block: &AnchorBlockId<H::Out, Number>,
 	mut remove_trie_node: F,
-) where H::Out: Codec {
+) where
+	H::Out: Codec,
+{
 	// delete changes trie for every block in range
 	let mut block = first;
 	loop {
 		if block >= last.clone() + One::one() {
-			break;
+			break
 		}
 
 		let prev_block = block.clone();
@@ -56,7 +62,7 @@ pub fn prune<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 			Err(error) => {
 				// try to delete other tries
 				warn!(target: "trie", "Failed to read changes trie root from DB: {}", error);
-				continue;
+				continue
 			},
 		};
 		let children_roots = {
@@ -91,8 +97,9 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 	storage: &dyn Storage<H, Number>,
 	root: H::Out,
 	remove_trie_node: &mut F,
-) where H::Out: Codec {
-
+) where
+	H::Out: Codec,
+{
 	// enumerate all changes trie' keys, recording all nodes that have been 'touched'
 	// (effectively - all changes trie nodes)
 	let mut proof_recorder: Recorder<H::Out> = Default::default();
@@ -113,14 +120,13 @@ fn prune_trie<H: Hasher, Number: BlockNumber, F: FnMut(H::Out)>(
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashSet;
-	use sp_trie::MemoryDB;
-	use sp_core::H256;
-	use crate::backend::insert_into_memory_db;
-	use crate::changes_trie::storage::InMemoryStorage;
-	use codec::Encode;
-	use sp_runtime::traits::BlakeTwo256;
 	use super::*;
+	use crate::{backend::insert_into_memory_db, changes_trie::storage::InMemoryStorage};
+	use codec::Encode;
+	use sp_core::H256;
+	use sp_runtime::traits::BlakeTwo256;
+	use sp_trie::MemoryDB;
+	use std::collections::HashSet;
 
 	fn prune_by_collect(
 		storage: &dyn Storage<BlakeTwo256, u64>,
@@ -130,8 +136,9 @@ mod tests {
 	) -> HashSet<H256> {
 		let mut pruned_trie_nodes = HashSet::new();
 		let anchor = AnchorBlockId { hash: Default::default(), number: current_block };
-		prune(storage, first, last, &anchor,
-			|node| { pruned_trie_nodes.insert(node); });
+		prune(storage, first, last, &anchor, |node| {
+			pruned_trie_nodes.insert(node);
+		});
 		pruned_trie_nodes
 	}
 
@@ -139,28 +146,36 @@ mod tests {
 	fn prune_works() {
 		fn prepare_storage() -> InMemoryStorage<BlakeTwo256, u64> {
 			let child_info = sp_core::storage::ChildInfo::new_default(&b"1"[..]);
-			let child_key = ChildIndex { block: 67u64, storage_key: child_info.prefixed_storage_key() }.encode();
+			let child_key =
+				ChildIndex { block: 67u64, storage_key: child_info.prefixed_storage_key() }
+					.encode();
 			let mut mdb1 = MemoryDB::<BlakeTwo256>::default();
-			let root1 = insert_into_memory_db::<BlakeTwo256, _>(
-				&mut mdb1, vec![(vec![10], vec![20])]).unwrap();
+			let root1 =
+				insert_into_memory_db::<BlakeTwo256, _>(&mut mdb1, vec![(vec![10], vec![20])])
+					.unwrap();
 			let mut mdb2 = MemoryDB::<BlakeTwo256>::default();
 			let root2 = insert_into_memory_db::<BlakeTwo256, _>(
 				&mut mdb2,
 				vec![(vec![11], vec![21]), (vec![12], vec![22])],
-			).unwrap();
+			)
+			.unwrap();
 			let mut mdb3 = MemoryDB::<BlakeTwo256>::default();
-			let ch_root3 = insert_into_memory_db::<BlakeTwo256, _>(
-				&mut mdb3, vec![(vec![110], vec![120])]).unwrap();
-			let root3 = insert_into_memory_db::<BlakeTwo256, _>(&mut mdb3, vec![
-				(vec![13], vec![23]),
-				(vec![14], vec![24]),
-				(child_key, ch_root3.as_ref().encode()),
-			]).unwrap();
+			let ch_root3 =
+				insert_into_memory_db::<BlakeTwo256, _>(&mut mdb3, vec![(vec![110], vec![120])])
+					.unwrap();
+			let root3 = insert_into_memory_db::<BlakeTwo256, _>(
+				&mut mdb3,
+				vec![
+					(vec![13], vec![23]),
+					(vec![14], vec![24]),
+					(child_key, ch_root3.as_ref().encode()),
+				],
+			)
+			.unwrap();
 			let mut mdb4 = MemoryDB::<BlakeTwo256>::default();
-			let root4 = insert_into_memory_db::<BlakeTwo256, _>(
-				&mut mdb4,
-				vec![(vec![15], vec![25])],
-			).unwrap();
+			let root4 =
+				insert_into_memory_db::<BlakeTwo256, _>(&mut mdb4, vec![(vec![15], vec![25])])
+					.unwrap();
 			let storage = InMemoryStorage::new();
 			storage.insert(65, root1, mdb1);
 			storage.insert(66, root2, mdb2);

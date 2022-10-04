@@ -16,19 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::CliConfiguration;
-use crate::Result;
-use crate::SubstrateCli;
+use crate::{error::Error as CliError, CliConfiguration, Result, SubstrateCli};
 use chrono::prelude::*;
-use futures::pin_mut;
-use futures::select;
-use futures::{future, future::FutureExt, Future};
+use futures::{future, future::FutureExt, pin_mut, select, Future};
 use log::info;
-use sc_service::{Configuration, TaskType, TaskManager};
+use sc_service::{Configuration, Error as ServiceError, TaskManager, TaskType};
 use sp_utils::metrics::{TOKIO_THREADS_ALIVE, TOKIO_THREADS_TOTAL};
 use std::marker::PhantomData;
-use sc_service::Error as ServiceError;
-use crate::error::Error as CliError;
 
 #[cfg(target_family = "unix")]
 async fn main<F, E>(func: F) -> std::result::Result<(), E>
@@ -119,27 +113,19 @@ pub struct Runner<C: SubstrateCli> {
 
 impl<C: SubstrateCli> Runner<C> {
 	/// Create a new runtime with the command provided in argument
-	pub fn new<T: CliConfiguration>(
-		cli: &C,
-		command: &T,
-	) -> Result<Runner<C>> {
+	pub fn new<T: CliConfiguration>(cli: &C, command: &T) -> Result<Runner<C>> {
 		let tokio_runtime = build_runtime()?;
 		let runtime_handle = tokio_runtime.handle().clone();
 
-		let task_executor = move |fut, task_type| {
-			match task_type {
-				TaskType::Async => runtime_handle.spawn(fut).map(drop),
-				TaskType::Blocking =>
-					runtime_handle.spawn_blocking(move || futures::executor::block_on(fut))
-						.map(drop),
-			}
+		let task_executor = move |fut, task_type| match task_type {
+			TaskType::Async => runtime_handle.spawn(fut).map(drop),
+			TaskType::Blocking => runtime_handle
+				.spawn_blocking(move || futures::executor::block_on(fut))
+				.map(drop),
 		};
 
 		Ok(Runner {
-			config: command.create_configuration(
-				cli,
-				task_executor.into(),
-			)?,
+			config: command.create_configuration(cli, task_executor.into())?,
 			tokio_runtime,
 			phantom: PhantomData,
 		})
@@ -160,22 +146,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// 2020-06-03 16:14:21 ⛓  Native runtime: node-251 (substrate-node-1.tx1.au10)
 	/// ```
 	fn print_node_infos(&self) {
-		info!("{}", C::impl_name());
-		info!("✌️  version {}", C::impl_version());
-		info!(
-			"❤️  by {}, {}-{}",
-			C::author(),
-			C::copyright_start_year(),
-			Local::today().year(),
-		);
-		info!("📋 Chain specification: {}", self.config.chain_spec.name());
-		info!("🏷 Node name: {}", self.config.network.node_name);
-		info!("👤 Role: {}", self.config.display_role());
-		info!("💾 Database: {} at {}",
-			self.config.database,
-			self.config.database.path().map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
-		);
-		info!("⛓  Native runtime: {}", C::native_runtime_version(&self.config.chain_spec));
+		print_node_infos::<C>(self.config())
 	}
 
 	/// A helper function that runs a node with tokio and stops if the process receives the signal
@@ -198,7 +169,7 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs a command with the configuration of this node.
 	pub fn sync_run<E>(
 		self,
-		runner: impl FnOnce(Configuration) -> std::result::Result<(), E>
+		runner: impl FnOnce(Configuration) -> std::result::Result<(), E>,
 	) -> std::result::Result<(), E>
 	where
 		E: std::error::Error + Send + Sync + 'static + From<ServiceError>,
@@ -209,7 +180,8 @@ impl<C: SubstrateCli> Runner<C> {
 	/// A helper function that runs a future with tokio and stops if the process receives
 	/// the signal `SIGTERM` or `SIGINT`.
 	pub fn async_run<F, E>(
-		self, runner: impl FnOnce(Configuration) -> std::result::Result<(F, TaskManager), E>,
+		self,
+		runner: impl FnOnce(Configuration) -> std::result::Result<(F, TaskManager), E>,
 	) -> std::result::Result<(), E>
 	where
 		F: Future<Output = std::result::Result<(), E>>,
@@ -228,4 +200,23 @@ impl<C: SubstrateCli> Runner<C> {
 	pub fn config_mut(&mut self) -> &mut Configuration {
 		&mut self.config
 	}
+}
+
+/// Log information about the node itself.
+pub fn print_node_infos<C: SubstrateCli>(config: &Configuration) {
+	info!("{}", C::impl_name());
+	info!("✌️  version {}", C::impl_version());
+	info!("❤️  by {}, {}-{}", C::author(), C::copyright_start_year(), Local::today().year());
+	info!("📋 Chain specification: {}", config.chain_spec.name());
+	info!("🏷 Node name: {}", config.network.node_name);
+	info!("👤 Role: {}", config.display_role());
+	info!(
+		"💾 Database: {} at {}",
+		config.database,
+		config
+			.database
+			.path()
+			.map_or_else(|| "<unknown>".to_owned(), |p| p.display().to_string())
+	);
+	info!("⛓  Native runtime: {}", C::native_runtime_version(&config.chain_spec));
 }

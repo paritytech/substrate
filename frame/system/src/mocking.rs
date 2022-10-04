@@ -21,7 +21,10 @@ use sp_runtime::generic;
 
 /// An unchecked extrinsic type to be used in tests.
 pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::UncheckedExtrinsic<
-	<T as crate::Config>::AccountId, <T as crate::Config>::Call, Signature, Extra,
+	<T as crate::Config>::AccountId,
+	<T as crate::Config>::Call,
+	Signature,
+	Extra,
 >;
 
 /// An implementation of `sp_runtime::traits::Block` to be used in tests.

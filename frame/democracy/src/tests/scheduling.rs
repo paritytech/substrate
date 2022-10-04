@@ -26,7 +26,7 @@ fn simple_passing_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
@@ -43,7 +43,7 @@ fn simple_failing_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, nay(1)));
 		assert_eq!(tally(r), Tally { ayes: 0, nays: 1, turnout: 10 });
@@ -62,13 +62,13 @@ fn ooo_inject_referendums_should_work() {
 			3,
 			set_balance_proposal_hash_and_note(3),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 		let r2 = Democracy::inject_referendum(
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			0
+			0,
 		);
 
 		assert_ok!(Democracy::vote(Origin::signed(1), r2, aye(1)));
@@ -92,7 +92,7 @@ fn delayed_enactment_should_work() {
 			2,
 			set_balance_proposal_hash_and_note(2),
 			VoteThreshold::SuperMajorityApprove,
-			1
+			1,
 		);
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		assert_ok!(Democracy::vote(Origin::signed(2), r, aye(2)));

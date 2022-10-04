@@ -40,11 +40,7 @@ pub struct ConsoleLogLayer<S, N = tracing_subscriber::fmt::format::DefaultFields
 impl<S, T> ConsoleLogLayer<S, tracing_subscriber::fmt::format::DefaultFields, T> {
 	/// Create a new [`ConsoleLogLayer`] using the `EventFormat` provided in argument.
 	pub fn new(event_format: EventFormat<T>) -> Self {
-		Self {
-			event_format,
-			fmt_fields: Default::default(),
-			_inner: std::marker::PhantomData,
-		}
+		Self { event_format, fmt_fields: Default::default(), _inner: std::marker::PhantomData }
 	}
 }
 
@@ -90,11 +86,11 @@ where
 				Ok(buf) => {
 					a = buf;
 					&mut *a
-				}
+				},
 				_ => {
 					b = String::new();
 					&mut b
-				}
+				},
 			};
 
 			if self.format_event(&ctx, &mut buf, event).is_ok() {

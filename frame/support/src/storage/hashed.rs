@@ -18,8 +18,8 @@
 //! Operation on runtime storage using hashed keys.
 
 use super::unhashed;
+use codec::{Decode, Encode};
 use sp_std::prelude::*;
-use codec::{Encode, Decode};
 
 /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T, HashFn, R>(hash: &HashFn, key: &[u8]) -> Option<T>

@@ -18,7 +18,7 @@
 use crate::{pallet::Def, COUNTER};
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Ident, spanned::Spanned};
+use syn::{spanned::Spanned, Ident};
 
 pub fn expand_origins(def: &mut Def) -> TokenStream {
 	let count = COUNTER.with(|counter| counter.borrow_mut().inc());
@@ -47,7 +47,7 @@ pub fn expand_origins(def: &mut Def) -> TokenStream {
 					#maybe_compile_error
 				}
 			}
-	
+
 			#[doc(hidden)]
 			pub use #macro_ident as is_origin_part_defined;
 		}

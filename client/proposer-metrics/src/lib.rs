@@ -18,7 +18,9 @@
 
 //! Prometheus basic proposer metrics.
 
-use prometheus_endpoint::{register, PrometheusError, Registry, Histogram, HistogramOpts, Gauge, U64};
+use prometheus_endpoint::{
+	register, Gauge, Histogram, HistogramOpts, PrometheusError, Registry, U64,
+};
 
 /// Optional shareable link to basic authorship metrics.
 #[derive(Clone, Default)]
@@ -26,13 +28,13 @@ pub struct MetricsLink(Option<Metrics>);
 
 impl MetricsLink {
 	pub fn new(registry: Option<&Registry>) -> Self {
-		Self(
-			registry.and_then(|registry|
-				Metrics::register(registry)
-					.map_err(|err| log::warn!("Failed to register proposer prometheus metrics: {}", err))
-					.ok()
-			)
-		)
+		Self(registry.and_then(|registry| {
+			Metrics::register(registry)
+				.map_err(|err| {
+					log::warn!("Failed to register proposer prometheus metrics: {}", err)
+				})
+				.ok()
+		}))
 	}
 
 	pub fn report<O>(&self, do_this: impl FnOnce(&Metrics) -> O) -> Option<O> {

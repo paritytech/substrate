@@ -17,7 +17,7 @@
 
 //! Types for working with tracing data
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use rustc_hash::FxHashMap;
 
@@ -84,7 +84,7 @@ pub struct Data {
 #[serde(rename_all = "camelCase")]
 pub struct TraceError {
 	/// Error message
-    pub error: String,
+	pub error: String,
 }
 
 /// Response for the `state_traceBlock` RPC.
@@ -94,5 +94,5 @@ pub enum TraceBlockResponse {
 	/// Error block tracing response
 	TraceError(TraceError),
 	/// Successful block tracing response
-	BlockTrace(BlockTrace)
+	BlockTrace(BlockTrace),
 }

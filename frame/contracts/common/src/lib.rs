@@ -26,7 +26,7 @@ use sp_runtime::{DispatchError, RuntimeDebug};
 use sp_std::prelude::*;
 
 #[cfg(feature = "std")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Result type of a `bare_call` or `bare_instantiate` call.
 ///
@@ -37,6 +37,15 @@ use serde::{Serialize, Deserialize};
 pub struct ContractResult<T> {
 	/// How much gas was consumed during execution.
 	pub gas_consumed: u64,
+	/// How much gas is required as gas limit in order to execute this call.
+	///
+	/// This value should be used to determine the gas limit for on-chain execution.
+	///
+	/// # Note
+	///
+	/// This can only different from [`Self::gas_consumed`] when weight pre charging
+	/// is used. Currently, only `seal_call_runtime` makes use of pre charging.
+	pub gas_required: u64,
 	/// An optional debug message. This message is only filled when explicitly requested
 	/// by the code that calls into the contract. Otherwise it is empty.
 	///
@@ -154,7 +163,7 @@ pub enum Code<Hash> {
 #[cfg(feature = "std")]
 mod as_string {
 	use super::*;
-	use serde::{Serializer, Deserializer, ser::Error};
+	use serde::{ser::Error, Deserializer, Serializer};
 
 	pub fn serialize<S: Serializer>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
 		std::str::from_utf8(bytes)

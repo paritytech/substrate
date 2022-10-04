@@ -40,8 +40,8 @@ pub fn expand_genesis_build(def: &mut Def) -> proc_macro2::TokenStream {
 
 	let gen_cfg_use_gen = genesis_config.gen_kind.type_use_gen(genesis_build.attr_span);
 
-	let genesis_build_item = &mut def.item.content.as_mut()
-		.expect("Checked by def parser").1[genesis_build.index];
+	let genesis_build_item =
+		&mut def.item.content.as_mut().expect("Checked by def parser").1[genesis_build.index];
 
 	let genesis_build_item_impl = if let syn::Item::Impl(impl_) = genesis_build_item {
 		impl_

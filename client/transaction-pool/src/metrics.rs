@@ -27,13 +27,13 @@ pub struct MetricsLink(Arc<Option<Metrics>>);
 
 impl MetricsLink {
 	pub fn new(registry: Option<&Registry>) -> Self {
-		Self(Arc::new(
-			registry.and_then(|registry|
-				Metrics::register(registry)
-					.map_err(|err| { log::warn!("Failed to register prometheus metrics: {}", err); })
-					.ok()
-			)
-		))
+		Self(Arc::new(registry.and_then(|registry| {
+			Metrics::register(registry)
+				.map_err(|err| {
+					log::warn!("Failed to register prometheus metrics: {}", err);
+				})
+				.ok()
+		})))
 	}
 
 	pub fn report(&self, do_this: impl FnOnce(&Metrics)) {

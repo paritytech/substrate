@@ -18,9 +18,10 @@
 
 mod common;
 mod construct;
-#[macro_use] mod core;
-mod import;
+#[macro_use]
+mod core;
 mod generator;
+mod import;
 mod simple_trie;
 mod state_sizes;
 mod tempdb;
@@ -29,15 +30,15 @@ mod txpool;
 
 use structopt::StructOpt;
 
-use node_testing::bench::{Profile, KeyTypes, BlockType, DatabaseType as BenchDataBaseType};
+use node_testing::bench::{BlockType, DatabaseType as BenchDataBaseType, KeyTypes, Profile};
 
 use crate::{
 	common::SizeType,
-	core::{run_benchmark, Mode as BenchmarkMode},
-	tempdb::DatabaseType,
-	import::ImportBenchmarkDescription,
-	trie::{TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription, DatabaseSize},
 	construct::ConstructionBenchmarkDescription,
+	core::{run_benchmark, Mode as BenchmarkMode},
+	import::ImportBenchmarkDescription,
+	tempdb::DatabaseType,
+	trie::{DatabaseSize, TrieReadBenchmarkDescription, TrieWriteBenchmarkDescription},
 	txpool::PoolBenchmarkDescription,
 };
 
@@ -92,14 +93,25 @@ fn main() {
 			SizeType::Large,
 			SizeType::Full,
 			SizeType::Custom(opt.transactions.unwrap_or(0)),
-		].iter() {
+		]
+		.iter()
+		{
 			for block_type in [
 				BlockType::RandomTransfersKeepAlive,
 				BlockType::RandomTransfersReaping,
 				BlockType::Noop,
-			].iter() {
-				for database_type in [BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb].iter() {
-					import_benchmarks.push((profile, size.clone(), block_type.clone(), database_type));
+			]
+			.iter()
+			{
+				for database_type in
+					[BenchDataBaseType::RocksDb, BenchDataBaseType::ParityDb].iter()
+				{
+					import_benchmarks.push((
+						profile,
+						size.clone(),
+						block_type.clone(),
+						database_type,
+					));
 				}
 			}
 		}
@@ -163,7 +175,7 @@ fn main() {
 				println!("{}: {}", benchmark.name(), benchmark.path().full())
 			}
 		}
-		return;
+		return
 	}
 
 	let mut results = Vec::new();
@@ -183,7 +195,8 @@ fn main() {
 	}
 
 	if opt.json {
-		let json_result: String = serde_json::to_string(&results).expect("Failed to construct json");
+		let json_result: String =
+			serde_json::to_string(&results).expect("Failed to construct json");
 		println!("{}", json_result);
 	}
 }

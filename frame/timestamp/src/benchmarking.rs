@@ -20,9 +20,9 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_system::RawOrigin;
+use frame_benchmarking::{benchmarks, impl_benchmark_test_suite, TrackedStorageKey};
 use frame_support::{ensure, traits::OnFinalize};
-use frame_benchmarking::{benchmarks, TrackedStorageKey, impl_benchmark_test_suite};
+use frame_system::RawOrigin;
 
 use crate::Pallet as Timestamp;
 
@@ -35,8 +35,9 @@ benchmarks! {
 		let did_update_key = crate::DidUpdate::<T>::hashed_key().to_vec();
 		frame_benchmarking::benchmarking::add_to_whitelist(TrackedStorageKey {
 			key: did_update_key,
-			has_been_read: false,
-			has_been_written: true,
+			reads: 0,
+			writes: 1,
+			whitelisted: false,
 		});
 	}: _(RawOrigin::None, t.into())
 	verify {
@@ -56,8 +57,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Timestamp,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Timestamp, crate::tests::new_test_ext(), crate::tests::Test);

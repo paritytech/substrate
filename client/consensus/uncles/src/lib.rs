@@ -19,7 +19,7 @@
 //! Uncles functionality for Substrate.
 
 use sc_client_api::ProvideUncles;
-use sp_runtime::{traits::Block as BlockT, generic::BlockId};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
@@ -34,7 +34,8 @@ const MAX_UNCLE_GENERATIONS: u32 = 8;
 pub fn create_uncles_inherent_data_provider<B, C>(
 	client: &C,
 	parent: B::Hash,
-) -> Result<sp_authorship::InherentDataProvider<B::Header>, sc_client_api::blockchain::Error> where
+) -> Result<sp_authorship::InherentDataProvider<B::Header>, sc_client_api::blockchain::Error>
+where
 	B: BlockT,
 	C: ProvideUncles<B>,
 {

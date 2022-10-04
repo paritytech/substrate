@@ -15,17 +15,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Config, Error, exec::ExecError};
-use sp_std::marker::PhantomData;
-use sp_runtime::traits::Zero;
+use crate::{exec::ExecError, Config, Error};
 use frame_support::{
 	dispatch::{
-		DispatchResultWithPostInfo, PostDispatchInfo, DispatchErrorWithPostInfo, DispatchError,
+		DispatchError, DispatchErrorWithPostInfo, DispatchResultWithPostInfo, PostDispatchInfo,
 	},
 	weights::Weight,
 	DefaultNoBound,
 };
 use sp_core::crypto::UncheckedFrom;
+use sp_runtime::traits::Zero;
+use sp_std::marker::PhantomData;
 
 #[cfg(test)]
 use std::{any::Any, fmt::Debug};
@@ -79,6 +79,8 @@ pub struct GasMeter<T: Config> {
 	gas_limit: Weight,
 	/// Amount of gas left from initial gas limit. Can reach zero.
 	gas_left: Weight,
+	/// Due to `adjust_gas` and `nested` the `gas_left` can temporarily dip below its final value.
+	gas_left_lowest: Weight,
 	_phantom: PhantomData<T>,
 	#[cfg(test)]
 	tokens: Vec<ErasedToken>,
@@ -86,12 +88,13 @@ pub struct GasMeter<T: Config> {
 
 impl<T: Config> GasMeter<T>
 where
-	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<<T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
 	pub fn new(gas_limit: Weight) -> Self {
 		GasMeter {
 			gas_limit,
 			gas_left: gas_limit,
+			gas_left_lowest: gas_limit,
 			_phantom: PhantomData,
 			#[cfg(test)]
 			tokens: Vec::new(),
@@ -104,11 +107,7 @@ where
 	///
 	/// Passing `0` as amount is interpreted as "all remaining gas".
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
-		let amount = if amount == 0 {
-			self.gas_left
-		} else {
-			amount
-		};
+		let amount = if amount == 0 { self.gas_left } else { amount };
 
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
@@ -122,6 +121,19 @@ where
 
 	/// Absorb the remaining gas of a nested meter after we are done using it.
 	pub fn absorb_nested(&mut self, nested: Self) {
+		if self.gas_left == 0 {
+			// All of the remaining gas was inherited by the nested gas meter. When absorbing
+			// we can therefore safely inherit the lowest gas that the nested gas meter experienced
+			// as long as it is lower than the lowest gas that was experienced by the parent.
+			// We cannot call `self.gas_left_lowest()` here because in the state that this
+			// code is run the parent gas meter has `0` gas left.
+			self.gas_left_lowest = nested.gas_left_lowest().min(self.gas_left_lowest);
+		} else {
+			// The nested gas meter was created with a fixed amount that did not consume all of the
+			// parents (self) gas. The lowest gas that self will experience is when the nested
+			// gas was pre charged with the fixed amount.
+			self.gas_left_lowest = self.gas_left_lowest();
+		}
 		self.gas_left += nested.gas_left;
 	}
 
@@ -139,10 +151,8 @@ where
 		#[cfg(test)]
 		{
 			// Unconditionally add the token to the storage.
-			let erased_tok = ErasedToken {
-				description: format!("{:?}", token),
-				token: Box::new(token),
-			};
+			let erased_tok =
+				ErasedToken { description: format!("{:?}", token), token: Box::new(token) };
 			self.tokens.push(erased_tok);
 		}
 
@@ -163,12 +173,21 @@ where
 	/// This is when a maximum a priori amount was charged and then should be partially
 	/// refunded to match the actual amount.
 	pub fn adjust_gas<Tok: Token<T>>(&mut self, charged_amount: ChargedAmount, token: Tok) {
+		self.gas_left_lowest = self.gas_left_lowest();
 		let adjustment = charged_amount.0.saturating_sub(token.weight());
 		self.gas_left = self.gas_left.saturating_add(adjustment).min(self.gas_limit);
 	}
 
-	/// Returns how much gas was used.
-	pub fn gas_spent(&self) -> Weight {
+	/// Returns the amount of gas that is required to run the same call.
+	///
+	/// This can be different from `gas_spent` because due to `adjust_gas` the amount of
+	/// spent gas can temporarily drop and be refunded later.
+	pub fn gas_required(&self) -> Weight {
+		self.gas_limit - self.gas_left_lowest()
+	}
+
+	/// Returns how much gas was spent
+	pub fn gas_consumed(&self) -> Weight {
 		self.gas_limit - self.gas_left
 	}
 
@@ -179,20 +198,25 @@ where
 
 	/// Turn this GasMeter into a DispatchResult that contains the actually used gas.
 	pub fn into_dispatch_result<R, E>(
-		self, result: Result<R, E>,
+		self,
+		result: Result<R, E>,
 		base_weight: Weight,
 	) -> DispatchResultWithPostInfo
 	where
 		E: Into<ExecError>,
 	{
 		let post_info = PostDispatchInfo {
-			actual_weight: Some(self.gas_spent().saturating_add(base_weight)),
+			actual_weight: Some(self.gas_consumed().saturating_add(base_weight)),
 			pays_fee: Default::default(),
 		};
 
 		result
 			.map(|_| post_info)
 			.map_err(|e| DispatchErrorWithPostInfo { post_info, error: e.into().error })
+	}
+
+	fn gas_left_lowest(&self) -> Weight {
+		self.gas_left_lowest.min(self.gas_left)
 	}
 
 	#[cfg(test)]
@@ -247,7 +271,9 @@ mod tests {
 	#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 	struct SimpleToken(u64);
 	impl Token<Test> for SimpleToken {
-		fn weight(&self) -> u64 { self.0 }
+		fn weight(&self) -> u64 {
+			self.0
+		}
 	}
 
 	#[test]
@@ -287,7 +313,6 @@ mod tests {
 		// The gas meter is emptied at this moment, so this should also fail.
 		assert!(gas_meter.charge(SimpleToken(1)).is_err());
 	}
-
 
 	// Charging the exact amount that the user paid for should be
 	// possible.

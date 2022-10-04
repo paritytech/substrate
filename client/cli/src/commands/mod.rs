@@ -19,37 +19,26 @@ mod build_spec_cmd;
 mod check_block_cmd;
 mod export_blocks_cmd;
 mod export_state_cmd;
+mod generate;
+mod generate_node_key;
 mod import_blocks_cmd;
+mod insert_key;
+mod inspect_key;
+mod inspect_node_key;
+mod key;
 mod purge_chain_cmd;
-mod sign;
-mod verify;
-mod vanity;
 mod revert_cmd;
 mod run_cmd;
-mod generate_node_key;
-mod generate;
-mod insert_key;
-mod inspect_node_key;
-mod inspect_key;
-mod key;
+mod sign;
 pub mod utils;
+mod vanity;
+mod verify;
 
 pub use self::{
-	build_spec_cmd::BuildSpecCmd,
-	check_block_cmd::CheckBlockCmd,
-	export_blocks_cmd::ExportBlocksCmd,
-	export_state_cmd::ExportStateCmd,
-	import_blocks_cmd::ImportBlocksCmd,
-	purge_chain_cmd::PurgeChainCmd,
-	sign::SignCmd,
-	generate::GenerateCmd,
-	insert_key::InsertKeyCmd,
-	inspect_key::InspectKeyCmd,
-	generate_node_key::GenerateNodeKeyCmd,
-	inspect_node_key::InspectNodeKeyCmd,
-	key::KeySubcommand,
-	vanity::VanityCmd,
-	verify::VerifyCmd,
-	revert_cmd::RevertCmd,
-	run_cmd::RunCmd,
+	build_spec_cmd::BuildSpecCmd, check_block_cmd::CheckBlockCmd,
+	export_blocks_cmd::ExportBlocksCmd, export_state_cmd::ExportStateCmd, generate::GenerateCmd,
+	generate_node_key::GenerateNodeKeyCmd, import_blocks_cmd::ImportBlocksCmd,
+	insert_key::InsertKeyCmd, inspect_key::InspectKeyCmd, inspect_node_key::InspectNodeKeyCmd,
+	key::KeySubcommand, purge_chain_cmd::PurgeChainCmd, revert_cmd::RevertCmd, run_cmd::RunCmd,
+	sign::SignCmd, vanity::VanityCmd, verify::VerifyCmd,
 };

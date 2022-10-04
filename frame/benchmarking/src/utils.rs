@@ -17,9 +17,10 @@
 
 //! Interfaces, types and utils for benchmarking a FRAME runtime.
 
-use codec::{Encode, Decode};
-use sp_std::{vec::Vec, prelude::Box};
+use codec::{Decode, Encode};
+use frame_support::traits::StorageInfo;
 use sp_io::hashing::blake2_256;
+use sp_std::{prelude::Box, vec::Vec};
 use sp_storage::TrackedStorageKey;
 
 /// An alphabet of possible parameters to use for benchmarking.
@@ -27,7 +28,32 @@ use sp_storage::TrackedStorageKey;
 #[allow(missing_docs)]
 #[allow(non_camel_case_types)]
 pub enum BenchmarkParameter {
-	a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z,
+	a,
+	b,
+	c,
+	d,
+	e,
+	f,
+	g,
+	h,
+	i,
+	j,
+	k,
+	l,
+	m,
+	n,
+	o,
+	p,
+	q,
+	r,
+	s,
+	t,
+	u,
+	v,
+	w,
+	x,
+	y,
+	z,
 }
 
 #[cfg(feature = "std")]
@@ -50,6 +76,22 @@ pub struct BenchmarkBatch {
 	pub results: Vec<BenchmarkResults>,
 }
 
+// TODO: could probably make API cleaner here.
+/// The results of a single of benchmark, where time and db results are separated.
+#[derive(Encode, Decode, Clone, PartialEq, Debug)]
+pub struct BenchmarkBatchSplitResults {
+	/// The pallet containing this benchmark.
+	pub pallet: Vec<u8>,
+	/// The instance of this pallet being benchmarked.
+	pub instance: Vec<u8>,
+	/// The extrinsic (or benchmark name) of this benchmark.
+	pub benchmark: Vec<u8>,
+	/// The extrinsic timing results from this benchmark.
+	pub time_results: Vec<BenchmarkResults>,
+	/// The db tracking results from this benchmark.
+	pub db_results: Vec<BenchmarkResults>,
+}
+
 /// Results from running benchmarks on a FRAME pallet.
 /// Contains duration of the function call in nanoseconds along with the benchmark parameters
 /// used for that benchmark result.
@@ -63,6 +105,7 @@ pub struct BenchmarkResults {
 	pub writes: u32,
 	pub repeat_writes: u32,
 	pub proof_size: u32,
+	pub keys: Vec<(Vec<u8>, u32, u32, bool)>,
 }
 
 /// Configuration used to setup and run runtime benchmarks.
@@ -72,23 +115,40 @@ pub struct BenchmarkConfig {
 	pub pallet: Vec<u8>,
 	/// The encoded name of the benchmark/extrinsic to run.
 	pub benchmark: Vec<u8>,
-	/// An optional manual override to the lowest values used in the `steps` range.
-	pub lowest_range_values: Vec<u32>,
-	/// An optional manual override to the highest values used in the `steps` range.
-	pub highest_range_values: Vec<u32>,
-	/// The number of samples to take across the range of values for components.
-	pub steps: Vec<u32>,
-	/// The number of times to repeat a benchmark.
-	pub repeat: u32,
+	/// The selected component values to use when running the benchmark.
+	pub selected_components: Vec<(BenchmarkParameter, u32)>,
 	/// Enable an extra benchmark iteration which runs the verification logic for a benchmark.
 	pub verify: bool,
-	/// Enable benchmarking of "extra" extrinsics, i.e. those that are not directly used in a pallet.
-	pub extra: bool,
+	/// Number of times to repeat benchmark within the Wasm environment. (versus in the client)
+	pub internal_repeats: u32,
+}
+
+/// A list of benchmarks available for a particular pallet and instance.
+///
+/// All `Vec<u8>` must be valid utf8 strings.
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkList {
+	pub pallet: Vec<u8>,
+	pub instance: Vec<u8>,
+	pub benchmarks: Vec<BenchmarkMetadata>,
+}
+
+#[derive(Encode, Decode, Default, Clone, PartialEq, Debug)]
+pub struct BenchmarkMetadata {
+	pub name: Vec<u8>,
+	pub components: Vec<(BenchmarkParameter, u32, u32)>,
 }
 
 sp_api::decl_runtime_apis! {
 	/// Runtime api for benchmarking a FRAME runtime.
 	pub trait Benchmark {
+		/// Get the benchmark metadata available for this runtime.
+		///
+		/// Parameters
+		/// - `extra`: Also list benchmarks marked "extra" which would otherwise not be
+		///            needed for weight calculation.
+		fn benchmark_metadata(extra: bool) -> (Vec<BenchmarkList>, Vec<StorageInfo>);
+
 		/// Dispatch the given benchmark.
 		fn dispatch_benchmark(config: BenchmarkConfig) -> Result<Vec<BenchmarkBatch>, sp_runtime::RuntimeString>;
 	}
@@ -102,7 +162,8 @@ pub trait Benchmarking {
 	/// WARNING! This is a non-deterministic call. Do not use this within
 	/// consensus critical logic.
 	fn current_time() -> u128 {
-		std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)
+		std::time::SystemTime::now()
+			.duration_since(std::time::SystemTime::UNIX_EPOCH)
 			.expect("Unix time doesn't go backwards; qed")
 			.as_nanos()
 	}
@@ -143,16 +204,14 @@ pub trait Benchmarking {
 		match whitelist.iter_mut().find(|x| x.key == add.key) {
 			// If we already have this key in the whitelist, update to be the most constrained value.
 			Some(item) => {
-				*item = TrackedStorageKey {
-					key: add.key,
-					has_been_read: item.has_been_read || add.has_been_read,
-					has_been_written: item.has_been_written || add.has_been_written,
-				}
+				item.reads += add.reads;
+				item.writes += add.writes;
+				item.whitelisted = item.whitelisted || add.whitelisted;
 			},
 			// If the key does not exist, add it.
 			None => {
 				whitelist.push(add);
-			}
+			},
 		}
 		self.set_whitelist(whitelist);
 	}
@@ -162,6 +221,10 @@ pub trait Benchmarking {
 		let mut whitelist = self.get_whitelist();
 		whitelist.retain(|x| x.key != remove);
 		self.set_whitelist(whitelist);
+	}
+
+	fn get_read_and_written_keys(&self) -> Vec<(Vec<u8>, u32, u32, bool)> {
+		self.get_read_and_written_keys()
 	}
 
 	/// Get current estimated proof size.
@@ -178,25 +241,15 @@ pub trait Benchmarking<T> {
 	/// Parameters
 	/// - `extra`: Also return benchmarks marked "extra" which would otherwise not be
 	///            needed for weight calculation.
-	fn benchmarks(extra: bool) -> Vec<&'static [u8]>;
+	fn benchmarks(extra: bool) -> Vec<BenchmarkMetadata>;
 
 	/// Run the benchmarks for this pallet.
-	///
-	/// Parameters
-	/// - `name`: The name of extrinsic function or benchmark you want to benchmark encoded as
-	///   bytes.
-	/// - `steps`: The number of sample points you want to take across the range of parameters.
-	/// - `lowest_range_values`: The lowest number for each range of parameters.
-	/// - `highest_range_values`: The highest number for each range of parameters.
-	/// - `repeat`: The number of times you want to repeat a benchmark.
 	fn run_benchmark(
 		name: &[u8],
-		lowest_range_values: &[u32],
-		highest_range_values: &[u32],
-		steps: &[u32],
-		repeat: u32,
+		selected_components: &[(BenchmarkParameter, u32)],
 		whitelist: &[TrackedStorageKey],
 		verify: bool,
+		internal_repeats: u32,
 	) -> Result<Vec<T>, &'static str>;
 }
 
@@ -212,12 +265,16 @@ pub trait BenchmarkingSetup<T, I = ()> {
 	fn instance(
 		&self,
 		components: &[(BenchmarkParameter, u32)],
-		verify: bool
+		verify: bool,
 	) -> Result<Box<dyn FnOnce() -> Result<(), &'static str>>, &'static str>;
 }
 
 /// Grab an account, seeded by a name and index.
-pub fn account<AccountId: Decode + Default>(name: &'static str, index: u32, seed: u32) -> AccountId {
+pub fn account<AccountId: Decode + Default>(
+	name: &'static str,
+	index: u32,
+	seed: u32,
+) -> AccountId {
 	let entropy = (name, index, seed).using_encoded(blake2_256);
 	AccountId::decode(&mut &entropy[..]).unwrap_or_default()
 }
@@ -231,7 +288,7 @@ pub fn whitelisted_caller<AccountId: Decode + Default>() -> AccountId {
 macro_rules! whitelist_account {
 	($acc:ident) => {
 		frame_benchmarking::benchmarking::add_to_whitelist(
-			frame_system::Account::<T>::hashed_key_for(&$acc).into()
+			frame_system::Account::<T>::hashed_key_for(&$acc).into(),
 		);
-	}
+	};
 }

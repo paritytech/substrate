@@ -61,13 +61,15 @@
 //! These status packets will typically contain light pieces of information
 //! used to inform peers of a current view of protocol state.
 
-pub use self::bridge::GossipEngine;
-pub use self::state_machine::TopicNotification;
-pub use self::validator::{DiscardAll, MessageIntent, Validator, ValidatorContext, ValidationResult};
+pub use self::{
+	bridge::GossipEngine,
+	state_machine::TopicNotification,
+	validator::{DiscardAll, MessageIntent, ValidationResult, Validator, ValidatorContext},
+};
 
 use futures::prelude::*;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId, ReputationChange};
-use sp_runtime::{traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use std::{borrow::Cow, iter, pin::Pin, sync::Arc};
 
 mod bridge;
@@ -111,18 +113,23 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
 	}
 
 	fn add_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
-		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
-			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
+		let addr =
+			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+		let result =
+			NetworkService::add_peers_to_reserved_set(self, protocol, iter::once(addr).collect());
 		if let Err(err) = result {
 			log::error!(target: "gossip", "add_set_reserved failed: {}", err);
 		}
 	}
 
 	fn remove_set_reserved(&self, who: PeerId, protocol: Cow<'static, str>) {
-		let addr = iter::once(multiaddr::Protocol::P2p(who.into()))
-			.collect::<multiaddr::Multiaddr>();
-		let result = NetworkService::remove_peers_from_reserved_set(self, protocol, iter::once(addr).collect());
+		let addr =
+			iter::once(multiaddr::Protocol::P2p(who.into())).collect::<multiaddr::Multiaddr>();
+		let result = NetworkService::remove_peers_from_reserved_set(
+			self,
+			protocol,
+			iter::once(addr).collect(),
+		);
 		if let Err(err) = result {
 			log::error!(target: "gossip", "remove_set_reserved failed: {}", err);
 		}

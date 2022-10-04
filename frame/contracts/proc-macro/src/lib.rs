@@ -21,11 +21,10 @@
 
 extern crate alloc;
 
+use alloc::string::ToString;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
-use syn::spanned::Spanned;
-use syn::{parse_macro_input, Data, DataStruct, DeriveInput, Fields, Ident};
-use alloc::string::ToString;
+use syn::{parse_macro_input, spanned::Spanned, Data, DataStruct, DeriveInput, Fields, Ident};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
@@ -44,7 +43,7 @@ pub fn derive_schedule_debug(input: proc_macro::TokenStream) -> proc_macro::Toke
 
 fn derive_debug(
 	input: proc_macro::TokenStream,
-	fmt: impl Fn(&Ident) -> TokenStream
+	fmt: impl Fn(&Ident) -> TokenStream,
 ) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = &input.ident;
@@ -55,7 +54,8 @@ fn derive_debug(
 		return quote_spanned! {
 			name.span() =>
 			compile_error!("WeightDebug is only supported for structs.");
-		}.into();
+		}
+		.into()
 	};
 
 	#[cfg(feature = "full")]
@@ -87,24 +87,22 @@ fn derive_debug(
 fn iterate_fields(data: &DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
 	match &data.fields {
 		Fields::Named(fields) => {
-			let recurse = fields.named
-			.iter()
-			.filter_map(|f| {
+			let recurse = fields.named.iter().filter_map(|f| {
 				let name = f.ident.as_ref()?;
 				if name.to_string().starts_with('_') {
-					return None;
+					return None
 				}
 				let value = fmt(name);
-				let ret = quote_spanned!{ f.span() =>
+				let ret = quote_spanned! { f.span() =>
 					formatter.field(stringify!(#name), #value);
 				};
 				Some(ret)
 			});
-			quote!{
+			quote! {
 				#( #recurse )*
 			}
-		}
-		Fields::Unnamed(fields) => quote_spanned!{
+		},
+		Fields::Unnamed(fields) => quote_spanned! {
 			fields.span() =>
 			compile_error!("Unnamed fields are not supported")
 		},

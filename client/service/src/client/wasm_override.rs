@@ -35,18 +35,17 @@
 //! A custom WASM blob will override on-chain WASM if the spec version matches. If it is
 //! required to overrides multiple runtimes, multiple WASM blobs matching each of the spec versions
 //! needed must be provided in the given directory.
-//!
-use std::{
-	fs, collections::{HashMap, hash_map::DefaultHasher},
-	path::{Path, PathBuf},
-	hash::Hasher as _,
-};
-use sp_core::traits::FetchRuntimeCode;
-use sp_state_machine::BasicExternalities;
-use sp_blockchain::Result;
 use sc_executor::RuntimeInfo;
+use sp_blockchain::Result;
+use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
+use sp_state_machine::BasicExternalities;
 use sp_version::RuntimeVersion;
-use sp_core::traits::RuntimeCode;
+use std::{
+	collections::{hash_map::DefaultHasher, HashMap},
+	fs,
+	hash::Hasher as _,
+	path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 /// Auxiliary structure that holds a wasm blob and its hash.
@@ -62,11 +61,7 @@ impl WasmBlob {
 	}
 
 	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
-		RuntimeCode {
-			code_fetcher: self,
-			hash: self.hash.clone(),
-			heap_pages,
-		}
+		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 }
 
@@ -117,7 +112,7 @@ pub struct WasmOverride<E> {
 
 impl<E> WasmOverride<E>
 where
-	E: RuntimeInfo + Clone + 'static
+	E: RuntimeInfo + Clone + 'static,
 {
 	pub fn new<P>(path: P, executor: E) -> Result<Self>
 	where
@@ -130,26 +125,19 @@ where
 	/// Gets an override by it's runtime spec version.
 	///
 	/// Returns `None` if an override for a spec version does not exist.
-	pub fn get<'a, 'b: 'a>(
-		&'b self,
-		spec: &u32,
-		pages: Option<u64>,
-	) -> Option<RuntimeCode<'a>> {
-		self.overrides
-			.get(spec)
-			.map(|w| w.runtime_code(pages))
+	pub fn get<'a, 'b: 'a>(&'b self, spec: &u32, pages: Option<u64>) -> Option<RuntimeCode<'a>> {
+		self.overrides.get(spec).map(|w| w.runtime_code(pages))
 	}
 
 	/// Scrapes a folder for WASM runtimes.
 	/// Returns a hashmap of the runtime version and wasm runtime code.
 	fn scrape_overrides(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
-
-		let handle_err = |e: std::io::Error | -> sp_blockchain::Error {
+		let handle_err = |e: std::io::Error| -> sp_blockchain::Error {
 			WasmOverrideError::Io(dir.to_owned(), e).into()
 		};
 
 		if !dir.is_dir() {
-			return Err(WasmOverrideError::NotADirectory(dir.to_owned()).into());
+			return Err(WasmOverrideError::NotADirectory(dir.to_owned()).into())
 		}
 
 		let mut overrides = HashMap::new();
@@ -176,13 +164,13 @@ where
 						);
 						duplicates.push(format!("{}", path.display()));
 					}
-				}
-				_ => ()
+				},
+				_ => (),
 			}
 		}
 
 		if !duplicates.is_empty() {
-			return Err(WasmOverrideError::DuplicateRuntime(duplicates).into());
+			return Err(WasmOverrideError::DuplicateRuntime(duplicates).into())
 		}
 
 		Ok(overrides)
@@ -194,7 +182,8 @@ where
 		heap_pages: Option<u64>,
 	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
-		executor.runtime_version(&mut ext, &code.runtime_code(heap_pages))
+		executor
+			.runtime_version(&mut ext, &code.runtime_code(heap_pages))
 			.map_err(|e| WasmOverrideError::VersionInvalid(format!("{:?}", e)).into())
 	}
 }
@@ -203,28 +192,25 @@ where
 #[cfg(test)]
 pub fn dummy_overrides<E>(executor: &E) -> WasmOverride<E>
 where
-	E: RuntimeInfo + Clone + 'static
+	E: RuntimeInfo + Clone + 'static,
 {
 	let mut overrides = HashMap::new();
 	overrides.insert(0, WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0]));
 	overrides.insert(1, WasmBlob::new(vec![1, 1, 1, 1, 1, 1, 1, 1]));
 	overrides.insert(2, WasmBlob::new(vec![2, 2, 2, 2, 2, 2, 2, 2]));
-	WasmOverride {
-		overrides,
-		executor: executor.clone()
-	}
+	WasmOverride { overrides, executor: executor.clone() }
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use sc_executor::{NativeExecutor, WasmExecutionMethod};
-	use substrate_test_runtime_client::LocalExecutor;
 	use std::fs::{self, File};
+	use substrate_test_runtime_client::LocalExecutor;
 
 	fn wasm_test<F>(fun: F)
 	where
-		F: Fn(&Path, &[u8], &NativeExecutor::<LocalExecutor>)
+		F: Fn(&Path, &[u8], &NativeExecutor<LocalExecutor>),
 	{
 		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
 			WasmExecutionMethod::Interpreted,
@@ -252,8 +238,8 @@ mod tests {
 	fn should_scrape_wasm() {
 		wasm_test(|dir, wasm_bytes, exec| {
 			fs::write(dir.join("test.wasm"), wasm_bytes).expect("Create test file");
-			let overrides = WasmOverride::scrape_overrides(dir, exec)
-				.expect("HashMap of u32 and WasmBlob");
+			let overrides =
+				WasmOverride::scrape_overrides(dir, exec).expect("HashMap of u32 and WasmBlob");
 			let wasm = overrides.get(&2).expect("WASM binary");
 			assert_eq!(wasm.code, substrate_test_runtime::wasm_binary_unwrap().to_vec())
 		});
@@ -272,10 +258,10 @@ mod tests {
 						Some(WasmOverrideError::DuplicateRuntime(duplicates)) => {
 							assert_eq!(duplicates.len(), 1);
 						},
-						_ => panic!("Test should end with Msg Error Variant")
+						_ => panic!("Test should end with Msg Error Variant"),
 					}
 				},
-				_ => panic!("Test should end in error")
+				_ => panic!("Test should end in error"),
 			}
 		});
 	}
@@ -286,8 +272,8 @@ mod tests {
 			File::create(dir.join("README.md")).expect("Create test file");
 			File::create(dir.join("LICENSE")).expect("Create a test file");
 			fs::write(dir.join("test0.wasm"), wasm_bytes).expect("Create test file");
-			let scraped = WasmOverride::scrape_overrides(dir, exec)
-				.expect("HashMap of u32 and WasmBlob");
+			let scraped =
+				WasmOverride::scrape_overrides(dir, exec).expect("HashMap of u32 and WasmBlob");
 			assert_eq!(scraped.len(), 1);
 		});
 	}

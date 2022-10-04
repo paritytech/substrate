@@ -41,8 +41,10 @@ use libp2p::Multiaddr;
 use log::{error, warn};
 use parking_lot::Mutex;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{atomic, Arc};
+use std::{
+	collections::HashMap,
+	sync::{atomic, Arc},
+};
 
 pub use libp2p::wasm_ext::ExtTransport;
 pub use log;
@@ -191,11 +193,7 @@ impl TelemetryWorker {
 		let input = input.expect("the stream is never closed; qed");
 
 		match input {
-			Register::Telemetry {
-				id,
-				endpoints,
-				connection_message,
-			} => {
+			Register::Telemetry { id, endpoints, connection_message } => {
 				let endpoints = endpoints.0;
 
 				let connection_message = match serde_json::to_value(&connection_message) {
@@ -205,10 +203,10 @@ impl TelemetryWorker {
 						obj.insert("id".to_string(), id.into());
 						obj.insert("payload".to_string(), value.into());
 						Some(obj)
-					}
+					},
 					Ok(_) => {
 						unreachable!("ConnectionMessage always serialize to an object; qed")
-					}
+					},
 					Err(err) => {
 						log::error!(
 							target: "telemetry",
@@ -216,7 +214,7 @@ impl TelemetryWorker {
 							err,
 						);
 						None
-					}
+					},
 				};
 
 				for (addr, verbosity) in endpoints {
@@ -225,10 +223,7 @@ impl TelemetryWorker {
 						"Initializing telemetry for: {:?}",
 						addr,
 					);
-					node_map
-						.entry(id.clone())
-						.or_default()
-						.push((verbosity, addr.clone()));
+					node_map.entry(id.clone()).or_default().push((verbosity, addr.clone()));
 
 					let node = node_pool.entry(addr.clone()).or_insert_with(|| {
 						Node::new(transport.clone(), addr.clone(), Vec::new(), Vec::new())
@@ -238,32 +233,27 @@ impl TelemetryWorker {
 
 					pending_connection_notifications.retain(|(addr_b, connection_message)| {
 						if *addr_b == addr {
-							node.telemetry_connection_notifier
-								.push(connection_message.clone());
+							node.telemetry_connection_notifier.push(connection_message.clone());
 							false
 						} else {
 							true
 						}
 					});
 				}
-			}
-			Register::Notifier {
-				addresses,
-				connection_notifier,
-			} => {
+			},
+			Register::Notifier { addresses, connection_notifier } => {
 				for addr in addresses {
 					// If the Node has been initialized, we directly push the connection_notifier.
 					// Otherwise we push it to a queue that will be consumed when the connection
 					// initializes, thus ensuring that the connection notifier will be sent to the
 					// Node when it becomes available.
 					if let Some(node) = node_pool.get_mut(&addr) {
-						node.telemetry_connection_notifier
-							.push(connection_notifier.clone());
+						node.telemetry_connection_notifier.push(connection_notifier.clone());
 					} else {
 						pending_connection_notifications.push((addr, connection_notifier.clone()));
 					}
 				}
-			}
+			},
 		}
 	}
 
@@ -297,12 +287,12 @@ impl TelemetryWorker {
 						message,
 					)),
 			);
-			return;
+			return
 		};
 
 		for (node_max_verbosity, addr) in nodes {
 			if verbosity > *node_max_verbosity {
-				continue;
+				continue
 			}
 
 			if let Some(node) = node_pool.get_mut(&addr) {
@@ -376,11 +366,7 @@ impl Telemetry {
 		let endpoints = self.endpoints.take().ok_or_else(|| Error::TelemetryAlreadyInitialized)?;
 
 		self.register_sender
-			.unbounded_send(Register::Telemetry {
-				id: self.id,
-				endpoints,
-				connection_message,
-			})
+			.unbounded_send(Register::Telemetry { id: self.id, endpoints, connection_message })
 			.map_err(|_| Error::TelemetryWorkerDropped)
 	}
 
@@ -407,12 +393,8 @@ pub struct TelemetryHandle {
 impl TelemetryHandle {
 	/// Send telemetry messages.
 	pub fn send_telemetry(&self, verbosity: VerbosityLevel, payload: TelemetryPayload) {
-		match self
-			.message_sender
-			.lock()
-			.try_send((self.id, verbosity, payload))
-		{
-			Ok(()) => {}
+		match self.message_sender.lock().try_send((self.id, verbosity, payload)) {
+			Ok(()) => {},
 			Err(err) if err.is_full() => log::trace!(
 				target: "telemetry",
 				"Telemetry channel full.",
@@ -461,15 +443,8 @@ impl TelemetryConnectionNotifier {
 
 #[derive(Debug)]
 enum Register {
-	Telemetry {
-		id: Id,
-		endpoints: TelemetryEndpoints,
-		connection_message: ConnectionMessage,
-	},
-	Notifier {
-		addresses: Vec<Multiaddr>,
-		connection_notifier: ConnectionNotifierSender,
-	},
+	Telemetry { id: Id, endpoints: TelemetryEndpoints, connection_message: ConnectionMessage },
+	Notifier { addresses: Vec<Multiaddr>, connection_notifier: ConnectionNotifierSender },
 }
 
 /// Report a telemetry.

@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error;
-use sc_service::{PruningMode, Role, KeepBlocks};
+use sc_service::{KeepBlocks, PruningMode, Role};
 use structopt::StructOpt;
 
 /// Parameters to define the pruning mode
@@ -54,13 +54,13 @@ impl PruningParams {
 						"Validators should run with state pruning disabled (i.e. archive). \
 						You can ignore this check with `--unsafe-pruning`."
 							.to_string(),
-					));
+					))
 				}
 
 				PruningMode::keep_blocks(s.parse().map_err(|_| {
 					error::Error::Input("Invalid pruning mode specified".to_string())
 				})?)
-			}
+			},
 		})
 	}
 

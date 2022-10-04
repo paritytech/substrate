@@ -17,22 +17,27 @@
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
 //! [`crate::request_responses::RequestResponsesBehaviour`].
 
-use codec::{Encode, Decode};
-use crate::chain::Client;
-use crate::config::ProtocolId;
-use crate::request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig};
-use crate::schema::v1::{StateResponse, StateRequest, StateEntry};
-use crate::{PeerId, ReputationChange};
-use futures::channel::{mpsc, oneshot};
-use futures::stream::StreamExt;
+use crate::{
+	chain::Client,
+	config::ProtocolId,
+	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
+	schema::v1::{StateEntry, StateRequest, StateResponse},
+	PeerId, ReputationChange,
+};
+use codec::{Decode, Encode};
+use futures::{
+	channel::{mpsc, oneshot},
+	stream::StreamExt,
+};
 use log::debug;
 use lru::LruCache;
 use prost::Message;
-use sp_runtime::generic::BlockId;
-use sp_runtime::traits::Block as BlockT;
-use std::sync::Arc;
-use std::time::Duration;
-use std::hash::{Hasher, Hash};
+use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use std::{
+	hash::{Hash, Hasher},
+	sync::Arc,
+	time::Duration,
+};
 
 const LOG_TARGET: &str = "sync";
 const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024; // Actual reponse may be bigger.
@@ -127,9 +132,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 				Ok(()) => debug!(target: LOG_TARGET, "Handled block request from {}.", peer),
 				Err(e) => debug!(
 					target: LOG_TARGET,
-					"Failed to handle state request from {}: {}",
-					peer,
-					e,
+					"Failed to handle state request from {}: {}", peer, e,
 				),
 			}
 		}
@@ -144,11 +147,8 @@ impl<B: BlockT> StateRequestHandler<B> {
 		let request = StateRequest::decode(&payload[..])?;
 		let block: B::Hash = Decode::decode(&mut request.block.as_ref())?;
 
-		let key = SeenRequestsKey {
-			peer: *peer,
-			block: block.clone(),
-			start: request.start.clone(),
-		};
+		let key =
+			SeenRequestsKey { peer: *peer, block: block.clone(), start: request.start.clone() };
 
 		let mut reputation_changes = Vec::new();
 
@@ -163,7 +163,7 @@ impl<B: BlockT> StateRequestHandler<B> {
 			},
 			None => {
 				self.seen_requests.put(key.clone(), SeenRequestsValue::First);
-			}
+			},
 		}
 
 		log::trace!(
@@ -194,7 +194,8 @@ impl<B: BlockT> StateRequestHandler<B> {
 					&request.start,
 					MAX_RESPONSE_BYTES,
 				)?;
-				response.entries = entries.into_iter().map(|(key, value)| StateEntry { key, value }).collect();
+				response.entries =
+					entries.into_iter().map(|(key, value)| StateEntry { key, value }).collect();
 				if response.entries.is_empty() {
 					response.complete = true;
 				}
@@ -224,11 +225,9 @@ impl<B: BlockT> StateRequestHandler<B> {
 			Err(())
 		};
 
-		pending_response.send(OutgoingResponse {
-			result,
-			reputation_changes,
-			sent_feedback: None,
-		}).map_err(|_| HandleRequestError::SendResponse)
+		pending_response
+			.send(OutgoingResponse { result, reputation_changes, sent_feedback: None })
+			.map_err(|_| HandleRequestError::SendResponse)
 	}
 }
 

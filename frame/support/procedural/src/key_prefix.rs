@@ -16,14 +16,14 @@
 // limitations under the License.
 
 use proc_macro2::{Span, TokenStream};
-use quote::{ToTokens, format_ident, quote};
+use quote::{format_ident, quote, ToTokens};
 use syn::{Ident, Result};
 
 const MAX_IDENTS: usize = 18;
 
 pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<TokenStream> {
 	if !input.is_empty() {
-		return Err(syn::Error::new(Span::call_site(), "No arguments expected"));
+		return Err(syn::Error::new(Span::call_site(), "No arguments expected"))
 	}
 
 	let mut all_trait_impls = TokenStream::new();
@@ -36,13 +36,17 @@ pub fn impl_key_prefix_for_tuples(input: proc_macro::TokenStream) -> Result<Toke
 		for prefix_count in 1..i {
 			let (prefixes, suffixes) = current_tuple.split_at(prefix_count);
 
-			let hashers = current_tuple.iter().map(|ident| format_ident!("Hasher{}", ident)).collect::<Vec<_>>();
-			let kargs = prefixes.iter().map(|ident| format_ident!("KArg{}", ident)).collect::<Vec<_>>();
+			let hashers = current_tuple
+				.iter()
+				.map(|ident| format_ident!("Hasher{}", ident))
+				.collect::<Vec<_>>();
+			let kargs =
+				prefixes.iter().map(|ident| format_ident!("KArg{}", ident)).collect::<Vec<_>>();
 			let partial_keygen = generate_keygen(prefixes);
 			let suffix_keygen = generate_keygen(suffixes);
 			let suffix_tuple = generate_tuple(suffixes);
 
-			let trait_impls = quote!{
+			let trait_impls = quote! {
 				impl<
 					#(#current_tuple: FullCodec,)*
 					#(#hashers: StorageHasher,)*

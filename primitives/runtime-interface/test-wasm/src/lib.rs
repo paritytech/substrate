@@ -22,7 +22,7 @@
 use sp_runtime_interface::runtime_interface;
 
 #[cfg(not(feature = "std"))]
-use sp_std::{prelude::*, mem, convert::TryFrom};
+use sp_std::{convert::TryFrom, mem, prelude::*};
 
 use sp_core::{sr25519::Public, wasm_export_functions};
 
@@ -33,8 +33,10 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 /// Wasm binary unwrapped. If built with `SKIP_WASM_BUILD`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
-	WASM_BINARY.expect("Development wasm binary is not available. Testing is only \
-						supported with the flag disabled.")
+	WASM_BINARY.expect(
+		"Development wasm binary is not available. Testing is only \
+						supported with the flag disabled.",
+	)
 }
 
 /// Used in the `test_array_as_mutable_reference` test.

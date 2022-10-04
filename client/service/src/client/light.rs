@@ -20,15 +20,20 @@
 
 use std::sync::Arc;
 
-use sc_executor::RuntimeInfo;
-use sp_core::traits::{CodeExecutor, SpawnNamed};
-use sc_telemetry::TelemetryHandle;
-use sp_runtime::BuildStorage;
-use sp_runtime::traits::{Block as BlockT, HashFor};
-use sp_blockchain::Result as ClientResult;
 use prometheus_endpoint::Registry;
+use sc_executor::RuntimeInfo;
+use sc_telemetry::TelemetryHandle;
+use sp_blockchain::Result as ClientResult;
+use sp_core::traits::{CodeExecutor, SpawnNamed};
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor},
+	BuildStorage,
+};
 
-use super::{call_executor::LocalCallExecutor, client::{Client, ClientConfig}};
+use super::{
+	call_executor::LocalCallExecutor,
+	client::{Client, ClientConfig},
+};
 use sc_client_api::light::Storage as BlockchainStorage;
 use sc_light::{Backend, GenesisCallExecutor};
 
@@ -41,26 +46,26 @@ pub fn new_light<B, S, RA, E>(
 	prometheus_registry: Option<Registry>,
 	telemetry: Option<TelemetryHandle>,
 ) -> ClientResult<
-		Client<
+	Client<
+		Backend<S, HashFor<B>>,
+		GenesisCallExecutor<
 			Backend<S, HashFor<B>>,
-			GenesisCallExecutor<
-				Backend<S, HashFor<B>>,
-				LocalCallExecutor<B, Backend<S, HashFor<B>>, E>
-			>,
-			B,
-			RA
-		>
-	>
-	where
-		B: BlockT,
-		S: BlockchainStorage<B> + 'static,
-		E: CodeExecutor + RuntimeInfo + Clone + 'static,
+			LocalCallExecutor<B, Backend<S, HashFor<B>>, E>,
+		>,
+		B,
+		RA,
+	>,
+>
+where
+	B: BlockT,
+	S: BlockchainStorage<B> + 'static,
+	E: CodeExecutor + RuntimeInfo + Clone + 'static,
 {
 	let local_executor = LocalCallExecutor::new(
 		backend.clone(),
 		code_executor,
 		spawn_handle.clone(),
-		ClientConfig::default()
+		ClientConfig::default(),
 	)?;
 	let executor = GenesisCallExecutor::new(backend.clone(), local_executor);
 	Client::new(

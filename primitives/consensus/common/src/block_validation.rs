@@ -18,9 +18,9 @@
 //! Block announcement validation.
 
 use crate::BlockStatus;
+use futures::FutureExt as _;
 use sp_runtime::{generic::BlockId, traits::Block};
 use std::{error::Error, future::Future, pin::Pin, sync::Arc};
-use futures::FutureExt as _;
 
 /// A type which provides access to chain information.
 pub trait Chain<B: Block> {
@@ -92,6 +92,7 @@ impl<B: Block> BlockAnnounceValidator<B> for DefaultBlockAnnounceValidator {
 			} else {
 				Ok(Validation::Success { is_new_best: false })
 			}
-		}.boxed()
+		}
+		.boxed()
 	}
 }

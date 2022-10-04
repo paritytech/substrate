@@ -75,9 +75,7 @@ impl syn::parse::Parse for FunctionAttr {
 
 		let weight_content;
 		syn::parenthesized!(weight_content in content);
-		Ok(FunctionAttr {
-			weight: weight_content.parse::<syn::Expr>()?,
-		})
+		Ok(FunctionAttr { weight: weight_content.parse::<syn::Expr>()? })
 	}
 }
 
@@ -100,7 +98,6 @@ impl syn::parse::Parse for ArgAttrIsCompact {
 
 /// Check the syntax is `OriginFor<T>`
 pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
-
 	pub struct CheckDispatchableFirstArg;
 	impl syn::parse::Parse for CheckDispatchableFirstArg {
 		fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -113,13 +110,12 @@ pub fn check_dispatchable_first_arg_type(ty: &syn::Type) -> syn::Result<()> {
 		}
 	}
 
-	syn::parse2::<CheckDispatchableFirstArg>(ty.to_token_stream())
-		.map_err(|e| {
-			let msg = "Invalid type: expected `OriginFor<T>`";
-			let mut err = syn::Error::new(ty.span(), msg);
-			err.combine(e);
-			err
-		})?;
+	syn::parse2::<CheckDispatchableFirstArg>(ty.to_token_stream()).map_err(|e| {
+		let msg = "Invalid type: expected `OriginFor<T>`";
+		let mut err = syn::Error::new(ty.span(), msg);
+		err.combine(e);
+		err
+	})?;
 
 	Ok(())
 }
@@ -128,12 +124,12 @@ impl CallDef {
 	pub fn try_from(
 		attr_span: proc_macro2::Span,
 		index: usize,
-		item: &mut syn::Item
+		item: &mut syn::Item,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Impl(item) = item {
 			item
 		} else {
-			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"));
+			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"))
 		};
 
 		let mut instances = vec![];
@@ -158,18 +154,18 @@ impl CallDef {
 						_ => method.vis.span(),
 					};
 
-					return Err(syn::Error::new(span, msg));
+					return Err(syn::Error::new(span, msg))
 				}
 
 				match method.sig.inputs.first() {
 					None => {
 						let msg = "Invalid pallet::call, must have at least origin arg";
-						return Err(syn::Error::new(method.sig.span(), msg));
+						return Err(syn::Error::new(method.sig.span(), msg))
 					},
 					Some(syn::FnArg::Receiver(_)) => {
 						let msg = "Invalid pallet::call, first argument must be a typed argument, \
 							e.g. `origin: OriginFor<T>`";
-						return Err(syn::Error::new(method.sig.span(), msg));
+						return Err(syn::Error::new(method.sig.span(), msg))
 					},
 					Some(syn::FnArg::Typed(arg)) => {
 						check_dispatchable_first_arg_type(&*arg.ty)?;
@@ -181,7 +177,7 @@ impl CallDef {
 				} else {
 					let msg = "Invalid pallet::call, require return type \
 						DispatchResultWithPostInfo";
-					return Err(syn::Error::new(method.sig.span(), msg));
+					return Err(syn::Error::new(method.sig.span(), msg))
 				}
 
 				let mut call_var_attrs: Vec<FunctionAttr> =
@@ -193,7 +189,7 @@ impl CallDef {
 					} else {
 						"Invalid pallet::call, too many weight attributes given"
 					};
-					return Err(syn::Error::new(method.sig.span(), msg));
+					return Err(syn::Error::new(method.sig.span(), msg))
 				}
 				let weight = call_var_attrs.pop().unwrap().weight;
 
@@ -210,14 +206,14 @@ impl CallDef {
 
 					if arg_attrs.len() > 1 {
 						let msg = "Invalid pallet::call, argument has too many attributes";
-						return Err(syn::Error::new(arg.span(), msg));
+						return Err(syn::Error::new(arg.span(), msg))
 					}
 
 					let arg_ident = if let syn::Pat::Ident(pat) = &*arg.pat {
 						pat.ident.clone()
 					} else {
 						let msg = "Invalid pallet::call, argument must be ident";
-						return Err(syn::Error::new(arg.pat.span(), msg));
+						return Err(syn::Error::new(arg.pat.span(), msg))
 					};
 
 					args.push((!arg_attrs.is_empty(), arg_ident, arg.ty.clone()));
@@ -225,15 +221,10 @@ impl CallDef {
 
 				let docs = helper::get_doc_literals(&method.attrs);
 
-				methods.push(CallVariantDef {
-					name: method.sig.ident.clone(),
-					weight,
-					args,
-					docs,
-				});
+				methods.push(CallVariantDef { name: method.sig.ident.clone(), weight, args, docs });
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";
-				return Err(syn::Error::new(impl_item.span(), msg));
+				return Err(syn::Error::new(impl_item.span(), msg))
 			}
 		}
 

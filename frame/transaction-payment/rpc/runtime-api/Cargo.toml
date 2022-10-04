@@ -1,6 +1,6 @@
 [package]
 name = "pallet-transaction-payment-rpc-runtime-api"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -14,9 +14,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-sp-api = { version = "3.0.0", default-features = false, path = "../../../../primitives/api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../../../../primitives/runtime" }
-pallet-transaction-payment = { version = "3.0.0", default-features = false, path = "../../../transaction-payment" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/runtime" }
+pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../transaction-payment" }
 
 [features]
 default = ["std"]

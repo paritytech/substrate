@@ -18,25 +18,20 @@
 //! Environment definition of the wasm smart-contract runtime.
 
 use crate::{
-	Config, CodeHash, BalanceOf, Error,
-	exec::{Ext, StorageKey, TopicOf, ExecResult, ExecError},
-	gas::{Token, ChargedAmount},
-	wasm::env_def::ConvertibleToWasm,
+	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
+	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
+	wasm::env_def::ConvertibleToWasm,
+	BalanceOf, CodeHash, Config, Error,
 };
 use bitflags::bitflags;
-use pwasm_utils::parity_wasm::elements::ValueType;
-use frame_support::{dispatch::DispatchError, ensure, weights::Weight, traits::MaxEncodedLen};
-use sp_std::prelude::*;
-use codec::{Decode, DecodeAll, Encode};
-use sp_core::{Bytes, crypto::UncheckedFrom};
-use sp_io::hashing::{
-	keccak_256,
-	blake2_256,
-	blake2_128,
-	sha2_256,
-};
+use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
+use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
+use pwasm_utils::parity_wasm::elements::ValueType;
+use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
+use sp_std::prelude::*;
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
 ///
@@ -76,6 +71,9 @@ pub enum ReturnCode {
 	/// recording was disabled.
 	#[cfg(feature = "unstable-interface")]
 	LoggingDisabled = 9,
+	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
+	#[cfg(feature = "unstable-interface")]
+	CallRuntimeReturnedError = 10,
 }
 
 impl ConvertibleToWasm for ReturnCode {
@@ -175,7 +173,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_random`. It includes the weight for copying the subject.
 	Random,
 	/// Weight of calling `seal_deposit_event` with the given number of topics and event size.
-	DepositEvent{num_topic: u32, len: u32},
+	DepositEvent { num_topic: u32, len: u32 },
 	/// Weight of calling `seal_debug_message`.
 	#[cfg(feature = "unstable-interface")]
 	DebugMessage,
@@ -200,7 +198,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_instantiate` for the given input and salt without output weight.
 	/// This includes the transfer as an instantiate without a value will always be below
 	/// the existential deposit and is disregarded as corner case.
-	InstantiateBase{input_data_len: u32, salt_len: u32},
+	InstantiateBase { input_data_len: u32, salt_len: u32 },
 	/// Weight of output received through `seal_instantiate` for the given size.
 	InstantiateCopyOut(u32),
 	/// Weight of calling `seal_hash_sha_256` for the given input size.
@@ -213,13 +211,19 @@ pub enum RuntimeCosts {
 	HashBlake128(u32),
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
+	/// Weight charged for copying data from the sandbox.
+	#[cfg(feature = "unstable-interface")]
+	CopyIn(u32),
+	/// Weight charged for calling into the runtime.
+	#[cfg(feature = "unstable-interface")]
+	CallRuntime(Weight),
 }
 
 impl RuntimeCosts {
 	fn token<T>(&self, s: &HostFnWeights<T>) -> RuntimeToken
 	where
 		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	{
 		use self::RuntimeCosts::*;
 		let weight = match *self {
@@ -237,42 +241,50 @@ impl RuntimeCosts {
 			WeightToFee => s.weight_to_fee,
 			InputBase => s.input,
 			InputCopyOut(len) => s.input_per_byte.saturating_mul(len.into()),
-			Return(len) => s.r#return
-				.saturating_add(s.return_per_byte.saturating_mul(len.into())),
+			Return(len) => s.r#return.saturating_add(s.return_per_byte.saturating_mul(len.into())),
 			Terminate => s.terminate,
-			RestoreTo(delta) => s.restore_to
-				.saturating_add(s.restore_to_per_delta.saturating_mul(delta.into())),
+			RestoreTo(delta) =>
+				s.restore_to.saturating_add(s.restore_to_per_delta.saturating_mul(delta.into())),
 			Random => s.random,
-			DepositEvent{num_topic, len} => s.deposit_event
+			DepositEvent { num_topic, len } => s
+				.deposit_event
 				.saturating_add(s.deposit_event_per_topic.saturating_mul(num_topic.into()))
 				.saturating_add(s.deposit_event_per_byte.saturating_mul(len.into())),
 			#[cfg(feature = "unstable-interface")]
 			DebugMessage => s.debug_message,
 			SetRentAllowance => s.set_rent_allowance,
-			SetStorage(len) => s.set_storage
-				.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
+			SetStorage(len) =>
+				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
 			ClearStorage => s.clear_storage,
 			GetStorageBase => s.get_storage,
 			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
 			Transfer => s.transfer,
-			CallBase(len) => s.call
-				.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
+			CallBase(len) =>
+				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
 			CallSurchargeTransfer => s.call_transfer_surcharge,
 			CallCopyOut(len) => s.call_per_output_byte.saturating_mul(len.into()),
-			InstantiateBase{input_data_len, salt_len} => s.instantiate
+			InstantiateBase { input_data_len, salt_len } => s
+				.instantiate
 				.saturating_add(s.instantiate_per_input_byte.saturating_mul(input_data_len.into()))
 				.saturating_add(s.instantiate_per_salt_byte.saturating_mul(salt_len.into())),
-			InstantiateCopyOut(len) => s.instantiate_per_output_byte
-				.saturating_mul(len.into()),
-			HashSha256(len) => s.hash_sha2_256
+			InstantiateCopyOut(len) => s.instantiate_per_output_byte.saturating_mul(len.into()),
+			HashSha256(len) => s
+				.hash_sha2_256
 				.saturating_add(s.hash_sha2_256_per_byte.saturating_mul(len.into())),
-			HashKeccak256(len) => s.hash_keccak_256
+			HashKeccak256(len) => s
+				.hash_keccak_256
 				.saturating_add(s.hash_keccak_256_per_byte.saturating_mul(len.into())),
-			HashBlake256(len) => s.hash_blake2_256
+			HashBlake256(len) => s
+				.hash_blake2_256
 				.saturating_add(s.hash_blake2_256_per_byte.saturating_mul(len.into())),
-			HashBlake128(len) => s.hash_blake2_128
+			HashBlake128(len) => s
+				.hash_blake2_128
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			ChainExtension(amount) => amount,
+			#[cfg(feature = "unstable-interface")]
+			CopyIn(len) => s.return_per_byte.saturating_mul(len.into()),
+			#[cfg(feature = "unstable-interface")]
+			CallRuntime(weight) => weight,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -293,7 +305,7 @@ struct RuntimeToken {
 impl<T> Token<T> for RuntimeToken
 where
 	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	fn weight(&self) -> Weight {
 		self.weight
@@ -360,19 +372,10 @@ impl<'a, E> Runtime<'a, E>
 where
 	E: Ext + 'a,
 	<E::T as frame_system::Config>::AccountId:
-		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>
+		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
-	pub fn new(
-		ext: &'a mut E,
-		input_data: Vec<u8>,
-		memory: sp_sandbox::Memory,
-	) -> Self {
-		Runtime {
-			ext,
-			input_data: Some(input_data),
-			memory,
-			trap_reason: None,
-		}
+	pub fn new(ext: &'a mut E, input_data: Vec<u8>, memory: sp_sandbox::Memory) -> Self {
+		Runtime { ext, input_data: Some(input_data), memory, trap_reason: None }
 	}
 
 	/// Converts the sandbox result and the runtime state into the execution outcome.
@@ -388,27 +391,15 @@ where
 		if let Some(trap_reason) = self.trap_reason {
 			return match trap_reason {
 				// The trap was the result of the execution `return` host function.
-				TrapReason::Return(ReturnData{ flags, data }) => {
-					let flags = ReturnFlags::from_bits(flags).ok_or_else(||
-						"used reserved bit in return flags"
-					)?;
-					Ok(ExecReturnValue {
-						flags,
-						data: Bytes(data),
-					})
+				TrapReason::Return(ReturnData { flags, data }) => {
+					let flags = ReturnFlags::from_bits(flags)
+						.ok_or_else(|| "used reserved bit in return flags")?;
+					Ok(ExecReturnValue { flags, data: Bytes(data) })
 				},
-				TrapReason::Termination => {
-					Ok(ExecReturnValue {
-						flags: ReturnFlags::empty(),
-						data: Bytes(Vec::new()),
-					})
-				},
-				TrapReason::Restoration => {
-					Ok(ExecReturnValue {
-						flags: ReturnFlags::empty(),
-						data: Bytes(Vec::new()),
-					})
-				},
+				TrapReason::Termination =>
+					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
+				TrapReason::Restoration =>
+					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
 				TrapReason::SupervisorError(error) => Err(error)?,
 			}
 		}
@@ -416,9 +407,7 @@ where
 		// Check the exact type of the error.
 		match sandbox_result {
 			// No traps were generated. Proceed normally.
-			Ok(_) => {
-				Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) })
-			}
+			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
 			// `Error::Module` is returned only if instantiation or linking failed (i.e.
 			// wasm binary tried to import a function that is not provided by the host).
 			// This shouldn't happen because validation process ought to reject such binaries.
@@ -428,7 +417,7 @@ where
 			Err(sp_sandbox::Error::Module) => Err("validation error")?,
 			// Any other kind of a trap should result in a failure.
 			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				Err(Error::<E::T>::ContractTrapped)?
+				Err(Error::<E::T>::ContractTrapped)?,
 		}
 	}
 
@@ -457,17 +446,25 @@ where
 		self.ext.gas_meter().charge(token)
 	}
 
+	/// Adjust a previously charged amount down to its actual amount.
+	///
+	/// This is when a maximum a priori amount was charged and then should be partially
+	/// refunded to match the actual amount.
+	pub fn adjust_gas(&mut self, charged: ChargedAmount, actual_costs: RuntimeCosts) {
+		let token = actual_costs.token(&self.ext.schedule().host_fn_weights);
+		self.ext.gas_meter().adjust_gas(charged, token);
+	}
+
 	/// Read designated chunk from the sandbox memory.
 	///
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	pub fn read_sandbox_memory(&self, ptr: u32, len: u32)
-	-> Result<Vec<u8>, DispatchError>
-	{
+	pub fn read_sandbox_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, DispatchError> {
 		ensure!(len <= self.ext.schedule().limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
-		self.memory.get(ptr, buf.as_mut_slice())
+		self.memory
+			.get(ptr, buf.as_mut_slice())
 			.map_err(|_| Error::<E::T>::OutOfBounds)?;
 		Ok(buf)
 	}
@@ -477,9 +474,11 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	pub fn read_sandbox_memory_into_buf(&self, ptr: u32, buf: &mut [u8])
-	-> Result<(), DispatchError>
-	{
+	pub fn read_sandbox_memory_into_buf(
+		&self,
+		ptr: u32,
+		buf: &mut [u8],
+	) -> Result<(), DispatchError> {
 		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
 	}
 
@@ -489,9 +488,10 @@ where
 	///
 	/// The weight of reading a fixed value is included in the overall weight of any
 	/// contract callable function.
-	pub fn read_sandbox_memory_as<D: Decode + MaxEncodedLen>(&self, ptr: u32)
-	-> Result<D, DispatchError>
-	{
+	pub fn read_sandbox_memory_as<D: Decode + MaxEncodedLen>(
+		&self,
+		ptr: u32,
+	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, D::max_encoded_len() as u32)?;
 		let decoded = D::decode_all(&mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
@@ -509,9 +509,11 @@ where
 	///
 	/// There must be an extra benchmark for determining the influence of `len` with
 	/// regard to the overall weight.
-	pub fn read_sandbox_memory_as_unbounded<D: Decode>(&self, ptr: u32, len: u32)
-	-> Result<D, DispatchError>
-	{
+	pub fn read_sandbox_memory_as_unbounded<D: Decode>(
+		&self,
+		ptr: u32,
+		len: u32,
+	) -> Result<D, DispatchError> {
 		let buf = self.read_sandbox_memory(ptr, len)?;
 		let decoded = D::decode_all(&mut &buf[..])
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
@@ -544,10 +546,9 @@ where
 		buf: &[u8],
 		allow_skip: bool,
 		create_token: impl FnOnce(u32) -> Option<RuntimeCosts>,
-	) -> Result<(), DispatchError>
-	{
+	) -> Result<(), DispatchError> {
 		if allow_skip && out_ptr == u32::MAX {
-			return Ok(());
+			return Ok(())
 		}
 
 		let buf_len = buf.len() as u32;
@@ -561,10 +562,10 @@ where
 			self.charge_gas(costs)?;
 		}
 
-		self.memory.set(out_ptr, buf).and_then(|_| {
-			self.memory.set(out_len_ptr, &buf_len.encode())
-		})
-		.map_err(|_| Error::<E::T>::OutOfBounds)?;
+		self.memory
+			.set(out_ptr, buf)
+			.and_then(|_| self.memory.set(out_len_ptr, &buf_len.encode()))
+			.map_err(|_| Error::<E::T>::OutOfBounds)?;
 
 		Ok(())
 	}
@@ -628,7 +629,7 @@ where
 			x if x == not_funded => Ok(NewContractNotFunded),
 			x if x == no_code => Ok(CodeNotFound),
 			x if (x == not_found || x == is_tombstone || x == rent_not_paid) => Ok(NotCallable),
-			err => Err(err)
+			err => Err(err),
 		}
 	}
 
@@ -643,7 +644,7 @@ where
 
 		match (error, origin) {
 			(_, Callee) => Ok(ReturnCode::CalleeTrapped),
-			(err, _) => Self::err_into_return_code(err)
+			(err, _) => Self::err_into_return_code(err),
 		}
 	}
 
@@ -656,9 +657,8 @@ where
 		input_data_ptr: u32,
 		input_data_len: u32,
 		output_ptr: u32,
-		output_len_ptr: u32
-	) -> Result<ReturnCode, TrapReason>
-	{
+		output_len_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
 		self.charge_gas(RuntimeCosts::CallBase(input_data_len))?;
 		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
 			self.read_sandbox_memory_as(callee_ptr)?;
@@ -674,9 +674,8 @@ where
 			self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 		}
 		let ext = &mut self.ext;
-		let call_outcome = ext.call(
-			gas, callee, value, input_data, flags.contains(CallFlags::ALLOW_REENTRY),
-		);
+		let call_outcome =
+			ext.call(gas, callee, value, input_data, flags.contains(CallFlags::ALLOW_REENTRY));
 
 		// `TAIL_CALL` only matters on an `OK` result. Otherwise the call stack comes to
 		// a halt anyways without anymore code being executed.
@@ -685,7 +684,7 @@ where
 				return Err(TrapReason::Return(ReturnData {
 					flags: return_value.flags.bits(),
 					data: return_value.data.0,
-				}));
+				}))
 			}
 		}
 
@@ -709,10 +708,9 @@ where
 		output_ptr: u32,
 		output_len_ptr: u32,
 		salt_ptr: u32,
-		salt_len: u32
-	) -> Result<ReturnCode, TrapReason>
-	{
-		self.charge_gas(RuntimeCosts::InstantiateBase {input_data_len, salt_len})?;
+		salt_len: u32,
+	) -> Result<ReturnCode, TrapReason> {
+		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
 		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
 		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
@@ -721,7 +719,11 @@ where
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
-					address_ptr, address_len_ptr, &address.encode(), true, already_charged,
+					address_ptr,
+					address_len_ptr,
+					&address.encode(),
+					true,
+					already_charged,
 				)?;
 			}
 			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
@@ -745,13 +747,12 @@ where
 		code_hash_ptr: u32,
 		rent_allowance_ptr: u32,
 		delta_ptr: u32,
-		delta_count: u32
+		delta_count: u32,
 	) -> Result<(), TrapReason> {
 		self.charge_gas(RuntimeCosts::RestoreTo(delta_count))?;
 		let dest: <<E as Ext>::T as frame_system::Config>::AccountId =
 			self.read_sandbox_memory_as(dest_ptr)?;
-		let code_hash: CodeHash<<E as Ext>::T> =
-			self.read_sandbox_memory_as(code_hash_ptr)?;
+		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
 		let rent_allowance: BalanceOf<<E as Ext>::T> =
 			self.read_sandbox_memory_as(rent_allowance_ptr)?;
 		let delta = {
@@ -797,7 +798,6 @@ where
 // data passed to the supervisor will lead to a trap. This is not documented explicitly
 // for every function.
 define_env!(Env, <E: Ext>,
-
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// NOTE: This is a implementation defined call and is NOT a part of the public API.
@@ -1807,5 +1807,59 @@ define_env!(Env, <E: Ext>,
 		Ok(ctx.write_sandbox_output(
 			out_ptr, out_len_ptr, &rent_status, false, already_charged
 		)?)
+	},
+
+	// Call some dispatchable of the runtime.
+	//
+	// This function decodes the passed in data as the overarching `Call` type of the
+	// runtime and dispatches it. The weight as specified in the runtime is charged
+	// from the gas meter. Any weight refunds made by the dispatchable are considered.
+	//
+	// The filter specified by `Config::CallFilter` is attached to the origin of
+	// the dispatched call.
+	//
+	// # Parameters
+	//
+	// - `input_ptr`: the pointer into the linear memory where the input data is placed.
+	// - `input_len`: the length of the input data in bytes.
+	//
+	// # Return Value
+	//
+	// Returns `ReturnCode::Success` when the dispatchable was succesfully executed and
+	// returned `Ok`. When the dispatchable was exeuted but returned an error
+	// `ReturnCode::CallRuntimeReturnedError` is returned. The full error is not
+	// provided because it is not guaranteed to be stable.
+	//
+	// # Comparison with `ChainExtension`
+	//
+	// Just as a chain extension this API allows the runtime to extend the functionality
+	// of contracts. While making use of this function is generelly easier it cannot be
+	// used in call cases. Consider writing a chain extension if you need to do perform
+	// one of the following tasks:
+	//
+	// - Return data.
+	// - Provide functionality **exclusively** to contracts.
+	// - Provide custom weights.
+	// - Avoid the need to keep the `Call` data structure stable.
+	//
+	// # Unstable
+	//
+	// This function is unstable and subject to change (or removal) in the future. Do not
+	// deploy a contract using it to a production chain.
+	[__unstable__] seal_call_runtime(ctx, call_ptr: u32, call_len: u32) -> ReturnCode => {
+		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
+		ctx.charge_gas(RuntimeCosts::CopyIn(call_len))?;
+		let call: <E::T as Config>::Call = ctx.read_sandbox_memory_as_unbounded(
+			call_ptr, call_len
+		)?;
+		let dispatch_info = call.get_dispatch_info();
+		let charged = ctx.charge_gas(RuntimeCosts::CallRuntime(dispatch_info.weight))?;
+		let result = ctx.ext.call_runtime(call);
+		let actual_weight = extract_actual_weight(&result, &dispatch_info);
+		ctx.adjust_gas(charged, RuntimeCosts::CallRuntime(actual_weight));
+		match result {
+			Ok(_) => Ok(ReturnCode::Success),
+			Err(_) => Ok(ReturnCode::CallRuntimeReturnedError),
+		}
 	},
 );

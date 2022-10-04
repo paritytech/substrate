@@ -21,8 +21,8 @@
 
 use super::*;
 
+use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
 use frame_system::RawOrigin;
-use frame_benchmarking::{benchmarks, account, whitelisted_caller, impl_benchmark_test_suite};
 use sp_runtime::traits::Saturating;
 
 use crate::Module as TipsMod;
@@ -32,9 +32,9 @@ const SEED: u32 = 0;
 // Create the pre-requisite information needed to create a `report_awesome`.
 fn setup_awesome<T: Config>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId) {
 	let caller = whitelisted_caller();
-	let value = T::TipReportDepositBase::get()
-		+ T::DataDepositPerByte::get() * length.into()
-		+ T::Currency::minimum_balance();
+	let value = T::TipReportDepositBase::get() +
+		T::DataDepositPerByte::get() * length.into() +
+		T::Currency::minimum_balance();
 	let _ = T::Currency::make_free_balance_be(&caller, value);
 	let reason = vec![0; length as usize];
 	let awesome_person = account("awesome", 0, SEED);
@@ -42,12 +42,13 @@ fn setup_awesome<T: Config>(length: u32) -> (T::AccountId, Vec<u8>, T::AccountId
 }
 
 // Create the pre-requisite information needed to call `tip_new`.
-fn setup_tip<T: Config>(r: u32, t: u32) ->
-	Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str>
-{
+fn setup_tip<T: Config>(
+	r: u32,
+	t: u32,
+) -> Result<(T::AccountId, Vec<u8>, T::AccountId, BalanceOf<T>), &'static str> {
 	let tippers_count = T::Tippers::count();
 
-	for i in 0 .. t {
+	for i in 0..t {
 		let member = account("member", i, SEED);
 		T::Tippers::add(&member);
 		ensure!(T::Tippers::contains(&member), "failed to add tipper");
@@ -63,10 +64,8 @@ fn setup_tip<T: Config>(r: u32, t: u32) ->
 
 // Create `t` new tips for the tip proposal with `hash`.
 // This function automatically makes the tip able to close.
-fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) ->
-	Result<(), &'static str>
-{
-	for i in 0 .. t {
+fn create_tips<T: Config>(t: u32, hash: T::Hash, value: BalanceOf<T>) -> Result<(), &'static str> {
+	for i in 0..t {
 		let caller = account("member", i, SEED);
 		ensure!(T::Tippers::contains(&caller), "caller is not a tipper");
 		TipsMod::<T>::tip(RawOrigin::Signed(caller).into(), hash, value)?;
@@ -193,8 +192,4 @@ benchmarks! {
 	}: _(RawOrigin::Root, hash)
 }
 
-impl_benchmark_test_suite!(
-	TipsMod,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(TipsMod, crate::tests::new_test_ext(), crate::tests::Test);

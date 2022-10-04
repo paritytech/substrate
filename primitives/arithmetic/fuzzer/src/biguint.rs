@@ -60,8 +60,13 @@ fn main() {
 				let expected = ue.unwrap() + ve.unwrap();
 				let t = u.clone().add(&v);
 				assert_eq!(
-					u128::try_from(t.clone()).unwrap(), expected,
-					"{:?} + {:?} ===> {:?} != {:?}", u, v, t, expected,
+					u128::try_from(t.clone()).unwrap(),
+					expected,
+					"{:?} + {:?} ===> {:?} != {:?}",
+					u,
+					v,
+					t,
+					expected,
 				);
 			}
 
@@ -74,8 +79,13 @@ fn main() {
 					let t = t.unwrap();
 					let expected = expected.unwrap();
 					assert_eq!(
-						u128::try_from(t.clone()).unwrap(), expected,
-						"{:?} - {:?} ===> {:?} != {:?}", u, v, t, expected,
+						u128::try_from(t.clone()).unwrap(),
+						expected,
+						"{:?} - {:?} ===> {:?} != {:?}",
+						u,
+						v,
+						t,
+						expected,
 					);
 				}
 			}
@@ -84,31 +94,51 @@ fn main() {
 				let expected = ue.unwrap() * ve.unwrap();
 				let t = u.clone().mul(&v);
 				assert_eq!(
-					u128::try_from(t.clone()).unwrap(), expected,
-					"{:?} * {:?} ===> {:?} != {:?}", u, v, t, expected,
+					u128::try_from(t.clone()).unwrap(),
+					expected,
+					"{:?} * {:?} ===> {:?} != {:?}",
+					u,
+					v,
+					t,
+					expected,
 				);
 			}
 
 			if check_digit_lengths(&u, &v, 4) {
 				let (ue, ve) = (ue.unwrap(), ve.unwrap());
 				if ve == 0 {
-					return;
+					return
 				}
 				let (q, r) = (ue / ve, ue % ve);
 				if let Some((qq, rr)) = u.clone().div(&v, true) {
 					assert_eq!(
-						u128::try_from(qq.clone()).unwrap(), q,
-						"{:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
+						u128::try_from(qq.clone()).unwrap(),
+						q,
+						"{:?} / {:?} ===> {:?} != {:?}",
+						u,
+						v,
+						qq,
+						q,
 					);
 					assert_eq!(
-						u128::try_from(rr.clone()).unwrap(), r,
-						"{:?} % {:?} ===> {:?} != {:?}", u, v, rr, r,
+						u128::try_from(rr.clone()).unwrap(),
+						r,
+						"{:?} % {:?} ===> {:?} != {:?}",
+						u,
+						v,
+						rr,
+						r,
 					);
 				} else if v.len() == 1 {
 					let qq = u.clone().div_unit(ve as Single);
 					assert_eq!(
-						u128::try_from(qq.clone()).unwrap(), q,
-						"[single] {:?} / {:?} ===> {:?} != {:?}", u, v, qq, q,
+						u128::try_from(qq.clone()).unwrap(),
+						q,
+						"[single] {:?} / {:?} ===> {:?} != {:?}",
+						u,
+						v,
+						qq,
+						q,
 					);
 				} else if v.msb() != 0 && u.msb() != 0 && u.len() > v.len() {
 					panic!("div returned none for an unexpected reason");
@@ -175,7 +205,7 @@ fn assert_biguints_eq(a: &BigUint, b: &num_bigint::BigUint) {
 
 	// `num_bigint::BigUint` doesn't expose it's internals, so we need to convert into that to
 	// compare.
-	let limbs = (0 .. a.len()).map(|i| a.get(i)).collect();
+	let limbs = (0..a.len()).map(|i| a.get(i)).collect();
 	let num_a = num_bigint::BigUint::new(limbs);
 
 	assert!(&num_a == b, "\narithmetic: {:?}\nnum-bigint: {:?}", a, b);

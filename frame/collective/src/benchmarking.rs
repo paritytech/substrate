@@ -19,19 +19,15 @@
 
 use super::*;
 
-use frame_system::RawOrigin as SystemOrigin;
 use frame_benchmarking::{
-	benchmarks_instance,
-	account,
-	whitelisted_caller,
-	impl_benchmark_test_suite,
+	account, benchmarks_instance, impl_benchmark_test_suite, whitelisted_caller,
 };
+use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::Bounded;
 use sp_std::mem::size_of;
 
-use frame_system::Call as SystemCall;
-use frame_system::Pallet as System;
 use crate::Module as Collective;
+use frame_system::{Call as SystemCall, Pallet as System};
 
 const SEED: u32 = 0;
 
@@ -250,8 +246,7 @@ benchmarks_instance! {
 
 		let index = p - 1;
 		// Have almost everyone vote aye on last proposal, while keeping it from passing.
-		// Proposer already voted aye so we start at 1.
-		for j in 1 .. m - 3 {
+		for j in 0 .. m - 3 {
 			let voter = &members[j as usize];
 			let approve = true;
 			Collective::<T, _>::vote(
@@ -326,8 +321,7 @@ benchmarks_instance! {
 
 		let index = p - 1;
 		// Have most everyone vote aye on last proposal, while keeping it from passing.
-		// Proposer already voted aye so we start at 1.
-		for j in 1 .. m - 2 {
+		for j in 0 .. m - 2 {
 			let voter = &members[j as usize];
 			let approve = true;
 			Collective::<T, _>::vote(
@@ -560,6 +554,14 @@ benchmarks_instance! {
 			last_hash = T::Hashing::hash_of(&proposal);
 		}
 
+		// The prime member votes aye, so abstentions default to aye.
+		Collective::<T, _>::vote(
+			SystemOrigin::Signed(caller.clone()).into(),
+			last_hash.clone(),
+			p - 1,
+			true // Vote aye.
+		)?;
+
 		// Have almost everyone vote nay on last proposal, while keeping it from failing.
 		// A few abstainers will be the aye votes needed to pass the vote.
 		for j in 2 .. m - 1 {
@@ -633,8 +635,4 @@ benchmarks_instance! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Collective,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Collective, crate::tests::new_test_ext(), crate::tests::Test);

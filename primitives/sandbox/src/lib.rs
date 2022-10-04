@@ -41,7 +41,7 @@
 use sp_std::prelude::*;
 
 pub use sp_core::sandbox::HostError;
-pub use sp_wasm_interface::{Value, ReturnValue};
+pub use sp_wasm_interface::{ReturnValue, Value};
 
 mod imp {
 	#[cfg(feature = "std")]
@@ -100,9 +100,7 @@ impl Memory {
 	///
 	/// Allocated memory is always zeroed.
 	pub fn new(initial: u32, maximum: Option<u32>) -> Result<Memory, Error> {
-		Ok(Memory {
-			inner: imp::Memory::new(initial, maximum)?,
-		})
+		Ok(Memory { inner: imp::Memory::new(initial, maximum)? })
 	}
 
 	/// Read a memory area at the address `ptr` with the size of the provided slice `buf`.
@@ -131,9 +129,7 @@ pub struct EnvironmentDefinitionBuilder<T> {
 impl<T> EnvironmentDefinitionBuilder<T> {
 	/// Construct a new `EnvironmentDefinitionBuilder`.
 	pub fn new() -> EnvironmentDefinitionBuilder<T> {
-		EnvironmentDefinitionBuilder {
-			inner: imp::EnvironmentDefinitionBuilder::new(),
-		}
+		EnvironmentDefinitionBuilder { inner: imp::EnvironmentDefinitionBuilder::new() }
 	}
 
 	/// Register a host function in this environment definition.
@@ -176,12 +172,12 @@ impl<T> Instance<T> {
 	/// be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
-	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T)
-		-> Result<Instance<T>, Error>
-	{
-		Ok(Instance {
-			inner: imp::Instance::new(code, &env_def_builder.inner, state)?,
-		})
+	pub fn new(
+		code: &[u8],
+		env_def_builder: &EnvironmentDefinitionBuilder<T>,
+		state: &mut T,
+	) -> Result<Instance<T>, Error> {
+		Ok(Instance { inner: imp::Instance::new(code, &env_def_builder.inner, state)? })
 	}
 
 	/// Invoke an exported function with the given name.

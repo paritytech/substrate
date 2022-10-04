@@ -17,7 +17,7 @@
 
 //! Implementation of conversions between Substrate and wasmi types.
 
-use crate::{Value, ValueType, Signature};
+use crate::{Signature, Value, ValueType};
 
 impl From<Value> for wasmi::RuntimeValue {
 	fn from(value: Value) -> Self {

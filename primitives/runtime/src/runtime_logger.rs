@@ -57,11 +57,7 @@ impl log::Log for RuntimeLogger {
 		let mut w = sp_std::Writer::default();
 		let _ = ::core::write!(&mut w, "{}", record.args());
 
-		sp_io::logging::log(
-			record.level().into(),
-			record.target(),
-			w.inner(),
-		);
+		sp_io::logging::log(record.level().into(), record.target(), w.inner());
 	}
 
 	fn flush(&self) {}
@@ -69,12 +65,12 @@ impl log::Log for RuntimeLogger {
 
 #[cfg(test)]
 mod tests {
-	use substrate_test_runtime_client::{
-		ExecutionStrategy, TestClientBuilderExt, DefaultTestClientBuilderExt,
-		TestClientBuilder, runtime::TestAPI,
-	};
-	use sp_api::{ProvideRuntimeApi, BlockId};
+	use sp_api::{BlockId, ProvideRuntimeApi};
 	use std::{env, str::FromStr};
+	use substrate_test_runtime_client::{
+		runtime::TestAPI, DefaultTestClientBuilderExt, ExecutionStrategy, TestClientBuilder,
+		TestClientBuilderExt,
+	};
 
 	#[test]
 	fn ensure_runtime_logger_respects_host_max_log_level() {
@@ -83,7 +79,8 @@ mod tests {
 			log::set_max_level(log::LevelFilter::from_str(&env::var("RUST_LOG").unwrap()).unwrap());
 
 			let client = TestClientBuilder::new()
-				.set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+				.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+				.build();
 			let runtime_api = client.runtime_api();
 			let block_id = BlockId::Number(0);
 			runtime_api.do_trace_log(&block_id).expect("Logging should not fail");

@@ -52,35 +52,34 @@
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod tests;
 mod benchmarking;
+mod tests;
 pub mod weights;
 
-use sp_std::prelude::*;
-use codec::{Encode, Decode};
+use codec::{Decode, Encode};
+use frame_support::{
+	dispatch::PostDispatchInfo,
+	traits::{IsSubType, OriginTrait, UnfilteredDispatchable},
+	transactional,
+	weights::{extract_actual_weight, GetDispatchInfo},
+};
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use frame_support::{
-	transactional,
-	traits::{OriginTrait, UnfilteredDispatchable, IsSubType},
-	weights::{GetDispatchInfo, extract_actual_weight},
-	dispatch::PostDispatchInfo,
-};
 use sp_runtime::traits::Dispatchable;
+use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
 pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
-
 
 	/// Configuration trait.
 	#[pallet::config]
@@ -89,9 +88,11 @@ pub mod pallet {
 		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The overarching call type.
-		type Call: Parameter + Dispatchable<Origin=Self::Origin, PostInfo=PostDispatchInfo>
-			+ GetDispatchInfo + From<frame_system::Call<Self>>
-			+ UnfilteredDispatchable<Origin=Self::Origin>
+		type Call: Parameter
+			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ GetDispatchInfo
+			+ From<frame_system::Call<Self>>
+			+ UnfilteredDispatchable<Origin = Self::Origin>
 			+ IsSubType<Call<Self>>
 			+ IsType<<Self as frame_system::Config>::Call>;
 
@@ -107,6 +108,27 @@ pub mod pallet {
 		BatchInterrupted(u32, DispatchError),
 		/// Batch of dispatches completed fully with no error.
 		BatchCompleted,
+		/// A single item within a Batch of dispatches has completed with no error.
+		ItemCompleted,
+	}
+
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		/// The limit on the number of batched calls.
+		fn batched_calls_limit() -> u32 {
+			let allocator_limit = sp_core::MAX_POSSIBLE_ALLOCATION;
+			let call_size = core::mem::size_of::<<T as Config>::Call>() as u32;
+			// The margin to take into account vec doubling capacity.
+			let margin_factor = 3;
+
+			allocator_limit / margin_factor / call_size
+		}
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// Too many calls batched.
+		TooManyCalls,
 	}
 
 	#[pallet::call]
@@ -115,7 +137,8 @@ pub mod pallet {
 		///
 		/// May be called from any origin.
 		///
-		/// - `calls`: The calls to be dispatched from the same origin.
+		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
 		/// bypassing `frame_system::Config::BaseCallFilter`).
@@ -153,6 +176,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
+			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
+
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
 			for (index, call) in calls.into_iter().enumerate() {
@@ -170,8 +195,9 @@ pub mod pallet {
 					// Take the weight of this function itself into account.
 					let base_weight = T::WeightInfo::batch(index.saturating_add(1) as u32);
 					// Return the actual used weight + base_weight of this call.
-					return Ok(Some(base_weight + weight).into());
+					return Ok(Some(base_weight + weight).into())
 				}
+				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
@@ -213,13 +239,16 @@ pub mod pallet {
 			let info = call.get_dispatch_info();
 			let result = call.dispatch(origin);
 			// Always take into account the base weight of this call.
-			let mut weight = T::WeightInfo::as_derivative().saturating_add(T::DbWeight::get().reads_writes(1, 1));
+			let mut weight = T::WeightInfo::as_derivative()
+				.saturating_add(T::DbWeight::get().reads_writes(1, 1));
 			// Add the real weight of the dispatch.
 			weight = weight.saturating_add(extract_actual_weight(&result, &info));
-			result.map_err(|mut err| {
-				err.post_info = Some(weight).into();
-				err
-			}).map(|_| Some(weight).into())
+			result
+				.map_err(|mut err| {
+					err.post_info = Some(weight).into();
+					err
+				})
+				.map(|_| Some(weight).into())
 		}
 
 		/// Send a batch of dispatch calls and atomically execute them.
@@ -227,7 +256,8 @@ pub mod pallet {
 		///
 		/// May be called from any origin.
 		///
-		/// - `calls`: The calls to be dispatched from the same origin.
+		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
+		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
 		/// If origin is root then call are dispatch without checking origin filter. (This includes
 		/// bypassing `frame_system::Config::BaseCallFilter`).
@@ -260,6 +290,8 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
+			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
+
 			// Track the actual weight of each of the batch calls.
 			let mut weight: Weight = 0;
 			for (index, call) in calls.into_iter().enumerate() {
@@ -285,13 +317,13 @@ pub mod pallet {
 					err.post_info = Some(base_weight + weight).into();
 					err
 				})?;
+				Self::deposit_event(Event::ItemCompleted);
 			}
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch_all(calls_len as u32);
 			Ok(Some(base_weight + weight).into())
 		}
 	}
-
 }
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.

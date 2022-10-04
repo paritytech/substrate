@@ -18,15 +18,19 @@
 
 //! Periodic rebroadcast of neighbor packets.
 
+use futures::{future::FutureExt as _, prelude::*, ready, stream::Stream};
 use futures_timer::Delay;
-use futures::{future::{FutureExt as _}, prelude::*, ready, stream::Stream};
 use log::debug;
-use std::{pin::Pin, task::{Context, Poll}, time::Duration};
 use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use std::{
+	pin::Pin,
+	task::{Context, Poll},
+	time::Duration,
+};
 
+use super::gossip::{GossipMessage, NeighborPacket};
 use sc_network::PeerId;
-use sp_runtime::traits::{NumberFor, Block as BlockT};
-use super::gossip::{NeighborPacket, GossipMessage};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 // How often to rebroadcast, in cases where no new packets are created.
 const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
@@ -34,7 +38,7 @@ const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
 pub(super) struct NeighborPacketSender<B: BlockT>(
-	TracingUnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
+	TracingUnboundedSender<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
 );
 
 impl<B: BlockT> NeighborPacketSender<B> {
@@ -63,24 +67,20 @@ pub(super) struct NeighborPacketWorker<B: BlockT> {
 impl<B: BlockT> Unpin for NeighborPacketWorker<B> {}
 
 impl<B: BlockT> NeighborPacketWorker<B> {
-	pub(super) fn new() -> (Self, NeighborPacketSender<B>){
-		let (tx, rx) = tracing_unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>
-			("mpsc_grandpa_neighbor_packet_worker");
+	pub(super) fn new() -> (Self, NeighborPacketSender<B>) {
+		let (tx, rx) = tracing_unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>(
+			"mpsc_grandpa_neighbor_packet_worker",
+		);
 		let delay = Delay::new(REBROADCAST_AFTER);
 
-		(NeighborPacketWorker {
-			last: None,
-			delay,
-			rx,
-		}, NeighborPacketSender(tx))
+		(NeighborPacketWorker { last: None, delay, rx }, NeighborPacketSender(tx))
 	}
 }
 
-impl <B: BlockT> Stream for NeighborPacketWorker<B> {
+impl<B: BlockT> Stream for NeighborPacketWorker<B> {
 	type Item = (Vec<PeerId>, GossipMessage<B>);
 
-	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>>
-	{
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
 		let this = &mut *self;
 		match this.rx.poll_next_unpin(cx) {
 			Poll::Ready(None) => return Poll::Ready(None),
@@ -88,8 +88,8 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 				this.delay.reset(REBROADCAST_AFTER);
 				this.last = Some((to.clone(), packet.clone()));
 
-				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet))));
-			}
+				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet))))
+			},
 			// Don't return yet, maybe the timer fired.
 			Poll::Pending => {},
 		};
@@ -104,10 +104,10 @@ impl <B: BlockT> Stream for NeighborPacketWorker<B> {
 		//
 		// Note: In case poll_unpin is called after the resetted delay fires again, this
 		// will drop one tick. Deemed as very unlikely and also not critical.
-		while let Poll::Ready(()) = this.delay.poll_unpin(cx) {};
+		while let Poll::Ready(()) = this.delay.poll_unpin(cx) {}
 
 		if let Some((ref to, ref packet)) = this.last {
-			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))));
+			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))))
 		}
 
 		Poll::Pending

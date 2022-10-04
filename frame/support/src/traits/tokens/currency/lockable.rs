@@ -17,10 +17,8 @@
 
 //! The lockable currency trait and some associated types.
 
-use crate::dispatch::DispatchResult;
-use crate::traits::misc::Get;
-use super::Currency;
-use super::super::misc::WithdrawReasons;
+use super::{super::misc::WithdrawReasons, Currency};
+use crate::{dispatch::DispatchResult, traits::misc::Get};
 
 /// An identifier for a lock. Used for disambiguating different locks so that
 /// they can be individually replaced or removed.
@@ -63,10 +61,7 @@ pub trait LockableCurrency<AccountId>: Currency<AccountId> {
 	);
 
 	/// Remove an existing lock.
-	fn remove_lock(
-		id: LockIdentifier,
-		who: &AccountId,
-	);
+	fn remove_lock(id: LockIdentifier, who: &AccountId);
 }
 
 /// A vesting schedule over a currency. This allows a particular currency to have vesting limits
@@ -80,7 +75,8 @@ pub trait VestingSchedule<AccountId> {
 
 	/// Get the amount that is currently being vested and cannot be transferred out of this account.
 	/// Returns `None` if the account has no vesting schedule.
-	fn vesting_balance(who: &AccountId) -> Option<<Self::Currency as Currency<AccountId>>::Balance>;
+	fn vesting_balance(who: &AccountId)
+		-> Option<<Self::Currency as Currency<AccountId>>::Balance>;
 
 	/// Adds a vesting schedule to a given account.
 	///

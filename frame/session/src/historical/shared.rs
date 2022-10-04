@@ -18,10 +18,9 @@
 //! Shared logic between on-chain and off-chain components used for slashing using an off-chain
 //! worker.
 
-
 use super::SessionIndex;
-use sp_std::prelude::*;
 use codec::Encode;
+use sp_std::prelude::*;
 
 pub(super) const PREFIX: &[u8] = b"session_historical";
 pub(super) const LAST_PRUNE: &[u8] = b"session_historical_last_prune";
@@ -30,7 +29,8 @@ pub(super) const LAST_PRUNE: &[u8] = b"session_historical_last_prune";
 pub(super) fn derive_key<P: AsRef<[u8]>>(prefix: P, session_index: SessionIndex) -> Vec<u8> {
 	let prefix: &[u8] = prefix.as_ref();
 	session_index.using_encoded(|encoded_session_index| {
-		prefix.into_iter()
+		prefix
+			.into_iter()
 			.chain(b"/".into_iter())
 			.chain(encoded_session_index.into_iter())
 			.copied()

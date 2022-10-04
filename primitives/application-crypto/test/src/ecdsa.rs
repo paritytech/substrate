@@ -16,28 +16,22 @@
 // limitations under the License.
 
 //! Integration tests for ecdsa
-use std::sync::Arc;
-use sp_runtime::generic::BlockId;
-use sp_core::{
-	crypto::Pair,
-	testing::ECDSA,
-};
-use sp_keystore::{
-	SyncCryptoStore,
-	testing::KeyStore,
-};
-use substrate_test_runtime_client::{
-	TestClientBuilder, DefaultTestClientBuilderExt, TestClientBuilderExt,
-	runtime::TestAPI,
-};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::ecdsa::{AppPair, AppPublic};
+use sp_core::{crypto::Pair, testing::ECDSA};
+use sp_keystore::{testing::KeyStore, SyncCryptoStore};
+use sp_runtime::generic::BlockId;
+use std::sync::Arc;
+use substrate_test_runtime_client::{
+	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
+};
 
 #[test]
 fn ecdsa_works_in_runtime() {
 	let keystore = Arc::new(KeyStore::new());
 	let test_client = TestClientBuilder::new().set_keystore(keystore.clone()).build();
-	let (signature, public) = test_client.runtime_api()
+	let (signature, public) = test_client
+		.runtime_api()
 		.test_ecdsa_crypto(&BlockId::Number(0))
 		.expect("Tests `ecdsa` crypto.");
 

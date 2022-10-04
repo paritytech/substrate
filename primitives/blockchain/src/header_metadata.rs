@@ -18,9 +18,9 @@
 //! Implements tree backend, cached header metadata and algorithms
 //! to compute routes efficiently over the tree of headers.
 
-use sp_runtime::traits::{Block as BlockT, NumberFor, Header};
-use parking_lot::RwLock;
 use lru::LruCache;
+use parking_lot::RwLock;
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -86,10 +86,7 @@ pub fn lowest_common_ancestor<Block: BlockT, T: HeaderMetadata<Block> + ?Sized>(
 		backend.insert_header_metadata(orig_header_two.hash, orig_header_two);
 	}
 
-	Ok(HashAndNumber {
-		hash: header_one.hash,
-		number: header_one.number,
-	})
+	Ok(HashAndNumber { hash: header_one.hash, number: header_one.number })
 }
 
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
@@ -105,51 +102,33 @@ pub fn tree_route<Block: BlockT, T: HeaderMetadata<Block>>(
 	let mut to_branch = Vec::new();
 
 	while to.number > from.number {
-		to_branch.push(HashAndNumber {
-			number: to.number,
-			hash: to.hash,
-		});
+		to_branch.push(HashAndNumber { number: to.number, hash: to.hash });
 
 		to = backend.header_metadata(to.parent)?;
 	}
 
 	while from.number > to.number {
-		from_branch.push(HashAndNumber {
-			number: from.number,
-			hash: from.hash,
-		});
+		from_branch.push(HashAndNumber { number: from.number, hash: from.hash });
 		from = backend.header_metadata(from.parent)?;
 	}
 
 	// numbers are equal now. walk backwards until the block is the same
 
 	while to.hash != from.hash {
-		to_branch.push(HashAndNumber {
-			number: to.number,
-			hash: to.hash,
-		});
+		to_branch.push(HashAndNumber { number: to.number, hash: to.hash });
 		to = backend.header_metadata(to.parent)?;
 
-		from_branch.push(HashAndNumber {
-			number: from.number,
-			hash: from.hash,
-		});
+		from_branch.push(HashAndNumber { number: from.number, hash: from.hash });
 		from = backend.header_metadata(from.parent)?;
 	}
 
 	// add the pivot block. and append the reversed to-branch
 	// (note that it's reverse order originals)
 	let pivot = from_branch.len();
-	from_branch.push(HashAndNumber {
-		number: to.number,
-		hash: to.hash,
-	});
+	from_branch.push(HashAndNumber { number: to.number, hash: to.hash });
 	from_branch.extend(to_branch.into_iter().rev());
 
-	Ok(TreeRoute {
-		route: from_branch,
-		pivot,
-	})
+	Ok(TreeRoute { route: from_branch, pivot })
 }
 
 /// Hash and number of a block.
@@ -204,14 +183,16 @@ impl<Block: BlockT> TreeRoute<Block> {
 	/// Get the common ancestor block. This might be one of the two blocks of the
 	/// route.
 	pub fn common_block(&self) -> &HashAndNumber<Block> {
-		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
+		self.route.get(self.pivot).expect(
+			"tree-routes are computed between blocks; \
 			which are included in the route; \
-			thus it is never empty; qed")
+			thus it is never empty; qed",
+		)
 	}
 
 	/// Get a slice of enacted blocks (descendents of the common ancestor)
 	pub fn enacted(&self) -> &[HashAndNumber<Block>] {
-		&self.route[self.pivot + 1 ..]
+		&self.route[self.pivot + 1..]
 	}
 }
 
@@ -240,17 +221,13 @@ pub struct HeaderMetadataCache<Block: BlockT> {
 impl<Block: BlockT> HeaderMetadataCache<Block> {
 	/// Creates a new LRU header metadata cache with `capacity`.
 	pub fn new(capacity: usize) -> Self {
-		HeaderMetadataCache {
-			cache: RwLock::new(LruCache::new(capacity)),
-		}
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(capacity)) }
 	}
 }
 
 impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	fn default() -> Self {
-		HeaderMetadataCache {
-			cache: RwLock::new(LruCache::new(LRU_CACHE_SIZE)),
-		}
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(LRU_CACHE_SIZE)) }
 	}
 }
 

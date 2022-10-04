@@ -18,8 +18,8 @@
 use super::Runtime;
 use crate::exec::Ext;
 
-use sp_sandbox::Value;
 use pwasm_utils::parity_wasm::elements::{FunctionType, ValueType};
+use sp_sandbox::Value;
 
 #[macro_use]
 pub mod macros;
@@ -67,11 +67,10 @@ impl ConvertibleToWasm for u64 {
 	}
 }
 
-pub type HostFunc<E> =
-	fn(
-		&mut Runtime<E>,
-		&[sp_sandbox::Value]
-	) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>;
+pub type HostFunc<E> = fn(
+	&mut Runtime<E>,
+	&[sp_sandbox::Value],
+) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>;
 
 pub trait FunctionImplProvider<E: Ext> {
 	fn impls<F: FnMut(&[u8], &[u8], HostFunc<E>)>(f: &mut F);

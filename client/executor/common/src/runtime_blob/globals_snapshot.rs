@@ -47,18 +47,17 @@ pub trait InstanceGlobals {
 /// A set of exposed mutable globals.
 ///
 /// This is set of globals required to create a [`GlobalsSnapshot`] and that are collected from
-/// a runtime blob that was instrumented by [`InstrumentModule::expose_mutable_globals`].
-///
+/// a runtime blob that was instrumented by
+/// [`RuntimeBlob::expose_mutable_globals`](super::RuntimeBlob::expose_mutable_globals`).
+
 /// If the code wasn't instrumented then it would be empty and snapshot would do nothing.
 pub struct ExposedMutableGlobalsSet(Vec<String>);
 
 impl ExposedMutableGlobalsSet {
 	/// Collect the set from the given runtime blob. See the struct documentation for details.
 	pub fn collect(runtime_blob: &RuntimeBlob) -> Self {
-		let global_names = runtime_blob
-			.exported_internal_global_names()
-			.map(ToOwned::to_owned)
-			.collect();
+		let global_names =
+			runtime_blob.exported_internal_global_names().map(ToOwned::to_owned).collect();
 		Self(global_names)
 	}
 }

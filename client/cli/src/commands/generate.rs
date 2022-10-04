@@ -16,12 +16,12 @@
 // limitations under the License.
 
 //! Implementation of the `generate` subcommand
-use bip39::{MnemonicType, Mnemonic, Language};
-use structopt::StructOpt;
 use crate::{
-	utils::print_from_uri, KeystoreParams, Error,
-	with_crypto_scheme, NetworkSchemeFlag, OutputTypeFlag, CryptoSchemeFlag,
+	utils::print_from_uri, with_crypto_scheme, CryptoSchemeFlag, Error, KeystoreParams,
+	NetworkSchemeFlag, OutputTypeFlag,
 };
+use bip39::{Language, Mnemonic, MnemonicType};
+use structopt::StructOpt;
 
 /// The `generate` command
 #[derive(Debug, StructOpt, Clone)]
@@ -52,12 +52,11 @@ impl GenerateCmd {
 	/// Run the command
 	pub fn run(&self) -> Result<(), Error> {
 		let words = match self.words {
-			Some(words) => {
-				MnemonicType::for_word_count(words)
-					.map_err(|_| {
-						Error::Input("Invalid number of words given for phrase: must be 12/15/18/21/24".into())
-					})?
-			},
+			Some(words) => MnemonicType::for_word_count(words).map_err(|_| {
+				Error::Input(
+					"Invalid number of words given for phrase: must be 12/15/18/21/24".into(),
+				)
+			})?,
 			None => MnemonicType::Words12,
 		};
 		let mnemonic = Mnemonic::new(words, Language::English);

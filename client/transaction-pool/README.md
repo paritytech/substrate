@@ -79,12 +79,15 @@ Field-specific rules are described below.
 ### `requires` / `provides`
 
 These two fields contain a set of `TransactionTag`s (opaque blobs) associated with
-given transaction. Looking at these fields we can find dependencies between
-transactions and their readiness for block inclusion.
+a given transaction. This is a mechanism for the runtime to be able to
+express dependencies between transactions (that this transaction pool can take
+account of). By looking at these fields we can establish a transaction's readiness
+for block inclusion.
 
 The `provides` set contains properties that will be *satisfied* in case the transaction
-is successfully added to a block. `requires` contains properties that must be satisfied
-**before** the transaction can be included to a block.
+is successfully added to a block. Only a transaction in a block may provide a specific
+tag. `requires` contains properties that must be satisfied **before** the transaction
+can be included to a block.
 
 Note that a transaction with empty `requires` set can be added to a block immediately,
 there are no other transactions that it expects to be included before.
@@ -131,7 +134,7 @@ Transaction priority describes importance of the transaction relative to other t
 in the pool. Block authors can expect benefiting from including such transactions
 before others.
 
-Note that we can't simply order transactions in the pool by `priority`, cause first
+Note that we can't simply order transactions in the pool by `priority`, because first
 we need to make sure that all of the transaction requirements are satisfied (see
 `requires/provides` section). However if we consider a set of transactions
 which all have their requirements (tags) satisfied, the block author should be
@@ -234,7 +237,7 @@ feasible, so the actual implementation might need to take some shortcuts.
 ## Suggestions & caveats
 
 1. The validity of transaction should not change significantly from block to
-   block. I.e. changes in validity should happen predicatably, e.g. `longevity`
+   block. I.e. changes in validity should happen predictably, e.g. `longevity`
    decrements by 1, `priority` stays the same, `requires` changes if transaction
    that provided a tag was included in block. `provides` does not change, etc.
 
@@ -360,5 +363,5 @@ queue and attempted to be re-imported by the background task in the future.
 
 Runtime calls to verify transactions are performed from a separate (limited)
 thread pool to avoid interferring too much with other subsystems of the node. We
-definitely don't want to have all cores validating network transactions, cause
+definitely don't want to have all cores validating network transactions, because
 all of these transactions need to be considered untrusted (potentially DoS).

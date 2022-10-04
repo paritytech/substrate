@@ -20,10 +20,10 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use sp_std::{vec, prelude::*};
-use frame_system::RawOrigin;
-use frame_support::{ensure, traits::OnInitialize};
 use frame_benchmarking::{benchmarks, impl_benchmark_test_suite};
+use frame_support::{ensure, traits::OnInitialize};
+use frame_system::RawOrigin;
+use sp_std::{prelude::*, vec};
 
 use crate::Pallet as Scheduler;
 use frame_system::Pallet as System;
@@ -31,7 +31,7 @@ use frame_system::Pallet as System;
 const BLOCK_NUMBER: u32 = 2;
 
 // Add `n` named items to the schedule
-fn fill_schedule<T: Config> (when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
+fn fill_schedule<T: Config>(when: T::BlockNumber, n: u32) -> Result<(), &'static str> {
 	// Essentially a no-op call.
 	let call = frame_system::Call::set_storage(vec![]);
 	for i in 0..n {
@@ -141,8 +141,4 @@ benchmarks! {
 	}
 }
 
-impl_benchmark_test_suite!(
-	Scheduler,
-	crate::tests::new_test_ext(),
-	crate::tests::Test,
-);
+impl_benchmark_test_suite!(Scheduler, crate::tests::new_test_ext(), crate::tests::Test);

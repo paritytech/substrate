@@ -17,9 +17,11 @@
 
 //! In-memory implementation of offchain workers database.
 
-use std::collections::hash_map::{HashMap, Entry};
 use crate::offchain::OffchainStorage;
-use std::iter::Iterator;
+use std::{
+	collections::hash_map::{Entry, HashMap},
+	iter::Iterator,
+};
 
 /// In-memory storage for offchain workers.
 #[derive(Debug, Clone, Default)]
@@ -29,12 +31,12 @@ pub struct InMemOffchainStorage {
 
 impl InMemOffchainStorage {
 	/// Consume the offchain storage and iterate over all key value pairs.
-	pub fn into_iter(self) -> impl Iterator<Item=(Vec<u8>,Vec<u8>)> {
+	pub fn into_iter(self) -> impl Iterator<Item = (Vec<u8>, Vec<u8>)> {
 		self.storage.into_iter()
 	}
 
 	/// Iterate over all key value pairs by reference.
-	pub fn iter(&self) -> impl Iterator<Item=(&Vec<u8>,&Vec<u8>)> {
+	pub fn iter(&self) -> impl Iterator<Item = (&Vec<u8>, &Vec<u8>)> {
 		self.storage.iter()
 	}
 
@@ -71,10 +73,13 @@ impl OffchainStorage for InMemOffchainStorage {
 		let key = prefix.iter().chain(key).cloned().collect();
 
 		match self.storage.entry(key) {
-			Entry::Vacant(entry) => if old_value.is_none() {
-				entry.insert(new_value.to_vec());
-				true
-			} else { false },
+			Entry::Vacant(entry) =>
+				if old_value.is_none() {
+					entry.insert(new_value.to_vec());
+					true
+				} else {
+					false
+				},
 			Entry::Occupied(ref mut entry) if Some(entry.get().as_slice()) == old_value => {
 				entry.insert(new_value.to_vec());
 				true

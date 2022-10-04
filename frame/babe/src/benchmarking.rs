@@ -69,14 +69,12 @@ benchmarks! {
 mod tests {
 	use super::*;
 	use crate::mock::*;
-	use frame_support::assert_ok;
 
-	#[test]
-	fn test_benchmarks() {
-		new_test_ext(3).execute_with(|| {
-			assert_ok!(test_benchmark_check_equivocation_proof::<Test>());
-		})
-	}
+	frame_benchmarking::impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(3),
+		crate::mock::Test,
+	);
 
 	#[test]
 	fn test_generate_equivocation_report_blob() {
@@ -95,10 +93,7 @@ mod tests {
 			);
 
 			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!(
-				"equivocation_proof.encode(): {:?}",
-				equivocation_proof.encode()
-			);
+			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
 		});
 	}
 }

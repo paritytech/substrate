@@ -1,6 +1,6 @@
 [package]
 name = "sp-authority-discovery"
-version = "3.0.0"
+version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Authority discovery primitives"
 edition = "2018"
@@ -13,11 +13,11 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sp-application-crypto = { version = "3.0.0", default-features = false, path = "../application-crypto" }
+sp-application-crypto = { version = "4.0.0-dev", default-features = false, path = "../application-crypto" }
 codec = { package = "parity-scale-codec", default-features = false, version = "2.0.0" }
-sp-std = { version = "3.0.0", default-features = false, path = "../std" }
-sp-api = { version = "3.0.0", default-features = false, path = "../api" }
-sp-runtime = { version = "3.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "4.0.0-dev", default-features = false, path = "../std" }
+sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
+sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
 
 [features]
 default = ["std"]

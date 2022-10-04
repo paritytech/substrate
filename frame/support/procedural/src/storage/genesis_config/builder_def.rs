@@ -17,11 +17,11 @@
 
 //! Builder logic definition used to build genesis storage.
 
+use super::super::{DeclStorageDefExt, StorageLineTypeDef};
 use frame_support_procedural_tools::syn_ext as ext;
 use proc_macro2::TokenStream;
-use syn::spanned::Spanned;
 use quote::{quote, quote_spanned};
-use super::super::{DeclStorageDefExt, StorageLineTypeDef};
+use syn::spanned::Spanned;
 
 /// Definition of builder blocks, each block insert some value in the storage.
 /// They must be called inside externalities, and with `self` being the genesis config.
@@ -79,7 +79,7 @@ impl BuilderDef {
 			if let Some(data) = data {
 				blocks.push(match &line.storage_type {
 					StorageLineTypeDef::Simple(_) if line.is_option => {
-						quote!{{
+						quote! {{
 							#data
 							let v: Option<&#value_type>= data;
 							if let Some(v) = v {
@@ -88,7 +88,7 @@ impl BuilderDef {
 						}}
 					},
 					StorageLineTypeDef::Simple(_) if !line.is_option => {
-						quote!{{
+						quote! {{
 							#data
 							let v: &#value_type = data;
 							<#storage_struct as #scrate::#storage_trait>::put::<&#value_type>(v);
@@ -97,7 +97,7 @@ impl BuilderDef {
 					StorageLineTypeDef::Simple(_) => unreachable!(),
 					StorageLineTypeDef::Map(map) => {
 						let key = &map.key;
-						quote!{{
+						quote! {{
 							#data
 							let data: &#scrate::sp_std::vec::Vec<(#key, #value_type)> = data;
 							data.iter().for_each(|(k, v)| {
@@ -110,7 +110,7 @@ impl BuilderDef {
 					StorageLineTypeDef::DoubleMap(map) => {
 						let key1 = &map.key1;
 						let key2 = &map.key2;
-						quote!{{
+						quote! {{
 							#data
 							let data: &#scrate::sp_std::vec::Vec<(#key1, #key2, #value_type)> = data;
 							data.iter().for_each(|(k1, k2, v)| {
@@ -122,12 +122,8 @@ impl BuilderDef {
 					},
 					StorageLineTypeDef::NMap(map) => {
 						let key_tuple = map.to_key_tuple();
-						let key_arg = if map.keys.len() == 1 {
-							quote!((k,))
-						} else {
-							quote!(k)
-						};
-						quote!{{
+						let key_arg = if map.keys.len() == 1 { quote!((k,)) } else { quote!(k) };
+						quote! {{
 							#data
 							let data: &#scrate::sp_std::vec::Vec<(#key_tuple, #value_type)> = data;
 							data.iter().for_each(|(k, v)| {
@@ -148,10 +144,6 @@ impl BuilderDef {
 			});
 		}
 
-
-		Self {
-			blocks,
-			is_generic,
-		}
+		Self { blocks, is_generic }
 	}
 }

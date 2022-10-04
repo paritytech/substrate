@@ -16,10 +16,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error::{self, Error};
 use super::RuntimeBlob;
-use std::mem;
+use crate::error::{self, Error};
 use pwasm_utils::parity_wasm::elements::Instruction;
+use std::mem;
 
 /// This is a snapshot of data segments specialzied for a particular instantiation.
 ///
@@ -49,7 +49,7 @@ impl DataSegmentsSnapshot {
 
 				// [op, End]
 				if init_expr.len() != 2 {
-					return Err(Error::InitializerHasTooManyExpressions);
+					return Err(Error::InitializerHasTooManyExpressions)
 				}
 				let offset = match &init_expr[0] {
 					Instruction::I32Const(v) => *v as u32,
@@ -60,8 +60,8 @@ impl DataSegmentsSnapshot {
 						// At the moment of writing the Substrate Runtime Interface does not provide
 						// any globals. There is nothing that prevents us from supporting this
 						// if/when we gain those.
-						return Err(Error::ImportedGlobalsUnsupported);
-					}
+						return Err(Error::ImportedGlobalsUnsupported)
+					},
 					insn => return Err(Error::InvalidInitializerExpression(format!("{:?}", insn))),
 				};
 

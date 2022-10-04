@@ -20,10 +20,17 @@
 #![cfg(test)]
 
 use crate as pallet_aura;
-use sp_consensus_aura::ed25519::AuthorityId;
-use sp_runtime::{traits::IdentityLookup, testing::{Header, UintAuthorityId}};
-use frame_support::{parameter_types, traits::GenesisBuild};
+use frame_support::{
+	parameter_types,
+	traits::{DisabledValidators, GenesisBuild},
+};
+use sp_consensus_aura::{ed25519::AuthorityId, AuthorityIndex};
 use sp_core::H256;
+use sp_runtime::{
+	testing::{Header, UintAuthorityId},
+	traits::IdentityLookup,
+};
+use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -48,7 +55,7 @@ parameter_types! {
 }
 
 impl frame_system::Config for Test {
-	type BaseCallFilter = ();
+	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -80,14 +87,40 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
+thread_local! {
+	static DISABLED_VALIDATORS: RefCell<Vec<AuthorityIndex>> = RefCell::new(Default::default());
+}
+
+pub struct MockDisabledValidators;
+
+impl MockDisabledValidators {
+	pub fn disable_validator(index: AuthorityIndex) {
+		DISABLED_VALIDATORS.with(|v| {
+			let mut disabled = v.borrow_mut();
+			if let Err(i) = disabled.binary_search(&index) {
+				disabled.insert(i, index);
+			}
+		})
+	}
+}
+
+impl DisabledValidators for MockDisabledValidators {
+	fn is_disabled(index: AuthorityIndex) -> bool {
+		DISABLED_VALIDATORS.with(|v| v.borrow().binary_search(&index).is_ok())
+	}
+}
+
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
+	type DisabledValidators = MockDisabledValidators;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_aura::GenesisConfig::<Test>{
+	pallet_aura::GenesisConfig::<Test> {
 		authorities: authorities.into_iter().map(|a| UintAuthorityId(a).to_public_key()).collect(),
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }

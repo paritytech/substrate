@@ -31,3 +31,37 @@ error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
    = note: required because of the requirements on the impl of `FullCodec` for `Bar`
    = note: required because of the requirements on the impl of `StorageValueMetadata` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
    = note: required by `frame_support::storage::types::StorageValueMetadata::NAME`
+
+error[E0277]: the trait bound `Bar: WrapperTypeDecode` is not satisfied
+ --> $DIR/storage_ensure_span_are_ok_on_wrong_gen.rs:9:12
+  |
+9 |     #[pallet::pallet]
+  |               ^^^^^^ the trait `WrapperTypeDecode` is not implemented for `Bar`
+  |
+  = note: required because of the requirements on the impl of `Decode` for `Bar`
+  = note: required because of the requirements on the impl of `FullCodec` for `Bar`
+  = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+  = note: required by `partial_storage_info`
+
+error[E0277]: the trait bound `Bar: EncodeLike` is not satisfied
+ --> $DIR/storage_ensure_span_are_ok_on_wrong_gen.rs:9:12
+  |
+9 |     #[pallet::pallet]
+  |               ^^^^^^ the trait `EncodeLike` is not implemented for `Bar`
+  |
+  = note: required because of the requirements on the impl of `FullEncode` for `Bar`
+  = note: required because of the requirements on the impl of `FullCodec` for `Bar`
+  = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+  = note: required by `partial_storage_info`
+
+error[E0277]: the trait bound `Bar: WrapperTypeEncode` is not satisfied
+ --> $DIR/storage_ensure_span_are_ok_on_wrong_gen.rs:9:12
+  |
+9 |     #[pallet::pallet]
+  |               ^^^^^^ the trait `WrapperTypeEncode` is not implemented for `Bar`
+  |
+  = note: required because of the requirements on the impl of `pallet::_::_parity_scale_codec::Encode` for `Bar`
+  = note: required because of the requirements on the impl of `FullEncode` for `Bar`
+  = note: required because of the requirements on the impl of `FullCodec` for `Bar`
+  = note: required because of the requirements on the impl of `PartialStorageInfoTrait` for `frame_support::pallet_prelude::StorageValue<_GeneratedPrefixForStorageFoo<T>, Bar>`
+  = note: required by `partial_storage_info`

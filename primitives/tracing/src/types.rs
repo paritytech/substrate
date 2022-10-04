@@ -15,15 +15,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use codec::{Decode, Encode};
 /// Types for wasm based tracing. Loosly inspired by `tracing-core` but
 /// optimised for the specific use case.
-
-use core::{format_args, fmt::Debug};
-use sp_std::{
-	vec, vec::Vec,
-};
-use sp_std::Writer;
-use codec::{Encode, Decode};
+use core::{fmt::Debug, format_args};
+use sp_std::{vec, vec::Vec, Writer};
 
 /// The Tracing Level – the user can filter by this
 #[derive(Clone, Encode, Decode, Debug)]
@@ -37,9 +33,8 @@ pub enum WasmLevel {
 	/// Further information for debugging purposes
 	DEBUG,
 	/// The lowest level, keeping track of minute detail
-	TRACE
+	TRACE,
 }
-
 
 impl From<&tracing_core::Level> for WasmLevel {
 	fn from(l: &tracing_core::Level) -> WasmLevel {
@@ -80,41 +75,27 @@ pub enum WasmValue {
 impl core::fmt::Debug for WasmValue {
 	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 		match self {
-			WasmValue::U8(ref i) => {
-				f.write_fmt(format_args!("{}_u8", i))
-			}
-			WasmValue::I8(ref i) => {
-				f.write_fmt(format_args!("{}_i8", i))
-			}
-			WasmValue::U32(ref i) => {
-				f.write_fmt(format_args!("{}_u32", i))
-			}
-			WasmValue::I32(ref i) => {
-				f.write_fmt(format_args!("{}_i32", i))
-			}
-			WasmValue::I64(ref i) => {
-				f.write_fmt(format_args!("{}_i64", i))
-			}
-			WasmValue::U64(ref i) => {
-				f.write_fmt(format_args!("{}_u64", i))
-			}
-			WasmValue::Bool(ref i) => {
-				f.write_fmt(format_args!("{}_bool", i))
-			}
+			WasmValue::U8(ref i) => f.write_fmt(format_args!("{}_u8", i)),
+			WasmValue::I8(ref i) => f.write_fmt(format_args!("{}_i8", i)),
+			WasmValue::U32(ref i) => f.write_fmt(format_args!("{}_u32", i)),
+			WasmValue::I32(ref i) => f.write_fmt(format_args!("{}_i32", i)),
+			WasmValue::I64(ref i) => f.write_fmt(format_args!("{}_i64", i)),
+			WasmValue::U64(ref i) => f.write_fmt(format_args!("{}_u64", i)),
+			WasmValue::Bool(ref i) => f.write_fmt(format_args!("{}_bool", i)),
 			WasmValue::Formatted(ref i) | WasmValue::Str(ref i) => {
 				if let Ok(v) = core::str::from_utf8(i) {
 					f.write_fmt(format_args!("{}", v))
 				} else {
 					f.write_fmt(format_args!("{:?}", i))
 				}
-			}
+			},
 			WasmValue::Encoded(ref v) => {
 				f.write_str("Scale(")?;
-					for byte in v {
-						f.write_fmt(format_args!("{:02x}", byte))?;
-					}
+				for byte in v {
+					f.write_fmt(format_args!("{:02x}", byte))?;
+				}
 				f.write_str(")")
-			}
+			},
 		}
 	}
 }
@@ -297,7 +278,6 @@ impl core::fmt::Debug for WasmValuesSet {
 	}
 }
 
-
 impl From<Vec<(WasmFieldName, Option<WasmValue>)>> for WasmValuesSet {
 	fn from(v: Vec<(WasmFieldName, Option<WasmValue>)>) -> Self {
 		WasmValuesSet(v)
@@ -324,34 +304,20 @@ impl WasmValuesSet {
 
 impl tracing_core::field::Visit for WasmValuesSet {
 	fn record_debug(&mut self, field: &tracing_core::field::Field, value: &dyn Debug) {
-		self.0.push( (
-			field.name().into(),
-			Some(WasmValue::from(format_args!("{:?}", value)))
-		))
+		self.0
+			.push((field.name().into(), Some(WasmValue::from(format_args!("{:?}", value)))))
 	}
 	fn record_i64(&mut self, field: &tracing_core::field::Field, value: i64) {
-		self.0.push( (
-			field.name().into(),
-			Some(WasmValue::from(value))
-		))
+		self.0.push((field.name().into(), Some(WasmValue::from(value))))
 	}
 	fn record_u64(&mut self, field: &tracing_core::field::Field, value: u64) {
-		self.0.push( (
-			field.name().into(),
-			Some(WasmValue::from(value))
-		))
+		self.0.push((field.name().into(), Some(WasmValue::from(value))))
 	}
 	fn record_bool(&mut self, field: &tracing_core::field::Field, value: bool) {
-		self.0.push( (
-			field.name().into(),
-			Some(WasmValue::from(value))
-		))
+		self.0.push((field.name().into(), Some(WasmValue::from(value))))
 	}
 	fn record_str(&mut self, field: &tracing_core::field::Field, value: &str) {
-		self.0.push( (
-			field.name().into(),
-			Some(WasmValue::from(value))
-		))
+		self.0.push((field.name().into(), Some(WasmValue::from(value))))
 	}
 }
 /// Metadata provides generic information about the specifc location of the
@@ -386,7 +352,7 @@ impl From<&tracing_core::Metadata<'_>> for WasmMetadata {
 			line: wm.line().unwrap_or_default(),
 			module_path: wm.module_path().map(|m| m.as_bytes().to_vec()).unwrap_or_default(),
 			is_span: wm.is_span(),
-			fields: wm.fields().into()
+			fields: wm.fields().into(),
 		}
 	}
 }
@@ -417,11 +383,10 @@ impl core::default::Default for WasmMetadata {
 			line: Default::default(),
 			module_path: Default::default(),
 			is_span: true,
-			fields: WasmFields::empty()
+			fields: WasmFields::empty(),
 		}
 	}
 }
-
 
 fn decode_field(field: &[u8]) -> &str {
 	core::str::from_utf8(field).unwrap_or_default()
@@ -445,7 +410,7 @@ impl From<&tracing_core::Event<'_>> for WasmEntryAttributes {
 		WasmEntryAttributes {
 			parent_id: evt.parent().map(|id| id.into_u64()),
 			metadata: evt.metadata().into(),
-			fields
+			fields,
 		}
 	}
 }
@@ -457,7 +422,7 @@ impl From<&tracing_core::span::Attributes<'_>> for WasmEntryAttributes {
 		WasmEntryAttributes {
 			parent_id: attrs.parent().map(|id| id.into_u64()),
 			metadata: attrs.metadata().into(),
-			fields
+			fields,
 		}
 	}
 }
@@ -480,10 +445,14 @@ mod std_features {
 	/// Static entry use for wasm-originated metadata.
 	pub struct WasmCallsite;
 	impl callsite::Callsite for WasmCallsite {
-		fn set_interest(&self, _: tracing_core::Interest) { unimplemented!() }
-		fn metadata(&self) -> &tracing_core::Metadata { unimplemented!() }
+		fn set_interest(&self, _: tracing_core::Interest) {
+			unimplemented!()
+		}
+		fn metadata(&self) -> &tracing_core::Metadata {
+			unimplemented!()
+		}
 	}
-	static CALLSITE: WasmCallsite =  WasmCallsite;
+	static CALLSITE: WasmCallsite = WasmCallsite;
 	/// The identifier we are using to inject the wasm events in the generic `tracing` system
 	pub static WASM_TRACE_IDENTIFIER: &str = "wasm_tracing";
 	/// The fieldname for the wasm-originated name
@@ -491,8 +460,8 @@ mod std_features {
 	/// The fieldname for the wasm-originated target
 	pub static WASM_TARGET_KEY: &str = "target";
 	/// The the list of all static field names we construct from the given metadata
-	pub static GENERIC_FIELDS: &[&str] = &[WASM_TARGET_KEY, WASM_NAME_KEY,
-		"file", "line", "module_path", "params"];
+	pub static GENERIC_FIELDS: &[&str] =
+		&[WASM_TARGET_KEY, WASM_NAME_KEY, "file", "line", "module_path", "params"];
 
 	// Implementation Note:
 	// the original `tracing` crate generates these static metadata entries at every `span!` and
@@ -500,67 +469,147 @@ mod std_features {
 	// of wasm events we need these static metadata entries to inject into that system. We then provide
 	// generic `From`-implementations picking the right metadata to refer to.
 
-	static SPAN_ERROR_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::ERROR, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::SPAN
+	static SPAN_ERROR_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::ERROR,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::SPAN,
 	);
 
-	static SPAN_WARN_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::WARN, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::SPAN
+	static SPAN_WARN_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::WARN,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::SPAN,
 	);
-	static SPAN_INFO_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::INFO, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::SPAN
-	);
-
-	static SPAN_DEBUG_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::DEBUG, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::SPAN
-	);
-
-	static SPAN_TRACE_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::TRACE, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::SPAN
-	);
-
-	static EVENT_ERROR_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::ERROR, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::EVENT
+	static SPAN_INFO_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::INFO,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::SPAN,
 	);
 
-	static EVENT_WARN_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::WARN, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::EVENT
+	static SPAN_DEBUG_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::DEBUG,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::SPAN,
 	);
 
-	static EVENT_INFO_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::INFO, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::EVENT
+	static SPAN_TRACE_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::TRACE,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::SPAN,
 	);
 
-	static EVENT_DEBUG_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::DEBUG, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::EVENT
+	static EVENT_ERROR_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::ERROR,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::EVENT,
 	);
 
-	static EVENT_TRACE_METADATA : tracing_core::Metadata<'static> = tracing::Metadata::new(
-		WASM_TRACE_IDENTIFIER, WASM_TRACE_IDENTIFIER, tracing::Level::TRACE, None, None, None,
-		tracing_core::field::FieldSet::new(GENERIC_FIELDS, tracing_core::identify_callsite!(&CALLSITE)),
-		tracing_core::metadata::Kind::EVENT
+	static EVENT_WARN_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::WARN,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::EVENT,
+	);
+
+	static EVENT_INFO_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::INFO,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::EVENT,
+	);
+
+	static EVENT_DEBUG_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::DEBUG,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::EVENT,
+	);
+
+	static EVENT_TRACE_METADATA: tracing_core::Metadata<'static> = tracing::Metadata::new(
+		WASM_TRACE_IDENTIFIER,
+		WASM_TRACE_IDENTIFIER,
+		tracing::Level::TRACE,
+		None,
+		None,
+		None,
+		tracing_core::field::FieldSet::new(
+			GENERIC_FIELDS,
+			tracing_core::identify_callsite!(&CALLSITE),
+		),
+		tracing_core::metadata::Kind::EVENT,
 	);
 
 	// FIXME: this could be done a lot in 0.2 if they opt for using `Cow<str,'static>` instead
-	//			https://github.com/paritytech/substrate/issues/7134
+	// 			https://github.com/paritytech/substrate/issues/7134
 	impl From<&crate::WasmMetadata> for &'static tracing_core::Metadata<'static> {
 		fn from(wm: &crate::WasmMetadata) -> &'static tracing_core::Metadata<'static> {
 			match (&wm.level, wm.is_span) {
@@ -586,12 +635,12 @@ mod std_features {
 			let line = a.metadata.line;
 			let module_path = std::str::from_utf8(&a.metadata.module_path).unwrap_or_default();
 			let params = a.fields;
-			let metadata : &tracing_core::metadata::Metadata<'static> = (&a.metadata).into();
+			let metadata: &tracing_core::metadata::Metadata<'static> = (&a.metadata).into();
 
 			tracing::span::Span::child_of(
 				a.parent_id.map(tracing_core::span::Id::from_u64),
 				&metadata,
-				&tracing::valueset!{ metadata.fields(), target, name, file, line, module_path, ?params }
+				&tracing::valueset! { metadata.fields(), target, name, file, line, module_path, ?params },
 			)
 		}
 	}
@@ -605,12 +654,12 @@ mod std_features {
 			let line = self.metadata.line;
 			let module_path = std::str::from_utf8(&self.metadata.module_path).unwrap_or_default();
 			let params = self.fields;
-			let metadata : &tracing_core::metadata::Metadata<'static> = (&self.metadata).into();
+			let metadata: &tracing_core::metadata::Metadata<'static> = (&self.metadata).into();
 
 			tracing_core::Event::child_of(
 				self.parent_id.map(tracing_core::span::Id::from_u64),
 				&metadata,
-				&tracing::valueset!{ metadata.fields(), target, name, file, line, module_path, ?params }
+				&tracing::valueset! { metadata.fields(), target, name, file, line, module_path, ?params },
 			)
 		}
 	}

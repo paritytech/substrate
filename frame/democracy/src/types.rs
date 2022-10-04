@@ -17,29 +17,31 @@
 
 //! Miscellaneous additional datatypes.
 
-use codec::{Encode, Decode};
-use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Zero, Bounded, CheckedAdd, CheckedSub, CheckedMul, CheckedDiv, Saturating};
-use crate::{Vote, VoteThreshold, AccountVote, Conviction};
+use crate::{AccountVote, Conviction, Vote, VoteThreshold};
+use codec::{Decode, Encode};
+use sp_runtime::{
+	traits::{Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Saturating, Zero},
+	RuntimeDebug,
+};
 
 /// Info regarding an ongoing referendum.
 #[derive(Encode, Decode, Default, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Tally<Balance> {
 	/// The number of aye votes, expressed in terms of post-conviction lock-vote.
-	pub (crate) ayes: Balance,
+	pub(crate) ayes: Balance,
 	/// The number of nay votes, expressed in terms of post-conviction lock-vote.
-	pub (crate) nays: Balance,
+	pub(crate) nays: Balance,
 	/// The amount of funds currently expressing its opinion. Pre-conviction.
-	pub (crate) turnout: Balance,
+	pub(crate) turnout: Balance,
 }
 
 /// Amount of votes and capital placed in delegation for an account.
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct Delegations<Balance> {
 	/// The number of votes (this is post-conviction).
-	pub (crate) votes: Balance,
+	pub(crate) votes: Balance,
 	/// The amount of raw capital, used for the turnout.
-	pub (crate) capital: Balance,
+	pub(crate) capital: Balance,
 }
 
 impl<Balance: Saturating> Saturating for Delegations<Balance> {
@@ -65,22 +67,24 @@ impl<Balance: Saturating> Saturating for Delegations<Balance> {
 	}
 
 	fn saturating_pow(self, exp: usize) -> Self {
-		Self {
-			votes: self.votes.saturating_pow(exp),
-			capital: self.capital.saturating_pow(exp),
-		}
+		Self { votes: self.votes.saturating_pow(exp), capital: self.capital.saturating_pow(exp) }
 	}
 }
 
 impl<
-	Balance: From<u8> + Zero + Copy + CheckedAdd + CheckedSub + CheckedMul + CheckedDiv + Bounded +
-		Saturating
-> Tally<Balance> {
+		Balance: From<u8>
+			+ Zero
+			+ Copy
+			+ CheckedAdd
+			+ CheckedSub
+			+ CheckedMul
+			+ CheckedDiv
+			+ Bounded
+			+ Saturating,
+	> Tally<Balance>
+{
 	/// Create a new tally.
-	pub fn new(
-		vote: Vote,
-		balance: Balance,
-	) -> Self {
+	pub fn new(vote: Vote, balance: Balance) -> Self {
 		let Delegations { votes, capital } = vote.conviction.votes(balance);
 		Self {
 			ayes: if vote.aye { votes } else { Zero::zero() },
@@ -90,10 +94,7 @@ impl<
 	}
 
 	/// Add an account's vote into the tally.
-	pub fn add(
-		&mut self,
-		vote: AccountVote<Balance>,
-	) -> Option<()> {
+	pub fn add(&mut self, vote: AccountVote<Balance>) -> Option<()> {
 		match vote {
 			AccountVote::Standard { vote, balance } => {
 				let Delegations { votes, capital } = vote.conviction.votes(balance);
@@ -102,23 +103,20 @@ impl<
 					true => self.ayes = self.ayes.checked_add(&votes)?,
 					false => self.nays = self.nays.checked_add(&votes)?,
 				}
-			}
+			},
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
 				self.turnout = self.turnout.checked_add(&aye.capital)?.checked_add(&nay.capital)?;
 				self.ayes = self.ayes.checked_add(&aye.votes)?;
 				self.nays = self.nays.checked_add(&nay.votes)?;
-			}
+			},
 		}
 		Some(())
 	}
 
 	/// Remove an account's vote from the tally.
-	pub fn remove(
-		&mut self,
-		vote: AccountVote<Balance>,
-	) -> Option<()> {
+	pub fn remove(&mut self, vote: AccountVote<Balance>) -> Option<()> {
 		match vote {
 			AccountVote::Standard { vote, balance } => {
 				let Delegations { votes, capital } = vote.conviction.votes(balance);
@@ -127,14 +125,14 @@ impl<
 					true => self.ayes = self.ayes.checked_sub(&votes)?,
 					false => self.nays = self.nays.checked_sub(&votes)?,
 				}
-			}
+			},
 			AccountVote::Split { aye, nay } => {
 				let aye = Conviction::None.votes(aye);
 				let nay = Conviction::None.votes(nay);
 				self.turnout = self.turnout.checked_sub(&aye.capital)?.checked_sub(&nay.capital)?;
 				self.ayes = self.ayes.checked_sub(&aye.votes)?;
 				self.nays = self.nays.checked_sub(&nay.votes)?;
-			}
+			},
 		}
 		Some(())
 	}
@@ -164,15 +162,15 @@ impl<
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct ReferendumStatus<BlockNumber, Hash, Balance> {
 	/// When voting on this referendum will end.
-	pub (crate) end: BlockNumber,
+	pub(crate) end: BlockNumber,
 	/// The hash of the proposal being voted on.
-	pub (crate) proposal_hash: Hash,
+	pub(crate) proposal_hash: Hash,
 	/// The thresholding mechanism to determine whether it passed.
-	pub (crate) threshold: VoteThreshold,
+	pub(crate) threshold: VoteThreshold,
 	/// The delay (in blocks) to wait after a successful referendum before deploying.
-	pub (crate) delay: BlockNumber,
+	pub(crate) delay: BlockNumber,
 	/// The current tally of votes in this referendum.
-	pub (crate) tally: Tally<Balance>,
+	pub(crate) tally: Tally<Balance>,
 }
 
 /// Info regarding a referendum, present or past.
@@ -181,7 +179,7 @@ pub enum ReferendumInfo<BlockNumber, Hash, Balance> {
 	/// Referendum is happening, the arg is the block number at which it will end.
 	Ongoing(ReferendumStatus<BlockNumber, Hash, Balance>),
 	/// Referendum finished at `end`, and has been `approved` or rejected.
-	Finished{approved: bool, end: BlockNumber},
+	Finished { approved: bool, end: BlockNumber },
 }
 
 impl<BlockNumber, Hash, Balance: Default> ReferendumInfo<BlockNumber, Hash, Balance> {
@@ -192,7 +190,7 @@ impl<BlockNumber, Hash, Balance: Default> ReferendumInfo<BlockNumber, Hash, Bala
 		threshold: VoteThreshold,
 		delay: BlockNumber,
 	) -> Self {
-		let s = ReferendumStatus{ end, proposal_hash, threshold, delay, tally: Tally::default() };
+		let s = ReferendumStatus { end, proposal_hash, threshold, delay, tally: Tally::default() };
 		ReferendumInfo::Ongoing(s)
 	}
 }

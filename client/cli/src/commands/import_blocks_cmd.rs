@@ -16,19 +16,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::error;
-use crate::params::ImportParams;
-use crate::params::SharedParams;
-use crate::CliConfiguration;
+use crate::{
+	error,
+	params::{ImportParams, SharedParams},
+	CliConfiguration,
+};
+use sc_client_api::UsageProvider;
 use sc_service::chain_ops::import_blocks;
 use sp_runtime::traits::Block as BlockT;
-use std::fmt::Debug;
-use std::fs;
-use std::io::{self, Read, Seek};
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{
+	fmt::Debug,
+	fs,
+	io::{self, Read, Seek},
+	path::PathBuf,
+	sync::Arc,
+};
 use structopt::StructOpt;
-use sc_client_api::UsageProvider;
 
 /// The `import-blocks` command used to import blocks.
 #[derive(Debug, StructOpt)]
@@ -63,11 +66,7 @@ impl<T: Read + Seek> ReadPlusSeek for T {}
 
 impl ImportBlocksCmd {
 	/// Run the import-blocks command
-	pub async fn run<B, C, IQ>(
-		&self,
-		client: Arc<C>,
-		import_queue: IQ,
-	) -> error::Result<()>
+	pub async fn run<B, C, IQ>(&self, client: Arc<C>, import_queue: IQ) -> error::Result<()>
 	where
 		C: UsageProvider<B> + Send + Sync + 'static,
 		B: BlockT + for<'de> serde::Deserialize<'de>,
@@ -79,7 +78,7 @@ impl ImportBlocksCmd {
 				let mut buffer = Vec::new();
 				io::stdin().read_to_end(&mut buffer)?;
 				Box::new(io::Cursor::new(buffer))
-			}
+			},
 		};
 
 		import_blocks(client, import_queue, file, false, self.binary)

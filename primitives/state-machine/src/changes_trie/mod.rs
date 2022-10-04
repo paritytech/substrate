@@ -58,63 +58,86 @@ mod prune;
 mod storage;
 mod surface_iterator;
 
-pub use self::build_cache::{BuildCache, CachedBuildData, CacheAction};
-pub use self::storage::InMemoryStorage;
-pub use self::changes_iterator::{
-	key_changes, key_changes_proof,
-	key_changes_proof_check, key_changes_proof_check_with_db,
+pub use self::{
+	build_cache::{BuildCache, CacheAction, CachedBuildData},
+	changes_iterator::{
+		key_changes, key_changes_proof, key_changes_proof_check, key_changes_proof_check_with_db,
+	},
+	prune::prune,
+	storage::InMemoryStorage,
 };
-pub use self::prune::prune;
 
-use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
-use hash_db::{Hasher, Prefix};
-use num_traits::{One, Zero};
-use codec::{Decode, Encode};
-use sp_core;
-use sp_core::storage::PrefixedStorageKey;
-use sp_trie::{MemoryDB, DBValue, TrieMut};
-use sp_trie::trie_types::TrieDBMut;
 use crate::{
-	StorageKey,
 	backend::Backend,
-	overlayed_changes::OverlayedChanges,
 	changes_trie::{
 		build::prepare_input,
-		build_cache::{IncompleteCachedBuildData, IncompleteCacheAction},
+		build_cache::{IncompleteCacheAction, IncompleteCachedBuildData},
 	},
+	overlayed_changes::OverlayedChanges,
+	StorageKey,
+};
+use codec::{Decode, Encode};
+use hash_db::{Hasher, Prefix};
+use num_traits::{One, Zero};
+use sp_core::{self, storage::PrefixedStorageKey};
+use sp_trie::{trie_types::TrieDBMut, DBValue, MemoryDB, TrieMut};
+use std::{
+	collections::{HashMap, HashSet},
+	convert::TryInto,
 };
 
 /// Requirements for block number that can be used with changes tries.
 pub trait BlockNumber:
-	Send + Sync + 'static +
-	std::fmt::Display +
-	Clone +
-	From<u32> + TryInto<u32> + One + Zero +
-	PartialEq + Ord +
-	std::hash::Hash +
-	std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
-	std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
-	std::ops::Rem<Self, Output=Self> +
-	std::ops::AddAssign<Self> +
-	num_traits::CheckedMul + num_traits::CheckedSub +
-	Decode + Encode
-{}
+	Send
+	+ Sync
+	+ 'static
+	+ std::fmt::Display
+	+ Clone
+	+ From<u32>
+	+ TryInto<u32>
+	+ One
+	+ Zero
+	+ PartialEq
+	+ Ord
+	+ std::hash::Hash
+	+ std::ops::Add<Self, Output = Self>
+	+ ::std::ops::Sub<Self, Output = Self>
+	+ std::ops::Mul<Self, Output = Self>
+	+ ::std::ops::Div<Self, Output = Self>
+	+ std::ops::Rem<Self, Output = Self>
+	+ std::ops::AddAssign<Self>
+	+ num_traits::CheckedMul
+	+ num_traits::CheckedSub
+	+ Decode
+	+ Encode
+{
+}
 
-impl<T> BlockNumber for T where T:
-	Send + Sync + 'static +
-	std::fmt::Display +
-	Clone +
-	From<u32> + TryInto<u32> + One + Zero +
-	PartialEq + Ord +
-	std::hash::Hash +
-	std::ops::Add<Self, Output=Self> + ::std::ops::Sub<Self, Output=Self> +
-	std::ops::Mul<Self, Output=Self> + ::std::ops::Div<Self, Output=Self> +
-	std::ops::Rem<Self, Output=Self> +
-	std::ops::AddAssign<Self> +
-	num_traits::CheckedMul + num_traits::CheckedSub +
-	Decode + Encode,
-{}
+impl<T> BlockNumber for T where
+	T: Send
+		+ Sync
+		+ 'static
+		+ std::fmt::Display
+		+ Clone
+		+ From<u32>
+		+ TryInto<u32>
+		+ One
+		+ Zero
+		+ PartialEq
+		+ Ord
+		+ std::hash::Hash
+		+ std::ops::Add<Self, Output = Self>
+		+ ::std::ops::Sub<Self, Output = Self>
+		+ std::ops::Mul<Self, Output = Self>
+		+ ::std::ops::Div<Self, Output = Self>
+		+ std::ops::Rem<Self, Output = Self>
+		+ std::ops::AddAssign<Self>
+		+ num_traits::CheckedMul
+		+ num_traits::CheckedSub
+		+ Decode
+		+ Encode
+{
+}
 
 /// Block identifier that could be used to determine fork of this block.
 #[derive(Debug)]
@@ -143,7 +166,11 @@ pub trait RootsStorage<H: Hasher, Number: BlockNumber>: Send + Sync {
 	fn build_anchor(&self, hash: H::Out) -> Result<AnchorBlockId<H::Out, Number>, String>;
 	/// Get changes trie root for the block with given number which is an ancestor (or the block
 	/// itself) of the anchor_block (i.e. anchor_block.number >= block).
-	fn root(&self, anchor: &AnchorBlockId<H::Out, Number>, block: Number) -> Result<Option<H::Out>, String>;
+	fn root(
+		&self,
+		anchor: &AnchorBlockId<H::Out, Number>,
+		block: Number,
+	) -> Result<Option<H::Out>, String>;
 }
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
@@ -162,9 +189,13 @@ pub trait Storage<H: Hasher, Number: BlockNumber>: RootsStorage<H, Number> {
 }
 
 /// Changes trie storage -> trie backend essence adapter.
-pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(pub &'a dyn Storage<H, Number>);
+pub struct TrieBackendStorageAdapter<'a, H: Hasher, Number: BlockNumber>(
+	pub &'a dyn Storage<H, Number>,
+);
 
-impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H> for TrieBackendStorageAdapter<'a, H, N> {
+impl<'a, H: Hasher, N: BlockNumber> crate::TrieBackendStorage<H>
+	for TrieBackendStorageAdapter<'a, H, N>
+{
 	type Overlay = sp_trie::MemoryDB<H>;
 
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Result<Option<DBValue>, String> {
@@ -188,26 +219,14 @@ pub struct ConfigurationRange<'a, N> {
 
 impl<'a, H, Number> State<'a, H, Number> {
 	/// Create state with given config and storage.
-	pub fn new(
-		config: Configuration,
-		zero: Number,
-		storage: &'a dyn Storage<H, Number>,
-	) -> Self {
-		Self {
-			config,
-			zero,
-			storage,
-		}
+	pub fn new(config: Configuration, zero: Number, storage: &'a dyn Storage<H, Number>) -> Self {
+		Self { config, zero, storage }
 	}
 }
 
 impl<'a, H, Number: Clone> Clone for State<'a, H, Number> {
 	fn clone(&self) -> Self {
-		State {
-			config: self.config.clone(),
-			zero: self.zero.clone(),
-			storage: self.storage,
-		}
+		State { config: self.config.clone(), zero: self.zero.clone(), storage: self.storage }
 	}
 }
 
@@ -227,20 +246,24 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 	parent_hash: H::Out,
 	panic_on_storage_error: bool,
 ) -> Result<Option<(MemoryDB<H>, H::Out, CacheAction<H::Out, Number>)>, ()>
-	where
-		H::Out: Ord + 'static + Encode,
+where
+	H::Out: Ord + 'static + Encode,
 {
 	/// Panics when `res.is_err() && panic`, otherwise it returns `Err(())` on an error.
 	fn maybe_panic<R, E: std::fmt::Debug>(
 		res: std::result::Result<R, E>,
 		panic: bool,
 	) -> std::result::Result<R, ()> {
-		res.map(Ok)
-			.unwrap_or_else(|e| if panic {
-				panic!("changes trie: storage access is not allowed to fail within runtime: {:?}", e)
+		res.map(Ok).unwrap_or_else(|e| {
+			if panic {
+				panic!(
+					"changes trie: storage access is not allowed to fail within runtime: {:?}",
+					e
+				)
 			} else {
 				Err(())
-			})
+			}
+		})
 	}
 
 	// when storage isn't provided, changes tries aren't created
@@ -255,11 +278,12 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 
 	// prepare configuration range - we already know zero block. Current block may be the end block if configuration
 	// has been changed in this block
-	let is_config_changed = match changes.storage(sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
-		Some(Some(new_config)) => new_config != &state.config.encode()[..],
-		Some(None) => true,
-		None => false,
-	};
+	let is_config_changed =
+		match changes.storage(sp_core::storage::well_known_keys::CHANGES_TRIE_CONFIG) {
+			Some(Some(new_config)) => new_config != &state.config.encode()[..],
+			Some(None) => true,
+			None => false,
+		};
 	let config_range = ConfigurationRange {
 		config: &state.config,
 		zero: state.zero.clone(),
@@ -303,10 +327,8 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 				maybe_panic(trie.insert(&key, &value), panic_on_storage_error)?;
 			}
 
-			cache_action = cache_action.insert(
-				Some(child_index.storage_key.clone()),
-				storage_changed_keys,
-			);
+			cache_action =
+				cache_action.insert(Some(child_index.storage_key.clone()), storage_changed_keys);
 		}
 		if not_empty {
 			child_roots.push(input::InputPair::ChildIndex(child_index, root.as_ref().to_vec()));
@@ -331,10 +353,7 @@ pub fn build_changes_trie<'a, B: Backend<H>, H: Hasher, Number: BlockNumber>(
 			maybe_panic(trie.insert(&key, &value), panic_on_storage_error)?;
 		}
 
-		cache_action = cache_action.insert(
-			None,
-			storage_changed_keys,
-		);
+		cache_action = cache_action.insert(None, storage_changed_keys);
 	}
 
 	let cache_action = cache_action.complete(block, &root);
@@ -350,20 +369,21 @@ fn prepare_cached_build_data<Number: BlockNumber>(
 	// because it'll never be used again for building other tries
 	// => let's clear the cache
 	if !config.config.is_digest_build_enabled() {
-		return IncompleteCacheAction::Clear;
+		return IncompleteCacheAction::Clear
 	}
 
 	// when this is the last block where current configuration is active
 	// => let's clear the cache
 	if config.end.as_ref() == Some(&block) {
-		return IncompleteCacheAction::Clear;
+		return IncompleteCacheAction::Clear
 	}
 
 	// we do not need to cache anything when top-level digest trie is created, because
 	// it'll never be used again for building other tries
 	// => let's clear the cache
 	match config.config.digest_level_at_block(config.zero.clone(), block) {
-		Some((digest_level, _, _)) if digest_level == config.config.digest_levels => IncompleteCacheAction::Clear,
+		Some((digest_level, _, _)) if digest_level == config.config.digest_levels =>
+			IncompleteCacheAction::Clear,
 		_ => IncompleteCacheAction::CacheBuildData(IncompleteCachedBuildData::new()),
 	}
 }
@@ -399,6 +419,9 @@ mod tests {
 	fn cache_is_cleared_when_end_block_of_configuration_is_built() {
 		let config = Configuration { digest_interval: 8, digest_levels: 2 };
 		let config_range = ConfigurationRange { zero: 0, end: Some(4u32), config: &config };
-		assert_eq!(prepare_cached_build_data(config_range.clone(), 4u32), IncompleteCacheAction::Clear);
+		assert_eq!(
+			prepare_cached_build_data(config_range.clone(), 4u32),
+			IncompleteCacheAction::Clear
+		);
 	}
 }

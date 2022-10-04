@@ -15,14 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{Criterion, criterion_group, criterion_main};
-use substrate_test_runtime_client::{
-	DefaultTestClientBuilderExt, TestClientBuilder,
-	TestClientBuilderExt, runtime::TestAPI,
-};
+use criterion::{criterion_group, criterion_main, Criterion};
+use sp_api::ProvideRuntimeApi;
 use sp_runtime::generic::BlockId;
 use sp_state_machine::ExecutionStrategy;
-use sp_api::ProvideRuntimeApi;
+use substrate_test_runtime_client::{
+	runtime::TestAPI, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
+};
 
 fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
@@ -58,13 +57,17 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	});
 
 	c.bench_function("calling function by function pointer in wasm", |b| {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 		b.iter(|| client.runtime_api().benchmark_indirect_call(&block_id).unwrap())
 	});
 
 	c.bench_function("calling function in wasm", |b| {
-		let client = TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::AlwaysWasm).build();
+		let client = TestClientBuilder::new()
+			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
+			.build();
 		let block_id = BlockId::Number(client.chain_info().best_number);
 		b.iter(|| client.runtime_api().benchmark_direct_call(&block_id).unwrap())
 	});

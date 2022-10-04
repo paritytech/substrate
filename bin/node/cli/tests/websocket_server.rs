@@ -116,7 +116,6 @@ impl WsServer {
 	/// # Panic
 	///
 	/// Panics if no connection is pending.
-	///
 	pub fn accept(&mut self) {
 		let pending_incoming = self.pending_incoming.take().expect("no pending socket");
 
@@ -129,15 +128,10 @@ impl WsServer {
 			};
 
 			match server
-				.send_response(&{
-					Response::Accept {
-						key: &websocket_key,
-						protocol: None,
-					}
-				})
+				.send_response(&{ Response::Accept { key: &websocket_key, protocol: None } })
 				.await
 			{
-				Ok(()) => {}
+				Ok(()) => {},
 				Err(err) => return Err(Box::new(err) as Box<_>),
 			};
 
@@ -153,7 +147,6 @@ impl WsServer {
 	/// # Panic
 	///
 	/// Panics if no connection is pending.
-	///
 	pub fn reject(&mut self) {
 		let _ = self.pending_incoming.take().expect("no pending socket");
 	}

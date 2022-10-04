@@ -18,15 +18,22 @@
 
 //! # WASM substitutes
 
-use std::{collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher as _, sync::Arc};
-use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
-use sp_state_machine::BasicExternalities;
-use sp_blockchain::{Result, HeaderBackend};
-use sc_executor::RuntimeInfo;
-use sp_version::RuntimeVersion;
-use sc_client_api::backend;
-use sp_runtime::{traits::{NumberFor, Block as BlockT}, generic::BlockId};
 use parking_lot::RwLock;
+use sc_client_api::backend;
+use sc_executor::RuntimeInfo;
+use sp_blockchain::{HeaderBackend, Result};
+use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
+};
+use sp_state_machine::BasicExternalities;
+use sp_version::RuntimeVersion;
+use std::{
+	collections::{hash_map::DefaultHasher, HashMap},
+	hash::Hasher as _,
+	sync::Arc,
+};
 
 /// A wasm substitute for the on chain wasm.
 #[derive(Debug)]
@@ -51,11 +58,7 @@ impl<Block: BlockT> WasmSubstitute<Block> {
 	}
 
 	fn runtime_code(&self, heap_pages: Option<u64>) -> RuntimeCode {
-		RuntimeCode {
-			code_fetcher: self,
-			hash: self.hash.clone(),
-			heap_pages,
-		}
+		RuntimeCode { code_fetcher: self, hash: self.hash.clone(), heap_pages }
 	}
 
 	/// Returns `true` when the substitute matches for the given `block_id`.
@@ -82,7 +85,8 @@ impl<Block: BlockT> WasmSubstitute<Block> {
 			block_number
 		};
 
-		let requested_block_number = backend.blockchain().block_number_from_id(&block_id).ok().flatten();
+		let requested_block_number =
+			backend.blockchain().block_number_from_id(&block_id).ok().flatten();
 
 		Some(block_number) <= requested_block_number
 	}
@@ -145,11 +149,14 @@ where
 		executor: Executor,
 		backend: Arc<Backend>,
 	) -> Result<Self> {
-		let substitutes = substitutes.into_iter().map(|(parent_block_hash, code)| {
-			let substitute = WasmSubstitute::new(code, parent_block_hash, &*backend)?;
-			let version = Self::runtime_version(&executor, &substitute)?;
-			Ok((version.spec_version, substitute))
-		}).collect::<Result<HashMap<_, _>>>()?;
+		let substitutes = substitutes
+			.into_iter()
+			.map(|(parent_block_hash, code)| {
+				let substitute = WasmSubstitute::new(code, parent_block_hash, &*backend)?;
+				let version = Self::runtime_version(&executor, &substitute)?;
+				Ok((version.spec_version, substitute))
+			})
+			.collect::<Result<HashMap<_, _>>>()?;
 
 		Ok(Self { executor, substitutes: Arc::new(substitutes), backend })
 	}
@@ -172,8 +179,8 @@ where
 		code: &WasmSubstitute<Block>,
 	) -> Result<RuntimeVersion> {
 		let mut ext = BasicExternalities::default();
-		executor.runtime_version(&mut ext, &code.runtime_code(None))
+		executor
+			.runtime_version(&mut ext, &code.runtime_code(None))
 			.map_err(|e| WasmSubstituteError::VersionInvalid(format!("{:?}", e)).into())
 	}
 }
-

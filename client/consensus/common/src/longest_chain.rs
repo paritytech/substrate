@@ -18,30 +18,26 @@
 
 //! Longest chain implementation
 
-use std::sync::Arc;
-use std::marker::PhantomData;
 use sc_client_api::backend;
-use sp_consensus::{SelectChain, Error as ConsensusError};
 use sp_blockchain::{Backend, HeaderBackend};
+use sp_consensus::{Error as ConsensusError, SelectChain};
 use sp_runtime::{
-	traits::{NumberFor, Block as BlockT},
 	generic::BlockId,
+	traits::{Block as BlockT, NumberFor},
 };
+use std::{marker::PhantomData, sync::Arc};
 
 /// Implement Longest Chain Select implementation
 /// where 'longest' is defined as the highest number of blocks
 pub struct LongestChain<B, Block> {
 	backend: Arc<B>,
-	_phantom: PhantomData<Block>
+	_phantom: PhantomData<Block>,
 }
 
 impl<B, Block> Clone for LongestChain<B, Block> {
 	fn clone(&self) -> Self {
 		let backend = self.backend.clone();
-		LongestChain {
-			backend,
-			_phantom: Default::default()
-		}
+		LongestChain { backend, _phantom: Default::default() }
 	}
 }
 
@@ -52,21 +48,22 @@ where
 {
 	/// Instantiate a new LongestChain for Backend B
 	pub fn new(backend: Arc<B>) -> Self {
-		LongestChain {
-			backend,
-			_phantom: Default::default(),
-		}
+		LongestChain { backend, _phantom: Default::default() }
 	}
 
 	fn best_block_header(&self) -> sp_blockchain::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info();
 		let import_lock = self.backend.get_import_lock();
-		let best_hash = self.backend
+		let best_hash = self
+			.backend
 			.blockchain()
 			.best_containing(info.best_hash, None, import_lock)?
 			.unwrap_or(info.best_hash);
 
-		Ok(self.backend.blockchain().header(BlockId::Hash(best_hash))?
+		Ok(self
+			.backend
+			.blockchain()
+			.header(BlockId::Hash(best_hash))?
 			.expect("given block hash was fetched from block in db; qed"))
 	}
 

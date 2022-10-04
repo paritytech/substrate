@@ -18,16 +18,16 @@
 //! The imbalance trait type and its associates, which handles keeps everything adding up properly
 //! with unbalanced operations.
 
-use sp_std::ops::Div;
+use crate::traits::misc::{SameOrOther, TryDrop};
 use sp_runtime::traits::Saturating;
-use crate::traits::misc::{TryDrop, SameOrOther};
+use sp_std::ops::Div;
 
-mod split_two_ways;
-mod signed_imbalance;
 mod on_unbalanced;
-pub use split_two_ways::SplitTwoWays;
-pub use signed_imbalance::SignedImbalance;
+mod signed_imbalance;
+mod split_two_ways;
 pub use on_unbalanced::OnUnbalanced;
+pub use signed_imbalance::SignedImbalance;
+pub use split_two_ways::SplitTwoWays;
 
 /// A trait for a not-quite Linear Type that tracks an imbalance.
 ///
@@ -78,10 +78,13 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	/// NOTE: This requires up to `first + second` room for a multiply, and `first + second` should
 	/// fit into a `u32`. Overflow will safely saturate in both cases.
 	fn ration(self, first: u32, second: u32) -> (Self, Self)
-		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	where
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
 	{
 		let total: u32 = first.saturating_add(second);
-		if total == 0 { return (Self::zero(), Self::zero()) }
+		if total == 0 {
+			return (Self::zero(), Self::zero())
+		}
 		let amount1 = self.peek().saturating_mul(first.into()) / total.into();
 		self.split(amount1)
 	}
@@ -100,7 +103,8 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	///
 	/// A convenient replacement for `split` and `merge`.
 	fn ration_merge(self, first: u32, second: u32, others: (Self, Self)) -> (Self, Self)
-		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	where
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
 	{
 		let (a, b) = self.ration(first, second);
 		(a.merge(others.0), b.merge(others.1))
@@ -121,7 +125,8 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	///
 	/// A convenient replacement for `split` and `merge`.
 	fn ration_merge_into(self, first: u32, second: u32, others: &mut (Self, Self))
-		where Balance: From<u32> + Saturating + Div<Output=Balance>
+	where
+		Balance: From<u32> + Saturating + Div<Output = Balance>,
 	{
 		let (a, b) = self.ration(first, second);
 		others.0.subsume(a);
@@ -167,7 +172,7 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	/// greater value than the `other`. Otherwise returns `Err` with an instance of
 	/// the `Opposite`. In both cases the value represents the combination of `self`
 	/// and `other`.
-	fn offset(self, other: Self::Opposite)-> SameOrOther<Self, Self::Opposite>;
+	fn offset(self, other: Self::Opposite) -> SameOrOther<Self, Self::Opposite>;
 
 	/// The raw value of self.
 	fn peek(&self) -> Balance;

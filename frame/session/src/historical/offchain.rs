@@ -27,16 +27,17 @@
 
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
-	KeyTypeId
+	KeyTypeId,
 };
 use sp_session::MembershipProof;
 
-use super::super::{Pallet as SessionModule, SessionIndex};
-use super::{IdentificationTuple, ProvingTrie, Config};
+use super::{
+	super::{Pallet as SessionModule, SessionIndex},
+	Config, IdentificationTuple, ProvingTrie,
+};
 
 use super::shared;
 use sp_std::prelude::*;
-
 
 /// A set of validators, which was used for a fixed session index.
 struct ValidatorSet<T: Config> {
@@ -87,14 +88,12 @@ pub fn prove_session_membership<T: Config, D: AsRef<[u8]>>(
 	let trie = ProvingTrie::<T>::generate_for(validators.into_iter()).ok()?;
 
 	let (id, data) = session_key;
-	trie.prove(id, data.as_ref())
-		.map(|trie_nodes| MembershipProof {
-			session: session_index,
-			trie_nodes,
-			validator_count: count,
-		})
+	trie.prove(id, data.as_ref()).map(|trie_nodes| MembershipProof {
+		session: session_index,
+		trie_nodes,
+		validator_count: count,
+	})
 }
-
 
 /// Attempt to prune anything that is older than `first_to_keep` session index.
 ///
@@ -104,18 +103,20 @@ pub fn prove_session_membership<T: Config, D: AsRef<[u8]>>(
 pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 	let derived_key = shared::LAST_PRUNE.to_vec();
 	let entry = StorageValueRef::persistent(derived_key.as_ref());
-	match entry.mutate(|current: Result<Option<SessionIndex>, StorageRetrievalError>| -> Result<_, ()> {
-		match current {
-			Ok(Some(current)) if current < first_to_keep => Ok(first_to_keep),
-			// do not move the cursor, if the new one would be behind ours
-			Ok(Some(current)) => Ok(current),
-			Ok(None) => Ok(first_to_keep),
-			// if the storage contains undecodable data, overwrite with current anyways
-			// which might leak some entries being never purged, but that is acceptable
-			// in this context
-			Err(_) => Ok(first_to_keep),
-		}
-	}) {
+	match entry.mutate(
+		|current: Result<Option<SessionIndex>, StorageRetrievalError>| -> Result<_, ()> {
+			match current {
+				Ok(Some(current)) if current < first_to_keep => Ok(first_to_keep),
+				// do not move the cursor, if the new one would be behind ours
+				Ok(Some(current)) => Ok(current),
+				Ok(None) => Ok(first_to_keep),
+				// if the storage contains undecodable data, overwrite with current anyways
+				// which might leak some entries being never purged, but that is acceptable
+				// in this context
+				Err(_) => Ok(first_to_keep),
+			}
+		},
+	) {
 		Ok(new_value) => {
 			// on a re-org this is not necessarily true, with the above they might be equal
 			if new_value < first_to_keep {
@@ -124,9 +125,9 @@ pub fn prune_older_than<T: Config>(first_to_keep: SessionIndex) {
 					let _ = StorageValueRef::persistent(derived_key.as_ref()).clear();
 				}
 			}
-		}
-		Err(MutateStorageError::ConcurrentModification(_)) => {}
-		Err(MutateStorageError::ValueFunctionFailed(_)) => {}
+		},
+		Err(MutateStorageError::ConcurrentModification(_)) => {},
+		Err(MutateStorageError::ValueFunctionFailed(_)) => {},
 	}
 }
 
@@ -141,23 +142,22 @@ pub fn keep_newest<T: Config>(n_to_keep: usize) {
 
 #[cfg(test)]
 mod tests {
-	use super::super::{onchain, Module};
-	use super::*;
+	use super::{
+		super::{onchain, Module},
+		*,
+	};
 	use crate::mock::{
 		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
 	};
 	use codec::Encode;
 	use frame_support::traits::{KeyOwnerProofSystem, OnInitialize};
-	use sp_core::crypto::key_types::DUMMY;
-	use sp_core::offchain::{
-		testing::TestOffchainExt,
-		OffchainDbExt,
-		OffchainWorkerExt,
-		StorageKind,
+	use sp_core::{
+		crypto::key_types::DUMMY,
+		offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt, StorageKind},
 	};
 
-	use sp_runtime::testing::UintAuthorityId;
 	use frame_support::BasicExternalities;
+	use sp_runtime::testing::UintAuthorityId;
 
 	type Historical = Module<Test>;
 
@@ -166,16 +166,16 @@ mod tests {
 			.build_storage::<Test>()
 			.expect("Failed to create test externalities.");
 
-		let keys: Vec<_> = NEXT_VALIDATORS.with(|l|
+		let keys: Vec<_> = NEXT_VALIDATORS.with(|l| {
 			l.borrow().iter().cloned().map(|i| (i, i, UintAuthorityId(i).into())).collect()
-		);
+		});
 		BasicExternalities::execute_with_storage(&mut t, || {
 			for (ref k, ..) in &keys {
 				frame_system::Pallet::<Test>::inc_providers(k);
 			}
 		});
 
-		crate::GenesisConfig::<Test>{ keys }.assimilate_storage(&mut t).unwrap();
+		crate::GenesisConfig::<Test> { keys }.assimilate_storage(&mut t).unwrap();
 
 		let mut ext = sp_io::TestExternalities::new(t);
 
@@ -193,13 +193,13 @@ mod tests {
 
 	#[test]
 	fn encode_decode_roundtrip() {
+		use super::super::{super::Config as SessionConfig, Config as HistoricalConfig};
 		use codec::{Decode, Encode};
-		use super::super::super::Config as SessionConfig;
-		use super::super::Config as HistoricalConfig;
 
 		let sample = (
-				22u32 as <Test as SessionConfig>::ValidatorId,
-				7_777_777 as <Test as HistoricalConfig>::FullIdentification);
+			22u32 as <Test as SessionConfig>::ValidatorId,
+			7_777_777 as <Test as HistoricalConfig>::FullIdentification,
+		);
 
 		let encoded = sample.encode();
 		let decoded = Decode::decode(&mut encoded.as_slice()).expect("Must decode");
@@ -210,7 +210,7 @@ mod tests {
 	fn onchain_to_offchain() {
 		let mut ext = new_test_ext();
 
-		const DATA: &[u8] = &[7,8,9,10,11];
+		const DATA: &[u8] = &[7, 8, 9, 10, 11];
 		ext.execute_with(|| {
 			b"alphaomega"[..].using_encoded(|key| sp_io::offchain_index::set(key, DATA));
 		});
@@ -218,14 +218,12 @@ mod tests {
 		ext.persist_offchain_overlay();
 
 		ext.execute_with(|| {
-			let data =
-			b"alphaomega"[..].using_encoded(|key| {
+			let data = b"alphaomega"[..].using_encoded(|key| {
 				sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, key)
 			});
 			assert_eq!(data, Some(DATA.to_vec()));
 		});
 	}
-
 
 	#[test]
 	fn historical_proof_offchain() {
@@ -251,8 +249,6 @@ mod tests {
 		ext.persist_offchain_overlay();
 
 		ext.execute_with(|| {
-
-
 			System::set_block_number(2);
 			Session::on_initialize(2);
 			assert_eq!(<SessionModule<Test>>::current_index(), 2);

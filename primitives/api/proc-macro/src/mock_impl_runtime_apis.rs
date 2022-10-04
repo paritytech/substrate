@@ -16,10 +16,10 @@
 // limitations under the License.
 
 use crate::utils::{
-	generate_crate_access, generate_hidden_includes,
-	generate_method_runtime_api_impl_name, extract_parameter_names_types_and_borrows,
-	return_type_extract_type, extract_block_type_from_trait_path, extract_impl_trait,
-	AllowSelfRefInParameters, RequireQualifiedTraitPath,
+	extract_block_type_from_trait_path, extract_impl_trait,
+	extract_parameter_names_types_and_borrows, generate_crate_access, generate_hidden_includes,
+	generate_method_runtime_api_impl_name, return_type_extract_type, AllowSelfRefInParameters,
+	RequireQualifiedTraitPath,
 };
 
 use proc_macro2::{Span, TokenStream};
@@ -27,8 +27,11 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
 
 use syn::{
-	spanned::Spanned, parse_macro_input, Ident, Type, ItemImpl, TypePath, parse_quote,
-	parse::{Parse, ParseStream, Result, Error}, fold::{self, Fold}, Attribute, Pat,
+	fold::{self, Fold},
+	parse::{Error, Parse, ParseStream, Result},
+	parse_macro_input, parse_quote,
+	spanned::Spanned,
+	Attribute, Ident, ItemImpl, Pat, Type, TypePath,
 };
 
 /// Unique identifier used to make the hidden includes unique for this macro.
@@ -62,10 +65,7 @@ impl Parse for RuntimeApiImpls {
 }
 
 /// Implement the `ApiExt` trait and the `Core` runtime api.
-fn implement_common_api_traits(
-	block_type: TypePath,
-	self_ty: Type,
-) -> Result<TokenStream> {
+fn implement_common_api_traits(block_type: TypePath, self_ty: Type) -> Result<TokenStream> {
 	let crate_ = generate_crate_access(HIDDEN_INCLUDES_ID);
 
 	Ok(quote!(
@@ -168,11 +168,13 @@ fn implement_common_api_traits(
 /// If the attribute was found, it will be automatically removed from the vec.
 fn has_advanced_attribute(attributes: &mut Vec<Attribute>) -> bool {
 	let mut found = false;
-	attributes.retain(|attr| if attr.path.is_ident(ADVANCED_ATTRIBUTE) {
-		found = true;
-		false
-	} else {
-		true
+	attributes.retain(|attr| {
+		if attr.path.is_ident(ADVANCED_ATTRIBUTE) {
+			found = true;
+			false
+		} else {
+			true
+		}
 	});
 
 	found
@@ -214,7 +216,7 @@ fn get_at_param_name(
 		let name = param_names.remove(0);
 		Ok((quote!( #name ), ptype_and_borrows.0))
 	} else {
-		Ok((quote!( _ ), default_block_id_type.clone()))
+		Ok((quote!(_), default_block_id_type.clone()))
 	}
 }
 
@@ -235,24 +237,27 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 			let is_advanced = has_advanced_attribute(&mut input.attrs);
 			let mut errors = Vec::new();
 
-			let (mut param_names, mut param_types_and_borrows) = match extract_parameter_names_types_and_borrows(
-				&input.sig,
-				AllowSelfRefInParameters::YesButIgnore,
-			) {
-				Ok(res) => (
-					res.iter().map(|v| v.0.clone()).collect::<Vec<_>>(),
-					res.iter().map(|v| {
-						let ty = &v.1;
-						let borrow = &v.2;
-						(quote_spanned!(ty.span() => #borrow #ty ), v.2.is_some())
-					}).collect::<Vec<_>>(),
-				),
-				Err(e) => {
-					errors.push(e.to_compile_error());
+			let (mut param_names, mut param_types_and_borrows) =
+				match extract_parameter_names_types_and_borrows(
+					&input.sig,
+					AllowSelfRefInParameters::YesButIgnore,
+				) {
+					Ok(res) => (
+						res.iter().map(|v| v.0.clone()).collect::<Vec<_>>(),
+						res.iter()
+							.map(|v| {
+								let ty = &v.1;
+								let borrow = &v.2;
+								(quote_spanned!(ty.span() => #borrow #ty ), v.2.is_some())
+							})
+							.collect::<Vec<_>>(),
+					),
+					Err(e) => {
+						errors.push(e.to_compile_error());
 
-					(Default::default(), Default::default())
-				}
-			};
+						(Default::default(), Default::default())
+					},
+				};
 
 			let block_type = &self.block_type;
 			let block_id_type = quote!( &#crate_::BlockId<#block_type> );
@@ -267,8 +272,8 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				Ok(res) => res,
 				Err(e) => {
 					errors.push(e.to_compile_error());
-					(quote!( _ ), block_id_type)
-				}
+					(quote!(_), block_id_type)
+				},
 			};
 
 			let param_types = param_types_and_borrows.iter().map(|v| &v.0);
@@ -281,10 +286,8 @@ impl<'a> Fold for FoldRuntimeApiImpl<'a> {
 				_: Vec<u8>,
 			};
 
-			input.sig.ident = generate_method_runtime_api_impl_name(
-				&self.impl_trait,
-				&input.sig.ident,
-			);
+			input.sig.ident =
+				generate_method_runtime_api_impl_name(&self.impl_trait, &input.sig.ident);
 
 			// When using advanced, the user needs to declare the correct return type on its own,
 			// otherwise do it for the user.
@@ -360,28 +363,24 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 		let block_type = extract_block_type_from_trait_path(impl_trait_path)?;
 
 		self_ty = match self_ty.take() {
-			Some(self_ty) => {
+			Some(self_ty) =>
 				if self_ty == impl_.self_ty {
 					Some(self_ty)
 				} else {
-					let mut error =Error::new(
+					let mut error = Error::new(
 						impl_.self_ty.span(),
 						"Self type should not change between runtime apis",
 					);
 
-					error.combine(Error::new(
-						self_ty.span(),
-						"First self type found here",
-					));
+					error.combine(Error::new(self_ty.span(), "First self type found here"));
 
 					return Err(error)
-				}
-			},
+				},
 			None => Some(impl_.self_ty.clone()),
 		};
 
 		global_block_type = match global_block_type.take() {
-			Some(global_block_type) => {
+			Some(global_block_type) =>
 				if global_block_type == *block_type {
 					Some(global_block_type)
 				} else {
@@ -396,15 +395,11 @@ fn generate_runtime_api_impls(impls: &[ItemImpl]) -> Result<GeneratedRuntimeApiI
 					));
 
 					return Err(error)
-				}
-			},
+				},
 			None => Some(block_type.clone()),
 		};
 
-		let mut visitor = FoldRuntimeApiImpl {
-			block_type,
-			impl_trait: &impl_trait.ident,
-		};
+		let mut visitor = FoldRuntimeApiImpl { block_type, impl_trait: &impl_trait.ident };
 
 		result.push(visitor.fold_item_impl(impl_.clone()));
 	}
@@ -421,7 +416,9 @@ pub fn mock_impl_runtime_apis_impl(input: proc_macro::TokenStream) -> proc_macro
 	// Parse all impl blocks
 	let RuntimeApiImpls { impls: api_impls } = parse_macro_input!(input as RuntimeApiImpls);
 
-	mock_impl_runtime_apis_impl_inner(&api_impls).unwrap_or_else(|e| e.to_compile_error()).into()
+	mock_impl_runtime_apis_impl_inner(&api_impls)
+		.unwrap_or_else(|e| e.to_compile_error())
+		.into()
 }
 
 fn mock_impl_runtime_apis_impl_inner(api_impls: &[ItemImpl]) -> Result<TokenStream> {

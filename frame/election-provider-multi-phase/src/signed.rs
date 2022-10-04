@@ -18,11 +18,11 @@
 //! The signed phase implementation.
 
 use crate::{
-	CompactOf, Config, ElectionCompute, Pallet, RawSolution, ReadySolution, SolutionOrSnapshotSize,
-	Weight, WeightInfo, QueuedSolution, SignedSubmissionsMap, SignedSubmissionIndices,
-	SignedSubmissionNextIndex,
+	CompactOf, Config, ElectionCompute, Pallet, QueuedSolution, RawSolution, ReadySolution,
+	SignedSubmissionIndices, SignedSubmissionNextIndex, SignedSubmissionsMap,
+	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
-use codec::{Encode, Decode, HasCompact};
+use codec::{Decode, Encode, HasCompact};
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
@@ -31,8 +31,8 @@ use frame_support::{
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{is_score_better, CompactSolution, ElectionScore};
 use sp_runtime::{
-	RuntimeDebug,
 	traits::{Saturating, Zero},
+	RuntimeDebug,
 };
 use sp_std::{
 	cmp::Ordering,
@@ -51,6 +51,8 @@ pub struct SignedSubmission<AccountId, Balance: HasCompact, CompactSolution> {
 	pub deposit: Balance,
 	/// The raw solution itself.
 	pub solution: RawSolution<CompactSolution>,
+	/// The reward that should potentially be paid for this solution, if accepted.
+	pub reward: Balance,
 }
 
 impl<AccountId, Balance, CompactSolution> Ord
@@ -131,24 +133,30 @@ impl<T: Config> SignedSubmissions<T> {
 			deletion_overlay: BTreeSet::new(),
 		};
 		// validate that the stored state is sane
-		debug_assert!(submissions.indices.values().copied().max().map_or(
-			true,
-			|max_idx| submissions.next_idx > max_idx,
-		));
+		debug_assert!(submissions
+			.indices
+			.values()
+			.copied()
+			.max()
+			.map_or(true, |max_idx| submissions.next_idx > max_idx,));
 		submissions
 	}
 
 	/// Put the signed submissions back into storage.
 	pub fn put(mut self) {
 		// validate that we're going to write only sane things to storage
-		debug_assert!(self.insertion_overlay.keys().copied().max().map_or(
-			true,
-			|max_idx| self.next_idx > max_idx,
-		));
-		debug_assert!(self.indices.values().copied().max().map_or(
-			true,
-			|max_idx| self.next_idx > max_idx,
-		));
+		debug_assert!(self
+			.insertion_overlay
+			.keys()
+			.copied()
+			.max()
+			.map_or(true, |max_idx| self.next_idx > max_idx,));
+		debug_assert!(self
+			.indices
+			.values()
+			.copied()
+			.max()
+			.map_or(true, |max_idx| self.next_idx > max_idx,));
 
 		SignedSubmissionIndices::<T>::put(self.indices);
 		SignedSubmissionNextIndex::<T>::put(self.next_idx);
@@ -203,10 +211,12 @@ impl<T: Config> SignedSubmissions<T> {
 		}
 
 		self.insertion_overlay.remove(&remove_idx).or_else(|| {
-			(!self.deletion_overlay.contains(&remove_idx)).then(|| {
-				self.deletion_overlay.insert(remove_idx);
-				SignedSubmissionsMap::<T>::try_get(remove_idx).ok()
-			}).flatten()
+			(!self.deletion_overlay.contains(&remove_idx))
+				.then(|| {
+					self.deletion_overlay.insert(remove_idx);
+					SignedSubmissionsMap::<T>::try_get(remove_idx).ok()
+				})
+				.flatten()
 		})
 	}
 
@@ -256,10 +266,7 @@ impl<T: Config> SignedSubmissions<T> {
 	///
 	/// In the event that the new submission is not better than the current weakest according
 	/// to `is_score_better`, we do not change anything.
-	pub fn insert(
-		&mut self,
-		submission: SignedSubmissionOf<T>,
-	) -> InsertResult<T> {
+	pub fn insert(&mut self, submission: SignedSubmissionOf<T>) -> InsertResult<T> {
 		// verify the expectation that we never reuse an index
 		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
 
@@ -271,12 +278,12 @@ impl<T: Config> SignedSubmissions<T> {
 				self.indices
 					.try_insert(submission.solution.score, prev_idx)
 					.expect("didn't change the map size; qed");
-				return InsertResult::NotInserted;
-			}
+				return InsertResult::NotInserted
+			},
 			Ok(None) => {
 				// successfully inserted into the set; no need to take out weakest member
 				None
-			}
+			},
 			Err((insert_score, insert_idx)) => {
 				// could not insert into the set because it is full.
 				// note that we short-circuit return here in case the iteration produces `None`.
@@ -290,11 +297,11 @@ impl<T: Config> SignedSubmissions<T> {
 
 				// if we haven't improved on the weakest score, don't change anything.
 				if !is_score_better(insert_score, weakest_score, threshold) {
-					return InsertResult::NotInserted;
+					return InsertResult::NotInserted
 				}
 
 				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
-			}
+			},
 		};
 
 		// we've taken out the weakest, so update the storage map and the next index
@@ -346,20 +353,13 @@ impl<T: Config> Pallet<T> {
 		let SolutionOrSnapshotSize { voters, targets } =
 			Self::snapshot_metadata().unwrap_or_default();
 
-		let reward = T::SignedRewardBase::get();
-
 		while let Some(best) = all_submissions.pop_last() {
-			let SignedSubmission { solution, who, deposit} = best;
+			let SignedSubmission { solution, who, deposit, reward } = best;
 			let active_voters = solution.compact.voter_count() as u32;
 			let feasibility_weight = {
 				// defensive only: at the end of signed phase, snapshot will exits.
 				let desired_targets = Self::desired_targets().unwrap_or_default();
-				T::WeightInfo::feasibility_check(
-					voters,
-					targets,
-					active_voters,
-					desired_targets,
-				)
+				T::WeightInfo::feasibility_check(voters, targets, active_voters, desired_targets)
 			};
 			// the feasibility check itself has some weight
 			weight = weight.saturating_add(feasibility_weight);
@@ -375,13 +375,13 @@ impl<T: Config> Pallet<T> {
 
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
-					break;
-				}
+					break
+				},
 				Err(_) => {
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_reject_solution());
-				}
+				},
 			}
 		}
 
@@ -398,7 +398,12 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(!SignedSubmissionNextIndex::<T>::exists());
 		debug_assert!(SignedSubmissionsMap::<T>::iter().next().is_none());
 
-		log!(debug, "closed signed phase, found solution? {}, discarded {}", found_solution, discarded);
+		log!(
+			debug,
+			"closed signed phase, found solution? {}, discarded {}",
+			found_solution,
+			discarded
+		);
 		(found_solution, weight)
 	}
 
@@ -417,7 +422,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::put(ready_solution);
 
 		// emit reward event
-		Self::deposit_event(crate::Event::Rewarded(who.clone()));
+		Self::deposit_event(crate::Event::Rewarded(who.clone(), reward));
 
 		// unreserve deposit.
 		let _remaining = T::Currency::unreserve(who, deposit);
@@ -434,7 +439,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_reject_solution(who: &T::AccountId, deposit: BalanceOf<T>) {
-		Self::deposit_event(crate::Event::Slashed(who.clone()));
+		Self::deposit_event(crate::Event::Slashed(who.clone(), deposit));
 		let (negative_imbalance, _remaining) = T::Currency::slash_reserved(who, deposit);
 		debug_assert!(_remaining.is_zero());
 		T::SlashHandler::on_unbalanced(negative_imbalance);
@@ -469,9 +474,12 @@ impl<T: Config> Pallet<T> {
 		let feasibility_weight = Self::feasibility_weight_of(solution, size);
 
 		let len_deposit = T::SignedDepositByte::get().saturating_mul(encoded_len);
-		let weight_deposit = T::SignedDepositWeight::get().saturating_mul(feasibility_weight.saturated_into());
+		let weight_deposit =
+			T::SignedDepositWeight::get().saturating_mul(feasibility_weight.saturated_into());
 
-		T::SignedDepositBase::get().saturating_add(len_deposit).saturating_add(weight_deposit)
+		T::SignedDepositBase::get()
+			.saturating_add(len_deposit)
+			.saturating_add(weight_deposit)
 	}
 }
 
@@ -479,19 +487,23 @@ impl<T: Config> Pallet<T> {
 mod tests {
 	use super::*;
 	use crate::{
-		Phase, Error,
 		mock::{
-			balances, ExtBuilder, MultiPhase, Origin, raw_solution, roll_to, Runtime,
+			balances, raw_solution, roll_to, ExtBuilder, MultiPhase, Origin, Runtime,
 			SignedMaxSubmissions, SignedMaxWeight,
 		},
+		Error, Phase,
 	};
-	use frame_support::{dispatch::DispatchResult, assert_noop, assert_storage_noop, assert_ok};
+	use frame_support::{assert_noop, assert_ok, assert_storage_noop, dispatch::DispatchResult};
 
 	fn submit_with_witness(
 		origin: Origin,
 		solution: RawSolution<CompactOf<Runtime>>,
 	) -> DispatchResult {
-		MultiPhase::submit(origin, solution, MultiPhase::signed_submissions().len() as u32)
+		MultiPhase::submit(
+			origin,
+			Box::new(solution),
+			MultiPhase::signed_submissions().len() as u32,
+		)
 	}
 
 	#[test]
@@ -524,7 +536,7 @@ mod tests {
 
 			// now try and cheat by passing a lower queue length
 			assert_noop!(
-				MultiPhase::submit(Origin::signed(99), solution, 0),
+				MultiPhase::submit(Origin::signed(99), Box::new(solution), 0),
 				Error::<Runtime>::SignedInvalidWitness,
 			);
 		})
@@ -559,7 +571,7 @@ mod tests {
 			assert_eq!(balances(&99), (95, 5));
 
 			assert!(MultiPhase::finalize_signed_phase().0);
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 		})
 	}
 
@@ -608,7 +620,7 @@ mod tests {
 			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 gets everything back.
 			assert_eq!(balances(&999), (100, 0));
 		})
@@ -625,7 +637,6 @@ mod tests {
 				let solution = RawSolution { score: [(5 + s).into(), 0, 0], ..Default::default() };
 				assert_ok!(submit_with_witness(Origin::signed(99), solution));
 			}
-
 
 			// weaker.
 			let solution = RawSolution { score: [4, 0, 0], ..Default::default() };
@@ -800,7 +811,7 @@ mod tests {
 			assert!(MultiPhase::finalize_signed_phase().0);
 
 			// 99 is rewarded.
-			assert_eq!(balances(&99), (100 + 7, 0));
+			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 is slashed.
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back.
@@ -810,33 +821,36 @@ mod tests {
 
 	#[test]
 	fn cannot_consume_too_much_future_weight() {
-		ExtBuilder::default().signed_weight(40).mock_weight_info(true).build_and_execute(|| {
-			roll_to(15);
-			assert!(MultiPhase::current_phase().is_signed());
+		ExtBuilder::default()
+			.signed_weight(40)
+			.mock_weight_info(true)
+			.build_and_execute(|| {
+				roll_to(15);
+				assert!(MultiPhase::current_phase().is_signed());
 
-			let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
-			let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
-				witness.voters,
-				witness.targets,
-				solution.compact.voter_count() as u32,
-				solution.compact.unique_targets().len() as u32,
-			);
-			// default solution will have 5 edges (5 * 5 + 10)
-			assert_eq!(solution_weight, 35);
-			assert_eq!(solution.compact.voter_count(), 5);
-			assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
+				let (solution, witness) = MultiPhase::mine_solution(2).unwrap();
+				let solution_weight = <Runtime as Config>::WeightInfo::feasibility_check(
+					witness.voters,
+					witness.targets,
+					solution.compact.voter_count() as u32,
+					solution.compact.unique_targets().len() as u32,
+				);
+				// default solution will have 5 edges (5 * 5 + 10)
+				assert_eq!(solution_weight, 35);
+				assert_eq!(solution.compact.voter_count(), 5);
+				assert_eq!(<Runtime as Config>::SignedMaxWeight::get(), 40);
 
-			assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
+				assert_ok!(submit_with_witness(Origin::signed(99), solution.clone()));
 
-			<SignedMaxWeight>::set(30);
+				<SignedMaxWeight>::set(30);
 
-			// note: resubmitting the same solution is technically okay as long as the queue has
-			// space.
-			assert_noop!(
-				submit_with_witness(Origin::signed(99), solution),
-				Error::<Runtime>::SignedTooMuchWeight,
-			);
-		})
+				// note: resubmitting the same solution is technically okay as long as the queue has
+				// space.
+				assert_noop!(
+					submit_with_witness(Origin::signed(99), solution),
+					Error::<Runtime>::SignedTooMuchWeight,
+				);
+			})
 	}
 
 	#[test]

@@ -18,17 +18,17 @@
 //! Tests for the module.
 
 use super::*;
+use frame_support::{assert_noop, assert_ok};
 use mock::{
-	Sudo, SudoCall, Origin, Call, Test, new_test_ext, LoggerCall, Logger, System,
-	Event as TestEvent,
+	new_test_ext, Call, Event as TestEvent, Logger, LoggerCall, Origin, Sudo, SudoCall, System,
+	Test,
 };
-use frame_support::{assert_ok, assert_noop};
 
 #[test]
 fn test_setup_works() {
 	// Environment setup, logger storage, and sudo `key` retrieval should work as expected.
 	new_test_ext(1).execute_with(|| {
-		assert_eq!(Sudo::key(),  1u64);
+		assert_eq!(Sudo::key(), 1u64);
 		assert!(Logger::i32_log().is_empty());
 		assert!(Logger::account_log().is_empty());
 	});
@@ -105,7 +105,7 @@ fn set_key_basics() {
 	new_test_ext(1).execute_with(|| {
 		// A root `key` can change the root `key`
 		assert_ok!(Sudo::set_key(Origin::signed(1), 2));
-		assert_eq!(Sudo::key(),  2u64);
+		assert_eq!(Sudo::key(), 2u64);
 	});
 
 	new_test_ext(1).execute_with(|| {
@@ -146,14 +146,14 @@ fn sudo_as_basics() {
 		let call = Box::new(Call::Logger(LoggerCall::non_privileged_log(42, 1)));
 		assert_ok!(Sudo::sudo_as(Origin::signed(1), 2, call));
 		assert_eq!(Logger::i32_log(), vec![42i32]);
-		 // The correct user makes the call within `sudo_as`.
+		// The correct user makes the call within `sudo_as`.
 		assert_eq!(Logger::account_log(), vec![2]);
 	});
 }
 
 #[test]
 fn sudo_as_emits_events_correctly() {
-		new_test_ext(1).execute_with(|| {
+	new_test_ext(1).execute_with(|| {
 		// Set block number to 1 because events are not emitted on block 0.
 		System::set_block_number(1);
 
