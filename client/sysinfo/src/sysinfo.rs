@@ -112,7 +112,7 @@ where
 	if let Some(t) = maybe_t {
 		return serializer.serialize_u64(t.as_mibs() as u64)
 	}
-	serializer.serialize_u64(0)
+	serializer.serialize_none()
 }
 
 #[inline(always)]
@@ -143,7 +143,7 @@ pub(crate) fn benchmark<E>(
 
 	let score = Throughput((size * count) as f64 / elapsed.as_secs_f64());
 	log::trace!(
-		"Calculated {} of {:.2} in {} iterations in {}ms",
+		"Calculated {} of {} in {} iterations in {}ms",
 		name,
 		score,
 		count,

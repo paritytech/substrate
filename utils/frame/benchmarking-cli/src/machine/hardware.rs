@@ -51,12 +51,12 @@ impl<'de> Visitor<'de> for ThroughputVisitor {
 	{
 		let (key, value): (&str, f64) =
 			if let Some((key, value)) = access.next_entry()? { (key, value) } else { todo!() };
-		if key == "KiBs" {
-			return Ok(Throughput::from_kibs(value))
-		} else if key == "MiBs" {
-			return Ok(Throughput::from_mibs(value))
-		} else {
-			return Ok(Throughput::from_gibs(value))
+
+		match key {
+			"KiBs" => Ok(Throughput::from_kibs(value)),
+			"MiBs" => Ok(Throughput::from_mibs(value)),
+			"GiBs" => Ok(Throughput::from_gibs(value)),
+			_ => todo!(),
 		}
 	}
 }
