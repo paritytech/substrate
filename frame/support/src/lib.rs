@@ -1500,6 +1500,9 @@ pub mod pallet_prelude {
 ///
 /// # Config trait: `#[pallet::config]` (mandatory)
 ///
+/// The mandatory attribute `#[pallet::config]` defines the configurable options for the
+/// pallet.
+///
 /// Item must be defined as:
 ///
 /// ```ignore
