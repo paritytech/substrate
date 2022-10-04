@@ -2170,6 +2170,7 @@ mod tests {
 					Event::SignedPhaseStarted { round: 1 },
 					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
 					Event::Rewarded { account: 99, value: 7 },
+					Event::UnsignedPhaseStarted { round: 1 },
 					Event::ElectionFinalized {
 						compute: ElectionCompute::Signed,
 						score: ElectionScore {
@@ -2177,7 +2178,7 @@ mod tests {
 							sum_stake: 100,
 							sum_stake_squared: 5200
 						}
-					},
+					}
 				],
 			);
 		})
