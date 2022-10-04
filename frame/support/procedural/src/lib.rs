@@ -594,7 +594,7 @@ fn pallet_macro_stub() -> TokenStream {
 	.into()
 }
 
-/// The mandatory attribute `#[pallet::config]` defines the generics of the pallet.
+/// The mandatory attribute `#[pallet::config]` defines the configurable options for the pallet.
 ///
 /// Item must be defined as:
 ///
