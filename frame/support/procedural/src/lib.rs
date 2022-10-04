@@ -929,9 +929,9 @@ pub fn event(_: TokenStream, _: TokenStream) -> TokenStream {
 /// * `#[derive(frame_support::CloneNoBound)]`
 /// * `#[derive(frame_support::EqNoBound)]`
 /// * `#[derive(frame_support::PartialEqNoBound)]`
+/// * `#[derive(frame_support::RuntimeDebugNoBound)]`
 /// * `#[derive(codec::Encode)]`
 /// * `#[derive(codec::Decode)]`
-/// * `#[derive(frame_support::RuntimeDebugNoBound)]`
 ///
 /// The macro implements `From<Event<..>>` for ().
 ///
