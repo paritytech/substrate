@@ -60,14 +60,14 @@ where
 	V: Visitor<H::Output>,
 	I: Iterator<Item = H::Output>,
 {
-	let upper = Vec::with_capacity(leaves.size_hint().0);
+	let upper = Vec::with_capacity((leaves.size_hint().1.unwrap_or(0).saturating_add(1)) / 2);
 	let mut next = match merkelize_row::<H, _, _>(leaves, upper, visitor) {
 		Ok(root) => return root,
 		Err(next) if next.is_empty() => return H::Output::default(),
 		Err(next) => next,
 	};
 
-	let mut upper = Vec::with_capacity((next.len() + 1) / 2);
+	let mut upper = Vec::with_capacity((next.len().saturating_add(1)) / 2);
 	loop {
 		visitor.move_up();
 
