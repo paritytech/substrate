@@ -18,6 +18,8 @@
 
 //! Configuration of the networking layer.
 
+use crate::protocol;
+
 use libp2p::{multiaddr, Multiaddr, PeerId};
 use std::{fmt, str, str::FromStr};
 
@@ -169,5 +171,131 @@ impl std::error::Error for ParseErr {
 impl From<multiaddr::Error> for ParseErr {
 	fn from(err: multiaddr::Error) -> ParseErr {
 		Self::MultiaddrParse(err)
+	}
+}
+
+/// Configuration for a set of nodes.
+#[derive(Clone, Debug)]
+pub struct SetConfig {
+	/// Maximum allowed number of incoming substreams related to this set.
+	pub in_peers: u32,
+	/// Number of outgoing substreams related to this set that we're trying to maintain.
+	pub out_peers: u32,
+	/// List of reserved node addresses.
+	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
+	/// Whether nodes that aren't in [`SetConfig::reserved_nodes`] are accepted or automatically
+	/// refused.
+	pub non_reserved_mode: NonReservedPeerMode,
+}
+
+impl Default for SetConfig {
+	fn default() -> Self {
+		Self {
+			in_peers: 25,
+			out_peers: 75,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: NonReservedPeerMode::Accept,
+		}
+	}
+}
+
+/// Extension to [`SetConfig`] for sets that aren't the default set.
+///
+/// > **Note**: As new fields might be added in the future, please consider using the `new` method
+/// >			and modifiers instead of creating this struct manually.
+#[derive(Clone, Debug)]
+pub struct NonDefaultSetConfig {
+	/// Name of the notifications protocols of this set. A substream on this set will be
+	/// considered established once this protocol is open.
+	///
+	/// > **Note**: This field isn't present for the default set, as this is handled internally
+	/// > by the networking code.
+	pub notifications_protocol: protocol::ProtocolName,
+	/// If the remote reports that it doesn't support the protocol indicated in the
+	/// `notifications_protocol` field, then each of these fallback names will be tried one by
+	/// one.
+	///
+	/// If a fallback is used, it will be reported in
+	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
+	pub fallback_names: Vec<protocol::ProtocolName>,
+	/// Maximum allowed size of single notifications.
+	pub max_notification_size: u64,
+	/// Base configuration.
+	pub set_config: SetConfig,
+}
+
+impl NonDefaultSetConfig {
+	/// Creates a new [`NonDefaultSetConfig`]. Zero slots and accepts only reserved nodes.
+	pub fn new(notifications_protocol: protocol::ProtocolName, max_notification_size: u64) -> Self {
+		Self {
+			notifications_protocol,
+			max_notification_size,
+			fallback_names: Vec::new(),
+			set_config: SetConfig {
+				in_peers: 0,
+				out_peers: 0,
+				reserved_nodes: Vec::new(),
+				non_reserved_mode: NonReservedPeerMode::Deny,
+			},
+		}
+	}
+
+	/// Modifies the configuration to allow non-reserved nodes.
+	pub fn allow_non_reserved(&mut self, in_peers: u32, out_peers: u32) {
+		self.set_config.in_peers = in_peers;
+		self.set_config.out_peers = out_peers;
+		self.set_config.non_reserved_mode = NonReservedPeerMode::Accept;
+	}
+
+	/// Add a node to the list of reserved nodes.
+	pub fn add_reserved(&mut self, peer: MultiaddrWithPeerId) {
+		self.set_config.reserved_nodes.push(peer);
+	}
+
+	/// Add a list of protocol names used for backward compatibility.
+	///
+	/// See the explanations in [`NonDefaultSetConfig::fallback_names`].
+	pub fn add_fallback_names(&mut self, fallback_names: Vec<protocol::ProtocolName>) {
+		self.fallback_names.extend(fallback_names);
+	}
+}
+
+/// Configuration for the transport layer.
+#[derive(Clone, Debug)]
+pub enum TransportConfig {
+	/// Normal transport mode.
+	Normal {
+		/// If true, the network will use mDNS to discover other libp2p nodes on the local network
+		/// and connect to them if they support the same chain.
+		enable_mdns: bool,
+
+		/// If true, allow connecting to private IPv4 addresses (as defined in
+		/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Irrelevant for addresses that have
+		/// been passed in `::sc_network::config::NetworkConfiguration::boot_nodes`.
+		allow_private_ipv4: bool,
+	},
+
+	/// Only allow connections within the same process.
+	/// Only addresses of the form `/memory/...` will be supported.
+	MemoryOnly,
+}
+
+/// The policy for connections to non-reserved peers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NonReservedPeerMode {
+	/// Accept them. This is the default.
+	Accept,
+	/// Deny them.
+	Deny,
+}
+
+impl NonReservedPeerMode {
+	/// Attempt to parse the peer mode from a string.
+	pub fn parse(s: &str) -> Option<Self> {
+		match s {
+			"accept" => Some(Self::Accept),
+			"deny" => Some(Self::Deny),
+			_ => None,
+		}
 	}
 }

@@ -2184,10 +2184,11 @@ impl<T: Config> Pallet<T> {
 	///
 	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
 	/// is coming from the staking pallet and the latter two are configured in this pallet.
-	fn depositor_min_bond() -> BalanceOf<T> {
+	pub fn depositor_min_bond() -> BalanceOf<T> {
 		T::StakingInterface::minimum_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
+			.max(T::Currency::minimum_balance())
 	}
 	/// Remove everything related to the given bonded pool.
 	///
@@ -2522,7 +2523,7 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_slash(
 		pool_account: &T::AccountId,
-		// Bonded balance is always read directly from staking, therefore we need not update
+		// Bonded balance is always read directly from staking, therefore we don't need to update
 		// anything here.
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,

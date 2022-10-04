@@ -51,14 +51,14 @@ mod module1 {
 		<Self as system::Config>::BlockNumber: From<u32>,
 	{
 		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
-		type Origin: From<Origin<Self, I>>;
+		type RuntimeOrigin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
 		type GenericType: Default + Clone + Codec + EncodeLike + TypeInfo;
 	}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance> for enum Call where
-			origin: <T as system::Config>::Origin,
+			origin: <T as system::Config>::RuntimeOrigin,
 			system = system,
 			T::BlockNumber: From<u32>
 		{
@@ -155,14 +155,14 @@ mod module2 {
 	pub trait Config<I = DefaultInstance>: system::Config {
 		type Amount: Parameter + Default;
 		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
-		type Origin: From<Origin<Self, I>>;
+		type RuntimeOrigin: From<Origin<Self, I>>;
 	}
 
 	impl<T: Config<I>, I: Instance> Currency for Module<T, I> {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Config>::Origin,
+			origin: <T as system::Config>::RuntimeOrigin,
 			system = system
 		{
 			fn deposit_event() = default;
@@ -228,41 +228,41 @@ mod module3 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::Origin, system=system {}
+		pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::RuntimeOrigin, system=system {}
 	}
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module1::Config<module1::Instance2> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module2::Config for Runtime {
 	type Amount = u16;
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 }
 impl module2::Config<module2::Instance1> for Runtime {
 	type Amount = u32;
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 }
 impl module2::Config<module2::Instance2> for Runtime {
 	type Amount = u32;
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 }
 impl module2::Config<module2::Instance3> for Runtime {
 	type Amount = u64;
 	type RuntimeEvent = RuntimeEvent;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 }
 impl module3::Config for Runtime {
 	type Currency = Module2_2;
@@ -277,7 +277,7 @@ pub type Index = u64;
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
 	type RuntimeEvent = RuntimeEvent;

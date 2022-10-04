@@ -215,8 +215,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
 
-		/// The `Origin` type used by dispatchable calls.
-		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+		/// The `RuntimeOrigin` type used by dispatchable calls.
+		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
 			+ OriginTrait<Call = Self::RuntimeCall>;
@@ -1509,9 +1509,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
+	///
+	/// Emits an `ExtrinsicSuccess` or `ExtrinsicFailed` event depending on the outcome.
+	/// The emitted event contains the post-dispatch corrected weight including
+	/// the base-weight for its dispatch class.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
-		info.weight = extract_actual_weight(r, &info);
+		info.weight = extract_actual_weight(r, &info)
+			.saturating_add(T::BlockWeights::get().get(info.class).base_extrinsic);
 		info.pays_fee = extract_actual_pays_fee(r, &info);
+
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
@@ -1701,7 +1707,7 @@ pub mod pallet_prelude {
 	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
 
 	/// Type alias for the `Origin` associated type of system config.
-	pub type OriginFor<T> = <T as crate::Config>::Origin;
+	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;

@@ -25,8 +25,8 @@ use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, EstimateNextNewSession, Get, Imbalance,
-		LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
+		Imbalance, LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -101,7 +101,7 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::InvalidEraToReward
 				.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))
 		})?;
-		let history_depth = Self::history_depth();
+		let history_depth = T::HistoryDepth::get();
 		ensure!(
 			era <= current_era && era >= current_era.saturating_sub(history_depth),
 			Error::<T>::InvalidEraToReward
@@ -123,11 +123,18 @@ impl<T: Config> Pallet<T> {
 		ledger
 			.claimed_rewards
 			.retain(|&x| x >= current_era.saturating_sub(history_depth));
+
 		match ledger.claimed_rewards.binary_search(&era) {
 			Ok(_) =>
 				return Err(Error::<T>::AlreadyClaimed
 					.with_weight(T::WeightInfo::payout_stakers_alive_staked(0))),
-			Err(pos) => ledger.claimed_rewards.insert(pos, era),
+			Err(pos) => ledger
+				.claimed_rewards
+				.try_insert(pos, era)
+				// Since we retain era entries in `claimed_rewards` only upto
+				// `HistoryDepth`, following bound is always expected to be
+				// satisfied.
+				.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 		}
 
 		let exposure = <ErasStakersClipped<T>>::get(&era, &ledger.stash);
@@ -174,14 +181,20 @@ impl<T: Config> Pallet<T> {
 		let validator_exposure_part = Perbill::from_rational(exposure.own, exposure.total);
 		let validator_staking_payout = validator_exposure_part * validator_leftover_payout;
 
-		Self::deposit_event(Event::<T>::PayoutStarted(era, ledger.stash.clone()));
+		Self::deposit_event(Event::<T>::PayoutStarted {
+			era_index: era,
+			validator_stash: ledger.stash.clone(),
+		});
 
 		let mut total_imbalance = PositiveImbalanceOf::<T>::zero();
 		// We can now make total validator payout:
 		if let Some(imbalance) =
 			Self::make_payout(&ledger.stash, validator_staking_payout + validator_commission_payout)
 		{
-			Self::deposit_event(Event::<T>::Rewarded(ledger.stash, imbalance.peek()));
+			Self::deposit_event(Event::<T>::Rewarded {
+				stash: ledger.stash,
+				amount: imbalance.peek(),
+			});
 			total_imbalance.subsume(imbalance);
 		}
 
@@ -201,7 +214,8 @@ impl<T: Config> Pallet<T> {
 			if let Some(imbalance) = Self::make_payout(&nominator.who, nominator_reward) {
 				// Note: this logic does not count payouts for `RewardDestination::None`.
 				nominator_payout_count += 1;
-				let e = Event::<T>::Rewarded(nominator.who.clone(), imbalance.peek());
+				let e =
+					Event::<T>::Rewarded { stash: nominator.who.clone(), amount: imbalance.peek() };
 				Self::deposit_event(e);
 				total_imbalance.subsume(imbalance);
 			}
@@ -225,7 +239,7 @@ impl<T: Config> Pallet<T> {
 		let chilled_as_validator = Self::do_remove_validator(stash);
 		let chilled_as_nominator = Self::do_remove_nominator(stash);
 		if chilled_as_validator || chilled_as_nominator {
-			Self::deposit_event(Event::<T>::Chilled(stash.clone()));
+			Self::deposit_event(Event::<T>::Chilled { stash: stash.clone() });
 		}
 	}
 
@@ -384,13 +398,18 @@ impl<T: Config> Pallet<T> {
 			let era_duration = (now_as_millis_u64 - active_era_start).saturated_into::<u64>();
 			let staked = Self::eras_total_stake(&active_era.index);
 			let issuance = T::Currency::total_issuance();
-			let (validator_payout, rest) = T::EraPayout::era_payout(staked, issuance, era_duration);
+			let (validator_payout, remainder) =
+				T::EraPayout::era_payout(staked, issuance, era_duration);
 
-			Self::deposit_event(Event::<T>::EraPaid(active_era.index, validator_payout, rest));
+			Self::deposit_event(Event::<T>::EraPaid {
+				era_index: active_era.index,
+				validator_payout,
+				remainder,
+			});
 
 			// Set ending era reward.
 			<ErasValidatorReward<T>>::insert(&active_era.index, validator_payout);
-			T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
+			T::RewardRemainder::on_unbalanced(T::Currency::issue(remainder));
 
 			// Clear offending validators.
 			<OffendingValidators<T>>::kill();
@@ -417,7 +436,7 @@ impl<T: Config> Pallet<T> {
 		ErasStartSessionIndex::<T>::insert(&new_planned_era, &start_session_index);
 
 		// Clean old era information.
-		if let Some(old_era) = new_planned_era.checked_sub(Self::history_depth() + 1) {
+		if let Some(old_era) = new_planned_era.checked_sub(T::HistoryDepth::get() + 1) {
 			Self::clear_era_information(old_era);
 		}
 
@@ -646,10 +665,10 @@ impl<T: Config> Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	pub fn add_era_stakers(
 		current_era: EraIndex,
-		controller: T::AccountId,
+		stash: T::AccountId,
 		exposure: Exposure<T::AccountId, BalanceOf<T>>,
 	) {
-		<ErasStakers<T>>::insert(&current_era, &controller, &exposure);
+		<ErasStakers<T>>::insert(&current_era, &stash, &exposure);
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -966,7 +985,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: Default::default(),
 			},
 		);
 
@@ -984,7 +1003,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 				active: stake,
 				total: stake,
 				unlocking: Default::default(),
-				claimed_rewards: vec![],
+				claimed_rewards: Default::default(),
 			},
 		);
 		Self::do_add_validator(
@@ -1025,7 +1044,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: vec![],
+					claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_validator(
@@ -1046,7 +1065,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 					active: stake,
 					total: stake,
 					unlocking: Default::default(),
-					claimed_rewards: vec![],
+					claimed_rewards: Default::default(),
 				},
 			);
 			Self::do_add_nominator(

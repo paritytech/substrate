@@ -22,10 +22,12 @@ use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
 	traits::{
-		Currency, CurrencyToVote, Defensive, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, UnixTime,
+		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
+		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
+		UnixTime,
 	},
 	weights::Weight,
+	BoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
@@ -41,9 +43,9 @@ pub use impls::*;
 
 use crate::{
 	slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-	EraRewardPoints, Exposure, Forcing, MaxUnlockingChunks, NegativeImbalanceOf, Nominations,
-	PositiveImbalanceOf, Releases, RewardDestination, SessionInterface, StakingLedger,
-	UnappliedSlash, UnlockChunk, ValidatorPrefs,
+	EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, Nominations, PositiveImbalanceOf,
+	Releases, RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
+	ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -58,7 +60,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Possible operations on the configuration values of this pallet.
@@ -124,6 +125,29 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxNominations: Get<u32>;
 
+		/// Number of eras to keep in history.
+		///
+		/// Following information is kept for eras in `[current_era -
+		/// HistoryDepth, current_era]`: `ErasStakers`, `ErasStakersClipped`,
+		/// `ErasValidatorPrefs`, `ErasValidatorReward`, `ErasRewardPoints`,
+		/// `ErasTotalStake`, `ErasStartSessionIndex`,
+		/// `StakingLedger.claimed_rewards`.
+		///
+		/// Must be more than the number of eras delayed by session.
+		/// I.e. active era must always be in history. I.e. `active_era >
+		/// current_era - history_depth` must be guaranteed.
+		///
+		/// If migrating an existing pallet from storage value to config value,
+		/// this should be set to same value or greater as in storage.
+		///
+		/// Note: `HistoryDepth` is used as the upper bound for the `BoundedVec`
+		/// item `StakingLedger.claimed_rewards`. Setting this value lower than
+		/// the existing value can lead to inconsistencies in the
+		/// `StakingLedger` and will need to be handled properly in a migration.
+		/// The test `reducing_history_depth_abrupt` shows this effect.
+		#[pallet::constant]
+		type HistoryDepth: Get<u32>;
+
 		/// Tokens have been minted and are unused for validator-reward.
 		/// See [Era payout](./index.html#era-payout).
 		type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -155,7 +179,7 @@ pub mod pallet {
 		type SlashDeferDuration: Get<EraIndex>;
 
 		/// The origin which can cancel a deferred slash. Root can always do this.
-		type SlashCancelOrigin: EnsureOrigin<Self::Origin>;
+		type SlashCancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Interface for interacting with a session pallet.
 		type SessionInterface: SessionInterface<Self::AccountId>;
@@ -214,8 +238,16 @@ pub mod pallet {
 		/// VALIDATOR.
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 
-		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can have. Effectively
-		/// determines how many unique eras a staker may be unbonding in.
+		/// The maximum number of `unlocking` chunks a [`StakingLedger`] can
+		/// have. Effectively determines how many unique eras a staker may be
+		/// unbonding in.
+		///
+		/// Note: `MaxUnlockingChunks` is used as the upper bound for the
+		/// `BoundedVec` item `StakingLedger.unlocking`. Setting this value
+		/// lower than the existing value can lead to inconsistencies in the
+		/// `StakingLedger` and will need to be handled properly in a runtime
+		/// migration. The test `reducing_max_unlocking_chunks_abrupt` shows
+		/// this effect.
 		#[pallet::constant]
 		type MaxUnlockingChunks: Get<u32>;
 
@@ -229,22 +261,6 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
-
-	#[pallet::type_value]
-	pub(crate) fn HistoryDepthOnEmpty() -> u32 {
-		84u32
-	}
-
-	/// Number of eras to keep in history.
-	///
-	/// Information is kept for eras in `[current_era - history_depth; current_era]`.
-	///
-	/// Must be more than the number of eras delayed by session otherwise. I.e. active era must
-	/// always be in history. I.e. `active_era > current_era - history_depth` must be
-	/// guaranteed.
-	#[pallet::storage]
-	#[pallet::getter(fn history_depth)]
-	pub(crate) type HistoryDepth<T> = StorageValue<_, u32, ValueQuery, HistoryDepthOnEmpty>;
 
 	/// The ideal number of staking participants.
 	#[pallet::storage]
@@ -261,6 +277,7 @@ pub mod pallet {
 	/// invulnerables) and restricted to testnets.
 	#[pallet::storage]
 	#[pallet::getter(fn invulnerables)]
+	#[pallet::unbounded]
 	pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Map from all locked "stash" accounts to the controller account.
@@ -364,6 +381,7 @@ pub mod pallet {
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
 	#[pallet::getter(fn eras_stakers)]
+	#[pallet::unbounded]
 	pub type ErasStakers<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
@@ -386,6 +404,7 @@ pub mod pallet {
 	/// Is it removed after `HISTORY_DEPTH` eras.
 	/// If stakers hasn't been set or has been removed then empty exposure is returned.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn eras_stakers_clipped)]
 	pub type ErasStakersClipped<T: Config> = StorageDoubleMap<
 		_,
@@ -425,6 +444,7 @@ pub mod pallet {
 	/// Rewards for the last `HISTORY_DEPTH` eras.
 	/// If reward hasn't been set or has been removed then 0 reward is returned.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn eras_reward_points)]
 	pub type ErasRewardPoints<T: Config> =
 		StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
@@ -456,6 +476,7 @@ pub mod pallet {
 
 	/// All unapplied slashes that are queued for later.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type UnappliedSlashes<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
@@ -469,6 +490,7 @@ pub mod pallet {
 	/// Must contains information for eras for the range:
 	/// `[active_era - bounding_duration; active_era]`
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(crate) type BondedEras<T: Config> =
 		StorageValue<_, Vec<(EraIndex, SessionIndex)>, ValueQuery>;
 
@@ -491,6 +513,8 @@ pub mod pallet {
 
 	/// Slashing spans for stash accounts.
 	#[pallet::storage]
+	#[pallet::getter(fn slashing_spans)]
+	#[pallet::unbounded]
 	pub(crate) type SlashingSpans<T: Config> =
 		StorageMap<_, Twox64Concat, T::AccountId, slashing::SlashingSpans>;
 
@@ -522,6 +546,7 @@ pub mod pallet {
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn offending_validators)]
 	pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
@@ -540,7 +565,6 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub history_depth: u32,
 		pub validator_count: u32,
 		pub minimum_validator_count: u32,
 		pub invulnerables: Vec<T::AccountId>,
@@ -559,7 +583,6 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {
-				history_depth: 84u32,
 				validator_count: Default::default(),
 				minimum_validator_count: Default::default(),
 				invulnerables: Default::default(),
@@ -578,7 +601,6 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			HistoryDepth::<T>::put(self.history_depth);
 			ValidatorCount::<T>::put(self.validator_count);
 			MinimumValidatorCount::<T>::put(self.minimum_validator_count);
 			Invulnerables::<T>::put(&self.invulnerables);
@@ -608,18 +630,18 @@ pub mod pallet {
 					"Stash does not have enough balance to bond."
 				);
 				frame_support::assert_ok!(<Pallet<T>>::bond(
-					T::Origin::from(Some(stash.clone()).into()),
+					T::RuntimeOrigin::from(Some(stash.clone()).into()),
 					T::Lookup::unlookup(controller.clone()),
 					balance,
 					RewardDestination::Staked,
 				));
 				frame_support::assert_ok!(match status {
 					crate::StakerStatus::Validator => <Pallet<T>>::validate(
-						T::Origin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(controller.clone()).into()),
 						Default::default(),
 					),
 					crate::StakerStatus::Nominator(votes) => <Pallet<T>>::nominate(
-						T::Origin::from(Some(controller.clone()).into()),
+						T::RuntimeOrigin::from(Some(controller.clone()).into()),
 						votes.iter().map(|l| T::Lookup::unlookup(l.clone())).collect(),
 					),
 					_ => Ok(()),
@@ -640,39 +662,36 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// The era payout has been set; the first balance is the validator-payout; the second is
 		/// the remainder from the maximum amount of reward.
-		/// \[era_index, validator_payout, remainder\]
-		EraPaid(EraIndex, BalanceOf<T>, BalanceOf<T>),
-		/// The nominator has been rewarded by this amount. \[stash, amount\]
-		Rewarded(T::AccountId, BalanceOf<T>),
-		/// One validator (and its nominators) has been slashed by the given amount.
-		/// \[validator, amount\]
-		Slashed(T::AccountId, BalanceOf<T>),
+		EraPaid { era_index: EraIndex, validator_payout: BalanceOf<T>, remainder: BalanceOf<T> },
+		/// The nominator has been rewarded by this amount.
+		Rewarded { stash: T::AccountId, amount: BalanceOf<T> },
+		/// One staker (and potentially its nominators) has been slashed by the given amount.
+		Slashed { staker: T::AccountId, amount: BalanceOf<T> },
 		/// An old slashing report from a prior era was discarded because it could
-		/// not be processed. \[session_index\]
-		OldSlashingReportDiscarded(SessionIndex),
+		/// not be processed.
+		OldSlashingReportDiscarded { session_index: SessionIndex },
 		/// A new set of stakers was elected.
 		StakersElected,
 		/// An account has bonded this amount. \[stash, amount\]
 		///
 		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
 		/// it will not be emitted for staking rewards when they are added to stake.
-		Bonded(T::AccountId, BalanceOf<T>),
-		/// An account has unbonded this amount. \[stash, amount\]
-		Unbonded(T::AccountId, BalanceOf<T>),
+		Bonded { stash: T::AccountId, amount: BalanceOf<T> },
+		/// An account has unbonded this amount.
+		Unbonded { stash: T::AccountId, amount: BalanceOf<T> },
 		/// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
-		/// from the unlocking queue. \[stash, amount\]
-		Withdrawn(T::AccountId, BalanceOf<T>),
-		/// A nominator has been kicked from a validator. \[nominator, stash\]
-		Kicked(T::AccountId, T::AccountId),
+		/// from the unlocking queue.
+		Withdrawn { stash: T::AccountId, amount: BalanceOf<T> },
+		/// A nominator has been kicked from a validator.
+		Kicked { nominator: T::AccountId, stash: T::AccountId },
 		/// The election failed. No new era is planned.
 		StakingElectionFailed,
 		/// An account has stopped participating as either a validator or nominator.
-		/// \[stash\]
-		Chilled(T::AccountId),
-		/// The stakers' rewards are getting paid. \[era_index, validator_stash\]
-		PayoutStarted(EraIndex, T::AccountId),
+		Chilled { stash: T::AccountId },
+		/// The stakers' rewards are getting paid.
+		PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
 		/// A validator has set their preferences.
-		ValidatorPrefsSet(T::AccountId, ValidatorPrefs),
+		ValidatorPrefsSet { stash: T::AccountId, prefs: ValidatorPrefs },
 	}
 
 	#[pallet::error]
@@ -729,6 +748,8 @@ pub mod pallet {
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
+		/// Some bound is not met.
+		BoundNotMet,
 	}
 
 	#[pallet::hooks]
@@ -830,18 +851,23 @@ pub mod pallet {
 			<Payee<T>>::insert(&stash, payee);
 
 			let current_era = CurrentEra::<T>::get().unwrap_or(0);
-			let history_depth = Self::history_depth();
+			let history_depth = T::HistoryDepth::get();
 			let last_reward_era = current_era.saturating_sub(history_depth);
 
 			let stash_balance = T::Currency::free_balance(&stash);
 			let value = value.min(stash_balance);
-			Self::deposit_event(Event::<T>::Bonded(stash.clone(), value));
+			Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
 			let item = StakingLedger {
 				stash,
 				total: value,
 				active: value,
 				unlocking: Default::default(),
-				claimed_rewards: (last_reward_era..current_era).collect(),
+				claimed_rewards: (last_reward_era..current_era)
+					.try_collect()
+					// Since last_reward_era is calculated as `current_era -
+					// HistoryDepth`, following bound is always expected to be
+					// satisfied.
+					.defensive_map_err(|_| Error::<T>::BoundNotMet)?,
 			};
 			Self::update_ledger(&controller, &item);
 			Ok(())
@@ -891,7 +917,7 @@ pub mod pallet {
 						T::VoterList::on_update(&stash, Self::weight_of(&ledger.stash)).defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Bonded(stash, extra));
+				Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
 			}
 			Ok(())
 		}
@@ -923,7 +949,7 @@ pub mod pallet {
 			let controller = ensure_signed(origin)?;
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			ensure!(
-				ledger.unlocking.len() < MaxUnlockingChunks::get() as usize,
+				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
 				Error::<T>::NoMoreChunks,
 			);
 
@@ -974,7 +1000,7 @@ pub mod pallet {
 						.defensive();
 				}
 
-				Self::deposit_event(Event::<T>::Unbonded(ledger.stash, value));
+				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
 			Ok(())
 		}
@@ -1030,7 +1056,7 @@ pub mod pallet {
 			if ledger.total < old_total {
 				// Already checked that this won't overflow by entry condition.
 				let value = old_total - ledger.total;
-				Self::deposit_event(Event::<T>::Withdrawn(stash, value));
+				Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 			}
 
 			Ok(post_info_weight.into())
@@ -1068,7 +1094,7 @@ pub mod pallet {
 
 			Self::do_remove_nominator(stash);
 			Self::do_add_validator(stash, prefs.clone());
-			Self::deposit_event(Event::<T>::ValidatorPrefsSet(ledger.stash, prefs));
+			Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash, prefs });
 
 			Ok(())
 		}
@@ -1437,7 +1463,7 @@ pub mod pallet {
 		/// - Bounded by `MaxUnlockingChunks`.
 		/// - Storage changes: Can't increase storage, only decrease it.
 		/// # </weight>
-		#[pallet::weight(T::WeightInfo::rebond(MaxUnlockingChunks::get() as u32))]
+		#[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get() as u32))]
 		pub fn rebond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
@@ -1451,7 +1477,10 @@ pub mod pallet {
 			// Last check: the new active amount of ledger must be more than ED.
 			ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
 
-			Self::deposit_event(Event::<T>::Bonded(ledger.stash.clone(), rebonded_value));
+			Self::deposit_event(Event::<T>::Bonded {
+				stash: ledger.stash.clone(),
+				amount: rebonded_value,
+			});
 
 			// NOTE: ledger must be updated prior to calling `Self::weight_of`.
 			Self::update_ledger(&controller, &ledger);
@@ -1464,48 +1493,6 @@ pub mod pallet {
 				.saturating_add(initial_unlocking)
 				.saturating_sub(ledger.unlocking.len() as u32);
 			Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
-		}
-
-		/// Set `HistoryDepth` value. This function will delete any history information
-		/// when `HistoryDepth` is reduced.
-		///
-		/// Parameters:
-		/// - `new_history_depth`: The new history depth you would like to set.
-		/// - `era_items_deleted`: The number of items that will be deleted by this dispatch. This
-		///   should report all the storage items that will be deleted by clearing old era history.
-		///   Needed to report an accurate weight for the dispatch. Trusted by `Root` to report an
-		///   accurate number.
-		///
-		/// Origin must be root.
-		///
-		/// # <weight>
-		/// - E: Number of history depths removed, i.e. 10 -> 7 = 3
-		/// - Weight: O(E)
-		/// - DB Weight:
-		///     - Reads: Current Era, History Depth
-		///     - Writes: History Depth
-		///     - Clear Prefix Each: Era Stakers, EraStakersClipped, ErasValidatorPrefs
-		///     - Writes Each: ErasValidatorReward, ErasRewardPoints, ErasTotalStake,
-		///       ErasStartSessionIndex
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::set_history_depth(*_era_items_deleted))]
-		pub fn set_history_depth(
-			origin: OriginFor<T>,
-			#[pallet::compact] new_history_depth: EraIndex,
-			#[pallet::compact] _era_items_deleted: u32,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			if let Some(current_era) = Self::current_era() {
-				HistoryDepth::<T>::mutate(|history_depth| {
-					let last_kept = current_era.saturating_sub(*history_depth);
-					let new_last_kept = current_era.saturating_sub(new_history_depth);
-					for era_index in last_kept..new_last_kept {
-						Self::clear_era_information(era_index);
-					}
-					*history_depth = new_history_depth
-				})
-			}
-			Ok(())
 		}
 
 		/// Remove all data structures concerning a staker/stash once it is at a state where it can
@@ -1568,10 +1555,10 @@ pub mod pallet {
 					if let Some(ref mut nom) = maybe_nom {
 						if let Some(pos) = nom.targets.iter().position(|v| v == stash) {
 							nom.targets.swap_remove(pos);
-							Self::deposit_event(Event::<T>::Kicked(
-								nom_stash.clone(),
-								stash.clone(),
-							));
+							Self::deposit_event(Event::<T>::Kicked {
+								nominator: nom_stash.clone(),
+								stash: stash.clone(),
+							});
 						}
 					}
 				});
@@ -1593,7 +1580,7 @@ pub mod pallet {
 		/// * `min_commission`: The minimum amount of commission that each validators must maintain.
 		///   This is checked only upon calling `validate`. Existing validators are not affected.
 		///
-		/// Origin must be Root to call this function.
+		/// RuntimeOrigin must be Root to call this function.
 		///
 		/// NOTE: Existing nominators and validators will not be affected by this update.
 		/// to kick people under the new limits, `chill_other` should be called.
