@@ -134,7 +134,6 @@ where
 					None, None, None, None, None, None, None, None, None, None, None, None, None,
 					None, None, None,
 				];
-				let mut nb_children = 0;
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
@@ -144,11 +143,7 @@ where
 						} else {
 							NodeHandlePlan::Inline(range)
 						});
-						nb_children += 1;
 					}
-				}
-				if nb_children == 0 || (nb_children == 1 && value.is_none()) {
-					return Err(Error::BadFormat)
 				}
 				Ok(NodePlan::NibbledBranch {
 					partial: NibbleSlicePlan::new(partial, partial_padding),
@@ -310,7 +305,11 @@ pub(crate) struct Bitmap(u16);
 
 impl Bitmap {
 	pub fn decode(mut data: &[u8]) -> Result<Self, codec::Error> {
-		Ok(Bitmap(u16::decode(&mut data)?))
+		let value = u16::decode(&mut &data[..])?;
+		if value == 0 {
+			return Err(Error::BadFormat)
+		}
+		Ok(Bitmap(value))
 	}
 
 	pub fn value_at(&self, i: usize) -> bool {
