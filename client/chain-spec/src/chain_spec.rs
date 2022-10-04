@@ -161,6 +161,18 @@ enum Genesis<G> {
 	StateRootHash(StorageData),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
+pub enum CodeSubstitute {
+	BlockNumberAndCode(String, Bytes),
+	BlockNumberCodeAndSpecVersion {
+		start_block_number: String,
+		code: Bytes,
+		spec_version: u32,
+	},
+}
+
 /// A configuration of a client. Does not include runtime storage initialization.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -193,7 +205,7 @@ struct ClientSpec<E> {
 	/// The given `wasm_code` will be used to substitute the on-chain wasm code starting with the
 	/// given block number until the `spec_version` on chain changes.
 	#[serde(default)]
-	code_substitutes: BTreeMap<String, Bytes>,
+	code_substitutes: Vec<CodeSubstitute>,
 }
 
 /// A type denoting empty extensions.
@@ -542,5 +554,15 @@ mod tests {
 					.unwrap()
 			);
 		}
+	}
+
+	#[test]
+	fn load_old_code_substitutes() {
+		let mut spec = TestSpec2::from_json_bytes(Cow::Owned(
+			include_bytes!("../res/chain_spec_code_substitutes_old.json").to_vec(),
+		))
+		.unwrap();
+
+		assert_eq!(spec.code_substitutes[0], CodeSubstitute::BlockNumberAndCode(1, vec![1, 3, 3, 7].into());
 	}
 }

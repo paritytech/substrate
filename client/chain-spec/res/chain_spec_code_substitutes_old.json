@@ -1,0 +1,20 @@
+{
+	"name": "Flaming Fir",
+	"id": "flaming-fir",
+	"properties": {
+		"tokenDecimals": 15,
+		"tokenSymbol": "FIR"
+	},
+	"bootNodes": [],
+	"telemetryEndpoints": [],
+	"protocolId": "fir",
+	"genesis": {
+		"raw": [
+			{},
+			{}
+		]
+	},
+	"code_substitutes": {
+		"1": "0x1337"
+	}
+}
