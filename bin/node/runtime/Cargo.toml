@@ -162,7 +162,6 @@ std = [
 	"log/std",
 	"frame-try-runtime/std",
 	"sp-npos-elections/std",
-	"max-encoded-len/std",
 	"pallet-ddc-metrics-offchain-worker/std",
 ]
 runtime-benchmarks = [
