@@ -872,6 +872,10 @@ pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
 /// size in order to reduce storage size. The error enum itself has an absolute maximum encoded
 /// size specified by `MAX_MODULE_ERROR_ENCODED_SIZE`.
 ///
+/// (1 byte can still be 256 different errors. The more specific the error, 
+/// the easier it is to diagnose problems and give a better experience to the user.
+/// Don't skimp on having lots of individual error conditions.)
+///
 /// Field types in enum variants must also implement `PalletError`, otherwise the pallet will
 /// fail to compile. Rust primitive types have already implemented the `PalletError` trait
 /// along with some commonly used stdlib types such as [`Option`] and `PhantomData`, and hence
