@@ -22,6 +22,7 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
+use sp_core::bounded::BoundedVec;
 use sp_runtime::{
 	traits::{Convert, StaticLookup},
 	ArithmeticError::Overflow,
@@ -33,7 +34,7 @@ use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
 	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
 	ensure,
-	traits::{EnsureOrigin, PollStatus, Polling, VoteTally, Time},
+	traits::{EnsureOrigin, PollStatus, Polling, Time, VoteTally},
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
@@ -47,11 +48,11 @@ pub mod weights;
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-/// The index of a sync---starts at zero and increments once per month.
-pub type SyncIndex = u32;
+/// The index of a globally synced meet---starts at zero and increments once per month.
+pub type MeetsIndex = u32;
 
-/// The ID of a meetup.
-pub type MeetupId = u32;
+/// The ID of a specific party ("bubble").
+pub type BubbleId = u32;
 
 /// Record needed for every member.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -61,7 +62,7 @@ pub struct Person {
 	/// The attendence counter, valid as of `valid_until` sync.
 	attendance_counter: u32,
 	/// The party at which `attendence_counter` is valid.
-	valid_until: SyncIndex,
+	valid_until: MeetIndex,
 }
 
 impl Person {
@@ -92,18 +93,21 @@ pub type Phase = u8;
 /// A standard geolocation, in billionths.
 pub type GeoLocation = (u64, u64);
 
-/// Record needed for every meetup.
+/// Record needed for every bubble.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct Meetup {
-	sync: SyncIndex,
+pub struct Bubbke<AccountId> {
+	meets: MeetIndex,
 	phase: Phase,
 	location: GeoLocation,
 	capacity: u32,
 	description: [u8; 32],
-//	organiser: T::AccountId,
-//	deposit: BalanceOf<T>,
+	//	organiser: T::AccountId,
+	//	deposit: BalanceOf<T>,
 	/// determined immediately prior to the party start randomly from the RSVPs list.
 	super_nodes: BoundedVec<AccountId, 8>,
+	earlier_bubbles: BoundedVec<BubbleId, 4>,
+	later_bubbles: BoundedVec<BubbleId, 4>,
+	contemp_bubbles: BoundedVec<BubbleId, 4>,
 }
 
 pub type SyncOf<T> = Sync<<<T as Config>::Time as Time>::Moment>;
@@ -132,10 +136,7 @@ pub mod pallet {
 
 	/// The current individuals we recognise.
 	#[pallet::storage]
-	pub type People<T: Config<I>> =
-		StorageMap<_, Twox64Concat, T::AccountId, Person>;
-
-	
+	pub type People<T: Config<I>> = StorageMap<_, Twox64Concat, T::AccountId, Person>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -166,6 +167,5 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> Pallet<T> {
-	}
+	impl<T: Config> Pallet<T> {}
 }
