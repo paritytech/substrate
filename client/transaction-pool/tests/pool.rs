@@ -1262,14 +1262,16 @@ fn two_blocks_delayed_finalization_works() {
 
 	let (pool, _background) = BasicPool::new_test(api.into());
 
-	let from_bob = uxt(Bob, 2);
 	let from_alice = uxt(Alice, 1);
-	let from_charlie = uxt(Charlie, 1);
+	let from_bob = uxt(Bob, 2);
+	let from_charlie = uxt(Charlie, 3);
 	pool.api().increment_nonce(Alice.into());
 	pool.api().increment_nonce(Bob.into());
+	pool.api().increment_nonce(Charlie.into());
 
 	let from_alice_watcher;
 	let from_bob_watcher;
+	let from_charlie_watcher;
 	let b1_header;
 	let c1_header;
 	let d1_header;
@@ -1304,12 +1306,13 @@ fn two_blocks_delayed_finalization_works() {
 
 	// block D1
 	{
-		block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, from_charlie.clone()))
-			.expect("1. Imported");
+		from_charlie_watcher =
+			block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, from_charlie.clone()))
+				.expect("1. Imported");
 		let header =
 			pool.api()
 				.push_block_with_parent(c1_header.hash(), vec![from_charlie.clone()], true);
-		assert_eq!(pool.status().ready, 2);
+		assert_eq!(pool.status().ready, 3);
 
 		log::trace!(target:"txpool", ">> D1: {:?} {:?}", header.hash(), header);
 		d1_header = header;
@@ -1318,7 +1321,7 @@ fn two_blocks_delayed_finalization_works() {
 	{
 		let event = ChainEvent::Finalized { hash: a_header.hash(), tree_route: Arc::from(vec![]) };
 		block_on(pool.maintain(event));
-		assert_eq!(pool.status().ready, 2);
+		assert_eq!(pool.status().ready, 3);
 	}
 
 	{
@@ -1330,8 +1333,14 @@ fn two_blocks_delayed_finalization_works() {
 	{
 		let event = ChainEvent::Finalized {
 			hash: c1_header.hash(),
-			tree_route: Arc::from(vec![a_header.hash(), b1_header.hash()]),
+			tree_route: Arc::from(vec![b1_header.hash()]),
 		};
+		block_on(pool.maintain(event));
+	}
+
+	// this is to collect events from_charlie_watcher and make sure nothing was retracted
+	{
+		let event = ChainEvent::Finalized { hash: d1_header.hash(), tree_route: Arc::from(vec![]) };
 		block_on(pool.maintain(event));
 	}
 
@@ -1348,6 +1357,14 @@ fn two_blocks_delayed_finalization_works() {
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c1_header.hash())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(c1_header.hash())));
+		assert_eq!(stream.next(), None);
+	}
+
+	{
+		let mut stream = futures::executor::block_on_stream(from_charlie_watcher);
+		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(d1_header.hash())));
 		assert_eq!(stream.next(), None);
 	}
 }

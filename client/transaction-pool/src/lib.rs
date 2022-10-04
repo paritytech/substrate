@@ -832,6 +832,15 @@ where
 		EnactmentState { recent_best_block: None, recent_finalized_block: None }
 	}
 
+	/// This function returns true and the tree_route if blocks enact/retract process (implemented
+	/// in handle_enactment function) should be performed based on:
+	/// - recent_finalized_block
+	/// - recent_best_block
+	/// - newly provided block in event
+	/// tree_route contains blocks to be enacted/retracted.
+	///
+	/// if enactment process is not needed (false, None) is returned
+	/// error message is returned when computing tree_route fails
 	pub fn update_and_check_if_new_enactment_is_valid<PoolApi: graph::ChainApi<Block = Block>>(
 		&mut self,
 		api: &PoolApi,
@@ -872,8 +881,8 @@ where
 		if let Some(finalized_block) = self.recent_finalized_block {
 			// block was already finalized
 			if finalized_block == new_hash {
-				log::trace!(target:"txpool", "handle_enactment: block already finalized: exit 3b");
-				return Ok((false, Some(tree_route)))
+				log::trace!(target:"txpool", "handle_enactment: block already finalized");
+				return Ok((false, None))
 			}
 
 			// check if recently finalized block is on retracted path...
@@ -883,8 +892,8 @@ where
 					"Recently finalized block {} would be retracted by Finalized event {}",
 					finalized_block, new_hash
 				);
-				log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path: exit 1");
-				return Ok((false, Some(tree_route)))
+				log::trace!(target: "txpool", "handle_enactment: recently finalized block is on retracted path");
+				return Ok((false, None))
 			}
 		}
 
@@ -894,10 +903,10 @@ where
 			self.recent_finalized_block = Some(new_hash);
 			if tree_route.enacted().is_empty() {
 				log::trace!(
-				target: "txpool",
-				"handle_enactment: no newly enacted blocks since recent best block: exit 2"
+					target: "txpool",
+					"handle_enactment: no newly enacted blocks since recent best block"
 				);
-				return Ok((false, Some(tree_route)))
+				return Ok((false, None))
 			}
 
 			// check if the recent best_block was retracted
