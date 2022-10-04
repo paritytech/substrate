@@ -1817,19 +1817,19 @@ pub mod pallet_prelude {
 /// 	= $StorageType<_, $some_generics, ...>;
 /// ```
 ///
-/// I.e. it must be a type alias, with generics: `T` or `T: Config`, aliased type must be one
-/// of [`StorageValue`](`pallet_prelude::StorageValue`),
+/// I.e. it must be a type alias, with generics: `T` or `T: Config`. The aliased type must be
+/// one of [`StorageValue`](`pallet_prelude::StorageValue`),
 /// [`StorageMap`](`pallet_prelude::StorageMap`) or
 /// [`StorageDoubleMap`](`pallet_prelude::StorageDoubleMap`). The generic arguments of the
 /// storage type can be given in two manners: named and unnamed. For named generic arguments,
 /// the name for each argument should match the name defined for it on the storage struct:
-/// * [`StorageValue`](`pallet_prelude::StorageValue`) expect `Value` and optionally
+/// * [`StorageValue`](`pallet_prelude::StorageValue`) expects `Value` and optionally
 ///   `QueryKind` and `OnEmpty`,
-/// * [`StorageMap`](`pallet_prelude::StorageMap`) expect `Hasher`, `Key`, `Value` and
+/// * [`StorageMap`](`pallet_prelude::StorageMap`) expects `Hasher`, `Key`, `Value` and
 ///   optionally `QueryKind` and `OnEmpty`,
-/// * [`CountedStorageMap`](`pallet_prelude::CountedStorageMap`) expect `Hasher`, `Key`,
+/// * [`CountedStorageMap`](`pallet_prelude::CountedStorageMap`) expects `Hasher`, `Key`,
 ///   `Value` and optionally `QueryKind` and `OnEmpty`,
-/// * [`StorageDoubleMap`](`pallet_prelude::StorageDoubleMap`) expect `Hasher1`, `Key1`,
+/// * [`StorageDoubleMap`](`pallet_prelude::StorageDoubleMap`) expects `Hasher1`, `Key1`,
 ///   `Hasher2`, `Key2`, `Value` and optionally `QueryKind` and `OnEmpty`.
 ///
 /// For unnamed generic arguments: Their first generic must be `_` as it is replaced by the

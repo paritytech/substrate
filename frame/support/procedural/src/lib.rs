@@ -970,10 +970,10 @@ pub fn generate_deposit(_: TokenStream, _: TokenStream) -> TokenStream {
 /// 	= $StorageType<_, $some_generics, ...>;
 /// ```
 ///
-/// I.e. it must be a type alias, with generics: `T` or `T: Config`. The aliased type must be one
-/// of `StorageValue`, `StorageMap` or `StorageDoubleMap`. The generic arguments of the storage
-/// type can be given in two manners: named and unnamed. For named generic arguments, the name
-/// for each argument should match the name defined for it on the storage struct:
+/// I.e. it must be a type alias, with generics: `T` or `T: Config`. The aliased type must be
+/// one of `StorageValue`, `StorageMap` or `StorageDoubleMap`. The generic arguments of the
+/// storage type can be given in two manners: named and unnamed. For named generic arguments,
+/// the name for each argument should match the name defined for it on the storage struct:
 /// * `StorageValue` expects `Value` and optionally `QueryKind` and `OnEmpty`,
 /// * `StorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
 /// * `CountedStorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
