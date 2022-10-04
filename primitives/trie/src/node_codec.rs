@@ -134,6 +134,7 @@ where
 					None, None, None, None, None, None, None, None, None, None, None, None, None,
 					None, None, None,
 				];
+				let mut nb_children = 0;
 				for i in 0..nibble_ops::NIBBLE_LENGTH {
 					if bitmap.value_at(i) {
 						let count = <Compact<u32>>::decode(&mut input)?.0 as usize;
@@ -143,7 +144,11 @@ where
 						} else {
 							NodeHandlePlan::Inline(range)
 						});
+						nb_children += 1;
 					}
+				}
+				if nb_children == 0 || (nb_children == 1 && value.is_none()) {
+					return Err(Error::BadFormat)
 				}
 				Ok(NodePlan::NibbledBranch {
 					partial: NibbleSlicePlan::new(partial, partial_padding),
