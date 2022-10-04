@@ -226,7 +226,6 @@ members = [
 	"utils/frame/benchmarking-cli",
 	"utils/frame/remote-externalities",
 	"utils/frame/frame-utilities-cli",
-	"utils/frame/sub-du",
 	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/state-trie-migration-rpc",
 	"utils/frame/rpc/support",
