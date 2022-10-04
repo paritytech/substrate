@@ -609,6 +609,8 @@ fn pallet_macro_stub() -> TokenStream {
 ///
 /// I.e. a regular trait definition named `Config`, with the supertrait
 /// `frame_system::pallet::Config`, and optionally other supertraits and a where clause.
+/// (Specifying other supertraits here is known as [tight
+/// coupling](https://docs.substrate.io/reference/how-to-guides/pallet-design/use-tight-coupling/))
 ///
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
 /// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
