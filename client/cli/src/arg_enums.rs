@@ -22,7 +22,7 @@ use clap::{builder::PossibleValue, ValueEnum};
 
 /// The instantiation strategy to use in compiled mode.
 #[derive(Debug, Clone, Copy, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum WasmtimeInstantiationStrategy {
 	/// Pool the instances to avoid initializing everything from scratch
 	/// on each instantiation. Use copy-on-write memory when possible.
@@ -153,7 +153,7 @@ pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum TracingReceiver {
 	/// Output the tracing records using the log.
 	Log,
@@ -169,7 +169,7 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 
 /// The type of the node key.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum NodeKeyType {
 	/// Use ed25519.
 	Ed25519,
@@ -177,7 +177,7 @@ pub enum NodeKeyType {
 
 /// The crypto scheme to use.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum CryptoScheme {
 	/// Use ed25519.
 	Ed25519,
@@ -189,7 +189,7 @@ pub enum CryptoScheme {
 
 /// The type of the output format.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum OutputType {
 	/// Output as json.
 	Json,
@@ -199,7 +199,7 @@ pub enum OutputType {
 
 /// How to execute blocks
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum ExecutionStrategy {
 	/// Execute with native build (if available, WebAssembly otherwise).
 	Native,
@@ -225,7 +225,7 @@ impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 /// Available RPC methods.
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum RpcMethods {
 	/// Expose every RPC method only when RPC is listening on `localhost`,
 	/// otherwise serve only safe RPC methods.
@@ -248,7 +248,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 
 /// Database backend
 #[derive(Debug, Clone, PartialEq, Copy, clap::ValueEnum)]
-#[clap(rename_all = "lower")]
+#[value(rename_all = "lower")]
 pub enum Database {
 	/// Facebooks RocksDB
 	#[cfg(feature = "rocksdb")]
@@ -259,7 +259,7 @@ pub enum Database {
 	/// instance of ParityDb
 	Auto,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
-	#[clap(name = "paritydb-experimental")]
+	#[value(name = "paritydb-experimental")]
 	ParityDbDeprecated,
 }
 
@@ -279,7 +279,7 @@ impl Database {
 /// Whether off-chain workers are enabled.
 #[allow(missing_docs)]
 #[derive(Debug, Clone, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum OffchainWorkerEnabled {
 	/// Always have offchain worker enabled.
 	Always,
@@ -291,7 +291,7 @@ pub enum OffchainWorkerEnabled {
 
 /// Syncing mode.
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
-#[clap(rename_all = "kebab-case")]
+#[value(rename_all = "kebab-case")]
 pub enum SyncMode {
 	/// Full sync. Download end verify all blocks.
 	Full,

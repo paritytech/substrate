@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 /// The `insert` command
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "insert", about = "Insert a key to the keystore of a node.")]
+#[command(name = "insert", about = "Insert a key to the keystore of a node.")]
 pub struct InsertKeyCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.

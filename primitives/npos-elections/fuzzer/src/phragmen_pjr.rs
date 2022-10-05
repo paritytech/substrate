@@ -68,7 +68,7 @@ fn main() {
 
 #[cfg(not(fuzzing))]
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[command(author, version, about)]
 struct Opt {
 	/// How many candidates participate in this election
 	#[clap(short, long)]

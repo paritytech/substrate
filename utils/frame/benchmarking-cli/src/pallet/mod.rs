@@ -47,11 +47,11 @@ pub struct PalletCmd {
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[clap(long = "low", use_value_delimiter = true)]
+	#[clap(long = "low", value_delimiter = ',')]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[clap(long = "high", use_value_delimiter = true)]
+	#[clap(long = "high", value_delimiter = ',')]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.

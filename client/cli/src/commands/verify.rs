@@ -24,7 +24,7 @@ use sp_core::crypto::{ByteArray, Ss58Codec};
 
 /// The `verify` command
 #[derive(Debug, Clone, Parser)]
-#[clap(
+#[command(
 	name = "verify",
 	about = "Verify a signature for a message, provided on STDIN, with a given (public or secret) key"
 )]

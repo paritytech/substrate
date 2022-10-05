@@ -28,7 +28,7 @@ use sp_runtime::traits::AccountIdConversion;
 
 /// The `palletid` command
 #[derive(Debug, Parser)]
-#[clap(name = "palletid", about = "Inspect a module ID address")]
+#[command(name = "palletid", about = "Inspect a module ID address")]
 pub struct PalletIdCmd {
 	/// The module ID used to derive the account
 	id: String,

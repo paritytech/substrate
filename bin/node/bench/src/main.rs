@@ -43,7 +43,7 @@ use crate::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(name = "node-bench", about = "Node integration benchmarks")]
+#[command(name = "node-bench", about = "Node integration benchmarks")]
 struct Opt {
 	/// Show list of all available benchmarks.
 	///

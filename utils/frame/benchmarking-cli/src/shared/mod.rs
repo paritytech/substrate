@@ -95,7 +95,7 @@ pub fn check_build_profile() -> Result<(), String> {
 
 /// Parameters to configure how the host info will be determined.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct HostInfoParams {
 	/// Manually override the hostname to use.
 	#[clap(long)]

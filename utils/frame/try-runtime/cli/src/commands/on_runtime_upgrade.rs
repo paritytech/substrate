@@ -31,7 +31,7 @@ use crate::{
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub state: State,
 }
 

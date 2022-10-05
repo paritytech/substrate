@@ -23,7 +23,7 @@ use sp_core::crypto::SecretString;
 
 /// The `sign` command
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "sign", about = "Sign a message, with a given (secret) key")]
+#[command(name = "sign", about = "Sign a message, with a given (secret) key")]
 pub struct SignCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.

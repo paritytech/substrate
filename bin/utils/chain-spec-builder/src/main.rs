@@ -37,7 +37,7 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 enum ChainSpecBuilder {
 	/// Create a new chain spec with the given authorities, endowed and sudo
 	/// accounts.
