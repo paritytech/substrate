@@ -652,8 +652,8 @@ pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> 
 	pallet_macro_stub()
 }
 
-/// To generate a `Store` trait associating all storages, use the attribute
-/// `#[pallet::generate_store($vis trait Store)]`, e.g.:
+/// To generate a `Store` trait associating all storages, annotate your `Pallet` struct with
+/// the attribute `#[pallet::generate_store($vis trait Store)]`, e.g.:
 ///
 /// ```ignore
 /// #[pallet::pallet]
@@ -665,6 +665,9 @@ pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> 
 ///
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
+/// 
+/// NOTE: this attribute is only valid when applied _directly_ to your `Pallet` struct
+/// definition.
 #[proc_macro_attribute]
 pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

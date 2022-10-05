@@ -1567,8 +1567,8 @@ pub mod pallet_prelude {
 ///
 /// # `pallet::generate_store($vis trait Store)`
 ///
-/// To generate a `Store` trait associating all storages, use the attribute
-/// `#[pallet::generate_store($vis trait Store)]`, e.g.:
+/// To generate a `Store` trait associating all storages, annotate your `Pallet` struct with
+/// the attribute `#[pallet::generate_store($vis trait Store)]`, e.g.:
 ///
 /// ```ignore
 /// #[pallet::pallet]
@@ -1580,6 +1580,9 @@ pub mod pallet_prelude {
 ///
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
+/// 
+/// NOTE: this attribute is only valid when applied _directly_ to your `Pallet` struct
+/// definition.
 ///
 /// Also see [`pallet::generate_store`](`frame_support::pallet_macros::generate_store`).
 ///
