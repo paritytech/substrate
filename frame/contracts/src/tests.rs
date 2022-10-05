@@ -823,8 +823,6 @@ fn deploy_and_call_other_contract() {
 		// Drop previous events
 		initialize_block(2);
 
-		println!("--------------");
-
 		// Call BOB contract, which attempts to instantiate and call the callee contract and
 		// makes various assertions on the results from those calls.
 		assert_ok!(Contracts::call(
