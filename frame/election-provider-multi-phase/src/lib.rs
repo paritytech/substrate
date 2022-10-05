@@ -335,7 +335,13 @@ impl<T: Config> BoundedElectionProvider for NoFallback<T> {
 }
 
 impl<T: Config> InstantElectionProvider for NoFallback<T> {
-	fn elect_with_bounds(_: usize, _: usize) -> Result<BoundedSupports<T::AccountId, <Self as BoundedElectionProvider>::MaxWinners>, Self::Error> {
+	fn elect_with_bounds(
+		_: usize,
+		_: usize,
+	) -> Result<
+		BoundedSupports<T::AccountId, <Self as BoundedElectionProvider>::MaxWinners>,
+		Self::Error,
+	> {
 		Err("NoFallback.")
 	}
 }
@@ -1874,7 +1880,6 @@ mod tests {
 		},
 		Phase,
 	};
-	use frame_election_provider_support::ElectionProvider;
 	use frame_support::{assert_noop, assert_ok};
 	use sp_npos_elections::{BalancingConfig, Support};
 
@@ -1929,7 +1934,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert!(MultiPhase::snapshot().is_some());
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -1980,7 +1985,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(20));
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -2018,7 +2023,7 @@ mod tests {
 			roll_to(30);
 			assert!(MultiPhase::current_phase().is_signed());
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
@@ -2056,7 +2061,7 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_off());
 
 			// This module is now only capable of doing on-chain backup.
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
 
@@ -2082,7 +2087,7 @@ mod tests {
 			assert_eq!(MultiPhase::round(), 1);
 
 			// An unexpected call to elect.
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
 			assert_eq!(
@@ -2129,7 +2134,7 @@ mod tests {
 			}
 
 			// an unexpected call to elect.
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			// all storage items must be cleared.
 			assert_eq!(MultiPhase::round(), 2);
@@ -2179,7 +2184,7 @@ mod tests {
 			));
 
 			roll_to(30);
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			assert_eq!(
 				multi_phase_events(),
@@ -2223,7 +2228,7 @@ mod tests {
 			));
 			assert!(MultiPhase::queued_solution().is_some());
 
-			assert_ok!(MultiPhase::elect());
+			assert_ok!(<MultiPhase as BoundedElectionProvider>::elect());
 
 			assert_eq!(
 				multi_phase_events(),
@@ -2255,7 +2260,7 @@ mod tests {
 
 			// Zilch solutions thus far, but we get a result.
 			assert!(MultiPhase::queued_solution().is_none());
-			let supports = MultiPhase::elect().unwrap();
+			let supports = <MultiPhase as BoundedElectionProvider>::elect().unwrap();
 
 			assert_eq!(
 				supports,
@@ -2288,7 +2293,10 @@ mod tests {
 
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+			assert_eq!(
+				<MultiPhase as BoundedElectionProvider>::elect().unwrap_err(),
+				ElectionError::Fallback("NoFallback.")
+			);
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 
@@ -2311,7 +2319,10 @@ mod tests {
 
 			// Zilch solutions thus far.
 			assert!(MultiPhase::queued_solution().is_none());
-			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
+			assert_eq!(
+				<MultiPhase as BoundedElectionProvider>::elect().unwrap_err(),
+				ElectionError::Fallback("NoFallback.")
+			);
 
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
@@ -2328,7 +2339,7 @@ mod tests {
 			// something is queued now
 			assert!(MultiPhase::queued_solution().is_some());
 			// next election call with fix everything.;
-			assert!(MultiPhase::elect().is_ok());
+			assert!(<MultiPhase as BoundedElectionProvider>::elect().is_ok());
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			assert_eq!(
@@ -2365,7 +2376,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// On-chain backup works though.
-			let supports = MultiPhase::elect().unwrap();
+			let supports = <MultiPhase as BoundedElectionProvider>::elect().unwrap();
 			assert!(supports.len() > 0);
 
 			assert_eq!(
@@ -2395,7 +2406,7 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			roll_to(29);
-			let err = MultiPhase::elect().unwrap_err();
+			let err = <MultiPhase as BoundedElectionProvider>::elect().unwrap_err();
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
 

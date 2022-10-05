@@ -1172,7 +1172,7 @@ mod tests {
 			let ready = ReadySolution {
 				score: ElectionScore { minimal_stake: 10, ..Default::default() },
 				supports: bounded_vec![],
-				compute: Default::default()
+				compute: Default::default(),
 			};
 			<QueuedSolution<Runtime>>::put(ready);
 

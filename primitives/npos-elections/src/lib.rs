@@ -450,10 +450,10 @@ impl<AccountId> Default for Support<AccountId> {
 /// The main advantage of this is that it is encodable.
 pub type Supports<A> = Vec<(A, Support<A>)>;
 
-/// Same as `Supports` bounded by `MaxWinners`.
+/// Same as `Supports` but bounded by `B`.
 ///
 /// To note, the inner `Support` is still unbounded.
-pub type BoundedSupports<A, MaxWinners> = BoundedVec<(A, Support<A>), MaxWinners>;
+pub type BoundedSupports<A, B> = BoundedVec<(A, Support<A>), B>;
 
 /// Linkage from a winner to their [`Support`].
 ///
