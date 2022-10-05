@@ -131,17 +131,17 @@ impl StorageProof {
 
 impl<H: Hasher> From<StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: StorageProof) -> Self {
-		let mut db = crate::MemoryDB::default();
-		proof.into_iter_nodes().for_each(|n| {
-			db.insert(crate::EMPTY_PREFIX, &n);
-		});
-		db
+		From::from(&proof)
 	}
 }
 
 impl<H: Hasher> From<&StorageProof> for crate::MemoryDB<H> {
 	fn from(proof: &StorageProof) -> Self {
-		From::from(proof.clone())
+		let mut db = crate::MemoryDB::default();
+		proof.iter_nodes().for_each(|n| {
+			db.insert(crate::EMPTY_PREFIX, &n);
+		});
+		db
 	}
 }
 
