@@ -1451,6 +1451,10 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// Pool id currently in use.
+		PoolIdInUse,
+		/// Claim exceeds the last pool id.
+		PoolIdCountExceeded
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1943,7 +1947,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/*
+		
+		// TODO: Benchmark?
+		/// Doesn't mean that the poolId has been removed from the BondedPools, just means that there is no active depositor and no stake in the pool
 		/// Create a new delegation pool with a previously used pool id
 		/// 
 		/// # Arguments
@@ -1951,17 +1957,98 @@ pub mod pallet {
 		/// same as `create` with the inclusion of
 		/// * `pool_id` - `Option<PoolId>`, if `None` this is similar to `create`.
 		///    if `Some(claim)` the caller is claiming that `claim` A.K.A PoolId is not in use. 
-		pub fn create_with_pool_id() {
+		#[pallet::weight(T::WeightInfo::create())]
+		#[transactional]
+		pub fn create_with_pool_id(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
-			pool_id: Option<PoolId>,
-		} -> DispatchResult {
-			
+			state_claim: Option<PoolId>,
+		 ) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let root = T::Lookup::lookup(root)?;
+			let nominator = T::Lookup::lookup(nominator)?;
+			let state_toggler = T::Lookup::lookup(state_toggler)?;
+
+			ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
+			ensure!(
+				MaxPools::<T>::get()
+					.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
+				Error::<T>::MaxPools
+			);
+			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+
+			let pool_id = match state_claim {
+				Some(claim) => {
+					ensure!(!BondedPools::<T>::contains_key(claim), Error::<T>::PoolIdInUse); // create custom Error?
+					ensure!(claim < LastPoolId::<T>::get(), Error::<T>::PoolIdCountExceeded);
+					claim
+				},
+				None => {
+					let inc_pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
+						*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
+						Ok(*id)
+					})?;
+					inc_pool_id
+				},
+			};
+
+			let mut bonded_pool = BondedPool::<T>::new(
+				pool_id,
+				PoolRoles {
+					root: Some(root),
+					nominator: Some(nominator),
+					state_toggler: Some(state_toggler),
+					depositor: who.clone(),
+				},
+			);
+
+			bonded_pool.try_inc_members()?;
+			let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create)?;
+
+			T::Currency::transfer(
+				&who,
+				&bonded_pool.reward_account(),
+				T::Currency::minimum_balance(),
+				ExistenceRequirement::AllowDeath,
+			)?;
+
+			PoolMembers::<T>::insert(
+				who.clone(),
+				PoolMember::<T> {
+					pool_id,
+					points,
+					last_recorded_reward_counter: Zero::zero(),
+					unbonding_eras: Default::default(),
+				},
+			);
+			RewardPools::<T>::insert(
+				pool_id,
+				RewardPool::<T> {
+					last_recorded_reward_counter: Zero::zero(),
+					last_recorded_total_payouts: Zero::zero(),
+					total_rewards_claimed: Zero::zero(),
+				},
+			);
+			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
+
+			Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
+
+			Self::deposit_event(Event::<T>::Bonded {
+				member: who,
+				pool_id,
+				bonded: amount,
+				joined: true,
+			});
+			bonded_pool.put();
+
+			Ok(())
+			// ensure bondedpoools contains that pool_id, this needs a custom error. // THIS should be inside the match statement
+
+			// let result = match Option ( if Some(claim), if None then increment the last pool Id)
 		}
-		*/
 
 		/// Nominate on behalf of the pool.
 		///
