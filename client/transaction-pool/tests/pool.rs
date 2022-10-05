@@ -51,7 +51,7 @@ fn pool() -> Pool<TestApi> {
 
 fn maintained_pool() -> (BasicPool<TestApi, Block>, Arc<TestApi>, futures::executor::ThreadPool) {
 	let test_api = TestApi::with_alice_nonce(209);
-	let first_block_hash = {
+	let genesis_hash = {
 		let chain = test_api.chain().read();
 		chain
 			.block_by_number
@@ -61,7 +61,7 @@ fn maintained_pool() -> (BasicPool<TestApi, Block>, Arc<TestApi>, futures::execu
 	};
 	let api = Arc::new(test_api);
 	let (pool, background_task) =
-		BasicPool::new_test(api.clone(), first_block_hash, first_block_hash);
+		BasicPool::new_test(api.clone(), genesis_hash, genesis_hash);
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
 	thread_pool.spawn_ok(background_task);
@@ -69,7 +69,7 @@ fn maintained_pool() -> (BasicPool<TestApi, Block>, Arc<TestApi>, futures::execu
 }
 
 fn create_basic_pool(test_api: TestApi) -> BasicPool<TestApi, Block> {
-	let first_block_hash = {
+	let genesis_hash = {
 		let chain = test_api.chain().read();
 		chain
 			.block_by_number
@@ -77,7 +77,7 @@ fn create_basic_pool(test_api: TestApi) -> BasicPool<TestApi, Block> {
 			.map(|blocks| blocks[0].0.header.hash())
 			.expect("there is block 0. qed")
 	};
-	let (pool, _) = BasicPool::new_test(Arc::new(test_api), first_block_hash, first_block_hash);
+	let (pool, _) = BasicPool::new_test(Arc::new(test_api), genesis_hash, genesis_hash);
 	pool
 }
 

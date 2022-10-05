@@ -307,7 +307,7 @@ mod tests {
 	use sc_basic_authorship::ProposerFactory;
 	use sc_client_api::BlockBackend;
 	use sc_consensus::ImportedAux;
-	use sc_transaction_pool::{BasicPool, Options, RevalidationType};
+	use sc_transaction_pool::{BasicPool, Options, RevalidationType, ChainApi};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
 	use sp_inherents::InherentData;
 	use sp_runtime::generic::{BlockId, Digest, DigestItem};
@@ -318,6 +318,17 @@ mod tests {
 
 	fn api() -> Arc<TestApi> {
 		Arc::new(TestApi::empty())
+	}
+
+	fn genesis_hash(test_api :&TestApi) -> <<TestApi as ChainApi>::Block as BlockT>::Hash
+	{
+		test_api
+			.chain()
+			.read()
+			.block_by_number
+			.get(&0)
+			.map(|blocks| blocks[0].0.header.hash())
+			.expect("there is block 0. qed")
 	}
 
 	const SOURCE: TransactionSource = TransactionSource::External;
@@ -359,14 +370,18 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let api = api();
+		let genesis_hash = genesis_hash(&api);
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
-			api(),
+			api,
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 		// this test checks that blocks are created as soon as transactions are imported into the
@@ -429,14 +444,18 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let api = api();
+		let genesis_hash = genesis_hash(&api);
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
-			api(),
+			api,
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 		// this test checks that blocks are created as soon as an engine command is sent over the
@@ -507,6 +526,7 @@ mod tests {
 		let client = Arc::new(client);
 		let pool_api = api();
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let genesis_hash = genesis_hash(&pool_api);
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
@@ -515,6 +535,8 @@ mod tests {
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 		// this test checks that blocks are created as soon as an engine command is sent over the
@@ -614,14 +636,18 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
+		let api = api();
+		let genesis_hash = genesis_hash(&api);
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
-			api(),
+			api,
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
 			0,
+			genesis_hash,
+			genesis_hash,
 		));
 		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
 
