@@ -828,8 +828,8 @@ pub struct EnactmentState<Block>
 where
 	Block: BlockT,
 {
-	recent_best_block: Option<Block::Hash>,
-	recent_finalized_block: Option<Block::Hash>,
+	recent_best_block: Block::Hash,
+	recent_finalized_block: Block::Hash,
 }
 
 impl<Block> EnactmentState<Block>
@@ -837,10 +837,7 @@ where
 	Block: BlockT,
 {
 	fn new(recent_best_block: Block::Hash, recent_finalized_block: Block::Hash) -> Self {
-		EnactmentState {
-			recent_best_block: Some(recent_best_block),
-			recent_finalized_block: Some(recent_finalized_block),
-		}
+		EnactmentState { recent_best_block, recent_finalized_block }
 	}
 
 	/// This function returns true and the tree_route if blocks enact/retract process (implemented
@@ -862,57 +859,45 @@ where
 			ChainEvent::Finalized { hash, .. } => (*hash, true),
 		};
 
-		let best_block = match self.recent_best_block {
-			Some(recent_best_hash) => recent_best_hash,
-			None => {
-				self.recent_best_block = Some(new_hash);
-				if finalized {
-					self.recent_finalized_block = Some(new_hash);
-				}
-
-				return Ok((true, None))
-			},
-		};
-
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
-		let tree_route = match api.tree_route(best_block, new_hash) {
+		let tree_route = match api.tree_route(self.recent_best_block, new_hash) {
 			Ok(tree_route) => tree_route,
 			Err(e) =>
 				return Err(format!(
 					"Error [{e}] occured while computing tree_route from {new_hash:?} to \
-									previously finalized: {best_block:?}"
+									previously finalized: {:?}",
+					self.recent_best_block
 				)),
 		};
 
 		log::trace!(
 			target: "txpool",
 			"resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} finalized_block:{:?}",
-			new_hash, finalized, tree_route, best_block, self.recent_finalized_block
+			new_hash, finalized, tree_route, self.recent_best_block, self.recent_finalized_block
 		);
 
-		if let Some(finalized_block) = self.recent_finalized_block {
-			// block was already finalized
-			if finalized_block == new_hash {
-				log::trace!(target:"txpool", "handle_enactment: block already finalized");
-				return Ok((false, None))
-			}
+		// block was already finalized
+		if self.recent_finalized_block == new_hash {
+			log::trace!(target:"txpool", "handle_enactment: block already finalized");
+			return Ok((false, None))
+		}
 
-			// check if recently finalized block is on retracted path...
-			if tree_route.retracted().iter().any(|x| x.hash == finalized_block) {
-				log::debug!(
-					target: "txpool",
-					"Recently finalized block {} would be retracted by Finalized event {}",
-					finalized_block, new_hash
-				);
-				return Ok((false, None))
-			}
+		// check if recently finalized block is on retracted path...
+		if tree_route.retracted().iter().any(|x| x.hash == self.recent_finalized_block) {
+			log::debug!(
+				target: "txpool",
+				"Recently finalized block {} would be retracted by Finalized event {}",
+				self.recent_finalized_block, new_hash
+			);
+			return Ok((false, None))
 		}
 
 		if finalized {
-			self.recent_finalized_block = Some(new_hash);
+			self.recent_finalized_block = new_hash;
 			// If there are no enacted blocks in best_block -> hash tree_route, it means that
-			// block being finalized was already enacted. (This case also covers best_block == hash)
+			// block being finalized was already enacted. (This case also covers best_block ==
+			// new_hash) recent_best_block remains valid
 			if tree_route.enacted().is_empty() {
 				log::trace!(
 					target: "txpool",
@@ -920,18 +905,10 @@ where
 				);
 				return Ok((false, None))
 			}
-
-			// check if the recent best_block was retracted
-			let best_block_retracted = tree_route.retracted().iter().any(|x| x.hash == best_block);
-			let best_block_is_pivot = tree_route.common_block().hash == best_block;
-
-			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
-			if best_block_retracted || best_block_is_pivot {
-				self.recent_best_block = Some(new_hash)
-			}
-		} else {
-			self.recent_best_block = Some(new_hash);
+			//otherwise enacted finalized block becomes best block...
 		}
+
+		self.recent_best_block = new_hash;
 
 		Ok((true, Some(tree_route)))
 	}
