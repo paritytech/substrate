@@ -985,7 +985,7 @@ pub mod pallet {
 			// `ElectionProvider::elect` will succeed and take care of that.
 
 			let solution = ReadySolution {
-				supports: supports.try_into().map_err(|_| "BoundNotMet")?,
+				supports: supports.try_into().map_err(|_| <Error<T>>::BoundNotMet)?,
 				score: Default::default(),
 				compute: ElectionCompute::Emergency,
 			};
@@ -1171,6 +1171,8 @@ pub mod pallet {
 		CallNotAllowed,
 		/// The fallback failed
 		FallbackFailed,
+		/// Some bound not met
+		BoundNotMet,
 	}
 
 	#[pallet::validate_unsigned]
