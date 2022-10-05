@@ -2066,9 +2066,9 @@ impl_runtime_apis! {
 
 		fn generate_historical_batch_proof(
 			block_numbers: Vec<BlockNumber>,
-			leaves_count: pallet_mmr::primitives::LeafIndex,
+			best_known_block_number: BlockNumber,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_historical_batch_proof(block_numbers, leaves_count).map(
+			Mmr::generate_historical_batch_proof(block_numbers, best_known_block_number).map(
 				|(leaves, proof)| {
 					(
 						leaves

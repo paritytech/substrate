@@ -129,7 +129,8 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 
-	/// Generate a MMR proof for the given `leaf_indices` of the MMR that had `leaves_count` leaves.
+	/// Generate a MMR proof for the given `block_numbers` of the MMR that had `leaves_count`
+	/// leaves.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
 	/// a MMR proof for the set of leaves at the given `leaf_indices` with MMR fixed to the state
@@ -150,7 +151,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	fn generate_historical_batch_proof(
 		&self,
 		block_numbers: Vec<BlockNumber>,
-		leaves_count: LeafIndex,
+		best_known_block_number: BlockNumber,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 }
@@ -223,7 +224,7 @@ where
 	fn generate_historical_batch_proof(
 		&self,
 		block_numbers: Vec<BlockNumber>,
-		leaves_count: LeafIndex,
+		best_known_block_number: BlockNumber,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
 		let api = self.client.runtime_api();
@@ -236,7 +237,7 @@ where
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
 				block_numbers,
-				leaves_count,
+				best_known_block_number,
 			)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;

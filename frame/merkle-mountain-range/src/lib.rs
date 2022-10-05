@@ -353,7 +353,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
-		Self::generate_historical_batch_proof(block_numbers, Self::mmr_leaves())
+		Self::generate_historical_batch_proof(
+			block_numbers,
+			Self::leaf_index_to_parent_block_num(Self::mmr_leaves(), Self::mmr_leaves()),
+		)
 	}
 
 	/// Generate a MMR proof for the given `block_numbers` for the MMR of `leaves_count` size.
@@ -364,11 +367,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_historical_batch_proof(
 		block_numbers: Vec<T::BlockNumber>,
-		leaves_count: LeafIndex,
+		best_known_block_number: T::BlockNumber,
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
+		let leaves_count = Self::block_num_to_leaf_index(best_known_block_number)?;
 		if leaves_count > Self::mmr_leaves() {
 			return Err(Error::InvalidLeavesCount)
 		}
