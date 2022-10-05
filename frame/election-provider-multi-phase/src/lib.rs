@@ -326,7 +326,6 @@ impl<T: Config> ElectionProviderBase for NoFallback<T> {
 }
 
 impl<T: Config> BoundedElectionProvider for NoFallback<T> {
-	// AKON: Can probably be 0 but verify later
 	type MaxWinners = T::MaxWinners;
 	fn elect() -> Result<BoundedSupports<T::AccountId, Self::MaxWinners>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
@@ -1258,13 +1257,13 @@ pub mod pallet {
 	/// Desired number of targets to elect for this round.
 	///
 	/// Only exists when [`Snapshot`] is present.
-	// WIP: call desired winners
+	// AKON: call desired winners?
+	// AKON: ensure desired_targets < MaxWinners when changing this value
 	#[pallet::storage]
 	#[pallet::getter(fn desired_targets)]
 	pub type DesiredTargets<T> = StorageValue<_, u32>;
 
-	// WIP: desired_targets < MaxWinners
-
+	
 	/// The metadata of the [`RoundSnapshot`]
 	///
 	/// Only exists when [`Snapshot`] is present.
@@ -1586,7 +1585,6 @@ impl<T: Config> Pallet<T> {
 		//   inexpensive (1 read of an empty vector).
 		let _ = Self::finalize_signed_phase();
 		<QueuedSolution<T>>::take()
-			// TODO: fix to one statement
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
 				<T::Fallback as ElectionProvider>::elect()
@@ -1651,7 +1649,6 @@ impl<T: Config> BoundedElectionProvider for Pallet<T> {
 				// All went okay, record the weight, put sign to be Off, clean snapshot, etc.
 				Self::weigh_supports(&supports);
 				Self::rotate_round();
-				// WIP: Fix unwrap
 				Ok(supports)
 			},
 			Err(why) => {
