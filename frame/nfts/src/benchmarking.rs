@@ -487,7 +487,6 @@ benchmarks_instance_pallet! {
 		let current_block = frame_system::Pallet::<T>::block_number();
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price_with_direction.clone()), duration)
 	verify {
-		let expect_deadline = duration.saturating_add(frame_system::Pallet::<T>::block_number());
 		assert_last_event::<T, I>(Event::SwapCreated {
 			offered_collection: collection,
 			offered_item: item1,
@@ -545,7 +544,6 @@ benchmarks_instance_pallet! {
 		)?;
 	}: _(SystemOrigin::Signed(target.clone()), collection, item2, collection, item1, Some(price_with_direction.clone()))
 	verify {
-		let expect_deadline = duration.saturating_add(frame_system::Pallet::<T>::block_number());
 		assert_last_event::<T, I>(Event::SwapClaimed {
 			sent_collection: collection,
 			sent_item: item2,
