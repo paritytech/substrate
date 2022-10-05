@@ -32,7 +32,7 @@ where
 {
 	let mut map = serializer.serialize_map(Some(1))?;
 	let (value, unit) = t.normalize();
-	map.serialize_entry(unit, &value)?;
+	map.serialize_entry(&unit.to_string(), &value)?;
 	map.end()
 }
 

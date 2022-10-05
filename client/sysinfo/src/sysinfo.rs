@@ -33,6 +33,23 @@ use std::{
 	time::{Duration, Instant},
 };
 
+pub enum Unit {
+	GiBs,
+	MiBs,
+	KiBs,
+}
+
+impl fmt::Display for Unit {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let unit = match self {
+			Unit::GiBs => "GiBs",
+			Unit::MiBs => "MiBs",
+			Unit::KiBs => "KiBs",
+		};
+		write!(f, "{}", unit)
+	}
+}
+
 /// Throughput as measured in bytes per second.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Throughput(f64);
@@ -75,15 +92,15 @@ impl Throughput {
 	}
 
 	/// Normalizes [`Self`] to use the larges unit possible.
-	pub fn normalize(&self) -> (f64, &'static str) {
+	pub fn normalize(&self) -> (f64, Unit) {
 		let bs = self.0;
 
 		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
-			(self.as_gibs(), "GiBs")
+			(self.as_gibs(), Unit::GiBs)
 		} else if bs >= KIBIBYTE * KIBIBYTE {
-			(self.as_mibs(), "MiBs")
+			(self.as_mibs(), Unit::MiBs)
 		} else {
-			(self.as_kibs(), "KiBs")
+			(self.as_kibs(), Unit::KiBs)
 		}
 	}
 }
@@ -91,7 +108,7 @@ impl Throughput {
 impl fmt::Display for Throughput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let (value, unit) = self.normalize();
-		write!(f, "{:.2?} {}", value, unit)
+		write!(f, "{:.2?} {}", value, unit.to_string())
 	}
 }
 
