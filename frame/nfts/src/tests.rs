@@ -18,7 +18,11 @@
 //! Tests for Nfts pallet.
 
 use crate::{mock::*, Event, *};
-use frame_support::{assert_noop, assert_ok, dispatch::Dispatchable, traits::Currency};
+use frame_support::{
+	assert_noop, assert_ok,
+	dispatch::Dispatchable,
+	traits::{Currency, Get},
+};
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
 
@@ -1294,6 +1298,315 @@ fn pay_tips_should_work() {
 			receiver: user_3,
 			amount: tip,
 		}));
+	});
+}
+
+#[test]
+fn create_cancel_swap_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		let user_id = 1;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+		let price = 1;
+		let price_direction = PriceDirection::Receive;
+		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
+		let duration = 2;
+		let expect_deadline = 3;
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, true));
+
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_1, user_id));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_2, user_id));
+
+		// validate desired item and the collection exists
+		assert_noop!(
+			Nfts::create_swap(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				item_1,
+				collection_id,
+				Some(item_2 + 1),
+				Some(price_with_direction.clone()),
+				duration,
+			),
+			Error::<Test>::UnknownItem
+		);
+		assert_noop!(
+			Nfts::create_swap(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				item_1,
+				collection_id + 1,
+				None,
+				Some(price_with_direction.clone()),
+				duration,
+			),
+			Error::<Test>::UnknownCollection
+		);
+
+		let max_duration: u64 = <Test as Config>::MaxDeadlineDuration::get();
+		assert_noop!(
+			Nfts::create_swap(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				item_1,
+				collection_id,
+				Some(item_2),
+				Some(price_with_direction.clone()),
+				max_duration.saturating_add(1),
+			),
+			Error::<Test>::WrongDuration
+		);
+
+		assert_ok!(Nfts::create_swap(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			collection_id,
+			Some(item_2),
+			Some(price_with_direction.clone()),
+			duration,
+		));
+
+		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(swap.desired_collection, collection_id);
+		assert_eq!(swap.desired_item, Some(item_2));
+		assert_eq!(swap.price, Some(price_with_direction.clone()));
+		assert_eq!(swap.deadline, expect_deadline);
+
+		assert!(events().contains(&Event::<Test>::SwapCreated {
+			offered_collection: collection_id,
+			offered_item: item_1,
+			desired_collection: collection_id,
+			desired_item: Some(item_2),
+			price: Some(price_with_direction.clone()),
+			deadline: expect_deadline,
+		}));
+
+		// validate we can cancel the swap
+		assert_ok!(Nfts::cancel_swap(RuntimeOrigin::signed(user_id), collection_id, item_1));
+		assert!(events().contains(&Event::<Test>::SwapCancelled {
+			offered_collection: collection_id,
+			offered_item: item_1,
+			desired_collection: collection_id,
+			desired_item: Some(item_2),
+			price: Some(price_with_direction.clone()),
+			deadline: expect_deadline,
+		}));
+		assert!(!PendingSwapOf::<Test>::contains_key(collection_id, item_1));
+
+		// validate anyone can cancel the expired swap
+		assert_ok!(Nfts::create_swap(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			collection_id,
+			Some(item_2),
+			Some(price_with_direction.clone()),
+			duration,
+		));
+		assert_noop!(
+			Nfts::cancel_swap(RuntimeOrigin::signed(user_id + 1), collection_id, item_1),
+			Error::<Test>::NoPermission
+		);
+		System::set_block_number(expect_deadline + 1);
+		assert_ok!(Nfts::cancel_swap(RuntimeOrigin::signed(user_id + 1), collection_id, item_1));
+
+		// validate optional desired_item param
+		assert_ok!(Nfts::create_swap(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			collection_id,
+			None,
+			Some(price_with_direction),
+			duration,
+		));
+
+		let swap = PendingSwapOf::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(swap.desired_item, None);
+	});
+}
+
+#[test]
+fn claim_swap_should_work() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		let user_1 = 1;
+		let user_2 = 2;
+		let collection_id = 0;
+		let item_1 = 1;
+		let item_2 = 2;
+		let item_3 = 3;
+		let item_4 = 4;
+		let item_5 = 5;
+		let price = 100;
+		let price_direction = PriceDirection::Receive;
+		let price_with_direction =
+			PriceWithDirection { amount: price, direction: price_direction.clone() };
+		let duration = 2;
+		let initial_balance = 1000;
+		let deadline = 1 + duration;
+
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, true));
+
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, user_1));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_2, user_2));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_3, user_2));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_4, user_1));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_5, user_2));
+
+		assert_ok!(Nfts::create_swap(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_1,
+			collection_id,
+			Some(item_2),
+			Some(price_with_direction.clone()),
+			duration,
+		));
+
+		// validate the deadline
+		System::set_block_number(5);
+		assert_noop!(
+			Nfts::claim_swap(
+				RuntimeOrigin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_1,
+				Some(price_with_direction.clone()),
+			),
+			Error::<Test>::DeadlineExpired
+		);
+		System::set_block_number(1);
+
+		// validate edge cases
+		assert_noop!(
+			Nfts::claim_swap(
+				RuntimeOrigin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_4, // no swap was created for that asset
+				Some(price_with_direction.clone()),
+			),
+			Error::<Test>::UnknownSwap
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				RuntimeOrigin::signed(user_2),
+				collection_id,
+				item_4, // not my item
+				collection_id,
+				item_1,
+				Some(price_with_direction.clone()),
+			),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				RuntimeOrigin::signed(user_2),
+				collection_id,
+				item_5, // my item, but not the one another part wants
+				collection_id,
+				item_1,
+				Some(price_with_direction.clone()),
+			),
+			Error::<Test>::UnknownSwap
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				RuntimeOrigin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_1,
+				Some(PriceWithDirection { amount: price + 1, direction: price_direction.clone() }), // wrong price
+			),
+			Error::<Test>::UnknownSwap
+		);
+		assert_noop!(
+			Nfts::claim_swap(
+				RuntimeOrigin::signed(user_2),
+				collection_id,
+				item_2,
+				collection_id,
+				item_1,
+				Some(PriceWithDirection { amount: price, direction: PriceDirection::Send }), // wrong direction
+			),
+			Error::<Test>::UnknownSwap
+		);
+
+		assert_ok!(Nfts::claim_swap(
+			RuntimeOrigin::signed(user_2),
+			collection_id,
+			item_2,
+			collection_id,
+			item_1,
+			Some(price_with_direction.clone()),
+		));
+
+		// validate the new owner
+		let item = Item::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.owner, user_2);
+		let item = Item::<Test>::get(collection_id, item_2).unwrap();
+		assert_eq!(item.owner, user_1);
+
+		// validate the balances
+		assert_eq!(Balances::total_balance(&user_1), initial_balance + price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance - price);
+
+		// ensure we reset the swap
+		assert!(!PendingSwapOf::<Test>::contains_key(collection_id, item_1));
+
+		// validate the event
+		assert!(events().contains(&Event::<Test>::SwapClaimed {
+			sent_collection: collection_id,
+			sent_item: item_2,
+			sent_item_owner: user_2,
+			received_collection: collection_id,
+			received_item: item_1,
+			received_item_owner: user_1,
+			price: Some(price_with_direction.clone()),
+			deadline,
+		}));
+
+		// validate the optional desired_item param and another price direction
+		let price_direction = PriceDirection::Send;
+		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
+		Balances::make_free_balance_be(&user_1, initial_balance);
+		Balances::make_free_balance_be(&user_2, initial_balance);
+
+		assert_ok!(Nfts::create_swap(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_4,
+			collection_id,
+			None,
+			Some(price_with_direction.clone()),
+			duration,
+		));
+		assert_ok!(Nfts::claim_swap(
+			RuntimeOrigin::signed(user_2),
+			collection_id,
+			item_1,
+			collection_id,
+			item_4,
+			Some(price_with_direction),
+		));
+		let item = Item::<Test>::get(collection_id, item_1).unwrap();
+		assert_eq!(item.owner, user_1);
+		let item = Item::<Test>::get(collection_id, item_4).unwrap();
+		assert_eq!(item.owner, user_2);
+
+		assert_eq!(Balances::total_balance(&user_1), initial_balance - price);
+		assert_eq!(Balances::total_balance(&user_2), initial_balance + price);
 	});
 }
 

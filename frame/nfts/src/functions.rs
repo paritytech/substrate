@@ -64,6 +64,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
+		PendingSwapOf::<T, I>::remove(&collection, &item);
 
 		Self::deposit_event(Event::Transferred {
 			collection,
@@ -136,6 +137,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
 			#[allow(deprecated)]
 			ItemPriceOf::<T, I>::remove_prefix(&collection, None);
+			#[allow(deprecated)]
+			PendingSwapOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
@@ -235,6 +238,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Item::<T, I>::remove(&collection, &item);
 		Account::<T, I>::remove((&owner, &collection, &item));
 		ItemPriceOf::<T, I>::remove(&collection, &item);
+		PendingSwapOf::<T, I>::remove(&collection, &item);
 
 		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
 		// then we keep the record and don't remove it

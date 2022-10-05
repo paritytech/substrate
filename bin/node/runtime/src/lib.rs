@@ -1474,6 +1474,7 @@ parameter_types! {
 	pub const ValueLimit: u32 = 256;
 	pub const ApprovalsLimit: u32 = 20;
 	pub const MaxTips: u32 = 10;
+	pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
 }
 
 impl pallet_uniques::Config for Runtime {
@@ -1517,6 +1518,7 @@ impl pallet_nfts::Config for Runtime {
 	type ValueLimit = ValueLimit;
 	type ApprovalsLimit = ApprovalsLimit;
 	type MaxTips = MaxTips;
+	type MaxDeadlineDuration = MaxDeadlineDuration;
 	type FeatureFlags = FeatureFlags;
 	type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
 	#[cfg(feature = "runtime-benchmarks")]
