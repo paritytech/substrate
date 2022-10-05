@@ -268,7 +268,6 @@ where
 		protocol_id: ProtocolId,
 		fork_id: &Option<String>,
 		network_config: &config::NetworkConfiguration,
-		notifications_protocols_handshakes: Vec<Vec<u8>>,
 		metrics_registry: Option<&Registry>,
 		chain_sync: Box<dyn ChainSync<B>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
@@ -397,16 +396,14 @@ where
 
 			Notifications::new(
 				peerset,
-				iter::once(sync_protocol_config).chain(
-					network_config.extra_sets.iter().zip(notifications_protocols_handshakes).map(
-						|(s, hs)| notifications::ProtocolConfig {
-							name: s.notifications_protocol.clone(),
-							fallback_names: s.fallback_names.clone(),
-							handshake: hs,
-							max_notification_size: s.max_notification_size,
-						},
-					),
-				),
+				iter::once(sync_protocol_config).chain(network_config.extra_sets.iter().map(|s| {
+					notifications::ProtocolConfig {
+						name: s.notifications_protocol.clone(),
+						fallback_names: s.fallback_names.clone(),
+						handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
+						max_notification_size: s.max_notification_size,
+					}
+				})),
 			)
 		};
 

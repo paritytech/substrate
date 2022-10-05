@@ -802,6 +802,7 @@ where
 				notifications_protocol: p,
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
+				handshake: None,
 				set_config: Default::default(),
 			})
 			.collect();

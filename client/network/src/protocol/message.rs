@@ -25,7 +25,7 @@ pub use self::generic::{
 };
 use codec::{Decode, Encode};
 use sc_client_api::StorageProof;
-use sc_network_common::{message::RequestId, protocol::role::*};
+use sc_network_common::message::RequestId;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 /// Type alias for using the message type using block type parameters.
@@ -57,8 +57,7 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use super::{RemoteCallResponse, RemoteReadResponse};
-	use bitflags::bitflags;
-	use codec::{Decode, Encode, Input, Output};
+	use codec::{Decode, Encode, Input};
 	use sc_client_api::StorageProof;
 	use sc_network_common::{
 		message::RequestId,

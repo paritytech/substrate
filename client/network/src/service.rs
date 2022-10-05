@@ -220,17 +220,12 @@ where
 			local_peer_id.to_base58(),
 		);
 
-		let default_notif_handshake_message = Roles::from(&params.role).encode();
-
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			params.chain.clone(),
 			params.protocol_id.clone(),
 			&params.fork_id,
 			&params.network_config,
-			(0..params.network_config.extra_sets.len())
-				.map(|_| default_notif_handshake_message.clone())
-				.collect(),
 			params.metrics_registry.as_ref(),
 			params.chain_sync,
 		)?;

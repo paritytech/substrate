@@ -178,6 +178,7 @@ fn build_nodes_one_proto() -> (
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: Default::default(),
 		}],
 		listen_addresses: vec![listen_addr.clone()],
@@ -190,6 +191,7 @@ fn build_nodes_one_proto() -> (
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
@@ -368,6 +370,7 @@ fn lots_of_incoming_peers_works() {
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: SetConfig { in_peers: u32::MAX, ..Default::default() },
 		}],
 		transport: TransportConfig::MemoryOnly,
@@ -387,6 +390,7 @@ fn lots_of_incoming_peers_works() {
 				notifications_protocol: PROTOCOL_NAME.into(),
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
+				handshake: None,
 				set_config: SetConfig {
 					reserved_nodes: vec![MultiaddrWithPeerId {
 						multiaddr: listen_addr.clone(),
@@ -504,6 +508,7 @@ fn fallback_name_working() {
 			notifications_protocol: NEW_PROTOCOL_NAME.into(),
 			fallback_names: vec![PROTOCOL_NAME.into()],
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: Default::default(),
 		}],
 		listen_addresses: vec![listen_addr.clone()],
@@ -516,6 +521,7 @@ fn fallback_name_working() {
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
