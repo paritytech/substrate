@@ -20,7 +20,7 @@
 use lazy_static::lazy_static;
 use sc_sysinfo::Throughput;
 use serde::{
-	de::{MapAccess, Visitor},
+	de::{Error, MapAccess, Visitor},
 	ser::SerializeMap,
 	Deserialize, Deserializer, Serialize, Serializer,
 };
@@ -42,21 +42,24 @@ impl<'de> Visitor<'de> for ThroughputVisitor {
 	type Value = Throughput;
 
 	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-		formatter.write_str("A f64")
+		formatter.write_str("A map where the key is the unit and value is a f64.")
 	}
 
 	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
 	where
 		M: MapAccess<'de>,
 	{
-		let (key, value): (&str, f64) =
-			if let Some((key, value)) = access.next_entry()? { (key, value) } else { todo!() };
+		let (key, value): (&str, f64) = if let Some((key, value)) = access.next_entry()? {
+			(key, value)
+		} else {
+			return Err(M::Error::custom("Expected an entry."))
+		};
 
 		match key {
 			"KiBs" => Ok(Throughput::from_kibs(value)),
 			"MiBs" => Ok(Throughput::from_mibs(value)),
 			"GiBs" => Ok(Throughput::from_gibs(value)),
-			_ => todo!(),
+			_ => Err(M::Error::custom("Invalid unit.")),
 		}
 	}
 }
