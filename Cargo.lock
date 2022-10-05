@@ -5531,6 +5531,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-runtime",
  "sp-std",
+ "sp-weights",
 ]
 
 [[package]]
