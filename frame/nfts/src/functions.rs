@@ -192,7 +192,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				ItemConfigOf::<T, I>::insert(&collection, &item, config);
+
+				if let Ok(existing_config) = ItemConfigOf::<T, I>::try_get(&collection, &item) {
+					ensure!(existing_config == config, Error::<T, I>::InconsistentItemConfig);
+				} else {
+					ItemConfigOf::<T, I>::insert(&collection, &item, config);
+				}
+
 				let details =
 					ItemDetails { owner, approvals: ApprovalsOf::<T, I>::default(), deposit };
 				Item::<T, I>::insert(&collection, &item, details);
@@ -229,7 +235,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Item::<T, I>::remove(&collection, &item);
 		Account::<T, I>::remove((&owner, &collection, &item));
 		ItemPriceOf::<T, I>::remove(&collection, &item);
-		ItemConfigOf::<T, I>::remove(&collection, &item);
+
+		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
+		// then we keep the record and don't remove it
+		let settings = Self::get_item_settings(&collection, &item)?;
+		if settings.is_empty() {
+			ItemConfigOf::<T, I>::remove(&collection, &item);
+		}
 
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())

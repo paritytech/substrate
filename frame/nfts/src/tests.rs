@@ -564,6 +564,40 @@ fn set_attribute_should_respect_freeze() {
 }
 
 #[test]
+fn preserve_config_for_frozen_items() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, CollectionConfig::empty()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, default_item_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 1, 1, default_item_config()));
+
+		// if the item is not locked/frozen then the config gets deleted on item burn
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(1), 0, 1, Some(1)));
+		assert!(!ItemConfigOf::<Test>::contains_key(0, 1));
+
+		// lock the item and ensure the config stays unchanged
+		assert_ok!(Nfts::lock_item(RuntimeOrigin::signed(1), 0, 0, true, true));
+
+		let expect_config = ItemConfig(ItemSetting::LockedAttributes | ItemSetting::LockedMetadata);
+		let config = ItemConfigOf::<Test>::get(0, 0).unwrap();
+		assert_eq!(config, expect_config);
+
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(1), 0, 0, Some(1)));
+		let config = ItemConfigOf::<Test>::get(0, 0).unwrap();
+		assert_eq!(config, expect_config);
+
+		// can't mint with the different config
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, default_item_config()),
+			Error::<Test>::InconsistentItemConfig
+		);
+
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, expect_config));
+	});
+}
+
+#[test]
 fn force_collection_status_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);

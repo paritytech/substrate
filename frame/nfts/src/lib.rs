@@ -483,6 +483,8 @@ pub mod pallet {
 		ReachedApprovalLimit,
 		/// The method is disabled by system settings.
 		MethodDisabled,
+		/// Item's config already exists and should be equal to the provided one.
+		InconsistentItemConfig,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -1301,11 +1303,12 @@ pub mod pallet {
 
 			let collection_settings = Self::get_collection_settings(&collection)?;
 			let maybe_is_frozen = match maybe_item {
-				None => Ok(collection_settings.contains(CollectionSetting::LockedAttributes)),
+				None => collection_settings.contains(CollectionSetting::LockedAttributes),
 				Some(item) => Self::get_item_settings(&collection, &item)
-					.map(|v| v.contains(ItemSetting::LockedAttributes)),
-			}?;
-			ensure!(!maybe_is_frozen, Error::<T, I>::Frozen);
+					.map_or(false, |v| v.contains(ItemSetting::LockedAttributes)),
+				// NOTE: if the item was previously burned, the ItemSettings record might not exists
+			};
+			ensure!(maybe_check_owner.is_none() || !maybe_is_frozen, Error::<T, I>::Frozen);
 
 			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
 				collection_details.attributes.saturating_dec();
@@ -1389,7 +1392,7 @@ pub mod pallet {
 		/// Clear the metadata for an item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `item`.
+		/// `collection`.
 		///
 		/// Any deposit is freed for the collection's owner.
 		///
@@ -1415,15 +1418,17 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let (action_allowed, _) =
-				Self::is_item_setting_disabled(&collection, &item, ItemSetting::LockedMetadata)?;
-			ensure!(maybe_check_owner.is_none() || action_allowed, Error::<T, I>::Frozen);
+			// NOTE: if the item was previously burned, the ItemSettings record might not exists
+			let is_frozen = Self::get_item_settings(&collection, &item)
+				.map_or(false, |v| v.contains(ItemSetting::LockedMetadata));
+
+			ensure!(maybe_check_owner.is_none() || !is_frozen, Error::<T, I>::Frozen);
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				if metadata.is_some() {
 					collection_details.item_metadatas.saturating_dec();
 				}
-				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownCollection)?.deposit;
+				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownItem)?.deposit;
 				T::Currency::unreserve(&collection_details.owner, deposit);
 				collection_details.total_deposit.saturating_reduce(deposit);
 
