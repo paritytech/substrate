@@ -376,8 +376,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let leaves = Self::mmr_leaves().saturated_into::<u64>();
 		let best_block_as_u64 = best_known_block_number.saturated_into::<u64>();
 
-		let leaves_count = now
-			.saturating_sub(leaves)
+		let leaves_count = leaves
+			.saturating_sub(now)
 			.saturating_add(best_block_as_u64)
 			.saturated_into::<LeafIndex>();
 		if leaves_count > Self::mmr_leaves() {
