@@ -305,7 +305,6 @@ pub async fn run_instant_seal_and_finalize<B, BI, CB, E, C, TP, SC, CIDP, P>(
 mod tests {
 	use super::*;
 	use sc_basic_authorship::ProposerFactory;
-	use sc_client_api::BlockBackend;
 	use sc_consensus::ImportedAux;
 	use sc_transaction_pool::{BasicPool, FullChainApi, Options, RevalidationType};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
