@@ -2063,9 +2063,17 @@ pub mod pallet_prelude {
 ///
 /// # Inherent: `#[pallet::inherent]` (optional)
 ///
-/// The `#[pallet::inherent]` attribute allows the pallet to provide some inherent:
+/// The `#[pallet::inherent]` attribute allows the pallet to provide some
+/// [inherent](https://docs.substrate.io/fundamentals/transaction-types/#inherent-transactions).
+/// An inherent is some piece of data that is inserted by a block authoring node at block
+/// creation time and can either be accepted or rejected by validators based on whether the
+/// data falls within an acceptable range.
 ///
-/// Item is defined as:
+/// The most common inherent is the `timestamp` that is inserted into every block. Since there
+/// is no way to validate timestamps, validators simply check that the timestamp reported by
+/// the block authoring node falls within an acceptable range.
+///
+/// Item must be defined as:
 ///
 /// ```ignore
 /// #[pallet::inherent]
