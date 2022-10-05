@@ -182,6 +182,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<u64, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxWinners = ConstU32<100>;
 }
 
 impl pallet_staking::Config for Test {

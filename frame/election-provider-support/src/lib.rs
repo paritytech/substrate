@@ -458,13 +458,14 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+impl<AccountId, BlockNumber, DataProvider> BoundedElectionProvider
 	for NoElection<(AccountId, BlockNumber, DataProvider)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
 {
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<NoElection as ElectionProvider> cannot do anything.")
+	type MaxWinners = frame_support::traits::ConstU32<0>;
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		Err("<NoElection as BoundedElectionProvider> cannot do anything.")
 	}
 }
 

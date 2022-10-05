@@ -103,6 +103,7 @@ parameter_types! {
 	pub static BondingDuration: u32 = 3;
 	pub static CurrentEra: u32 = 0;
 	pub static Ongoing: bool = false;
+	pub static MaxWinners: u32 = 100;
 }
 
 pub struct MockElection;
@@ -117,8 +118,9 @@ impl frame_election_provider_support::ElectionProviderBase for MockElection {
 	}
 }
 
-impl frame_election_provider_support::ElectionProvider for MockElection {
-	fn elect() -> Result<frame_election_provider_support::Supports<AccountId>, Self::Error> {
+impl frame_election_provider_support::BoundedElectionProvider for MockElection {
+	type MaxWinners = MaxWinners;
+	fn elect() -> Result<frame_election_provider_support::BoundedSupportsOf<Self>, Self::Error> {
 		Err(())
 	}
 }

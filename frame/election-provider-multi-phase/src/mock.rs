@@ -354,10 +354,11 @@ impl InstantElectionProvider for MockFallback {
 impl PartialEq for ReadySolution<u64, MaxWinners> {
 	fn eq(&self, other: &ReadySolution<u64, MaxWinners>) -> bool {
 		self.score == other.score && self.compute == other.compute
+			&& self.supports.clone().into_inner() == other.supports.clone().into_inner()
 	}
 }
 
-// AKON: Is there a better way?
+// AKON: Is there another way?
 impl std::fmt::Debug for MaxWinners {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("MaxWinners").field(&MaxWinners::get()).finish()

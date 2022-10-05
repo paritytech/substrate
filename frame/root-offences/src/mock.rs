@@ -145,6 +145,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxWinners = ConstU32<100>;
 }
 
 pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
