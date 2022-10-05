@@ -17,6 +17,7 @@
 
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_runtime::traits::Block;
 use sp_std::prelude::*;
 
 /// Id of different payloads in the [`Commitment`] data
@@ -71,6 +72,12 @@ impl Payload {
 		self.0.sort_by_key(|(id, _)| *id);
 		self
 	}
+}
+
+/// Trait for custom BEEFY payload providers.
+pub trait PayloadProvider<B: Block> {
+	/// Provide BEEFY payload if available for `header`.
+	fn payload(&self, header: &B::Header) -> Option<Payload>;
 }
 
 #[cfg(test)]

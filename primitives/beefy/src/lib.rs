@@ -37,7 +37,7 @@ mod payload;
 pub mod witness;
 
 pub use commitment::{Commitment, SignedCommitment, VersionedFinalityProof};
-pub use payload::{known_payloads, BeefyPayloadId, Payload};
+pub use payload::{known_payloads, BeefyPayloadId, Payload, PayloadProvider};
 
 use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
