@@ -5531,6 +5531,7 @@ dependencies = [
  "parity-scale-codec",
  "sp-runtime",
  "sp-std",
+ "sp-weights",
 ]
 
 [[package]]
@@ -5580,7 +5581,9 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
+ "pallet-preimage",
  "pallet-scheduler",
  "parity-scale-codec",
  "scale-info",
@@ -5898,6 +5901,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -6064,6 +6068,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -9998,6 +10003,7 @@ dependencies = [
  "array-bytes",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-api",
  "sp-core",

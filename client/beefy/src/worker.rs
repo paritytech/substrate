@@ -508,7 +508,7 @@ where
 
 			if let Err(e) = self.backend.append_justification(
 				BlockId::Number(block_num),
-				(BEEFY_ENGINE_ID, finality_proof.clone().encode()),
+				(BEEFY_ENGINE_ID, finality_proof.encode()),
 			) {
 				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
 			}
