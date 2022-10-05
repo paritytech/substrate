@@ -18,6 +18,7 @@
 
 //! Structs to easily compose inspect sub-command for CLI.
 
+use clap::{arg, command};
 use sc_cli::{ImportParams, SharedParams};
 
 /// The `inspect` command used to print decoded chain data.

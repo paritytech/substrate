@@ -40,7 +40,7 @@ pub struct KeystoreParams {
 	pub keystore_path: Option<PathBuf>,
 
 	/// Use interactive shell for entering the password used by the keystore.
-	#[clap(long, conflicts_with_all = &["password", "password-filename"])]
+	#[clap(long, conflicts_with_all = &["password", "password_filename"])]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore. This allows appending an extra user-defined secret to the
@@ -48,7 +48,7 @@ pub struct KeystoreParams {
 	#[clap(
 		long,
 		value_parser = secret_string_from_str,
-		conflicts_with_all = &["password-interactive", "password-filename"]
+		conflicts_with_all = &["password_interactive", "password_filename"]
 	)]
 	pub password: Option<SecretString>,
 
@@ -57,7 +57,7 @@ pub struct KeystoreParams {
 		long,
 		value_name = "PATH",
 		value_parser,
-		conflicts_with_all = &["password-interactive", "password"]
+		conflicts_with_all = &["password_interactive", "password"]
 	)]
 	pub password_filename: Option<PathBuf>,
 }

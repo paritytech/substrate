@@ -69,7 +69,7 @@ pub struct PalletCmd {
 	pub json_output: bool,
 
 	/// Write the raw results in JSON format into the given file.
-	#[clap(long, conflicts_with = "json-output")]
+	#[clap(long, conflicts_with = "json_output")]
 	pub json_file: Option<PathBuf>,
 
 	/// Don't print the median-slopes linear regression analysis.
@@ -126,7 +126,7 @@ pub struct PalletCmd {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used for benchmarks.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution: Option<ExecutionStrategy>,
 
 	/// Method for executing Wasm runtime code.
@@ -146,7 +146,7 @@ pub struct PalletCmd {
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
-		arg_enum,
+		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 

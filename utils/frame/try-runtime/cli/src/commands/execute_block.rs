@@ -58,7 +58,6 @@ pub struct ExecuteBlockCmd {
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
 	#[clap(
 		long,
-		multiple_values = false,
 		value_parser = crate::parse::hash
 	)]
 	block_at: Option<String>,
@@ -69,7 +68,6 @@ pub struct ExecuteBlockCmd {
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
 	#[clap(
 		long,
-		multiple_values = false,
 		value_parser = crate::parse::url
 	)]
 	block_ws_uri: Option<String>,

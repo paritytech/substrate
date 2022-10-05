@@ -40,7 +40,6 @@ pub struct OffchainWorkerCmd {
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
 	#[clap(
 		long,
-		multiple_values = false,
 		value_parser = parse::hash
 	)]
 	header_at: Option<String>,
@@ -51,7 +50,6 @@ pub struct OffchainWorkerCmd {
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
 	#[clap(
 		long,
-		multiple_values = false,
 		value_parser = parse::url
 	)]
 	header_ws_uri: Option<String>,

@@ -50,7 +50,7 @@ pub struct InsertKeyCmd {
 	pub keystore_params: KeystoreParams,
 
 	/// The cryptography scheme that should be used to generate the key out of the given URI.
-	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "SCHEME", value_enum, ignore_case = true)]
 	pub scheme: CryptoScheme,
 }
 

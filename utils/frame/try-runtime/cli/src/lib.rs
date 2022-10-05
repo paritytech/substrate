@@ -392,7 +392,7 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "wasm")]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value = "wasm")]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
@@ -412,7 +412,7 @@ pub struct SharedParams {
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
-		arg_enum,
+		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
@@ -470,7 +470,6 @@ pub enum State {
 		#[clap(
 			short,
 			long,
-			multiple_values = false,
 			value_parser = parse::hash,
 		)]
 		at: Option<String>,
@@ -481,7 +480,7 @@ pub enum State {
 
 		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
 		/// be scraped.
-		#[clap(short, long, multiple_values = true)]
+		#[clap(short, long, num_args = 0..)]
 		pallet: Vec<String>,
 
 		/// Fetch the child-keys as well.

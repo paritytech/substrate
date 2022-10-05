@@ -66,7 +66,7 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	#[clap(long, value_name = "TYPE", arg_enum, ignore_case = true, default_value = "ed25519")]
+	#[clap(long, value_name = "TYPE", value_enum, ignore_case = true, default_value = "ed25519")]
 	pub node_key_type: NodeKeyType,
 
 	/// The file from which to read the node's secret key to use for libp2p networking.
@@ -122,7 +122,7 @@ fn parse_ed25519_secret(hex: &str) -> error::Result<sc_network::config::Ed25519S
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use clap::ArgEnum;
+	use clap::ValueEnum;
 	use sc_network::config::identity::{ed25519, Keypair};
 	use std::fs;
 

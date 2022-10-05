@@ -16,12 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Definitions of [`ArgEnum`] types.
+//! Definitions of [`ValueEnum`] types.
 
-use clap::{ArgEnum, PossibleValue};
+use clap::{builder::PossibleValue, ValueEnum};
 
 /// The instantiation strategy to use in compiled mode.
-#[derive(Debug, Clone, Copy, ArgEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum WasmtimeInstantiationStrategy {
 	/// Pool the instances to avoid initializing everything from scratch
@@ -93,7 +93,7 @@ impl clap::ValueEnum for WasmExecutionMethod {
 	/// The canonical argument value.
 	///
 	/// The value is `None` for skipped variants.
-	fn to_possible_value<'a>(&self) -> Option<PossibleValue<'a>> {
+	fn to_possible_value(&self) -> Option<PossibleValue> {
 		match self {
 			#[cfg(feature = "wasmtime")]
 			WasmExecutionMethod::Compiled => Some(PossibleValue::new("compiled")),
@@ -152,7 +152,7 @@ pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "compiled";
 pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
 
 #[allow(missing_docs)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum TracingReceiver {
 	/// Output the tracing records using the log.
@@ -168,7 +168,7 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 }
 
 /// The type of the node key.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum NodeKeyType {
 	/// Use ed25519.
@@ -176,7 +176,7 @@ pub enum NodeKeyType {
 }
 
 /// The crypto scheme to use.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum CryptoScheme {
 	/// Use ed25519.
@@ -188,7 +188,7 @@ pub enum CryptoScheme {
 }
 
 /// The type of the output format.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum OutputType {
 	/// Output as json.
@@ -198,7 +198,7 @@ pub enum OutputType {
 }
 
 /// How to execute blocks
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum ExecutionStrategy {
 	/// Execute with native build (if available, WebAssembly otherwise).
@@ -224,7 +224,7 @@ impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 
 /// Available RPC methods.
 #[allow(missing_docs)]
-#[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum RpcMethods {
 	/// Expose every RPC method only when RPC is listening on `localhost`,
@@ -259,7 +259,7 @@ pub enum Database {
 	/// instance of ParityDb
 	Auto,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
-	#[clap(alias = "paritydb-experimental")]
+	#[clap(name = "paritydb-experimental")]
 	ParityDbDeprecated,
 }
 
@@ -278,7 +278,7 @@ impl Database {
 
 /// Whether off-chain workers are enabled.
 #[allow(missing_docs)]
-#[derive(Debug, Clone, ArgEnum)]
+#[derive(Debug, Clone, ValueEnum)]
 #[clap(rename_all = "kebab-case")]
 pub enum OffchainWorkerEnabled {
 	/// Always have offchain worker enabled.
@@ -290,7 +290,7 @@ pub enum OffchainWorkerEnabled {
 }
 
 /// Syncing mode.
-#[derive(Debug, Clone, Copy, ArgEnum, PartialEq)]
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
 #[clap(rename_all = "kebab-case")]
 pub enum SyncMode {
 	/// Full sync. Download end verify all blocks.

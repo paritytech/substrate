@@ -38,7 +38,7 @@ pub struct OffchainWorkerParams {
 	#[clap(
 		long = "offchain-worker",
 		value_name = "ENABLED",
-		arg_enum,
+		value_enum,
 		ignore_case = true,
 		default_value = "when-validating"
 	)]

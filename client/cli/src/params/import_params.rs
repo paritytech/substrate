@@ -80,7 +80,7 @@ pub struct ImportParams {
 		long,
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
-		arg_enum,
+		value_enum,
 	)]
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
@@ -168,39 +168,39 @@ impl ImportParams {
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime for importing blocks as
 	/// part of an initial sync.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_syncing: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime for general block import
 	/// (including locally authored blocks).
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_import_block: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_block_construction: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while using an off-chain worker.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while not syncing, importing or
 	/// constructing blocks.
-	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true)]
+	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_other: Option<ExecutionStrategy>,
 
 	/// The execution strategy that should be used by all execution contexts.
 	#[clap(
 		long,
 		value_name = "STRATEGY",
-		arg_enum,
+		value_enum,
 		ignore_case = true,
 		conflicts_with_all = &[
-			"execution-other",
-			"execution-offchain-worker",
-			"execution-block-construction",
-			"execution-import-block",
-			"execution-syncing",
+			"execution_other",
+			"execution_offchain_worker",
+			"execution_block_construction",
+			"execution_import_block",
+			"execution_syncing",
 		]
 	)]
 	pub execution: Option<ExecutionStrategy>,

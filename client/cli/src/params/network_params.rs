@@ -33,11 +33,11 @@ use std::{borrow::Cow, path::PathBuf};
 #[derive(Debug, Clone, Args)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
-	#[clap(long, value_name = "ADDR", multiple_values(true))]
+	#[clap(long, value_name = "ADDR", num_args = 0..)]
 	pub bootnodes: Vec<MultiaddrWithPeerId>,
 
 	/// Specify a list of reserved node addresses.
-	#[clap(long, value_name = "ADDR", multiple_values(true))]
+	#[clap(long, value_name = "ADDR", num_args = 0..)]
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
@@ -53,7 +53,7 @@ pub struct NetworkParams {
 
 	/// The public address that other nodes will use to connect to it.
 	/// This can be used if there's a proxy in front of this node.
-	#[clap(long, value_name = "PUBLIC_ADDR", multiple_values(true))]
+	#[clap(long, value_name = "PUBLIC_ADDR", num_args = 0..)]
 	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
@@ -61,24 +61,24 @@ pub struct NetworkParams {
 	/// By default:
 	/// If `--validator` is passed: `/ip4/0.0.0.0/tcp/<port>` and `/ip6/[::]/tcp/<port>`.
 	/// Otherwise: `/ip4/0.0.0.0/tcp/<port>/ws` and `/ip6/[::]/tcp/<port>/ws`.
-	#[clap(long, value_name = "LISTEN_ADDR", multiple_values(true))]
+	#[clap(long, value_name = "LISTEN_ADDR", num_args = 0..)]
 	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.
-	#[clap(long, value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
+	#[clap(long, value_name = "PORT", conflicts_with_all = &[ "listen_addr" ])]
 	pub port: Option<u16>,
 
 	/// Always forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
 	/// their chain specifications.
-	#[clap(long, conflicts_with_all = &["allow-private-ipv4"])]
+	#[clap(long, conflicts_with_all = &["allow_private_ipv4"])]
 	pub no_private_ipv4: bool,
 
 	/// Always accept connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Enabled by default for chains marked as
 	/// "local" in their chain specifications, or when `--dev` is passed.
-	#[clap(long, conflicts_with_all = &["no-private-ipv4"])]
+	#[clap(long, conflicts_with_all = &["no_private_ipv4"])]
 	pub allow_private_ipv4: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
@@ -137,7 +137,7 @@ pub struct NetworkParams {
 	/// - `warp`: Download the latest state and proof.
 	#[clap(
 		long,
-		arg_enum,
+		value_enum,
 		value_name = "SYNC_MODE",
 		default_value = "full",
 		ignore_case = true,

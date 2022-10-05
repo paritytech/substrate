@@ -74,7 +74,7 @@ pub struct RunCmd {
 	#[clap(
 		long,
 		value_name = "METHOD SET",
-		arg_enum,
+		value_enum,
 		ignore_case = true,
 		default_value = "auto",
 		verbatim_doc_comment
@@ -262,7 +262,7 @@ pub struct RunCmd {
 	/// which includes: database, node key and keystore.
 	///
 	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
-	#[clap(long, conflicts_with = "base-path")]
+	#[clap(long, conflicts_with = "base_path")]
 	pub tmp: bool,
 }
 

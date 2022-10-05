@@ -46,7 +46,7 @@ pub struct SharedParams {
 	///
 	/// Log levels (least to most verbose) are error, warn, info, debug, and trace.
 	/// By default, all targets log `info`. The global log level can be set with -l<level>.
-	#[clap(short = 'l', long, value_name = "LOG_PATTERN", multiple_values(true))]
+	#[clap(short = 'l', long, value_name = "LOG_PATTERN", num_args = 0..)]
 	pub log: Vec<String>,
 
 	/// Enable detailed log output.
@@ -76,7 +76,7 @@ pub struct SharedParams {
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages.
-	#[clap(long, value_name = "RECEIVER", arg_enum, ignore_case = true, default_value = "log")]
+	#[clap(long, value_name = "RECEIVER", value_enum, ignore_case = true, default_value = "log")]
 	pub tracing_receiver: TracingReceiver,
 }
 
