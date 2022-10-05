@@ -48,7 +48,7 @@ use sp_runtime::{
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	known_payloads, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
@@ -627,7 +627,7 @@ where
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
 			return Ok(())
 		};
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
+		let payload = Payload::new(known_payloads::MMR_ROOT_ID, mmr_root.encode());
 
 		let rounds = self.voting_oracle.rounds_mut().ok_or(Error::UninitSession)?;
 		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
@@ -1363,7 +1363,7 @@ pub(crate) mod tests {
 
 		let create_finality_proof = |block_num: NumberFor<Block>| {
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: block_num,
 				validator_set_id: validator_set.id(),
 			};
@@ -1574,7 +1574,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for session boundary block 10
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 10,
 				validator_set_id: validator_set.id(),
 			};
@@ -1608,7 +1608,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for block 12
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 12,
 				validator_set_id: validator_set.id(),
 			};
