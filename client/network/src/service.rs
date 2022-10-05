@@ -34,10 +34,7 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{
-		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
-		Ready,
-	},
+	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
 	transport, ReputationChange,
 };
 
@@ -63,6 +60,7 @@ use sc_network_common::{
 	error::Error,
 	protocol::{
 		event::{DhtEvent, Event},
+		role::Roles,
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, RequestFailure},

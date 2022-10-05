@@ -31,10 +31,7 @@ use libp2p::{
 	Multiaddr, PeerId,
 };
 use log::{debug, error, info, log, trace, warn, Level};
-use message::{
-	generic::{Message as GenericMessage, Roles},
-	Message,
-};
+use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_client_api::HeaderBackend;
@@ -44,7 +41,7 @@ use sc_consensus::import_queue::{
 use sc_network_common::{
 	config::{NonReservedPeerMode, ProtocolId},
 	error,
-	protocol::ProtocolName,
+	protocol::{role::Roles, ProtocolName},
 	request_responses::RequestFailure,
 	sync::{
 		message::{
@@ -1627,7 +1624,7 @@ where
 					}
 				} else {
 					match (
-						message::Roles::decode_all(&mut &received_handshake[..]),
+						Roles::decode_all(&mut &received_handshake[..]),
 						self.peers.get(&peer_id),
 					) {
 						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
