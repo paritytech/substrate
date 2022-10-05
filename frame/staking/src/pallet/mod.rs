@@ -750,6 +750,10 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
+		/// Validator count exceeded the maximum supported by the `ElectionProvider`.
+		// AKON: sounds like too many validators but should probably
+		// differentiate from it. 
+		TooManyElectionWinners,
 	}
 
 	#[pallet::hooks]
@@ -1264,6 +1268,10 @@ pub mod pallet {
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			// AKON:: test new number is less than maxwinners
+			// max winners supported by election provider
+			let max_winners = <T::ElectionProvider as frame_election_provider_support::BoundedElectionProvider>::MaxWinners::get();
+			ensure!(new > max_winners, Error::<T>::TooManyElectionWinners);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
