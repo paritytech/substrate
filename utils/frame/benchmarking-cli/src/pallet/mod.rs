@@ -35,11 +35,11 @@ fn parse_pallet_name(pallet: &str) -> std::result::Result<String, String> {
 #[derive(Debug, clap::Parser)]
 pub struct PalletCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[arg(short, long, value_parser = parse_pallet_name, required_unless_present = "list")]
+	#[arg(short, long, value_parser = parse_pallet_name, required_unless_present_any = ["list", "json_input"])]
 	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[arg(short, long, required_unless_present = "list")]
+	#[arg(short, long, required_unless_present_any = ["list", "json_input"])]
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
@@ -166,4 +166,10 @@ pub struct PalletCmd {
 	/// template for that purpose.
 	#[arg(long)]
 	pub no_storage_info: bool,
+
+	/// A path to a `.json` file with existing benchmark results generated with `--json` or
+	/// `--json-file`. When specified the benchmarks are not actually executed, and the data for
+	/// the analysis is read from this file.
+	#[arg(long)]
+	pub json_input: Option<PathBuf>,
 }

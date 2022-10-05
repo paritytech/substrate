@@ -35,7 +35,9 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream};
+use beefy_gadget::communication::notification::{
+	BeefyBestBlockStream, BeefyVersionedFinalityProofStream,
+};
 
 mod notification;
 
@@ -165,8 +167,8 @@ mod tests {
 	use super::*;
 
 	use beefy_gadget::{
+		communication::notification::BeefyVersionedFinalityProofSender,
 		justification::BeefyVersionedFinalityProof,
-		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofSender},
 	};
 	use beefy_primitives::{known_payload_ids, Payload, SignedCommitment};
 	use codec::{Decode, Encode};

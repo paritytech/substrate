@@ -80,7 +80,7 @@ macro_rules! log {
 pub mod pallet {
 	use super::*;
 	use crate::types::*;
-	use frame_election_provider_support::ElectionProvider;
+	use frame_election_provider_support::ElectionProviderBase;
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{Defensive, ReservableCurrency},
@@ -330,7 +330,8 @@ pub mod pallet {
 				}
 			}
 
-			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
+			if <<T as pallet_staking::Config>::ElectionProvider as ElectionProviderBase>::ongoing()
+			{
 				// NOTE: we assume `ongoing` does not consume any weight.
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
