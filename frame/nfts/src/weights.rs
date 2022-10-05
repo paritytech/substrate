@@ -48,7 +48,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(n: u32, ) -> Weight;
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
@@ -111,10 +111,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nfts ItemConfigOf (r:0 w:20)
 	// Storage: Nfts Account (r:0 w:20)
 	/// The range of component `n` is `[0, 1000]`.
-	fn destroy(n: u32, ) -> Weight {
+	/// The range of component `m` is `[0, 1000]`.
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		Weight::from_ref_time(55_419_000 as u64)
 			// Standard Error: 18_623
 			.saturating_add(Weight::from_ref_time(12_843_237 as u64).saturating_mul(n as u64))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(315_839 as u64).saturating_mul(m as u64))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(217_497 as u64).saturating_mul(a as u64))
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(n as u64)))
 			.saturating_add(T::DbWeight::get().writes(5 as u64))
@@ -387,10 +393,16 @@ impl WeightInfo for () {
 	// Storage: Nfts ItemConfigOf (r:0 w:20)
 	// Storage: Nfts Account (r:0 w:20)
 	/// The range of component `n` is `[0, 1000]`.
-	fn destroy(n: u32, ) -> Weight {
+	/// The range of component `m` is `[0, 1000]`.
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		Weight::from_ref_time(55_419_000 as u64)
 			// Standard Error: 18_623
 			.saturating_add(Weight::from_ref_time(12_843_237 as u64).saturating_mul(n as u64))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(315_839 as u64).saturating_mul(m as u64))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(217_497 as u64).saturating_mul(a as u64))
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(n as u64)))
 			.saturating_add(RocksDbWeight::get().writes(5 as u64))

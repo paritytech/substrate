@@ -1315,10 +1315,22 @@ fn create_cancel_swap_should_work() {
 		let duration = 2;
 		let expect_deadline = 3;
 
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, true));
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_1, user_id));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_2, user_id));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_1,
+			user_id,
+			default_item_config(),
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			item_2,
+			user_id,
+			default_item_config(),
+		));
 
 		// validate desired item and the collection exists
 		assert_noop!(
@@ -1453,13 +1465,13 @@ fn claim_swap_should_work() {
 		Balances::make_free_balance_be(&user_1, initial_balance);
 		Balances::make_free_balance_be(&user_2, initial_balance);
 
-		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, true));
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, user_1));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_2, user_2));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_3, user_2));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_4, user_1));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_5, user_2));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, user_1, default_item_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_2, user_2, default_item_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_3, user_2, default_item_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_4, user_1, default_item_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_5, user_2, default_item_config()));
 
 		assert_ok!(Nfts::create_swap(
 			RuntimeOrigin::signed(user_1),
