@@ -9974,6 +9974,7 @@ dependencies = [
  "array-bytes",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-api",
  "sp-core",
