@@ -221,7 +221,7 @@ impl RuntimeCache {
 		runtime_code: &'c RuntimeCode<'c>,
 		ext: &mut dyn Externalities,
 		wasm_method: WasmExecutionMethod,
-		default_heap_pages: HeapPages,
+		heap_pages: HeapPages,
 		allow_missing_func_imports: bool,
 		f: F,
 	) -> Result<Result<R, Error>, Error>
@@ -235,10 +235,6 @@ impl RuntimeCache {
 		) -> Result<R, Error>,
 	{
 		let code_hash = &runtime_code.hash;
-		let heap_pages = runtime_code
-			.heap_pages
-			.map(|h| HeapPages::ExtraMax(h as _))
-			.unwrap_or(default_heap_pages);
 
 		let versioned_runtime_id =
 			VersionedRuntimeId { code_hash: code_hash.clone(), heap_pages, wasm_method };

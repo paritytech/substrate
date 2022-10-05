@@ -43,7 +43,7 @@ use sp_core::{
 	storage::{
 		ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey,
 	},
-	Bytes,
+	Bytes, traits::CallContext,
 };
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_version::RuntimeVersion;
@@ -202,6 +202,7 @@ where
 						&call_data,
 						self.client.execution_extensions().strategies().other,
 						None,
+						CallContext::Offchain,
 					)
 					.map(Into::into)
 			})

@@ -20,7 +20,7 @@ use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes:
 use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
+use sp_core::traits::{CallContext, CodeExecutor, RuntimeCode, SpawnNamed};
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
@@ -145,6 +145,7 @@ where
 		call_data: &[u8],
 		strategy: ExecutionStrategy,
 		extensions: Option<Extensions>,
+		context: CallContext,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
 		let state = self.backend.state_at(*at)?;
@@ -167,6 +168,7 @@ where
 			extensions.unwrap_or_default(),
 			&runtime_code,
 			self.spawn_handle.clone(),
+			context,
 		)
 		.set_parent_hash(at_hash);
 
@@ -189,6 +191,7 @@ where
 		execution_manager: ExecutionManager<EM>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
+		context: CallContext,
 	) -> Result<Vec<u8>, sp_blockchain::Error>
 	where
 		ExecutionManager<EM>: Clone,
@@ -229,6 +232,7 @@ where
 					extensions.unwrap_or_default(),
 					&runtime_code,
 					self.spawn_handle.clone(),
+					context,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
@@ -244,6 +248,7 @@ where
 					extensions.unwrap_or_default(),
 					&runtime_code,
 					self.spawn_handle.clone(),
+					CallContext::Offchain,
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);

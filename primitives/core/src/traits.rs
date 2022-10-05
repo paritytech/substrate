@@ -24,6 +24,15 @@ use std::{
 
 pub use sp_externalities::{Externalities, ExternalitiesExt};
 
+/// The context a call is done.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub enum CallContext {
+	/// The call is happening in some offchain context.
+	Offchain,
+	/// The call is happening in some on-chain context like building or importing a block.
+	Onchain,
+}
+
 /// Code execution engine.
 pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'static {
 	/// Externalities error type.
@@ -38,6 +47,7 @@ pub trait CodeExecutor: Sized + Send + Sync + ReadRuntimeVersion + Clone + 'stat
 		method: &str,
 		data: &[u8],
 		use_native: bool,
+		context: CallContext,
 	) -> (Result<Vec<u8>, Self::Error>, bool);
 }
 

@@ -30,10 +30,10 @@ use sc_client_db::BenchmarkingState;
 use sc_executor::NativeElseWasmExecutor;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use serde::Serialize;
-use sp_core::offchain::{
+use sp_core::{offchain::{
 	testing::{TestOffchainExt, TestTransactionPoolExt},
 	OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
-};
+}, traits::CallContext};
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
@@ -196,6 +196,7 @@ impl PalletCmd {
 			extensions(),
 			&sp_state_machine::backend::BackendRuntimeCode::new(state).runtime_code()?,
 			sp_core::testing::TaskExecutor::new(),
+			CallContext::Offchain,
 		)
 		.execute(strategy.into())
 		.map_err(|e| format!("{}: {}", ERROR_METADATA_NOT_FOUND, e))?;
@@ -316,6 +317,7 @@ impl PalletCmd {
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
 					.execute(strategy.into())
 					.map_err(|e| {
@@ -342,6 +344,7 @@ impl PalletCmd {
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
 					.execute(strategy.into())
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;
@@ -374,6 +377,7 @@ impl PalletCmd {
 						&sp_state_machine::backend::BackendRuntimeCode::new(state)
 							.runtime_code()?,
 						sp_core::testing::TaskExecutor::new(),
+						CallContext::Offchain,
 					)
 					.execute(strategy.into())
 					.map_err(|e| format!("Error executing runtime benchmark: {}", e))?;

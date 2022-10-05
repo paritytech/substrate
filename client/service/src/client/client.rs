@@ -58,9 +58,13 @@ use sp_blockchain::{
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError};
 
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
-use sp_core::storage::{
-	well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild, StorageData,
-	StorageKey,
+use sp_core::{
+	storage::{
+		well_known_keys, ChildInfo, ChildType, PrefixedStorageKey, Storage, StorageChild,
+		StorageData, StorageKey,
+	},
+	traits::CallContext,
+	ExecutionContext,
 };
 #[cfg(feature = "test-helpers")]
 use sp_keystore::SyncCryptoStorePtr;
@@ -1659,6 +1663,11 @@ where
 	) -> Result<Vec<u8>, sp_api::ApiError> {
 		let at = params.at;
 
+		let context = match params.context {
+			ExecutionContext::OffchainCall(_) => CallContext::Offchain,
+			_ => CallContext::Onchain,
+		};
+
 		let (manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at, params.context);
 
@@ -1672,6 +1681,7 @@ where
 				manager,
 				params.recorder,
 				Some(extensions),
+				context,
 			)
 			.map_err(Into::into)
 	}

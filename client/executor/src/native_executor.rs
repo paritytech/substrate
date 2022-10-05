@@ -36,9 +36,11 @@ use std::{
 use codec::Encode;
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{AllocationStats, InvokeMethod, WasmInstance, WasmModule, HeapPages},
+	wasm_runtime::{AllocationStats, HeapPages, InvokeMethod, WasmInstance, WasmModule},
 };
-use sp_core::traits::{CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt};
+use sp_core::traits::{
+	CallContext, CodeExecutor, Externalities, RuntimeCode, RuntimeSpawn, RuntimeSpawnExt,
+};
 use sp_externalities::ExternalitiesExt as _;
 use sp_tasks::new_async_externalities;
 use sp_version::{GetNativeVersion, NativeVersion, RuntimeVersion};
@@ -144,7 +146,9 @@ where
 	) -> Self {
 		WasmExecutor {
 			method,
-			default_heap_pages: default_heap_pages.map(|h| HeapPages::ExtraMax(h as _)).unwrap_or(DEFAULT_HEAP_PAGES),
+			default_heap_pages: default_heap_pages
+				.map(|h| HeapPages::ExtraMax(h as _))
+				.unwrap_or(DEFAULT_HEAP_PAGES),
 			cache: Arc::new(RuntimeCache::new(
 				max_runtime_instances,
 				cache_path.clone(),
@@ -178,6 +182,7 @@ where
 		&self,
 		runtime_code: &RuntimeCode,
 		ext: &mut dyn Externalities,
+		heap_pages: HeapPages,
 		f: F,
 	) -> Result<R>
 	where
@@ -192,7 +197,7 @@ where
 			runtime_code,
 			ext,
 			self.method,
-			self.default_heap_pages,
+			heap_pages,
 			self.allow_missing_host_functions,
 			|module, instance, version, ext| {
 				let module = AssertUnwindSafe(module);
@@ -342,6 +347,7 @@ where
 		method: &str,
 		data: &[u8],
 		_use_native: bool,
+		context: CallContext,
 	) -> (Result<Vec<u8>>, bool) {
 		tracing::trace!(
 			target: "executor",
@@ -349,9 +355,20 @@ where
 			"Executing function",
 		);
 
+		let on_chain_heap_pages = runtime_code
+			.heap_pages
+			.map(|h| HeapPages::ExtraMax(h as _))
+			.unwrap_or_else(|| self.default_heap_pages);
+
+		let heap_pages = match context {
+			CallContext::Offchain => HeapPages::Dynamic,
+			CallContext::Onchain => on_chain_heap_pages,
+		};
+
 		let result = self.with_instance(
 			runtime_code,
 			ext,
+			heap_pages,
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
 					preregister_builtin_ext(module.clone());
@@ -359,6 +376,7 @@ where
 				})
 			},
 		);
+
 		(result, false)
 	}
 }
@@ -372,9 +390,14 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
-			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-		})
+		self.with_instance(
+			runtime_code,
+			ext,
+			self.default_heap_pages,
+			|_module, _instance, version, _ext| {
+				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+			},
+		)
 	}
 }
 
@@ -439,9 +462,14 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> 
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(runtime_code, ext, |_module, _instance, version, _ext| {
-			Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-		})
+		self.wasm.with_instance(
+			runtime_code,
+			ext,
+			self.wasm.default_heap_pages,
+			|_module, _instance, version, _ext| {
+				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
+			},
+		)
 	}
 }
 
@@ -593,6 +621,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		method: &str,
 		data: &[u8],
 		use_native: bool,
+		context: CallContext,
 	) -> (Result<Vec<u8>>, bool) {
 		tracing::trace!(
 			target: "executor",
@@ -600,10 +629,21 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 			"Executing function",
 		);
 
+		let on_chain_heap_pages = runtime_code
+			.heap_pages
+			.map(|h| HeapPages::ExtraMax(h as _))
+			.unwrap_or_else(|| self.wasm.default_heap_pages);
+
+		let heap_pages = match context {
+			CallContext::Offchain => HeapPages::Dynamic,
+			CallContext::Onchain => on_chain_heap_pages,
+		};
+
 		let mut used_native = false;
 		let result = self.wasm.with_instance(
 			runtime_code,
 			ext,
+			heap_pages,
 			|module, mut instance, onchain_version, mut ext| {
 				let onchain_version =
 					onchain_version.ok_or_else(|| Error::ApiError("Unknown version".into()))?;

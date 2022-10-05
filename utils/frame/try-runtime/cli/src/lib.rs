@@ -285,7 +285,7 @@ use sp_core::{
 	},
 	storage::{well_known_keys, StorageData, StorageKey},
 	testing::TaskExecutor,
-	traits::TaskExecutorExt,
+	traits::{TaskExecutorExt, CallContext},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
@@ -736,6 +736,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 		extensions,
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
 	.execute(execution.into())
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
@@ -779,6 +780,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		extensions,
 		&runtime_code,
 		sp_core::testing::TaskExecutor::new(),
+		CallContext::Offchain,
 	)
 	.execute(execution.into())
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
