@@ -1697,6 +1697,15 @@ pub mod pallet_prelude {
 /// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar`
 /// has a call index of 10, then `fn qux` will have an index of 11, instead of 1.
 ///
+/// **WARNING**: modifying dispatchables, changing their order, removing some, etc., must be
+/// done with care. Indeed this will change the outer runtime call type (which is an enum with
+/// one variant per pallet), this outer runtime call can be stored on-chain (e.g. in
+/// `pallet-scheduler`). Thus migration might be needed. To mitigate against some of this, the
+/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
+/// that the `Call` enum encoding does not change after modification. As a general rule of
+/// thumb, it is therefore adventageous to always add new calls to the end so you can maintain
+/// the existing order of calls.
+///
 /// Also see [`pallet::call_index`](`frame_support::pallet_macros::call_index`)
 ///
 /// # Extra constants: `#[pallet::extra_constants]` (optional)
