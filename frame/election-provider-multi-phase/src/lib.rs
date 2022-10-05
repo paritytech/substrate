@@ -1105,8 +1105,8 @@ pub mod pallet {
 			// truncate GovernanceFallback::MaxWinners by pallet::Config::MaxWinners
 			supports.truncate(T::MaxWinners::get().try_into().unwrap());
 			
-			// AKON: This is a hack to convert a BoundedVec<A,B> to
-			// BoundedVec<A,C>. May be there is a more elegant solution.
+			// AKON: This is an ugly hack to convert a BoundedVec<A,B> to
+			// BoundedVec<A,C>. May be impl try_from to do this conversion?
 			let supports: BoundedVec<_, T::MaxWinners> = supports.into_inner().try_into().unwrap();
 
 			let solution = ReadySolution {
