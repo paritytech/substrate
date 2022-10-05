@@ -166,7 +166,11 @@ where
 	PoolApi: graph::ChainApi<Block = Block> + 'static,
 {
 	/// Create new basic transaction pool with provided api, for tests.
-	pub fn new_test(pool_api: Arc<PoolApi>) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
+	pub fn new_test(
+		pool_api: Arc<PoolApi>,
+		best_block_hash: Block::Hash,
+		finalized_hash: Block::Hash,
+	) -> (Self, Pin<Box<dyn Future<Output = ()> + Send>>) {
 		let pool = Arc::new(graph::Pool::new(Default::default(), true.into(), pool_api.clone()));
 		let (revalidation_queue, background_task) =
 			revalidation::RevalidationQueue::new_background(pool_api.clone(), pool.clone());
@@ -178,7 +182,10 @@ where
 				revalidation_strategy: Arc::new(Mutex::new(RevalidationStrategy::Always)),
 				ready_poll: Default::default(),
 				metrics: Default::default(),
-				enactment_state: Arc::new(Mutex::new(EnactmentState::new())),
+				enactment_state: Arc::new(Mutex::new(EnactmentState::new(
+					best_block_hash,
+					finalized_hash,
+				))),
 			},
 			background_task,
 		)
@@ -194,6 +201,8 @@ where
 		revalidation_type: RevalidationType,
 		spawner: impl SpawnEssentialNamed,
 		best_block_number: NumberFor<Block>,
+		best_block_hash: Block::Hash,
+		finalized_hash: Block::Hash,
 	) -> Self {
 		let pool = Arc::new(graph::Pool::new(options, is_validator, pool_api.clone()));
 		let (revalidation_queue, background_task) = match revalidation_type {
@@ -221,7 +230,10 @@ where
 			})),
 			ready_poll: Arc::new(Mutex::new(ReadyPoll::new(best_block_number))),
 			metrics: PrometheusMetrics::new(prometheus),
-			enactment_state: Arc::new(Mutex::new(EnactmentState::new())),
+			enactment_state: Arc::new(Mutex::new(EnactmentState::new(
+				best_block_hash,
+				finalized_hash,
+			))),
 		}
 	}
 
@@ -386,6 +398,8 @@ where
 			RevalidationType::Full,
 			spawner,
 			client.usage_info().chain.best_number,
+			client.usage_info().chain.best_hash,
+			client.usage_info().chain.finalized_hash,
 		));
 
 		// make transaction pool available for off-chain runtime calls.
@@ -822,8 +836,11 @@ impl<Block> EnactmentState<Block>
 where
 	Block: BlockT,
 {
-	fn new() -> Self {
-		EnactmentState { recent_best_block: None, recent_finalized_block: None }
+	fn new(recent_best_block: Block::Hash, recent_finalized_block: Block::Hash) -> Self {
+		EnactmentState {
+			recent_best_block: Some(recent_best_block),
+			recent_finalized_block: Some(recent_finalized_block),
+		}
 	}
 
 	/// This function returns true and the tree_route if blocks enact/retract process (implemented
@@ -892,10 +909,10 @@ where
 			}
 		}
 
-		// If there are no enacted blocks in best_block -> hash tree_route, it means that
-		// block being finalized was already enacted. (This case also covers best_block == hash)
 		if finalized {
 			self.recent_finalized_block = Some(new_hash);
+			// If there are no enacted blocks in best_block -> hash tree_route, it means that
+			// block being finalized was already enacted. (This case also covers best_block == hash)
 			if tree_route.enacted().is_empty() {
 				log::trace!(
 					target: "txpool",
@@ -906,9 +923,10 @@ where
 
 			// check if the recent best_block was retracted
 			let best_block_retracted = tree_route.retracted().iter().any(|x| x.hash == best_block);
+			let best_block_is_pivot = tree_route.common_block().hash == best_block;
 
 			// ...if it was retracted, or was not set, newly finalized block becomes new best_block
-			if best_block_retracted {
+			if best_block_retracted || best_block_is_pivot {
 				self.recent_best_block = Some(new_hash)
 			}
 		} else {

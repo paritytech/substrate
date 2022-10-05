@@ -50,12 +50,35 @@ fn pool() -> Pool<TestApi> {
 }
 
 fn maintained_pool() -> (BasicPool<TestApi, Block>, Arc<TestApi>, futures::executor::ThreadPool) {
-	let api = Arc::new(TestApi::with_alice_nonce(209));
-	let (pool, background_task) = BasicPool::new_test(api.clone());
+	let test_api = TestApi::with_alice_nonce(209);
+	let first_block_hash = {
+		let chain = test_api.chain().read();
+		chain
+			.block_by_number
+			.get(&0)
+			.map(|blocks| blocks[0].0.header.hash())
+			.expect("there is block 0. qed")
+	};
+	let api = Arc::new(test_api);
+	let (pool, background_task) =
+		BasicPool::new_test(api.clone(), first_block_hash, first_block_hash);
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
 	thread_pool.spawn_ok(background_task);
 	(pool, api, thread_pool)
+}
+
+fn create_basic_pool(test_api: TestApi) -> BasicPool<TestApi, Block> {
+	let first_block_hash = {
+		let chain = test_api.chain().read();
+		chain
+			.block_by_number
+			.get(&0)
+			.map(|blocks| blocks[0].0.header.hash())
+			.expect("there is block 0. qed")
+	};
+	let (pool, _) = BasicPool::new_test(Arc::new(test_api), first_block_hash, first_block_hash);
+	pool
 }
 
 const SOURCE: TransactionSource = TransactionSource::External;
@@ -437,7 +460,7 @@ fn finalization() {
 	let xt = uxt(Alice, 209);
 	let api = TestApi::with_alice_nonce(209);
 	api.push_block(1, vec![], true);
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 	let watcher = block_on(pool.submit_and_watch(&BlockId::number(1), SOURCE, xt.clone()))
 		.expect("1. Imported");
 	pool.api().push_block(2, vec![xt.clone()], true);
@@ -463,7 +486,7 @@ fn fork_aware_finalization() {
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 	let mut canon_watchers = vec![];
 
 	let from_alice = uxt(Alice, 1);
@@ -621,7 +644,7 @@ fn prune_and_retract_tx_at_same_time() {
 	// starting block A1 (last finalized.)
 	api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let from_alice = uxt(Alice, 1);
 	pool.api().increment_nonce(Alice.into());
@@ -687,7 +710,7 @@ fn resubmit_tx_of_fork_that_is_not_part_of_retracted() {
 	// starting block A1 (last finalized.)
 	api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let tx0 = uxt(Alice, 1);
 	let tx1 = uxt(Dave, 2);
@@ -732,7 +755,7 @@ fn resubmit_from_retracted_fork() {
 	// starting block A1 (last finalized.)
 	api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let tx0 = uxt(Alice, 1);
 	let tx1 = uxt(Dave, 2);
@@ -878,14 +901,9 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 fn should_not_accept_old_signatures() {
 	let client = Arc::new(substrate_test_runtime_client::new());
 
-	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(
-			client,
-			None,
-			&sp_core::testing::TaskExecutor::new(),
-		)))
-		.0,
-	);
+	let fca = FullChainApi::new(client, None, &sp_core::testing::TaskExecutor::new());
+	let genesis = fca.block_id_to_hash(&BlockId::Number(0)).unwrap().unwrap();
+	let pool = Arc::new(BasicPool::new_test(Arc::new(fca), genesis, genesis).0);
 
 	let transfer = Transfer { from: Alice.into(), to: Bob.into(), nonce: 0, amount: 1 };
 	let _bytes: sp_core::sr25519::Signature = transfer.using_encoded(|e| Alice.sign(e)).into();
@@ -919,14 +937,10 @@ fn should_not_accept_old_signatures() {
 fn import_notification_to_pool_maintain_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 
-	let pool = Arc::new(
-		BasicPool::new_test(Arc::new(FullChainApi::new(
-			client.clone(),
-			None,
-			&sp_core::testing::TaskExecutor::new(),
-		)))
-		.0,
-	);
+	let fca = FullChainApi::new(client.clone(), None, &sp_core::testing::TaskExecutor::new());
+	let genesis = fca.block_id_to_hash(&BlockId::Number(0)).unwrap().unwrap();
+
+	let pool = Arc::new(BasicPool::new_test(Arc::new(fca), genesis, genesis).0);
 
 	// Prepare the extrisic, push it to the pool and check that it was added.
 	let xt = uxt(Alice, 0);
@@ -1074,7 +1088,7 @@ fn switching_fork_with_finalized_works() {
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let from_alice = uxt(Alice, 1);
 	let from_bob = uxt(Bob, 2);
@@ -1152,7 +1166,7 @@ fn switching_fork_multiple_times_works() {
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let from_alice = uxt(Alice, 1);
 	let from_bob = uxt(Bob, 2);
@@ -1260,7 +1274,7 @@ fn two_blocks_delayed_finalization_works() {
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let from_alice = uxt(Alice, 1);
 	let from_bob = uxt(Bob, 2);
@@ -1376,7 +1390,7 @@ fn delayed_finalization_does_not_retract() {
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let from_alice = uxt(Alice, 1);
 	let from_bob = uxt(Bob, 2);
@@ -1471,7 +1485,7 @@ fn best_block_after_finalization_does_not_retract() {
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
 
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	let from_alice = uxt(Alice, 1);
 	let from_bob = uxt(Bob, 2);
@@ -1617,7 +1631,7 @@ fn test_enactment_helper() {
 	let (root, fork1, fork2) = create_chain(&api);
 	let (b1, c1, d1, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
 	let (b2, c2, d2, e2) = (&fork2[0], &fork2[1], &fork2[2], &fork2[3]);
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	/*
 	 *      B1-C1-D1-E1
@@ -1627,10 +1641,13 @@ fn test_enactment_helper() {
 	 *      B2-C2-D2-E2
 	 */
 
+	let (result, _) = trigger_new_best_block(&pool, &root, &root);
+	assert_eq!(result, true);
+
 	let (result, _) = trigger_new_best_block(&pool, &root, d1);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_new_best_block(&pool, &d1, e1);
+	let (result, _) = trigger_new_best_block(&pool, d1, e1);
 	assert_eq!(result, true);
 
 	let (result, _) = trigger_finalized(&pool, &root, d2);
@@ -1657,10 +1674,10 @@ fn test_enactment_helper() {
 	let (result, _) = trigger_new_best_block(&pool, &root, c1);
 	assert_eq!(result, false);
 
-	let (result, _) = trigger_new_best_block(&pool, &d2, e2);
+	let (result, _) = trigger_new_best_block(&pool, d2, e2);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_finalized(&pool, &d2, e2);
+	let (result, _) = trigger_finalized(&pool, d2, e2);
 	assert_eq!(result, false);
 }
 
@@ -1672,7 +1689,7 @@ fn test_enactment_helper_2() {
 
 	let (root, fork1, _) = create_chain(&api);
 	let (b1, c1, d1, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	/*
 	 *   A-B1-C1-D1-E1
@@ -1681,13 +1698,13 @@ fn test_enactment_helper_2() {
 	let (result, _) = trigger_new_best_block(&pool, &root, b1);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_new_best_block(&pool, &b1, c1);
+	let (result, _) = trigger_new_best_block(&pool, b1, c1);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_new_best_block(&pool, &c1, d1);
+	let (result, _) = trigger_new_best_block(&pool, c1, d1);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_new_best_block(&pool, &d1, e1);
+	let (result, _) = trigger_new_best_block(&pool, d1, e1);
 	assert_eq!(result, true);
 
 	let (result, _) = trigger_finalized(&pool, &root, c1);
@@ -1705,7 +1722,7 @@ fn test_enactment_helper_3() {
 
 	let (root, fork1, _) = create_chain(&api);
 	let (b1, _, _, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	/*
 	 *   A-B1-C1-D1-E1
@@ -1726,16 +1743,19 @@ fn test_enactment_helper_4() {
 
 	let (root, fork1, _) = create_chain(&api);
 	let (b1, _, _, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	/*
 	 *   A-B1-C1-D1-E1
 	 */
 
+	let (result, _) = trigger_new_best_block(&pool, &root, &root);
+	assert_eq!(result, true);
+
 	let (result, _) = trigger_finalized(&pool, &root, e1);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_finalized(&pool, &root, b1);
+	let (result, _) = trigger_finalized(&pool, e1, b1);
 	assert_eq!(result, false);
 }
 
@@ -1748,7 +1768,7 @@ fn test_enactment_helper_5() {
 	let (root, fork1, fork2) = create_chain(&api);
 	let (_, _, _, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
 	let (_, _, _, e2) = (&fork2[0], &fork2[1], &fork2[2], &fork2[3]);
-	let (pool, _background) = BasicPool::new_test(api.into());
+	let pool = create_basic_pool(api);
 
 	/*
 	 *      B1-C1-D1-E1
@@ -1758,9 +1778,42 @@ fn test_enactment_helper_5() {
 	 *      B2-C2-D2-E2
 	 */
 
+	let (result, _) = trigger_new_best_block(&pool, &root, &root);
+	assert_eq!(result, true);
+
 	let (result, _) = trigger_finalized(&pool, &root, e1);
 	assert_eq!(result, true);
 
-	let (result, _) = trigger_finalized(&pool, &root, e2);
+	let (result, _) = trigger_finalized(&pool, e1, e2);
+	assert_eq!(result, false);
+}
+
+#[test]
+fn test_enactment_helper_6() {
+	sp_tracing::try_init_simple();
+	let api = TestApi::empty();
+	api.push_block(1, vec![], true);
+
+	let (root, fork1, _) = create_chain(&api);
+	let (b1, c1, d1, e1) = (&fork1[0], &fork1[1], &fork1[2], &fork1[3]);
+	let pool = create_basic_pool(api);
+
+	/*
+	 *    A-B1-C1-D1-E1
+	 */
+
+	let (result, _) = trigger_new_best_block(&pool, &root, &root);
+	assert_eq!(result, true);
+
+	let (result, _) = trigger_new_best_block(&pool, &root, b1);
+	assert_eq!(result, true);
+
+	let (result, _) = trigger_finalized(&pool, &root, d1);
+	assert_eq!(result, true);
+
+	let (result, _) = trigger_new_best_block(&pool, &root, e1);
+	assert_eq!(result, true);
+
+	let (result, _) = trigger_new_best_block(&pool, &root, c1);
 	assert_eq!(result, false);
 }
