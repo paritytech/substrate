@@ -45,7 +45,8 @@ use sc_network_common::{
 	request_responses::RequestFailure,
 	sync::{
 		message::{
-			BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, BlockState,
+			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
+			BlockResponse, BlockState,
 		},
 		warp::{EncodedProof, WarpProofRequest},
 		BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData, OpaqueBlockRequest,
@@ -82,8 +83,6 @@ const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
 
 /// Maximum number of known block hashes to keep for a peer.
 const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
-/// Maximum allowed size for a block announce.
-const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 
 /// Maximum size used for notifications in the block announce and transaction protocols.
 // Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
@@ -232,30 +231,6 @@ pub struct PeerInfo<B: BlockT> {
 	pub best_number: <B::Header as HeaderT>::Number,
 }
 
-/// Handshake sent when we open a block announces substream.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-struct BlockAnnouncesHandshake<B: BlockT> {
-	/// Roles of the node.
-	roles: Roles,
-	/// Best block number.
-	best_number: NumberFor<B>,
-	/// Best block hash.
-	best_hash: B::Hash,
-	/// Genesis block hash.
-	genesis_hash: B::Hash,
-}
-
-impl<B: BlockT> BlockAnnouncesHandshake<B> {
-	fn build(
-		roles: Roles,
-		best_number: NumberFor<B>,
-		best_hash: B::Hash,
-		genesis_hash: B::Hash,
-	) -> Self {
-		Self { genesis_hash, roles, best_number, best_hash }
-	}
-}
-
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
@@ -263,6 +238,7 @@ where
 {
 	/// Create a new instance.
 	pub fn new(
+		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
 		roles: Roles,
 		chain: Arc<Client>,
 		protocol_id: ProtocolId,
@@ -361,48 +337,25 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		let block_announces_protocol = {
-			let genesis_hash =
-				chain.hash(0u32.into()).ok().flatten().expect("Genesis block exists; qed");
-			let genesis_hash = genesis_hash.as_ref();
-			if let Some(fork_id) = fork_id {
-				format!(
-					"/{}/{}/block-announces/1",
-					array_bytes::bytes2hex("", genesis_hash),
-					fork_id
-				)
-			} else {
-				format!("/{}/block-announces/1", array_bytes::bytes2hex("", genesis_hash))
-			}
-		};
-
-		let legacy_ba_protocol_name = format!("/{}/block-announces/1", protocol_id.as_ref());
+		// println!("{:#?}", network_config.extra_sets);
 
 		let behaviour = {
-			let best_number = info.best_number;
-			let best_hash = info.best_hash;
-			let genesis_hash = info.genesis_hash;
-
-			let block_announces_handshake =
-				BlockAnnouncesHandshake::<B>::build(roles, best_number, best_hash, genesis_hash)
-					.encode();
-
-			let sync_protocol_config = notifications::ProtocolConfig {
-				name: block_announces_protocol.into(),
-				fallback_names: iter::once(legacy_ba_protocol_name.into()).collect(),
-				handshake: block_announces_handshake,
-				max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
-			};
-
 			Notifications::new(
 				peerset,
-				iter::once(sync_protocol_config).chain(network_config.extra_sets.iter().map(|s| {
-					notifications::ProtocolConfig {
-						name: s.notifications_protocol.clone(),
-						fallback_names: s.fallback_names.clone(),
-						handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
-						max_notification_size: s.max_notification_size,
-					}
+				iter::once(notifications::ProtocolConfig {
+					name: block_announces_protocol.notifications_protocol.clone(),
+					fallback_names: block_announces_protocol.fallback_names.clone(),
+					handshake: block_announces_protocol
+						.handshake
+						.as_ref()
+						.map_or(roles.encode(), |h| (*h).to_vec()),
+					max_notification_size: block_announces_protocol.max_notification_size,
+				})
+				.chain(network_config.extra_sets.iter().map(|s| notifications::ProtocolConfig {
+					name: s.notifications_protocol.clone(),
+					fallback_names: s.fallback_names.clone(),
+					handshake: s.handshake.as_ref().map_or(roles.encode(), |h| (*h).to_vec()),
+					max_notification_size: s.max_notification_size,
 				})),
 			)
 		};

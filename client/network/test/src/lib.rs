@@ -24,6 +24,7 @@ mod sync;
 
 use std::{
 	collections::HashMap,
+	iter,
 	marker::PhantomData,
 	pin::Pin,
 	sync::Arc,
@@ -55,7 +56,7 @@ use sc_network_common::{
 	config::{
 		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
 	},
-	protocol::ProtocolName,
+	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
@@ -880,6 +881,19 @@ where
 			Some(warp_sync),
 		)
 		.unwrap();
+		let block_announce_config = chain_sync.get_block_announce_proto_config(
+			protocol_id.clone(),
+			&fork_id,
+			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
+			client.info().best_number,
+			client.info().best_hash,
+			client
+				.block_hash(0u32.into())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+		);
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -890,6 +904,7 @@ where
 			import_queue,
 			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,
+			block_announce_config,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,

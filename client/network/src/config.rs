@@ -94,6 +94,9 @@ where
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
+	/// Block announce protocol configuration
+	pub block_announce_config: NonDefaultSetConfig,
+
 	/// Request response configuration for the block request protocol.
 	///
 	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct

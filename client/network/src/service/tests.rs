@@ -20,10 +20,15 @@ use crate::{config, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
+use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
-	protocol::event::Event,
+	config::{
+		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake,
+		ProtocolId, SetConfig, TransportConfig,
+	},
+	protocol::{event::Event, role::Roles},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
+	sync::message::BlockAnnouncesHandshake,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -32,7 +37,7 @@ use sc_network_sync::{
 };
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_runtime::traits::{Block as BlockT, Header as _};
-use std::{sync::Arc, time::Duration};
+use std::{iter, sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
 type TestNetworkService = NetworkService<
@@ -132,7 +137,21 @@ fn build_test_full_node(
 		None,
 	)
 	.unwrap();
+	let block_announce_config = chain_sync.get_block_announce_proto_config(
+		protocol_id.clone(),
+		&fork_id,
+		Roles::from(&config::Role::Full),
+		client.info().best_number,
+		client.info().best_hash,
+		client
+			.block_hash(0u32.into())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed"),
+	);
+
 	let worker = NetworkWorker::new(config::Params {
+		block_announce_config,
 		role: config::Role::Full,
 		executor: None,
 		network_config,

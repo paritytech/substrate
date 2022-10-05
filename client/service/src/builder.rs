@@ -24,6 +24,7 @@ use crate::{
 	metrics::MetricsService,
 	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
+use codec::Encode;
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
 use log::info;
@@ -40,8 +41,10 @@ use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
+	config::{NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, SetConfig},
+	protocol::role::Roles,
 	service::{NetworkStateInfo, NetworkStatusProvider},
-	sync::warp::WarpSyncProvider,
+	sync::{message::BlockAnnouncesHandshake, warp::WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -71,7 +74,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
 	BuildStorage,
 };
-use std::{str::FromStr, sync::Arc, time::SystemTime};
+use std::{iter, str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -843,6 +846,18 @@ where
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
 	)?;
+	let block_announce_config = chain_sync.get_block_announce_proto_config(
+		protocol_id.clone(),
+		&config.chain_spec.fork_id().map(ToOwned::to_owned),
+		Roles::from(&config.role.clone()),
+		client.info().best_number,
+		client.info().best_hash,
+		client
+			.block_hash(0u32.into())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed"),
+	);
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
@@ -865,6 +880,7 @@ where
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_announce_config,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		warp_sync_protocol_config,
@@ -885,6 +901,8 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
+
+	// configure transaction and block announce protocols
 	network_params
 		.network_config
 		.extra_sets

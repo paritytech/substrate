@@ -221,6 +221,7 @@ where
 		);
 
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
+			params.block_announce_config,
 			From::from(&params.role),
 			params.chain.clone(),
 			params.protocol_id.clone(),
