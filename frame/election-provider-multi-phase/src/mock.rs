@@ -99,6 +99,17 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+pub fn roll_to_unsigned() {
+	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
+		roll_to(System::block_number() + 1);
+	}
+}
+pub fn roll_to_signed() {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
+		roll_to(System::block_number() + 1);
+	}
+}
+
 pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
