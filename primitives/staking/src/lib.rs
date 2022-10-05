@@ -135,6 +135,32 @@ pub trait StakingInterface {
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError>;
 
+	/// Get StakingLedger by controller account.
+	fn get_ledger(ctrl: &Self::AccountId) -> StakingLedger<Self>;
+
+	/// The ideal number of staking participants.
+	fn validator_count() -> u32;
+
+	/// Whether or not there is an ongoing election.
+	fn ongoing() -> bool;
+
+	/// Force a current staker to become completely unstaked, immediately.
+	///
+	/// The dispatch origin must be Root.
+	/// TODO: Do we need `num_slashing_spans` in the original method or should
+	/// we do Staking::<T>::slashing_spans(&stash).iter().count() within it?
+	/// Or should we introduce another method force_unstake_with_spans that will do it?
+	fn force_unstake(
+		origin: OriginFor<Self>,
+		stash: T::AccountId,
+		num_slashing_spans: u32,
+	) -> DispatchResult;
+
+	/// Checks whether an account `staker` has been exposed in an era.
+	/// TODO: shall we have this helper here or just expose ErasStakers
+	/// storage instead for the caller to do as they please?
+	fn is_exposed_in_era(staker: &T::AccountId, era: &EraIndex) -> bool;
+
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(who: Self::AccountId) -> Option<sp_std::prelude::Vec<Self::AccountId>>;
