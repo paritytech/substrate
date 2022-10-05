@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedElectionProvider, BoundedSupportsOf, ElectionDataProvider,
-	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedElectionProvider, BoundedSupportsOf, ElectionDataProvider, ScoreProvider,
+	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
