@@ -615,7 +615,8 @@ fn pallet_macro_stub() -> TokenStream {
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
 /// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
 ///
-/// [`pallet::event`](`macro@event`) must be present if `pallet::config` is present.
+/// [`pallet::event`](`macro@event`) must be present if `RuntimeEvent` exists as a config item
+/// in your `#[pallet::config]`.
 #[proc_macro_attribute]
 pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
