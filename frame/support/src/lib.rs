@@ -1522,7 +1522,8 @@ pub mod pallet_prelude {
 /// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
 /// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
 ///
-/// See [`pallet::event`](`frame_support::pallet_macros::event`) for more information.
+/// [`pallet::event`](`frame_support::pallet_macros::event`) must be present if
+/// `pallet::config` is present.
 ///
 /// Also see [`pallet::config`](`frame_support::pallet_macros::config`)
 ///
