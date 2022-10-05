@@ -1084,10 +1084,10 @@ pub fn whitelist_storage(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
 
-/// The `#[pallet::type_value]` attribute lets you define a struct implementing the
-/// `Get` trait to ease the use of storage types. This attribute is meant to be used alongside [`#[pallet::storage]`](`macro@storage`)
-/// to define a storage's default value. This attribute can be used
-/// multiple times.
+/// The `#[pallet::type_value]` attribute lets you define a struct implementing the `Get` trait
+/// to ease the use of storage types. This attribute is meant to be used alongside
+/// [`#[pallet::storage]`](`macro@storage`) to define a storage's default value. This attribute
+/// can be used multiple times.
 ///
 /// Item must be defined as:
 ///

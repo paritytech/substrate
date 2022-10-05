@@ -1980,8 +1980,9 @@ pub mod pallet_prelude {
 /// # Type value: `#[pallet::type_value]` (optional)
 ///
 /// The `#[pallet::type_value]` attribute lets you define a struct implementing the
-/// [`Get`](crate::traits::Get) trait to ease use of storage types. This attribute can be used
-/// multiple times.
+/// [`Get`](crate::traits::Get) trait to ease use of storage types. This attribute is meant to
+/// be used alongside [`#[pallet::storage]`](#storage-palletstorage-optional) to define a
+/// storage's default value. This attribute can be used multiple times.
 ///
 /// Item must be defined as:
 ///
@@ -1998,10 +1999,6 @@ pub mod pallet_prelude {
 /// #[pallet::type_value]
 /// fn MyDefault<T: Config>() -> T::Balance { 3.into() }
 /// ```
-///
-/// NOTE: This attribute is meant to be used alongside
-/// [`#[pallet::storage]`](#storage-palletstorage-optional) to define some specific default
-/// value in storage.
 ///
 /// Also see [`pallet::type_value`](`frame_support::pallet_macros::type_value`)
 ///
