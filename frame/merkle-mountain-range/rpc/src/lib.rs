@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_mmr_primitives::{BatchProof, Error as MmrError, LeafIndex, Proof};
+use sp_mmr_primitives::{BatchProof, Error as MmrError, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
