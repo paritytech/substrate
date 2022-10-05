@@ -60,8 +60,7 @@ fn maintained_pool() -> (BasicPool<TestApi, Block>, Arc<TestApi>, futures::execu
 			.expect("there is block 0. qed")
 	};
 	let api = Arc::new(test_api);
-	let (pool, background_task) =
-		BasicPool::new_test(api.clone(), genesis_hash, genesis_hash);
+	let (pool, background_task) = BasicPool::new_test(api.clone(), genesis_hash, genesis_hash);
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
 	thread_pool.spawn_ok(background_task);
