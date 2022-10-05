@@ -616,21 +616,7 @@ pub mod pallet {
 				Ok(_) => None,
 				Err(origin) => Some(ensure_signed(origin)?),
 			};
-			let _ = Asset::<T, I>::try_mutate_exists(
-				id,
-				|maybe_details| -> Result<(), DispatchError> {
-					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-					if let Some(check_owner) = maybe_check_owner {
-						ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-					}
-					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-					details.status = AssetStatus::Destroying;
-
-					Self::deposit_event(Event::DestructionStarted { asset_id: id });
-					Ok(())
-				},
-			)?;
-			Ok(())
+			Self::do_start_destroy(id, maybe_check_owner)
 		}
 
 		/// Destroy all accounts associated with a given asset.
@@ -651,42 +637,11 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			let mut dead_accounts: Vec<T::AccountId> = vec![];
-			let mut removed_accounts = 0;
-			let _ = Asset::<T, I>::try_mutate_exists(
-				id,
-				|maybe_details| -> Result<(), DispatchError> {
-					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-					// Should only destroy accounts while the asset is being destroyed
-					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
-
-					for (who, v) in Account::<T, I>::drain_prefix(id) {
-						let _ = Self::dead_account(&who, &mut details, &v.reason, true);
-						dead_accounts.push(who);
-						removed_accounts = removed_accounts.saturating_add(1);
-						if removed_accounts >= T::RemoveKeysLimit::get() {
-							break
-						}
-					}
-
-					Self::deposit_event(Event::DestroyedAccounts {
-						asset_id: id,
-						accounts_destroyed: removed_accounts as u32,
-						accounts_remaining: details.accounts as u32,
-					});
-
-					Ok(())
-				},
-			)?;
-
-			for who in dead_accounts {
-				T::Freezer::died(id, &who);
-			}
+			let removed_accounts = Self::do_destroy_accounts(id)?;
 			Ok(Some(T::WeightInfo::destroy_accounts(removed_accounts)).into())
 		}
 
-		/// Destroy all approvals associated with a given asset.
+		/// Destroy all approvals associated with a given asset up to the max (T::RemoveKeysLimit),
 		/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
 		/// asset is in a `Destroying` state
 		///
@@ -704,33 +659,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			let mut removed_approvals = 0;
-			let _ = Asset::<T, I>::try_mutate_exists(
-				id,
-				|maybe_details| -> Result<(), DispatchError> {
-					let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-
-					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-					// Should only destroy accounts while the asset is being destroyed
-					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
-
-					for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
-						T::Currency::unreserve(&owner, approval.deposit);
-						removed_approvals = removed_approvals.saturating_add(1);
-						details.approvals = details.approvals.saturating_sub(1);
-						if removed_approvals >= T::RemoveKeysLimit::get() {
-							break
-						}
-					}
-					Self::deposit_event(Event::DestroyedApprovals {
-						asset_id: id,
-						approvals_destroyed: removed_approvals as u32,
-						approvals_remaining: details.approvals as u32,
-					});
-					Ok(())
-				},
-			)?;
-
+			let removed_approvals = Self::do_destroy_approvals(id)?;
 			Ok(Some(T::WeightInfo::destroy_approvals(removed_approvals)).into())
 		}
 
@@ -749,26 +678,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
-			let _ = Asset::<T, I>::try_mutate_exists(
-				id,
-				|maybe_details| -> Result<(), DispatchError> {
-					let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-					ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-					ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
-					ensure!(details.accounts == 0, Error::<T, I>::InUse);
-					ensure!(details.approvals == 0, Error::<T, I>::InUse);
-
-					let metadata = Metadata::<T, I>::take(&id);
-					T::Currency::unreserve(
-						&details.owner,
-						details.deposit.saturating_add(metadata.deposit),
-					);
-					Self::deposit_event(Event::Destroyed { asset_id: id });
-
-					Ok(())
-				},
-			)?;
-			Ok(())
+			Self::do_finish_destroy(id)
 		}
 
 		/// Mint assets of a particular class.
