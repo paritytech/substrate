@@ -528,10 +528,11 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
-			Runtime, RuntimeOrigin, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
+			balances, multi_phase_events, raw_solution, roll_to, roll_to_signed, Balances,
+			ExtBuilder, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxRefunds,
+			SignedMaxSubmissions, SignedMaxWeight,
 		},
-		Error, Perbill, Phase,
+		Error, Event, Perbill, Phase,
 	};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
@@ -555,7 +556,7 @@ mod tests {
 	#[test]
 	fn should_pay_deposit() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -565,13 +566,21 @@ mod tests {
 
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn good_solution_is_rewarded() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -582,13 +591,22 @@ mod tests {
 
 			assert!(MultiPhase::finalize_signed_phase());
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn bad_solution_is_slashed() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -604,13 +622,22 @@ mod tests {
 			assert!(!MultiPhase::finalize_signed_phase());
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 99, value: 5 }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn suppressed_solution_gets_bond_back() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -633,13 +660,22 @@ mod tests {
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 gets everything back, including the call fee.
 			assert_eq!(balances(&999), (100 + 8, 0));
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn cannot_submit_worse_with_full_queue() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -667,7 +703,7 @@ mod tests {
 	#[test]
 	fn call_fee_refund_is_limited_by_signed_max_refunds() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(SignedMaxRefunds::get(), 1);
 			assert!(SignedMaxSubmissions::get() > 2);
@@ -683,7 +719,7 @@ mod tests {
 				assert_eq!(balances(&account), (95, 5));
 			}
 
-			assert!(MultiPhase::finalize_signed_phase());
+			assert_ok!(MultiPhase::do_elect());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				let account = 99 + s as u64;
@@ -699,6 +735,26 @@ mod tests {
 					assert_eq!(balances(&account), (100, 0));
 				}
 			}
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Signed,
+						score: ElectionScore {
+							minimal_stake: 40,
+							sum_stake: 100,
+							sum_stake_squared: 5200
+						}
+					}
+				]
+			);
 		});
 	}
 
@@ -708,7 +764,7 @@ mod tests {
 			.signed_max_submission(1)
 			.better_signed_threshold(Perbill::from_percent(20))
 			.build_and_execute(|| {
-				roll_to(15);
+				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
 				let mut solution = RawSolution {
@@ -747,13 +803,27 @@ mod tests {
 				};
 
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(solution)));
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::SignedPhaseStarted { round: 1 },
+						Event::SolutionStored {
+							compute: ElectionCompute::Signed,
+							prev_ejected: false
+						},
+						Event::SolutionStored {
+							compute: ElectionCompute::Signed,
+							prev_ejected: true
+						}
+					]
+				);
 			})
 	}
 
 	#[test]
 	fn weakest_is_removed_if_better_provided() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -800,7 +870,7 @@ mod tests {
 	#[test]
 	fn replace_weakest_works() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 1..SignedMaxSubmissions::get() {
@@ -847,7 +917,7 @@ mod tests {
 	#[test]
 	fn early_ejected_solution_gets_bond_back() {
 		ExtBuilder::default().signed_deposit(2, 0, 0).build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -878,7 +948,7 @@ mod tests {
 	#[test]
 	fn equally_good_solution_is_not_accepted() {
 		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
@@ -915,7 +985,7 @@ mod tests {
 		// - bad_solution_is_slashed
 		// - suppressed_solution_gets_bond_back
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_eq!(balances(&99), (100, 0));
@@ -951,6 +1021,17 @@ mod tests {
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back, including the call fee.
 			assert_eq!(balances(&9999), (100 + 8, 0));
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 999, value: 5 },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
@@ -960,7 +1041,7 @@ mod tests {
 			.signed_weight(Weight::from_ref_time(40).set_proof_size(u64::MAX))
 			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
-				roll_to(15);
+				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
 				let (raw, witness) = MultiPhase::mine_solution().unwrap();
@@ -994,7 +1075,7 @@ mod tests {
 	#[test]
 	fn insufficient_deposit_does_not_store_submission() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -1014,7 +1095,7 @@ mod tests {
 	#[test]
 	fn insufficient_deposit_with_full_queue_works_properly() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -1060,7 +1141,7 @@ mod tests {
 	#[test]
 	fn finalize_signed_phase_is_idempotent_given_submissions() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -1073,6 +1154,15 @@ mod tests {
 
 			// calling it again doesn't change anything
 			assert_storage_noop!(MultiPhase::finalize_signed_phase());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 }

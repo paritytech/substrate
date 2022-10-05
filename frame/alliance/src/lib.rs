@@ -706,7 +706,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::disband(
 			witness.voting_members,
 			witness.ally_members,
-			witness.voting_members + witness.ally_members,
+			witness.voting_members.saturating_add(witness.ally_members),
 		))]
 		pub fn disband(
 			origin: OriginFor<T>,
