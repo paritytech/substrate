@@ -484,16 +484,16 @@ benchmarks_instance_pallet! {
 		let price_direction = PriceDirection::Receive;
 		let price_with_direction = PriceWithDirection { amount: price, direction: price_direction };
 		let duration = T::MaxDeadlineDuration::get();
-		let current_block = frame_system::Pallet::<T>::block_number();
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item1, collection, Some(item2), Some(price_with_direction.clone()), duration)
 	verify {
+		let current_block = frame_system::Pallet::<T>::block_number();
 		assert_last_event::<T, I>(Event::SwapCreated {
 			offered_collection: collection,
 			offered_item: item1,
 			desired_collection: collection,
 			desired_item: Some(item2),
 			price: Some(price_with_direction),
-			deadline: duration.saturating_add(current_block),
+			deadline: current_block.saturating_add(duration),
 		}.into());
 	}
 
