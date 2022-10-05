@@ -9839,6 +9839,7 @@ dependencies = [
  "hex-literal",
  "log",
  "parity-scale-codec",
+ "scale-info",
  "serde",
  "sp-api",
  "sp-core",
