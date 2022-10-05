@@ -644,6 +644,9 @@ pub fn constant(_: TokenStream, _: TokenStream) -> TokenStream {
 /// #[pallet::disable_frame_system_supertrait_check]
 /// pub trait Config: pallet_timestamp::Config {}
 /// ```
+///
+/// NOTE: Bypassing the `frame_system::Config` supertrait check is typically desirable when you
+/// want to write an alternative to the `frame_system` pallet.
 #[proc_macro_attribute]
 pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()

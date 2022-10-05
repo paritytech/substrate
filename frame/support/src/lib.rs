@@ -1554,6 +1554,9 @@ pub mod pallet_prelude {
 /// pub trait Config: pallet_timestamp::Config {}
 /// ```
 ///
+/// NOTE: Bypassing the `frame_system::Config` supertrait check is typically desirable when you
+/// want to write an alternative to the `frame_system` pallet.
+///
 /// Also see
 /// [`pallet::disable_frame_system_supertrait_check`](`frame_support::pallet_macros::disable_frame_system_supertrait_check`)
 ///
