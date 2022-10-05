@@ -10948,18 +10948,18 @@ checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
 
 [[package]]
 name = "thiserror"
-version = "1.0.30"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "854babe52e4df1653706b98fcfc05843010039b406875930a70e4d9644e5c417"
+checksum = "10deb33631e3c9018b9baf9dcbbc4f737320d2b576bac10f6aefa048fa407e3e"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.30"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa32fd3f627f367fe16f893e2597ae3c05020f8bba2666a4e6ea73d377e5714b"
+checksum = "982d17546b47146b28f7c22e3d08465f6b8903d0ea13c1660d9d84a6e7adcdbb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11692,23 +11692,25 @@ dependencies = [
 
 [[package]]
 name = "wasm-opt"
-version = "0.0.1-preview.3"
+version = "0.110.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c83c32bd4dab059b292f09a42c3f06c4d3ea84eabcda762e177f977905f4e80a"
+checksum = "02484958a1edbd8e71485c5c10e89cbcf58b3a234aafc2fe78dee79cbfbbaae5"
 dependencies = [
  "anyhow",
  "libc",
  "strum",
  "strum_macros",
+ "tempfile",
+ "thiserror",
  "wasm-opt-cxx-sys",
  "wasm-opt-sys",
 ]
 
 [[package]]
 name = "wasm-opt-cxx-sys"
-version = "0.0.1-preview.3"
+version = "0.110.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1deb34c5251b6200fcf468c9a2fc8b164c432b4a212be36e18f6d2640c1fc00"
+checksum = "c150ac22758b63137b0ccbcddcc45cfaa2bb1b4d7ebc7d50f6bb76d4d52a5bf1"
 dependencies = [
  "anyhow",
  "cxx",
@@ -11718,9 +11720,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-opt-sys"
-version = "0.0.1-preview.3"
+version = "0.110.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1fafc76c275ffce5b0e03f28757f822a3df1a742a5b09a5682b8fe2f46800f7"
+checksum = "dc8110e347152693834f357f67b1505ab85ec9546b9546d41a6299bab06d4f9a"
 dependencies = [
  "anyhow",
  "cc",

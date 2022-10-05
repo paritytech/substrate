@@ -669,7 +669,7 @@ fn compact_wasm_file(
 		let wasm_compact_path = project.join(format!("{}.compact.wasm", out_name,));
 		wasm_opt::OptimizationOptions::new_opt_level_0()
 			.debug_info(true)
-			.run(&in_path, Option::<&str>::None, &wasm_compact_path, Option::<&str>::None)
+			.run(&in_path, &wasm_compact_path)
 			.expect("Failed to compact generated WASM binary.");
 
 		let wasm_compact_compressed_path =
