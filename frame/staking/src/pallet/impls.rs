@@ -19,7 +19,7 @@
 
 use frame_election_provider_support::{
 	data_provider, BoundedElectionProvider, BoundedSupportsOf, ElectionDataProvider,
-	ElectionProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
+	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
