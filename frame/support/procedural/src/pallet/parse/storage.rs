@@ -555,8 +555,8 @@ fn process_generics(
 		found => {
 			let msg = format!(
 				"Invalid pallet::storage, expected ident: `StorageValue` or \
-				`StorageMap` or `StorageDoubleMap` or `StorageNMap` in order to expand metadata, \
-				found `{}`.",
+				`StorageMap` or `CountedStorageMap` or `StorageDoubleMap` or `StorageNMap` \
+				in order to expand metadata, found `{}`.",
 				found,
 			);
 			return Err(syn::Error::new(segment.ident.span(), msg))

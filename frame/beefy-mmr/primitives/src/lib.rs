@@ -25,88 +25,49 @@
 //! compilation targets.
 //!
 //! Merkle Tree is constructed from arbitrary-length leaves, that are initially hashed using the
-//! same [Hasher] as the inner nodes.
+//! same hasher as the inner nodes.
 //! Inner nodes are created by concatenating child hashes and hashing again. The implementation
 //! does not perform any sorting of the input data (leaves) nor when inner nodes are created.
 //!
 //! If the number of leaves is not even, last leave (hash of) is promoted to the upper layer.
 
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+pub use sp_runtime::traits::Keccak256;
+use sp_runtime::{app_crypto::sp_core, sp_std, traits::Hash as HashT};
+use sp_std::{vec, vec::Vec};
 
 use beefy_primitives::mmr::{BeefyAuthoritySet, BeefyNextAuthoritySet};
-
-/// Supported hashing output size.
-///
-/// The size is restricted to 32 bytes to allow for a more optimised implementation.
-pub type Hash = [u8; 32];
-
-/// Generic hasher trait.
-///
-/// Implement the function to support custom way of hashing data.
-/// The implementation must return a [Hash](type@Hash) type, so only 32-byte output hashes are
-/// supported.
-pub trait Hasher {
-	/// Hash given arbitrary-length piece of data.
-	fn hash(data: &[u8]) -> Hash;
-}
-
-#[cfg(feature = "keccak")]
-mod keccak256 {
-	use tiny_keccak::{Hasher as _, Keccak};
-
-	/// Keccak256 hasher implementation.
-	pub struct Keccak256;
-	impl Keccak256 {
-		/// Hash given data.
-		pub fn hash(data: &[u8]) -> super::Hash {
-			<Keccak256 as super::Hasher>::hash(data)
-		}
-	}
-	impl super::Hasher for Keccak256 {
-		fn hash(data: &[u8]) -> super::Hash {
-			let mut keccak = Keccak::v256();
-			keccak.update(data);
-			let mut output = [0_u8; 32];
-			keccak.finalize(&mut output);
-			output
-		}
-	}
-}
-#[cfg(feature = "keccak")]
-pub use keccak256::Keccak256;
 
 /// Construct a root hash of a Binary Merkle Tree created from given leaves.
 ///
 /// See crate-level docs for details about Merkle Tree construction.
 ///
 /// In case an empty list of leaves is passed the function returns a 0-filled hash.
-pub fn merkle_root<H, I, T>(leaves: I) -> Hash
+pub fn merkle_root<H, I>(leaves: I) -> H::Output
 where
-	H: Hasher,
-	I: IntoIterator<Item = T>,
-	T: AsRef<[u8]>,
+	H: HashT,
+	H::Output: Default + AsRef<[u8]>,
+	I: IntoIterator,
+	I::Item: AsRef<[u8]>,
 {
-	let iter = leaves.into_iter().map(|l| H::hash(l.as_ref()));
-	merkelize::<H, _, _>(iter, &mut ())
+	let iter = leaves.into_iter().map(|l| <H as HashT>::hash(l.as_ref()));
+	merkelize::<H, _, _>(iter, &mut ()).into()
 }
 
-fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> Hash
+fn merkelize<H, V, I>(leaves: I, visitor: &mut V) -> H::Output
 where
-	H: Hasher,
-	V: Visitor,
-	I: Iterator<Item = Hash>,
+	H: HashT,
+	H::Output: Default + AsRef<[u8]>,
+	V: Visitor<H::Output>,
+	I: Iterator<Item = H::Output>,
 {
-	let upper = Vec::with_capacity(leaves.size_hint().0);
+	let upper = Vec::with_capacity((leaves.size_hint().1.unwrap_or(0).saturating_add(1)) / 2);
 	let mut next = match merkelize_row::<H, _, _>(leaves, upper, visitor) {
 		Ok(root) => return root,
-		Err(next) if next.is_empty() => return Hash::default(),
+		Err(next) if next.is_empty() => return H::Output::default(),
 		Err(next) => next,
 	};
 
-	let mut upper = Vec::with_capacity((next.len() + 1) / 2);
+	let mut upper = Vec::with_capacity((next.len().saturating_add(1)) / 2);
 	loop {
 		visitor.move_up();
 
@@ -125,14 +86,14 @@ where
 ///
 /// The structure contains all necessary data to later on verify the proof and the leaf itself.
 #[derive(Debug, PartialEq, Eq)]
-pub struct MerkleProof<T> {
+pub struct MerkleProof<H, L> {
 	/// Root hash of generated merkle tree.
-	pub root: Hash,
+	pub root: H,
 	/// Proof items (does not contain the leaf hash, nor the root obviously).
 	///
 	/// This vec contains all inner node hashes necessary to reconstruct the root hash given the
 	/// leaf hash.
-	pub proof: Vec<Hash>,
+	pub proof: Vec<H>,
 	/// Number of leaves in the original tree.
 	///
 	/// This is needed to detect a case where we have an odd number of leaves that "get promoted"
@@ -141,14 +102,14 @@ pub struct MerkleProof<T> {
 	/// Index of the leaf the proof is for (0-based).
 	pub leaf_index: usize,
 	/// Leaf content.
-	pub leaf: T,
+	pub leaf: L,
 }
 
 /// A trait of object inspecting merkle root creation.
 ///
 /// It can be passed to [`merkelize_row`] or [`merkelize`] functions and will be notified
 /// about tree traversal.
-trait Visitor {
+trait Visitor<T> {
 	/// We are moving one level up in the tree.
 	fn move_up(&mut self);
 
@@ -158,13 +119,13 @@ trait Visitor {
 	/// The method will also visit the `root` hash (level 0).
 	///
 	/// The `index` is an index of `left` item.
-	fn visit(&mut self, index: usize, left: &Option<Hash>, right: &Option<Hash>);
+	fn visit(&mut self, index: usize, left: &Option<T>, right: &Option<T>);
 }
 
 /// No-op implementation of the visitor.
-impl Visitor for () {
+impl<T> Visitor<T> for () {
 	fn move_up(&mut self) {}
-	fn visit(&mut self, _index: usize, _left: &Option<Hash>, _right: &Option<Hash>) {}
+	fn visit(&mut self, _index: usize, _left: &Option<T>, _right: &Option<T>) {}
 }
 
 /// Construct a Merkle Proof for leaves given by indices.
@@ -177,16 +138,17 @@ impl Visitor for () {
 /// # Panic
 ///
 /// The function will panic if given `leaf_index` is greater than the number of leaves.
-pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<T>
+pub fn merkle_proof<H, I, T>(leaves: I, leaf_index: usize) -> MerkleProof<H::Output, T>
 where
-	H: Hasher,
+	H: HashT,
+	H::Output: Default + Copy + AsRef<[u8]>,
 	I: IntoIterator<Item = T>,
 	I::IntoIter: ExactSizeIterator,
 	T: AsRef<[u8]>,
 {
 	let mut leaf = None;
 	let iter = leaves.into_iter().enumerate().map(|(idx, l)| {
-		let hash = H::hash(l.as_ref());
+		let hash = <H as HashT>::hash(l.as_ref());
 		if idx == leaf_index {
 			leaf = Some(l);
 		}
@@ -194,23 +156,23 @@ where
 	});
 
 	/// The struct collects a proof for single leaf.
-	struct ProofCollection {
-		proof: Vec<Hash>,
+	struct ProofCollection<T> {
+		proof: Vec<T>,
 		position: usize,
 	}
 
-	impl ProofCollection {
+	impl<T> ProofCollection<T> {
 		fn new(position: usize) -> Self {
 			ProofCollection { proof: Default::default(), position }
 		}
 	}
 
-	impl Visitor for ProofCollection {
+	impl<T: Copy> Visitor<T> for ProofCollection<T> {
 		fn move_up(&mut self) {
 			self.position /= 2;
 		}
 
-		fn visit(&mut self, index: usize, left: &Option<Hash>, right: &Option<Hash>) {
+		fn visit(&mut self, index: usize, left: &Option<T>, right: &Option<T>) {
 			// we are at left branch - right goes to the proof.
 			if self.position == index {
 				if let Some(right) = right {
@@ -238,7 +200,7 @@ where
 		collect_proof
 			.proof
 			.iter()
-			.map(|s| array_bytes::bytes2hex("", s))
+			.map(|s| array_bytes::bytes2hex("", s.as_ref()))
 			.collect::<Vec<_>>()
 	);
 
@@ -250,22 +212,16 @@ where
 /// Can be either a value that needs to be hashed first,
 /// or the hash itself.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Leaf<'a> {
+pub enum Leaf<'a, H> {
 	/// Leaf content.
 	Value(&'a [u8]),
 	/// Hash of the leaf content.
-	Hash(Hash),
+	Hash(H),
 }
 
-impl<'a, T: AsRef<[u8]>> From<&'a T> for Leaf<'a> {
+impl<'a, H, T: AsRef<[u8]>> From<&'a T> for Leaf<'a, H> {
 	fn from(v: &'a T) -> Self {
 		Leaf::Value(v.as_ref())
-	}
-}
-
-impl<'a> From<Hash> for Leaf<'a> {
-	fn from(v: Hash) -> Self {
-		Leaf::Hash(v)
 	}
 }
 
@@ -277,45 +233,47 @@ impl<'a> From<Hash> for Leaf<'a> {
 ///
 /// The proof must not contain the root hash.
 pub fn verify_proof<'a, H, P, L>(
-	root: &'a Hash,
+	root: &'a H::Output,
 	proof: P,
 	number_of_leaves: usize,
 	leaf_index: usize,
 	leaf: L,
 ) -> bool
 where
-	H: Hasher,
-	P: IntoIterator<Item = Hash>,
-	L: Into<Leaf<'a>>,
+	H: HashT,
+	H::Output: PartialEq + AsRef<[u8]>,
+	P: IntoIterator<Item = H::Output>,
+	L: Into<Leaf<'a, H::Output>>,
 {
 	if leaf_index >= number_of_leaves {
 		return false
 	}
 
 	let leaf_hash = match leaf.into() {
-		Leaf::Value(content) => H::hash(content),
+		Leaf::Value(content) => <H as HashT>::hash(content),
 		Leaf::Hash(hash) => hash,
 	};
 
-	let mut combined = [0_u8; 64];
+	let hash_len = <H as sp_core::Hasher>::LENGTH;
+	let mut combined = vec![0_u8; hash_len * 2];
 	let mut position = leaf_index;
 	let mut width = number_of_leaves;
 	let computed = proof.into_iter().fold(leaf_hash, |a, b| {
 		if position % 2 == 1 || position + 1 == width {
-			combined[0..32].copy_from_slice(&b);
-			combined[32..64].copy_from_slice(&a);
+			combined[..hash_len].copy_from_slice(&b.as_ref());
+			combined[hash_len..].copy_from_slice(&a.as_ref());
 		} else {
-			combined[0..32].copy_from_slice(&a);
-			combined[32..64].copy_from_slice(&b);
+			combined[..hash_len].copy_from_slice(&a.as_ref());
+			combined[hash_len..].copy_from_slice(&b.as_ref());
 		}
-		let hash = H::hash(&combined);
+		let hash = <H as HashT>::hash(&combined);
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"[verify_proof]: (a, b) {:?}, {:?} => {:?} ({:?}) hash",
-			array_bytes::bytes2hex("", &a),
-			array_bytes::bytes2hex("", &b),
-			array_bytes::bytes2hex("", &hash),
-			array_bytes::bytes2hex("", &combined)
+			array_bytes::bytes2hex("", &a.as_ref()),
+			array_bytes::bytes2hex("", &b.as_ref()),
+			array_bytes::bytes2hex("", &hash.as_ref()),
+			array_bytes::bytes2hex("", &combined.as_ref())
 		);
 		position /= 2;
 		width = ((width - 1) / 2) + 1;
@@ -332,20 +290,22 @@ where
 /// empty iterator) an `Err` with the inner nodes of upper layer is returned.
 fn merkelize_row<H, V, I>(
 	mut iter: I,
-	mut next: Vec<Hash>,
+	mut next: Vec<H::Output>,
 	visitor: &mut V,
-) -> Result<Hash, Vec<Hash>>
+) -> Result<H::Output, Vec<H::Output>>
 where
-	H: Hasher,
-	V: Visitor,
-	I: Iterator<Item = Hash>,
+	H: HashT,
+	H::Output: AsRef<[u8]>,
+	V: Visitor<H::Output>,
+	I: Iterator<Item = H::Output>,
 {
 	#[cfg(feature = "debug")]
 	log::debug!("[merkelize_row]");
 	next.clear();
 
+	let hash_len = <H as sp_core::Hasher>::LENGTH;
 	let mut index = 0;
-	let mut combined = [0_u8; 64];
+	let mut combined = vec![0_u8; hash_len * 2];
 	loop {
 		let a = iter.next();
 		let b = iter.next();
@@ -354,17 +314,17 @@ where
 		#[cfg(feature = "debug")]
 		log::debug!(
 			"  {:?}\n  {:?}",
-			a.as_ref().map(|s| array_bytes::bytes2hex("", s)),
-			b.as_ref().map(|s| array_bytes::bytes2hex("", s))
+			a.as_ref().map(|s| array_bytes::bytes2hex("", s.as_ref())),
+			b.as_ref().map(|s| array_bytes::bytes2hex("", s.as_ref()))
 		);
 
 		index += 2;
 		match (a, b) {
 			(Some(a), Some(b)) => {
-				combined[0..32].copy_from_slice(&a);
-				combined[32..64].copy_from_slice(&b);
+				combined[..hash_len].copy_from_slice(a.as_ref());
+				combined[hash_len..].copy_from_slice(b.as_ref());
 
-				next.push(H::hash(&combined));
+				next.push(<H as HashT>::hash(&combined));
 			},
 			// Odd number of items. Promote the item to the upper layer.
 			(Some(a), None) if !next.is_empty() => {
@@ -377,7 +337,7 @@ where
 				#[cfg(feature = "debug")]
 				log::debug!(
 					"[merkelize_row] Next: {:?}",
-					next.iter().map(|s| array_bytes::bytes2hex("", s)).collect::<Vec<_>>()
+					next.iter().map(|s| array_bytes::bytes2hex("", s.as_ref())).collect::<Vec<_>>()
 				);
 				return Err(next)
 			},
@@ -389,7 +349,6 @@ sp_api::decl_runtime_apis! {
 	/// API useful for BEEFY light clients.
 	pub trait BeefyMmrApi<H>
 	where
-		H: From<Hash> + Into<Hash>,
 		BeefyAuthoritySet<H>: sp_api::Decode,
 	{
 		/// Return the currently active BEEFY authority set proof.
@@ -403,6 +362,7 @@ sp_api::decl_runtime_apis! {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::sp_core::H256;
 
 	#[test]
 	fn should_generate_empty_root() {
@@ -411,11 +371,11 @@ mod tests {
 		let data: Vec<[u8; 1]> = Default::default();
 
 		// when
-		let out = merkle_root::<Keccak256, _, _>(data);
+		let out = merkle_root::<Keccak256, _>(data);
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &out),
+			array_bytes::bytes2hex("", out.as_ref()),
 			"0000000000000000000000000000000000000000000000000000000000000000"
 		);
 	}
@@ -429,11 +389,11 @@ mod tests {
 		)];
 
 		// when
-		let out = merkle_root::<Keccak256, _, _>(data);
+		let out = merkle_root::<Keccak256, _>(data);
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &out),
+			array_bytes::bytes2hex("", out.as_ref()),
 			"aeb47a269393297f4b0a3c9c9cfd00c7a4195255274cf39d83dabc2fcc9ff3d7"
 		);
 	}
@@ -448,11 +408,11 @@ mod tests {
 		];
 
 		// when
-		let out = merkle_root::<Keccak256, _, _>(data);
+		let out = merkle_root::<Keccak256, _>(data);
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &out),
+			array_bytes::bytes2hex("", out.as_ref()),
 			"697ea2a8fe5b03468548a7a413424a6292ab44a82a6f5cc594c3fa7dda7ce402"
 		);
 	}
@@ -461,7 +421,10 @@ mod tests {
 	fn should_generate_root_complex() {
 		let _ = env_logger::try_init();
 		let test = |root, data| {
-			assert_eq!(array_bytes::bytes2hex("", &merkle_root::<Keccak256, _, _>(data)), root);
+			assert_eq!(
+				array_bytes::bytes2hex("", &merkle_root::<Keccak256, _>(data).as_ref()),
+				root
+			);
 		};
 
 		test(
@@ -521,18 +484,19 @@ mod tests {
 
 		// then
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof0.root),
-			array_bytes::bytes2hex("", &proof1.root)
+			array_bytes::bytes2hex("", &proof0.root.as_ref()),
+			array_bytes::bytes2hex("", &proof1.root.as_ref())
 		);
 		assert_eq!(
-			array_bytes::bytes2hex("", &proof2.root),
-			array_bytes::bytes2hex("", &proof1.root)
+			array_bytes::bytes2hex("", &proof2.root.as_ref()),
+			array_bytes::bytes2hex("", &proof1.root.as_ref())
 		);
 
 		assert!(!verify_proof::<Keccak256, _, _>(
 			&array_bytes::hex2array_unchecked(
 				"fb3b3be94be9e983ba5e094c9c51a7d96a4fa2e5d8e891df00ca89ba05bb1239"
-			),
+			)
+			.into(),
 			proof0.proof,
 			data.len(),
 			proof0.leaf_index,
@@ -540,7 +504,7 @@ mod tests {
 		));
 
 		assert!(!verify_proof::<Keccak256, _, _>(
-			&proof0.root,
+			&proof0.root.into(),
 			vec![],
 			data.len(),
 			proof0.leaf_index,
@@ -796,9 +760,10 @@ mod tests {
 			"0xA4cDc98593CE52d01Fe5Ca47CB3dA5320e0D7592",
 			"0xc26B34D375533fFc4c5276282Fa5D660F3d8cbcB",
 		];
-		let root = array_bytes::hex2array_unchecked(
+		let root: H256 = array_bytes::hex2array_unchecked(
 			"72b0acd7c302a84f1f6b6cefe0ba7194b7398afb440e1b44a9dbbe270394ca53",
-		);
+		)
+		.into();
 
 		let data = addresses
 			.into_iter()
@@ -808,7 +773,10 @@ mod tests {
 		for l in 0..data.len() {
 			// when
 			let proof = merkle_proof::<Keccak256, _, _>(data.clone(), l);
-			assert_eq!(array_bytes::bytes2hex("", &proof.root), array_bytes::bytes2hex("", &root));
+			assert_eq!(
+				array_bytes::bytes2hex("", &proof.root.as_ref()),
+				array_bytes::bytes2hex("", &root.as_ref())
+			);
 			assert_eq!(proof.leaf_index, l);
 			assert_eq!(&proof.leaf, &data[l]);
 
@@ -831,16 +799,20 @@ mod tests {
 				proof: vec![
 					array_bytes::hex2array_unchecked(
 						"340bcb1d49b2d82802ddbcf5b85043edb3427b65d09d7f758fbc76932ad2da2f"
-					),
+					)
+					.into(),
 					array_bytes::hex2array_unchecked(
 						"ba0580e5bd530bc93d61276df7969fb5b4ae8f1864b4a28c280249575198ff1f"
-					),
+					)
+					.into(),
 					array_bytes::hex2array_unchecked(
 						"d02609d2bbdb28aa25f58b85afec937d5a4c85d37925bce6d0cf802f9d76ba79"
-					),
+					)
+					.into(),
 					array_bytes::hex2array_unchecked(
 						"ae3f8991955ed884613b0a5f40295902eea0e0abe5858fc520b72959bc016d4e"
-					),
+					)
+					.into(),
 				],
 				number_of_leaves: data.len(),
 				leaf_index: data.len() - 1,

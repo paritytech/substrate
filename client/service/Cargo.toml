@@ -56,6 +56,7 @@ sc-network-bitswap = { version = "0.10.0-dev", path = "../network/bitswap" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-network-light = { version = "0.10.0-dev", path = "../network/light" }
 sc-network-sync = { version = "0.10.0-dev", path = "../network/sync" }
+sc-network-transactions = { version = "0.10.0-dev", path = "../network/transactions" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
