@@ -72,3 +72,27 @@ impl Payload {
 		self
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn payload_methods_work_as_expected() {
+		let id1: BeefyPayloadId = *b"hw";
+		let msg1: String = "1. Hello World!".to_string();
+		let id2: BeefyPayloadId = *b"yb";
+		let msg2: String = "2. Yellow Board!".to_string();
+		let id3: BeefyPayloadId = *b"cs";
+		let msg3: String = "3. Cello Cord!".to_string();
+
+		let payload = Payload::new(id1, msg1.encode())
+			.push_raw(id2, msg2.encode())
+			.push_raw(id3, msg3.encode());
+
+		assert_eq!(payload.get_decoded(&id1), Some(msg1));
+		assert_eq!(payload.get_decoded(&id2), Some(msg2));
+		assert_eq!(payload.get_raw(&id3), Some(&msg3.encode()));
+		assert_eq!(payload.get_raw(&known_payloads::MMR_ROOT_ID), None);
+	}
+}
