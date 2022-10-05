@@ -30,7 +30,7 @@ use sc_transaction_pool::*;
 use sc_transaction_pool_api::{
 	ChainEvent, MaintainedTransactionPool, TransactionPool, TransactionStatus,
 };
-use sp_blockchain::TreeRoute;
+use sp_blockchain::{HeaderBackend, TreeRoute};
 use sp_consensus::BlockOrigin;
 use sp_runtime::{
 	generic::BlockId,
@@ -899,10 +899,16 @@ fn ready_set_should_eventually_resolve_when_block_update_arrives() {
 #[test]
 fn should_not_accept_old_signatures() {
 	let client = Arc::new(substrate_test_runtime_client::new());
-
-	let fca = FullChainApi::new(client, None, &sp_core::testing::TaskExecutor::new());
-	let genesis = fca.block_id_to_hash(&BlockId::Number(0)).unwrap().unwrap();
-	let pool = Arc::new(BasicPool::new_test(Arc::new(fca), genesis, genesis).0);
+	let best_hash = client.info().best_hash;
+	let finalized_hash = client.info().finalized_hash;
+	let pool = Arc::new(
+		BasicPool::new_test(
+			Arc::new(FullChainApi::new(client, None, &sp_core::testing::TaskExecutor::new())),
+			best_hash,
+			finalized_hash,
+		)
+		.0,
+	);
 
 	let transfer = Transfer { from: Alice.into(), to: Bob.into(), nonce: 0, amount: 1 };
 	let _bytes: sp_core::sr25519::Signature = transfer.using_encoded(|e| Alice.sign(e)).into();
@@ -936,10 +942,21 @@ fn should_not_accept_old_signatures() {
 fn import_notification_to_pool_maintain_works() {
 	let mut client = Arc::new(substrate_test_runtime_client::new());
 
-	let fca = FullChainApi::new(client.clone(), None, &sp_core::testing::TaskExecutor::new());
-	let genesis = fca.block_id_to_hash(&BlockId::Number(0)).unwrap().unwrap();
+	let best_hash = client.info().best_hash;
+	let finalized_hash = client.info().finalized_hash;
 
-	let pool = Arc::new(BasicPool::new_test(Arc::new(fca), genesis, genesis).0);
+	let pool = Arc::new(
+		BasicPool::new_test(
+			Arc::new(FullChainApi::new(
+				client.clone(),
+				None,
+				&sp_core::testing::TaskExecutor::new(),
+			)),
+			best_hash,
+			finalized_hash,
+		)
+		.0,
+	);
 
 	// Prepare the extrisic, push it to the pool and check that it was added.
 	let xt = uxt(Alice, 0);

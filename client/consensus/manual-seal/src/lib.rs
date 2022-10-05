@@ -307,7 +307,7 @@ mod tests {
 	use sc_basic_authorship::ProposerFactory;
 	use sc_client_api::BlockBackend;
 	use sc_consensus::ImportedAux;
-	use sc_transaction_pool::{BasicPool, Options, RevalidationType};
+	use sc_transaction_pool::{BasicPool, FullChainApi, Options, RevalidationType};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
 	use sp_inherents::InherentData;
 	use sp_runtime::generic::{BlockId, Digest, DigestItem};
@@ -513,7 +513,11 @@ mod tests {
 		let builder = TestClientBuilder::new();
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
-		let pool_api = api();
+		let pool_api = Arc::new(FullChainApi::new(
+			client.clone(),
+			None,
+			&sp_core::testing::TaskExecutor::new(),
+		));
 		let spawner = sp_core::testing::TaskExecutor::new();
 		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
@@ -561,7 +565,6 @@ mod tests {
 		.await
 		.unwrap();
 		let created_block = rx.await.unwrap().unwrap();
-		pool_api.increment_nonce(Alice.into());
 
 		// assert that the background task returns ok
 		assert_eq!(
@@ -578,12 +581,6 @@ mod tests {
 			}
 		);
 
-		//pool_api goes as ChainApi to the txpool, so we need to keep client chain and TestApi in
-		// sync (as we need to compute tree_route - pool_api as ChainApi is used for that)
-		pool_api.add_block(client.block(&BlockId::Number(0)).unwrap().unwrap().block, true);
-
-		let block = client.block(&BlockId::Number(1)).unwrap().unwrap().block;
-		pool_api.add_block(block, true);
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Alice, 1)).await.is_ok());
 
 		let header = client.header(&BlockId::Number(1)).expect("db error").expect("imported above");
@@ -604,9 +601,6 @@ mod tests {
 			.await
 			.is_ok());
 		assert_matches::assert_matches!(rx1.await.expect("should be no error receiving"), Ok(_));
-		let block = client.block(&BlockId::Number(2)).unwrap().unwrap().block;
-		pool_api.add_block(block, true);
-		pool_api.increment_nonce(Alice.into());
 
 		assert!(pool.submit_one(&BlockId::Number(1), SOURCE, uxt(Bob, 0)).await.is_ok());
 		let (tx2, rx2) = futures::channel::oneshot::channel();
