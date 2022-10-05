@@ -1089,7 +1089,7 @@ pub mod pallet {
 			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
 			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
 
-			let supports = T::GovernanceFallback::elect_with_bounds(
+			let mut supports = T::GovernanceFallback::elect_with_bounds(
 				maybe_max_voters.unwrap_or(Bounded::max_value()),
 				maybe_max_targets.unwrap_or(Bounded::max_value()),
 			)
@@ -1098,10 +1098,17 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
+			// AKON: verify sort and truncate in a test
+			
+			// sort by total balance of the `supports`
+			supports.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap());
+			// truncate GovernanceFallback::MaxWinners by pallet::Config::MaxWinners
+			supports.truncate(T::MaxWinners::get().try_into().unwrap());
+			
 			// AKON: This is a hack to convert a BoundedVec<A,B> to
 			// BoundedVec<A,C>. May be there is a more elegant solution.
 			let supports: BoundedVec<_, T::MaxWinners> = supports.into_inner().try_into().unwrap();
-			// AKON: sort and truncate supports with MaxWinners
+
 			let solution = ReadySolution {
 				supports,
 				score: Default::default(),
