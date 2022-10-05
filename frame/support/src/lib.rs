@@ -1580,7 +1580,7 @@ pub mod pallet_prelude {
 ///
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
-/// 
+///
 /// NOTE: this attribute is only valid when applied _directly_ to your `Pallet` struct
 /// definition.
 ///

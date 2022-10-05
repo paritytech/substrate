@@ -665,7 +665,7 @@ pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> 
 ///
 /// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
 /// `<Pallet as Store>::Foo`.
-/// 
+///
 /// NOTE: this attribute is only valid when applied _directly_ to your `Pallet` struct
 /// definition.
 #[proc_macro_attribute]
@@ -811,12 +811,14 @@ pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
 /// impl<T: Config> Pallet<T> {}
 /// ```
 ///
-/// **WARNING**: modifying dispatchables, changing their order, removing some must be done with
-/// care. Indeed this will change the outer runtime call type (which is an enum with one
-/// variant per pallet), this outer runtime call can be stored on-chain (e.g. in
+/// **WARNING**: modifying dispatchables, changing their order, removing some, etc., must be
+/// done with care. Indeed this will change the outer runtime call type (which is an enum with
+/// one variant per pallet), this outer runtime call can be stored on-chain (e.g. in
 /// `pallet-scheduler`). Thus migration might be needed. To mitigate against some of this, the
 /// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
-/// that the `Call` enum encoding does not change after modification.
+/// that the `Call` enum encoding does not change after modification. As a general rule of
+/// thumb, it is therefore adventageous to always add new calls to the end so you can maintain
+/// the existing order of calls.
 ///
 /// ### Macro expansion
 ///
