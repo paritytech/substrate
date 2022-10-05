@@ -32,7 +32,7 @@ use utils::print_from_uri;
 #[command(name = "vanity", about = "Generate a seed that provides a vanity address")]
 pub struct VanityCmd {
 	/// Desired pattern
-	#[clap(long, value_parser = assert_non_empty_string)]
+	#[arg(long, value_parser = assert_non_empty_string)]
 	pattern: String,
 
 	#[allow(missing_docs)]

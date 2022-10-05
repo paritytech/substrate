@@ -34,7 +34,7 @@ pub struct Cli {
 	///
 	/// The results are then printed out in the logs, and also sent as part of
 	/// telemetry, if telemetry is enabled.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_hardware_benchmarks: bool,
 }
 

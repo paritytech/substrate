@@ -31,14 +31,14 @@ use std::{fmt::Debug, str::FromStr};
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
 	/// Overwrite the wasm code in state or not.
-	#[clap(long)]
+	#[arg(long)]
 	overwrite_wasm_code: bool,
 
 	/// The block hash at which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
 		value_parser = parse::hash
 	)]
@@ -48,14 +48,14 @@ pub struct OffchainWorkerCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
 		value_parser = parse::url
 	)]
 	header_ws_uri: Option<String>,
 
 	/// The state type to use.
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub state: State,
 }
 

@@ -32,20 +32,20 @@ const DEFAULT_KEYSTORE_CONFIG_PATH: &str = "keystore";
 #[derive(Debug, Clone, Args)]
 pub struct KeystoreParams {
 	/// Specify custom URIs to connect to for keystore-services
-	#[clap(long)]
+	#[arg(long)]
 	pub keystore_uri: Option<String>,
 
 	/// Specify custom keystore path.
-	#[clap(long, value_name = "PATH", value_parser)]
+	#[arg(long, value_name = "PATH", value_parser)]
 	pub keystore_path: Option<PathBuf>,
 
 	/// Use interactive shell for entering the password used by the keystore.
-	#[clap(long, conflicts_with_all = &["password", "password_filename"])]
+	#[arg(long, conflicts_with_all = &["password", "password_filename"])]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore. This allows appending an extra user-defined secret to the
 	/// seed.
-	#[clap(
+	#[arg(
 		long,
 		value_parser = secret_string_from_str,
 		conflicts_with_all = &["password_interactive", "password_filename"]
@@ -53,7 +53,7 @@ pub struct KeystoreParams {
 	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
-	#[clap(
+	#[arg(
 		long,
 		value_name = "PATH",
 		value_parser,

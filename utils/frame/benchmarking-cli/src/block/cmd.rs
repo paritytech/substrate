@@ -71,7 +71,7 @@ pub struct BlockCmd {
 	/// Enable the Trie cache.
 	///
 	/// This should only be used for performance analysis and not for final results.
-	#[clap(long)]
+	#[arg(long)]
 	pub enable_trie_cache: bool,
 }
 

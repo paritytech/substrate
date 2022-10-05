@@ -35,61 +35,61 @@ fn parse_pallet_name(pallet: &str) -> std::result::Result<String, String> {
 #[derive(Debug, clap::Parser)]
 pub struct PalletCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[clap(short, long, value_parser = parse_pallet_name, required_unless_present = "list")]
+	#[arg(short, long, value_parser = parse_pallet_name, required_unless_present = "list")]
 	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[clap(short, long, required_unless_present = "list")]
+	#[arg(short, long, required_unless_present = "list")]
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[clap(short, long, default_value = "2")]
+	#[arg(short, long, default_value = "2")]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
-	#[clap(long = "low", value_delimiter = ',')]
+	#[arg(long = "low", value_delimiter = ',')]
 	pub lowest_range_values: Vec<u32>,
 
 	/// Indicates highest values for each of the component ranges.
-	#[clap(long = "high", value_delimiter = ',')]
+	#[arg(long = "high", value_delimiter = ',')]
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.
-	#[clap(short, long, default_value = "1")]
+	#[arg(short, long, default_value = "1")]
 	pub repeat: u32,
 
 	/// Select how many repetitions of this benchmark should run from the client.
 	///
 	/// NOTE: Using this alone may give slower results, but will afford you maximum Wasm memory.
-	#[clap(long, default_value = "1")]
+	#[arg(long, default_value = "1")]
 	pub external_repeat: u32,
 
 	/// Print the raw results in JSON format.
-	#[clap(long = "json")]
+	#[arg(long = "json")]
 	pub json_output: bool,
 
 	/// Write the raw results in JSON format into the given file.
-	#[clap(long, conflicts_with = "json_output")]
+	#[arg(long, conflicts_with = "json_output")]
 	pub json_file: Option<PathBuf>,
 
 	/// Don't print the median-slopes linear regression analysis.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_median_slopes: bool,
 
 	/// Don't print the min-squares linear regression analysis.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_min_squares: bool,
 
 	/// Output the benchmarks to a Rust file at the given path.
-	#[clap(long)]
+	#[arg(long)]
 	pub output: Option<PathBuf>,
 
 	/// Add a header file to your outputted benchmarks.
-	#[clap(long)]
+	#[arg(long)]
 	pub header: Option<PathBuf>,
 
 	/// Path to Handlebars template file used for outputting benchmark results. (Optional)
-	#[clap(long)]
+	#[arg(long)]
 	pub template: Option<PathBuf>,
 
 	#[allow(missing_docs)]
@@ -100,25 +100,25 @@ pub struct PalletCmd {
 	/// * min-squares (default)
 	/// * median-slopes
 	/// * max (max of min squares and median slopes for each value)
-	#[clap(long)]
+	#[arg(long)]
 	pub output_analysis: Option<String>,
 
 	/// Set the heap pages while running benchmarks. If not set, the default value from the client
 	/// is used.
-	#[clap(long)]
+	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
 	/// Disable verification logic when running benchmarks.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_verify: bool,
 
 	/// Display and run extra benchmarks that would otherwise not be needed for weight
 	/// construction.
-	#[clap(long)]
+	#[arg(long)]
 	pub extra: bool,
 
 	/// Estimate PoV size.
-	#[clap(long)]
+	#[arg(long)]
 	pub record_proof: bool,
 
 	#[allow(missing_docs)]
@@ -126,11 +126,11 @@ pub struct PalletCmd {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used for benchmarks.
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution: Option<ExecutionStrategy>,
 
 	/// Method for executing Wasm runtime code.
-	#[clap(
+	#[arg(
 		long = "wasm-execution",
 		value_name = "METHOD",
 		value_enum,
@@ -142,7 +142,7 @@ pub struct PalletCmd {
 	/// The WASM instantiation method to use.
 	///
 	/// Only has an effect when `wasm-execution` is set to `compiled`.
-	#[clap(
+	#[arg(
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
@@ -151,19 +151,19 @@ pub struct PalletCmd {
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Limit the memory the database cache can use.
-	#[clap(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	#[arg(long = "db-cache", value_name = "MiB", default_value = "1024")]
 	pub database_cache_size: u32,
 
 	/// List the benchmarks that match your query rather than running them.
 	///
 	/// When nothing is provided, we list all benchmarks.
-	#[clap(long)]
+	#[arg(long)]
 	pub list: bool,
 
 	/// If enabled, the storage info is not displayed in the output next to the analysis.
 	///
 	/// This is independent of the storage info appearing in the *output file*. Use a Handlebar
 	/// template for that purpose.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_storage_info: bool,
 }

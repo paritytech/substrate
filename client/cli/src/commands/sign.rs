@@ -28,16 +28,16 @@ pub struct SignCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[clap(long)]
+	#[arg(long)]
 	suri: Option<String>,
 
 	/// Message to sign, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[clap(long)]
+	#[arg(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[clap(long)]
+	#[arg(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]

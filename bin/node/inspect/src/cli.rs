@@ -18,7 +18,7 @@
 
 //! Structs to easily compose inspect sub-command for CLI.
 
-use clap::{arg, command};
+use clap::arg;
 use sc_cli::{ImportParams, SharedParams};
 
 /// The `inspect` command used to print decoded chain data.
@@ -47,7 +47,7 @@ pub enum InspectSubCmd {
 		/// Can be either a block hash (no 0x prefix) or a number to retrieve existing block,
 		/// or a 0x-prefixed bytes hex string, representing SCALE encoding of
 		/// a block.
-		#[clap(value_name = "HASH or NUMBER or BYTES")]
+		#[arg(value_name = "HASH or NUMBER or BYTES")]
 		input: String,
 	},
 	/// Decode extrinsic with native version of runtime and print out the details.
@@ -57,7 +57,7 @@ pub enum InspectSubCmd {
 		/// Can be either a block hash (no 0x prefix) or number and the index, in the form
 		/// of `{block}:{index}` or a 0x-prefixed bytes hex string,
 		/// representing SCALE encoding of an extrinsic.
-		#[clap(value_name = "BLOCK:INDEX or BYTES")]
+		#[arg(value_name = "BLOCK:INDEX or BYTES")]
 		input: String,
 	},
 }

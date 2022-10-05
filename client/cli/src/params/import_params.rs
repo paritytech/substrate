@@ -49,12 +49,12 @@ pub struct ImportParams {
 	/// up error.
 	///
 	/// Details: <https://github.com/paritytech/substrate/issues/8103>
-	#[clap(long)]
+	#[arg(long)]
 	#[deprecated = "According to https://github.com/paritytech/substrate/issues/8103"]
 	pub unsafe_pruning: bool,
 
 	/// Method for executing Wasm runtime code.
-	#[clap(
+	#[arg(
 		long = "wasm-execution",
 		value_name = "METHOD",
 		value_enum,
@@ -76,7 +76,7 @@ pub struct ImportParams {
 	/// The `legacy-instance-reuse` strategy is deprecated and will
 	/// be removed in the future. It should only be used in case of
 	/// issues with the default instantiation strategy.
-	#[clap(
+	#[arg(
 		long,
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
@@ -87,7 +87,7 @@ pub struct ImportParams {
 	/// Specify the path where local WASM runtimes are stored.
 	///
 	/// These runtimes will override on-chain runtimes when the version matches.
-	#[clap(long, value_name = "PATH", value_parser)]
+	#[arg(long, value_name = "PATH", value_parser)]
 	pub wasm_runtime_overrides: Option<PathBuf>,
 
 	#[allow(missing_docs)]
@@ -97,13 +97,13 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	///
 	/// Providing `0` will disable the cache.
-	#[clap(long, value_name = "Bytes", default_value = "67108864")]
+	#[arg(long, value_name = "Bytes", default_value = "67108864")]
 	pub trie_cache_size: usize,
 
 	/// DEPRECATED
 	///
 	/// Switch to `--trie-cache-size`.
-	#[clap(long)]
+	#[arg(long)]
 	state_cache_size: Option<usize>,
 }
 
@@ -168,29 +168,29 @@ impl ImportParams {
 pub struct ExecutionStrategiesParams {
 	/// The means of execution used when calling into the runtime for importing blocks as
 	/// part of an initial sync.
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_syncing: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime for general block import
 	/// (including locally authored blocks).
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_import_block: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while constructing blocks.
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_block_construction: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while using an off-chain worker.
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_offchain_worker: Option<ExecutionStrategy>,
 
 	/// The means of execution used when calling into the runtime while not syncing, importing or
 	/// constructing blocks.
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true)]
 	pub execution_other: Option<ExecutionStrategy>,
 
 	/// The execution strategy that should be used by all execution contexts.
-	#[clap(
+	#[arg(
 		long,
 		value_name = "STRATEGY",
 		value_enum,

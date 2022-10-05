@@ -35,7 +35,7 @@ pub struct OffchainWorkerParams {
 	/// Should execute offchain workers on every block.
 	///
 	/// By default it's only enabled for nodes that are authoring new blocks.
-	#[clap(
+	#[arg(
 		long = "offchain-worker",
 		value_name = "ENABLED",
 		value_enum,
@@ -48,7 +48,7 @@ pub struct OffchainWorkerParams {
 	///
 	/// Enables a runtime to write directly to a offchain workers
 	/// DB during block import.
-	#[clap(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING")]
+	#[arg(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING")]
 	pub indexing_enabled: bool,
 }
 

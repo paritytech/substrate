@@ -34,7 +34,7 @@ pub struct PalletIdCmd {
 	id: String,
 
 	/// network address format
-	#[clap(
+	#[arg(
 		long,
 		value_name = "NETWORK",
 		value_parser = sc_cli::parse_ss58_address_format,
@@ -43,15 +43,15 @@ pub struct PalletIdCmd {
 	pub network: Option<Ss58AddressFormat>,
 
 	#[allow(missing_docs)]
-	#[clap(flatten)]
+	#[command(flatten)]
 	pub output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[clap(flatten)]
+	#[command(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[clap(flatten)]
+	#[command(flatten)]
 	pub keystore_params: KeystoreParams,
 }
 

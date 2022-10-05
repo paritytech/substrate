@@ -392,11 +392,11 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[clap(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value = "wasm")]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value = "wasm")]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
-	#[clap(
+	#[arg(
 		long = "wasm-execution",
 		value_name = "METHOD",
 		value_enum,
@@ -408,7 +408,7 @@ pub struct SharedParams {
 	/// The WASM instantiation method to use.
 	///
 	/// Only has an effect when `wasm-execution` is set to `compiled`.
-	#[clap(
+	#[arg(
 		long = "wasm-instantiation-strategy",
 		value_name = "STRATEGY",
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
@@ -418,15 +418,15 @@ pub struct SharedParams {
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
-	#[clap(long)]
+	#[arg(long)]
 	pub heap_pages: Option<u64>,
 
 	/// When enabled, the spec check will not panic, and instead only show a warning.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
-	#[clap(long, default_value = "1", value_parser = parse::state_version)]
+	#[arg(long, default_value = "1", value_parser = parse::state_version)]
 	pub state_version: StateVersion,
 }
 
@@ -438,7 +438,7 @@ pub struct TryRuntimeCmd {
 	#[clap(flatten)]
 	pub shared: SharedParams,
 
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub command: Command,
 }
 
@@ -449,14 +449,14 @@ pub enum State {
 	///
 	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
-		#[clap(short, long)]
+		#[arg(short, long)]
 		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain as the source of runtime state.
 	Live {
 		/// The url to connect to.
-		#[clap(
+		#[arg(
 			short,
 			long,
 			value_parser = parse::url,
@@ -467,7 +467,7 @@ pub enum State {
 		///
 		/// If non provided, then the latest finalized head is used. This is particularly useful
 		/// for [`Command::OnRuntimeUpgrade`].
-		#[clap(
+		#[arg(
 			short,
 			long,
 			value_parser = parse::hash,
@@ -475,12 +475,12 @@ pub enum State {
 		at: Option<String>,
 
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-		#[clap(short, long)]
+		#[arg(short, long)]
 		snapshot_path: Option<PathBuf>,
 
 		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
 		/// be scraped.
-		#[clap(short, long, num_args = 0..)]
+		#[arg(short, long, num_args = 0..)]
 		pallet: Vec<String>,
 
 		/// Fetch the child-keys as well.
@@ -488,7 +488,7 @@ pub enum State {
 		/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[clap(long)]
+		#[arg(long)]
 		child_tree: bool,
 	},
 }
