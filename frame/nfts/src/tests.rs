@@ -1467,11 +1467,41 @@ fn claim_swap_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, default_collection_config()));
 
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, user_1, default_item_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_2, user_2, default_item_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_3, user_2, default_item_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_4, user_1, default_item_config()));
-		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_5, user_2, default_item_config()));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_1,
+			user_1,
+			default_item_config(),
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_2,
+			user_2,
+			default_item_config(),
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_3,
+			user_2,
+			default_item_config(),
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_4,
+			user_1,
+			default_item_config(),
+		));
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(user_1),
+			collection_id,
+			item_5,
+			user_2,
+			default_item_config(),
+		));
 
 		assert_ok!(Nfts::create_swap(
 			RuntimeOrigin::signed(user_1),
