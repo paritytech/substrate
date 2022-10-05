@@ -32,7 +32,7 @@ use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
 #[derive(Debug, Clone, Parser)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
-	#[arg(value_parser)]
+	#[arg()]
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
