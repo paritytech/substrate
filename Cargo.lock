@@ -525,7 +525,7 @@ dependencies = [
  "env_logger",
  "log",
  "sp-api",
- "tiny-keccak",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -3425,7 +3425,7 @@ dependencies = [
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
- "pallet-contracts-rpc-runtime-api",
+ "pallet-contracts-runtime-api",
  "pallet-conviction-voting",
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
@@ -4888,7 +4888,6 @@ version = "3.0.0-dev"
 dependencies = [
  "jsonrpsee",
  "node-primitives",
- "pallet-contracts-rpc",
  "pallet-mmr-rpc",
  "pallet-transaction-payment-rpc",
  "sc-chain-spec",
@@ -5593,10 +5592,6 @@ version = "6.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
- "scale-info",
- "serde",
- "sp-core",
- "sp-rpc",
  "sp-runtime",
  "sp-std",
 ]
@@ -5611,24 +5606,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-contracts-rpc"
-version = "4.0.0-dev"
-dependencies = [
- "jsonrpsee",
- "pallet-contracts-primitives",
- "pallet-contracts-rpc-runtime-api",
- "parity-scale-codec",
- "serde",
- "serde_json",
- "sp-api",
- "sp-blockchain",
- "sp-core",
- "sp-rpc",
- "sp-runtime",
-]
-
-[[package]]
-name = "pallet-contracts-rpc-runtime-api"
+name = "pallet-contracts-runtime-api"
 version = "4.0.0-dev"
 dependencies = [
  "pallet-contracts-primitives",
@@ -7906,8 +7884,8 @@ dependencies = [
  "libp2p",
  "log",
  "parity-scale-codec",
- "prost 0.10.3",
- "prost-build 0.10.4",
+ "prost 0.11.0",
+ "prost-build 0.11.1",
  "quickcheck",
  "rand 0.7.3",
  "sc-client-api",
@@ -8562,7 +8540,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
- "prost 0.10.3",
+ "prost 0.11.0",
  "rand 0.7.3",
  "sc-block-builder",
  "sc-client-api",
@@ -8629,7 +8607,7 @@ dependencies = [
  "libp2p",
  "linked_hash_set",
  "parity-scale-codec",
- "prost-build 0.10.4",
+ "prost-build 0.11.1",
  "sc-consensus",
  "sc-peerset",
  "serde",
@@ -8671,8 +8649,8 @@ dependencies = [
  "libp2p",
  "log",
  "parity-scale-codec",
- "prost 0.10.3",
- "prost-build 0.10.4",
+ "prost 0.11.0",
+ "prost-build 0.11.1",
  "sc-client-api",
  "sc-network-common",
  "sc-peerset",
@@ -8693,8 +8671,8 @@ dependencies = [
  "log",
  "lru",
  "parity-scale-codec",
- "prost 0.10.3",
- "prost-build 0.10.4",
+ "prost 0.11.0",
+ "prost-build 0.11.1",
  "quickcheck",
  "sc-block-builder",
  "sc-client-api",

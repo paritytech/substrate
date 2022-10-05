@@ -207,7 +207,10 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::with_sensible_defaults(1u64 * constants::WEIGHT_PER_SECOND, DEFAULT_NORMAL_RATIO)
+		Self::with_sensible_defaults(
+			Weight::from_components(constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			DEFAULT_NORMAL_RATIO,
+		)
 	}
 }
 
@@ -224,7 +227,6 @@ impl BlockWeights {
 		}
 		let mut error = ValidationErrors::default();
 
-		// TODO: account for proof size weight in the assertions below
 		for class in DispatchClass::all() {
 			let weights = self.per_class.get(*class);
 			let max_for_class = or_max(weights.max_total);
@@ -233,16 +235,18 @@ impl BlockWeights {
 			// Make sure that if total is set it's greater than base_block &&
 			// base_for_class
 			error_assert!(
-				(max_for_class.ref_time() > self.base_block.ref_time() && max_for_class.ref_time() > base_for_class.ref_time())
-				|| max_for_class.ref_time() == 0,
+				(max_for_class.all_gt(self.base_block) && max_for_class.all_gt(base_for_class))
+				|| max_for_class == Weight::zero(),
 				&mut error,
 				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
 				class, max_for_class, self.base_block, base_for_class,
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(
-				weights.max_extrinsic.unwrap_or(Weight::zero()).ref_time() <=
-					max_for_class.saturating_sub(base_for_class).ref_time(),
+				weights
+					.max_extrinsic
+					.unwrap_or(Weight::zero())
+					.all_lte(max_for_class.saturating_sub(base_for_class)),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class,
@@ -251,14 +255,14 @@ impl BlockWeights {
 			);
 			// Max extrinsic should not be 0
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(Weight::max_value).ref_time() > 0,
+				weights.max_extrinsic.unwrap_or_else(Weight::max_value).all_gt(Weight::zero()),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
 			);
 			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
-				reserved.ref_time() > base_for_class.ref_time() || reserved.ref_time() == 0,
+				reserved.all_gt(base_for_class) || reserved == Weight::zero(),
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
 				class,
@@ -267,7 +271,7 @@ impl BlockWeights {
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
-				self.max_block.ref_time() >= weights.max_total.unwrap_or(Weight::zero()).ref_time(),
+				self.max_block.all_gte(weights.max_total.unwrap_or(Weight::zero())),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
 				class,
@@ -276,7 +280,7 @@ impl BlockWeights {
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
-				self.max_block.ref_time() > (base_for_class + self.base_block).ref_time(),
+				self.max_block.all_gt(base_for_class + self.base_block),
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
 				class,
