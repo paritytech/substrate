@@ -20,18 +20,22 @@
 
 #[allow(unused_imports)]
 use super::*;
+
 use futures::executor::block_on;
+use std::{cell::RefCell, sync::Arc};
+
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::TransactionFor;
 use sc_consensus::{BlockImport, BoxBlockImport, BoxJustificationImport};
 use sc_keystore::LocalKeystore;
-use sc_network_test::{Block as TestBlock, *};
+use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::inherents::InherentDataProvider;
 use sp_runtime::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
-use std::{cell::RefCell, sync::Arc};
+
+use substrate_test_runtime_client::runtime::Block as TestBlock;
 
 type TestHeader = <TestBlock as BlockT>::Header;
 
@@ -53,42 +57,9 @@ enum Stage {
 	PostSeal,
 }
 
-type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
-
-thread_local! {
-	static MUTATOR: RefCell<Mutator> = RefCell::new(Arc::new(|_, _|()));
-}
-
-type SassafrasBlockImport = crate::SassafrasBlockImport<TestBlock, TestClient, Arc<TestClient>>;
-
 type SassafrasIntermediate = crate::SassafrasIntermediate<TestBlock>;
 
-#[derive(Clone)]
-struct TestBlockImport {
-	inner: SassafrasBlockImport,
-}
-
-#[async_trait::async_trait]
-impl BlockImport<TestBlock> for TestBlockImport {
-	type Error = <SassafrasBlockImport as BlockImport<TestBlock>>::Error;
-	type Transaction = <SassafrasBlockImport as BlockImport<TestBlock>>::Transaction;
-
-	async fn import_block(
-		&mut self,
-		block: BlockImportParams<TestBlock, Self::Transaction>,
-		new_cache: HashMap<CacheKeyId, Vec<u8>>,
-	) -> Result<ImportResult, Self::Error> {
-		println!("IMPORT: {}", block.header.number);
-		Ok(self.inner.import_block(block, new_cache).await.expect("importing block failed"))
-	}
-
-	async fn check_block(
-		&mut self,
-		block: BlockCheckParams<TestBlock>,
-	) -> Result<ImportResult, Self::Error> {
-		Ok(self.inner.check_block(block).await.expect("checking block failed"))
-	}
-}
+type SassafrasBlockImport = crate::SassafrasBlockImport<TestBlock, TestClient, Arc<TestClient>>;
 
 type SassafrasVerifier = crate::SassafrasVerifier<
 	TestBlock,
@@ -103,126 +74,12 @@ type SassafrasVerifier = crate::SassafrasVerifier<
 	>,
 >;
 
-pub struct TestVerifier {
-	inner: SassafrasVerifier,
-	mutator: Mutator,
-}
+type SassafrasLink = crate::SassafrasLink<TestBlock>;
 
-#[async_trait::async_trait]
-impl Verifier<TestBlock> for TestVerifier {
-	/// Verify the given data and return the BlockImportParams and an optional
-	/// new set of validators to import. If not, err with an Error-Message
-	/// presented to the User in the logs.
-	async fn verify(
-		&mut self,
-		mut block: BlockImportParams<TestBlock, ()>,
-	) -> Result<(BlockImportParams<TestBlock, ()>, Option<Vec<(CacheKeyId, Vec<u8>)>>), String> {
-		// apply post-sealing mutations (i.e. stripping seal, if desired).
-		(self.mutator)(&mut block.header, Stage::PostSeal);
-		self.inner.verify(block).await
-	}
-}
-
-struct PeerData {
-	link: SassafrasLink<TestBlock>,
-	block_import: Mutex<
-		Option<
-			BoxBlockImport<
-				TestBlock,
-				TransactionFor<substrate_test_runtime_client::Backend, TestBlock>,
-			>,
-		>,
-	>,
-}
-
-type SassafrasPeer = Peer<Option<PeerData>, TestBlockImport>;
-
-#[derive(Default)]
-struct SassafrasTestNet {
-	peers: Vec<SassafrasPeer>,
-}
-
-impl TestNetFactory for SassafrasTestNet {
-	type BlockImport = TestBlockImport;
-	type Verifier = TestVerifier;
-	type PeerData = Option<PeerData>;
-
-	fn make_block_import(
-		&self,
-		client: PeersClient,
-	) -> (
-		BlockImportAdapter<Self::BlockImport>,
-		Option<BoxJustificationImport<Block>>,
-		Option<PeerData>,
-	) {
-		let client = client.as_client();
-
-		let config = crate::configuration(&*client).expect("config available");
-		let (inner, link) = crate::block_import(config, client.clone(), client.clone())
-			.expect("can initialize block-import");
-
-		let block_import = TestBlockImport { inner };
-
-		let data_block_import =
-			Mutex::new(Some(Box::new(block_import.clone()) as BoxBlockImport<_, _>));
-		(
-			BlockImportAdapter::new(block_import),
-			None,
-			Some(PeerData { link, block_import: data_block_import }),
-		)
-	}
-
-	fn make_verifier(&self, client: PeersClient, maybe_link: &Option<PeerData>) -> Self::Verifier {
-		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
-
-		let client = client.as_client();
-
-		// ensure block import and verifier are linked correctly.
-		let data = maybe_link
-			.as_ref()
-			.expect("babe link always provided to verifier instantiation");
-
-		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
-
-		let config = crate::configuration(&*client).expect("config available");
-		let slot_duration = config.slot_duration();
-
-		let create_inherent_data_providers = Box::new(move |_, _| async move {
-			let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-				Timestamp::current(),
-				slot_duration,
-			);
-			Ok((slot,))
-		});
-
-		let inner = SassafrasVerifier::new(
-			client.clone(),
-			longest_chain,
-			create_inherent_data_providers,
-			data.link.epoch_changes.clone(),
-			None,
-			// TODO-SASS-P2: why babe doesn't have this config???
-			config,
-		);
-
-		TestVerifier { inner, mutator: MUTATOR.with(|m| m.borrow().clone()) }
-	}
-
-	fn peer(&mut self, i: usize) -> &mut SassafrasPeer {
-		&mut self.peers[i]
-	}
-
-	fn peers(&self) -> &Vec<SassafrasPeer> {
-		&self.peers
-	}
-
-	fn mut_peers<F: FnOnce(&mut Vec<SassafrasPeer>)>(&mut self, closure: F) {
-		closure(&mut self.peers);
-	}
-}
+type BlockId = crate::BlockId<TestBlock>;
 
 struct DummyProposer {
-	factory: DummyFactory,
+	factory: TestEnvironment,
 	parent_hash: Hash,
 	parent_number: u64,
 	parent_slot: Slot,
@@ -262,21 +119,21 @@ impl Proposer<TestBlock> for DummyProposer {
 			Err(e) => return future::ready(Err(e)),
 		};
 
-		println!("PROPOSING {}", block.header().number);
+		// Currently the test runtime doesn't invoke each pallet Hooks such as `on_initialize` and
+		// `on_finalize`. Thus we have to manually figure out if we should add a consensus digest.
 
 		let this_slot = crate::find_pre_digest::<TestBlock>(block.header())
 			.expect("baked block has valid pre-digest")
 			.slot;
 
-		// figure out if we should add a consensus digest, since the test runtime doesn't.
-		let epoch_changes = self.factory.epoch_changes.shared_data();
+		let epoch_changes = self.factory.link.epoch_changes.shared_data();
 		let epoch = epoch_changes
 			.epoch_data_for_child_of(
 				descendent_query(&*self.factory.client),
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Epoch::genesis(&self.factory.genesis_config, slot),
+				|slot| Epoch::genesis(&self.factory.link.genesis_config, slot),
 			)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -297,22 +154,140 @@ impl Proposer<TestBlock> for DummyProposer {
 			block.header.digest_mut().push(digest)
 		}
 
-		// mutate the block header according to the mutator.
-		(self.factory.mutator)(&mut block.header, Stage::PreSeal);
-
 		future::ready(Ok(Proposal { block, proof: (), storage_changes: Default::default() }))
 	}
 }
 
+type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
+
 #[derive(Clone)]
-struct DummyFactory {
+struct TestEnvironment {
 	client: Arc<TestClient>,
-	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
-	genesis_config: SassafrasConfiguration,
-	mutator: Mutator,
+	block_import: SassafrasBlockImport,
+	link: SassafrasLink,
+	mutator: Option<Mutator>,
 }
 
-impl Environment<TestBlock> for DummyFactory {
+impl TestEnvironment {
+	fn new(client: Arc<TestClient>, mutator: Option<Mutator>) -> Self {
+		let config = crate::configuration(&*client).expect("config available");
+		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
+			.expect("can initialize block-import");
+
+		Self { client, block_import, link, mutator }
+	}
+
+	fn new_with_pre_built_data(
+		client: Arc<TestClient>,
+		block_import: SassafrasBlockImport,
+		link: SassafrasLink,
+		mutator: Option<Mutator>,
+	) -> Self {
+		Self { client, block_import, link, mutator }
+	}
+
+	// Propose and import a new Sassafras block on top of the given parent.
+	// This skips verification.
+	fn propose_and_import_block(
+		//<Transaction: Send + 'static>(
+		&mut self,
+		parent_id: BlockId,
+		slot: Option<Slot>,
+	) -> Hash {
+		let mut parent = self.client.header(&parent_id).unwrap().unwrap();
+
+		let proposer = block_on(self.init(&parent)).unwrap();
+
+		let slot = slot.unwrap_or_else(|| {
+			let parent_pre_digest = find_pre_digest::<TestBlock>(&parent).unwrap();
+			parent_pre_digest.slot + 1
+		});
+
+		let pre_digest = PreDigest {
+			slot,
+			authority_idx: 0,
+			vrf_output: VRFOutput::try_from([0; 32]).unwrap(),
+			vrf_proof: VRFProof::try_from([0; 64]).unwrap(),
+			ticket_aux: None,
+		};
+		let digest = sp_runtime::generic::Digest {
+			logs: vec![DigestItem::sassafras_pre_digest(pre_digest)],
+		};
+
+		let mut block = proposer.propose_block(digest);
+
+		let epoch_descriptor = self
+			.link
+			.epoch_changes
+			.shared_data()
+			.epoch_descriptor_for_child_of(
+				descendent_query(&*self.client),
+				&parent.hash(),
+				*parent.number(),
+				slot,
+			)
+			.unwrap()
+			.unwrap();
+
+		if let Some(ref mutator) = self.mutator {
+			(mutator)(&mut block.header, Stage::PreSeal);
+		}
+
+		let seal = {
+			// Sign the pre-sealed hash of the block and then add it to a digest item.
+			let pair = AuthorityPair::from_seed(&[1; 32]);
+			let pre_hash = block.header.hash();
+			let signature = pair.sign(pre_hash.as_ref());
+			DigestItem::sassafras_seal(signature)
+		};
+
+		let post_hash = {
+			block.header.digest_mut().push(seal.clone());
+			let h = block.header.hash();
+			block.header.digest_mut().pop();
+			h
+		};
+
+		if let Some(ref mutator) = self.mutator {
+			(mutator)(&mut block.header, Stage::PostSeal);
+		}
+
+		let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
+		import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
+		import.body = Some(block.extrinsics);
+		import.post_digests.push(seal);
+		import.insert_intermediate(INTERMEDIATE_KEY, SassafrasIntermediate { epoch_descriptor });
+
+		match block_on(self.block_import.import_block(import, Default::default())).unwrap() {
+			ImportResult::Imported(_) => (),
+			_ => panic!("expected block to be imported"),
+		}
+
+		post_hash
+	}
+
+	// Propose and import n valid Sassafras blocks that are built on top of the given parent.
+	// The proposer takes care of producing epoch change digests according to the epoch
+	// duration (which is set to 6 slots in the test runtime).
+	fn propose_and_import_blocks(
+		//)<Transaction: Send + 'static>(
+		&mut self,
+		mut parent_id: BlockId,
+		n: usize,
+	) -> Vec<Hash> {
+		let mut hashes = Vec::with_capacity(n);
+
+		for _ in 0..n {
+			let hash = self.propose_and_import_block(parent_id, None);
+			hashes.push(hash);
+			parent_id = BlockId::Hash(hash);
+		}
+
+		hashes
+	}
+}
+
+impl Environment<TestBlock> for TestEnvironment {
 	type CreateProposer = future::Ready<Result<DummyProposer, Error>>;
 	type Proposer = DummyProposer;
 	type Error = Error;
@@ -331,10 +306,202 @@ impl Environment<TestBlock> for DummyFactory {
 	}
 }
 
-fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
-	let mutator = Arc::new(mutator) as Mutator;
+#[test]
+#[should_panic(expected = "valid sassafras headers must contain a predigest")]
+fn rejects_block_without_pre_digest() {
+	let client = TestClientBuilder::with_default_backend().build();
+	let client = Arc::new(client);
 
-	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
+	let mutator = Arc::new(|header: &mut TestHeader, stage| {
+		if stage == Stage::PreSeal {
+			header.digest.logs.clear()
+		}
+	});
+
+	let mut env = TestEnvironment::new(client.clone(), Some(mutator));
+
+	env.propose_and_import_block(BlockId::Number(0), Some(999.into()));
+}
+
+#[test]
+fn importing_block_one_sets_genesis_epoch() {
+	let client = TestClientBuilder::with_default_backend().build();
+	let client = Arc::new(client);
+
+	let mut env = TestEnvironment::new(client.clone(), None);
+
+	let block_hash = env.propose_and_import_block(BlockId::Number(0), Some(999.into()));
+
+	let genesis_epoch = Epoch::genesis(&env.link.genesis_config, 999.into());
+
+	let epoch_changes = env.link.epoch_changes.shared_data();
+
+	let epoch_for_second_block = epoch_changes
+		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
+			Epoch::genesis(&env.link.genesis_config, slot)
+		})
+		.unwrap()
+		.unwrap();
+
+	assert_eq!(epoch_for_second_block, genesis_epoch);
+}
+
+#[test]
+fn revert_prunes_epoch_changes_and_removes_weights() {
+	let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
+	let client = Arc::new(client);
+
+	let mut env = TestEnvironment::new(client.clone(), None);
+
+	let mut propose_and_import_blocks_wrap =
+		|parent_id, n| env.propose_and_import_blocks(parent_id, n);
+
+	// Test scenario.
+	// Information for epoch 19 is produced on three different forks at block #13.
+	// One branch starts before the revert point (epoch data should be maintained).
+	// One branch starts after the revert point (epoch data should be removed).
+	//
+	//                        *----------------- F(#13) --#18                  < fork #2
+	//                       /
+	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19) ------#21  < canon
+	//   \                        ^       \
+	//    \                    revert      *---- G(#13) ---- H(#19) ---#20     < fork #3
+	//     \                   to #10
+	//      *-----E(#7)---#11                                          < fork #1
+
+	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
+	let fork1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
+	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
+	let fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 8);
+
+	let epoch_changes = env.link.epoch_changes.clone();
+
+	// We should be tracking a total of 9 epochs in the fork tree
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
+	// And only one root
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
+
+	// Revert canon chain to block #10 (best(21) - 11)
+	// crate::revert(client.clone(), backend, 11).unwrap();
+
+	// Load and check epoch changes.
+
+	let actual_nodes = aux_schema::load_epoch_changes::<TestBlock, TestClient>(&*client)
+		.unwrap()
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| *h)
+		.collect::<Vec<_>>();
+
+	let expected_nodes = vec![
+		canon[0], // A
+		canon[6], // B
+		fork2[4], // F
+		fork1[5], // E
+	];
+
+	assert_eq!(actual_nodes, expected_nodes);
+
+	let weight_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+		})
+	};
+	assert!(weight_data_check(&canon[..10], true));
+	assert!(weight_data_check(&canon[10..], false));
+	assert!(weight_data_check(&fork1, true));
+	assert!(weight_data_check(&fork2, true));
+	assert!(weight_data_check(&fork3, false));
+}
+
+////=================================================================================================
+//// More complex tests involving communication between multiple nodes.
+////
+//// These tests are performed via a specially crafted test network.
+////=================================================================================================
+
+struct PeerData {
+	link: SassafrasLink,
+	block_import: SassafrasBlockImport,
+}
+
+type SassafrasPeer = Peer<Option<PeerData>, SassafrasBlockImport>;
+
+#[derive(Default)]
+struct SassafrasTestNet {
+	peers: Vec<SassafrasPeer>,
+}
+
+impl TestNetFactory for SassafrasTestNet {
+	type BlockImport = SassafrasBlockImport;
+	type Verifier = SassafrasVerifier;
+	type PeerData = Option<PeerData>;
+
+	fn make_block_import(
+		&self,
+		client: PeersClient,
+	) -> (
+		BlockImportAdapter<Self::BlockImport>,
+		Option<BoxJustificationImport<Block>>,
+		Option<PeerData>,
+	) {
+		let client = client.as_client();
+
+		let config = crate::configuration(&*client).expect("config available");
+		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
+			.expect("can initialize block-import");
+
+		(BlockImportAdapter::new(block_import.clone()), None, Some(PeerData { link, block_import }))
+	}
+
+	fn make_verifier(&self, client: PeersClient, maybe_link: &Option<PeerData>) -> Self::Verifier {
+		use substrate_test_runtime_client::DefaultTestClientBuilderExt;
+
+		let client = client.as_client();
+
+		let data = maybe_link.as_ref().expect("data provided to verifier instantiation");
+
+		let config = crate::configuration(&*client).expect("config available");
+		let slot_duration = config.slot_duration();
+
+		let create_inherent_data_providers = Box::new(move |_, _| async move {
+			let slot = InherentDataProvider::from_timestamp_and_slot_duration(
+				Timestamp::current(),
+				slot_duration,
+			);
+			Ok((slot,))
+		});
+
+		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
+
+		SassafrasVerifier::new(
+			client.clone(),
+			longest_chain,
+			create_inherent_data_providers,
+			data.link.epoch_changes.clone(),
+			None,
+			// TODO-SASS-P2: why babe doesn't have this config???
+			config,
+		)
+	}
+
+	fn peer(&mut self, i: usize) -> &mut SassafrasPeer {
+		&mut self.peers[i]
+	}
+
+	fn peers(&self) -> &Vec<SassafrasPeer> {
+		&self.peers
+	}
+
+	fn mut_peers<F: FnOnce(&mut Vec<SassafrasPeer>)>(&mut self, closure: F) {
+		closure(&mut self.peers);
+	}
+}
+
+// Multiple nodes authoring and validating blocks
+#[test]
+fn sassafras_network_progress() {
 	let net = SassafrasTestNet::new(3);
 
 	let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
@@ -357,14 +524,14 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			.expect("Generates authority key");
 		keystore_paths.push(keystore_path);
 
-		let data = peer.data.as_ref().expect("babe link set up during initialization");
+		let data = peer.data.as_ref().expect("sassafras link set up during initialization");
 
-		let environ = DummyFactory {
-			client: client.clone(),
-			genesis_config: data.link.genesis_config.clone(),
-			epoch_changes: data.link.epoch_changes.clone(),
-			mutator: mutator.clone(),
-		};
+		let env = TestEnvironment::new_with_pre_built_data(
+			client.clone(),
+			data.block_import.clone(),
+			data.link.clone(),
+			None,
+		);
 
 		// Run the imported block number is less than five and we don't receive a block produced
 		// by us and one produced by another peer.
@@ -399,8 +566,8 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 			client: client.clone(),
 			keystore,
 			select_chain,
-			env: environ,
-			block_import: data.block_import.lock().take().expect("import set up during init"),
+			env,
+			block_import: data.block_import.clone(),//.lock().take().expect("import set up during init"),
 			sassafras_link: data.link.clone(),
 			sync_oracle: DummyOracle,
 			justification_sync_link: (),
@@ -424,127 +591,4 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 		}),
 		future::select(future::join_all(import_notifications), future::join_all(sassafras_futures)),
 	));
-}
-
-// Propose and import a new Sassafras block on top of the given parent.
-// This skips verification.
-fn propose_and_import_block<Transaction: Send + 'static>(
-	parent: &TestHeader,
-	slot: Option<Slot>,
-	proposer_factory: &mut DummyFactory,
-	block_import: &mut BoxBlockImport<TestBlock, Transaction>,
-) -> Hash {
-	let proposer = block_on(proposer_factory.init(parent)).unwrap();
-
-	let slot = slot.unwrap_or_else(|| {
-		let parent_pre_digest = find_pre_digest::<TestBlock>(parent).unwrap();
-		parent_pre_digest.slot + 1
-	});
-
-	let pre_digest = PreDigest {
-		slot,
-		authority_idx: 0,
-		vrf_output: VRFOutput::try_from([0; 32]).unwrap(),
-		vrf_proof: VRFProof::try_from([0; 64]).unwrap(),
-		ticket_aux: None,
-	};
-	let digest =
-		sp_runtime::generic::Digest { logs: vec![DigestItem::sassafras_pre_digest(pre_digest)] };
-
-	let mut block = proposer.propose_block(digest);
-
-	let epoch_descriptor = proposer_factory
-		.epoch_changes
-		.shared_data()
-		.epoch_descriptor_for_child_of(
-			descendent_query(&*proposer_factory.client),
-			&parent.hash(),
-			*parent.number(),
-			slot,
-		)
-		.unwrap()
-		.unwrap();
-
-	let seal = {
-		// Sign the pre-sealed hash of the block and then add it to a digest item.
-		let pair = AuthorityPair::from_seed(&[1; 32]);
-		let pre_hash = block.header.hash();
-		let signature = pair.sign(pre_hash.as_ref());
-		DigestItem::sassafras_seal(signature)
-	};
-
-	let post_hash = {
-		block.header.digest_mut().push(seal.clone());
-		let h = block.header.hash();
-		block.header.digest_mut().pop();
-		h
-	};
-
-	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
-	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
-	import.body = Some(block.extrinsics);
-	import.post_digests.push(seal);
-	import.insert_intermediate(INTERMEDIATE_KEY, SassafrasIntermediate { epoch_descriptor });
-
-	match block_on(block_import.import_block(import, Default::default())).unwrap() {
-		ImportResult::Imported(_) => (),
-		_ => panic!("expected block to be imported"),
-	}
-
-	post_hash
-}
-
-// Smoke test for multiple nodes authoring and validating blocks
-#[test]
-fn authoring_blocks() {
-	run_one_test(|_, _| ())
-}
-
-#[test]
-#[should_panic]
-fn rejects_empty_block() {
-	let mut net = SassafrasTestNet::new(1);
-	let block_builder = |builder: BlockBuilder<_, _, _>| builder.build().unwrap().block;
-	net.mut_peers(|peer| {
-		peer[0].generate_blocks(1, BlockOrigin::NetworkInitialSync, block_builder);
-	})
-}
-
-#[test]
-fn importing_block_one_sets_genesis_epoch() {
-	let mut net = SassafrasTestNet::new(1);
-
-	let peer = net.peer(0);
-	let data = peer.data.as_ref().expect("babe link set up during initialization");
-	let client = peer.client().as_client();
-
-	let mut proposer_factory = DummyFactory {
-		client: client.clone(),
-		genesis_config: data.link.genesis_config.clone(),
-		epoch_changes: data.link.epoch_changes.clone(),
-		mutator: Arc::new(|_, _| ()),
-	};
-
-	let mut block_import = data.block_import.lock().take().expect("import set up during init");
-
-	let genesis_header = client.header(&BlockId::Number(0)).unwrap().unwrap();
-
-	let block_hash = propose_and_import_block(
-		&genesis_header,
-		Some(999.into()),
-		&mut proposer_factory,
-		&mut block_import,
-	);
-
-	let genesis_epoch = Epoch::genesis(&data.link.genesis_config, 999.into());
-
-	let epoch_changes = data.link.epoch_changes.shared_data();
-	let epoch_for_second_block = epoch_changes
-		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(&data.link.genesis_config, slot)
-		})
-		.unwrap()
-		.unwrap();
-
-	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
