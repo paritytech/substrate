@@ -21,7 +21,7 @@ use crate::{mock::*, Event, *};
 use frame_support::{
 	assert_noop, assert_ok,
 	dispatch::Dispatchable,
-	traits::{Currency, Get},
+	traits::{tokens::nonfungibles_v2::Destroy, Currency, Get},
 };
 use pallet_balances::Error as BalancesError;
 use sp_std::prelude::*;
@@ -148,7 +148,7 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 13);
 		assert!(ItemMetadataOf::<Test>::contains_key(0, 69));
 
-		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
+		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_eq!(w.items, 2);
 		assert_eq!(w.item_metadatas, 2);
 		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(1), 0, w));
@@ -172,7 +172,7 @@ fn destroy_with_bad_witness_should_not_work() {
 		Balances::make_free_balance_be(&1, 100);
 		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, default_collection_config()));
 
-		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
+		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, default_item_config()));
 		assert_noop!(Nfts::destroy(RuntimeOrigin::signed(1), 0, w), Error::<Test>::BadWitness);
 	});
@@ -282,7 +282,7 @@ fn origin_guards_should_work() {
 			Nfts::burn(RuntimeOrigin::signed(2), 0, 42, None),
 			Error::<Test>::NoPermission
 		);
-		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
+		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_noop!(Nfts::destroy(RuntimeOrigin::signed(2), 0, w), Error::<Test>::NoPermission);
 	});
 }
@@ -517,7 +517,7 @@ fn set_attribute_should_work() {
 		);
 		assert_eq!(Balances::reserved_balance(1), 16);
 
-		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
+		let w = Nfts::get_destroy_witness(&0).unwrap();
 		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(1), 0, w));
 		assert_eq!(attributes(0), vec![]);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -641,6 +641,53 @@ fn force_collection_status_should_work() {
 
 		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0; 20]));
 		assert_eq!(Balances::reserved_balance(1), 0);
+
+		// validate new roles
+		assert_ok!(Nfts::force_collection_status(
+			RuntimeOrigin::root(),
+			0,
+			1,
+			2,
+			3,
+			4,
+			CollectionConfig::empty(),
+		));
+		assert_eq!(
+			CollectionRoleOf::<Test>::get(0, 2).unwrap(),
+			CollectionRoles(CollectionRole::Issuer.into())
+		);
+		assert_eq!(
+			CollectionRoleOf::<Test>::get(0, 3).unwrap(),
+			CollectionRoles(CollectionRole::Admin.into())
+		);
+		assert_eq!(
+			CollectionRoleOf::<Test>::get(0, 4).unwrap(),
+			CollectionRoles(CollectionRole::Freezer.into())
+		);
+
+		assert_ok!(Nfts::force_collection_status(
+			RuntimeOrigin::root(),
+			0,
+			1,
+			3,
+			2,
+			3,
+			CollectionConfig::empty(),
+		));
+
+		assert_eq!(
+			CollectionRoleOf::<Test>::get(0, 2).unwrap(),
+			CollectionRoles(CollectionRole::Admin.into())
+		);
+		assert_eq!(
+			CollectionRoleOf::<Test>::get(0, 3).unwrap(),
+			CollectionRoles(CollectionRole::Issuer | CollectionRole::Freezer)
+		);
+
+		let w = Nfts::get_destroy_witness(&0).unwrap();
+		assert_eq!(w.issuer, 3);
+		assert_eq!(w.admin, 2);
+		assert_eq!(w.freezer, 3);
 	});
 }
 
@@ -725,11 +772,11 @@ fn cancel_approval_works() {
 		assert_ok!(Nfts::approve_transfer(RuntimeOrigin::signed(2), 0, 42, 3, None));
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::signed(2), 1, 42, 3),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::signed(2), 0, 43, 3),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::signed(3), 0, 42, 3),
@@ -848,11 +895,11 @@ fn cancel_approval_works_with_admin() {
 		assert_ok!(Nfts::approve_transfer(RuntimeOrigin::signed(2), 0, 42, 3, None));
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::signed(1), 1, 42, 1),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::signed(1), 0, 43, 1),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::signed(1), 0, 42, 4),
@@ -876,11 +923,11 @@ fn cancel_approval_works_with_force() {
 		assert_ok!(Nfts::approve_transfer(RuntimeOrigin::signed(2), 0, 42, 3, None));
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::root(), 1, 42, 1),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::root(), 0, 43, 1),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownItem
 		);
 		assert_noop!(
 			Nfts::cancel_approval(RuntimeOrigin::root(), 0, 42, 4),
@@ -991,7 +1038,7 @@ fn max_supply_should_work() {
 		assert_ok!(Nfts::destroy(
 			RuntimeOrigin::signed(user_id),
 			collection_id,
-			Collection::<Test>::get(collection_id).unwrap().destroy_witness()
+			Nfts::get_destroy_witness(&collection_id).unwrap()
 		));
 		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
 	});

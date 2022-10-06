@@ -24,10 +24,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		lock_config: CollectionConfig,
 	) -> DispatchResult {
-		let details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
-
+		ensure!(
+			Self::has_role(&collection, &origin, CollectionRole::Freezer),
+			Error::<T, I>::NoPermission
+		);
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut settings = config.values();

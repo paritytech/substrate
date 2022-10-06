@@ -118,10 +118,35 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 }
 
 impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	type DestroyWitness = DestroyWitness;
+	type DestroyWitness = DestroyWitnessFor<T>;
 
-	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<DestroyWitness> {
-		Collection::<T, I>::get(collection).map(|a| a.destroy_witness())
+	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<DestroyWitnessFor<T>> {
+		let mut issuer = None;
+		let mut admin = None;
+		let mut freezer = None;
+
+		for (account, roles) in CollectionRoleOf::<T, I>::iter_prefix(collection) {
+			let roles = roles.values();
+			if roles.contains(CollectionRole::Admin) {
+				admin = Some(account.clone());
+			}
+			if roles.contains(CollectionRole::Freezer) {
+				freezer = Some(account.clone());
+			}
+			if roles.contains(CollectionRole::Issuer) {
+				issuer = Some(account);
+			}
+		}
+
+		if let Some(issuer) = issuer {
+			if let Some(admin) = admin {
+				if let Some(freezer) = freezer {
+					return Collection::<T, I>::get(collection)
+						.map(|a| a.destroy_witness(issuer, admin, freezer))
+				}
+			}
+		}
+		return None
 	}
 
 	fn destroy(

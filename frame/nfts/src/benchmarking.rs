@@ -68,7 +68,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, Account
 fn mint_item<T: Config<I>, I: 'static>(
 	index: u16,
 ) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
-	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
+	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
 	}
@@ -160,7 +160,7 @@ benchmarks_instance_pallet! {
 			add_item_metadata::<T, I>(T::Helper::item(i as u16));
 			add_item_attribute::<T, I>(T::Helper::item(i as u16));
 		}
-		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();
+		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness(caller.clone(), caller.clone(), caller.clone());
 	}: _(SystemOrigin::Signed(caller), collection, witness)
 	verify {
 		assert_last_event::<T, I>(Event::Destroyed { collection }.into());

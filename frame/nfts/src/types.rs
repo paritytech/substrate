@@ -42,6 +42,7 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
+pub(super) type DestroyWitnessFor<T> = DestroyWitness<<T as SystemConfig>::AccountId>;
 
 pub trait Incrementable {
 	fn increment(&self) -> Self;
@@ -53,12 +54,6 @@ impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
 	pub(super) owner: AccountId,
-	/// Can mint tokens.
-	pub(super) issuer: AccountId,
-	/// Can thaw tokens, force transfers and burn tokens from any account.
-	pub(super) admin: AccountId,
-	/// Can freeze tokens.
-	pub(super) freezer: AccountId,
 	/// The total balance deposited for the all storage associated with this collection.
 	/// Used by `destroy`.
 	pub(super) total_deposit: DepositBalance,
@@ -72,24 +67,38 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct DestroyWitness {
+pub struct DestroyWitness<AccountId> {
 	/// The total number of outstanding items of this collection.
 	#[codec(compact)]
 	pub items: u32,
 	/// The total number of items in this collection that have outstanding item metadata.
 	#[codec(compact)]
 	pub item_metadatas: u32,
-	#[codec(compact)]
 	/// The total number of attributes for this collection.
+	#[codec(compact)]
 	pub attributes: u32,
+	/// Collection's issuer.
+	pub issuer: AccountId,
+	/// Collection's admin.
+	pub admin: AccountId,
+	/// Collection's freezer.
+	pub freezer: AccountId,
 }
 
 impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
-	pub fn destroy_witness(&self) -> DestroyWitness {
+	pub fn destroy_witness(
+		&self,
+		issuer: AccountId,
+		admin: AccountId,
+		freezer: AccountId,
+	) -> DestroyWitness<AccountId> {
 		DestroyWitness {
 			items: self.items,
 			item_metadatas: self.item_metadatas,
 			attributes: self.attributes,
+			issuer,
+			admin,
+			freezer,
 		}
 	}
 }
@@ -258,3 +267,29 @@ impl SystemFeatures {
 	}
 }
 impl_codec_bitflags!(SystemFeatures, u64, SystemFeature);
+
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum CollectionRole {
+	/// Can mint items.
+	Issuer,
+	/// Can freeze items.
+	Freezer,
+	/// Can thaw items, force transfers and burn items from any account.
+	Admin,
+}
+
+/// A wrapper type that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct CollectionRoles(pub BitFlags<CollectionRole>);
+
+impl CollectionRoles {
+	pub fn empty() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+	pub fn values(&self) -> BitFlags<CollectionRole> {
+		self.0
+	}
+}
+impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
