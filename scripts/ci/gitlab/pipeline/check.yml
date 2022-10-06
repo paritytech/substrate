@@ -41,10 +41,9 @@ test-rust-features:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
   script:
-    # TODO @ggwpez change the branch to $PIPELINE_SCRIPTS_TAG
     - git clone
         --depth=1
-        "--branch=oty-check-rust-feature"
+        --branch="$PIPELINE_SCRIPTS_TAG"
         https://github.com/paritytech/pipeline-scripts
     - bash ./pipeline-scripts/rust-features.sh .
 
