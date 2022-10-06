@@ -4388,11 +4388,9 @@ mod election_data_provider {
 		// we assume a network only wants up to 1000 validators in most cases, thus having 2000
 		// candidates is as high as it gets.
 		let validators = 2000;
-		// we assume the worse case: each validator also has a slashing span.
-		let slashing_spans = validators;
 		let mut nominators = 1000;
 
-		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators, slashing_spans)
+		while <Test as Config>::WeightInfo::get_npos_voters(validators, nominators)
 			.all_lt(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND)
 		{
 			nominators += 1;

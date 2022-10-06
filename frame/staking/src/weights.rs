@@ -69,8 +69,8 @@ pub trait WeightInfo {
 	fn rebond(l: u32, ) -> Weight;
 	fn reap_stash(s: u32, ) -> Weight;
 	fn new_era(v: u32, n: u32, ) -> Weight;
-	fn get_npos_voters(v: u32, n: u32, s: u32, ) -> Weight;
-	fn get_npos_targets(v: u32, ) -> Weight;
+	fn get_npos_voters(v: u32, n: u32) -> Weight;
+	fn get_npos_targets(v: u32) -> Weight;
 	fn set_staking_configs_all_set() -> Weight;
 	fn set_staking_configs_all_remove() -> Weight;
 	fn chill_other() -> Weight;
@@ -397,7 +397,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `v` is `[500, 1000]`.
 	/// The range of component `n` is `[500, 1000]`.
 	/// The range of component `s` is `[1, 20]`.
-	fn get_npos_voters(v: u32, n: u32, _s: u32, ) -> Weight {
+	fn get_npos_voters(v: u32, n: u32) -> Weight {
 		Weight::from_ref_time(24_930_788_000 as u64)
 			// Standard Error: 266_386
 			.saturating_add(Weight::from_ref_time(6_687_552 as u64).saturating_mul(v as u64))
@@ -779,7 +779,7 @@ impl WeightInfo for () {
 	/// The range of component `v` is `[500, 1000]`.
 	/// The range of component `n` is `[500, 1000]`.
 	/// The range of component `s` is `[1, 20]`.
-	fn get_npos_voters(v: u32, n: u32, _s: u32, ) -> Weight {
+	fn get_npos_voters(v: u32, n: u32) -> Weight {
 		Weight::from_ref_time(24_930_788_000 as u64)
 			// Standard Error: 266_386
 			.saturating_add(Weight::from_ref_time(6_687_552 as u64).saturating_mul(v as u64))

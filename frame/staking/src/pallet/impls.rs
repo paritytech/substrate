@@ -752,7 +752,6 @@ impl<T: Config> Pallet<T> {
 		Self::register_weight(T::WeightInfo::get_npos_voters(
 			validators_taken,
 			nominators_taken,
-			0,
 		));
 
 		log!(
