@@ -3358,7 +3358,6 @@ dependencies = [
  "pallet-collective",
  "pallet-contracts",
  "pallet-contracts-primitives",
- "pallet-contracts-runtime-api",
  "pallet-conviction-voting",
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
@@ -5487,6 +5486,7 @@ dependencies = [
  "scale-info",
  "serde",
  "smallvec",
+ "sp-api",
  "sp-core",
  "sp-io",
  "sp-keystore",
@@ -5516,18 +5516,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "pallet-contracts-runtime-api"
-version = "4.0.0-dev"
-dependencies = [
- "pallet-contracts-primitives",
- "parity-scale-codec",
- "scale-info",
- "sp-api",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
