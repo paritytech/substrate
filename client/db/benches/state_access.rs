@@ -122,7 +122,7 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 		trie_cache_maximum_size,
 		state_pruning: Some(PruningMode::ArchiveAll),
 		source: DatabaseSource::ParityDb { path },
-		blocks_pruning: BlocksPruning::All,
+		blocks_pruning: BlocksPruning::KeepAll,
 	};
 
 	Backend::new(settings, 100).expect("Creates backend")

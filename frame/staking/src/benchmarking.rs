@@ -613,7 +613,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. MaxUnlockingChunks::get() as u32;
+		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -660,25 +660,6 @@ benchmarks! {
 		assert!(original_bonded < new_bonded);
 	}
 
-	set_history_depth {
-		let e in 1 .. 100;
-		HistoryDepth::<T>::put(e);
-		CurrentEra::<T>::put(e);
-		let dummy = || -> T::AccountId { codec::Decode::decode(&mut TrailingZeroInput::zeroes()).unwrap() };
-		for i in 0 .. e {
-			<ErasStakers<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasStakersClipped<T>>::insert(i, dummy(), Exposure::<T::AccountId, BalanceOf<T>>::default());
-			<ErasValidatorPrefs<T>>::insert(i, dummy(), ValidatorPrefs::default());
-			<ErasValidatorReward<T>>::insert(i, BalanceOf::<T>::one());
-			<ErasRewardPoints<T>>::insert(i, EraRewardPoints::<T::AccountId>::default());
-			<ErasTotalStake<T>>::insert(i, BalanceOf::<T>::one());
-			ErasStartSessionIndex::<T>::insert(i, i);
-		}
-	}: _(RawOrigin::Root, EraIndex::zero(), u32::MAX)
-	verify {
-		assert_eq!(HistoryDepth::<T>::get(), 0);
-	}
-
 	reap_stash {
 		let s in 1 .. MAX_SPANS;
 		// clean up any existing state.
@@ -698,7 +679,7 @@ benchmarks! {
 			active: T::Currency::minimum_balance() - One::one(),
 			total: T::Currency::minimum_balance() - One::one(),
 			unlocking: Default::default(),
-			claimed_rewards: vec![],
+			claimed_rewards: Default::default(),
 		};
 		Ledger::<T>::insert(&controller, l);
 
@@ -783,7 +764,7 @@ benchmarks! {
 
 	#[extra]
 	do_slash {
-		let l in 1 .. MaxUnlockingChunks::get() as u32;
+		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {
@@ -844,7 +825,7 @@ benchmarks! {
 			v, n, T::MaxNominations::get() as usize, false, None
 		)?;
 	}: {
-		let targets = <Staking<T>>::get_npos_targets();
+		let targets = <Staking<T>>::get_npos_targets(None);
 		assert_eq!(targets.len() as u32, v);
 	}
 
@@ -953,7 +934,7 @@ benchmarks! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::mock::{Balances, ExtBuilder, Origin, Staking, Test};
+	use crate::mock::{Balances, ExtBuilder, RuntimeOrigin, Staking, Test};
 	use frame_support::assert_ok;
 
 	#[test]
@@ -1000,7 +981,11 @@ mod tests {
 			let current_era = CurrentEra::<Test>::get().unwrap();
 
 			let original_free_balance = Balances::free_balance(&validator_stash);
-			assert_ok!(Staking::payout_stakers(Origin::signed(1337), validator_stash, current_era));
+			assert_ok!(Staking::payout_stakers(
+				RuntimeOrigin::signed(1337),
+				validator_stash,
+				current_era
+			));
 			let new_free_balance = Balances::free_balance(&validator_stash);
 
 			assert!(original_free_balance < new_free_balance);

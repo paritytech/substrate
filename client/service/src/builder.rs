@@ -37,9 +37,10 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{bitswap::Bitswap, config::SyncMode, NetworkService};
+use sc_network::{config::SyncMode, NetworkService};
+use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
-	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
+	service::{NetworkStateInfo, NetworkStatusProvider},
 	sync::warp::WarpSyncProvider,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -325,7 +326,6 @@ where
 pub trait SpawnTaskNetwork<Block: BlockT>:
 	sc_offchain::NetworkProvider
 	+ NetworkStateInfo
-	+ NetworkTransaction<Block::Hash>
 	+ NetworkStatusProvider<Block>
 	+ Send
 	+ Sync
@@ -338,7 +338,6 @@ where
 	Block: BlockT,
 	T: sc_offchain::NetworkProvider
 		+ NetworkStateInfo
-		+ NetworkTransaction<Block::Hash>
 		+ NetworkStatusProvider<Block>
 		+ Send
 		+ Sync
@@ -367,6 +366,9 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub network: Arc<dyn SpawnTaskNetwork<TBl>>,
 	/// A Sender for RPC requests.
 	pub system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+	/// Controller for transactions handlers
+	pub tx_handler_controller:
+		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
 }
@@ -445,6 +447,7 @@ where
 		rpc_builder,
 		network,
 		system_rpc_tx,
+		tx_handler_controller,
 		telemetry,
 	} = params;
 
@@ -480,7 +483,11 @@ where
 	spawn_handle.spawn(
 		"on-transaction-imported",
 		Some("transaction-pool"),
-		transaction_notifications(transaction_pool.clone(), network.clone(), telemetry.clone()),
+		transaction_notifications(
+			transaction_pool.clone(),
+			tx_handler_controller,
+			telemetry.clone(),
+		),
 	);
 
 	// Prometheus metrics.
@@ -543,20 +550,21 @@ where
 	Ok(rpc_handlers)
 }
 
-async fn transaction_notifications<Block, ExPool, Network>(
+async fn transaction_notifications<Block, ExPool>(
 	transaction_pool: Arc<ExPool>,
-	network: Network,
+	tx_handler_controller: sc_network_transactions::TransactionsHandlerController<
+		<Block as BlockT>::Hash,
+	>,
 	telemetry: Option<TelemetryHandle>,
 ) where
 	Block: BlockT,
 	ExPool: MaintainedTransactionPool<Block = Block, Hash = <Block as BlockT>::Hash>,
-	Network: NetworkTransaction<<Block as BlockT>::Hash> + Send + Sync,
 {
 	// transaction notifications
 	transaction_pool
 		.import_notification_stream()
 		.for_each(move |hash| {
-			network.propagate_transaction(hash);
+			tx_handler_controller.propagate_transaction(hash);
 			let status = transaction_pool.status();
 			telemetry!(
 				telemetry;
@@ -718,6 +726,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	(
 		Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
+		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 		NetworkStarter,
 	),
 	Error,
@@ -746,6 +755,8 @@ where
 		warp_sync,
 	} = params;
 
+	let mut request_response_protocol_configs = Vec::new();
+
 	if warp_sync.is_none() && config.network.sync_mode.is_warp() {
 		return Err("Warp sync enabled, but no warp sync provider configured.".into())
 	}
@@ -757,9 +768,6 @@ where
 			SyncMode::Full => {},
 		}
 	}
-
-	let transaction_pool_adapter =
-		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() });
 
 	let protocol_id = config.protocol_id();
 
@@ -835,7 +843,14 @@ where
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
 	)?;
-	let network_params = sc_network::config::Params {
+
+	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
+		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
+		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
+		protocol_config
+	}));
+
+	let mut network_params = sc_network::config::Params {
 		role: config.role.clone(),
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
@@ -843,30 +858,48 @@ where
 				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
 			}))
 		},
-		transactions_handler_executor: {
-			let spawn_handle = Clone::clone(&spawn_handle);
-			Box::new(move |fut| {
-				spawn_handle.spawn("network-transactions-handler", Some("networking"), fut);
-			})
-		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		transaction_pool: transaction_pool_adapter as _,
-		protocol_id,
+		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
-		bitswap: config.network.ipfs_server.then(|| Bitswap::from_client(client.clone())),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
 		warp_sync_protocol_config,
 		light_client_request_protocol_config,
+		request_response_protocol_configs: request_response_protocol_configs
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>(),
 	};
+
+	// crate transactions protocol and add it to the list of supported protocols of `network_params`
+	let transactions_handler_proto = sc_network_transactions::TransactionsHandlerPrototype::new(
+		protocol_id.clone(),
+		client
+			.block_hash(0u32.into())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed"),
+		config.chain_spec.fork_id(),
+	);
+	network_params
+		.network_config
+		.extra_sets
+		.insert(0, transactions_handler_proto.set_config());
 
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
+
+	let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
+		network.clone(),
+		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() }),
+		config.prometheus_config.as_ref().map(|config| &config.registry),
+	)?;
+	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
@@ -915,7 +948,7 @@ where
 		future.await
 	});
 
-	Ok((network, system_rpc_tx, NetworkStarter(network_start_tx)))
+	Ok((network, system_rpc_tx, tx_handler_controller, NetworkStarter(network_start_tx)))
 }
 
 /// Object used to start the network.

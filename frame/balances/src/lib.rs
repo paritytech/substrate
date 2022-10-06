@@ -185,7 +185,7 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, RuntimeDebug,
+	ArithmeticError, DispatchError, FixedPointOperand, RuntimeDebug,
 };
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
@@ -212,13 +212,15 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize
 			+ Debug
 			+ MaxEncodedLen
-			+ TypeInfo;
+			+ TypeInfo
+			+ FixedPointOperand;
 
 		/// Handler for the unbalanced reduction when removing a dust account.
 		type DustRemoval: OnUnbalanced<NegativeImbalance<Self, I>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The minimum amount required to keep an account open.
 		#[pallet::constant]
@@ -492,6 +494,7 @@ pub mod pallet {
 	/// The total units issued in the system.
 	#[pallet::storage]
 	#[pallet::getter(fn total_issuance)]
+	#[pallet::whitelist_storage]
 	pub type TotalIssuance<T: Config<I>, I: 'static = ()> = StorageValue<_, T::Balance, ValueQuery>;
 
 	/// The Balances pallet example of storing the balance of an account.

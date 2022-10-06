@@ -75,7 +75,7 @@
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Pallet<T>>::submit_candidacy(
-//! 				T::Origin::from(Some(who.clone()).into())
+//! 				T::RuntimeOrigin::from(Some(who.clone()).into())
 //! 			);
 //! 			Ok(())
 //! 		}
@@ -159,7 +159,8 @@ pub mod pallet {
 			+ MaxEncodedLen;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		// The deposit which is reserved from candidates if they want to
 		// start a candidacy. The deposit gets returned when the candidacy is
@@ -182,13 +183,13 @@ pub mod pallet {
 		type MembershipChanged: ChangeMembers<Self::AccountId>;
 
 		/// Allows a configurable origin type to set a score to a candidate in the pool.
-		type ScoreOrigin: EnsureOrigin<Self::Origin>;
+		type ScoreOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Required origin for removing a member (though can always be Root).
 		/// Configurable origin which enables removing an entity. If the entity
 		/// is part of the `Members` it is immediately replaced by the next
 		/// highest scoring candidate, if available.
-		type KickOrigin: EnsureOrigin<Self::Origin>;
+		type KickOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 	}
 
 	#[pallet::event]

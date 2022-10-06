@@ -47,16 +47,14 @@ use sc_consensus::{
 	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
 	Verifier,
 };
-pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
-	config::{
-		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
-		TransportConfig,
-	},
+	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId},
+	config::{
+		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
+	},
 	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
@@ -69,7 +67,7 @@ use sc_network_sync::{
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
+	Backend as BlockchainBackend, HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
@@ -540,6 +538,13 @@ where
 			.map(|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some())
 			.unwrap_or(false)
 	}
+
+	pub fn has_body(&self, hash: &H256) -> bool {
+		self.backend
+			.as_ref()
+			.map(|backend| backend.blockchain().body(BlockId::hash(*hash)).unwrap().is_some())
+			.unwrap_or(false)
+	}
 }
 
 pub trait BlockImportAdapterFull:
@@ -683,6 +688,8 @@ pub struct FullPeerConfig {
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
 	pub notifications_protocols: Vec<ProtocolName>,
+	/// List of request-response protocols that the network must support.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -785,6 +792,9 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		network_config
+			.request_response_protocols
+			.extend(config.request_response_protocols);
 		network_config.extra_sets = config
 			.notifications_protocols
 			.into_iter()
@@ -872,22 +882,18 @@ where
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
-			transactions_handler_executor: Box::new(|task| {
-				async_std::task::spawn(task);
-			}),
 			network_config,
 			chain: client.clone(),
-			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
 			fork_id,
 			import_queue,
 			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,
-			bitswap: None,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
 			warp_sync_protocol_config: Some(warp_protocol_config),
+			request_response_protocol_configs: Vec::new(),
 		})
 		.unwrap();
 

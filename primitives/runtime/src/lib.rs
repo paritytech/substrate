@@ -19,10 +19,6 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-// to allow benchmarking
-#![cfg_attr(feature = "bench", feature(test))]
-#[cfg(feature = "bench")]
-extern crate test;
 
 #[doc(hidden)]
 pub use codec;
@@ -36,6 +32,8 @@ pub use sp_std;
 
 #[doc(hidden)]
 pub use paste;
+#[doc(hidden)]
+pub use sp_arithmetic::traits::Saturating;
 
 #[doc(hidden)]
 pub use sp_application_crypto as app_crypto;
@@ -549,6 +547,12 @@ pub enum DispatchError {
 	/// The number of transactional layers has been reached, or we are not in a transactional
 	/// layer.
 	Transactional(TransactionalError),
+	/// Resources exhausted, e.g. attempt to read/write data which is too large to manipulate.
+	Exhausted,
+	/// The state is corrupt; this is generally not going to fix itself.
+	Corruption,
+	/// Some resource (e.g. a preimage) is unavailable right now. This might fix itself later.
+	Unavailable,
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -673,18 +677,21 @@ impl From<&'static str> for DispatchError {
 
 impl From<DispatchError> for &'static str {
 	fn from(err: DispatchError) -> &'static str {
+		use DispatchError::*;
 		match err {
-			DispatchError::Other(msg) => msg,
-			DispatchError::CannotLookup => "Cannot lookup",
-			DispatchError::BadOrigin => "Bad origin",
-			DispatchError::Module(ModuleError { message, .. }) =>
-				message.unwrap_or("Unknown module error"),
-			DispatchError::ConsumerRemaining => "Consumer remaining",
-			DispatchError::NoProviders => "No providers",
-			DispatchError::TooManyConsumers => "Too many consumers",
-			DispatchError::Token(e) => e.into(),
-			DispatchError::Arithmetic(e) => e.into(),
-			DispatchError::Transactional(e) => e.into(),
+			Other(msg) => msg,
+			CannotLookup => "Cannot lookup",
+			BadOrigin => "Bad origin",
+			Module(ModuleError { message, .. }) => message.unwrap_or("Unknown module error"),
+			ConsumerRemaining => "Consumer remaining",
+			NoProviders => "No providers",
+			TooManyConsumers => "Too many consumers",
+			Token(e) => e.into(),
+			Arithmetic(e) => e.into(),
+			Transactional(e) => e.into(),
+			Exhausted => "Resources exhausted",
+			Corruption => "State corrupt",
+			Unavailable => "Resource unavailable",
 		}
 	}
 }
@@ -700,33 +707,37 @@ where
 
 impl traits::Printable for DispatchError {
 	fn print(&self) {
+		use DispatchError::*;
 		"DispatchError".print();
 		match self {
-			Self::Other(err) => err.print(),
-			Self::CannotLookup => "Cannot lookup".print(),
-			Self::BadOrigin => "Bad origin".print(),
-			Self::Module(ModuleError { index, error, message }) => {
+			Other(err) => err.print(),
+			CannotLookup => "Cannot lookup".print(),
+			BadOrigin => "Bad origin".print(),
+			Module(ModuleError { index, error, message }) => {
 				index.print();
 				error.print();
 				if let Some(msg) = message {
 					msg.print();
 				}
 			},
-			Self::ConsumerRemaining => "Consumer remaining".print(),
-			Self::NoProviders => "No providers".print(),
-			Self::TooManyConsumers => "Too many consumers".print(),
-			Self::Token(e) => {
+			ConsumerRemaining => "Consumer remaining".print(),
+			NoProviders => "No providers".print(),
+			TooManyConsumers => "Too many consumers".print(),
+			Token(e) => {
 				"Token error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::Arithmetic(e) => {
+			Arithmetic(e) => {
 				"Arithmetic error: ".print();
 				<&'static str>::from(*e).print();
 			},
-			Self::Transactional(e) => {
+			Transactional(e) => {
 				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
 			},
+			Exhausted => "Resources exhausted".print(),
+			Corruption => "State corrupt".print(),
+			Unavailable => "Resource unavailable".print(),
 		}
 	}
 }
@@ -825,7 +836,24 @@ pub fn verify_encoded_lazy<V: Verify, T: codec::Encode>(
 macro_rules! assert_eq_error_rate {
 	($x:expr, $y:expr, $error:expr $(,)?) => {
 		assert!(
-			($x) >= (($y) - ($error)) && ($x) <= (($y) + ($error)),
+			($x >= $crate::Saturating::saturating_sub($y, $error)) &&
+				($x <= $crate::Saturating::saturating_add($y, $error)),
+			"{:?} != {:?} (with error rate {:?})",
+			$x,
+			$y,
+			$error,
+		);
+	};
+}
+
+/// Same as [`assert_eq_error_rate`], but intended to be used with floating point number, or
+/// generally those who do not have over/underflow potentials.
+#[macro_export]
+#[cfg(feature = "std")]
+macro_rules! assert_eq_error_rate_float {
+	($x:expr, $y:expr, $error:expr $(,)?) => {
+		assert!(
+			($x >= $y - $error) && ($x <= $y + $error),
 			"{:?} != {:?} (with error rate {:?})",
 			$x,
 			$y,

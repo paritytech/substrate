@@ -251,11 +251,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
-	/// `BlocksPruning::All`.
+	/// `BlocksPruning::KeepFinalized`.
 	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
 			.map(|x| x.blocks_pruning())
-			.unwrap_or_else(|| Ok(BlocksPruning::All))
+			.unwrap_or_else(|| Ok(BlocksPruning::KeepFinalized))
 	}
 
 	/// Get the chain ID (string).
@@ -657,17 +657,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 					new_limit, RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT,
 				);
 			}
-		}
-
-		if self.import_params().map_or(false, |p| {
-			#[allow(deprecated)]
-			p.unsafe_pruning
-		}) {
-			// according to https://github.com/substrate/issues/8103;
-			warn!(
-				"WARNING: \"--unsafe-pruning\" CLI-flag is deprecated and has no effect. \
-				In future builds it will be removed, and providing this flag will lead to an error."
-			);
 		}
 
 		Ok(())

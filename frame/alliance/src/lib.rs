@@ -120,7 +120,7 @@ use frame_support::{
 		ChangeMembers, Currency, Get, InitializeMembers, IsSubType, OnUnbalanced,
 		ReservableCurrency,
 	},
-	weights::Weight,
+	weights::{OldWeight, Weight},
 };
 use pallet_identity::IdentityField;
 
@@ -240,25 +240,26 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The outer call dispatch type.
+		/// The runtime call dispatch type.
 		type Proposal: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self, I>>
 			+ GetDispatchInfo
 			+ IsSubType<Call<Self, I>>
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Origin for admin-level operations, like setting the Alliance's rules.
-		type AdminOrigin: EnsureOrigin<Self::Origin>;
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin that manages entry and forcible discharge from the Alliance.
-		type MembershipManager: EnsureOrigin<Self::Origin>;
+		type MembershipManager: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin for making announcements and adding/removing unscrupulous items.
-		type AnnouncementOrigin: EnsureOrigin<Self::Origin>;
+		type AnnouncementOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The currency used for deposits.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -619,25 +620,22 @@ pub mod pallet {
 				.max(T::WeightInfo::close_early_disapproved(x, y, p2))
 				.max(T::WeightInfo::close_approved(b, x, y, p2))
 				.max(T::WeightInfo::close_disapproved(x, y, p2))
-				.saturating_add(p1)
+				.saturating_add(p1.into())
 		})]
-		pub fn close(
+		#[allow(deprecated)]
+		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to use `close`")]
+		pub fn close_old_weight(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			#[pallet::compact] proposal_weight_bound: OldWeight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
+			let proposal_weight_bound: Weight = proposal_weight_bound.into();
 			let who = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
-			let info = T::ProposalProvider::close_proposal(
-				proposal_hash,
-				index,
-				proposal_weight_bound,
-				length_bound,
-			)?;
-			Ok(info.into())
+			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
 		}
 
 		/// Initialize the Alliance, onboard founders, fellows, and allies.
@@ -708,7 +706,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::disband(
 			witness.voting_members,
 			witness.ally_members,
-			witness.voting_members + witness.ally_members,
+			witness.voting_members.saturating_add(witness.ally_members),
 		))]
 		pub fn disband(
 			origin: OriginFor<T>,
@@ -984,6 +982,34 @@ pub mod pallet {
 			Self::deposit_event(Event::UnscrupulousItemRemoved { items });
 			Ok(())
 		}
+
+		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
+		///
+		/// Requires the sender to be a founder or fellow.
+		#[pallet::weight({
+			let b = *length_bound;
+			let x = T::MaxFounders::get();
+			let y = T::MaxFellows::get();
+			let p1 = *proposal_weight_bound;
+			let p2 = T::MaxProposals::get();
+			T::WeightInfo::close_early_approved(b, x, y, p2)
+				.max(T::WeightInfo::close_early_disapproved(x, y, p2))
+				.max(T::WeightInfo::close_approved(b, x, y, p2))
+				.max(T::WeightInfo::close_disapproved(x, y, p2))
+				.saturating_add(p1)
+		})]
+		pub fn close(
+			origin: OriginFor<T>,
+			proposal_hash: T::Hash,
+			#[pallet::compact] index: ProposalIndex,
+			proposal_weight_bound: Weight,
+			#[pallet::compact] length_bound: u32,
+		) -> DispatchResultWithPostInfo {
+			let who = ensure_signed(origin)?;
+			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
+
+			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
+		}
 	}
 }
 
@@ -1195,5 +1221,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			}
 		}
 		res
+	}
+
+	fn do_close(
+		proposal_hash: T::Hash,
+		index: ProposalIndex,
+		proposal_weight_bound: Weight,
+		length_bound: u32,
+	) -> DispatchResultWithPostInfo {
+		let info = T::ProposalProvider::close_proposal(
+			proposal_hash,
+			index,
+			proposal_weight_bound,
+			length_bound,
+		)?;
+		Ok(info.into())
 	}
 }

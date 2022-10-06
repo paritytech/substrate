@@ -103,13 +103,13 @@ pub fn expand_outer_origin(
 		///
 		#[doc = #doc_string]
 		#[derive(Clone)]
-		pub struct Origin {
+		pub struct RuntimeOrigin {
 			caller: OriginCaller,
-			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool>>,
+			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::RuntimeCall) -> bool>>,
 		}
 
 		#[cfg(not(feature = "std"))]
-		impl #scrate::sp_std::fmt::Debug for Origin {
+		impl #scrate::sp_std::fmt::Debug for RuntimeOrigin {
 			fn fmt(
 				&self,
 				fmt: &mut #scrate::sp_std::fmt::Formatter,
@@ -119,7 +119,7 @@ pub fn expand_outer_origin(
 		}
 
 		#[cfg(feature = "std")]
-		impl #scrate::sp_std::fmt::Debug for Origin {
+		impl #scrate::sp_std::fmt::Debug for RuntimeOrigin {
 			fn fmt(
 				&self,
 				fmt: &mut #scrate::sp_std::fmt::Formatter,
@@ -131,8 +131,8 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl #scrate::traits::OriginTrait for Origin {
-			type Call = <#runtime as #system_path::Config>::Call;
+		impl #scrate::traits::OriginTrait for RuntimeOrigin {
+			type Call = <#runtime as #system_path::Config>::RuntimeCall;
 			type PalletsOrigin = OriginCaller;
 			type AccountId = <#runtime as #system_path::Config>::AccountId;
 
@@ -147,7 +147,7 @@ pub fn expand_outer_origin(
 			fn reset_filter(&mut self) {
 				let filter = <
 					<#runtime as #system_path::Config>::BaseCallFilter
-					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
+					as #scrate::traits::Contains<<#runtime as #system_path::Config>::RuntimeCall>
 				>::contains;
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));
@@ -167,6 +167,10 @@ pub fn expand_outer_origin(
 
 			fn caller(&self) -> &Self::PalletsOrigin {
 				&self.caller
+			}
+
+			fn into_caller(self) -> Self::PalletsOrigin {
+				self.caller
 			}
 
 			fn try_with_caller<R>(
@@ -190,13 +194,6 @@ pub fn expand_outer_origin(
 			fn signed(by: Self::AccountId) -> Self {
 				#system_path::RawOrigin::Signed(by).into()
 			}
-
-			fn as_signed(self) -> Option<Self::AccountId> {
-				match self.caller {
-					OriginCaller::system(#system_path::RawOrigin::Signed(by)) => Some(by),
-					_ => None,
-				}
-			}
 		}
 
 		#[derive(
@@ -214,27 +211,41 @@ pub fn expand_outer_origin(
 
 		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
-		impl Origin {
-
+		impl RuntimeOrigin {
 			#[doc = #doc_string_none_origin]
 			pub fn none() -> Self {
-				<Origin as #scrate::traits::OriginTrait>::none()
+				<RuntimeOrigin as #scrate::traits::OriginTrait>::none()
 			}
 
 			#[doc = #doc_string_root_origin]
 			pub fn root() -> Self {
-				<Origin as #scrate::traits::OriginTrait>::root()
+				<RuntimeOrigin as #scrate::traits::OriginTrait>::root()
 			}
 
 			#[doc = #doc_string_signed_origin]
 			pub fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
-				<Origin as #scrate::traits::OriginTrait>::signed(by)
+				<RuntimeOrigin as #scrate::traits::OriginTrait>::signed(by)
 			}
 		}
 
 		impl From<#system_path::Origin<#runtime>> for OriginCaller {
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
 				OriginCaller::system(x)
+			}
+		}
+
+		impl #scrate::traits::CallerTrait<<#runtime as #system_path::Config>::AccountId> for OriginCaller {
+			fn into_system(self) -> Option<#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
+				match self {
+					OriginCaller::system(x) => Some(x),
+					_ => None,
+				}
+			}
+			fn as_system_ref(&self) -> Option<&#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
+				match &self {
+					OriginCaller::system(o) => Some(o),
+					_ => None,
+				}
 			}
 		}
 
@@ -251,7 +262,7 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl From<#system_path::Origin<#runtime>> for Origin {
+		impl From<#system_path::Origin<#runtime>> for RuntimeOrigin {
 
 			#[doc = #doc_string_runtime_origin]
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
@@ -260,9 +271,9 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl From<OriginCaller> for Origin {
+		impl From<OriginCaller> for RuntimeOrigin {
 			fn from(x: OriginCaller) -> Self {
-				let mut o = Origin {
+				let mut o = RuntimeOrigin {
 					caller: x,
 					filter: #scrate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
@@ -273,9 +284,9 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl From<Origin> for #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, Origin> {
+		impl From<RuntimeOrigin> for #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, RuntimeOrigin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn from(val: Origin) -> Self {
+			fn from(val: RuntimeOrigin) -> Self {
 				if let OriginCaller::system(l) = val.caller {
 					Ok(l)
 				} else {
@@ -283,7 +294,7 @@ pub fn expand_outer_origin(
 				}
 			}
 		}
-		impl From<Option<<#runtime as #system_path::Config>::AccountId>> for Origin {
+		impl From<Option<<#runtime as #system_path::Config>::AccountId>> for RuntimeOrigin {
 			#[doc = #doc_string_runtime_origin_with_caller]
 			fn from(x: Option<<#runtime as #system_path::Config>::AccountId>) -> Self {
 				<#system_path::Origin<#runtime>>::from(x).into()
@@ -374,7 +385,7 @@ fn expand_origin_pallet_conversions(
 		}
 
 		#attr
-		impl From<#pallet_origin> for Origin {
+		impl From<#pallet_origin> for RuntimeOrigin {
 			#[doc = #doc_string]
 			fn from(x: #pallet_origin) -> Self {
 				let x: OriginCaller = x.into();
@@ -383,9 +394,9 @@ fn expand_origin_pallet_conversions(
 		}
 
 		#attr
-		impl From<Origin> for #scrate::sp_std::result::Result<#pallet_origin, Origin> {
+		impl From<RuntimeOrigin> for #scrate::sp_std::result::Result<#pallet_origin, RuntimeOrigin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn from(val: Origin) -> Self {
+			fn from(val: RuntimeOrigin) -> Self {
 				if let OriginCaller::#variant_name(l) = val.caller {
 					Ok(l)
 				} else {
