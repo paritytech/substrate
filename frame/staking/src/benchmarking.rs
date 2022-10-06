@@ -613,7 +613,7 @@ benchmarks! {
 	}
 
 	rebond {
-		let l in 1 .. MaxUnlockingChunks::get() as u32;
+		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
 
 		// clean up any existing state.
 		clear_validators_and_nominators::<T>();
@@ -764,7 +764,7 @@ benchmarks! {
 
 	#[extra]
 	do_slash {
-		let l in 1 .. MaxUnlockingChunks::get() as u32;
+		let l in 1 .. T::MaxUnlockingChunks::get() as u32;
 		let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
 		let mut staking_ledger = Ledger::<T>::get(controller.clone()).unwrap();
 		let unlock_chunk = UnlockChunk::<BalanceOf<T>> {

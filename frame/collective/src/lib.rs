@@ -57,7 +57,7 @@ use frame_support::{
 	traits::{
 		Backing, ChangeMembers, EnsureOrigin, Get, GetBacking, InitializeMembers, StorageVersion,
 	},
-	weights::Weight,
+	weights::{OldWeight, Weight},
 };
 
 #[cfg(test)]
@@ -620,17 +620,20 @@ pub mod pallet {
 					.max(T::WeightInfo::close_early_disapproved(m, p2))
 					.max(T::WeightInfo::close_approved(b, m, p2))
 					.max(T::WeightInfo::close_disapproved(m, p2))
-					.saturating_add(p1)
+					.saturating_add(p1.into())
 			},
 			DispatchClass::Operational
 		))]
-		pub fn close(
+		#[allow(deprecated)]
+		#[deprecated(note = "1D weight is used in this extrinsic, please migrate to `close`")]
+		pub fn close_old_weight(
 			origin: OriginFor<T>,
 			proposal_hash: T::Hash,
 			#[pallet::compact] index: ProposalIndex,
-			#[pallet::compact] proposal_weight_bound: Weight,
+			#[pallet::compact] proposal_weight_bound: OldWeight,
 			#[pallet::compact] length_bound: u32,
 		) -> DispatchResultWithPostInfo {
+			let proposal_weight_bound: Weight = proposal_weight_bound.into();
 			let _ = ensure_signed(origin)?;
 
 			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
@@ -658,6 +661,64 @@ pub mod pallet {
 			ensure_root(origin)?;
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
 			Ok(Some(T::WeightInfo::disapprove_proposal(proposal_count)).into())
+		}
+
+		/// Close a vote that is either approved, disapproved or whose voting period has ended.
+		///
+		/// May be called by any signed account in order to finish voting and close the proposal.
+		///
+		/// If called before the end of the voting period it will only close the vote if it is
+		/// has enough votes to be approved or disapproved.
+		///
+		/// If called after the end of the voting period abstentions are counted as rejections
+		/// unless there is a prime member set and the prime member cast an approval.
+		///
+		/// If the close operation completes successfully with disapproval, the transaction fee will
+		/// be waived. Otherwise execution of the approved operation will be charged to the caller.
+		///
+		/// + `proposal_weight_bound`: The maximum amount of weight consumed by executing the closed
+		/// proposal.
+		/// + `length_bound`: The upper bound for the length of the proposal in storage. Checked via
+		/// `storage::read` so it is `size_of::<u32>() == 4` larger than the pure length.
+		///
+		/// # <weight>
+		/// ## Weight
+		/// - `O(B + M + P1 + P2)` where:
+		///   - `B` is `proposal` size in bytes (length-fee-bounded)
+		///   - `M` is members-count (code- and governance-bounded)
+		///   - `P1` is the complexity of `proposal` preimage.
+		///   - `P2` is proposal-count (code-bounded)
+		/// - DB:
+		///  - 2 storage reads (`Members`: codec `O(M)`, `Prime`: codec `O(1)`)
+		///  - 3 mutations (`Voting`: codec `O(M)`, `ProposalOf`: codec `O(B)`, `Proposals`: codec
+		///    `O(P2)`)
+		///  - any mutations done while executing `proposal` (`P1`)
+		/// - up to 3 events
+		/// # </weight>
+		#[pallet::weight((
+			{
+				let b = *length_bound;
+				let m = T::MaxMembers::get();
+				let p1 = *proposal_weight_bound;
+				let p2 = T::MaxProposals::get();
+				T::WeightInfo::close_early_approved(b, m, p2)
+					.max(T::WeightInfo::close_early_disapproved(m, p2))
+					.max(T::WeightInfo::close_approved(b, m, p2))
+					.max(T::WeightInfo::close_disapproved(m, p2))
+					.saturating_add(p1)
+			},
+			DispatchClass::Operational
+		))]
+		pub fn close(
+			origin: OriginFor<T>,
+			proposal_hash: T::Hash,
+			#[pallet::compact] index: ProposalIndex,
+			proposal_weight_bound: Weight,
+			#[pallet::compact] length_bound: u32,
+		) -> DispatchResultWithPostInfo {
+			let _ = ensure_signed(origin)?;
+
+			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
 		}
 	}
 }

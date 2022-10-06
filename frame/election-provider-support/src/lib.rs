@@ -20,10 +20,11 @@
 //! This crate provides two traits that could interact to enable extensible election functionality
 //! within FRAME pallets.
 //!
-//! Something that will provide the functionality of election will implement [`ElectionProvider`],
-//! whilst needing an associated [`ElectionProvider::DataProvider`], which needs to be fulfilled by
-//! an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is* the receiver
-//! of the election, resulting in a diagram as below:
+//! Something that will provide the functionality of election will implement
+//! [`ElectionProvider`] and its parent-trait [`ElectionProviderBase`], whilst needing an
+//! associated [`ElectionProviderBase::DataProvider`], which needs to be
+//! fulfilled by an entity implementing [`ElectionDataProvider`]. Most often, *the data provider is*
+//! the receiver of the election, resulting in a diagram as below:
 //!
 //! ```ignore
 //!                                         ElectionDataProvider
@@ -131,12 +132,16 @@
 //!         type DataProvider: ElectionDataProvider<AccountId=AccountId, BlockNumber = BlockNumber>;
 //!     }
 //!
-//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
+//!     impl<T: Config> ElectionProviderBase for GenericElectionProvider<T> {
 //!         type AccountId = AccountId;
 //!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
 //! 	        fn ongoing() -> bool { false }
+//!        
+//!     }
+//!
+//!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
 //!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
 //!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
@@ -177,8 +182,8 @@ pub use frame_support::{traits::Get, weights::Weight, BoundedVec, RuntimeDebug};
 /// Re-export some type as they are used in the interface.
 pub use sp_arithmetic::PerThing;
 pub use sp_npos_elections::{
-	Assignment, BalancingConfig, ElectionResult, Error, ExtendedBalance, IdentifierT, PerThing128,
-	Support, Supports, VoteWeight,
+	Assignment, BalancingConfig, BoundedSupports, ElectionResult, Error, ExtendedBalance,
+	IdentifierT, PerThing128, Support, Supports, VoteWeight,
 };
 pub use traits::NposSolution;
 
@@ -349,12 +354,12 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
-/// Something that can compute the result of an election and pass it back to the caller.
+/// Base trait for [`ElectionProvider`] and [`BoundedElectionProvider`]. It is
+/// meant to be used only with an extension trait that adds an election
+/// functionality.
 ///
-/// This trait only provides an interface to _request_ an election, i.e.
-/// [`ElectionProvider::elect`]. That data required for the election need to be passed to the
-/// implemented of this trait through [`ElectionProvider::DataProvider`].
-pub trait ElectionProvider {
+/// Data can be bounded or unbounded and is fetched from [`Self::DataProvider`].
+pub trait ElectionProviderBase {
 	/// The account identifier type.
 	type AccountId;
 
@@ -372,24 +377,39 @@ pub trait ElectionProvider {
 
 	/// Indicate if this election provider is currently ongoing an asynchronous election or not.
 	fn ongoing() -> bool;
+}
 
-	/// Elect a new set of winners, without specifying any bounds on the amount of data fetched from
-	/// [`Self::DataProvider`]. An implementation could nonetheless impose its own custom limits.
-	///
-	/// The result is returned in a target major format, namely as *vector of supports*.
-	///
-	/// This should be implemented as a self-weighing function. The implementor should register its
-	/// appropriate weight at the end of execution with the system pallet directly.
+/// Elect a new set of winners, bounded by `MaxWinners`.
+///
+/// Returns a result in bounded, target major format, namely as
+/// *BoundedVec<(AccountId, Vec<Support>), MaxWinners>*.   
+pub trait BoundedElectionProvider: ElectionProviderBase {
+	/// The upper bound on election winners.
+	type MaxWinners: Get<u32>;
+	/// Performs the election. This should be implemented as a self-weighing function. The
+	/// implementor should register its appropriate weight at the end of execution with the
+	/// system pallet directly.
+	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
+}
+
+/// Same a [`BoundedElectionProvider`], but no bounds are imposed on the number
+/// of winners.
+///
+/// The result is returned in a target major format, namely as
+///*Vec<(AccountId, Vec<Support>)>*.
+pub trait ElectionProvider: ElectionProviderBase {
+	/// Performs the election. This should be implemented as a self-weighing
+	/// function, similar to [`BoundedElectionProvider::elect()`].
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
 }
 
-/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure an election needs to
-/// happen instantly, not asynchronously.
+/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure
+/// an election needs to happen instantly, not asynchronously.
 ///
 /// The same `DataProvider` is assumed to be used.
 ///
-/// Consequently, allows for control over the amount of data that is being fetched from the
-/// [`ElectionProvider::DataProvider`].
+/// Consequently, allows for control over the amount of data that is being
+/// fetched from the [`ElectionProviderBase::DataProvider`].
 pub trait InstantElectionProvider: ElectionProvider {
 	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
 	/// bounds, this trait method can enforce bounds on the amount of data provided by the
@@ -410,7 +430,7 @@ pub trait InstantElectionProvider: ElectionProvider {
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
 #[cfg(feature = "std")]
-impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+impl<AccountId, BlockNumber, DataProvider> ElectionProviderBase
 	for NoElection<(AccountId, BlockNumber, DataProvider)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
@@ -420,12 +440,19 @@ where
 	type Error = &'static str;
 	type DataProvider = DataProvider;
 
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<NoElection as ElectionProvider> cannot do anything.")
-	}
-
 	fn ongoing() -> bool {
 		false
+	}
+}
+
+#[cfg(feature = "std")]
+impl<AccountId, BlockNumber, DataProvider> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+{
+	fn elect() -> Result<Supports<AccountId>, Self::Error> {
+		Err("<NoElection as ElectionProvider> cannot do anything.")
 	}
 }
 
