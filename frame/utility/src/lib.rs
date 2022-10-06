@@ -63,7 +63,7 @@ use frame_support::{
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Dispatchable, TrailingZeroInput};
+use sp_runtime::traits::{BadOrigin, Dispatchable, TrailingZeroInput};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -203,6 +203,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
@@ -319,6 +324,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
@@ -426,6 +436,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
 			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
