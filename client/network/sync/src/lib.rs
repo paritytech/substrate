@@ -57,14 +57,8 @@ use sc_network_common::{
 	protocol::role::Roles,
 	sync::{
 		message::{
-			BlockAnnounce,
-			BlockAnnouncesHandshake, // TODO: move away from common to here
-			BlockAttributes,
-			BlockData,
-			BlockRequest,
-			BlockResponse,
-			Direction,
-			FromBlock,
+			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
+			BlockResponse, Direction, FromBlock,
 		},
 		warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
 		BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, OnStateData,
@@ -2248,11 +2242,6 @@ where
 			}
 		}
 		None
-	}
-
-	/// Get handshake for the block announcement protocol
-	pub fn get_block_announce_proto_handshake(&self) -> Vec<u8> {
-		todo!();
 	}
 
 	/// Get config for the block announcement protocol

@@ -24,7 +24,6 @@ use crate::{
 	metrics::MetricsService,
 	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
-use codec::Encode;
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
 use log::info;
@@ -41,10 +40,9 @@ use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
-	config::{NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, SetConfig},
 	protocol::role::Roles,
 	service::{NetworkStateInfo, NetworkStatusProvider},
-	sync::{message::BlockAnnouncesHandshake, warp::WarpSyncProvider},
+	sync::warp::WarpSyncProvider,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -74,7 +72,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
 	BuildStorage,
 };
-use std::{iter, str::FromStr, sync::Arc, time::SystemTime};
+use std::{str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -901,8 +899,6 @@ where
 			.expect("Genesis block exists; qed"),
 		config.chain_spec.fork_id(),
 	);
-
-	// configure transaction and block announce protocols
 	network_params
 		.network_config
 		.extra_sets

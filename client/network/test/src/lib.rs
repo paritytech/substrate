@@ -24,7 +24,6 @@ mod sync;
 
 use std::{
 	collections::HashMap,
-	iter,
 	marker::PhantomData,
 	pin::Pin,
 	sync::Arc,

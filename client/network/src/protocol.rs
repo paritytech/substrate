@@ -39,7 +39,7 @@ use sc_consensus::import_queue::{
 	BlockImportError, BlockImportStatus, IncomingBlock, RuntimeOrigin,
 };
 use sc_network_common::{
-	config::{NonReservedPeerMode, ProtocolId},
+	config::NonReservedPeerMode,
 	error,
 	protocol::{role::Roles, ProtocolName},
 	request_responses::RequestFailure,
@@ -238,14 +238,12 @@ where
 {
 	/// Create a new instance.
 	pub fn new(
-		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
 		roles: Roles,
 		chain: Arc<Client>,
-		protocol_id: ProtocolId,
-		fork_id: &Option<String>,
 		network_config: &config::NetworkConfiguration,
 		metrics_registry: Option<&Registry>,
 		chain_sync: Box<dyn ChainSync<B>>,
+		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 
@@ -337,8 +335,6 @@ where
 			sc_peerset::Peerset::from_config(sc_peerset::PeersetConfig { sets })
 		};
 
-		// println!("{:#?}", network_config.extra_sets);
-
 		let behaviour = {
 			Notifications::new(
 				peerset,
@@ -384,10 +380,8 @@ where
 			},
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
-			notification_protocols: network_config
-				.extra_sets
-				.iter()
-				.map(|s| s.notifications_protocol.clone())
+			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
+				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
 				.collect(),
 			bad_handshake_substreams: Default::default(),
 			metrics: if let Some(r) = metrics_registry {
@@ -416,10 +410,7 @@ where
 	pub fn disconnect_peer(&mut self, peer_id: &PeerId, protocol_name: ProtocolName) {
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
-			self.behaviour.disconnect_peer(
-				peer_id,
-				sc_peerset::SetId::from(position + NUM_HARDCODED_PEERSETS),
-			);
+			self.behaviour.disconnect_peer(peer_id, sc_peerset::SetId::from(position));
 		} else {
 			warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
 		}
@@ -1042,8 +1033,7 @@ where
 	/// Sets the list of reserved peers for the given protocol/peerset.
 	pub fn set_reserved_peerset_peers(&self, protocol: ProtocolName, peers: HashSet<PeerId>) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.set_reserved_peers(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peers);
+			self.peerset_handle.set_reserved_peers(sc_peerset::SetId::from(index), peers);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1056,10 +1046,7 @@ where
 	/// Removes a `PeerId` from the list of reserved peers.
 	pub fn remove_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_reserved_peer(
-				sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS),
-				peer,
-			);
+			self.peerset_handle.remove_reserved_peer(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1072,8 +1059,7 @@ where
 	/// Adds a `PeerId` to the list of reserved peers.
 	pub fn add_set_reserved_peer(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.add_reserved_peer(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
+			self.peerset_handle.add_reserved_peer(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1095,8 +1081,7 @@ where
 	/// Add a peer to a peers set.
 	pub fn add_to_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle
-				.add_to_peers_set(sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS), peer);
+			self.peerset_handle.add_to_peers_set(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1109,10 +1094,7 @@ where
 	/// Remove a peer from a peers set.
 	pub fn remove_from_peers_set(&self, protocol: ProtocolName, peer: PeerId) {
 		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
-			self.peerset_handle.remove_from_peers_set(
-				sc_peerset::SetId::from(index + NUM_HARDCODED_PEERSETS),
-				peer,
-			);
+			self.peerset_handle.remove_from_peers_set(sc_peerset::SetId::from(index), peer);
 		} else {
 			error!(
 				target: "sub-libp2p",
@@ -1579,9 +1561,7 @@ where
 					) {
 						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
 							remote: peer_id,
-							protocol: self.notification_protocols
-								[usize::from(set_id) - NUM_HARDCODED_PEERSETS]
-								.clone(),
+							protocol: self.notification_protocols[usize::from(set_id)].clone(),
 							negotiated_fallback,
 							roles,
 							notifications_sink,
@@ -1593,9 +1573,7 @@ where
 							// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
 							CustomMessageOutcome::NotificationStreamOpened {
 								remote: peer_id,
-								protocol: self.notification_protocols
-									[usize::from(set_id) - NUM_HARDCODED_PEERSETS]
-									.clone(),
+								protocol: self.notification_protocols[usize::from(set_id)].clone(),
 								negotiated_fallback,
 								roles: peer.info.roles,
 								notifications_sink,
@@ -1619,9 +1597,7 @@ where
 				} else {
 					CustomMessageOutcome::NotificationStreamReplaced {
 						remote: peer_id,
-						protocol: self.notification_protocols
-							[usize::from(set_id) - NUM_HARDCODED_PEERSETS]
-							.clone(),
+						protocol: self.notification_protocols[usize::from(set_id)].clone(),
 						notifications_sink,
 					}
 				},
@@ -1646,9 +1622,7 @@ where
 				} else {
 					CustomMessageOutcome::NotificationStreamClosed {
 						remote: peer_id,
-						protocol: self.notification_protocols
-							[usize::from(set_id) - NUM_HARDCODED_PEERSETS]
-							.clone(),
+						protocol: self.notification_protocols[usize::from(set_id)].clone(),
 					}
 				}
 			},
@@ -1681,9 +1655,7 @@ where
 				_ if self.bad_handshake_substreams.contains(&(peer_id, set_id)) =>
 					CustomMessageOutcome::None,
 				_ => {
-					let protocol_name = self.notification_protocols
-						[usize::from(set_id) - NUM_HARDCODED_PEERSETS]
-						.clone();
+					let protocol_name = self.notification_protocols[usize::from(set_id)].clone();
 					CustomMessageOutcome::NotificationsReceived {
 						remote: peer_id,
 						messages: vec![(protocol_name, message.freeze())],

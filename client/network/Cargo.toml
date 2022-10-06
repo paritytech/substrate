@@ -57,7 +57,7 @@ sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 
 [dev-dependencies]
 assert_matches = "1.3"
-async-std = "1.11.0"
+async-std = { version = "1.11.0", features = ["attributes"] }
 rand = "0.7.2"
 tempfile = "3.1.0"
 sc-network-light = { version = "0.10.0-dev", path = "./light" }

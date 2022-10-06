@@ -38,7 +38,6 @@ use crate::{
 	transport, ReputationChange,
 };
 
-use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -60,7 +59,6 @@ use sc_network_common::{
 	error::Error,
 	protocol::{
 		event::{DhtEvent, Event},
-		role::Roles,
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, RequestFailure},
@@ -221,14 +219,12 @@ where
 		);
 
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
-			params.block_announce_config,
 			From::from(&params.role),
 			params.chain.clone(),
-			params.protocol_id.clone(),
-			&params.fork_id,
 			&params.network_config,
 			params.metrics_registry.as_ref(),
 			params.chain_sync,
+			params.block_announce_config,
 		)?;
 
 		// List of multiaddresses that we know in the network.
