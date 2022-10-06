@@ -131,9 +131,9 @@ pub struct TargetedFeeAdjustment<T, S, V, M, X>(sp_std::marker::PhantomData<(T, 
 
 /// Something that can convert the current multiplier to the next one.
 pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
-	/// Minimum multiplier. Any outcome of the `convert` function should be more than this.
+	/// Minimum multiplier. Any outcome of the `convert` function should be at least this.
 	fn min() -> Multiplier;
-	/// Maximum multiplier. Any outcome of the `convert` function should be less than this.
+	/// Maximum multiplier. Any outcome of the `convert` function should be less or equal this.
 	fn max() -> Multiplier;
 	/// Target block saturation level
 	fn target() -> Perquintill;
@@ -232,7 +232,7 @@ where
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
-			previous.saturating_sub(negative).max(min_multiplier)
+			previous.saturating_sub(negative).max(min_multiplier).min(max_multiplier)
 		}
 	}
 }
