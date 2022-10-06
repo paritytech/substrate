@@ -26,7 +26,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -466,16 +466,12 @@ impl<T: Config> Pallet<T> {
 					log!(warn, "genesis election provider failed due to {:?}", e);
 					Self::deposit_event(Event::StakingElectionFailed);
 				});
+
 			result
-				.ok()?
-				.into_inner()
-				.try_into()
-				.map_err(|e| {
-					// AKON: Bounds not met if genesis_max_winners > election_provider_max_winners
-					log!(warn, "genesis election provider failed due to {:?}", e);
-					Self::deposit_event(Event::StakingElectionFailed);
-				})
-				.ok()?
+			.ok()?
+			.into_inner()
+			.try_into()
+			.expect("integrity test guarantees bounds for genesis and election provider are always equal; qed")
 		} else {
 			let result = <T::ElectionProvider as BoundedElectionProvider>::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
@@ -560,8 +556,7 @@ impl<T: Config> Pallet<T> {
 			);
 		}
 
-		// AKON: return result here?
-		elected_stashes.try_into().expect("reasons why; qed;")
+		elected_stashes.try_into().expect("since we only map through exposures, size of elected_stashes is always same as exposures; qed")
 	}
 
 	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
@@ -597,10 +592,8 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			// AKON: return result here? try_collect
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
-			.try_into()
-			.unwrap()
+			.try_collect()
+			.expect("we only map through support vector which cannot change the size; qed")
 	}
 
 	/// Remove all associated data of a stash account from the staking system.

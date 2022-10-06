@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use frame_election_provider_support::{BoundedElectionProvider, SortedListProvider, VoteWeight};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -107,7 +107,7 @@ pub mod pallet {
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
-		type ElectionProvider: frame_election_provider_support::BoundedElectionProvider<
+		type ElectionProvider: BoundedElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
@@ -115,7 +115,7 @@ pub mod pallet {
 		>;
 
 		/// Something that provides the election functionality at genesis.
-		type GenesisElectionProvider: frame_election_provider_support::BoundedElectionProvider<
+		type GenesisElectionProvider: BoundedElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
@@ -743,16 +743,14 @@ pub mod pallet {
 		/// There are too many nominators in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyNominators,
-		/// There are too many validator candidates in the system. Governance needs to adjust the staking
-		/// settings to keep things safe for the runtime.
+		/// There are too many validator candidates in the system. Governance needs to adjust the
+		/// staking settings to keep things safe for the runtime.
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
 		/// Validator count exceeded the maximum supported by the `ElectionProvider`.
-		// AKON: sounds like too many validators but should probably
-		// differentiate from it. 
 		TooManyElectionWinners,
 	}
 
@@ -786,6 +784,11 @@ pub mod pallet {
 			// and that MaxNominations is always greater than 1, since we count on this.
 			assert!(!T::MaxNominations::get().is_zero());
 
+			// ensure election results are always bounded with the same value
+			assert!(
+				<T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get() ==
+					<T::GenesisElectionProvider as BoundedElectionProvider>::MaxWinners::get()
+			);
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(
@@ -1271,7 +1274,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// AKON:: test new number is less than maxwinners
 			// max winners supported by election provider
-			let max_winners = <T::ElectionProvider as frame_election_provider_support::BoundedElectionProvider>::MaxWinners::get();
+			let max_winners = <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get();
 			ensure!(new > max_winners, Error::<T>::TooManyValidators);
 			ValidatorCount::<T>::put(new);
 			Ok(())

@@ -726,14 +726,12 @@ pub mod pallet {
 		// }
 
 		// fn governance_fallback() -> {
-		// 	let support: Supports: BoundedVec<_, T::GovernanceFallback::MaxWinners> = T::GovernanceFallback::elect();
-		// 	let other_supports: Supports: BoundedVec<_, T::MaxWinners> = support
-		// 		.into_inner()
+		// 	let support: Supports: BoundedVec<_, T::GovernanceFallback::MaxWinners> =
+		// T::GovernanceFallback::elect(); 	let other_supports: Supports: BoundedVec<_,
+		// T::MaxWinners> = support 		.into_inner()
 		// 		.try_into()
 		// 		.expect("bounds are checked to be same in integrity_check; conversion work; qed");
 		// }
-
-		
 
 		// // approach #2
 		// parmeter_type! {
@@ -916,7 +914,7 @@ pub mod pallet {
 			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
 			// We expect the same bounds on election results provided by the
 			// `ElectionProvider` implementations of the pallet and
-			// `GovernanceFallback`.    
+			// `GovernanceFallback`.
 			assert!(T::MaxWinners::get() == <<T as pallet::Config>::GovernanceFallback as BoundedElectionProvider>::MaxWinners::get());
 		}
 	}
@@ -1129,9 +1127,12 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			// AKON: This is an ugly hack to convert a BoundedVec<A,B> to
-			// BoundedVec<A,C>. May be impl try_from to do this conversion?
-			let supports: BoundedVec<_, T::MaxWinners> = supports.into_inner().try_into().unwrap();
+			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into `BoundedVec<_,
+			// T::MaxWinners>`
+			let supports: BoundedVec<_, T::MaxWinners> = supports
+				.into_inner()
+				.try_into()
+				.expect("integrity test guarantees both bounds are always equal; qed");
 
 			let solution = ReadySolution {
 				supports,
@@ -1290,12 +1291,10 @@ pub mod pallet {
 	/// Desired number of targets to elect for this round.
 	///
 	/// Only exists when [`Snapshot`] is present.
-	// AKON: call desired winners?
 	#[pallet::storage]
 	#[pallet::getter(fn desired_targets)]
 	pub type DesiredTargets<T> = StorageValue<_, u32>;
 
-	
 	/// The metadata of the [`RoundSnapshot`]
 	///
 	/// Only exists when [`Snapshot`] is present.
