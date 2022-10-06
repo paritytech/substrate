@@ -19,7 +19,7 @@
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
-use sp_runtime::traits::{Identity, Keccak256};
+use sp_runtime::traits::Keccak256;
 
 use log::warn;
 
@@ -99,7 +99,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		BeefyVerify::<Keccak256, _, Identity>::verify(sig, message, public)
+		BeefyVerify::<Keccak256>::verify(sig, message, public)
 	}
 }
 
