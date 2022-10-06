@@ -126,7 +126,7 @@ pub struct BeefyAuthoritySet<MerkleRoot> {
 pub type BeefyNextAuthoritySet<MerkleRoot> = BeefyAuthoritySet<MerkleRoot>;
 
 /// Extract the MMR root hash from a digest in the given header, if it exists.
-fn find_mmr_root_digest<B: Block>(header: &B::Header) -> Option<MmrRootHash> {
+pub fn find_mmr_root_digest<B: Block>(header: &B::Header) -> Option<MmrRootHash> {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 
 	let filter = |log: ConsensusLog<AuthorityId>| match log {
