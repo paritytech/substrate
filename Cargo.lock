@@ -4817,7 +4817,6 @@ dependencies = [
 name = "pallet-cere-ddc"
 version = "5.1.0"
 dependencies = [
- "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
