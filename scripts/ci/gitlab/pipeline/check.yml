@@ -41,7 +41,12 @@ test-rust-features:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
   script:
-    - bash ./scripts/ci/gitlab/rust-features.sh .
+    # TODO @ggwpez change the branch to $PIPELINE_SCRIPTS_TAG
+    - git clone
+        --depth=1
+        "--branch=https://github.com/paritytech/pipeline-scripts/pull/81"
+        https://github.com/paritytech/pipeline-scripts
+    - bash ./pipeline-scripts/rust-features.sh .
 
 test-prometheus-alerting-rules:
   stage:                           check
@@ -59,4 +64,3 @@ test-prometheus-alerting-rules:
     - promtool check rules ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml
     - cat ./scripts/ci/monitoring/alerting-rules/alerting-rules.yaml |
         promtool test rules ./scripts/ci/monitoring/alerting-rules/alerting-rule-tests.yaml
-
