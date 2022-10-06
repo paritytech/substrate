@@ -241,7 +241,7 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Remove the signed submission with the highest score from the set.
 	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
-		let best_index = self.indices.len().saturating_sub(1);
+		let best_index = self.indices.len().checked_sub(1)?;
 		self.swap_out_submission(best_index, None)
 	}
 
