@@ -35,7 +35,9 @@ use jsonrpsee::{
 };
 use log::warn;
 
-use beefy_gadget::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream};
+use beefy_gadget::communication::notification::{
+	BeefyBestBlockStream, BeefyVersionedFinalityProofStream,
+};
 
 mod notification;
 
@@ -82,7 +84,7 @@ impl From<Error> for JsonRpseeError {
 // Provides RPC methods for interacting with BEEFY.
 #[rpc(client, server)]
 pub trait BeefyApi<Notification, Hash> {
-	/// Returns the block most recently finalized by BEEFY, alongside side its justification.
+	/// Returns the block most recently finalized by BEEFY, alongside its justification.
 	#[subscription(
 		name = "beefy_subscribeJustifications" => "beefy_justifications",
 		unsubscribe = "beefy_unsubscribeJustifications",
@@ -165,8 +167,8 @@ mod tests {
 	use super::*;
 
 	use beefy_gadget::{
+		communication::notification::BeefyVersionedFinalityProofSender,
 		justification::BeefyVersionedFinalityProof,
-		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofSender},
 	};
 	use beefy_primitives::{known_payload_ids, Payload, SignedCommitment};
 	use codec::{Decode, Encode};

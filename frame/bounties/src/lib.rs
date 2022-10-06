@@ -819,7 +819,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: BalanceOf<T, I>,
 	) -> DispatchResult {
 		let bounded_description: BoundedVec<_, _> =
-			description.try_into().map_err(|()| Error::<T, I>::ReasonTooBig)?;
+			description.try_into().map_err(|_| Error::<T, I>::ReasonTooBig)?;
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T, I>::InvalidValue);
 
 		let index = Self::bounty_count();

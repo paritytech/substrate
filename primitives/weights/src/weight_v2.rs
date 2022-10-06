@@ -318,7 +318,7 @@ impl Zero for Weight {
 	}
 
 	fn is_zero(&self) -> bool {
-		self.ref_time == 0
+		self == &Self::zero()
 	}
 }
 
@@ -445,5 +445,18 @@ impl SubAssign for Weight {
 			ref_time: self.ref_time - other.ref_time,
 			proof_size: self.proof_size - other.proof_size,
 		};
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn is_zero_works() {
+		assert!(Weight::zero().is_zero());
+		assert!(!Weight::from_components(1, 0).is_zero());
+		assert!(!Weight::from_components(0, 1).is_zero());
+		assert!(!Weight::MAX.is_zero());
 	}
 }
