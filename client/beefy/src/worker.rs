@@ -48,7 +48,7 @@ use sp_runtime::{
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
-	known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
@@ -194,9 +194,10 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, N> {
+pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
+	pub payload_provider: P,
 	pub runtime: Arc<R>,
 	pub network: N,
 	pub key_store: BeefyKeystore,
@@ -210,10 +211,11 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, N> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	// utilities
 	client: Arc<C>,
 	backend: Arc<BE>,
+	payload_provider: P,
 	runtime: Arc<R>,
 	network: N,
 	key_store: BeefyKeystore,
@@ -243,11 +245,12 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, N> {
 	voting_oracle: VoterOracle<B>,
 }
 
-impl<B, BE, C, R, N> BeefyWorker<B, BE, C, R, N>
+impl<B, BE, C, P, R, N> BeefyWorker<B, BE, C, P, R, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
+	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
@@ -258,10 +261,11 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, P, R, N>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
+			payload_provider,
 			runtime,
 			key_store,
 			network,
@@ -282,6 +286,7 @@ where
 		BeefyWorker {
 			client: client.clone(),
 			backend,
+			payload_provider,
 			runtime,
 			network,
 			known_peers,
@@ -297,17 +302,6 @@ where
 			pending_justifications: BTreeMap::new(),
 			voting_oracle: VoterOracle::new(min_block_delta),
 		}
-	}
-
-	/// Simple wrapper that gets MMR root from header digests or from client state.
-	fn get_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		find_mmr_root_digest::<B>(header).or_else(|| {
-			self.runtime
-				.runtime_api()
-				.mmr_root(&BlockId::hash(header.hash()))
-				.ok()
-				.and_then(|r| r.ok())
-		})
 	}
 
 	/// Verify `active` validator set for `block` against the key store
@@ -621,13 +615,12 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = self.get_mmr_root_digest(&target_header) {
+		let payload = if let Some(hash) = self.payload_provider.payload(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
 			return Ok(())
 		};
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
 		let rounds = self.voting_oracle.rounds_mut().ok_or(Error::UninitSession)?;
 		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
@@ -917,20 +910,6 @@ where
 	}
 }
 
-/// Extract the MMR root hash from a digest in the given header, if it exists.
-fn find_mmr_root_digest<B>(header: &B::Header) -> Option<MmrRootHash>
-where
-	B: Block,
-{
-	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
-
-	let filter = |log: ConsensusLog<AuthorityId>| match log {
-		ConsensusLog::MmrRoot(root) => Some(root),
-		_ => None,
-	};
-	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
-}
-
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
 /// validator set or `None` in case no validator set change has been signaled.
 fn find_authorities_change<B>(header: &B::Header) -> Option<ValidatorSet<AuthorityId>>
@@ -1016,8 +995,8 @@ pub(crate) mod tests {
 		BeefyRPCLinks,
 	};
 
+	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
-
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
 	use sc_network_test::{PeersFullClient, TestNetFactory};
@@ -1032,7 +1011,14 @@ pub(crate) mod tests {
 		peer: &BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
-	) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
+	) -> BeefyWorker<
+		Block,
+		Backend,
+		PeersFullClient,
+		MmrRootProvider<Block, TestApi>,
+		TestApi,
+		Arc<NetworkService<Block, H256>>,
+	> {
 		let keystore = create_beefy_keystore(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
@@ -1064,9 +1050,11 @@ pub(crate) mod tests {
 			"/beefy/justifs/1".into(),
 			known_peers.clone(),
 		);
+		let payload_provider = MmrRootProvider::new(api.clone());
 		let worker_params = crate::worker::WorkerParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
+			payload_provider,
 			runtime: api,
 			key_store: Some(keystore).into(),
 			known_peers,
@@ -1078,7 +1066,7 @@ pub(crate) mod tests {
 			network,
 			on_demand_justifications,
 		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1301,30 +1289,6 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn extract_mmr_root_digest() {
-		let mut header = Header::new(
-			1u32.into(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Digest::default(),
-		);
-
-		// verify empty digest shows nothing
-		assert!(find_mmr_root_digest::<Block>(&header).is_none());
-
-		let mmr_root_hash = H256::random();
-		header.digest_mut().push(DigestItem::Consensus(
-			BEEFY_ENGINE_ID,
-			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash).encode(),
-		));
-
-		// verify validator set is correctly extracted from digest
-		let extracted = find_mmr_root_digest::<Block>(&header);
-		assert_eq!(extracted, Some(mmr_root_hash));
-	}
-
-	#[test]
 	fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
@@ -1363,7 +1327,7 @@ pub(crate) mod tests {
 
 		let create_finality_proof = |block_num: NumberFor<Block>| {
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: block_num,
 				validator_set_id: validator_set.id(),
 			};
@@ -1482,7 +1446,7 @@ pub(crate) mod tests {
 			block_number: NumberFor<Block>,
 		) -> VoteMessage<NumberFor<Block>, AuthorityId, Signature> {
 			let commitment = Commitment {
-				payload: Payload::new(*b"BF", vec![]),
+				payload: Payload::from_single_entry(*b"BF", vec![]),
 				block_number,
 				validator_set_id: 0,
 			};
@@ -1574,7 +1538,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for session boundary block 10
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 10,
 				validator_set_id: validator_set.id(),
 			};
@@ -1608,7 +1572,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for block 12
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 12,
 				validator_set_id: validator_set.id(),
 			};

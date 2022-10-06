@@ -33,12 +33,11 @@
 
 mod commitment;
 pub mod mmr;
+mod payload;
 pub mod witness;
 
-pub use commitment::{
-	known_payload_ids, BeefyPayloadId, Commitment, Payload, SignedCommitment,
-	VersionedFinalityProof,
-};
+pub use commitment::{Commitment, SignedCommitment, VersionedFinalityProof};
+pub use payload::{known_payloads, BeefyPayloadId, Payload, PayloadProvider};
 
 use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;

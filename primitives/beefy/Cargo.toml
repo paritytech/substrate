@@ -18,6 +18,7 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-application-crypto = { version = "6.0.0", default-features = false, path = "../application-crypto" }
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
+sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
@@ -33,6 +34,7 @@ std = [
 	"sp-api/std",
 	"sp-application-crypto/std",
 	"sp-core/std",
+	"sp-mmr-primitives/std",
 	"sp-runtime/std",
 	"sp-std/std",
 ]
