@@ -995,7 +995,7 @@ mod remote_tests {
 		}
 	}
 
-	// TODO: maybe remove before merge, although, it is an okay example :shrug:
+	// NOTE: maybe remove before merge, although, it is an okay example :shrug:
 	#[tokio::test]
 	async fn example_staking_slashing_spans() {
 		init_logger();
@@ -1016,7 +1016,7 @@ mod remote_tests {
 				use codec::Encode;
 				let x = pallet_staking::SlashingSpans::<kitchensink_runtime::Runtime>::iter()
 					.collect::<Vec<_>>();
-				println!("Len = {:?} / encoded_size = {:?}", x.len(), x.encoded_size());
+				println!("len() = {:?} / encoded_size() = {:?}", x.len(), x.encoded_size());
 			});
 	}
 

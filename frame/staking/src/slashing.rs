@@ -188,9 +188,9 @@ pub(crate) struct SpanRecord<Balance> {
 	paid_out: Balance,
 }
 
-#[cfg(test)]
 impl<Balance> SpanRecord<Balance> {
 	/// The value of stash balance slashed in this span.
+	#[cfg(test)]
 	pub(crate) fn amount(&self) -> &Balance {
 		&self.slashed
 	}
@@ -272,9 +272,9 @@ pub(crate) fn compute_slash<T: Config>(
 			params.reward_proportion,
 		);
 
-		let maybe_target_span = spans.compare_and_update_span_slash(params.slash_era, own_slash);
+		let target_span = spans.compare_and_update_span_slash(params.slash_era, own_slash);
 
-		if maybe_target_span == Some(spans.span_index()) {
+		if target_span == Some(spans.span_index()) {
 			// misbehavior occurred within the current slashing span - take appropriate
 			// actions.
 
@@ -406,10 +406,9 @@ fn slash_nominators<T: Config>(
 				params.reward_proportion,
 			);
 
-			let maybe_target_span =
-				spans.compare_and_update_span_slash(params.slash_era, era_slash);
+			let target_span = spans.compare_and_update_span_slash(params.slash_era, era_slash);
 
-			if maybe_target_span == Some(spans.span_index()) {
+			if target_span == Some(spans.span_index()) {
 				// end the span, but don't chill the nominator.
 				spans.end_span(params.now);
 			}

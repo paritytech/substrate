@@ -545,7 +545,6 @@ pub mod pallet {
 	/// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
 	/// whether a given validator has previously offended using binary search. It gets cleared when
 	/// the era ends.
-	// TODO: invariant test for the above.
 	#[pallet::storage]
 	#[pallet::unbounded]
 	#[pallet::getter(fn offending_validators)]
