@@ -2265,10 +2265,8 @@ mod tests {
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
-<<<<<<< HEAD
 			// snapshot is still there until election finalizes.
 			assert!(MultiPhase::snapshot().is_some());
-=======
 
 			assert_eq!(
 				multi_phase_events(),
@@ -2278,7 +2276,6 @@ mod tests {
 					Event::ElectionFailed
 				]
 			);
->>>>>>> fc67cbb66d8c484bc7b7506fc1300344d12ecbad
 		})
 	}
 
