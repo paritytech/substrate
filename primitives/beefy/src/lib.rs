@@ -255,36 +255,44 @@ mod tests {
 		let msg = &b"test-message"[..];
 		let (pair, _) = crypto::Pair::generate();
 
-		let signature: crypto::Signature =
+		let keccak_256_signature: crypto::Signature =
 			pair.as_inner_ref().sign_prehashed(&keccak_256(msg)).into();
 
-		let signature_blake2_256: crypto::Signature =
+		let blake2_256_signature: crypto::Signature =
 			pair.as_inner_ref().sign_prehashed(&blake2_256(msg)).into();
 
 		// Verification works if same hashing function is used when signing and verifying.
-		assert!(BeefyVerify::<Keccak256, _, Identity>::verify(&signature, msg, &pair.public()));
+		assert!(BeefyVerify::<Keccak256, _, Identity>::verify(
+			&keccak_256_signature,
+			msg,
+			&pair.public()
+		));
 		assert!(BeefyVerify::<BlakeTwo256, _, Identity>::verify(
-			&signature_blake2_256,
+			&blake2_256_signature,
 			msg,
 			&pair.public()
 		));
 		// Verification fails if distinct hashing functions are used when signing and verifying.
 		assert!(!BeefyVerify::<Keccak256, _, Identity>::verify(
-			&signature_blake2_256,
+			&blake2_256_signature,
 			msg,
 			&pair.public()
 		));
-		assert!(!BeefyVerify::<BlakeTwo256, _, Identity>::verify(&signature, msg, &pair.public()));
+		assert!(!BeefyVerify::<BlakeTwo256, _, Identity>::verify(
+			&keccak_256_signature,
+			msg,
+			&pair.public()
+		));
 
 		// Other public key doesn't work
 		let (other_pair, _) = crypto::Pair::generate();
 		assert!(!BeefyVerify::<Keccak256, _, Identity>::verify(
-			&signature,
+			&keccak_256_signature,
 			msg,
 			&other_pair.public()
 		));
 		assert!(!BeefyVerify::<BlakeTwo256, _, Identity>::verify(
-			&signature_blake2_256,
+			&blake2_256_signature,
 			msg,
 			&other_pair.public()
 		));
