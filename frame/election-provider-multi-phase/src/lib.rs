@@ -987,7 +987,7 @@ pub mod pallet {
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
-
+			// TODO: Do not error here
 			let solution = ReadySolution {
 				supports: supports.try_into().map_err(|_| <Error<T>>::BoundNotMet)?,
 				score: Default::default(),
@@ -1093,7 +1093,7 @@ pub mod pallet {
 			let maybe_max_voters = maybe_max_voters.map(|x| x as usize);
 			let maybe_max_targets = maybe_max_targets.map(|x| x as usize);
 
-			let mut supports = T::GovernanceFallback::elect_with_bounds(
+			let supports = T::GovernanceFallback::elect_with_bounds(
 				maybe_max_voters.unwrap_or(Bounded::max_value()),
 				maybe_max_targets.unwrap_or(Bounded::max_value()),
 			)
@@ -1102,8 +1102,8 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into `BoundedVec<_,
-			// T::MaxWinners>`
+			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into 
+			// `BoundedVec<_, T::MaxWinners>`
 			let supports: BoundedVec<_, T::MaxWinners> = supports
 				.into_inner()
 				.try_into()

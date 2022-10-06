@@ -337,12 +337,6 @@ macro_rules! log {
 /// pallet.
 pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::BoundedElectionProvider>::MaxWinners;
 
-// impl<T, S1: Get<u32>, S2: Get<u32>> TryFrom<BoundedVec<T, S1>> for BoundedVec<T, S2> {
-// 	type Error = ();
-// 	fn try_from(x: BoundedVec<T, S1>) -> Result<BoundedVec<T, S2>, Self::Error> {
-// 		if x.len() <= Self::bound
-// 	}
-// }
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
 

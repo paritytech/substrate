@@ -148,6 +148,7 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
+	// TODO: Handle TooManyWinners error
 	let supports =
 	//  match T::TooManyWinners::get() {
 		// TooManyWinners::Error => {
@@ -289,7 +290,7 @@ mod tests {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
-		type MaxWinners = ConstU32<50>;
+		type MaxWinners = ConstU32<100>;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -302,7 +303,7 @@ mod tests {
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
-		type MaxWinners = ConstU32<50>;
+		type MaxWinners = ConstU32<100>;
 	}
 
 	impl BoundedConfig for PhragMMSParams {
