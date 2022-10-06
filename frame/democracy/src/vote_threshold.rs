@@ -18,7 +18,7 @@
 //! Voting thresholds.
 
 use crate::Tally;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,9 @@ use sp_runtime::traits::{IntegerSquareRoot, Zero};
 use sp_std::ops::{Add, Div, Mul, Rem};
 
 /// A means of determining if a vote is past pass threshold.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, sp_runtime::RuntimeDebug, TypeInfo)]
+#[derive(
+	Clone, Copy, PartialEq, Eq, Encode, MaxEncodedLen, Decode, sp_runtime::RuntimeDebug, TypeInfo,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum VoteThreshold {
 	/// A supermajority of approvals is needed to pass this vote.

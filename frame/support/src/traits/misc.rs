@@ -932,7 +932,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// Maximum size of a preimage.
 	type MaxSize: Get<u32>;
 
-	/// Store the bytes of a preimage on chain.
+	/// Store the bytes of a preimage on chain infallible due to the bounded type.
 	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a

@@ -41,18 +41,6 @@ pub struct ImportParams {
 	#[clap(flatten)]
 	pub database_params: DatabaseParams,
 
-	/// THIS IS A DEPRECATED CLI-ARGUMENT.
-	///
-	/// It has been preserved in order to not break the compatibility with the existing scripts.
-	/// Enabling this option will lead to a runtime warning.
-	/// In future this option will be removed completely, thus specifying it will lead to a start
-	/// up error.
-	///
-	/// Details: <https://github.com/paritytech/substrate/issues/8103>
-	#[clap(long)]
-	#[deprecated = "According to https://github.com/paritytech/substrate/issues/8103"]
-	pub unsafe_pruning: bool,
-
 	/// Method for executing Wasm runtime code.
 	#[clap(
 		long = "wasm-execution",

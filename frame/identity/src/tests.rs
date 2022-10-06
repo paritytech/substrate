@@ -268,7 +268,7 @@ fn registration_should_work() {
 		let mut three_fields = ten();
 		three_fields.additional.try_push(Default::default()).unwrap();
 		three_fields.additional.try_push(Default::default()).unwrap();
-		assert_eq!(three_fields.additional.try_push(Default::default()), Err(()));
+		assert!(three_fields.additional.try_push(Default::default()).is_err());
 		assert_ok!(Identity::set_identity(RuntimeOrigin::signed(10), Box::new(ten())));
 		assert_eq!(Identity::identity(10).unwrap().info, ten());
 		assert_eq!(Balances::free_balance(10), 90);
