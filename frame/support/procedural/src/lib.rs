@@ -403,7 +403,49 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
 }
 
-/// Macro to define a pallet. Docs are at `frame_support::pallet`.
+/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
+/// pallet information.
+///
+/// The struct must be defined as follows:
+/// ```ignore
+/// #[pallet::pallet]
+/// pub struct Pallet<T>(_);
+/// ```
+/// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
+///
+/// ## Macro expansion:
+///
+/// The macro adds this attribute to the struct definition:
+/// ```ignore
+/// #[derive(
+/// 	frame_support::CloneNoBound,
+/// 	frame_support::EqNoBound,
+/// 	frame_support::PartialEqNoBound,
+/// 	frame_support::RuntimeDebugNoBound,
+/// )]
+/// ```
+/// and replaces the type `_` with `PhantomData<T>`. It also implements on the pallet:
+/// * `GetStorageVersion`
+/// * `OnGenesis`: contains some logic to write the pallet version into storage.
+/// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
+///
+/// It declares `type Module` type alias for `Pallet`, used by `construct_runtime`.
+///
+/// It implements `PalletInfoAccess` on `Pallet` to ease access to pallet information given by
+/// `frame_support::traits::PalletInfo`. (The implementation uses the associated type
+/// `frame_system::Config::PalletInfo`).
+///
+/// It implements `StorageInfoTrait` on `Pallet` which give information about all storages.
+///
+/// If the attribute `generate_store` is set then the macro creates the trait `Store` and
+/// implements it on `Pallet`.
+///
+/// If the attribute `set_storage_max_encoded_len` is set then the macro calls
+/// `StorageInfoTrait` for each storage in the implementation of `StorageInfoTrait` for the
+/// pallet. Otherwise it implements `StorageInfoTrait` for the pallet using the
+/// `PartialStorageInfoTrait` implementation of storages.
+///
+/// See `frame_support::pallet` docs for more info.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
