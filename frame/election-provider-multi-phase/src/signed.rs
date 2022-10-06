@@ -327,7 +327,7 @@ impl<T: Config> SignedSubmissions<T> {
 		self.indices
 			.sort_by(|(score1, bn1, _), (score2, bn2, _)| match score1.cmp(score2) {
 				Ordering::Equal => bn1.cmp(&bn2).reverse(),
-				x @ _ => x,
+				x => x,
 			});
 
 		// we've taken out the weakest, so update the storage map and the next index
