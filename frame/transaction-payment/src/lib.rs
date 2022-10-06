@@ -131,7 +131,7 @@ pub struct TargetedFeeAdjustment<T, S, V, M, X>(sp_std::marker::PhantomData<(T, 
 
 /// Something that can convert the current multiplier to the next one.
 pub trait MultiplierUpdate: Convert<Multiplier, Multiplier> {
-	/// Minimum multiplier. Any outcome of the `convert` function should be less than this.
+	/// Minimum multiplier. Any outcome of the `convert` function should be more than this.
 	fn min() -> Multiplier;
 	/// Maximum multiplier. Any outcome of the `convert` function should be less than this.
 	fn max() -> Multiplier;
