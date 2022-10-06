@@ -18,7 +18,7 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use sc_sysinfo::Throughput;
+use sc_sysinfo::{Throughput, Unit};
 use serde::{
 	de::{Error, MapAccess, Visitor},
 	ser::SerializeMap,
@@ -32,7 +32,13 @@ where
 {
 	let mut map = serializer.serialize_map(Some(1))?;
 	let (value, unit) = t.normalize();
-	map.serialize_entry(&unit.to_string(), &value)?;
+	let unit_as_str = match unit {
+		Unit::GiBs => "GiBs",
+		Unit::MiBs => "MiBs",
+		Unit::KiBs => "KiBs",
+	};
+
+	map.serialize_entry(&unit_as_str, &value)?;
 	map.end()
 }
 

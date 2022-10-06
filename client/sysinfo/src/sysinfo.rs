@@ -41,12 +41,11 @@ pub enum Unit {
 
 impl fmt::Display for Unit {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let unit = match self {
+		f.write_str(match self {
 			Unit::GiBs => "GiBs",
 			Unit::MiBs => "MiBs",
 			Unit::KiBs => "KiBs",
-		};
-		write!(f, "{}", unit)
+		})
 	}
 }
 
@@ -127,7 +126,7 @@ where
 	S: Serializer,
 {
 	if let Some(t) = maybe_t {
-		return serializer.serialize_u64(t.as_mibs() as u64)
+		return serializer.serialize_some(&(t.as_mibs() as u64))
 	}
 	serializer.serialize_none()
 }
