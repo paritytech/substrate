@@ -34,17 +34,18 @@
 //! First, we only slash participants for the _maximum_ slash they receive in some time period,
 //! rather than the sum. This ensures a protection from overslashing.
 //!
-//! Second, we do not want the time period (or "span") that the maximum is computed over to last
-//! indefinitely. That would allow participants to begin acting with impunity after some point,
-//! fearing no further repercussions. For that reason, we automatically "chill" validators and
-//! withdraw a nominator's nomination after a slashing event, requiring them to re-enlist
-//! voluntarily (acknowledging the slash) and begin a new slashing span.
+//! Second, we do not want the time period (or "span") that the maximum is computed
+//! over to last indefinitely. That would allow participants to begin acting with
+//! impunity after some point, fearing no further repercussions. For that reason, we
+//! automatically "chill" validators and withdraw a nominator's nomination after a slashing event,
+//! requiring them to re-enlist voluntarily (acknowledging the slash) and begin a new
+//! slashing span.
 //!
-//! Typically, you will have a single slashing event per slashing span. Only in the case where a
-//! validator releases many misbehaviors at once, or goes "back in time" to misbehave in eras that
-//! have already passed, would you encounter situations where a slashing span has multiple
-//! misbehaviors. However, accounting for such cases is necessary to deter a class of "rage-quit"
-//! attacks.
+//! Typically, you will have a single slashing event per slashing span. Only in the case
+//! where a validator releases many misbehaviors at once, or goes "back in time" to misbehave in
+//! eras that have already passed, would you encounter situations where a slashing span
+//! has multiple misbehaviors. However, accounting for such cases is necessary
+//! to deter a class of "rage-quit" attacks.
 //!
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
@@ -90,15 +91,15 @@ impl SlashingSpan {
 /// An encoding of all of a nominator's slashing spans.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct SlashingSpans {
-	// the index of the current slashing span of the nominator. different for every stash, resets
-	// when the account hits free balance 0.
+	// the index of the current slashing span of the nominator. different for
+	// every stash, resets when the account hits free balance 0.
 	span_index: SpanIndex,
 	// the start era of the most recent (ongoing) slashing span.
 	last_start: EraIndex,
 	// the last era at which a non-zero slash occurred.
 	last_nonzero_slash: EraIndex,
-	// all prior slashing spans' start indices, in reverse order (most recent first) encoded as
-	// offsets relative to the slashing span after it.
+	// all prior slashing spans' start indices, in reverse order (most recent first)
+	// encoded as offsets relative to the slashing span after it.
 	prior: Vec<EraIndex>,
 }
 
@@ -217,12 +218,12 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 	pub(crate) disable_strategy: DisableStrategy,
 }
 
-/// Computes a slash of a validator and nominators. It returns an unapplied record to be applied at
-/// some later point. Slashing metadata is updated in storage, since unapplied records are only
-/// rarely intended to be dropped.
+/// Computes a slash of a validator and nominators. It returns an unapplied
+/// record to be applied at some later point. Slashing metadata is updated in storage,
+/// since unapplied records are only rarely intended to be dropped.
 ///
-/// The pending slash record returned does not have initialized reporters. Those have to be set at a
-/// higher level, if any.
+/// The pending slash record returned does not have initialized reporters. Those have
+/// to be set at a higher level, if any.
 pub(crate) fn compute_slash<T: Config>(
 	params: SlashParams<T>,
 ) -> Option<UnappliedSlash<T::AccountId, BalanceOf<T>>> {
@@ -232,8 +233,8 @@ pub(crate) fn compute_slash<T: Config>(
 	// is the slash amount here a maximum for the era?
 	let own_slash = params.slash * params.exposure.own;
 	if params.slash * params.exposure.total == Zero::zero() {
-		// kick out the validator even if they won't be slashed, as long as the misbehavior is from
-		// their most recent slashing span.
+		// kick out the validator even if they won't be slashed,
+		// as long as the misbehavior is from their most recent slashing span.
 		kick_out_if_recent::<T>(params);
 		return None
 	}
@@ -251,12 +252,13 @@ pub(crate) fn compute_slash<T: Config>(
 			&(params.slash, own_slash),
 		);
 	} else {
-		// we slash based on the max in era - this new event is not the max, so neither the
-		// validator or any nominators will need an update.
+		// we slash based on the max in era - this new event is not the max,
+		// so neither the validator or any nominators will need an update.
 		//
-		// this does lead to a divergence of our system from the paper, which pays out some reward
-		// even if the latest report is not max-in-era. we opt to avoid the nominator lookups and
-		// edits and leave more rewards for more drastic misbehavior.
+		// this does lead to a divergence of our system from the paper, which
+		// pays out some reward even if the latest report is not max-in-era.
+		// we opt to avoid the nominator lookups and edits and leave more rewards
+		// for more drastic misbehavior.
 		return None
 	}
 
@@ -321,8 +323,9 @@ fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
 	add_offending_validator::<T>(params.stash, disable_without_slash);
 }
 
-/// Add the given validator to the offenders list and optionally disable it. If after adding the
-/// validator `OffendingValidatorsThreshold` is reached a new era will be forced.
+/// Add the given validator to the offenders list and optionally disable it.
+/// If after adding the validator `OffendingValidatorsThreshold` is reached
+/// a new era will be forced.
 fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 	<Pallet<T> as Store>::OffendingValidators::mutate(|offending| {
 		let validators = T::SessionInterface::validators();
@@ -428,12 +431,13 @@ fn slash_nominators<T: Config>(
 	reward_payout
 }
 
-// helper struct for managing a set of spans we are currently inspecting. writes alterations to disk
-// on drop, but only if a slash has been carried out.
+// helper struct for managing a set of spans we are currently inspecting.
+// writes alterations to disk on drop, but only if a slash has been carried out.
 //
-// NOTE: alterations to slashing metadata should not be done after this is dropped. dropping this
-// struct applies any necessary slashes, which can lead to free balance being 0, and the account
-// being garbage-collected -- a dead account should get no new metadata.
+// NOTE: alterations to slashing metadata should not be done after this is dropped.
+// dropping this struct applies any necessary slashes, which can lead to free balance
+// being 0, and the account being garbage-collected -- a dead account should get no new
+// metadata.
 struct InspectingSpans<'a, T: Config + 'a> {
 	dirty: bool,
 	window_start: EraIndex,
@@ -481,9 +485,8 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
 	}
 
 	// add some value to the slash of the staker.
-	//
-	// invariant: the staker is being slashed for non-zero value here although `amount` may be zero,
-	// as it is only a difference.
+	// invariant: the staker is being slashed for non-zero value here
+	// although `amount` may be zero, as it is only a difference.
 	fn add_slash(&mut self, amount: BalanceOf<T>, slash_era: EraIndex) {
 		*self.slash_of += amount;
 		self.spans.last_nonzero_slash = sp_std::cmp::max(self.spans.last_nonzero_slash, slash_era);
@@ -494,8 +497,8 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
 		self.spans.iter().find(|span| span.contains_era(era))
 	}
 
-	// compares the slash in an era to the overall current span slash. If it's higher, applies the
-	// difference of the slashes and then updates the span on disk.
+	// compares the slash in an era to the overall current span slash.
+	// if it's higher, applies the difference of the slashes and then updates the span on disk.
 	//
 	// returns the span index of the era where the slash occurred, if any.
 	fn compare_and_update_span_slash(
@@ -587,9 +590,9 @@ pub(crate) fn clear_stash_metadata<T: Config>(
 
 	// kill slashing-span metadata for account.
 	//
-	// this can only happen while the account is staked _if_ they are completely slashed. in that
-	// case, they may re-bond, but it would count again as span 0. Further ancient slashes would
-	// slash into this new bond, since wmetadata has now been cleared.
+	// this can only happen while the account is staked _if_ they are completely slashed.
+	// in that case, they may re-bond, but it would count again as span 0. Further ancient
+	// slashes would slash into this new bond, since metadata has now been cleared.
 	for span in spans.iter() {
 		<Pallet<T> as Store>::SpanSlash::remove(&(stash.clone(), span.index));
 	}
@@ -597,9 +600,9 @@ pub(crate) fn clear_stash_metadata<T: Config>(
 	Ok(())
 }
 
-// apply the slash to a stash account, deducting any missing funds from the reward payout,
-// saturating at 0. this is mildly unfair but also an edge-case that can only occur when overlapping
-// locked funds have been slashed.
+// apply the slash to a stash account, deducting any missing funds from the reward
+// payout, saturating at 0. this is mildly unfair but also an edge-case that
+// can only occur when overlapping locked funds have been slashed.
 pub fn do_slash<T: Config>(
 	stash: &T::AccountId,
 	value: BalanceOf<T>,

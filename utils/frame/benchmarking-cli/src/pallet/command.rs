@@ -134,6 +134,20 @@ impl PalletCmd {
 			};
 		}
 
+		if let Some(json_input) = &self.json_input {
+			let raw_data = match std::fs::read(json_input) {
+				Ok(raw_data) => raw_data,
+				Err(error) =>
+					return Err(format!("Failed to read {:?}: {}", json_input, error).into()),
+			};
+			let batches: Vec<BenchmarkBatchSplitResults> = match serde_json::from_slice(&raw_data) {
+				Ok(batches) => batches,
+				Err(error) =>
+					return Err(format!("Failed to deserialize {:?}: {}", json_input, error).into()),
+			};
+			return self.output_from_results(&batches)
+		}
+
 		let spec = config.chain_spec;
 		let strategy = self.execution.unwrap_or(ExecutionStrategy::Native);
 		let pallet = self.pallet.clone().unwrap_or_default();
@@ -396,8 +410,16 @@ impl PalletCmd {
 
 		// Combine all of the benchmark results, so that benchmarks of the same pallet/function
 		// are together.
-		let batches: Vec<BenchmarkBatchSplitResults> = combine_batches(batches, batches_db);
+		let batches = combine_batches(batches, batches_db);
+		self.output(&batches, &storage_info, &component_ranges)
+	}
 
+	fn output(
+		&self,
+		batches: &[BenchmarkBatchSplitResults],
+		storage_info: &[StorageInfo],
+		component_ranges: &HashMap<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>,
+	) -> Result<()> {
 		// Jsonify the result and write it to a file or stdout if desired.
 		if !self.jsonify(&batches)? {
 			// Print the summary only if `jsonify` did not write to stdout.
@@ -412,10 +434,45 @@ impl PalletCmd {
 		Ok(())
 	}
 
+	fn output_from_results(&self, batches: &[BenchmarkBatchSplitResults]) -> Result<()> {
+		let mut component_ranges =
+			HashMap::<(Vec<u8>, Vec<u8>), HashMap<String, (u32, u32)>>::new();
+		for batch in batches {
+			let range = component_ranges
+				.entry((batch.pallet.clone(), batch.benchmark.clone()))
+				.or_default();
+			for result in &batch.time_results {
+				for (param, value) in &result.components {
+					let name = param.to_string();
+					let (ref mut min, ref mut max) = range.entry(name).or_insert((*value, *value));
+					if *value < *min {
+						*min = *value;
+					}
+					if *value > *max {
+						*max = *value;
+					}
+				}
+			}
+		}
+
+		let component_ranges: HashMap<_, _> = component_ranges
+			.into_iter()
+			.map(|(key, ranges)| {
+				let ranges = ranges
+					.into_iter()
+					.map(|(name, (min, max))| ComponentRange { name, min, max })
+					.collect();
+				(key, ranges)
+			})
+			.collect();
+
+		self.output(batches, &[], &component_ranges)
+	}
+
 	/// Jsonifies the passed batches and writes them to stdout or into a file.
 	/// Can be configured via `--json` and `--json-file`.
 	/// Returns whether it wrote to stdout.
-	fn jsonify(&self, batches: &Vec<BenchmarkBatchSplitResults>) -> Result<bool> {
+	fn jsonify(&self, batches: &[BenchmarkBatchSplitResults]) -> Result<bool> {
 		if self.json_output || self.json_file.is_some() {
 			let json = serde_json::to_string_pretty(&batches)
 				.map_err(|e| format!("Serializing into JSON: {:?}", e))?;
@@ -432,11 +489,7 @@ impl PalletCmd {
 	}
 
 	/// Prints the results as human-readable summary without raw timing data.
-	fn print_summary(
-		&self,
-		batches: &Vec<BenchmarkBatchSplitResults>,
-		storage_info: &Vec<StorageInfo>,
-	) {
+	fn print_summary(&self, batches: &[BenchmarkBatchSplitResults], storage_info: &[StorageInfo]) {
 		for batch in batches.iter() {
 			// Print benchmark metadata
 			println!(

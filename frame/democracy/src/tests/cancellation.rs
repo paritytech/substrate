@@ -24,7 +24,7 @@ fn cancel_referendum_should_work() {
 	new_test_ext().execute_with(|| {
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
@@ -43,36 +43,12 @@ fn cancel_referendum_should_work() {
 }
 
 #[test]
-fn cancel_queued_should_work() {
-	new_test_ext().execute_with(|| {
-		System::set_block_number(0);
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
-
-		// start of 2 => next referendum scheduled.
-		fast_forward_to(2);
-
-		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), 0, aye(1)));
-
-		fast_forward_to(4);
-
-		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_some());
-
-		assert_noop!(
-			Democracy::cancel_queued(RuntimeOrigin::root(), 1),
-			Error::<Test>::ProposalMissing
-		);
-		assert_ok!(Democracy::cancel_queued(RuntimeOrigin::root(), 0));
-		assert!(pallet_scheduler::Agenda::<Test>::get(6)[0].is_none());
-	});
-}
-
-#[test]
 fn emergency_cancel_should_work() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SuperMajorityApprove,
 			2,
 		);
@@ -86,7 +62,7 @@ fn emergency_cancel_should_work() {
 
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SuperMajorityApprove,
 			2,
 		);
