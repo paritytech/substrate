@@ -138,7 +138,7 @@ pub trait StakingInterface {
 	/// Get `StakingLedger` by controller account.
 	fn get_ledger(ctrl: &Self::AccountId) -> StakingLedger<Self>;
 
-	/// The ideal number of staking participants.
+	/// The ideal number of active validators.
 	fn validator_count() -> u32;
 
 	/// Whether or not there is an ongoing election.
