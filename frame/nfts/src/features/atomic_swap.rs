@@ -31,6 +31,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 		duration: <T as SystemConfig>::BlockNumber,
 	) -> DispatchResult {
+		ensure!(!Self::is_feature_flag_set(SystemFeature::NoSwaps), Error::<T, I>::MethodDisabled);
 		ensure!(duration <= T::MaxDeadlineDuration::get(), Error::<T, I>::WrongDuration);
 
 		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
@@ -111,6 +112,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		receive_item_id: T::ItemId,
 		witness_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 	) -> DispatchResult {
+		ensure!(!Self::is_feature_flag_set(SystemFeature::NoSwaps), Error::<T, I>::MethodDisabled);
+
 		let send_item = Item::<T, I>::get(&send_collection_id, &send_item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
 		let receive_item = Item::<T, I>::get(&receive_collection_id, &receive_item_id)

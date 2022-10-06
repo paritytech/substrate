@@ -1753,18 +1753,6 @@ fn pallet_level_feature_flags_should_work() {
 			Nfts::approve_transfer(RuntimeOrigin::signed(user_id), collection_id, item_id, 2, None),
 			Error::<Test>::MethodDisabled
 		);
-		assert_noop!(
-			Nfts::cancel_approval(RuntimeOrigin::signed(user_id), collection_id, item_id, 2),
-			Error::<Test>::MethodDisabled
-		);
-		assert_noop!(
-			Nfts::clear_all_transfer_approvals(
-				RuntimeOrigin::signed(user_id),
-				collection_id,
-				item_id,
-			),
-			Error::<Test>::MethodDisabled
-		);
 
 		// SystemFeature::NoAttributes
 		assert_noop!(
@@ -1775,10 +1763,6 @@ fn pallet_level_feature_flags_should_work() {
 				bvec![0],
 				bvec![0]
 			),
-			Error::<Test>::MethodDisabled
-		);
-		assert_noop!(
-			Nfts::clear_attribute(RuntimeOrigin::signed(user_id), collection_id, None, bvec![0]),
 			Error::<Test>::MethodDisabled
 		);
 	})

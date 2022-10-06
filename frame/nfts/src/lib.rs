@@ -1082,10 +1082,6 @@ pub mod pallet {
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoApprovals),
-				Error::<T, I>::MethodDisabled
-			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
@@ -1146,10 +1142,6 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
-			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoApprovals),
-				Error::<T, I>::MethodDisabled
-			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
@@ -1343,10 +1335,6 @@ pub mod pallet {
 			maybe_item: Option<T::ItemId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
-			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoAttributes),
-				Error::<T, I>::MethodDisabled
-			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
