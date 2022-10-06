@@ -1176,8 +1176,8 @@ construct_runtime!(
 		CereDDCModule: pallet_cere_ddc::{Pallet, Call, Storage, Event<T>},
 		ChainBridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Pallet, Call, Storage, Event<T>},
-		Erc20: pallet_erc20::{Pallet, Call, Event<T>},
-		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Event<T>},
+		Erc20: pallet_erc20::{Pallet, Call, Storage, Event<T>},
+		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Storage, Event<T>},
 	}
 );
 

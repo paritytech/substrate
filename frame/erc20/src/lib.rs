@@ -50,6 +50,10 @@ decl_error! {
     }
 }
 
+decl_storage! {
+	trait Store for Module<T: Config> as Test {}
+}
+
 decl_event!(
     pub enum Event<T> where
         <T as frame_system::Config>::Hash,
