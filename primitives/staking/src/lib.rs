@@ -135,7 +135,7 @@ pub trait StakingInterface {
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError>;
 
-	/// Get StakingLedger by controller account.
+	/// Get `StakingLedger` by controller account.
 	fn get_ledger(ctrl: &Self::AccountId) -> StakingLedger<Self>;
 
 	/// The ideal number of staking participants.
