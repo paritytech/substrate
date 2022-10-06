@@ -98,6 +98,8 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 	<<T as crate::Config>::MinerConfig as MinerConfig>::Solution,
 >;
 
+/// Always sorted vector of a score, submitted at the given block number, which can be found at the
+/// given index (`u32`) of the `SignedSubmissionsMap`.
 pub type SubmissionIndicesOf<T> = BoundedVec<
 	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
 	<T as Config>::SignedMaxSubmissions,

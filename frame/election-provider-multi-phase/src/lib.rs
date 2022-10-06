@@ -270,6 +270,7 @@ const LOG_TARGET: &str = "runtime::election-provider";
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
+pub mod migrations;
 use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
@@ -1296,9 +1297,14 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_untrusted_score)]
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
 
+	/// The current storage version.
+	///
+	/// v1: https://github.com/paritytech/substrate/pull/12237/
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
