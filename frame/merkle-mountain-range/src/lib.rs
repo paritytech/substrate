@@ -59,7 +59,7 @@
 use codec::Encode;
 use frame_support::weights::Weight;
 use sp_runtime::{
-	traits::{self, One, Saturating},
+	traits::{self, One, Saturating, CheckedSub},
 	SaturatedConversion,
 };
 
@@ -323,22 +323,26 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	where
 		T: frame_system::Config,
 	{
-		// leaf_indx = block_num - (current_block_num - leaves_count) - 1;
-		let leaves_count = Self::mmr_leaves().saturated_into::<u64>();
-		let current_block_num = <frame_system::Pallet<T>>::block_number().saturated_into::<u64>();
-		let diff = current_block_num.saturating_sub(leaves_count.into());
-
-		let block_num_as_u64 = block_num.saturated_into::<u64>();
-
-		if block_num_as_u64 <= diff {
-			return Err(
-				primitives::Error::BlockNumToLeafIndex.log_debug("The block_number is incorrect.")
+		// leaf_idx = (leaves_count - 1) - (current_block_num - block_num);
+		let best_block_num = <frame_system::Pallet<T>>::block_number();
+		let blocks_diff = best_block_num.checked_sub(&block_num).ok_or_else(|| {
+			primitives::Error::BlockNumToLeafIndex.log_debug(
+				"The provided block_number is greater than the best block number.",
 			)
-		}
+		})?;
+		let blocks_diff_as_leaf_idx = blocks_diff.try_into().map_err(|_| {
+			primitives::Error::BlockNumToLeafIndex
+				.log_debug("The `blocks_diff` couldn't be converted to `LeafIndex`.")
+		})?;
 
-		let leaf_index = (block_num_as_u64.saturating_sub(diff).saturating_sub(1u32.into()))
-			.saturated_into::<LeafIndex>();
-		Ok(leaf_index)
+		let leaf_idx = Self::mmr_leaves()
+			.checked_sub(1)
+			.and_then(|last_leaf_idx| last_leaf_idx.checked_sub(blocks_diff_as_leaf_idx))
+			.ok_or_else(|| {
+				primitives::Error::BlockNumToLeafIndex
+					.log_debug("There aren't enough leaves in the chain.")
+			})?;
+		Ok(leaf_idx)
 	}
 
 	/// Generate a MMR proof for the given `block_numbers`.
@@ -374,16 +378,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	> {
 		let leaves_count =
 			Self::block_num_to_leaf_index(best_known_block_number)?.saturating_add(1);
-		if leaves_count > Self::mmr_leaves() {
-			return Err(Error::InvalidBestKnownBlock)
-		}
 
 		// we need to translate the block_numbers into leaf indices.
 		let leaf_indices = block_numbers
 			.iter()
-			.map(|n| -> Result<LeafIndex, primitives::Error> {
-				let leaf_index = Self::block_num_to_leaf_index(*n)?;
-				Ok(leaf_index)
+			.map(|block_num| -> Result<LeafIndex, primitives::Error> {
+				Self::block_num_to_leaf_index(*block_num)
 			})
 			.collect::<Result<Vec<LeafIndex>, _>>()?;
 
