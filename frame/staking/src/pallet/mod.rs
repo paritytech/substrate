@@ -1271,10 +1271,9 @@ pub mod pallet {
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			// TODO:: test for new number is less than maxwinners
 			// max winners supported by election provider
 			let max_winners = <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get();
-			ensure!(new > max_winners, Error::<T>::TooManyValidators);
+			ensure!(new <= max_winners, Error::<T>::TooManyElectionWinners);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
