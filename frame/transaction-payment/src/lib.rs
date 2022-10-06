@@ -227,7 +227,9 @@ where
 
 		if positive {
 			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			previous.saturating_add(excess).max(M::get()).min(X::get())
+			let min_multiplier = M::get();
+			let max_multiplier = X::get();
+			previous.saturating_add(excess).max(min_multiplier).min(max_multiplier)
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
