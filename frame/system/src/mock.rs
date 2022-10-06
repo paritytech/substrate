@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 );
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const MAX_BLOCK_WEIGHT: Weight = Weight::from_ref_time(1024);
+const MAX_BLOCK_WEIGHT: Weight = Weight::from_ref_time(1024).set_proof_size(u64::MAX);
 
 parameter_types! {
 	pub Version: RuntimeVersion = RuntimeVersion {
@@ -67,6 +67,7 @@ parameter_types! {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
+			weights.base_extrinsic = Weight::from_ref_time(10);
 			weights.max_total = Some(MAX_BLOCK_WEIGHT);
 			weights.reserved = Some(
 				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
