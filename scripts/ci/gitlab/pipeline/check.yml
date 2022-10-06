@@ -44,7 +44,7 @@ test-rust-features:
     # TODO @ggwpez change the branch to $PIPELINE_SCRIPTS_TAG
     - git clone
         --depth=1
-        "--branch=https://github.com/paritytech/pipeline-scripts/pull/81"
+        "--branch=oty-check-rust-feature"
         https://github.com/paritytech/pipeline-scripts
     - bash ./pipeline-scripts/rust-features.sh .
 
