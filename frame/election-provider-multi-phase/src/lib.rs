@@ -716,31 +716,6 @@ pub mod pallet {
 			DataProvider = Self::DataProvider,
 		>;
 
-		// // approach 1
-		// #[pallet::hooks]
-		// impl Pallet {
-		// 	fn integrity_check() {
-		// 		// construct-runtime check -- can panic here
-		// 		assert!(T::MaxWinners::get() == T::GovernanceFallback::MaxWinners::get());
-		// 	}
-		// }
-
-		// fn governance_fallback() -> {
-		// 	let support: Supports: BoundedVec<_, T::GovernanceFallback::MaxWinners> =
-		// T::GovernanceFallback::elect(); 	let other_supports: Supports: BoundedVec<_,
-		// T::MaxWinners> = support 		.into_inner()
-		// 		.try_into()
-		// 		.expect("bounds are checked to be same in integrity_check; conversion work; qed");
-		// }
-
-		// // approach #2
-		// parmeter_type! {
-		// 	// Config::MaxWinners
-		// 	type Foo: u32 = 10;
-		// 	// GovernanceFallback::MaxWinners
-		// 	type Bar: u32 = 10;
-		// }
-
 		/// OCW election solution miner algorithm implementation.
 		type Solver: NposSolver<AccountId = Self::AccountId>;
 
@@ -1132,7 +1107,7 @@ pub mod pallet {
 			let supports: BoundedVec<_, T::MaxWinners> = supports
 				.into_inner()
 				.try_into()
-				.expect("integrity test guarantees both bounds are always equal; qed");
+				.expect("integrity test guarantees both bounds are equal; qed");
 
 			let solution = ReadySolution {
 				supports,
