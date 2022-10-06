@@ -1345,6 +1345,7 @@ mod tests {
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
+			_: CallContext,
 		) -> (CallResult<Self::Error>, bool) {
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {

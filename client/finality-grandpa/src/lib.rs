@@ -75,7 +75,7 @@ use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus::SelectChain;
-use sp_core::crypto::ByteArray;
+use sp_core::{crypto::ByteArray, traits::CallContext};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -478,6 +478,7 @@ where
 				&[],
 				ExecutionStrategy::NativeElseWasm,
 				None,
+				CallContext::Offchain,
 			)
 			.and_then(|call_result| {
 				Decode::decode(&mut &call_result[..]).map_err(|err| {

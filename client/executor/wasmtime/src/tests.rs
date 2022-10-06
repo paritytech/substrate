@@ -17,7 +17,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use codec::{Decode as _, Encode as _};
-use sc_executor_common::{error::Error, runtime_blob::RuntimeBlob, wasm_runtime::WasmModule};
+use sc_executor_common::{
+	error::Error,
+	runtime_blob::RuntimeBlob,
+	wasm_runtime::{HeapPages, WasmModule},
+};
 use sc_runtime_test::wasm_binary_unwrap;
 
 use crate::InstantiationStrategy;
@@ -77,8 +81,7 @@ struct RuntimeBuilder {
 	instantiation_strategy: InstantiationStrategy,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
-	extra_heap_pages: u64,
-	max_memory_size: Option<usize>,
+	heap_pages: HeapPages,
 	precompile_runtime: bool,
 	tmpdir: Option<tempfile::TempDir>,
 }
@@ -90,8 +93,7 @@ impl RuntimeBuilder {
 			instantiation_strategy,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			extra_heap_pages: 1024,
-			max_memory_size: None,
+			heap_pages: HeapPages::ExtraMax(1024),
 			precompile_runtime: false,
 			tmpdir: None,
 		}
@@ -117,8 +119,8 @@ impl RuntimeBuilder {
 		self
 	}
 
-	fn max_memory_size(mut self, max_memory_size: Option<usize>) -> Self {
-		self.max_memory_size = max_memory_size;
+	fn heap_pages(mut self, heap_pages: HeapPages) -> Self {
+		self.heap_pages = heap_pages;
 		self
 	}
 
@@ -152,8 +154,7 @@ impl RuntimeBuilder {
 				},
 				canonicalize_nans: self.canonicalize_nans,
 				parallel_compilation: true,
-				extra_heap_pages: self.extra_heap_pages,
-				max_memory_size: self.max_memory_size,
+				heap_pages: self.heap_pages,
 			},
 		};
 
@@ -345,14 +346,14 @@ fn test_max_memory_pages(
 	precompile_runtime: bool,
 ) {
 	fn try_instantiate(
-		max_memory_size: Option<usize>,
+		heap_pages: HeapPages,
 		wat: String,
 		instantiation_strategy: InstantiationStrategy,
 		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
 		let mut builder = RuntimeBuilder::new(instantiation_strategy)
 			.use_wat(wat)
-			.max_memory_size(max_memory_size)
+			.heap_pages(heap_pages)
 			.precompile_runtime(precompile_runtime);
 
 		let runtime = builder.build();
@@ -375,11 +376,9 @@ fn test_max_memory_pages(
 		}
 	}
 
-	const WASM_PAGE_SIZE: usize = 65536;
-
 	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
 	try_instantiate(
-		None,
+		HeapPages::ExtraMax(1024),
 		format!(
 			r#"
 			(module
@@ -412,7 +411,7 @@ fn test_max_memory_pages(
 	//
 	// max_memory_size = (1 (initial) + 1024 (heap_pages)) * WASM_PAGE_SIZE
 	try_instantiate(
-		Some((1 + 1024) * WASM_PAGE_SIZE),
+		HeapPages::Max(1024 + 1),
 		format!(
 			r#"
 			(module
@@ -434,7 +433,7 @@ fn test_max_memory_pages(
 
 	// max is specified explicitly to 2048 pages.
 	try_instantiate(
-		Some((1 + 1024) * WASM_PAGE_SIZE),
+		HeapPages::Max(1 + 1024),
 		format!(
 			r#"
 			(module
@@ -456,7 +455,7 @@ fn test_max_memory_pages(
 
 	// memory grow should work as long as it doesn't exceed 1025 pages in total.
 	try_instantiate(
-		Some((0 + 1024 + 25) * WASM_PAGE_SIZE),
+		HeapPages::Max(1024 + 25),
 		format!(
 			r#"
 			(module
@@ -490,7 +489,7 @@ fn test_max_memory_pages(
 
 	// We start with 1025 pages and try to grow at least one.
 	try_instantiate(
-		Some((1 + 1024) * WASM_PAGE_SIZE),
+		HeapPages::Max(1 + 1024),
 		format!(
 			r#"
 			(module
@@ -514,8 +513,8 @@ fn test_max_memory_pages(
 				)
 			)
 			"#,
-			// Initial=1, meaning after heap pages mount the total will be already 1025.
-			memory(1, None, import_memory)
+			// Initial=1025, meaning after heap pages mount the total will be already 1025.
+			memory(1025, None, import_memory)
 		),
 		instantiation_strategy,
 		precompile_runtime,
@@ -538,8 +537,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
-				extra_heap_pages: 2048,
-				max_memory_size: None,
+				heap_pages: HeapPages::ExtraMax(2048),
 			},
 		},
 	)
