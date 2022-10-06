@@ -462,7 +462,7 @@ sp_api::decl_runtime_apis! {
 		/// Generate MMR proof for a series of blocks with the specified block numbers.
 		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
-		/// Generate MMR proof for a series of `block_numbers`, using MMR at given `best_known_block_number` size.
+		/// Generate MMR proof for a series of `block_numbers`, given the `best_known_block_number`.
 		fn generate_historical_batch_proof(
 			block_numbers: Vec<BlockNumber>,
 			best_known_block_number: BlockNumber

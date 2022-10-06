@@ -359,7 +359,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		)
 	}
 
-	/// Generate a MMR proof for the given `block_numbers` for the MMR of `leaves_count` size.
+	/// Generate a MMR proof for the given `block_numbers` given the `best_known_block_number`.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
