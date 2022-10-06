@@ -82,7 +82,7 @@ pub struct NetworkParams {
 	pub allow_private_ipv4: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[clap(long, value_name = "COUNT", default_value = "25")]
+	#[clap(long, value_name = "COUNT", default_value = "15")]
 	pub out_peers: u32,
 
 	/// Maximum number of inbound full nodes peers.
