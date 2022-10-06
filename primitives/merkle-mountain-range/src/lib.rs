@@ -146,7 +146,7 @@ impl FullLeaf for OpaqueLeaf {
 ///
 /// It is different from [`OpaqueLeaf`], because it does implement `Codec`
 /// and the encoding has to match raw `Vec<u8>` encoding.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq)]
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, PartialEq, Eq, TypeInfo)]
 pub struct EncodableOpaqueLeaf(pub Vec<u8>);
 
 impl EncodableOpaqueLeaf {

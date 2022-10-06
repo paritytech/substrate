@@ -20,8 +20,8 @@
 use codec::Encode;
 use frame_support::traits::Get;
 use mmr_lib::helper;
-use sp_core::offchain::StorageKind;
-use sp_io::{offchain, offchain_index};
+use sp_core::{bounded::BoundedVec, offchain::StorageKind};
+use sp_io::offchain;
 use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
@@ -30,7 +30,7 @@ use sp_std::prelude::*;
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
 	primitives::{self, NodeIndex},
-	Config, Nodes, NumberOfLeaves, Pallet,
+	Config, LatestLeaf, NewNodes, NumberOfLeaves, Pallet, Peaks,
 };
 
 /// A marker type for runtime-specific storage implementation.
@@ -274,7 +274,7 @@ where
 	L: primitives::FullLeaf,
 {
 	fn get_elem(&self, pos: NodeIndex) -> mmr_lib::Result<Option<NodeOf<T, I, L>>> {
-		Ok(<Nodes<T, I>>::get(pos).map(Node::Hash))
+		Ok(<Peaks<T, I>>::get(pos).map(Node::Hash))
 	}
 
 	fn append(&mut self, pos: NodeIndex, elems: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
@@ -305,35 +305,42 @@ where
 		let mut leaf_index = leaves;
 		let mut node_index = size;
 
-		// Use parent hash of block adding new nodes (this block) as extra identifier
-		// in offchain DB to avoid DB collisions and overwrites in case of forks.
-		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
+		// // Use parent hash of block adding new nodes (this block) as extra identifier
+		// // in offchain DB to avoid DB collisions and overwrites in case of forks.
+		// let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		for elem in elems {
-			// For now we store this leaf offchain keyed by `(parent_hash, node_index)`
-			// to make it fork-resistant.
-			// Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
-			// later when we are not worried about forks anymore (highly unlikely to have a fork
-			// in the chain that deep).
-			// "Canonicalization" in this case means moving this leaf under a new key based
-			// only on the leaf's `node_index`.
-			let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
-			frame_support::log::debug!(
-				target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
-				node_index, parent_hash, key
-			);
-			// Indexing API is used to store the full node content (both leaf and inner).
-			elem.using_encoded(|elem| offchain_index::set(&key, elem));
+			// // For now we store this leaf offchain keyed by `(parent_hash, node_index)`
+			// // to make it fork-resistant.
+			// // Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
+			// // later when we are not worried about forks anymore (highly unlikely to have a fork
+			// // in the chain that deep).
+			// // "Canonicalization" in this case means moving this leaf under a new key based
+			// // only on the leaf's `node_index`.
+			// let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
+			// frame_support::log::debug!(
+			// 	target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key
+			// {:?}", 	node_index, parent_hash, key
+			// );
+			// // Indexing API is used to store the full node content (both leaf and inner).
+			// elem.using_encoded(|elem| offchain_index::set(&key, elem));
 
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {
-				<Nodes<T, I>>::insert(node_index, elem.hash());
+				<Peaks<T, I>>::insert(node_index, elem.hash());
 			}
 
-			// Increase the indices.
-			if let Node::Data(..) = elem {
-				leaf_index += 1;
-			}
+			// Increase the indices. Store all newly added nodes and leaves to temporary
+			// storage, from where they will be copied to offchain db by offchain worker.
 			node_index += 1;
+			match elem {
+				Node::Data(..) => {
+					leaf_index += 1;
+					// TODO: 'try' bounded and throw error instead of truncating.
+					let bounded_encoded_leaf = BoundedVec::<_, _>::truncate_from(elem.encode());
+					LatestLeaf::<T, I>::put(bounded_encoded_leaf);
+				},
+				Node::Hash(..) => <NewNodes<T, I>>::insert(node_index, elem.hash()),
+			}
 		}
 
 		// Update current number of leaves.
@@ -341,7 +348,7 @@ where
 
 		// And remove all remaining items from `peaks_before` collection.
 		for pos in peaks_to_prune {
-			<Nodes<T, I>>::remove(pos);
+			<Peaks<T, I>>::remove(pos);
 		}
 
 		Ok(())

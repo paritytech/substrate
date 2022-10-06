@@ -99,6 +99,15 @@ impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
 	}
 }
 
+/// A MMR specific to the pallet.
+type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
+
+/// Leaf data.
+type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
+
+/// Hashing used for the pallet.
+pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
+
 pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
 }
@@ -173,6 +182,9 @@ pub mod pallet {
 		/// writes are identical).
 		type LeafData: primitives::LeafDataProvider;
 
+		/// The maximum leaf size.
+		type MaxLeafSize: Get<u32>;
+
 		/// A hook to act on the new MMR root.
 		///
 		/// For some applications it might be beneficial to make the MMR root available externally
@@ -196,13 +208,29 @@ pub mod pallet {
 	#[pallet::getter(fn mmr_leaves)]
 	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, LeafIndex, ValueQuery>;
 
-	/// Hashes of the nodes in the MMR.
+	/// Leaf data added by current block (leaf index: `NumberOfLeaves-1`).
+	///
+	/// This is single value storage overwritten by each block. It is used as temporary
+	/// leaf storage until after block is built and offchain worker can move/copy this
+	/// leaf in offchain database under `node_offchain_key()`.
+	#[pallet::storage]
+	#[pallet::getter(fn latest_leaf)]
+	pub type LatestLeaf<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BoundedVec<u8, T::MaxLeafSize>, OptionQuery>;
+
+	/// TODO
+	#[pallet::storage]
+	#[pallet::getter(fn new_nodes)]
+	pub type NewNodes<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
+
+	/// Hashes of the peaks in the MMR.
 	///
 	/// Note this collection only contains MMR peaks, the inner nodes (and leaves)
 	/// are pruned and only stored in the Offchain DB.
 	#[pallet::storage]
 	#[pallet::getter(fn mmr_peak)]
-	pub type Nodes<T: Config<I>, I: 'static = ()> =
+	pub type Peaks<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
 
 	#[pallet::hooks]
@@ -251,15 +279,6 @@ pub mod pallet {
 		}
 	}
 }
-
-/// A MMR specific to the pallet.
-type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
-
-/// Leaf data.
-type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
-
-/// Hashing used for the pallet.
-pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
 /// Stateless MMR proof verification for batch of leaves.
 ///
