@@ -145,16 +145,7 @@ pub trait StakingInterface {
 	fn ongoing() -> bool;
 
 	/// Force a current staker to become completely unstaked, immediately.
-	///
-	/// The dispatch origin must be Root.
-	/// TODO: Do we need `num_slashing_spans` in the original method or should
-	/// we do Staking::<T>::slashing_spans(&stash).iter().count() within it?
-	/// Or should we introduce another method force_unstake_with_spans that will do it?
-	fn force_unstake(
-		origin: OriginFor<Self>,
-		stash: T::AccountId,
-		num_slashing_spans: u32,
-	) -> DispatchResult;
+	fn force_unstake(stash: T::AccountId) -> DispatchResult;
 
 	/// Checks whether an account `staker` has been exposed in an era.
 	/// TODO: shall we have this helper here or just expose ErasStakers
