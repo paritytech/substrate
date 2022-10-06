@@ -355,7 +355,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	> {
 		Self::generate_historical_batch_proof(
 			block_numbers,
-			Self::leaf_index_to_parent_block_num(Self::mmr_leaves(), Self::mmr_leaves()),
+			<frame_system::Pallet<T>>::block_number(),
 		)
 	}
 
