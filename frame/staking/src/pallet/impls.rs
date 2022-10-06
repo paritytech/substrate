@@ -561,7 +561,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// AKON: return result here?
-		elected_stashes.try_into().unwrap()
+		elected_stashes.try_into().expect("reasons why; qed;")
 	}
 
 	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
@@ -597,7 +597,7 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			// AKON: return result here?
+			// AKON: return result here? try_collect
 			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
 			.try_into()
 			.unwrap()

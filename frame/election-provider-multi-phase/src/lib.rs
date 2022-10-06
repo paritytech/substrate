@@ -716,6 +716,33 @@ pub mod pallet {
 			DataProvider = Self::DataProvider,
 		>;
 
+		// // approach 1
+		// #[pallet::hooks]
+		// impl Pallet {
+		// 	fn integrity_check() {
+		// 		// construct-runtime check -- can panic here
+		// 		assert!(T::MaxWinners::get() == T::GovernanceFallback::MaxWinners::get());
+		// 	}
+		// }
+
+		// fn governance_fallback() -> {
+		// 	let support: Supports: BoundedVec<_, T::GovernanceFallback::MaxWinners> = T::GovernanceFallback::elect();
+		// 	let other_supports: Supports: BoundedVec<_, T::MaxWinners> = support
+		// 		.into_inner()
+		// 		.try_into()
+		// 		.expect("bounds are checked to be same in integrity_check; conversion work; qed");
+		// }
+
+		
+
+		// // approach #2
+		// parmeter_type! {
+		// 	// Config::MaxWinners
+		// 	type Foo: u32 = 10;
+		// 	// GovernanceFallback::MaxWinners
+		// 	type Bar: u32 = 10;
+		// }
+
 		/// OCW election solution miner algorithm implementation.
 		type Solver: NposSolver<AccountId = Self::AccountId>;
 
@@ -887,6 +914,10 @@ pub mod pallet {
 			// `SignedMaxSubmissions` is a red flag that the developer does not understand how to
 			// configure this pallet.
 			assert!(T::SignedMaxSubmissions::get() >= T::SignedMaxRefunds::get());
+			// We expect the same bounds on election results provided by the
+			// `ElectionProvider` implementations of the pallet and
+			// `GovernanceFallback`.    
+			assert!(T::MaxWinners::get() == <<T as pallet::Config>::GovernanceFallback as BoundedElectionProvider>::MaxWinners::get());
 		}
 	}
 
@@ -1098,13 +1129,6 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			// AKON: verify sort and truncate in a test
-			
-			// sort by total balance of the `supports`
-			supports.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap());
-			// truncate GovernanceFallback::MaxWinners by pallet::Config::MaxWinners
-			supports.truncate(T::MaxWinners::get().try_into().unwrap());
-			
 			// AKON: This is an ugly hack to convert a BoundedVec<A,B> to
 			// BoundedVec<A,C>. May be impl try_from to do this conversion?
 			let supports: BoundedVec<_, T::MaxWinners> = supports.into_inner().try_into().unwrap();
@@ -1267,7 +1291,6 @@ pub mod pallet {
 	///
 	/// Only exists when [`Snapshot`] is present.
 	// AKON: call desired winners?
-	// AKON: ensure desired_targets < MaxWinners when changing this value
 	#[pallet::storage]
 	#[pallet::getter(fn desired_targets)]
 	pub type DesiredTargets<T> = StorageValue<_, u32>;

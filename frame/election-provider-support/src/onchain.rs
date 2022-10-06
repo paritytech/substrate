@@ -69,6 +69,12 @@ pub struct BoundedExecution<T: BoundedConfig>(PhantomData<T>);
 /// This can be very expensive to run frequently on-chain. Use with care.
 pub struct UnboundedExecution<T: Config>(PhantomData<T>);
 
+pub enum TooManyWinners {
+	Error,
+	Truncate,
+	SortAndTruncate,
+}
+
 /// Configuration trait for an onchain election execution.
 pub trait Config {
 	/// Needed for weight registration.
@@ -86,8 +92,11 @@ pub trait Config {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 
-	/// Upper bound on maximum winners from electable targets
+	/// Upper bound on maximum winners from electable targets, and how to deal with it if we have
+	/// Too many.
 	type MaxWinners: Get<u32>;
+
+	// type TooManyWinners: Get<TooManyWinners>;
 }
 
 pub trait BoundedConfig: Config {
@@ -139,9 +148,18 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
-	let supports = to_supports(&staked)
-		.try_into()
-		.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?;
+	let supports =
+	//  match T::TooManyWinners::get() {
+		// TooManyWinners::Error => {
+			 to_supports(&staked)
+				.try_into()
+				.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?;
+		// }, 
+	// 	_ => {
+	// 		todo!();
+	// 	}
+	// };
+
 	Ok(supports)
 }
 

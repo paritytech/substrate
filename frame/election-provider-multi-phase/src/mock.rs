@@ -297,6 +297,7 @@ parameter_types! {
 	pub static MockWeightInfo: MockedWeightInfo = MockedWeightInfo::Real;
 	pub static MaxElectingVoters: VoterIndex = u32::max_value();
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
+	#[derive(Eq, PartialEq, Debug)]
 	pub static MaxWinners: u32 = 100;
 
 	pub static EpochLength: u64 = 30;
@@ -348,21 +349,6 @@ impl InstantElectionProvider for MockFallback {
 		} else {
 			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
 		}
-	}
-}
-
-impl PartialEq for ReadySolution<u64, MaxWinners> {
-	fn eq(&self, other: &ReadySolution<u64, MaxWinners>) -> bool {
-		self.score == other.score &&
-			self.compute == other.compute &&
-			self.supports.clone().into_inner() == other.supports.clone().into_inner()
-	}
-}
-
-// AKON: Is there another way?
-impl std::fmt::Debug for MaxWinners {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_tuple("MaxWinners").field(&MaxWinners::get()).finish()
 	}
 }
 

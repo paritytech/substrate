@@ -743,7 +743,7 @@ pub mod pallet {
 		/// There are too many nominators in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyNominators,
-		/// There are too many validators in the system. Governance needs to adjust the staking
+		/// There are too many validator candidates in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
@@ -1262,6 +1262,7 @@ pub mod pallet {
 		/// Weight: O(1)
 		/// Write: Validator Count
 		/// # </weight>
+		// AKON: Probably change name?
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn set_validator_count(
 			origin: OriginFor<T>,
@@ -1271,7 +1272,7 @@ pub mod pallet {
 			// AKON:: test new number is less than maxwinners
 			// max winners supported by election provider
 			let max_winners = <T::ElectionProvider as frame_election_provider_support::BoundedElectionProvider>::MaxWinners::get();
-			ensure!(new > max_winners, Error::<T>::TooManyElectionWinners);
+			ensure!(new > max_winners, Error::<T>::TooManyValidators);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
