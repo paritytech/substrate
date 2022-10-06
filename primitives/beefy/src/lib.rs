@@ -234,7 +234,7 @@ sp_api::decl_runtime_apis! {
 mod tests {
 	use super::*;
 	use sp_application_crypto::ecdsa::{self, Public};
-	use sp_core::{crypto::Wraps, keccak_256, Pair};
+	use sp_core::{blake2_256, crypto::Wraps, keccak_256, Pair};
 	use sp_runtime::traits::{BlakeTwo256, Identity, Keccak256};
 
 	#[test]
@@ -263,9 +263,17 @@ mod tests {
 
 		// Verification works if same hashing function is used when signing and verifying.
 		assert!(BeefyVerify::<Keccak256, _, Identity>::verify(&signature, msg, &pair.public()));
-		assert!(BeefyVerify::<BlakeTwo256, _, Identity>::verify(&signature_blake2_256, msg, &pair.public()));
+		assert!(BeefyVerify::<BlakeTwo256, _, Identity>::verify(
+			&signature_blake2_256,
+			msg,
+			&pair.public()
+		));
 		// Verification fails if distinct hashing functions are used when signing and verifying.
-		assert!(!BeefyVerify::<Keccak256, _, Identity>::verify(&signature_blake2_256, msg, &pair.public()));
+		assert!(!BeefyVerify::<Keccak256, _, Identity>::verify(
+			&signature_blake2_256,
+			msg,
+			&pair.public()
+		));
 		assert!(!BeefyVerify::<BlakeTwo256, _, Identity>::verify(&signature, msg, &pair.public()));
 
 		// Other public key doesn't work
