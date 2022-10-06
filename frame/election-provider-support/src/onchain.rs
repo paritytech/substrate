@@ -69,7 +69,8 @@ pub struct BoundedExecution<T: BoundedConfig>(PhantomData<T>);
 /// This can be very expensive to run frequently on-chain. Use with care.
 pub struct UnboundedExecution<T: Config>(PhantomData<T>);
 
-pub enum TooManyWinners {
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum TooManyWinnersResolution {
 	Error,
 	Truncate,
 	SortAndTruncate,
@@ -96,7 +97,8 @@ pub trait Config {
 	/// Too many.
 	type MaxWinners: Get<u32>;
 
-	// type TooManyWinners: Get<TooManyWinners>;
+	/// Action to take if there are too many winners
+	type TooManyWinnersResolution: Get<TooManyWinnersResolution>;
 }
 
 pub trait BoundedConfig: Config {
@@ -148,18 +150,25 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
-	// TODO: Handle TooManyWinners error
-	let supports =
-	//  match T::TooManyWinners::get() {
-		// TooManyWinners::Error => {
-			 to_supports(&staked)
+	// TODO: Add test for TooManyWinnersResolution variants
+	let mut supports = to_supports(&staked);
+	let supports: OnChainBoundedSupportsOf<T> =
+	 match T::TooManyWinnersResolution::get() {
+		TooManyWinnersResolution::Error => {
+			 supports
 				.try_into()
-				.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?;
-	// },
-	// 	_ => {
-	// 		todo!();
-	// 	}
-	// };
+				.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?
+	},
+		TooManyWinnersResolution::Truncate => {
+			supports.truncate(T::MaxWinners::get() as usize);
+			supports.try_into().expect("we truncated to the bound so this always works; qed")	
+	},
+		TooManyWinnersResolution::SortAndTruncate => {
+			supports.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap());
+			supports.truncate(T::MaxWinners::get() as usize);
+			supports.try_into().expect("we truncated to the bound so this always works; qed")
+		}
+	};
 
 	Ok(supports)
 }
@@ -285,12 +294,17 @@ mod tests {
 	struct PhragmenParams;
 	struct PhragMMSParams;
 
+	frame_support::parameter_types! {
+		pub static Tmw: TooManyWinnersResolution = TooManyWinnersResolution::Error;
+	}
+
 	impl Config for PhragmenParams {
 		type System = Runtime;
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = ConstU32<100>;
+		type TooManyWinnersResolution = Tmw;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -298,12 +312,14 @@ mod tests {
 		type TargetsBound = ConstU32<400>;
 	}
 
+	// TODO: test TooManyErrors
 	impl Config for PhragMMSParams {
 		type System = Runtime;
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = ConstU32<100>;
+		type TooManyWinnersResolution = Tmw;
 	}
 
 	impl BoundedConfig for PhragMMSParams {
