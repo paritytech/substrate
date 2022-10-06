@@ -22,11 +22,10 @@
 use super::*;
 
 use futures::executor::block_on;
-use std::{cell::RefCell, sync::Arc};
+use std::sync::Arc;
 
-use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
-use sc_client_api::TransactionFor;
-use sc_consensus::{BlockImport, BoxBlockImport, BoxJustificationImport};
+use sc_block_builder::BlockBuilderProvider;
+use sc_consensus::{BlockImport, BoxJustificationImport};
 use sc_keystore::LocalKeystore;
 use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
@@ -188,13 +187,8 @@ impl TestEnvironment {
 
 	// Propose and import a new Sassafras block on top of the given parent.
 	// This skips verification.
-	fn propose_and_import_block(
-		//<Transaction: Send + 'static>(
-		&mut self,
-		parent_id: BlockId,
-		slot: Option<Slot>,
-	) -> Hash {
-		let mut parent = self.client.header(&parent_id).unwrap().unwrap();
+	fn propose_and_import_block(&mut self, parent_id: BlockId, slot: Option<Slot>) -> Hash {
+		let parent = self.client.header(&parent_id).unwrap().unwrap();
 
 		let proposer = block_on(self.init(&parent)).unwrap();
 
@@ -269,12 +263,7 @@ impl TestEnvironment {
 	// Propose and import n valid Sassafras blocks that are built on top of the given parent.
 	// The proposer takes care of producing epoch change digests according to the epoch
 	// duration (which is set to 6 slots in the test runtime).
-	fn propose_and_import_blocks(
-		//)<Transaction: Send + 'static>(
-		&mut self,
-		mut parent_id: BlockId,
-		n: usize,
-	) -> Vec<Hash> {
+	fn propose_and_import_blocks(&mut self, mut parent_id: BlockId, n: usize) -> Vec<Hash> {
 		let mut hashes = Vec::with_capacity(n);
 
 		for _ in 0..n {
@@ -382,7 +371,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
 	// Revert canon chain to block #10 (best(21) - 11)
-	// crate::revert(client.clone(), backend, 11).unwrap();
+	crate::aux_schema::revert(backend, 11).unwrap();
 
 	// Load and check epoch changes.
 
