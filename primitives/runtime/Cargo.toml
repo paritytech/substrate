@@ -19,7 +19,7 @@ either = { version = "1.5", default-features = false }
 hash256-std-hasher = { version = "0.15.2", default-features = false }
 impl-trait-for-tuples = "0.2.2"
 log = { version = "0.4.17", default-features = false }
-parity-util-mem = { version = "0.11.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.12.0", default-features = false, features = ["primitive-types"] }
 paste = "1.0"
 rand = { version = "0.7.2", optional = true }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
@@ -29,10 +29,11 @@ sp-arithmetic = { version = "5.0.0", default-features = false, path = "../arithm
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-io = { version = "6.0.0", default-features = false, path = "../io" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../weights" }
 
 [dev-dependencies]
 rand = "0.7.2"
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 zstd = { version = "0.11.2", default-features = false }
 sp-api = { version = "4.0.0-dev", path = "../api" }
 sp-state-machine = { version = "0.12.0", path = "../state-machine" }
@@ -40,7 +41,6 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
-bench = []
 runtime-benchmarks = []
 default = ["std"]
 std = [
@@ -57,4 +57,5 @@ std = [
 	"sp-core/std",
 	"sp-io/std",
 	"sp-std/std",
+	"sp-weights/std",
 ]
