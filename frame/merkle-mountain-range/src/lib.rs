@@ -235,9 +235,26 @@ pub mod pallet {
 		}
 
 		fn offchain_worker(n: T::BlockNumber) {
+			use mmr::storage::{OffchainStorage, Storage};
 			// MMR pallet uses offchain storage to hold full MMR and leaves.
 			// The leaves are saved under fork-unique keys `(block_hash, pos)`.
-      
+			// MMR Runtime depends on `frame_system::block_hash(block_num)` mappings to find
+			// parent hashes for particular nodes or leaves.
+			// This MMR offchain worker function moves a rolling window of the same size
+			// as `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
+			// about to exit the window are "canonicalized" so that their offchain key no longer
+			// depends on `parent_hash` therefore on access to `frame_system::block_hash`.
+			//
+			// This approach works to eliminate fork-induced leaf collisions in offchain db,
+			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
+			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc):
+			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
+			//   solely on block number. The only way to have collisions is if two competing forks
+			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
+			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
+			// other forks are pruned from offchain db.
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
+
 			// Copy leaf to offchain db after the block is built
 			if let Some((node_index, elem)) = NewLeaf::<T, _>::get() {
 				let block_hash = <frame_system::Pallet<T>>::block_hash(n);
