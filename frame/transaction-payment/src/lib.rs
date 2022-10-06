@@ -191,6 +191,7 @@ where
 		// we recover here in case of errors, because any value below this would be stale and can
 		// never change.
 		let min_multiplier = M::get();
+		let max_multiplier = X::get();
 		let previous = previous.max(min_multiplier);
 
 		let weights = T::BlockWeights::get();
@@ -227,8 +228,6 @@ where
 
 		if positive {
 			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			let min_multiplier = M::get();
-			let max_multiplier = X::get();
 			previous.saturating_add(excess).max(min_multiplier).min(max_multiplier)
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
