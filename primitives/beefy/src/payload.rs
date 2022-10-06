@@ -44,7 +44,7 @@ pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
 
 impl Payload {
 	/// Construct a new payload given an initial vallue
-	pub fn new(id: BeefyPayloadId, value: Vec<u8>) -> Self {
+	pub fn from_single_entry(id: BeefyPayloadId, value: Vec<u8>) -> Self {
 		Self(vec![(id, value)])
 	}
 
@@ -93,7 +93,7 @@ mod tests {
 		let id3: BeefyPayloadId = *b"cs";
 		let msg3: String = "3. Cello Cord!".to_string();
 
-		let payload = Payload::new(id1, msg1.encode())
+		let payload = Payload::from_single_entry(id1, msg1.encode())
 			.push_raw(id2, msg2.encode())
 			.push_raw(id3, msg3.encode());
 

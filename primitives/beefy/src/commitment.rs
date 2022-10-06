@@ -285,7 +285,8 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
-		let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -306,7 +307,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
-		let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -340,7 +342,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
-		let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -365,7 +368,8 @@ mod tests {
 			block_number: u128,
 			validator_set_id: crate::ValidatorSetId,
 		) -> TestCommitment {
-			let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+			let payload =
+				Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 			Commitment { payload, block_number, validator_set_id }
 		}
 
@@ -385,7 +389,8 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
-		let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -411,7 +416,8 @@ mod tests {
 	#[test]
 	fn large_signed_commitment_encode_decode() {
 		// given
-		let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 

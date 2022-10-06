@@ -185,8 +185,9 @@ mod mmr_root_provider {
 		R::Api: MmrApi<B, MmrRootHash>,
 	{
 		fn payload(&self, header: &B::Header) -> Option<Payload> {
-			self.mmr_root_from_digest_or_runtime(header)
-				.map(|mmr_root| Payload::new(known_payloads::MMR_ROOT_ID, mmr_root.encode()))
+			self.mmr_root_from_digest_or_runtime(header).map(|mmr_root| {
+				Payload::from_single_entry(known_payloads::MMR_ROOT_ID, mmr_root.encode())
+			})
 		}
 	}
 }

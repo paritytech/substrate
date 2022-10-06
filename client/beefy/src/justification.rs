@@ -94,7 +94,7 @@ pub(crate) mod tests {
 		keys: &[Keyring],
 	) -> BeefyVersionedFinalityProof<Block> {
 		let commitment = Commitment {
-			payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
+			payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 			block_number: block_num,
 			validator_set_id: validator_set.id(),
 		};

@@ -1327,7 +1327,7 @@ pub(crate) mod tests {
 
 		let create_finality_proof = |block_num: NumberFor<Block>| {
 			let commitment = Commitment {
-				payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: block_num,
 				validator_set_id: validator_set.id(),
 			};
@@ -1446,7 +1446,7 @@ pub(crate) mod tests {
 			block_number: NumberFor<Block>,
 		) -> VoteMessage<NumberFor<Block>, AuthorityId, Signature> {
 			let commitment = Commitment {
-				payload: Payload::new(*b"BF", vec![]),
+				payload: Payload::from_single_entry(*b"BF", vec![]),
 				block_number,
 				validator_set_id: 0,
 			};
@@ -1538,7 +1538,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for session boundary block 10
 			let commitment = Commitment {
-				payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 10,
 				validator_set_id: validator_set.id(),
 			};
@@ -1572,7 +1572,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for block 12
 			let commitment = Commitment {
-				payload: Payload::new(known_payloads::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 12,
 				validator_set_id: validator_set.id(),
 			};

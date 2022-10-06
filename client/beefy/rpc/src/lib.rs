@@ -266,7 +266,8 @@ mod tests {
 	}
 
 	fn create_finality_proof() -> BeefyVersionedFinalityProof<Block> {
-		let payload = Payload::new(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		BeefyVersionedFinalityProof::<Block>::V1(SignedCommitment {
 			commitment: beefy_primitives::Commitment {
 				payload,
