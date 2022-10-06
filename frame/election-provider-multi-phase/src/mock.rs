@@ -26,7 +26,7 @@ pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
 use frame_support::{
 	bounded_vec, parameter_types,
 	traits::{ConstU32, Hooks},
-	weights::Weight,
+	weights::{constants, Weight},
 	BoundedVec,
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
@@ -96,6 +96,17 @@ pub fn roll_to(n: BlockNumber) {
 	for i in now + 1..=n {
 		System::set_block_number(i);
 		MultiPhase::on_initialize(i);
+	}
+}
+
+pub fn roll_to_unsigned() {
+	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
+		roll_to(System::block_number() + 1);
+	}
+}
+pub fn roll_to_signed() {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
+		roll_to(System::block_number() + 1);
 	}
 }
 
@@ -199,7 +210,7 @@ pub fn witness() -> SolutionOrSnapshotSize {
 impl frame_system::Config for Runtime {
 	type SS58Prefix = ();
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = BlockNumber;
 	type RuntimeCall = RuntimeCall;
@@ -227,7 +238,10 @@ const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-		::with_sensible_defaults(2u64 * frame_support::weights::constants::WEIGHT_PER_SECOND, NORMAL_DISPATCH_RATIO);
+		::with_sensible_defaults(
+			Weight::from_components(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			NORMAL_DISPATCH_RATIO,
+		);
 }
 
 impl pallet_balances::Config for Runtime {
@@ -297,12 +311,17 @@ impl onchain::Config for OnChainSeqPhragmen {
 }
 
 pub struct MockFallback;
-impl ElectionProvider for MockFallback {
+impl ElectionProviderBase for MockFallback {
 	type AccountId = AccountId;
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
 
+	fn ongoing() -> bool {
+		false
+	}
+}
+impl ElectionProvider for MockFallback {
 	fn elect() -> Result<Supports<AccountId>, Self::Error> {
 		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
 	}

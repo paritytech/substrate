@@ -128,6 +128,31 @@ pub trait MmrApi<BlockHash> {
 		leaf_indices: Vec<LeafIndex>,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
+
+	/// Generate a MMR proof for the given `leaf_indices` of the MMR that had `leaves_count` leaves.
+	///
+	/// This method calls into a runtime with MMR pallet included and attempts to generate
+	/// a MMR proof for the set of leaves at the given `leaf_indices` with MMR fixed to the state
+	/// with exactly `leaves_count` leaves. `leaves_count` must be larger than all `leaf_indices`
+	/// for the function to succeed.
+	///
+	/// Optionally, a block hash at which the runtime should be queried can be specified.
+	/// Note that specifying the block hash isn't super-useful here, unless you're generating
+	/// proof using non-finalized blocks where there are several competing forks. That's because
+	/// MMR state will be fixed to the state with `leaves_count`, which already points to some
+	/// historical block.
+	///
+	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
+	/// the leaves). Both parameters are SCALE-encoded.
+	/// The order of entries in the `leaves` field of the returned struct
+	/// is the same as the order of the entries in `leaf_indices` supplied
+	#[method(name = "mmr_generateHistoricalBatchProof")]
+	fn generate_historical_batch_proof(
+		&self,
+		leaf_indices: Vec<LeafIndex>,
+		leaves_count: LeafIndex,
+		at: Option<BlockHash>,
+	) -> RpcResult<LeafBatchProof<BlockHash>>;
 }
 
 /// MMR RPC methods.
@@ -186,6 +211,30 @@ where
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
 				leaf_indices,
+			)
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
+
+		Ok(LeafBatchProof::new(block_hash, leaves, proof))
+	}
+
+	fn generate_historical_batch_proof(
+		&self,
+		leaf_indices: Vec<LeafIndex>,
+		leaves_count: LeafIndex,
+		at: Option<<Block as BlockT>::Hash>,
+	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
+		let api = self.client.runtime_api();
+		let block_hash = at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash);
+
+		let (leaves, proof) = api
+			.generate_historical_batch_proof_with_context(
+				&BlockId::hash(block_hash),
+				sp_core::ExecutionContext::OffchainCall(None),
+				leaf_indices,
+				leaves_count,
 			)
 			.map_err(runtime_error_into_rpc_error)?
 			.map_err(mmr_error_into_rpc_error)?;
