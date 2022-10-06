@@ -939,13 +939,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"0d786e24c1f9e6ce237806a22c005bbbc7dee4edd6692b6c5442843d164392de",
+				"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"348485a4ab856467b440167e45f99b491385e8528e09b0e51f85f814a3021c93",
+				"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5",
 			),
 		);
 	}

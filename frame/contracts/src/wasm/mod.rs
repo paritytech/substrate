@@ -274,11 +274,7 @@ mod tests {
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
-	use frame_support::{
-		assert_ok,
-		dispatch::DispatchResultWithPostInfo,
-		weights::{OldWeight, Weight},
-	};
+	use frame_support::{assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::{Bytes, H256};
@@ -1549,11 +1545,10 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
+		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		// TODO: account for proof size weight
-		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
-		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
+		assert!(gas_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(gas_left.all_gt(actual_left), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1951,7 +1946,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
+		assert!(mock_ext.gas_meter.gas_left().all_gt(Weight::zero()));
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
