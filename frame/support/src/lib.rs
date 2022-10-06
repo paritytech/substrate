@@ -1487,7 +1487,19 @@ pub mod pallet_prelude {
 /// non-instantiable pallets. For an example of an instantiable pallet, see [this
 /// example](#example-of-an-instantiable-pallet).
 ///
-/// # Macro expansion:
+/// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
+///
+/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
+/// pallet information.
+///
+/// The struct must be defined as follows:
+/// ```ignore
+/// #[pallet::pallet]
+/// pub struct Pallet<T>(_);
+/// ```
+/// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
+///
+/// ## Macro expansion:
 ///
 /// The macro adds this attribute to the struct definition:
 /// ```ignore
@@ -1521,18 +1533,6 @@ pub mod pallet_prelude {
 /// [`StorageInfoTrait`](`traits::StorageInfoTrait`) for the pallet. Otherwise it implements
 /// [`StorageInfoTrait`](`traits::StorageInfoTrait`) for the pallet using the
 /// [`PartialStorageInfoTrait`](`traits::PartialStorageInfoTrait`) implementation of storages.
-///
-/// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
-///
-/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
-/// pallet information.
-///
-/// The struct must be defined as follows:
-/// ```ignore
-/// #[pallet::pallet]
-/// pub struct Pallet<T>(_);
-/// ```
-/// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
 ///
 /// # Config trait: `#[pallet::config]` (mandatory)
 ///
