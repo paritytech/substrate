@@ -295,7 +295,7 @@ mod tests {
 	struct PhragMMSParams;
 
 	frame_support::parameter_types! {
-		pub static Tmw: TooManyWinnersResolution = TooManyWinnersResolution::Error;
+		pub static ErrorResolution: TooManyWinnersResolution = TooManyWinnersResolution::Error;
 	}
 
 	impl Config for PhragmenParams {
@@ -304,7 +304,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = ConstU32<100>;
-		type TooManyWinnersResolution = Tmw;
+		type TooManyWinnersResolution = ErrorResolution;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -319,7 +319,7 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = ConstU32<100>;
-		type TooManyWinnersResolution = Tmw;
+		type TooManyWinnersResolution = ErrorResolution;
 	}
 
 	impl BoundedConfig for PhragMMSParams {
