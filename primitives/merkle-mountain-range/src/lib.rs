@@ -405,8 +405,8 @@ pub enum Error {
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
 	InvalidLeafIndex,
-	/// The provided leaves count is larger than the actual leaves count.
-	InvalidLeavesCount,
+	/// The provided best know block number is invalid.
+	InvalidBestKnownBlock,
 }
 
 impl Error {

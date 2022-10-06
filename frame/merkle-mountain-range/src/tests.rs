@@ -978,13 +978,13 @@ fn does_not_panic_when_generating_historical_proofs() {
 		// when leaves count is invalid
 		assert_eq!(
 			crate::Pallet::<Test>::generate_historical_batch_proof(vec![3], 100),
-			Err(Error::InvalidLeavesCount),
+			Err(Error::InvalidBestKnownBlock),
 		);
 
 		// when both leaf index and leaves count are invalid
 		assert_eq!(
 			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 100),
-			Err(Error::InvalidLeavesCount),
+			Err(Error::InvalidBestKnownBlock),
 		);
 	});
 }
