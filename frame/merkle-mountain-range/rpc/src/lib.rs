@@ -129,19 +129,18 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 
-	/// Generate a MMR proof for the given `block_numbers` of the MMR that had `leaves_count`
-	/// leaves.
+	/// Generate a MMR proof for the given `block_numbers` given the `best_known_block_number`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// a MMR proof for the set of leaves at the given `leaf_indices` with MMR fixed to the state
-	/// with exactly `leaves_count` leaves. `leaves_count` must be larger than all `leaf_indices`
-	/// for the function to succeed.
+	/// a MMR proof for the set of blocks that have the given `block_numbers` with MMR given the
+	/// `best_known_block_number`. `best_known_block_number` must be larger than all the
+	/// `block_numbers` for the function to succeed.
 	///
 	/// Optionally, a block hash at which the runtime should be queried can be specified.
 	/// Note that specifying the block hash isn't super-useful here, unless you're generating
 	/// proof using non-finalized blocks where there are several competing forks. That's because
-	/// MMR state will be fixed to the state with `leaves_count`, which already points to some
-	/// historical block.
+	/// MMR state will be fixed to the state with `best_known_block_number`, which already points to
+	/// some historical block.
 	///
 	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
 	/// the leaves). Both parameters are SCALE-encoded.

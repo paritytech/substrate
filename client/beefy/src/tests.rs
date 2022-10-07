@@ -43,9 +43,7 @@ use beefy_primitives::{
 	KEY_TYPE as BeefyKeyType,
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
-use sp_mmr_primitives::{
-	BatchProof, EncodableOpaqueLeaf, Error as MmrError, LeafIndex, MmrApi, Proof,
-};
+use sp_mmr_primitives::{BatchProof, EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
@@ -248,7 +246,7 @@ macro_rules! create_test_api {
 				}
 
 				impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
-					fn generate_proof(_leaf_index: LeafIndex)
+					fn generate_proof(_block_number: u64)
 						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
@@ -270,13 +268,13 @@ macro_rules! create_test_api {
 						Ok($mmr_root)
 					}
 
-					fn generate_batch_proof(_leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
+					fn generate_batch_proof(_block_numbers: Vec<u64>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
 
 					fn generate_historical_batch_proof(
-						_leaf_indices: Vec<LeafIndex>,
-						_leaves_count: LeafIndex
+						_block_numbers: Vec<u64>,
+						_best_known_block_number: u64
 					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
