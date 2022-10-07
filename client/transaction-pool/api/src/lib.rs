@@ -181,7 +181,10 @@ pub trait TransactionPool: Send + Sync {
 	/// Transaction hash type.
 	type Hash: Hash + Eq + Member + Serialize + DeserializeOwned;
 	/// In-pool transaction type.
-	type InPoolTransaction: InPoolTransaction<Transaction = TransactionFor<Self>, Hash = TxHash<Self>>;
+	type InPoolTransaction: InPoolTransaction<
+		Transaction = TransactionFor<Self>,
+		Hash = TxHash<Self>,
+	>;
 	/// Error type.
 	type Error: From<crate::error::Error> + crate::error::IntoPoolError;
 
