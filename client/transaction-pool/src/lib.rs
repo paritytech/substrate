@@ -869,7 +869,7 @@ where
 		if tree_route.retracted().iter().any(|x| x.hash == self.recent_finalized_block) {
 			log::debug!(
 				target: "txpool",
-				"Recently finalized block {} would be retracted by Finalized event {}",
+				"Recently finalized block {} would be retracted by ChainEvent {}, skipping",
 				self.recent_finalized_block, new_hash
 			);
 			return Ok(None)
