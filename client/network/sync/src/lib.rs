@@ -2696,8 +2696,7 @@ mod test {
 		assert!(sync.justification_requests().any(|(p, r)| {
 			p == peer_id3 &&
 				r.fields == BlockAttributes::JUSTIFICATION &&
-				r.from == FromBlock::Hash(b1_hash) &&
-				r.to == None
+				r.from == FromBlock::Hash(b1_hash)
 		}));
 
 		assert_eq!(
