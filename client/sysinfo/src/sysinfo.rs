@@ -33,6 +33,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
+/// Used to represent the unit used in the benchmarks.
 pub enum Unit {
 	GiBs,
 	MiBs,
@@ -71,6 +72,7 @@ impl Throughput {
 		Throughput(gibs * KIBIBYTE * KIBIBYTE * KIBIBYTE)
 	}
 
+	/// [`Self`] as f64.
 	pub fn as_f64(&self) -> f64 {
 		self.0
 	}
@@ -90,7 +92,7 @@ impl Throughput {
 		self.0 / (KIBIBYTE * KIBIBYTE * KIBIBYTE)
 	}
 
-	/// Normalizes [`Self`] to use the larges unit possible.
+	/// Normalizes [`Self`] to use the largest unit possible.
 	pub fn normalize(&self) -> (f64, Unit) {
 		let bs = self.0;
 
@@ -111,22 +113,25 @@ impl fmt::Display for Throughput {
 	}
 }
 
-pub fn serialize_throughput_as_mibs<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
-where
-	S: Serializer,
-{
-	serializer.serialize_u64(t.as_mibs() as u64)
-}
-
-pub fn serialize_throughput_option_as_mibs<S>(
-	maybe_t: &Option<Throughput>,
+pub fn serialize_throughput_as_mibs<S>(
+	throughput: &Throughput,
 	serializer: S,
 ) -> Result<S::Ok, S::Error>
 where
 	S: Serializer,
 {
-	if let Some(t) = maybe_t {
-		return serializer.serialize_some(&(t.as_mibs() as u64))
+	serializer.serialize_u64(throughput.as_mibs() as u64)
+}
+
+pub fn serialize_throughput_option_as_mibs<S>(
+	maybe_throughput: &Option<Throughput>,
+	serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	if let Some(throughput) = maybe_throughput {
+		return serializer.serialize_some(&(throughput.as_mibs() as u64))
 	}
 	serializer.serialize_none()
 }
@@ -595,7 +600,7 @@ mod tests {
 		assert_eq!("1.00 GiBs", mib.to_string());
 	}
 
-	/// Test the [`HwBench`].
+	/// Test the [`HwBench`] serialization.
 	#[test]
 	fn hwbench_serialize_works() {
 		let hwbench = HwBench {
@@ -606,7 +611,7 @@ mod tests {
 		};
 
 		let serialized = serde_json::to_string(&hwbench).unwrap();
-		// All the throughput should be converted to MiBs.
+		// Throughput from all of the benchmarks should be converted to MiBs.
 		assert_eq!(serialized, "{\"cpu_hashrate_score\":1351,\"memory_memcpy_score\":9,\"disk_sequential_write_score\":4}");
 	}
 }
