@@ -199,16 +199,16 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 }
 
 parameter_types! {
-	pub const ActivateDuration: u64 = 3;
-	pub const ExtendDuration: u64 = 30;
-	pub const ActivateStakeAmount: u64 = 100;
-	pub const ExtendStakeAmount: u64 = 100;
-	pub const DeactivateOrigin: u64 = 3;
+	pub const SignedActivationDuration: u64 = 3;
+	pub const SignedExtendDuration: u64 = 30;
+	pub const ActivateReservationAmount: u64 = 100;
+	pub const ExtendReservationAmount: u64 = 100;
+	pub const ForceDeactivateOrigin: u64 = 3;
 	pub const RepayOrigin: u64 = 4;
 }
 
 // Required impl to use some <Configured Origin>::get() in tests
-impl SortedMembers<u64> for DeactivateOrigin {
+impl SortedMembers<u64> for ForceDeactivateOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
@@ -227,13 +227,13 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type UnfilterableCalls = MockUnfilterableCalls;
-	type ActivateDuration = ActivateDuration;
-	type ActivateStakeAmount = ActivateStakeAmount;
-	type ExtendDuration = ExtendDuration;
-	type ExtendStakeAmount = ExtendStakeAmount;
+	type SignedActivationDuration = SignedActivationDuration;
+	type ActivateReservationAmount = ActivateReservationAmount;
+	type SignedExtendDuration = SignedExtendDuration;
+	type ExtendReservationAmount = ExtendReservationAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
-	type ForceDeactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
+	type ForceDeactivateOrigin = EnsureSignedBy<ForceDeactivateOrigin, Self::AccountId>;
 	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
 	type WeightInfo = ();
 }

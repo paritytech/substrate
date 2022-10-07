@@ -33,7 +33,7 @@ benchmarks! {
 	verify {
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::ActivateDuration::get()
+			System::<T>::block_number() + T::SignedActivationDuration::get()
 		);
 	}
 
@@ -60,7 +60,7 @@ benchmarks! {
 	verify {
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::ActivateDuration::get() + T::ExtendDuration::get()
+			System::<T>::block_number() + T::SignedActivationDuration::get() + T::SignedExtendDuration::get()
 		);
 	}
 
@@ -78,7 +78,7 @@ benchmarks! {
 	verify {
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() +  T::ActivateDuration::get() + extension
+			System::<T>::block_number() +  T::SignedActivationDuration::get() + extension
 		);
 	}
 
@@ -99,24 +99,24 @@ benchmarks! {
 		);
 	}
 
-	repay_stake {
+	release_reservation {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let activated_at_block: T::BlockNumber = System::<T>::block_number();
 		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
-		let current_stake = Stakes::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		let current_reservation = Reservations::<T>::get(&caller, activated_at_block).unwrap_or_default();
 		assert_eq!(
 			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateStakeAmount::get().unwrap()
+			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
 		let force_origin = T::ForceDeactivateOrigin::successful_origin();
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
 		let repay_origin = T::RepayOrigin::successful_origin();
-		let call = Call::<T>::repay_stake { account: caller.clone(), block: activated_at_block.clone()};
+		let call = Call::<T>::release_reservation { account: caller.clone(), block: activated_at_block.clone()};
 	}: { call.dispatch_bypass_filter(repay_origin)? }
 	verify {
 		assert_eq!(
@@ -125,29 +125,29 @@ benchmarks! {
 		);
 	}
 
-	slash_stake {
+	slash_reservation {
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let activated_at_block: T::BlockNumber = System::<T>::block_number();
 		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
-		let current_stake = Stakes::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		let current_reservation = Reservations::<T>::get(&caller, activated_at_block).unwrap_or_default();
 		assert_eq!(
 			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateStakeAmount::get().unwrap()
+			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 
 		let force_origin = T::ForceDeactivateOrigin::successful_origin();
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
 		let repay_origin = T::RepayOrigin::successful_origin();
-		let call = Call::<T>::slash_stake { account: caller.clone(), block: activated_at_block.clone()};
+		let call = Call::<T>::slash_reservation { account: caller.clone(), block: activated_at_block.clone()};
 	}: { call.dispatch_bypass_filter(repay_origin)? }
 	verify {
 		assert_eq!(
 			T::Currency::free_balance(&caller),
-			BalanceOf::<T>::max_value() - T::ActivateStakeAmount::get().unwrap()
+			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
 		);
 	}
 

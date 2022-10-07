@@ -55,39 +55,39 @@ pub mod pallet {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Currency type for this pallet.
+		/// Currency type for this pallet, used for reservations.
 		type Currency: NamedReservableCurrency<
 			Self::AccountId,
 			ReserveIdentifier = Self::BlockNumber,
 		>;
 
-		/// Contains all calls that can be dispatched even when the safe-mode is activated.
+		/// Contains all runtime calls in any pallet that can be dispatched even while the safe-mode is activated.
 		///
-		/// The `SafeMode` pallet cannot disable it's own calls, and does not need to be explicitly
+		/// The safe-mode pallet cannot disable it's own calls, and does not need to be explicitly
 		/// added here.
 		type UnfilterableCalls: Contains<Self::RuntimeCall>;
 
 		/// How long the safe-mode will stay active when activated with [`Pallet::activate`].
 		#[pallet::constant]
-		type ActivateDuration: Get<Self::BlockNumber>;
+		type SignedActivationDuration: Get<Self::BlockNumber>;
 
 		/// For how many blocks the safe-mode can be extended by each [`Pallet::extend`] call.
 		///
 		/// This does not impose a hard limit as the safe-mode can be extended multiple times.
 		#[pallet::constant]
-		type ExtendDuration: Get<Self::BlockNumber>;
+		type SignedExtendDuration: Get<Self::BlockNumber>;
 
 		/// The amount that will be reserved upon calling [`Pallet::activate`].
 		///
 		/// `None` disallows permissionlessly enabling the safe-mode.
 		#[pallet::constant]
-		type ActivateStakeAmount: Get<Option<BalanceOf<Self>>>;
+		type ActivateReservationAmount: Get<Option<BalanceOf<Self>>>;
 
 		/// The amount that will be reserved upon calling [`Pallet::extend`].
 		///
 		/// `None` disallows permissionlessly extending the safe-mode.
 		#[pallet::constant]
-		type ExtendStakeAmount: Get<Option<BalanceOf<Self>>>;
+		type ExtendReservationAmount: Get<Option<BalanceOf<Self>>>;
 
 		/// The origin that may call [`Pallet::force_activate`].
 		///
@@ -102,7 +102,7 @@ pub mod pallet {
 		/// The origin that may call [`Pallet::force_activate`].
 		type ForceDeactivateOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The origin that may call [`Pallet::repay_stake`] and [`Pallet::slash_stake`].
+		/// The origin that may call [`Pallet::release_reservation`] and [`Pallet::slash_reservation`].
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
@@ -120,8 +120,8 @@ pub mod pallet {
 		/// A value that is required for the extrinsic was not configured.
 		NotConfigured,
 
-		/// There is no balance staked.
-		NotStaked,
+		/// There is no balance reserved.
+		NoReservation,
 	}
 
 	#[pallet::event]
@@ -136,11 +136,11 @@ pub mod pallet {
 		/// Exited safe-mode for a specific \[reason\].
 		Exited { reason: ExitReason },
 
-		/// An account had stake repaid previously reserved at a block. \[block, account, amount\]
-		StakeRepaid { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
+		/// An account had reserve repaid previously reserved at a block. \[block, account, amount\]
+		ReservationRepaid { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
 
-		/// An account had stake slashed previously reserved at a block. \[account, amount\]
-		StakeSlashed { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
+		/// An account had reserve slashed previously reserved at a block. \[account, amount\]
+		ReservationSlashed { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
 	}
 
 	/// The reason why the safe-mode was exited.
@@ -162,10 +162,10 @@ pub mod pallet {
 	#[pallet::getter(fn active_until)]
 	pub type ActiveUntil<T: Config> = StorageValue<_, T::BlockNumber, OptionQuery>;
 
-	/// Holds the stake that was reserved from a user at a specific block number.
+	/// Holds the reserve that was reserved from a user at a specific block number.
 	#[pallet::storage]
-	#[pallet::getter(fn stakes)]
-	pub type Stakes<T: Config> = StorageDoubleMap<
+	#[pallet::getter(fn reserves)]
+	pub type Reservations<T: Config> = StorageDoubleMap<
 		_,
 		Twox64Concat,
 		T::AccountId,
@@ -202,20 +202,22 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Activate safe-mode permissionlessly for [`Config::ActivateDuration`] blocks.
+		/// Activate safe-mode permissionlessly for [`Config::SignedActivationDuration`] blocks.
 		///
-		/// Reserves [`Config::ActivateStakeAmount`] from the caller's account.
+		/// Reserves [`Config::ActivateReservationAmount`] from the caller's account.
 		/// Emits an [`Event::Activated`] event on success.
 		/// Errors with [`Error::IsActive`] if the safe-mode is already activated.
+		/// Errors with [`Error::NotConfigured`] if the reservation amount is `None` .
 		///
 		/// ### Safety
 		///
-		/// Can be permanently disabled by configuring [`Config::ActivateStakeAmount`] to `None`.
+		/// This may be called by any signed origin with [`Config::ActivateReservationAmount`] free currency to reserve.
+		/// This call can be disabled for all origins by configuring [`Config::ActivateReservationAmount`] to `None`.
 		#[pallet::weight(T::WeightInfo::activate())]
 		pub fn activate(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_activate(Some(who), T::ActivateDuration::get())
+			Self::do_activate(Some(who), T::SignedActivationDuration::get())
 		}
 
 		/// Activate safe-mode by force for a per-origin configured number of blocks.
@@ -233,23 +235,27 @@ pub mod pallet {
 			Self::do_activate(None, duration)
 		}
 
-		/// Extend the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
+		/// Extend the safe-mode permissionlessly for [`Config::SignedExtendDuration`] blocks.
 		///
-		/// Reserves [`Config::ExtendStakeAmount`] from the caller's account.
+		/// Reserves [`Config::ExtendReservationAmount`] from the caller's account.
+		/// Emits an [`Event::Extended`] event on success.
 		/// Errors with [`Error::IsInactive`] if the safe-mode is active.
+		/// Errors with [`Error::NotConfigured`] if the reservation amount is `None` .
 		///
 		/// ### Safety
 		///
-		/// Can be permanently disabled by configuring [`Config::ActivateStakeAmount`] to `None`.
+		/// This may be called by any signed origin with [`Config::ExtendReservationAmount`] free currency to reserve.
+		/// This call can be disabled for all origins by configuring [`Config::ExtendReservationAmount`] to `None`.
 		#[pallet::weight(T::WeightInfo::extend())]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_extend(Some(who), T::ExtendDuration::get())
+			Self::do_extend(Some(who), T::SignedExtendDuration::get())
 		}
 
 		/// Extend the safe-mode by force a per-origin configured number of blocks.
 		///
+		/// Emits an [`Event::Extended`] event on success.
 		/// Errors with [`Error::IsInactive`] if the safe-mode is inactive.
 		///
 		/// ### Safety
@@ -262,11 +268,15 @@ pub mod pallet {
 			Self::do_extend(None, duration)
 		}
 
-		/// deactivate safe-mode by force.
+		/// Deactivate safe-mode by force.
 		///
-		/// Note: safe-mode will be automatically deactivated by [`Pallet::on_initialize`] hook
-		/// after the block height is greater than [`ActiveUntil`] found in storage. Errors with
-		/// [`Error::IsInactive`] if the safe-mode is inactive.
+		/// Emits an [`Event::Exited`] with [`ExitReason::Force`] event on success.
+		/// Errors with [`Error::IsInactive`] if the safe-mode is inactive.
+		/// 
+		/// Note: `safe-mode` will be automatically deactivated by [`Pallet::on_initialize`] hook
+		/// after the block height is greater than [`ActiveUntil`] found in storage.
+		/// Emits an [`Event::Exited`] with [`ExitReason::Timeout`] event on hook.
+		/// 
 		///
 		/// ### Safety
 		///
@@ -278,42 +288,45 @@ pub mod pallet {
 			Self::do_deactivate(ExitReason::Force)
 		}
 
-		/// Repay an honest account that activated safe-mode earlier.
+		/// Release a currency reservation for an account that activated safe-mode at a specific block earlier.
+		/// This cannot be called while safe-mode is active.
 		///
-		/// Emits a [`Event::StakeRepaid`] event on success.
-		/// Errors if the safe-mode is already activated.
+		/// Emits a [`Event::ReservationRepaid`] event on success.
+		/// Errors with [`Error::IsActive`] if the safe-mode presently activated.
+		/// Errors with [`Error::NoReservation`] if the payee has no named reserved currency at the block specified.
 		///
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::RepayOrigin`] origin.
-		#[pallet::weight(T::WeightInfo::repay_stake())]
-		pub fn repay_stake(
+		#[pallet::weight(T::WeightInfo::release_reservation())]
+		pub fn release_reservation(
 			origin: OriginFor<T>,
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
 			T::RepayOrigin::ensure_origin(origin)?;
 
-			Self::do_repay_stake(account, block)
+			Self::do_release_reservation(account, block)
 		}
 
-		/// Slash a dishonest account that put the chain into safe-mode earlier.
+		/// Slash a reservation for an account that activated or extended safe-mode at a specific block earlier.
+		/// This cannot be called while safe-mode is active.
 		///
-		/// Errors if the safe-mode is already activated.
-		/// Emits a [`Event::StakeSlashed`] event on success.
+		/// Emits a [`Event::ReservationSlashed`] event on success.
+		/// Errors with [`Error::IsActive`] if the safe-mode presently activated.
 		///
 		/// ### Safety
 		///
 		/// Can only be called by the [`Config::RepayOrigin`] origin.
-		#[pallet::weight(T::WeightInfo::slash_stake())]
-		pub fn slash_stake(
+		#[pallet::weight(T::WeightInfo::slash_reservation())]
+		pub fn slash_reservation(
 			origin: OriginFor<T>,
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
 			T::RepayOrigin::ensure_origin(origin)?;
 
-			Self::do_slash_stake(account, block)
+			Self::do_slash_reservation(account, block)
 		}
 	}
 
@@ -339,8 +352,8 @@ impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::activate`] and [`crate::Pallet::force_activate`] calls.
 	fn do_activate(who: Option<T::AccountId>, duration: T::BlockNumber) -> DispatchResult {
 		if let Some(who) = who {
-			let stake = T::ActivateStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
-			Self::reserve(who, stake)?;
+			let reserve = T::ActivateReservationAmount::get().ok_or(Error::<T>::NotConfigured)?;
+			Self::reserve(who, reserve)?;
 		}
 
 		ensure!(!ActiveUntil::<T>::exists(), Error::<T>::IsActive);
@@ -353,8 +366,8 @@ impl<T: Config> Pallet<T> {
 	/// Logic for the [`crate::Pallet::extend`] and [`crate::Pallet::force_extend`] calls.
 	fn do_extend(who: Option<T::AccountId>, duration: T::BlockNumber) -> DispatchResult {
 		if let Some(who) = who {
-			let stake = T::ExtendStakeAmount::get().ok_or(Error::<T>::NotConfigured)?;
-			Self::reserve(who, stake)?;
+			let reserve = T::ExtendReservationAmount::get().ok_or(Error::<T>::NotConfigured)?;
+			Self::reserve(who, reserve)?;
 		}
 
 		let limit =
@@ -374,42 +387,42 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Logic for the [`crate::Pallet::repay_stake`] call.
+	/// Logic for the [`crate::Pallet::release_reservation`] call.
 	///
 	/// Errors if the safe-mode is active.
 	/// Does not check the origin.
-	fn do_repay_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+	fn do_release_reservation(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
 		ensure!(!Self::is_activated(), Error::<T>::IsActive);
-		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
+		let reserve = Reservations::<T>::take(&account, block).ok_or(Error::<T>::NoReservation)?;
 
-		T::Currency::unreserve_named(&block, &account, stake);
-		Self::deposit_event(Event::<T>::StakeRepaid { block, account, amount: stake });
+		T::Currency::unreserve_named(&block, &account, reserve);
+		Self::deposit_event(Event::<T>::ReservationRepaid { block, account, amount: reserve });
 		Ok(())
 	}
 
-	/// Logic for the [`crate::Pallet::slash_stake`] call.
+	/// Logic for the [`crate::Pallet::slash_reservation`] call.
 	///
 	/// Errors if the safe-mode is activated.
 	/// Does not check the origin.
-	fn do_slash_stake(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+	fn do_slash_reservation(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
 		ensure!(!Self::is_activated(), Error::<T>::IsActive);
-		let stake = Stakes::<T>::take(&account, block).ok_or(Error::<T>::NotStaked)?;
+		let reserve = Reservations::<T>::take(&account, block).ok_or(Error::<T>::NoReservation)?;
 
-		T::Currency::slash_reserved_named(&block, &account, stake);
-		Self::deposit_event(Event::<T>::StakeSlashed { block, account, amount: stake });
+		T::Currency::slash_reserved_named(&block, &account, reserve);
+		Self::deposit_event(Event::<T>::ReservationSlashed { block, account, amount: reserve });
 		Ok(())
 	}
 
-	/// Reserve `stake` amount from `who` and store it in `Stakes`.
-	fn reserve(who: T::AccountId, stake: BalanceOf<T>) -> DispatchResult {
+	/// Reserve `reserve` amount from `who` and store it in `Reservations`.
+	fn reserve(who: T::AccountId, reserve: BalanceOf<T>) -> DispatchResult {
 		let block = <frame_system::Pallet<T>>::block_number();
-		T::Currency::reserve_named(&block, &who, stake)?;
-		let current_stake = Stakes::<T>::get(&who, block).unwrap_or_default();
-		// Stake is mapped to the block that an extrinsic calls activate or extend,
+		T::Currency::reserve_named(&block, &who, reserve)?;
+		let current_reservation = Reservations::<T>::get(&who, block).unwrap_or_default();
+		// Reservation is mapped to the block that an extrinsic calls activate or extend,
 		// therefore we prevent abuse in a block by adding to present value in the same block. TODO:
 		// should we? Why not just fail? Calls in other blocks to activate or extend are stored in a
-		// new Stakes item.
-		Stakes::<T>::insert(&who, block, current_stake.saturating_add(stake));
+		// new Reservations item.
+		Reservations::<T>::insert(&who, block, current_reservation.saturating_add(reserve));
 		Ok(())
 	}
 

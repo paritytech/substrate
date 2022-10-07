@@ -337,20 +337,20 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
 }
 
 parameter_types! {
-	pub const ActivateDuration: u32 = 3;
-	pub const ExtendDuration: u32 = 30;
-	pub const ActivateStakeAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendStakeAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const SignedActivationDuration: u32 = 3;
+	pub const SignedExtendDuration: u32 = 30;
+	pub const ActivateReservationAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ExtendReservationAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 }
 
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type UnfilterableCalls = UnfilterableCalls;
-	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
-	type ActivateStakeAmount = ActivateStakeAmount;
-	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
-	type ExtendStakeAmount = ExtendStakeAmount;
+	type SignedActivationDuration = ConstU32<{ 2 * DAYS }>;
+	type ActivateReservationAmount = ActivateReservationAmount;
+	type SignedExtendDuration = ConstU32<{ 1 * DAYS }>;
+	type ExtendReservationAmount = ExtendReservationAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
 	type ForceDeactivateOrigin = EnsureRoot<Self::AccountId>;
