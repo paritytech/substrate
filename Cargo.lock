@@ -9064,6 +9064,7 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_matches",
+ "async-trait",
  "criterion",
  "futures",
  "futures-timer",
@@ -9095,6 +9096,7 @@ dependencies = [
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
 dependencies = [
+ "async-trait",
  "futures",
  "log",
  "serde",
