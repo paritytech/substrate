@@ -746,7 +746,7 @@ where
 			.update_and_check_if_new_enactment_is_valid(&event, &compute_tree_route)
 		{
 			Err(msg) => {
-				log::warn!(target:"txpool", "{msg}");
+				log::warn!(target: "txpool", "{msg}");
 				return
 			},
 			Ok(r) => r,
