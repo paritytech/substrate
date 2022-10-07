@@ -20,7 +20,11 @@
 
 use crate::{chain_head::api::ChainHeadApiServer, SubscriptionTaskExecutor};
 use serde::{Deserialize, Serialize};
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+	collections::HashMap,
+	marker::PhantomData,
+	sync::{Arc, Mutex},
+};
 
 use futures::{
 	future::{self, FutureExt},
@@ -42,6 +46,8 @@ pub struct ChainHead<Block: BlockT, Client> {
 	client: Arc<Client>,
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
+
+	// pinned_blocks: Arc<Mutex<Vec<T>>>,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<Block>,
 }
@@ -49,7 +55,12 @@ pub struct ChainHead<Block: BlockT, Client> {
 impl<Block: BlockT, Client> ChainHead<Block, Client> {
 	/// Creates a new [`ChainHead`].
 	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
-		Self { client, executor, _phantom: PhantomData }
+		Self {
+			client,
+			executor,
+			// pinned_blocks: Arc::new(Mutex::new(Vec::new())),
+			_phantom: PhantomData,
+		}
 	}
 }
 
@@ -58,6 +69,7 @@ impl<Block, Client>
 	ChainHeadApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for ChainHead<Block, Client>
 where
+	// BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
 	Client: BlockBackend<Block>
@@ -65,9 +77,12 @@ where
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
 		+ 'static,
+	// T: Send + 'static,
 {
 	fn follow(&self, mut sink: SubscriptionSink, runtime_updates: bool) -> SubscriptionResult {
 		let client = self.client.clone();
+
+		// let pinned_blocks = self.pinned_blocks.clone();
 
 		let stream_import = self
 			.client
@@ -112,9 +127,33 @@ where
 			})
 			.flatten();
 
-		let stream_finalized = self.client.finality_notification_stream().map(|notification| {
-			FollowEvent::Finalized(Finalized { block_hash: notification.hash })
-		});
+		let client = self.client.clone();
+		let stream_finalized =
+			self.client.finality_notification_stream().map(move |notification| {
+				// let pinned = client.pin_block(&BlockId::Hash(notification.hash));
+				// if let Ok(_) = pinned {
+				// 	println!("Calling client.pin_block on hash = {:?}", notification.hash);
+				// }
+
+
+				
+				// let pinned = client.state_at(&BlockId::Hash(notification.hash));
+				// if let Ok(pinned) = pinned {
+				// 	println!(
+				// 		"Not Pinned finalized block hash = {:?} pinned = {:?}",
+				// 		notification.hash, pinned
+				// 	);
+
+				// 	// let boxed = Box::new(pinned);
+				// 	// let ptr = Box::leak(boxed);
+				// 	// println!("leaked at: {:?}", ptr);
+
+				// 	// let mut cache = pinned_blocks.lock().unwrap();
+				// 	// cache.push(pinned)
+				// }
+
+				FollowEvent::Finalized(Finalized { block_hash: notification.hash })
+			});
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 

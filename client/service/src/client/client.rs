@@ -418,6 +418,11 @@ where
 		self.backend.state_at(*block)
 	}
 
+	/// Pin the block to avoid pruning.
+	fn pin_block(&self, block: &BlockId<Block>) -> sp_blockchain::Result<()> {
+		self.backend.pin_block(*block)
+	}
+
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
 		Ok(StorageProvider::storage(self, id, &StorageKey(well_known_keys::CODE.to_vec()))?
@@ -1947,6 +1952,10 @@ where
 		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
+	}
+
+	fn pin_block(&self, block: &BlockId<Block>) -> sp_blockchain::Result<()> {
+		self.pin_block(block)
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {

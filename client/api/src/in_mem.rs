@@ -768,6 +768,11 @@ where
 		None
 	}
 
+	fn pin_block(&self, block: BlockId<Block>) -> sp_blockchain::Result<()> {
+		// Blocks are always pinned in memory for this database.
+		Ok(())
+	}
+
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
 			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),
