@@ -107,32 +107,45 @@ where
 	///
 	/// Passing `0` as amount is interpreted as "all remaining gas".
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
-		let amount = if amount == Weight::zero() { self.gas_left } else { amount };
-
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
-		if self.gas_left.any_lt(amount) {
-			Err(<Error<T>>::OutOfGas.into())
-		} else {
-			self.gas_left -= amount;
-			Ok(GasMeter::new(amount))
-		}
+		let amount = Weight::from_components(
+			if amount.ref_time().is_zero() {
+				self.gas_left().ref_time()
+			} else {
+				amount.ref_time()
+			},
+			if amount.proof_size().is_zero() {
+				self.gas_left().proof_size()
+			} else {
+				amount.proof_size()
+			},
+		);
+		self.gas_left = self.gas_left.checked_sub(&amount).ok_or_else(|| <Error<T>>::OutOfGas)?;
+		Ok(GasMeter::new(amount))
 	}
 
 	/// Absorb the remaining gas of a nested meter after we are done using it.
 	pub fn absorb_nested(&mut self, nested: Self) {
-		if self.gas_left == Weight::zero() {
+		if self.gas_left.ref_time().is_zero() {
 			// All of the remaining gas was inherited by the nested gas meter. When absorbing
 			// we can therefore safely inherit the lowest gas that the nested gas meter experienced
 			// as long as it is lower than the lowest gas that was experienced by the parent.
 			// We cannot call `self.gas_left_lowest()` here because in the state that this
 			// code is run the parent gas meter has `0` gas left.
-			self.gas_left_lowest = nested.gas_left_lowest().min(self.gas_left_lowest);
+			*self.gas_left_lowest.ref_time_mut() =
+				nested.gas_left_lowest().ref_time().min(self.gas_left_lowest.ref_time());
 		} else {
 			// The nested gas meter was created with a fixed amount that did not consume all of the
 			// parents (self) gas. The lowest gas that self will experience is when the nested
 			// gas was pre charged with the fixed amount.
-			self.gas_left_lowest = self.gas_left_lowest();
+			*self.gas_left_lowest.ref_time_mut() = self.gas_left_lowest().ref_time();
+		}
+		if self.gas_left.proof_size().is_zero() {
+			*self.gas_left_lowest.proof_size_mut() =
+				nested.gas_left_lowest().proof_size().min(self.gas_left_lowest.proof_size());
+		} else {
+			*self.gas_left_lowest.proof_size_mut() = self.gas_left_lowest().proof_size();
 		}
 		self.gas_left += nested.gas_left;
 	}
@@ -155,17 +168,11 @@ where
 				ErasedToken { description: format!("{:?}", token), token: Box::new(token) };
 			self.tokens.push(erased_tok);
 		}
-
 		let amount = token.weight();
-		let new_value = self.gas_left.checked_sub(&amount);
-
-		// We always consume the gas even if there is not enough gas.
-		self.gas_left = new_value.unwrap_or_else(Zero::zero);
-
-		match new_value {
-			Some(_) => Ok(ChargedAmount(amount)),
-			None => Err(Error::<T>::OutOfGas.into()),
-		}
+		// It is OK to not charge anything on failure because we always charge _before_ we perform
+		// any action
+		self.gas_left = self.gas_left.checked_sub(&amount).ok_or_else(|| Error::<T>::OutOfGas)?;
+		Ok(ChargedAmount(amount))
 	}
 
 	/// Adjust a previously charged amount down to its actual amount.
@@ -298,20 +305,16 @@ mod tests {
 		assert!(gas_meter.charge(SimpleToken(1)).is_err());
 	}
 
-	// Make sure that if the gas meter is charged by exceeding amount then not only an error
-	// returned for that charge, but also for all consequent charges.
-	//
-	// This is not strictly necessary, because the execution should be interrupted immediately
-	// if the gas meter runs out of gas. However, this is just a nice property to have.
+	// Make sure that the gas meter does not charge in case of overcharger
 	#[test]
-	fn overcharge_is_unrecoverable() {
+	fn overcharge_does_not_charge() {
 		let mut gas_meter = GasMeter::<Test>::new(Weight::from_ref_time(200));
 
 		// The first charge is should lead to OOG.
 		assert!(gas_meter.charge(SimpleToken(300)).is_err());
 
-		// The gas meter is emptied at this moment, so this should also fail.
-		assert!(gas_meter.charge(SimpleToken(1)).is_err());
+		// The gas meter should still contain the full 200.
+		assert!(gas_meter.charge(SimpleToken(200)).is_ok());
 	}
 
 	// Charging the exact amount that the user paid for should be

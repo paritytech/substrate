@@ -236,17 +236,25 @@ pub trait UnfilteredDispatchable {
 	fn dispatch_bypass_filter(self, origin: Self::RuntimeOrigin) -> DispatchResultWithPostInfo;
 }
 
+/// The trait implemented by the overarching enumeration of the different pallets' origins.
+/// Unlike `OriginTrait` impls, this does not include any kind of dispatch/call filter. Also, this
+/// trait is more flexible in terms of how it can be used: it is a `Parameter` and `Member`, so it
+/// can be used as dispatchable parameters as well as in storage items.
+pub trait CallerTrait<AccountId>: Parameter + Member + From<RawOrigin<AccountId>> {
+	/// Extract the signer from the message if it is a `Signed` origin.
+	fn into_system(self) -> Option<RawOrigin<AccountId>>;
+
+	/// Extract a reference to the system-level `RawOrigin` if it is that.
+	fn as_system_ref(&self) -> Option<&RawOrigin<AccountId>>;
+}
+
 /// Methods available on `frame_system::Config::RuntimeOrigin`.
 pub trait OriginTrait: Sized {
 	/// Runtime call type, as in `frame_system::Config::Call`
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin: Parameter
-		+ Member
-		+ Into<Self>
-		+ From<RawOrigin<Self::AccountId>>
-		+ MaxEncodedLen;
+	type PalletsOrigin: Into<Self> + CallerTrait<Self::AccountId> + MaxEncodedLen;
 
 	/// The AccountId used across the system.
 	type AccountId;
@@ -266,8 +274,11 @@ pub trait OriginTrait: Sized {
 	/// For root origin caller, the filters are bypassed and true is returned.
 	fn filter_call(&self, call: &Self::Call) -> bool;
 
-	/// Get the caller.
+	/// Get a reference to the caller (`CallerTrait` impl).
 	fn caller(&self) -> &Self::PalletsOrigin;
+
+	/// Consume `self` and return the caller.
+	fn into_caller(self) -> Self::PalletsOrigin;
 
 	/// Do something with the caller, consuming self but returning it if the caller was unused.
 	fn try_with_caller<R>(
@@ -285,7 +296,20 @@ pub trait OriginTrait: Sized {
 	fn signed(by: Self::AccountId) -> Self;
 
 	/// Extract the signer from the message if it is a `Signed` origin.
-	fn as_signed(self) -> Option<Self::AccountId>;
+	fn as_signed(self) -> Option<Self::AccountId> {
+		self.into_caller().into_system().and_then(|s| {
+			if let RawOrigin::Signed(who) = s {
+				Some(who)
+			} else {
+				None
+			}
+		})
+	}
+
+	/// Extract a reference to the sytsem origin, if that's what the caller is.
+	fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+		self.caller().as_system_ref()
+	}
 }
 
 #[cfg(test)]
