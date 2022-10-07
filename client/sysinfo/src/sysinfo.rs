@@ -107,7 +107,7 @@ impl Throughput {
 impl fmt::Display for Throughput {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let (value, unit) = self.normalize();
-		write!(f, "{:.2?} {}", value, unit.to_string())
+		write!(f, "{:.2?} {}", value, unit)
 	}
 }
 
