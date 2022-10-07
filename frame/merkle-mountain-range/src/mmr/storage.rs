@@ -112,27 +112,28 @@ where
 	I: 'static,
 	L: primitives::FullLeaf,
 {
-	/// Copy all nodes added by `block_number` from temporary runtime storage to offchain storage.
-	pub(crate) fn move_new_nodes_to_offchain(block_number: T::BlockNumber) {
+	/// Copy all nodes added by block `number` from temporary runtime storage to offchain storage.
+	pub(crate) fn move_new_nodes_to_offchain(
+		number: T::BlockNumber,
+		block_hash: <T as frame_system::Config>::Hash,
+	) {
 		// Helper to store `value` in offchain db at (`block_hash` and `node_index`)-derived key.
-		let store_to_offchain =
-			|block_hash: <T as frame_system::Config>::Hash, node_index: NodeIndex, value: &[u8]| {
-				let key = Pallet::<T, I>::node_offchain_key(block_hash, node_index);
-				frame_support::log::debug!(
-					target: "runtime::mmr::offchain", "offchain db set: pos {} block_hash {:?} key {:?}",
-					node_index, block_hash, key
-				);
-				sp_io::offchain::local_storage_set(
-					sp_core::offchain::StorageKind::PERSISTENT,
-					&key,
-					value,
-				);
-			};
+		let store_to_offchain = |block_hash: _, node_index: NodeIndex, value: &[u8]| {
+			let key = Pallet::<T, I>::node_offchain_key(block_hash, node_index);
+			frame_support::log::debug!(
+				target: "runtime::mmr::offchain", "offchain db set: pos {} block_hash {:?} key {:?}",
+				node_index, block_hash, key
+			);
+			sp_io::offchain::local_storage_set(
+				sp_core::offchain::StorageKind::PERSISTENT,
+				&key,
+				value,
+			);
+		};
 		// Copy newly added leaf and nodes to offchain db keyed under this block's hash.
 		if let Some(elem) = LatestLeaf::<T, _>::get() {
-			let block_hash = <frame_system::Pallet<T>>::block_hash(block_number);
 			// FIXME: fix expect
-			let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(block_number).expect("TODO");
+			let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(number).expect("TODO");
 			let leaf_node_index = helper::leaf_index_to_pos(leaf_index);
 			// Copy over leaf.
 			store_to_offchain(block_hash, leaf_node_index, &elem);
@@ -152,14 +153,13 @@ where
 	/// `frame_system::BlockHashCount` blocks.
 	///
 	/// For the canonicalized block, prune all nodes pertaining to other forks from offchain db.
-	///
-	/// Should only be called from offchain context, because it requires both read and write
-	/// access to offchain db.
-	pub(crate) fn canonicalize_and_prune(block: T::BlockNumber) {
-		// Add "block_num -> hash" mapping to offchain db,
-		// with all forks pushing hashes to same entry (same block number).
-		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
-		PruningMap::<T, I>::append(block, parent_hash);
+	pub(crate) fn canonicalize_and_prune(
+		number: T::BlockNumber,
+		hash: <T as frame_system::Config>::Hash,
+	) {
+		// Add "number -> hash" mapping to offchain db,
+		// with all forks appending hashes to same entry (same block number).
+		PruningMap::<T, I>::append(number, hash);
 
 		// Effectively move a rolling window of fork-unique leaves. Once out of the window, leaves
 		// are "canonicalized" in offchain by moving them under `Pallet::node_canon_offchain_key`.
@@ -177,10 +177,9 @@ where
 				to_canon_leaf, to_canon_nodes
 			);
 			// For this block number there may be node entries saved from multiple forks.
-			let to_canon_block_num =
-				Pallet::<T, I>::leaf_index_to_parent_block_num(to_canon_leaf, leaves);
+			let to_canon_block_num = Pallet::<T, I>::leaf_index_to_block_num(to_canon_leaf, leaves);
 			// Only entries under this hash (retrieved from state on current canon fork) are to be
-			// persisted. All other entries added by same block number will be cleared.
+			// persisted. All entries added by same block number by other forks will be cleared.
 			let to_canon_hash = <frame_system::Pallet<T>>::block_hash(to_canon_block_num);
 
 			Self::canonicalize_nodes_for_hash(&to_canon_nodes, to_canon_hash);
@@ -272,13 +271,12 @@ where
 		}
 
 		// Leaves still within the window will be found in offchain db under fork-aware keys.
-		let ancestor_parent_block_num =
-			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves);
-		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
-		let key = Pallet::<T, I>::node_offchain_key(ancestor_parent_hash, pos);
+		let ancestor_block_num = Pallet::<T, I>::leaf_index_to_block_num(ancestor_leaf_idx, leaves);
+		let ancestor_hash = <frame_system::Pallet<T>>::block_hash(ancestor_block_num);
+		let key = Pallet::<T, I>::node_offchain_key(ancestor_hash, pos);
 		frame_support::log::debug!(
 			target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, hash {:?}, key {:?}",
-			pos, ancestor_leaf_idx, ancestor_parent_hash, key
+			pos, ancestor_leaf_idx, ancestor_hash, key
 		);
 		// Retrieve the element from Off-chain DB.
 		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)

@@ -174,12 +174,6 @@ pub mod pallet {
 		///
 		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
 		/// block number as an easiest way to ensure that.
-		/// Also note that the leaf added by each block is expected to only reference data coming
-		/// from ancestor blocks (leaves are saved offchain using `(parent_hash, pos)` key to be
-		/// fork-resistant, as such conflicts could only happen on 1-block deep forks, which means
-		/// two forks with identical line of ancestors compete to write the same offchain key, but
-		/// that's fine as long as leaves only contain data coming from ancestors - conflicting
-		/// writes are identical).
 		type LeafData: primitives::LeafDataProvider;
 
 		/// The maximum leaf size.
@@ -282,10 +276,11 @@ pub mod pallet {
 			//
 			// The offchain worker is responsible for maintaining the nodes' positions in
 			// offchain db as the chain progresses.
+			let hash = <frame_system::Pallet<T>>::block_hash(n);
 
 			// First it moves nodes newly added by current block from temporary runtime storage
 			// to offchain storage under fork-unique keys `(prefix, block_hash, pos)`.
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::move_new_nodes_to_offchain(n);
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::move_new_nodes_to_offchain(n, hash);
 
 			// Then it moves a rolling window of the same size as `frame_system::block_hash` map,
 			// where nodes/leaves added by blocks that are just about to exit the window are
@@ -300,7 +295,7 @@ pub mod pallet {
 			//   both "canonicalize" their view of block `N`.
 			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
 			// other forks are pruned from offchain db.
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n, hash);
 		}
 	}
 }
@@ -330,14 +325,14 @@ where
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	/// Build offchain key from `parent_hash` of block that originally added node `pos` to MMR.
+	/// Build offchain key from `block_hash` of block that originally added node `pos` to MMR.
 	///
 	/// This combination makes the offchain (key,value) entry resilient to chain forks.
 	fn node_offchain_key(
-		parent_hash: <T as frame_system::Config>::Hash,
+		block_hash: <T as frame_system::Config>::Hash,
 		pos: NodeIndex,
 	) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, parent_hash, pos).encode()
+		(T::INDEXING_PREFIX, block_hash, pos).encode()
 	}
 
 	/// Build canonical offchain key for node `pos` in MMR.
@@ -347,19 +342,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
 
-	/// Provide the parent number for the block that added `leaf_index` to the MMR.
-	fn leaf_index_to_parent_block_num(
+	/// Provide the number for the block that added `leaf_index` to the MMR.
+	fn leaf_index_to_block_num(
 		leaf_index: LeafIndex,
 		leaves_count: LeafIndex,
 	) -> <T as frame_system::Config>::BlockNumber {
 		// leaves are zero-indexed and were added one per block since pallet activation,
 		// while block numbers are one-indexed, so block number that added `leaf_idx` is:
 		// `block_num = block_num_when_pallet_activated + leaf_idx + 1`
-		// `block_num = (current_block_num - leaves_count) + leaf_idx + 1`
-		// `parent_block_num = current_block_num - leaves_count + leaf_idx`.
+		// `block_num = (current_block_num - leaves_count) + leaf_idx + 1`.
 		<frame_system::Pallet<T>>::block_number()
 			.saturating_sub(leaves_count.saturated_into())
-			.saturating_add(leaf_index.saturated_into())
+			.saturating_add((leaf_index + 1).saturated_into())
 	}
 
 	/// Convert a `block_num` into a leaf index.
