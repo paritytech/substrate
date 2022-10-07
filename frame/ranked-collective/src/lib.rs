@@ -718,3 +718,5 @@ pub mod pallet {
 		}
 	}
 }
+
+// TODO: Impl `RankedMembers` for this pallet.

@@ -18,6 +18,7 @@
 //! Traits for dealing with the idea of membership.
 
 use impl_trait_for_tuples::impl_for_tuples;
+use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::{marker::PhantomData, prelude::*};
 
 /// A trait for querying whether a type can be said to "contain" a value.
@@ -263,6 +264,20 @@ pub trait ContainsLengthBound {
 	fn min_len() -> usize;
 	/// Maximum number of elements contained
 	fn max_len() -> usize;
+}
+
+/// Ranked membership data structure.
+pub trait RankedMembers {
+	type AccountId;
+	type Rank: AtLeast32BitUnsigned;
+
+	/// Return the rank of the given ID, or `None` if they are not a member.
+	fn rank_of(who: &Self::AccountId) -> Option<Self::Rank>;
+
+	/// Remove a member from the group. This does not result in a call to `removed`.
+	fn remove(who: &Self::AccountId);
+	/// Change a member's rank. This does not result in a call to `changed`.
+	fn change(who: &Self::AccountId, rank: Self::Rank);
 }
 
 /// Trait for type that can handle the initialization of account IDs at genesis.

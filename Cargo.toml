@@ -114,6 +114,7 @@ members = [
 	"frame/nicks",
 	"frame/node-authorization",
 	"frame/offences",
+	"frame/paymaster",
 	"frame/preimage",
 	"frame/proxy",
 	"frame/nomination-pools",
