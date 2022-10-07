@@ -18,6 +18,10 @@
 use crate::*;
 use frame_support::pallet_prelude::*;
 
+/// The helper methods bellow allow to read and validate different
+/// collection/item/pallet settings.
+/// For example, those settings allow to disable NFTs trading on a pallet level, or for a particular
+/// collection, or for a specific item.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn get_collection_settings(
 		collection_id: &T::CollectionId,

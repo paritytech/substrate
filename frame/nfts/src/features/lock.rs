@@ -18,6 +18,9 @@
 use crate::*;
 use frame_support::pallet_prelude::*;
 
+/// Lock functions allow to lock collection/items metadata and attributes.
+/// Additionally, it's possible to make all collection items non-transferable.
+/// Those settings are irreversible.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_lock_collection(
 		origin: T::AccountId,
