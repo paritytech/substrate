@@ -230,7 +230,7 @@ fn freezing_should_work() {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, default_item_config()));
 		assert_ok!(Nfts::freeze(RuntimeOrigin::signed(1), 0, 42));
-		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::Locked);
+		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::ItemLocked);
 
 		assert_ok!(Nfts::thaw(RuntimeOrigin::signed(1), 0, 42));
 		assert_ok!(Nfts::lock_collection(
@@ -394,11 +394,11 @@ fn set_collection_metadata_should_work() {
 		));
 		assert_noop!(
 			Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0u8; 15]),
-			Error::<Test, _>::CollectionMetadataIsLocked,
+			Error::<Test, _>::LockedCollectionMetadata,
 		);
 		assert_noop!(
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(1), 0),
-			Error::<Test>::CollectionMetadataIsLocked
+			Error::<Test>::LockedCollectionMetadata
 		);
 
 		// Clear Metadata
@@ -413,7 +413,7 @@ fn set_collection_metadata_should_work() {
 		);
 		assert_noop!(
 			Nfts::clear_collection_metadata(RuntimeOrigin::signed(1), 0),
-			Error::<Test>::CollectionMetadataIsLocked
+			Error::<Test>::LockedCollectionMetadata
 		);
 		assert_ok!(Nfts::clear_collection_metadata(RuntimeOrigin::root(), 0));
 		assert!(!CollectionMetadataOf::<Test>::contains_key(0));
@@ -459,19 +459,22 @@ fn set_item_metadata_should_work() {
 		assert_ok!(Nfts::lock_item(RuntimeOrigin::signed(1), 0, 42, true, false));
 		assert_noop!(
 			Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 42, bvec![0u8; 15]),
-			Error::<Test, _>::Frozen,
+			Error::<Test, _>::LockedItemMetadata,
 		);
-		assert_noop!(Nfts::clear_metadata(RuntimeOrigin::signed(1), 0, 42), Error::<Test>::Frozen);
+		assert_noop!(
+			Nfts::clear_metadata(RuntimeOrigin::signed(1), 0, 42),
+			Error::<Test>::LockedItemMetadata,
+		);
 
 		// Clear Metadata
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::root(), 0, 42, bvec![0u8; 15]));
 		assert_noop!(
 			Nfts::clear_metadata(RuntimeOrigin::signed(2), 0, 42),
-			Error::<Test>::NoPermission
+			Error::<Test>::NoPermission,
 		);
 		assert_noop!(
 			Nfts::clear_metadata(RuntimeOrigin::signed(1), 1, 42),
-			Error::<Test>::UnknownCollection
+			Error::<Test>::UnknownCollection,
 		);
 		assert_ok!(Nfts::clear_metadata(RuntimeOrigin::root(), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
@@ -525,7 +528,7 @@ fn set_attribute_should_work() {
 }
 
 #[test]
-fn set_attribute_should_respect_freeze() {
+fn set_attribute_should_respect_lock() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
@@ -553,12 +556,12 @@ fn set_attribute_should_respect_freeze() {
 			CollectionConfig(CollectionSetting::LockedAttributes.into())
 		));
 
-		let e = Error::<Test>::Frozen;
+		let e = Error::<Test>::LockedCollectionAttributes;
 		assert_noop!(Nfts::set_attribute(RuntimeOrigin::signed(1), 0, None, bvec![0], bvec![0]), e);
 		assert_ok!(Nfts::set_attribute(RuntimeOrigin::signed(1), 0, Some(0), bvec![0], bvec![1]));
 
 		assert_ok!(Nfts::lock_item(RuntimeOrigin::signed(1), 0, 0, false, true));
-		let e = Error::<Test>::Frozen;
+		let e = Error::<Test>::LockedItemAttributes;
 		assert_noop!(
 			Nfts::set_attribute(RuntimeOrigin::signed(1), 0, Some(0), bvec![0], bvec![1]),
 			e
@@ -1250,7 +1253,7 @@ fn buy_item_should_work() {
 			});
 			assert_noop!(
 				buy_item_call.dispatch(RuntimeOrigin::signed(user_2)),
-				Error::<Test>::Locked
+				Error::<Test>::ItemLocked
 			);
 		}
 	});

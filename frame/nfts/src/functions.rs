@@ -36,7 +36,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
+		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
 
 		let (action_allowed, _) = Self::is_collection_setting_disabled(
 			&collection,
@@ -46,7 +46,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let (action_allowed, _) =
 			Self::is_item_setting_disabled(&collection, &item, ItemSetting::NonTransferable)?;
-		ensure!(action_allowed, Error::<T, I>::Locked);
+		ensure!(action_allowed, Error::<T, I>::ItemLocked);
 
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
@@ -274,7 +274,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let (action_allowed, _) =
 			Self::is_item_setting_disabled(&collection, &item, ItemSetting::NonTransferable)?;
-		ensure!(action_allowed, Error::<T, I>::Locked);
+		ensure!(action_allowed, Error::<T, I>::ItemLocked);
 
 		if let Some(ref price) = price {
 			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));

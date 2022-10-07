@@ -514,9 +514,15 @@ pub mod pallet {
 		/// The named owner has not signed ownership of the collection is acceptable.
 		Unaccepted,
 		/// The item is locked.
-		Locked,
-		/// The collection's metadata is locked.
-		CollectionMetadataIsLocked,
+		ItemLocked,
+		/// Item's attributes are locked.
+		LockedItemAttributes,
+		/// Collection's attributes are locked.
+		LockedCollectionAttributes,
+		/// Item's metadata is locked.
+		LockedItemMetadata,
+		/// Collection's metadata is locked.
+		LockedCollectionMetadata,
 		/// All items have been minted.
 		MaxSupplyReached,
 		/// The max supply has already been set.
@@ -1280,12 +1286,19 @@ pub mod pallet {
 			}
 
 			let collection_settings = Self::get_collection_settings(&collection)?;
-			let maybe_is_frozen = match maybe_item {
-				None => Ok(collection_settings.contains(CollectionSetting::LockedAttributes)),
-				Some(item) => Self::get_item_settings(&collection, &item)
-					.map(|v| v.contains(ItemSetting::LockedAttributes)),
-			}?;
-			ensure!(!maybe_is_frozen, Error::<T, I>::Frozen);
+			match maybe_item {
+				None => {
+					ensure!(
+						!collection_settings.contains(CollectionSetting::LockedAttributes),
+						Error::<T, I>::LockedCollectionAttributes
+					)
+				},
+				Some(item) => {
+					let maybe_is_locked = Self::get_item_settings(&collection, &item)
+						.map(|v| v.contains(ItemSetting::LockedAttributes))?;
+					ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
+				},
+			};
 
 			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
 			if attribute.is_none() {
@@ -1345,14 +1358,24 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let collection_settings = Self::get_collection_settings(&collection)?;
-			let maybe_is_frozen = match maybe_item {
-				None => collection_settings.contains(CollectionSetting::LockedAttributes),
-				Some(item) => Self::get_item_settings(&collection, &item)
-					.map_or(false, |v| v.contains(ItemSetting::LockedAttributes)),
-				// NOTE: if the item was previously burned, the ItemSettings record might not exists
-			};
-			ensure!(maybe_check_owner.is_none() || !maybe_is_frozen, Error::<T, I>::Frozen);
+			if maybe_check_owner.is_some() {
+				match maybe_item {
+					None => {
+						let collection_settings = Self::get_collection_settings(&collection)?;
+						ensure!(
+							!collection_settings.contains(CollectionSetting::LockedAttributes),
+							Error::<T, I>::LockedCollectionAttributes
+						)
+					},
+					Some(item) => {
+						// NOTE: if the item was previously burned, the ItemSettings record might
+						// not exists. In that case, we allow to clear the attribute.
+						let maybe_is_locked = Self::get_item_settings(&collection, &item)
+							.map_or(false, |v| v.contains(ItemSetting::LockedAttributes));
+						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
+					},
+				};
+			}
 
 			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
 				collection_details.attributes.saturating_dec();
@@ -1396,7 +1419,10 @@ pub mod pallet {
 
 			let (action_allowed, _) =
 				Self::is_item_setting_disabled(&collection, &item, ItemSetting::LockedMetadata)?;
-			ensure!(maybe_check_owner.is_none() || action_allowed, Error::<T, I>::Frozen);
+			ensure!(
+				maybe_check_owner.is_none() || action_allowed,
+				Error::<T, I>::LockedItemMetadata
+			);
 
 			let collection_settings = Self::get_collection_settings(&collection)?;
 
@@ -1463,10 +1489,10 @@ pub mod pallet {
 			}
 
 			// NOTE: if the item was previously burned, the ItemSettings record might not exists
-			let is_frozen = Self::get_item_settings(&collection, &item)
+			let is_locked = Self::get_item_settings(&collection, &item)
 				.map_or(false, |v| v.contains(ItemSetting::LockedMetadata));
 
-			ensure!(maybe_check_owner.is_none() || !is_frozen, Error::<T, I>::Frozen);
+			ensure!(maybe_check_owner.is_none() || !is_locked, Error::<T, I>::LockedItemMetadata);
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				if metadata.is_some() {
@@ -1513,7 +1539,7 @@ pub mod pallet {
 			)?;
 			ensure!(
 				maybe_check_owner.is_none() || action_allowed,
-				Error::<T, I>::CollectionMetadataIsLocked
+				Error::<T, I>::LockedCollectionMetadata
 			);
 
 			let mut details =
@@ -1581,7 +1607,7 @@ pub mod pallet {
 			)?;
 			ensure!(
 				maybe_check_owner.is_none() || action_allowed,
-				Error::<T, I>::CollectionMetadataIsLocked
+				Error::<T, I>::LockedCollectionMetadata
 			);
 
 			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
