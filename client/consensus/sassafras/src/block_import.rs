@@ -166,8 +166,8 @@ where
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
-				let viable_epoch = epoch_changes
-					.viable_epoch(&epoch_descriptor, |slot| {
+				let mut viable_epoch = epoch_changes
+					.viable_epoch_mut(&epoch_descriptor, |slot| {
 						Epoch::genesis(&self.genesis_config, slot)
 					})
 					.ok_or_else(|| {
@@ -189,6 +189,15 @@ where
 					 slot,
 					 viable_epoch.as_ref().start_slot,
 				);
+
+				// TODO-SASS-P2: test me
+				if viable_epoch.as_ref().end_slot() <= slot {
+					viable_epoch.as_mut().start_slot = slot;
+					log::warn!(
+						target: "sassafras",
+						"🌳 Detected skipped epochs, starting recovery epoch"
+					);
+				}
 
 				let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 

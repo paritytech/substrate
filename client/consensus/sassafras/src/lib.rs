@@ -224,7 +224,7 @@ impl EpochT for Epoch {
 	}
 
 	fn end_slot(&self) -> Slot {
-		self.start_slot + self.config.slot_duration
+		self.start_slot + self.config.epoch_duration
 	}
 }
 

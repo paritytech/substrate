@@ -483,10 +483,8 @@ impl<T: Config> Pallet<T> {
 	/// Typically, this is not handled directly by the user, but by higher-level validator-set
 	/// manager logic like `pallet-session`.
 	///
-	/// TODO-SASS-P3:
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
-	/// from the first skipped epoch.
-	/// Should the tickets be invalidated? Currently they are... see the `get-ticket` method.
+	/// from the first skipped epoch. The tickets are invalidated.
 	pub(crate) fn enact_session_change(
 		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<
@@ -511,7 +509,7 @@ impl<T: Config> Pallet<T> {
 		if slot_idx >= T::EpochDuration::get() {
 			// Detected one or more skipped epochs, kill tickets and recompute the `epoch_index`.
 			TicketsMeta::<T>::kill();
-			// TODO-SASS-P2: adjust epoch index (TEST ME)
+			// TODO-SASS-P2: adjust epoch index accordingly (TEST ME)
 			let idx: u64 = slot_idx.into();
 			epoch_idx += idx / T::EpochDuration::get();
 		}
