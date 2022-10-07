@@ -312,7 +312,6 @@ mod tests {
 		type TargetsBound = ConstU32<400>;
 	}
 
-	// TODO: test TooManyErrors
 	impl Config for PhragMMSParams {
 		type System = Runtime;
 		type Solver = PhragMMS<AccountId, Perbill>;

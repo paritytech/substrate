@@ -299,6 +299,7 @@ parameter_types! {
 	pub static MaxElectableTargets: TargetIndex = TargetIndex::max_value();
 	#[derive(Eq, PartialEq, Debug)]
 	pub static MaxWinners: u32 = 100;
+	pub static ErrorResolution: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::Error;
 
 	pub static EpochLength: u64 = 30;
 	pub static OnChainFallback: bool = true;
@@ -311,6 +312,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
+	type TooManyWinnersResolution = ErrorResolution;
 }
 
 pub struct MockFallback;
