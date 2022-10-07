@@ -592,7 +592,7 @@ where
 {
 	/// Part of MaintainedTransactionPool::maintain procedure. Handles enactment and retraction of
 	/// blocks, sends transaction notifications.
-	async fn handle_enactment(&self, hash: Block::Hash, tree_route: Option<TreeRoute<Block>>) {
+	async fn handle_enactment(&self, hash: Block::Hash, tree_route: TreeRoute<Block>) {
 		log::trace!(target: "txpool", "handle_enactment hash:{hash:?} tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
 		let api = self.api.clone();
@@ -629,30 +629,26 @@ where
 		// retracted blocks and their transactions. This order is important, because
 		// if we enact and retract the same transaction at the same time, we want to
 		// send first the retract and than the prune event.
-		if let Some(ref tree_route) = tree_route {
-			for retracted in tree_route.retracted() {
-				// notify txs awaiting finality that it has been retracted
-				pool.validated_pool().on_block_retracted(retracted.hash);
-			}
-
-			future::join_all(
-				tree_route
-					.enacted()
-					.iter()
-					.map(|h| prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)),
-			)
-			.await
-			.into_iter()
-			.for_each(|enacted_log| {
-				pruned_log.extend(enacted_log);
-			});
-		} else {
-			pruned_log.extend(prune_known_txs_for_block(id, &*api, &*pool).await);
+		for retracted in tree_route.retracted() {
+			// notify txs awaiting finality that it has been retracted
+			pool.validated_pool().on_block_retracted(retracted.hash);
 		}
+
+		future::join_all(
+			tree_route
+				.enacted()
+				.iter()
+				.map(|h| prune_known_txs_for_block(BlockId::Hash(h.hash), &*api, &*pool)),
+		)
+		.await
+		.into_iter()
+		.for_each(|enacted_log| {
+			pruned_log.extend(enacted_log);
+		});
 
 		metrics.report(|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64));
 
-		if let (true, Some(tree_route)) = (next_action.resubmit, tree_route) {
+		if next_action.resubmit {
 			let mut resubmit_transactions = Vec::new();
 
 			for retracted in tree_route.retracted() {
@@ -740,7 +736,8 @@ where
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
 			EnactmentState::tree_route(&*self.api, from, to)
 		};
-		let (proceed, tree_route) = match self
+
+		let tree_route = match self
 			.enactment_state
 			.lock()
 			.update_and_check_if_new_enactment_is_valid(&event, &compute_tree_route)
@@ -756,7 +753,7 @@ where
 			ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } => hash,
 		};
 
-		if proceed {
+		if let Some(tree_route) = tree_route {
 			self.handle_enactment(hash, tree_route).await;
 		}
 
@@ -830,20 +827,20 @@ where
 		}
 	}
 
-	/// This function returns true and the tree_route if blocks enact/retract process (implemented
+	/// This function returns Some(tree_route) if blocks enact/retract process (implemented
 	/// in handle_enactment function) should be performed based on:
 	/// - recent_finalized_block
 	/// - recent_best_block
 	/// - newly provided block in event
 	/// tree_route contains blocks to be enacted/retracted.
 	///
-	/// if enactment process is not needed (false, None) is returned
+	/// if enactment process is not needed None is returned
 	/// error message is returned when computing tree_route fails
 	fn update_and_check_if_new_enactment_is_valid<F>(
 		&mut self,
 		event: &ChainEvent<Block>,
 		tree_route: &F,
-	) -> Result<(bool, Option<TreeRoute<Block>>), String>
+	) -> Result<Option<TreeRoute<Block>>, String>
 	where
 		F: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
 	{
@@ -865,7 +862,7 @@ where
 		// block was already finalized
 		if self.recent_finalized_block == new_hash {
 			log::trace!(target:"txpool", "handle_enactment: block already finalized");
-			return Ok((false, None))
+			return Ok(None)
 		}
 
 		// check if recently finalized block is on retracted path...
@@ -875,7 +872,7 @@ where
 				"Recently finalized block {} would be retracted by Finalized event {}",
 				self.recent_finalized_block, new_hash
 			);
-			return Ok((false, None))
+			return Ok(None)
 		}
 
 		if finalized {
@@ -888,14 +885,14 @@ where
 					target: "txpool",
 					"handle_enactment: no newly enacted blocks since recent best block"
 				);
-				return Ok((false, None))
+				return Ok(None)
 			}
 			//otherwise enacted finalized block becomes best block...
 		}
 
 		self.recent_best_block = new_hash;
 
-		Ok((true, Some(tree_route)))
+		Ok(Some(tree_route))
 	}
 }
 
@@ -1147,7 +1144,7 @@ mod enactment_state_tests {
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
 		acted_on: HashAndNumber<Block>,
-	) -> (bool, Option<TreeRoute<Block>>) {
+	) -> bool {
 		let (from, acted_on) = (from.hash, acted_on.hash);
 
 		let event_tree_route = tree_route(from, acted_on).expect("Tree route exists");
@@ -1161,13 +1158,14 @@ mod enactment_state_tests {
 				&tree_route,
 			)
 			.unwrap()
+			.is_some()
 	}
 
 	fn trigger_finalized(
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
 		acted_on: HashAndNumber<Block>,
-	) -> (bool, Option<TreeRoute<Block>>) {
+	) -> bool {
 		let (from, acted_on) = (from.hash, acted_on.hash);
 
 		let v = tree_route(from, acted_on)
@@ -1183,6 +1181,7 @@ mod enactment_state_tests {
 				&tree_route,
 			)
 			.unwrap()
+			.is_some()
 	}
 
 	fn assert_es_eq(
@@ -1207,51 +1206,51 @@ mod enactment_state_tests {
 		 *      B2-C2-D2-E2
 		 */
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), d1());
+		let result = trigger_new_best_block(&mut es, a(), d1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, d1(), a());
 
-		let (result, _) = trigger_new_best_block(&mut es, d1(), e1());
+		let result = trigger_new_best_block(&mut es, d1(), e1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e1(), a());
 
-		let (result, _) = trigger_finalized(&mut es, a(), d2());
+		let result = trigger_finalized(&mut es, a(), d2());
 		assert_eq!(result, true);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_new_best_block(&mut es, d2(), e1());
+		let result = trigger_new_best_block(&mut es, d2(), e1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_finalized(&mut es, a(), b2());
+		let result = trigger_finalized(&mut es, a(), b2());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_finalized(&mut es, a(), b1());
+		let result = trigger_finalized(&mut es, a(), b1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), d2());
+		let result = trigger_new_best_block(&mut es, a(), d2());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_finalized(&mut es, a(), d2());
+		let result = trigger_finalized(&mut es, a(), d2());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), c2());
+		let result = trigger_new_best_block(&mut es, a(), c2());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), c1());
+		let result = trigger_new_best_block(&mut es, a(), c1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, d2(), d2());
 
-		let (result, _) = trigger_new_best_block(&mut es, d2(), e2());
+		let result = trigger_new_best_block(&mut es, d2(), e2());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e2(), d2());
 
-		let (result, _) = trigger_finalized(&mut es, d2(), e2());
+		let result = trigger_finalized(&mut es, d2(), e2());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e2(), e2());
 	}
@@ -1265,27 +1264,27 @@ mod enactment_state_tests {
 		 *   A-B1-C1-D1-E1
 		 */
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), b1());
+		let result = trigger_new_best_block(&mut es, a(), b1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, b1(), a());
 
-		let (result, _) = trigger_new_best_block(&mut es, b1(), c1());
+		let result = trigger_new_best_block(&mut es, b1(), c1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, c1(), a());
 
-		let (result, _) = trigger_new_best_block(&mut es, c1(), d1());
+		let result = trigger_new_best_block(&mut es, c1(), d1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, d1(), a());
 
-		let (result, _) = trigger_new_best_block(&mut es, d1(), e1());
+		let result = trigger_new_best_block(&mut es, d1(), e1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e1(), a());
 
-		let (result, _) = trigger_finalized(&mut es, a(), c1());
+		let result = trigger_finalized(&mut es, a(), c1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), c1());
 
-		let (result, _) = trigger_finalized(&mut es, c1(), e1());
+		let result = trigger_finalized(&mut es, c1(), e1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), e1());
 	}
@@ -1299,11 +1298,11 @@ mod enactment_state_tests {
 		 *   A-B1-C1-D1-E1
 		 */
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), e1());
+		let result = trigger_new_best_block(&mut es, a(), e1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e1(), a());
 
-		let (result, _) = trigger_finalized(&mut es, a(), b1());
+		let result = trigger_finalized(&mut es, a(), b1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), b1());
 	}
@@ -1317,11 +1316,11 @@ mod enactment_state_tests {
 		 *   A-B1-C1-D1-E1
 		 */
 
-		let (result, _) = trigger_finalized(&mut es, a(), e1());
+		let result = trigger_finalized(&mut es, a(), e1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e1(), e1());
 
-		let (result, _) = trigger_finalized(&mut es, e1(), b1());
+		let result = trigger_finalized(&mut es, e1(), b1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), e1());
 	}
@@ -1339,11 +1338,11 @@ mod enactment_state_tests {
 		 *      B2-C2-D2-E2
 		 */
 
-		let (result, _) = trigger_finalized(&mut es, a(), e1());
+		let result = trigger_finalized(&mut es, a(), e1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e1(), e1());
 
-		let (result, _) = trigger_finalized(&mut es, e1(), e2());
+		let result = trigger_finalized(&mut es, e1(), e2());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), e1());
 	}
@@ -1357,19 +1356,19 @@ mod enactment_state_tests {
 		 *    A-B1-C1-D1-E1
 		 */
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), b1());
+		let result = trigger_new_best_block(&mut es, a(), b1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, b1(), a());
 
-		let (result, _) = trigger_finalized(&mut es, a(), d1());
+		let result = trigger_finalized(&mut es, a(), d1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, d1(), d1());
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), e1());
+		let result = trigger_new_best_block(&mut es, a(), e1());
 		assert_eq!(result, true);
 		assert_es_eq(&es, e1(), d1());
 
-		let (result, _) = trigger_new_best_block(&mut es, a(), c1());
+		let result = trigger_new_best_block(&mut es, a(), c1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), d1());
 	}
