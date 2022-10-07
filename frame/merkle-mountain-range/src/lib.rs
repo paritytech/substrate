@@ -264,16 +264,32 @@ pub mod pallet {
 
 		fn offchain_worker(n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
-
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::move_new_nodes_to_offchain(n);
 			// MMR pallet uses offchain storage to hold full MMR and leaves.
-			// The leaves are saved under fork-unique keys `(block_hash, pos)`.
-			// MMR Runtime depends on `frame_system::block_hash(block_num)` mappings to find
-			// parent hashes for particular nodes or leaves.
-			// This MMR offchain worker function moves a rolling window of the same size
-			// as `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
-			// about to exit the window are "canonicalized" so that their offchain key no longer
-			// depends on `block_hash` therefore on access to `frame_system::block_hash`.
+			// The MMR nodes can be found in offchain db under either:
+			//   - fork-unique keys `(prefix, block_hash, pos)`, or,
+			//   - "canonical" keys `(prefix, pos)`,
+			//   depending on how many blocks in the past the node at position `pos` was
+			//   added to the MMR.
+			//
+			// For the fork-unique keys, the MMR pallet depends on
+			// `frame_system::block_hash(block_num)` mappings to find the relevant block hashes,
+			// so it is limited by `frame_system::BlockHashCount` in terms of how many historical
+			// forks it can track. Nodes added to MMR by block `N` can be found in offchain db at:
+			//   - fork-unique keys `(prefix, block_hash, pos)` when (`N` >= `latest_block` -
+			//     `frame_system::BlockHashCount`);
+			//   - "canonical" keys `(prefix, pos)` when (`N` < `latest_block` -
+			//     `frame_system::BlockHashCount`);
+			//
+			// The offchain worker is responsible for maintaining the nodes' positions in
+			// offchain db as the chain progresses.
+
+			// First it moves nodes newly added by current block from temporary runtime storage
+			// to offchain storage under fork-unique keys `(prefix, block_hash, pos)`.
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::move_new_nodes_to_offchain(n);
+
+			// Then it moves a rolling window of the same size as `frame_system::block_hash` map,
+			// where nodes/leaves added by blocks that are just about to exit the window are
+			// "canonicalized" so that their offchain key no longer depends on `block_hash`.
 			//
 			// This approach works to eliminate fork-induced leaf collisions in offchain db,
 			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`

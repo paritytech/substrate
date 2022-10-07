@@ -112,8 +112,9 @@ where
 	I: 'static,
 	L: primitives::FullLeaf,
 {
-	/// TODO
+	/// Copy all nodes added by `block_number` from temporary runtime storage to offchain storage.
 	pub(crate) fn move_new_nodes_to_offchain(block_number: T::BlockNumber) {
+		// Helper to store `value` in offchain db at (`block_hash` and `node_index`)-derived key.
 		let store_to_offchain =
 			|block_hash: <T as frame_system::Config>::Hash, node_index: NodeIndex, value: &[u8]| {
 				let key = Pallet::<T, I>::node_offchain_key(block_hash, node_index);
@@ -335,33 +336,15 @@ where
 		let mut leaf_index = leaves;
 		let mut node_index = size;
 
-		// // Use parent hash of block adding new nodes (this block) as extra identifier
-		// // in offchain DB to avoid DB collisions and overwrites in case of forks.
-		// let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		for elem in elems {
-			// // For now we store this leaf offchain keyed by `(parent_hash, node_index)`
-			// // to make it fork-resistant.
-			// // Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
-			// // later when we are not worried about forks anymore (highly unlikely to have a fork
-			// // in the chain that deep).
-			// // "Canonicalization" in this case means moving this leaf under a new key based
-			// // only on the leaf's `node_index`.
-			// let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
-			// frame_support::log::debug!(
-			// 	target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key
-			// {:?}", 	node_index, parent_hash, key
-			// );
-			// // Indexing API is used to store the full node content (both leaf and inner).
-			// elem.using_encoded(|elem| offchain_index::set(&key, elem));
-
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {
 				<Peaks<T, I>>::insert(node_index, elem.hash());
 			}
 
 			// Increase the indices.
-			// Store all newly added nodes and leaves to temporary storage, from where
-			// they will be copied to offchain db by offchain worker.
+			// Store all newly added nodes and leaves to temporary storage,
+			// offchain worker will copy them over to offchain db once block is finished.
 			node_index += 1;
 			match elem {
 				Node::Data(..) => {
