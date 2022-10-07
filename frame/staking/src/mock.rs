@@ -241,6 +241,7 @@ parameter_types! {
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
 	pub static MaxWinners: u32 = 100;
+	pub SortAndTruncate: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::SortAndTruncate;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -260,6 +261,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
+	type TooManyWinnersResolution = SortAndTruncate;
 }
 
 pub struct MockReward {}

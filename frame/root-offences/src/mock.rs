@@ -87,6 +87,7 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+	pub SortAndTruncate: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::SortAndTruncate;	
 }
 
 impl frame_system::Config for Test {
@@ -146,6 +147,7 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
+	type TooManyWinnersResolution = SortAndTruncate;
 }
 
 pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
