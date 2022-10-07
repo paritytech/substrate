@@ -1455,7 +1455,7 @@ pub mod pallet {
 		/// Pool id currently in use.
 		PoolIdInUse,
 		/// Claim exceeds the last pool id.
-		PoolIdCountExceeded
+		PoolIdCountExceeded,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1888,12 +1888,12 @@ pub mod pallet {
 		}
 
 		/// Create a new delegation pool with a previously used pool id
-		/// 
+		///
 		/// # Arguments
-		/// 
+		///
 		/// same as `create` with the inclusion of
-		/// * `pool_id` - `Option<PoolId>`, if `None` this is similar to `create`.
-		///    if `Some(claim)` the caller is claiming that `claim` A.K.A PoolId is not in use. 
+		/// * `pool_id` - `Option<PoolId>`, if `None` this is similar to `create`. if `Some(claim)`
+		///   the caller is claiming that `claim` A.K.A PoolId is not in use.
 		#[pallet::weight(T::WeightInfo::create())]
 		#[transactional]
 		pub fn create_with_pool_id(
@@ -1903,7 +1903,7 @@ pub mod pallet {
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
 			state_claim: Option<PoolId>,
-		 ) -> DispatchResult {			
+		) -> DispatchResult {
 			let pool_id = match state_claim {
 				Some(claim) => {
 					ensure!(!BondedPools::<T>::contains_key(claim), Error::<T>::PoolIdInUse);
@@ -2349,7 +2349,7 @@ impl<T: Config> Pallet<T> {
 		root: AccountIdLookupOf<T>,
 		nominator: AccountIdLookupOf<T>,
 		state_toggler: AccountIdLookupOf<T>,
-		pool_id: PoolId,	
+		pool_id: PoolId,
 	) -> DispatchResult {
 		let who = ensure_signed(origin)?;
 		let root = T::Lookup::lookup(root)?;
@@ -2358,8 +2358,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 		ensure!(
-			MaxPools::<T>::get()
-				.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
+			MaxPools::<T>::get().map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
 			Error::<T>::MaxPools
 		);
 		ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);

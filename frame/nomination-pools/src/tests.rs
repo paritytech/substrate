@@ -4224,18 +4224,14 @@ mod create {
 				456,
 				789
 			));
-			
+
 			assert_eq!(Balances::free_balance(&11), 0);
 			// delete the initial pool created, then pool_Id `1` will be free
 
-			assert_noop!(Pools::create_with_pool_id(
-				RuntimeOrigin::signed(12),
-				20,
-				234,
-				654,
-				783,
-				Some(1)
-			), Error::<Runtime>::PoolIdInUse);
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, Some(1)),
+				Error::<Runtime>::PoolIdInUse
+			);
 
 			// start dismantling the pool.
 			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
@@ -4245,16 +4241,15 @@ mod create {
 			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 10));
 
 			assert_ok!(Pools::create_with_pool_id(
-				RuntimeOrigin::signed(10), 
-				20, 
-				234, 
-				654, 
-				783, 
+				RuntimeOrigin::signed(10),
+				20,
+				234,
+				654,
+				783,
 				Some(1)
 			));
 		});
-
-	} 
+	}
 }
 
 mod nominate {
