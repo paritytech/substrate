@@ -214,10 +214,12 @@ benchmarks_instance_pallet! {
 		);
 	}
 	verify {
-		ensure!(budget_remaining < BalanceOf::<T, I>::max_value(), "Budget not used");
 		ensure!(missed_any == false, "Missed some");
 		if b > 0 {
+			ensure!(budget_remaining < BalanceOf::<T, I>::max_value(), "Budget not used");
 			assert_last_event::<T, I>(Event::BountyBecameActive { index: b - 1 }.into())
+		} else {
+			ensure!(budget_remaining == BalanceOf::<T, I>::max_value(), "Budget used");
 		}
 	}
 
