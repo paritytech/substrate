@@ -972,7 +972,7 @@ cfg_if! {
 				}
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash, BlockNumber> for RuntimeApi {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}

@@ -59,7 +59,7 @@
 use codec::Encode;
 use frame_support::weights::Weight;
 use sp_runtime::{
-	traits::{self, One, Saturating, CheckedSub},
+	traits::{self, CheckedSub, One, Saturating},
 	SaturatedConversion,
 };
 
@@ -326,9 +326,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// leaf_idx = (leaves_count - 1) - (current_block_num - block_num);
 		let best_block_num = <frame_system::Pallet<T>>::block_number();
 		let blocks_diff = best_block_num.checked_sub(&block_num).ok_or_else(|| {
-			primitives::Error::BlockNumToLeafIndex.log_debug(
-				"The provided block_number is greater than the best block number.",
-			)
+			primitives::Error::BlockNumToLeafIndex
+				.log_debug("The provided block_number is greater than the best block number.")
 		})?;
 		let blocks_diff_as_leaf_idx = blocks_diff.try_into().map_err(|_| {
 			primitives::Error::BlockNumToLeafIndex
