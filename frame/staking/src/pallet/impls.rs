@@ -468,10 +468,10 @@ impl<T: Config> Pallet<T> {
 				});
 
 			result
-			.ok()?
-			.into_inner()
-			.try_into()
-			.expect("both bounds checked in integrity test to be equal; qed")
+				.ok()?
+				.into_inner()
+				.try_into()
+				.expect("both bounds checked in integrity test to be equal; qed")
 		} else {
 			let result = <T::ElectionProvider as BoundedElectionProvider>::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);

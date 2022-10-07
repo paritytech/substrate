@@ -989,12 +989,14 @@ pub mod pallet {
 			let mut supports = supports;
 			supports.truncate(T::MaxWinners::get() as usize);
 			// bound supports with T::MaxWinners
-			let supports = supports.try_into().expect("since we truncated, its guaranteed to satisfy bounds; qed");
+			let supports = supports
+				.try_into()
+				.expect("since we truncated, its guaranteed to satisfy bounds; qed");
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
 			let solution = ReadySolution {
-				supports: supports,
+				supports,
 				score: Default::default(),
 				compute: ElectionCompute::Emergency,
 			};
@@ -1107,7 +1109,7 @@ pub mod pallet {
 				Error::<T>::FallbackFailed
 			})?;
 
-			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into 
+			// transform BoundedVec<_, T::GovernanceFallback::MaxWinners> into
 			// `BoundedVec<_, T::MaxWinners>`
 			let supports: BoundedVec<_, T::MaxWinners> = supports
 				.into_inner()

@@ -152,22 +152,23 @@ fn elect_with<T: Config>(
 
 	// TODO: Add test for TooManyWinnersResolution variants
 	let mut supports = to_supports(&staked);
-	let supports: OnChainBoundedSupportsOf<T> =
-	 match T::TooManyWinnersResolution::get() {
-		TooManyWinnersResolution::Error => {
-			 supports
-				.try_into()
-				.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?
-	},
+	let supports: OnChainBoundedSupportsOf<T> = match T::TooManyWinnersResolution::get() {
+		TooManyWinnersResolution::Error => supports
+			.try_into()
+			.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?,
 		TooManyWinnersResolution::Truncate => {
 			supports.truncate(T::MaxWinners::get() as usize);
-			supports.try_into().expect("we truncated to the bound so this always works; qed")	
-	},
+			supports
+				.try_into()
+				.expect("we truncated to the bound so this always works; qed")
+		},
 		TooManyWinnersResolution::SortAndTruncate => {
 			supports.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap());
 			supports.truncate(T::MaxWinners::get() as usize);
-			supports.try_into().expect("we truncated to the bound so this always works; qed")
-		}
+			supports
+				.try_into()
+				.expect("we truncated to the bound so this always works; qed")
+		},
 	};
 
 	Ok(supports)

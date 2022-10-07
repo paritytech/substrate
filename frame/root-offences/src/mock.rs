@@ -87,7 +87,7 @@ impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-	pub SortAndTruncate: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::SortAndTruncate;	
+	pub SortAndTruncate: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::SortAndTruncate;
 }
 
 impl frame_system::Config for Test {
