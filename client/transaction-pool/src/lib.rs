@@ -589,18 +589,8 @@ where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	/// enactment_state getter, intended for tests only
-	#[doc(hidden)]
-	pub fn enactment_state(&self) -> Arc<Mutex<EnactmentState<Block>>> {
-		self.enactment_state.clone()
-	}
-}
-
-impl<PoolApi, Block> BasicPool<PoolApi, Block>
-where
-	Block: BlockT,
-	PoolApi: 'static + graph::ChainApi<Block = Block>,
-{
+	/// Part of MaintainedTransactionPool::maintain procedure. Handles enactment and retraction of
+	/// blocks, sends transaction notifications.
 	fn handle_enactment(
 		&self,
 		hash: Block::Hash,
@@ -754,10 +744,13 @@ where
 {
 	fn maintain(&self, event: ChainEvent<Self::Block>) -> Pin<Box<dyn Future<Output = ()> + Send>> {
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block;
+		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
+			EnactmentState::tree_route(&*self.api, from, to)
+		};
 		let (proceed, tree_route) = match self
 			.enactment_state
 			.lock()
-			.update_and_check_if_new_enactment_is_valid(&*self.api, &event)
+			.update_and_check_if_new_enactment_is_valid(&event, &compute_tree_route)
 		{
 			Err(msg) => {
 				log::warn!(target:"txpool", "{msg}");
@@ -823,8 +816,7 @@ where
 /// nbb(B1), nbb(B2) -> true
 /// nbb(B1), nbb(C1), f(C1) -> false (handle_enactment was already performed in nbb(B1)
 /// nbb(C1), f(B1) -> false (handle_enactment was already performed in nbb(B2)
-#[doc(hidden)]
-pub struct EnactmentState<Block>
+struct EnactmentState<Block>
 where
 	Block: BlockT,
 {
@@ -840,6 +832,22 @@ where
 		EnactmentState { recent_best_block, recent_finalized_block }
 	}
 
+	/// computes tree route using provided ChainApi instance
+	fn tree_route<PoolApi: graph::ChainApi<Block = Block>>(
+		api: &PoolApi,
+		from: Block::Hash,
+		to: Block::Hash,
+	) -> Result<TreeRoute<Block>, String> {
+		match api.tree_route(from, to) {
+			Ok(tree_route) => Ok(tree_route),
+			Err(e) =>
+				return Err(format!(
+					"Error [{e}] occured while computing tree_route from {from:?} to \
+					 previously finalized: {to:?}"
+				)),
+		}
+	}
+
 	/// This function returns true and the tree_route if blocks enact/retract process (implemented
 	/// in handle_enactment function) should be performed based on:
 	/// - recent_finalized_block
@@ -849,11 +857,14 @@ where
 	///
 	/// if enactment process is not needed (false, None) is returned
 	/// error message is returned when computing tree_route fails
-	pub fn update_and_check_if_new_enactment_is_valid<PoolApi: graph::ChainApi<Block = Block>>(
+	fn update_and_check_if_new_enactment_is_valid<F>(
 		&mut self,
-		api: &PoolApi,
 		event: &ChainEvent<Block>,
-	) -> Result<(bool, Option<TreeRoute<Block>>), String> {
+		tree_route: &F,
+	) -> Result<(bool, Option<TreeRoute<Block>>), String>
+	where
+		F: Fn(Block::Hash, Block::Hash) -> Result<TreeRoute<Block>, String>,
+	{
 		let (new_hash, finalized) = match event {
 			ChainEvent::NewBestBlock { hash, .. } => (*hash, false),
 			ChainEvent::Finalized { hash, .. } => (*hash, true),
@@ -861,15 +872,7 @@ where
 
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
-		let tree_route = match api.tree_route(self.recent_best_block, new_hash) {
-			Ok(tree_route) => tree_route,
-			Err(e) =>
-				return Err(format!(
-					"Error [{e}] occured while computing tree_route from {new_hash:?} to \
-									previously finalized: {:?}",
-					self.recent_best_block
-				)),
-		};
+		let tree_route = tree_route(self.recent_best_block, new_hash)?;
 
 		log::trace!(
 			target: "txpool",
@@ -930,4 +933,455 @@ where
 	futures::stream::select(import_stream, finality_stream)
 		.for_each(|evt| txpool.maintain(evt))
 		.await
+}
+
+#[cfg(test)]
+mod enactment_state_tests {
+	use sp_blockchain::{HashAndNumber, TreeRoute};
+	use substrate_test_runtime_client::runtime::{Block, Hash};
+
+	// some helpers for convenient blocks' hash naming
+	fn a() -> HashAndNumber<Block> {
+		HashAndNumber { number: 1, hash: Hash::from([0xAA; 32]) }
+	}
+	fn b1() -> HashAndNumber<Block> {
+		HashAndNumber { number: 2, hash: Hash::from([0xB1; 32]) }
+	}
+	fn c1() -> HashAndNumber<Block> {
+		HashAndNumber { number: 3, hash: Hash::from([0xC1; 32]) }
+	}
+	fn d1() -> HashAndNumber<Block> {
+		HashAndNumber { number: 4, hash: Hash::from([0xD1; 32]) }
+	}
+	fn e1() -> HashAndNumber<Block> {
+		HashAndNumber { number: 5, hash: Hash::from([0xE1; 32]) }
+	}
+	fn b2() -> HashAndNumber<Block> {
+		HashAndNumber { number: 2, hash: Hash::from([0xB2; 32]) }
+	}
+	fn c2() -> HashAndNumber<Block> {
+		HashAndNumber { number: 3, hash: Hash::from([0xC2; 32]) }
+	}
+	fn d2() -> HashAndNumber<Block> {
+		HashAndNumber { number: 4, hash: Hash::from([0xD2; 32]) }
+	}
+	fn e2() -> HashAndNumber<Block> {
+		HashAndNumber { number: 5, hash: Hash::from([0xE2; 32]) }
+	}
+
+	/// mock tree_route computing function for simple two-forks chain
+	fn tree_route(from: Hash, to: Hash) -> Result<TreeRoute<Block>, String> {
+		let chain = vec![e1(), d1(), c1(), b1(), a(), b2(), c2(), d2(), e2()];
+		let pivot = 4_usize;
+
+		let from = chain
+			.iter()
+			.position(|bn| bn.hash == from)
+			.ok_or("existing block should be given")?;
+		let to = chain
+			.iter()
+			.position(|bn| bn.hash == to)
+			.ok_or("existing block should be given")?;
+
+		/*
+		 *      B1-C1-D1-E1
+		 *     /
+		 *    A
+		 *     \
+		 *      B2-C2-D2-E2
+		 *
+		 *    [E1 D1 C1 B1 A B2 C2 D2 E2]
+		 */
+
+		let vec: Vec<HashAndNumber<Block>> = if from < to {
+			chain.into_iter().skip(from).take(to - from + 1).collect()
+		} else {
+			chain.into_iter().skip(to).take(from - to + 1).rev().collect()
+		};
+
+		let pivot = if from <= pivot && to <= pivot {
+			if from < to {
+				to - from
+			} else {
+				0
+			}
+		} else if from >= pivot && to >= pivot {
+			if from < to {
+				0
+			} else {
+				from - to
+			}
+		} else {
+			if from < to {
+				pivot - from
+			} else {
+				from - pivot
+			}
+		};
+
+		Ok(TreeRoute::new(vec, pivot))
+	}
+
+	mod mock_tree_route_tests {
+		use super::*;
+
+		/// asserts that tree routes are equal
+		fn assert_treeroute_eq(expected: TreeRoute<Block>, result: TreeRoute<Block>) {
+			assert_eq!(result.common_block().hash, expected.common_block().hash);
+			assert_eq!(result.enacted().len(), expected.enacted().len());
+			assert_eq!(result.retracted().len(), expected.retracted().len());
+			assert!(result
+				.enacted()
+				.iter()
+				.zip(expected.enacted().iter())
+				.all(|(a, b)| a.hash == b.hash));
+			assert!(result
+				.retracted()
+				.iter()
+				.zip(expected.retracted().iter())
+				.all(|(a, b)| a.hash == b.hash));
+		}
+
+		// some tests for mock tree_route function
+		#[test]
+		fn tree_route_mock_test_01() {
+			let result = tree_route(b1().hash, a().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![b1(), a()], 1);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_02() {
+			let result = tree_route(a().hash, b1().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![a(), b1()], 0);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_03() {
+			let result = tree_route(a().hash, c2().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![a(), b2(), c2()], 0);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_04() {
+			let result = tree_route(e2().hash, a().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![e2(), d2(), c2(), b2(), a()], 4);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_05() {
+			let result = tree_route(d1().hash, b1().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![d1(), c1(), b1()], 2);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_06() {
+			let result = tree_route(d2().hash, b2().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![d2(), c2(), b2()], 2);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_07() {
+			let result = tree_route(b1().hash, d1().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![b1(), c1(), d1()], 0);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_08() {
+			let result = tree_route(b2().hash, d2().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![b2(), c2(), d2()], 0);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_09() {
+			let result = tree_route(e2().hash, e1().hash).expect("tree route exists");
+			let expected =
+				TreeRoute::new(vec![e2(), d2(), c2(), b2(), a(), b1(), c1(), d1(), e1()], 4);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_10() {
+			let result = tree_route(e1().hash, e2().hash).expect("tree route exists");
+			let expected =
+				TreeRoute::new(vec![e1(), d1(), c1(), b1(), a(), b2(), c2(), d2(), e2()], 4);
+			assert_treeroute_eq(result, expected);
+		}
+		#[test]
+		fn tree_route_mock_test_11() {
+			let result = tree_route(b1().hash, c2().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![b1(), a(), b2(), c2()], 1);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_12() {
+			let result = tree_route(d2().hash, b1().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![d2(), c2(), b2(), a(), b1()], 3);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_13() {
+			let result = tree_route(c2().hash, e1().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![c2(), b2(), a(), b1(), c1(), d1(), e1()], 2);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_14() {
+			let result = tree_route(b1().hash, b1().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![b1()], 0);
+			assert_treeroute_eq(result, expected);
+		}
+
+		#[test]
+		fn tree_route_mock_test_15() {
+			let result = tree_route(b2().hash, b2().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![b2()], 0);
+			assert_treeroute_eq(result, expected);
+		}
+	}
+
+	use super::EnactmentState;
+	use sc_transaction_pool_api::ChainEvent;
+	use std::sync::Arc;
+
+	fn trigger_new_best_block(
+		state: &mut EnactmentState<Block>,
+		from: HashAndNumber<Block>,
+		acted_on: HashAndNumber<Block>,
+	) -> (bool, Option<TreeRoute<Block>>) {
+		let (from, acted_on) = (from.hash, acted_on.hash);
+
+		let event_tree_route = tree_route(from, acted_on).expect("Tree route exists");
+
+		state
+			.update_and_check_if_new_enactment_is_valid(
+				&ChainEvent::NewBestBlock {
+					hash: acted_on,
+					tree_route: Some(Arc::new(event_tree_route)),
+				},
+				&tree_route,
+			)
+			.unwrap()
+	}
+
+	fn trigger_finalized(
+		state: &mut EnactmentState<Block>,
+		from: HashAndNumber<Block>,
+		acted_on: HashAndNumber<Block>,
+	) -> (bool, Option<TreeRoute<Block>>) {
+		let (from, acted_on) = (from.hash, acted_on.hash);
+
+		let v = tree_route(from, acted_on)
+			.expect("Tree route exists")
+			.enacted()
+			.iter()
+			.map(|h| h.hash)
+			.collect::<Vec<_>>();
+
+		state
+			.update_and_check_if_new_enactment_is_valid(
+				&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() },
+				&tree_route,
+			)
+			.unwrap()
+	}
+
+	fn assert_es_eq(
+		es: &EnactmentState<Block>,
+		expected_best_block: HashAndNumber<Block>,
+		expected_finalized_block: HashAndNumber<Block>,
+	) {
+		assert_eq!(es.recent_best_block, expected_best_block.hash);
+		assert_eq!(es.recent_finalized_block, expected_finalized_block.hash);
+	}
+
+	#[test]
+	fn test_enactment_helper() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		/*
+		 *      B1-C1-D1-E1
+		 *     /
+		 *    A
+		 *     \
+		 *      B2-C2-D2-E2
+		 */
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), d1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, d1(), a());
+
+		let (result, _) = trigger_new_best_block(&mut es, d1(), e1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e1(), a());
+
+		let (result, _) = trigger_finalized(&mut es, a(), d2());
+		assert_eq!(result, true);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_new_best_block(&mut es, d2(), e1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_finalized(&mut es, a(), b2());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_finalized(&mut es, a(), b1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), d2());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_finalized(&mut es, a(), d2());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), c2());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), c1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, d2(), d2());
+
+		let (result, _) = trigger_new_best_block(&mut es, d2(), e2());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e2(), d2());
+
+		let (result, _) = trigger_finalized(&mut es, d2(), e2());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e2(), e2());
+	}
+
+	#[test]
+	fn test_enactment_helper_2() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		/*
+		 *   A-B1-C1-D1-E1
+		 */
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), b1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, b1(), a());
+
+		let (result, _) = trigger_new_best_block(&mut es, b1(), c1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, c1(), a());
+
+		let (result, _) = trigger_new_best_block(&mut es, c1(), d1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, d1(), a());
+
+		let (result, _) = trigger_new_best_block(&mut es, d1(), e1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e1(), a());
+
+		let (result, _) = trigger_finalized(&mut es, a(), c1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e1(), c1());
+
+		let (result, _) = trigger_finalized(&mut es, c1(), e1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e1(), e1());
+	}
+
+	#[test]
+	fn test_enactment_helper_3() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		/*
+		 *   A-B1-C1-D1-E1
+		 */
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), e1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e1(), a());
+
+		let (result, _) = trigger_finalized(&mut es, a(), b1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e1(), b1());
+	}
+
+	#[test]
+	fn test_enactment_helper_4() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		/*
+		 *   A-B1-C1-D1-E1
+		 */
+
+		let (result, _) = trigger_finalized(&mut es, a(), e1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e1(), e1());
+
+		let (result, _) = trigger_finalized(&mut es, e1(), b1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e1(), e1());
+	}
+
+	#[test]
+	fn test_enactment_helper_5() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		/*
+		 *      B1-C1-D1-E1
+		 *     /
+		 *    A
+		 *     \
+		 *      B2-C2-D2-E2
+		 */
+
+		let (result, _) = trigger_finalized(&mut es, a(), e1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e1(), e1());
+
+		let (result, _) = trigger_finalized(&mut es, e1(), e2());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e1(), e1());
+	}
+
+	#[test]
+	fn test_enactment_helper_6() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		/*
+		 *    A-B1-C1-D1-E1
+		 */
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), b1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, b1(), a());
+
+		let (result, _) = trigger_finalized(&mut es, a(), d1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, d1(), d1());
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), e1());
+		assert_eq!(result, true);
+		assert_es_eq(&es, e1(), d1());
+
+		let (result, _) = trigger_new_best_block(&mut es, a(), c1());
+		assert_eq!(result, false);
+		assert_es_eq(&es, e1(), d1());
+	}
 }
