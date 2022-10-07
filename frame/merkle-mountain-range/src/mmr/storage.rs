@@ -68,25 +68,25 @@ where
 		(T::INDEXING_PREFIX, block, OFFCHAIN_PRUNING_MAP_KEY_SUFFIX).encode()
 	}
 
-	/// Append `hash` to the list of parent hashes for `block` in offchain db.
-	pub fn append(block: T::BlockNumber, hash: <T as frame_system::Config>::Hash) {
-		let map_key = Self::pruning_map_offchain_key(block);
+	/// Append `hash` to the list of hashes for `block_number` in offchain db.
+	pub fn append(block_number: T::BlockNumber, hash: <T as frame_system::Config>::Hash) {
+		let map_key = Self::pruning_map_offchain_key(block_number);
 		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key)
 			.and_then(|v| codec::Decode::decode(&mut &*v).ok())
 			.or_else(|| Some(Vec::<<T as frame_system::Config>::Hash>::new()))
-			.map(|mut parents| {
-				parents.push(hash);
+			.map(|mut hashes| {
+				hashes.push(hash);
 				offchain::local_storage_set(
 					StorageKind::PERSISTENT,
 					&map_key,
-					&Encode::encode(&parents),
+					&Encode::encode(&hashes),
 				);
 			});
 	}
 
-	/// Remove list of parent hashes for `block` from offchain db and return it.
-	pub fn remove(block: T::BlockNumber) -> Option<Vec<<T as frame_system::Config>::Hash>> {
-		let map_key = Self::pruning_map_offchain_key(block);
+	/// Remove list of hashes for `block_number` from offchain db and return it.
+	pub fn remove(block_number: T::BlockNumber) -> Option<Vec<<T as frame_system::Config>::Hash>> {
+		let map_key = Self::pruning_map_offchain_key(block_number);
 		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key).and_then(|v| {
 			offchain::local_storage_clear(StorageKind::PERSISTENT, &map_key);
 			codec::Decode::decode(&mut &*v).ok()
@@ -112,6 +112,36 @@ where
 	I: 'static,
 	L: primitives::FullLeaf,
 {
+	/// TODO
+	pub(crate) fn move_new_nodes_to_offchain(block_number: T::BlockNumber) {
+		let store_to_offchain =
+			|block_hash: <T as frame_system::Config>::Hash, node_index: NodeIndex, value: &[u8]| {
+				let key = Pallet::<T, I>::node_offchain_key(block_hash, node_index);
+				frame_support::log::debug!(
+					target: "runtime::mmr::offchain", "offchain db set: pos {} block_hash {:?} key {:?}",
+					node_index, block_hash, key
+				);
+				sp_io::offchain::local_storage_set(
+					sp_core::offchain::StorageKind::PERSISTENT,
+					&key,
+					value,
+				);
+			};
+		// Copy newly added leaf and nodes to offchain db keyed under this block's hash.
+		if let Some(elem) = LatestLeaf::<T, _>::get() {
+			let block_hash = <frame_system::Pallet<T>>::block_hash(block_number);
+			// FIXME: fix expect
+			let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(block_number).expect("TODO");
+			let leaf_node_index = mmr_lib::helper::leaf_index_to_pos(leaf_index);
+			// Copy over leaf.
+			store_to_offchain(block_hash, leaf_node_index, &elem);
+			// Copy over all parent nodes.
+			NewNodes::<T, _>::drain().for_each(|(node_index, node)| {
+				store_to_offchain(block_hash, node_index, &node.encode());
+			});
+		}
+	}
+
 	/// Move nodes and leaves added by block `N` in offchain db from _fork-aware key_ to
 	/// _canonical key_,
 	/// where `N` is `frame_system::BlockHashCount` blocks behind current block number.
@@ -329,8 +359,9 @@ where
 				<Peaks<T, I>>::insert(node_index, elem.hash());
 			}
 
-			// Increase the indices. Store all newly added nodes and leaves to temporary
-			// storage, from where they will be copied to offchain db by offchain worker.
+			// Increase the indices.
+			// Store all newly added nodes and leaves to temporary storage, from where
+			// they will be copied to offchain db by offchain worker.
 			node_index += 1;
 			match elem {
 				Node::Data(..) => {

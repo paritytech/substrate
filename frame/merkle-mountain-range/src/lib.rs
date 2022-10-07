@@ -258,21 +258,24 @@ pub mod pallet {
 
 		fn offchain_worker(n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
+
+			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::move_new_nodes_to_offchain(n);
 			// MMR pallet uses offchain storage to hold full MMR and leaves.
-			// The leaves are saved under fork-unique keys `(parent_hash, pos)`.
+			// The leaves are saved under fork-unique keys `(block_hash, pos)`.
 			// MMR Runtime depends on `frame_system::block_hash(block_num)` mappings to find
 			// parent hashes for particular nodes or leaves.
 			// This MMR offchain worker function moves a rolling window of the same size
 			// as `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
 			// about to exit the window are "canonicalized" so that their offchain key no longer
-			// depends on `parent_hash` therefore on access to `frame_system::block_hash`.
+			// depends on `block_hash` therefore on access to `frame_system::block_hash`.
 			//
 			// This approach works to eliminate fork-induced leaf collisions in offchain db,
 			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
-			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc):
-			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
-			//   solely on block number. The only way to have collisions is if two competing forks
-			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
+			// blocks:
+			//   entries pertaining to block `N` where `N < current-BlockHashCount` are moved to a
+			//   key based solely on block number. The only way to have collisions is if two
+			//   competing forks are deeper than `frame_system::BlockHashCount` blocks and they
+			//   both "canonicalize" their view of block `N`.
 			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
 			// other forks are pruned from offchain db.
 			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
@@ -335,6 +338,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		<frame_system::Pallet<T>>::block_number()
 			.saturating_sub(leaves_count.saturated_into())
 			.saturating_add(leaf_index.saturated_into())
+	}
+
+	/// Convert a `block_num` into a leaf index.
+	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error> {
+		use sp_runtime::traits::CheckedSub;
+		// leaf_idx = (leaves_count - 1) - (current_block_num - block_num);
+		let best_block_num = <frame_system::Pallet<T>>::block_number();
+		let blocks_diff = best_block_num.checked_sub(&block_num).ok_or_else(|| {
+			primitives::Error::BlockNumToLeafIndex
+				.log_debug("The provided block_number is greater than the best block number.")
+		})?;
+		let blocks_diff_as_leaf_idx = blocks_diff.try_into().map_err(|_| {
+			primitives::Error::BlockNumToLeafIndex
+				.log_debug("The `blocks_diff` couldn't be converted to `LeafIndex`.")
+		})?;
+
+		let leaf_idx = Self::mmr_leaves()
+			.checked_sub(1)
+			.and_then(|last_leaf_idx| last_leaf_idx.checked_sub(blocks_diff_as_leaf_idx))
+			.ok_or_else(|| {
+				primitives::Error::BlockNumToLeafIndex
+					.log_debug("There aren't enough leaves in the chain.")
+			})?;
+		Ok(leaf_idx)
 	}
 
 	/// Generate a MMR proof for the given `leaf_indices`.

@@ -387,6 +387,8 @@ impl<Hash> Proof<Hash> {
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
+	/// Could not get leaf index from block number.
+	BlockNumToLeafIndex,
 	/// Error while pushing new node.
 	Push,
 	/// Error getting the new root.
