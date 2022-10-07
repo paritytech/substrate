@@ -21,7 +21,7 @@ use codec::Encode;
 
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule},
+	wasm_runtime::{WasmInstance, WasmModule, HeapPages},
 };
 #[cfg(feature = "wasmtime")]
 use sc_executor_wasmtime::InstantiationStrategy;
@@ -62,10 +62,9 @@ fn initialize(
 	match method {
 		Method::Interpreted => sc_executor_wasmi::create_runtime(
 			blob,
-			heap_pages,
+			HeapPages::ExtraMax(heap_pages),
 			host_functions,
 			allow_missing_func_imports,
-			None,
 		)
 		.map(|runtime| -> Arc<dyn WasmModule> { Arc::new(runtime) }),
 		#[cfg(feature = "wasmtime")]

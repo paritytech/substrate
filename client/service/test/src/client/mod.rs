@@ -29,7 +29,7 @@ use sc_consensus::{
 use sc_service::client::{new_in_mem, Client, LocalCallExecutor};
 use sp_api::ProvideRuntimeApi;
 use sp_consensus::{BlockOrigin, BlockStatus, Error as ConsensusError, SelectChain};
-use sp_core::{testing::TaskExecutor, H256};
+use sp_core::{testing::TaskExecutor, traits::CallContext, H256};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Header as HeaderT},
@@ -143,6 +143,7 @@ fn construct_block(
 		Default::default(),
 		&runtime_code,
 		task_executor.clone() as Box<_>,
+		CallContext::Offchain,
 	)
 	.execute(ExecutionStrategy::NativeElseWasm)
 	.unwrap();
