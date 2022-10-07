@@ -32,7 +32,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
 
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
-			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
 			let mut settings = config.values();
 			let lock_settings = lock_config.values();
 

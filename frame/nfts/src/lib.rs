@@ -547,6 +547,8 @@ pub mod pallet {
 		MethodDisabled,
 		/// Item's config already exists and should be equal to the provided one.
 		InconsistentItemConfig,
+		/// Config for a collection or an item can't be found.
+		NoConfig,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
