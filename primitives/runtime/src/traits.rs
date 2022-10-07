@@ -803,8 +803,8 @@ sp_core::impl_maybe_marker!(
 );
 
 /// A type that can be used in runtime structures.
-pub trait Member: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
-impl<T: Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static> Member for T {}
+pub trait Member: MaxEncodedLen + Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static {}
+impl<T: MaxEncodedLen + Send + Sync + Sized + Debug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Determine if a `MemberId` is a valid member.
 pub trait IsMember<MemberId> {
