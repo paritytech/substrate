@@ -1148,6 +1148,13 @@ mod enactment_state_tests {
 			let expected = TreeRoute::new(vec![b2()], 0);
 			assert_treeroute_eq(result, expected);
 		}
+
+		#[test]
+		fn tree_route_mock_test_16() {
+			let result = tree_route(a().hash, a().hash).expect("tree route exists");
+			let expected = TreeRoute::new(vec![a()], 0);
+			assert_treeroute_eq(result, expected);
+		}
 	}
 
 	use super::EnactmentState;
