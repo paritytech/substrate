@@ -761,8 +761,8 @@ where
 		}
 
 		if let ChainEvent::Finalized { hash, tree_route } = event {
-			log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized:
-		{prev_finalized_block:?}");
+			log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized: \
+						{prev_finalized_block:?}");
 			for hash in tree_route.iter().chain(std::iter::once(&hash)) {
 				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
 					log::warn!(
