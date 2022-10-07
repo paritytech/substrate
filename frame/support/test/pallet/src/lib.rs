@@ -24,20 +24,17 @@ pub use pallet::*;
 
 #[frame_support::pallet]
 pub mod pallet {
-	#[allow(unused_imports)]
 	use frame_support::pallet_prelude::*;
-	#[allow(unused_imports)]
-	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
-	pub struct Pallet<T>(_);
+	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
 	/// I'm the documentation
 	#[pallet::storage]
-	pub type Value<T> = StorageValue<Value = u32>;
+	pub type Value<T> = StorageValue<_, u32>;
 
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
