@@ -276,6 +276,14 @@ impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	}
 }
 
+impl<'a, T, S: Get<u32>> BoundedSlice<'a, T, S> {
+	/// Create an instance from the first elements of the given slice (or all of it if it is smaller
+	/// than the length bound).
+	pub fn truncate_from(s: &'a [T]) -> Self {
+		Self(&s[0..(s.len().min(S::get() as usize))], PhantomData)
+	}
+}
+
 impl<T: Decode, S: Get<u32>> Decode for BoundedVec<T, S> {
 	fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
 		let inner = Vec::<T>::decode(input)?;
@@ -620,12 +628,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index > len`.
-	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), ()> {
+	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), T> {
 		if self.len() < Self::bound() {
 			self.0.insert(index, element);
 			Ok(())
 		} else {
-			Err(())
+			Err(element)
 		}
 	}
 
@@ -635,12 +643,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if the new capacity exceeds isize::MAX bytes.
-	pub fn try_push(&mut self, element: T) -> Result<(), ()> {
+	pub fn try_push(&mut self, element: T) -> Result<(), T> {
 		if self.len() < Self::bound() {
 			self.0.push(element);
 			Ok(())
 		} else {
-			Err(())
+			Err(element)
 		}
 	}
 }
@@ -673,13 +681,13 @@ where
 }
 
 impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
-	type Error = ();
+	type Error = Vec<T>;
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
 			// explicit check just above
 			Ok(Self::unchecked_from(t))
 		} else {
-			Err(())
+			Err(t)
 		}
 	}
 }
@@ -885,6 +893,16 @@ where
 pub mod test {
 	use super::*;
 	use crate::{bounded_vec, ConstU32};
+
+	#[test]
+	fn slice_truncate_from_works() {
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3, 4, 5]);
+		assert_eq!(bounded.deref(), &[1, 2, 3, 4]);
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3, 4]);
+		assert_eq!(bounded.deref(), &[1, 2, 3, 4]);
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3]);
+		assert_eq!(bounded.deref(), &[1, 2, 3]);
+	}
 
 	#[test]
 	fn slide_works() {

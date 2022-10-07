@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use beefy_primitives::{BeefyApi, MmrRootHash};
+use beefy_primitives::{BeefyApi, MmrRootHash, PayloadProvider};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, Finalizer};
@@ -167,11 +167,13 @@ pub struct BeefyNetworkParams<B: Block, N> {
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B: Block, BE, C, N, R> {
+pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
 	pub backend: Arc<BE>,
+	/// BEEFY Payload provider
+	pub payload_provider: P,
 	/// Runtime Api Provider
 	pub runtime: Arc<R>,
 	/// Local key store
@@ -191,11 +193,12 @@ pub struct BeefyParams<B: Block, BE, C, N, R> {
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
+pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE> + BlockBackend<B>,
+	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
 	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
@@ -203,6 +206,7 @@ where
 	let BeefyParams {
 		client,
 		backend,
+		payload_provider,
 		runtime,
 		key_store,
 		network_params,
@@ -249,6 +253,7 @@ where
 	let worker_params = worker::WorkerParams {
 		client,
 		backend,
+		payload_provider,
 		runtime,
 		network,
 		key_store: key_store.into(),
@@ -261,7 +266,7 @@ where
 		min_block_delta,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
 
 	futures::future::join(worker.run(), on_demand_justifications_handler.run()).await;
 }
