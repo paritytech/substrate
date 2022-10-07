@@ -38,6 +38,7 @@ use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
+	mmr::MmrRootProvider,
 	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
 };
@@ -372,10 +373,12 @@ where
 			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
 			_phantom: PhantomData,
 		};
+		let payload_provider = MmrRootProvider::new(api.clone());
 
 		let beefy_params = crate::BeefyParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
+			payload_provider,
 			runtime: api.clone(),
 			key_store: Some(keystore),
 			network_params,
@@ -384,7 +387,7 @@ where
 			prometheus_registry: None,
 			on_demand_justifications_handler: on_demand_justif_handler,
 		};
-		let task = crate::start_beefy_gadget::<_, _, _, _, _>(beefy_params);
+		let task = crate::start_beefy_gadget::<_, _, _, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&task);
