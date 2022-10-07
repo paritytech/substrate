@@ -159,7 +159,7 @@ mod mmr_root_provider {
 	where
 		B: Block,
 		R: ProvideRuntimeApi<B>,
-		R::Api: MmrApi<B, MmrRootHash>,
+		R::Api: MmrApi<B, MmrRootHash, BlockNumber>,
 	{
 		/// Create new BEEFY Payload provider with MMR Root as payload.
 		pub fn new(runtime: Arc<R>) -> Self {
@@ -182,7 +182,7 @@ mod mmr_root_provider {
 	where
 		B: Block,
 		R: ProvideRuntimeApi<B>,
-		R::Api: MmrApi<B, MmrRootHash>,
+		R::Api: MmrApi<B, MmrRootHash, BlockNumber>,
 	{
 		fn payload(&self, header: &B::Header) -> Option<Payload> {
 			self.mmr_root_from_digest_or_runtime(header).map(|mmr_root| {
