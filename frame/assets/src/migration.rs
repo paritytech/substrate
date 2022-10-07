@@ -23,10 +23,7 @@
 // use sp_std::prelude::*;
 
 use super::*;
-use frame_support::traits::{
-	GetStorageVersion, OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
-};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use frame_support::{log, traits::OnRuntimeUpgrade};
 
 pub mod v1 {
 	use frame_support::{pallet_prelude::*, weights::Weight};
@@ -84,12 +81,10 @@ pub mod v1 {
 					Some(old_value.migrate_to_v1())
 				});
 				current_version.put::<Pallet<T>>();
-				// log::info!(target: "runtime::assets", "Upgraded {} pools, storage to version
-				// {:?}", tranlated, current);
+				log::info!(target: "runtime::assets", "Upgraded {} pools, storage to version {:?}", translated, current_version);
 				T::DbWeight::get().reads_writes(translated + 1, translated + 1)
 			} else {
-				// log::info!(target: "runtime::assets",  "Migration did not execute. This probably
-				// should be removed");
+				log::info!(target: "runtime::assets",  "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
 			}
 		}
