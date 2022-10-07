@@ -240,6 +240,11 @@ pub mod pallet {
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
+
+			// clear out previous `NewNodes`; `LatestLeaf` will just be overwritten.
+			// FIXME: use proper limit (count_nodes_now - count_nodes_one_leaf_less).
+			let _ = NewNodes::<T, I>::clear(100, None);
+
 			// append new leaf to MMR
 			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
 			mmr.push(data).expect("MMR push never fails.");
@@ -253,6 +258,7 @@ pub mod pallet {
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 
+			// TODO: add weight: 2*DbReadWrite*(nodes_before - nodes_now)
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
 

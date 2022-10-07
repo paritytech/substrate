@@ -132,11 +132,11 @@ where
 			let block_hash = <frame_system::Pallet<T>>::block_hash(block_number);
 			// FIXME: fix expect
 			let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(block_number).expect("TODO");
-			let leaf_node_index = mmr_lib::helper::leaf_index_to_pos(leaf_index);
+			let leaf_node_index = helper::leaf_index_to_pos(leaf_index);
 			// Copy over leaf.
 			store_to_offchain(block_hash, leaf_node_index, &elem);
 			// Copy over all parent nodes.
-			NewNodes::<T, _>::drain().for_each(|(node_index, node)| {
+			NewNodes::<T, _>::iter().for_each(|(node_index, node)| {
 				store_to_offchain(block_hash, node_index, &node.encode());
 			});
 		}
