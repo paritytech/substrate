@@ -1720,8 +1720,8 @@ fn collection_locking_should_work() {
 #[test]
 fn pallet_level_feature_flags_should_work() {
 	new_test_ext().execute_with(|| {
-		FeatureFlags::set(&SystemFeatures(
-			SystemFeature::NoTrading | SystemFeature::NoApprovals | SystemFeature::NoAttributes,
+		Features::set(&PalletFeatures(
+			PalletFeature::NoTrading | PalletFeature::NoApprovals | PalletFeature::NoAttributes,
 		));
 
 		let user_id = 1;
@@ -1738,7 +1738,7 @@ fn pallet_level_feature_flags_should_work() {
 			default_item_config(),
 		));
 
-		// SystemFeature::NoTrading
+		// PalletFeature::NoTrading
 		assert_noop!(
 			Nfts::set_price(RuntimeOrigin::signed(user_id), collection_id, item_id, Some(1), None),
 			Error::<Test>::MethodDisabled
@@ -1748,13 +1748,13 @@ fn pallet_level_feature_flags_should_work() {
 			Error::<Test>::MethodDisabled
 		);
 
-		// SystemFeature::NoApprovals
+		// PalletFeature::NoApprovals
 		assert_noop!(
 			Nfts::approve_transfer(RuntimeOrigin::signed(user_id), collection_id, item_id, 2, None),
 			Error::<Test>::MethodDisabled
 		);
 
-		// SystemFeature::NoAttributes
+		// PalletFeature::NoAttributes
 		assert_noop!(
 			Nfts::set_attribute(
 				RuntimeOrigin::signed(user_id),

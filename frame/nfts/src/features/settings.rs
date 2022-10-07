@@ -53,8 +53,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((!settings.contains(setting), settings))
 	}
 
-	pub fn is_feature_flag_set(feature: SystemFeature) -> bool {
-		let features = T::FeatureFlags::get();
-		return features.0.contains(feature)
+	pub fn is_pallet_feature_disabled(feature: PalletFeature) -> bool {
+		let features = T::Features::get();
+		return !features.0.contains(feature)
 	}
 }

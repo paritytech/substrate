@@ -165,7 +165,7 @@ pub mod pallet {
 
 		/// Disables some of pallet's features.
 		#[pallet::constant]
-		type FeatureFlags: Get<SystemFeatures>;
+		type Features: Get<PalletFeatures>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -1015,7 +1015,7 @@ pub mod pallet {
 			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoApprovals),
+				Self::is_pallet_feature_disabled(PalletFeature::NoApprovals),
 				Error::<T, I>::MethodDisabled
 			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -1265,7 +1265,7 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			ensure!(
-				!Self::is_feature_flag_set(SystemFeature::NoAttributes),
+				Self::is_pallet_feature_disabled(PalletFeature::NoAttributes),
 				Error::<T, I>::MethodDisabled
 			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)

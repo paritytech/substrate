@@ -234,7 +234,7 @@ impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum SystemFeature {
+pub enum PalletFeature {
 	/// Disallow trading operations.
 	NoTrading,
 	/// Disallow setting attributes.
@@ -246,15 +246,14 @@ pub enum SystemFeature {
 	/// Disallow public mints.
 	NoPublicMints,
 }
-pub type SystemFeatureFlags = BitFlags<SystemFeature>;
 
-/// Wrapper type for `SystemFeatureFlags` that implements `Codec`.
+/// Wrapper type for `BitFlags<PalletFeature>` that implements `Codec`.
 #[derive(Default, RuntimeDebug)]
-pub struct SystemFeatures(pub SystemFeatureFlags);
+pub struct PalletFeatures(pub BitFlags<PalletFeature>);
 
-impl SystemFeatures {
+impl PalletFeatures {
 	pub fn empty() -> Self {
 		Self(BitFlags::EMPTY)
 	}
 }
-impl_codec_bitflags!(SystemFeatures, u64, SystemFeature);
+impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);

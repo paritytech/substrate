@@ -20,7 +20,6 @@
 use super::*;
 use crate as pallet_nfts;
 
-use enumflags2::BitFlag;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
@@ -86,7 +85,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub storage FeatureFlags: SystemFeatures = SystemFeatures(SystemFeature::empty());
+	pub storage Features: PalletFeatures = PalletFeatures::empty();
 }
 
 impl Config for Test {
@@ -108,7 +107,7 @@ impl Config for Test {
 	type ApprovalsLimit = ConstU32<10>;
 	type MaxTips = ConstU32<10>;
 	type MaxDeadlineDuration = ConstU64<10000>;
-	type FeatureFlags = FeatureFlags;
+	type Features = Features;
 	type WeightInfo = ();
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = ();
