@@ -35,11 +35,11 @@ fn parse_pallet_name(pallet: &str) -> String {
 #[derive(Debug, clap::Parser)]
 pub struct PalletCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[clap(short, long, parse(from_str = parse_pallet_name), required_unless_present = "list")]
+	#[clap(short, long, parse(from_str = parse_pallet_name), required_unless_present_any = ["list", "json-input"])]
 	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[clap(short, long, required_unless_present = "list")]
+	#[clap(short, long, required_unless_present_any = ["list", "json-input"])]
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
@@ -166,4 +166,10 @@ pub struct PalletCmd {
 	/// template for that purpose.
 	#[clap(long)]
 	pub no_storage_info: bool,
+
+	/// A path to a `.json` file with existing benchmark results generated with `--json` or
+	/// `--json-file`. When specified the benchmarks are not actually executed, and the data for
+	/// the analysis is read from this file.
+	#[clap(long)]
+	pub json_input: Option<PathBuf>,
 }
