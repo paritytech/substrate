@@ -330,9 +330,8 @@ pub mod pallet {
 		/// - `spawner`: The account that originally called `pure` to create this account.
 		/// - `index`: The disambiguation index originally passed to `pure`. Probably `0`.
 		/// - `proxy_type`: The proxy type originally passed to `pure`.
-		/// - (`height`, `ext_index`): An Optional tuple with:
-		/// 	- The height of the chain when the call to `pure` was processed and;
-		/// 	- The extrinsic index in which the call to `pure` was processed.
+		/// - `height`: The height of the chain when the call to `pure` was processed.
+		/// - `ext_index`: The extrinsic index in which the call to `pure` was processed.
 		///
 		/// Fails with `NoPermission` in case the caller is not a previously created pure
 		/// account whose `pure` call has corresponding parameters.
@@ -342,12 +341,47 @@ pub mod pallet {
 			spawner: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
 			index: u16,
-			when: Option<(T::BlockNumber, u32)>,
+			#[pallet::compact] height: T::BlockNumber,
+			#[pallet::compact] ext_index: u32,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let spawner = T::Lookup::lookup(spawner)?;
 
-			let proxy = Self::pure_account(&spawner, &proxy_type, index, when);
+			let when = (height, ext_index);
+			let proxy = Self::pure_account(&spawner, &proxy_type, index, Some(when));
+			ensure!(proxy == who, Error::<T>::NoPermission);
+
+			let (_, deposit) = Proxies::<T>::take(&who);
+			T::Currency::unreserve(&spawner, deposit);
+
+			Ok(())
+		}
+
+		/// Removes a previously spawned pure proxy by using its type and index.
+		///
+		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
+		/// inaccessible.
+		///
+		/// Requires a `Signed` origin, and the sender account must have been created by a call to
+		/// `pure` with corresponding parameters.
+		///
+		/// - `spawner`: The account that originally called `pure` to create this account.
+		/// - `proxy_type`: The proxy type originally passed to `pure`.
+		/// - `index`: The disambiguation index originally passed to `pure`. Probably `0`.
+		///
+		/// Fails with `NoPermission` in case the caller is not a previously created pure
+		/// account whose `pure` call has corresponding parameters.
+		#[pallet::weight(T::WeightInfo::kill_pure(T::MaxProxies::get()))]
+		pub fn kill_pure_by_type_and_index(
+			origin: OriginFor<T>,
+			spawner: AccountIdLookupOf<T>,
+			proxy_type: T::ProxyType,
+			index: u16,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let spawner = T::Lookup::lookup(spawner)?;
+
+			let proxy = Self::pure_account(&spawner, &proxy_type, index, None);
 			ensure!(proxy == who, Error::<T>::NoPermission);
 
 			let (_, deposit) = Proxies::<T>::take(&who);

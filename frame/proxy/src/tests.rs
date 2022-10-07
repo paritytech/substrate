@@ -567,7 +567,12 @@ fn pure_works() {
 		// other calls to pure allowed as long as they're not exactly the same.
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::JustTransfer, 0, 0));
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 1));
-		let anon2 = Proxy::pure_account(&2, &ProxyType::Any, 0, None);
+
+		// Manually adding a pure proxy account with `(height, ext_index) = (1, 0)`
+		let anon2 = Proxy::pure_account(&2, &ProxyType::Any, 0, Some((1, 0)));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(4), anon2, 2));
+		assert_ok!(Proxy::add_proxy_delegate(&anon2, 2, ProxyType::Any, 0));
+
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(2), ProxyType::Any, 0, 0));
 		assert_noop!(
 			Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0),
@@ -578,22 +583,23 @@ fn pure_works() {
 		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 3));
 
 		let call = Box::new(call_transfer(6, 1));
-		assert_ok!(Balances::transfer(RuntimeOrigin::signed(3), anon, 5));
+		assert_ok!(Balances::transfer(RuntimeOrigin::signed(4), anon, 5));
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(1), anon, None, call));
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(RuntimeCall::Proxy(ProxyCall::new_call_variant_kill_pure(
-			1,
-			ProxyType::Any,
-			0,
-			None,
-		)));
+		let call = Box::new(RuntimeCall::Proxy(
+			ProxyCall::new_call_variant_kill_pure_by_type_and_index(1, ProxyType::Any, 0),
+		));
 		assert_ok!(Proxy::proxy(RuntimeOrigin::signed(2), anon2, None, call.clone()));
 		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Err(de) }.into());
 		assert_noop!(
-			Proxy::kill_pure(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, None),
+			Proxy::kill_pure_by_type_and_index(RuntimeOrigin::signed(2), 1, ProxyType::Any, 0),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Proxy::kill_pure(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, 1, 0),
 			Error::<Test>::NoPermission
 		);
 		assert_eq!(Balances::free_balance(1), 0);

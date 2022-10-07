@@ -243,17 +243,21 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Pallet::<T>::create_pure(
-			RawOrigin::Signed(whitelisted_caller()).into(),
-			T::ProxyType::default(),
-			T::BlockNumber::zero(),
-			0
-		)?;
-		let pure_account = Pallet::<T>::pure_account(&caller, &T::ProxyType::default(), 0, None);
 
-		add_proxies::<T>(p, Some(pure_account.clone()))?;
+		let height = system::Pallet::<T>::block_number();
+		let ext_index = system::Pallet::<T>::extrinsic_index().unwrap_or(0);
+		let pure_account = Pallet::<T>::pure_account(
+			&caller, &T::ProxyType::default(), 0, Some((height, ext_index)));
+		T::Currency::make_free_balance_be(&pure_account, BalanceOf::<T>::max_value() / 2u32.into());
+		Pallet::<T>::add_proxy_delegate(
+			&pure_account,
+			caller.clone(),
+			T::ProxyType::default(),
+			height.clone(),
+		)?;
+
 		ensure!(Proxies::<T>::contains_key(&pure_account), "pure proxy not created");
-	}: _(RawOrigin::Signed(pure_account.clone()), caller_lookup, T::ProxyType::default(), 0, None)
+	}: _(RawOrigin::Signed(pure_account.clone()), caller_lookup, T::ProxyType::default(), 0, height, ext_index)
 	verify {
 		assert!(!Proxies::<T>::contains_key(&pure_account));
 	}
