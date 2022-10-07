@@ -26,7 +26,10 @@ use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
 use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
-use clap::{Args, Parser};
+use clap::{
+	builder::{PossibleValuesParser, TypedValueParser},
+	Args, Parser,
+};
 use log::info;
 use rand::prelude::*;
 use serde::Serialize;
@@ -99,7 +102,7 @@ pub struct StorageParams {
 
 	/// The `StateVersion` to use. Substrate `--dev` should use `V1` and Polkadot `V0`.
 	/// Selecting the wrong version can corrupt the DB.
-	#[arg(long, value_parser = ["0", "1"])]
+	#[arg(long, value_parser = PossibleValuesParser::new(["0", "1"]).map(|v| v.parse::<u8>().expect("0 and 1 can be parsed to u8; qed")))]
 	pub state_version: u8,
 
 	/// Trie cache size in bytes.
