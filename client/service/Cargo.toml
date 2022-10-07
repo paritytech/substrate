@@ -31,7 +31,7 @@ parking_lot = "0.12.1"
 log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
-pin-project = "1.0.10"
+pin-project = "1.0.12"
 hash-db = "0.15.2"
 serde = "1.0.136"
 serde_json = "1.0.85"
@@ -80,7 +80,7 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.11.0", default-features = false, features = [
+parity-util-mem = { version = "0.12.0", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.57"
