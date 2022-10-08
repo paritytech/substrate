@@ -986,9 +986,7 @@ pub mod pallet {
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// bound supports with T::MaxWinners
-			let supports = supports
-				.try_into()
-				.map_err(|_| Error::<T>::BoundNotMet)?;
+			let supports = supports.try_into().map_err(|_| Error::<T>::BoundNotMet)?;
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.

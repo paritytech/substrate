@@ -174,7 +174,6 @@ parameter_types! {
 	pub const BondingDuration: EraIndex = 3;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
-	pub SortAndTruncate: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::SortAndTruncate;
 }
 
 pub struct OnChainSeqPhragmen;
@@ -184,7 +183,6 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = Staking;
 	type WeightInfo = ();
 	type MaxWinners = ConstU32<100>;
-	type TooManyWinnersResolution = SortAndTruncate;
 }
 
 impl pallet_staking::Config for Test {

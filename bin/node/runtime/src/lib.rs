@@ -628,7 +628,6 @@ parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
 	pub MaxElectingVoters: u32 = 10_000;
 	pub MaxWinners: u32 = 1000;
-	pub SortAndTruncate: onchain::TooManyWinnersResolution = onchain::TooManyWinnersResolution::SortAndTruncate;
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -680,7 +679,6 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = <Runtime as pallet_election_provider_multi_phase::Config>::DataProvider;
 	type WeightInfo = frame_election_provider_support::weights::SubstrateWeight<Runtime>;
 	type MaxWinners = <Runtime as pallet_election_provider_multi_phase::Config>::MaxWinners;
-	type TooManyWinnersResolution = SortAndTruncate;
 }
 
 impl onchain::BoundedConfig for OnChainSeqPhragmen {

@@ -34,6 +34,9 @@ pub enum Error {
 	NposElections(sp_npos_elections::Error),
 	/// Errors from the data provider.
 	DataProvider(&'static str),
+	/// Configurational error caused by `desired_targets` requested by data
+	/// provider exceeding `MaxWinners`.
+	TooManyWinners,
 }
 
 impl From<sp_npos_elections::Error> for Error {
@@ -46,10 +49,10 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// This will accept voting data on the fly and produce the results immediately.
 ///
-/// The [`BoundedElectionProvider`] implementation of this type does not impose any dynamic limits on the
-/// number of voters and targets that are fetched. This could potentially make this unsuitable for
-/// execution onchain. One could, however, impose bounds on it by using `BoundedExecution` using the
-/// `MaxVoters` and `MaxTargets` bonds in the `BoundedConfig` trait.
+/// The [`BoundedElectionProvider`] implementation of this type does not impose any dynamic limits
+/// on the number of voters and targets that are fetched. This could potentially make this
+/// unsuitable for execution onchain. One could, however, impose bounds on it by using
+/// `BoundedExecution` using the `MaxVoters` and `MaxTargets` bonds in the `BoundedConfig` trait.
 ///
 /// On the other hand, the [`InstantElectionProvider`] implementation does limit these inputs
 /// dynamically. If you use `elect_with_bounds` along with `InstantElectionProvider`, the bound that
@@ -69,13 +72,6 @@ pub struct BoundedExecution<T: BoundedConfig>(PhantomData<T>);
 /// This can be very expensive to run frequently on-chain. Use with care.
 pub struct UnboundedExecution<T: Config>(PhantomData<T>);
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum TooManyWinnersResolution {
-	Error,
-	Truncate,
-	SortAndTruncate,
-}
-
 /// Configuration trait for an onchain election execution.
 pub trait Config {
 	/// Needed for weight registration.
@@ -93,12 +89,10 @@ pub trait Config {
 	/// Weight information for extrinsics in this pallet.
 	type WeightInfo: WeightInfo;
 
-	/// Upper bound on maximum winners from electable targets, and how to deal with it if we have
-	/// Too many.
+	/// Upper bound on maximum winners from electable targets. This should be
+	/// strictly higher than `DataProvider::desired_targets()`. Its recommended
+	/// to add this check to integrity test of data provider.
 	type MaxWinners: Get<u32>;
-
-	/// Action to take if there are too many winners
-	type TooManyWinnersResolution: Get<TooManyWinnersResolution>;
 }
 
 pub trait BoundedConfig: Config {
@@ -150,27 +144,8 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
-	// TODO: Add test for TooManyWinnersResolution variants
-	let mut supports = to_supports(&staked);
-	let supports: OnChainBoundedSupportsOf<T> = match T::TooManyWinnersResolution::get() {
-		TooManyWinnersResolution::Error => supports
-			.try_into()
-			.map_err(|_| Error::NposElections(sp_npos_elections::Error::SolutionTargetOverflow))?,
-		TooManyWinnersResolution::Truncate => {
-			supports.truncate(T::MaxWinners::get() as usize);
-			supports
-				.try_into()
-				.expect("truncated to the bound so this always works; qed")
-		},
-		TooManyWinnersResolution::SortAndTruncate => {
-			// sort by total support balance, highest first
-			supports.sort_by(|b, a| a.1.total.partial_cmp(&b.1.total).unwrap());
-			supports.truncate(T::MaxWinners::get() as usize);
-			supports
-				.try_into()
-				.expect("truncated to the bound so this always works; qed")
-		},
-	};
+	let supports: OnChainBoundedSupportsOf<T> =
+		to_supports(&staked).try_into().map_err(|_| Error::TooManyWinners)?;
 
 	Ok(supports)
 }
@@ -297,7 +272,6 @@ mod tests {
 	struct PhragMMSParams;
 
 	frame_support::parameter_types! {
-		pub static ErrorResolution: TooManyWinnersResolution = TooManyWinnersResolution::Error;
 		pub static MaxWinners: u32 = 10;
 	}
 
@@ -307,7 +281,6 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type TooManyWinnersResolution = ErrorResolution;
 	}
 
 	impl BoundedConfig for PhragmenParams {
@@ -321,7 +294,6 @@ mod tests {
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
 		type MaxWinners = MaxWinners;
-		type TooManyWinnersResolution = ErrorResolution;
 	}
 
 	impl BoundedConfig for PhragMMSParams {
