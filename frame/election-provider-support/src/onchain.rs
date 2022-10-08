@@ -46,7 +46,7 @@ impl From<sp_npos_elections::Error> for Error {
 ///
 /// This will accept voting data on the fly and produce the results immediately.
 ///
-/// The [`ElectionProvider`] implementation of this type does not impose any dynamic limits on the
+/// The [`BoundedElectionProvider`] implementation of this type does not impose any dynamic limits on the
 /// number of voters and targets that are fetched. This could potentially make this unsuitable for
 /// execution onchain. One could, however, impose bounds on it by using `BoundedExecution` using the
 /// `MaxVoters` and `MaxTargets` bonds in the `BoundedConfig` trait.
@@ -160,14 +160,15 @@ fn elect_with<T: Config>(
 			supports.truncate(T::MaxWinners::get() as usize);
 			supports
 				.try_into()
-				.expect("we truncated to the bound so this always works; qed")
+				.expect("truncated to the bound so this always works; qed")
 		},
 		TooManyWinnersResolution::SortAndTruncate => {
-			supports.sort_by(|a, b| a.1.total.partial_cmp(&b.1.total).unwrap());
+			// sort by total support balance, highest first
+			supports.sort_by(|b, a| a.1.total.partial_cmp(&b.1.total).unwrap());
 			supports.truncate(T::MaxWinners::get() as usize);
 			supports
 				.try_into()
-				.expect("we truncated to the bound so this always works; qed")
+				.expect("truncated to the bound so this always works; qed")
 		},
 	};
 
@@ -297,6 +298,7 @@ mod tests {
 
 	frame_support::parameter_types! {
 		pub static ErrorResolution: TooManyWinnersResolution = TooManyWinnersResolution::Error;
+		pub static MaxWinners: u32 = 10;
 	}
 
 	impl Config for PhragmenParams {
@@ -304,7 +306,7 @@ mod tests {
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
-		type MaxWinners = ConstU32<100>;
+		type MaxWinners = MaxWinners;
 		type TooManyWinnersResolution = ErrorResolution;
 	}
 
@@ -318,7 +320,7 @@ mod tests {
 		type Solver = PhragMMS<AccountId, Perbill>;
 		type DataProvider = mock_data_provider::DataProvider;
 		type WeightInfo = ();
-		type MaxWinners = ConstU32<100>;
+		type MaxWinners = MaxWinners;
 		type TooManyWinnersResolution = ErrorResolution;
 	}
 

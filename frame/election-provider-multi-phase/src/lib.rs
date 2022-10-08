@@ -985,13 +985,10 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
-			// Truncate supports upto MaxWinners bound
-			let mut supports = supports;
-			supports.truncate(T::MaxWinners::get() as usize);
 			// bound supports with T::MaxWinners
 			let supports = supports
 				.try_into()
-				.expect("since we truncated, its guaranteed to satisfy bounds; qed");
+				.map_err(|_| Error::<T>::BoundNotMet)?;
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
