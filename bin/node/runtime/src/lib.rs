@@ -902,6 +902,10 @@ impl pallet_remark::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }
 
+impl pallet_root_offences::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
@@ -1659,6 +1663,7 @@ construct_runtime!(
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
 		Remark: pallet_remark,
+		RootOffences: pallet_root_offences,
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
 		AllianceMotion: pallet_collective::<Instance3>,
@@ -1771,6 +1776,7 @@ mod benches {
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
+		[pallet_root_offences, RootOffences]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]

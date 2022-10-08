@@ -60,9 +60,9 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 			CheckedExtrinsic {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: RuntimeCall::Sudo(pallet_sudo::Call::sudo {
-					call: Box::new(RuntimeCall::System(frame_system::Call::fill_block {
+					call: RuntimeCall::RootOffences(pallet_root_offences::Call::fill_block {
 						ratio: Perbill::from_percent(60),
-					})),
+					}),
 				}),
 			},
 		],
