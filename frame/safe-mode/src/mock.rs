@@ -89,29 +89,23 @@ impl Contains<RuntimeCall> for MockUnfilterableCalls {
 }
 
 /// An origin that can enable the safe-mode by force.
+/// Variants must yield the BlockNumber duration of how long the safe-mode will be activated.
+
 pub enum ForceActivateOrigin {
-	Weak,
-	Medium,
-	Strong,
+	Weak = 5,
+	Medium = 7,
+	Strong = 9,
 }
 
 /// An origin that can extend the safe-mode by force.
+/// Variants yield the integer castable BlockNumber duration safe-mode will be extended by.
 pub enum ForceExtendOrigin {
-	Weak,
-	Medium,
-	Strong,
+	Weak = 10,
+	Medium = 14,
+	Strong = 18,
 }
 
 impl ForceActivateOrigin {
-	/// The duration of how long the safe-mode will be activated.
-	pub fn duration(&self) -> u64 {
-		match self {
-			Self::Weak => 5,
-			Self::Medium => 7,
-			Self::Strong => 11,
-		}
-	}
-
 	/// Account id of the origin.
 	pub const fn acc(&self) -> u64 {
 		match self {
@@ -128,15 +122,6 @@ impl ForceActivateOrigin {
 }
 
 impl ForceExtendOrigin {
-	/// The duration of how long the safe-mode will be extended.
-	pub fn duration(&self) -> u64 {
-		match self {
-			Self::Weak => 13,
-			Self::Medium => 17,
-			Self::Strong => 19,
-		}
-	}
-
 	/// Account id of the origin.
 	pub const fn acc(&self) -> u64 {
 		match self {
@@ -152,7 +137,7 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	for ForceActivateOrigin
 {
 	type Success = u64;
@@ -160,11 +145,11 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Weak.acc() =>
-				Ok(ForceActivateOrigin::Weak.duration()),
+				Ok(ForceActivateOrigin::Weak as BlockNumberFor<Test>),
 			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Medium.acc() =>
-				Ok(ForceActivateOrigin::Medium.duration()),
+				Ok(ForceActivateOrigin::Medium as BlockNumberFor<Test>),
 			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Strong.acc() =>
-				Ok(ForceActivateOrigin::Strong.duration()),
+				Ok(ForceActivateOrigin::Strong as BlockNumberFor<Test>),
 			r => Err(O::from(r)),
 		})
 	}
@@ -175,7 +160,7 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	for ForceExtendOrigin
 {
 	type Success = u64;
@@ -183,11 +168,11 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 	fn try_origin(o: O) -> Result<Self::Success, O> {
 		o.into().and_then(|o| match o {
 			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Weak.acc() =>
-				Ok(ForceExtendOrigin::Weak.duration()),
+				Ok(ForceExtendOrigin::Weak as BlockNumberFor<Test>),
 			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Medium.acc() =>
-				Ok(ForceExtendOrigin::Medium.duration()),
+				Ok(ForceExtendOrigin::Medium as BlockNumberFor<Test>),
 			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Strong.acc() =>
-				Ok(ForceExtendOrigin::Strong.duration()),
+				Ok(ForceExtendOrigin::Strong as BlockNumberFor<Test>),
 			r => Err(O::from(r)),
 		})
 	}

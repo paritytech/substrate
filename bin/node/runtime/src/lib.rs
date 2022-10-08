@@ -34,8 +34,7 @@ use frame_support::{
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
 		EitherOfDiverse, EnsureOrigin, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		U128CurrencyToVote,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -253,9 +252,9 @@ impl ForceActivateOrigin {
 	/// Account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak   => sp_core::ed25519::Public::from_raw([0;32]).into(),
-			Self::Medium => sp_core::ed25519::Public::from_raw([1;32]).into(),
-			Self::Strong => sp_core::ed25519::Public::from_raw([2;32]).into(),
+			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
 		}
 	}
 
@@ -278,9 +277,9 @@ impl ForceExtendOrigin {
 	/// Account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak   => sp_core::ed25519::Public::from_raw([0;32]).into(),
-			Self::Medium => sp_core::ed25519::Public::from_raw([1;32]).into(),
-			Self::Strong => sp_core::ed25519::Public::from_raw([2;32]).into(),
+			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
 		}
 	}
 
@@ -290,8 +289,8 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
-	EnsureOrigin<O> for ForceActivateOrigin
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
+	for ForceActivateOrigin
 {
 	type Success = u32;
 
@@ -313,8 +312,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
-	EnsureOrigin<O> for ForceExtendOrigin
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
+	for ForceExtendOrigin
 {
 	type Success = u32;
 
