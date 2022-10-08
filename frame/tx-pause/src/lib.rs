@@ -104,8 +104,8 @@ pub mod pallet {
 		/// The call is listed as safe and cannot be paused.
 		IsUnpausable,
 
-		/// The call has a name exceeds [`MaxNameLen`].
-		IsTooLong,
+		// The call does not exist in the runtime.
+		NoSuchCall,
 	}
 
 	#[pallet::event]
@@ -158,13 +158,22 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::pause_call())]
 		pub fn pause_call(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::RuntimeCall>,
+			pallet_name: PalletNameOf<T>,
+			call_name: CallNameOf<T>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
-
-			Self::ensure_can_pause(&call)?;
+			// The `TxPause` pallet can never be paused.
+			if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+				return Err(Error::<T>::IsUnpausable)
+			}
+			let call = Self::try_get_valid_call(&pallet_name, &call_name)?;
+			if T::UnfilterableCalls::contains(&call) {
+				return Err(Error::<T>::IsUnpausable)
+			}
+			if Self::is_paused(&pallet_name, &call_name) {
+				return Err(Error::<T>::IsPaused)
+			}
 			PausedCalls::<T>::insert((&pallet_name, &call_name), ());
 			Self::deposit_event(Event::CallPaused { pallet_name, call_name });
 
@@ -188,13 +197,22 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unpause_call())]
 		pub fn unpause_call(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::RuntimeCall>,
+			pallet_name: PalletNameOf<T>,
+			call_name: CallNameOf<T>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
-
-			Self::ensure_can_unpause(&call)?;
+			// The `TxPause` pallet can never be paused.
+			if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+				return Err(Error::<T>::IsUnpausable)
+			}
+			let call = Self::try_get_call_from_names(&pallet_name, &call_name)?;
+			if T::UnfilterableCalls::contains(&call) {
+				return Err(Error::<T>::IsUnpausable)
+			}
+			if Self::is_paused(&pallet_name, &call_name) {
+				return Err(Error::<T>::IsPaused)
+			}
 			PausedCalls::<T>::remove((&pallet_name, &call_name));
 			Self::deposit_event(Event::CallUnpaused { pallet_name, call_name });
 
@@ -220,26 +238,10 @@ impl<T: Config> Pallet<T> {
 		<PausedCalls<T>>::contains_key((pallet_name, call_name))
 	}
 
-	/// Ensure that this call can be paused.
-	pub fn ensure_can_pause(call: &<T as Config>::RuntimeCall) -> Result<(), Error<T>> {
-		let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
-
-		// The `TxPause` pallet can never be paused.
-		if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-			return Err(Error::<T>::IsUnpausable)
-		}
-		if T::UnfilterableCalls::contains(call) {
-			return Err(Error::<T>::IsUnpausable)
-		}
-		if Self::is_paused(&pallet_name, &call_name) {
-			return Err(Error::<T>::IsPaused)
-		}
-		Ok(())
-	}
+	
 
 	/// Ensure that this call can be un-paused.
-	pub fn ensure_can_unpause(call: &<T as Config>::RuntimeCall) -> Result<(), Error<T>> {
-		let (pallet_name, call_name) = Self::try_get_bounded_names(&call)?;
+	pub fn ensure_can_unpause(pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T>) -> Result<(), Error<T>> {
 
 		if Self::is_paused(&pallet_name, &call_name) {
 			// SAFETY: Everything that is paused, can be un-paused.
@@ -249,22 +251,21 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Get bounded pallet and call names from a runtime call.
-	pub fn try_get_bounded_names(
-		call: &<T as Config>::RuntimeCall,
-	) -> Result<(PalletNameOf<T>, CallNameOf<T>), Error<T>>
-	where
-		<T as Config>::RuntimeCall: GetCallMetadata,
-	{
-		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
-
-		let pallet_name = PalletNameOf::<T>::try_from(pallet_name.as_bytes().to_vec());
-		let call_name = CallNameOf::<T>::try_from(function_name.as_bytes().to_vec());
-
-		match (pallet_name, call_name) {
-			(Ok(pallet_name), Ok(call_name)) => Ok((pallet_name, call_name)),
-			_ => Err(Error::IsTooLong), /* TODO consider better method than custom error? */
+	/// TODO FIX ME
+	/// Check bounded pallet and call names match an existing runtime call.
+	pub fn try_get_valid_call( pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T> ) -> Result<<T as pallet::Config>::RuntimeCall, Error<T>> {
+		// iterate/match PalletsInfoAccess::infos() for the runtime... how to get this data?
+		// if pallet matched, only then check the call names via GetCallMetadata::get_call_names()
+		let pallet_names = <T as frame_system::Config>::RuntimeCall::get_module_names();
+		for name in pallet_names {
+			if name == pallet_name.into() {
+				let call_names = <T as frame_system::Config>::RuntimeCall::get_call_names(name);
+				for name in call_names {
+					return Ok(TODO_CALL_VARIANT)
+				}
+			}
 		}
+		Err(Error::NoSuchCall)
 	}
 }
 

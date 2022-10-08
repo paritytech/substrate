@@ -31,7 +31,8 @@ fn can_pause_specific_call() {
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			Box::new(call_transfer(3, 1)),
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 
 		assert_err!(
@@ -47,7 +48,8 @@ fn can_unpause_specific_call() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			Box::new(call_transfer(3, 1)),
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 		assert_err!(
 			call_transfer(2, 1).dispatch(Origin::signed(2)),
@@ -56,7 +58,8 @@ fn can_unpause_specific_call() {
 
 		assert_ok!(TxPause::unpause_call(
 			Origin::signed(mock::UnpauseOrigin::get()),
-			Box::new(call_transfer(3, 1)),
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 		assert_ok!(call_transfer(4, 1).dispatch(Origin::signed(0)));
 	});
@@ -67,11 +70,8 @@ fn can_unpause_specific_call() {
 #[test]
 fn fails_to_pause_self() {
 	new_test_ext().execute_with(|| {
-		let call =
-			RuntimeCall::TxPause(crate::Call::pause_call { call: Box::new(call_transfer(3, 1)) });
-
 		assert_noop!(
-			TxPause::pause_call(Origin::signed(mock::PauseOrigin::get()), Box::new(call),),
+			TxPause::pause_call(Origin::signed(mock::PauseOrigin::get()), name(b"TxPause"), name(b"pause_call")),
 			Error::<Test>::IsUnpausable
 		);
 	});
@@ -83,7 +83,8 @@ fn fails_to_pause_unpausable_pallet() {
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				Box::new(call_unpausable())
+				name(b"Balances"),
+				name(b"transfer_keep_alive"),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -95,13 +96,15 @@ fn fails_to_pause_already_paused_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			Box::new(call_transfer(1, 1))
+			name(b"Balances"),
+			name(b"transfer"),
 		));
 
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				Box::new(call_transfer(2, 1))
+				name(b"Balances"),
+				name(b"transfer"),
 			),
 			Error::<Test>::IsPaused
 		);
@@ -114,15 +117,16 @@ fn fails_to_unpause_not_paused_pallet() {
 		assert_noop!(
 			TxPause::unpause_call(
 				Origin::signed(mock::UnpauseOrigin::get()),
-				Box::new(call_transfer(2, 1))
+				name(b"Balances"),
+				name(b"transfer"),
 			),
 			Error::<Test>::IsUnpaused
 		);
 	});
 }
 
-fn call_unpausable() -> RuntimeCall {
-	call_transfer_keep_alive(1, 1)
+fn name(bytes: &[u8]) -> BoundedVec<u8, MaxNameLen> {
+	bytes.to_vec().try_into().unwrap()
 }
 
 fn call_transfer(dest: u64, value: u64) -> RuntimeCall {
