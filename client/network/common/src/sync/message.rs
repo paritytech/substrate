@@ -158,8 +158,6 @@ pub mod generic {
 		pub fields: BlockAttributes,
 		/// Start from this block.
 		pub from: FromBlock<Hash, Number>,
-		/// End at this block. An implementation defined maximum is used when unspecified.
-		pub to: Option<Hash>,
 		/// Sequence direction.
 		pub direction: Direction,
 		/// Maximum number of blocks to return. An implementation defined maximum is used when

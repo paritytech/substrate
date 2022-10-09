@@ -41,11 +41,29 @@ pub use payload::{known_payloads, BeefyPayloadId, Payload, PayloadProvider};
 
 use codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
+use sp_application_crypto::RuntimeAppPublic;
 use sp_core::H256;
+use sp_runtime::traits::Hash;
 use sp_std::prelude::*;
 
 /// Key type for BEEFY module.
 pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::KeyTypeId(*b"beef");
+
+/// Trait representing BEEFY authority id.
+pub trait BeefyAuthorityId: RuntimeAppPublic {}
+
+/// Means of verification for a BEEFY authority signature.
+///
+/// Accepts custom hashing fn for the message and custom convertor fn for the signer.
+pub trait BeefyVerify<MsgHash: Hash> {
+	/// Type of the signer.
+	type Signer: BeefyAuthorityId;
+
+	/// Verify a signature.
+	///
+	/// Return `true` if signature is valid for the value.
+	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
+}
 
 /// BEEFY cryptographic types
 ///
@@ -60,7 +78,9 @@ pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::Ke
 /// The current underlying crypto scheme used is ECDSA. This can be changed,
 /// without affecting code restricted against the above listed crypto types.
 pub mod crypto {
+	use super::{BeefyAuthorityId, BeefyVerify, Hash};
 	use sp_application_crypto::{app_crypto, ecdsa};
+	use sp_core::crypto::Wraps;
 	app_crypto!(ecdsa, crate::KEY_TYPE);
 
 	/// Identity of a BEEFY authority using ECDSA as its crypto.
@@ -68,6 +88,26 @@ pub mod crypto {
 
 	/// Signature for a BEEFY authority using ECDSA as its crypto.
 	pub type AuthoritySignature = Signature;
+
+	impl BeefyAuthorityId for AuthorityId {}
+
+	impl<MsgHash: Hash> BeefyVerify<MsgHash> for AuthoritySignature
+	where
+		<MsgHash as Hash>::Output: Into<[u8; 32]>,
+	{
+		type Signer = AuthorityId;
+
+		fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
+			let msg_hash = <MsgHash as Hash>::hash(msg).into();
+			match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
+				self.as_inner_ref().as_ref(),
+				&msg_hash,
+			) {
+				Ok(raw_pubkey) => raw_pubkey.as_ref() == AsRef::<[u8]>::as_ref(signer),
+				_ => false,
+			}
+		}
+	}
 }
 
 /// The `ConsensusEngineId` of BEEFY.
@@ -180,7 +220,8 @@ sp_api::decl_runtime_apis! {
 mod tests {
 	use super::*;
 	use sp_application_crypto::ecdsa::{self, Public};
-	use sp_core::Pair;
+	use sp_core::{blake2_256, crypto::Wraps, keccak_256, Pair};
+	use sp_runtime::traits::{BlakeTwo256, Keccak256};
 
 	#[test]
 	fn validator_set() {
@@ -193,5 +234,37 @@ mod tests {
 
 		assert_eq!(validators.id(), set_id);
 		assert_eq!(validators.validators(), &vec![alice.public()]);
+	}
+
+	#[test]
+	fn beefy_verify_works() {
+		let msg = &b"test-message"[..];
+		let (pair, _) = crypto::Pair::generate();
+
+		let keccak_256_signature: crypto::Signature =
+			pair.as_inner_ref().sign_prehashed(&keccak_256(msg)).into();
+
+		let blake2_256_signature: crypto::Signature =
+			pair.as_inner_ref().sign_prehashed(&blake2_256(msg)).into();
+
+		// Verification works if same hashing function is used when signing and verifying.
+		assert!(BeefyVerify::<Keccak256>::verify(&keccak_256_signature, msg, &pair.public()));
+		assert!(BeefyVerify::<BlakeTwo256>::verify(&blake2_256_signature, msg, &pair.public()));
+		// Verification fails if distinct hashing functions are used when signing and verifying.
+		assert!(!BeefyVerify::<Keccak256>::verify(&blake2_256_signature, msg, &pair.public()));
+		assert!(!BeefyVerify::<BlakeTwo256>::verify(&keccak_256_signature, msg, &pair.public()));
+
+		// Other public key doesn't work
+		let (other_pair, _) = crypto::Pair::generate();
+		assert!(!BeefyVerify::<Keccak256>::verify(
+			&keccak_256_signature,
+			msg,
+			&other_pair.public()
+		));
+		assert!(!BeefyVerify::<BlakeTwo256>::verify(
+			&blake2_256_signature,
+			msg,
+			&other_pair.public()
+		));
 	}
 }
