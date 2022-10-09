@@ -36,11 +36,12 @@ use frame_system::RawOrigin;
 benchmarks! {
 	// This will measure the execution time of `set_dummy`.
 	set_dummy_benchmark {
-		// This is the benchmark setup phase. Nothing to do in this case.
-	}: set_dummy(RawOrigin::Root, 1000u32.into()) // The execution phase is just running `set_dummy` extrinsic call
+		// This is the benchmark setup phase.
+		let value = 1000u32.into();
+	}: set_dummy(RawOrigin::Root, value) // The execution phase is just running `set_dummy` extrinsic call
 	verify {
 		// This is the optional benchmark verification phase, asserting certain states.
-		assert_eq!(Pallet::<T>::dummy(), Some(b.into()))
+		assert_eq!(Pallet::<T>::dummy(), Some(value))
 	}
 
 	// This will measure the execution time of `accumulate_dummy`.
@@ -48,9 +49,10 @@ benchmarks! {
 	// as the extrinsic call. `_(...)` is used to represent the extrinsic name.
 	// The benchmark verification phase is omitted.
 	accumulate_dummy {
+		let value = 1000u32.into();
 		// The caller account is whitelisted for DB reads/write by the benchmarking macro.
 		let caller: T::AccountId = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), 1000u32.into())
+	}: _(RawOrigin::Signed(caller), value)
 
 	// This will measure the execution time of sorting a vector.
 	sort_vector {
