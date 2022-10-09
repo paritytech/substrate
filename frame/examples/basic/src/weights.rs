@@ -54,22 +54,20 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_example_basic.
 pub trait WeightInfo {
-	fn set_dummy_benchmark(b: u32, ) -> Weight;
-	fn accumulate_dummy(b: u32, ) -> Weight;
+	fn set_dummy_benchmark() -> Weight;
+	fn accumulate_dummy() -> Weight;
 	fn sort_vector(x: u32, ) -> Weight;
 }
 
 /// Weights for pallet_example_basic using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-	fn set_dummy_benchmark(b: u32, ) -> Weight {
+	fn set_dummy_benchmark() -> Weight {
 		Weight::from_ref_time(5_834_000 as u64)
-			.saturating_add(Weight::from_ref_time(24_000 as u64).saturating_mul(b as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
-	fn accumulate_dummy(b: u32, ) -> Weight {
+	fn accumulate_dummy() -> Weight {
 		Weight::from_ref_time(51_353_000 as u64)
-			.saturating_add(Weight::from_ref_time(14_000 as u64).saturating_mul(b as u64))
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
@@ -82,14 +80,12 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn set_dummy_benchmark(b: u32, ) -> Weight {
+	fn set_dummy_benchmark() -> Weight {
 		Weight::from_ref_time(5_834_000 as u64)
-			.saturating_add(Weight::from_ref_time(24_000 as u64).saturating_mul(b as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
-	fn accumulate_dummy(b: u32, ) -> Weight {
+	fn accumulate_dummy() -> Weight {
 		Weight::from_ref_time(51_353_000 as u64)
-			.saturating_add(Weight::from_ref_time(14_000 as u64).saturating_mul(b as u64))
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
