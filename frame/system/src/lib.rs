@@ -393,7 +393,7 @@ pub mod pallet {
 		/// - `O(1)`
 		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
+		pub fn remark(origin: OriginFor<T>, _remark: Vec<u32>) -> DispatchResultWithPostInfo {
 			ensure_signed_or_root(origin)?;
 			Ok(().into())
 		}
