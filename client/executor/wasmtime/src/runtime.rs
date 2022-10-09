@@ -544,6 +544,7 @@ pub struct Semantics {
 	pub max_memory_size: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct Config {
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
 	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is

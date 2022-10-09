@@ -34,22 +34,22 @@ use frame_system::RawOrigin;
 // Details on using the benchmarks macro can be seen at:
 //   https://paritytech.github.io/substrate/master/frame_benchmarking/trait.Benchmarking.html#tymethod.benchmarks
 benchmarks! {
-	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
+	// This will measure the execution time of `set_dummy` for b in [0..1000] range.
 	set_dummy_benchmark {
 		// This is the benchmark setup phase
-		let b in 1 .. 1000;
+		let b in 0 .. 1000;
 	}: set_dummy(RawOrigin::Root, b.into()) // The execution phase is just running `set_dummy` extrinsic call
 	verify {
 		// This is the optional benchmark verification phase, asserting certain states.
 		assert_eq!(Pallet::<T>::dummy(), Some(b.into()))
 	}
 
-	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
+	// This will measure the execution time of `accumulate_dummy` for b in [0..1000] range.
 	// The benchmark execution phase is shorthanded. When the name of the benchmark case is the same
 	// as the extrinsic call. `_(...)` is used to represent the extrinsic name.
 	// The benchmark verification phase is omitted.
 	accumulate_dummy {
-		let b in 1 .. 1000;
+		let b in 0 .. 1000;
 		// The caller account is whitelisted for DB reads/write by the benchmarking macro.
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(RawOrigin::Signed(caller), b.into())

@@ -227,7 +227,8 @@ fn should_generate_proofs_correctly() {
 	let _ = env_logger::try_init();
 	let mut ext = new_test_ext();
 	// given
-	ext.execute_with(|| add_blocks(7));
+	let num_blocks: u64 = 7;
+	ext.execute_with(|| add_blocks(num_blocks as usize));
 	ext.persist_offchain_overlay();
 
 	// Try to generate proofs now. This requires the offchain extensions to be present
@@ -239,6 +240,23 @@ fn should_generate_proofs_correctly() {
 			.into_iter()
 			.map(|leaf_index| {
 				crate::Pallet::<Test>::generate_batch_proof(vec![leaf_index]).unwrap()
+			})
+			.collect::<Vec<_>>();
+		// when generate historical proofs for all leaves
+		let historical_proofs = (0_u64..crate::NumberOfLeaves::<Test>::get())
+			.into_iter()
+			.map(|leaf_index| {
+				let mut proofs = vec![];
+				for leaves_count in leaf_index + 1..=num_blocks {
+					proofs.push(
+						crate::Pallet::<Test>::generate_historical_batch_proof(
+							vec![leaf_index],
+							leaves_count,
+						)
+						.unwrap(),
+					)
+				}
+				proofs
 			})
 			.collect::<Vec<_>>();
 
@@ -259,6 +277,79 @@ fn should_generate_proofs_correctly() {
 			)
 		);
 		assert_eq!(
+			historical_proofs[0][0],
+			(
+				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
+				BatchProof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
+			)
+		);
+
+		//       D
+		//     /   \
+		//    /     \
+		//   A       B       C
+		//  / \     / \     / \
+		// 1   2   3   4   5   6  7
+		//
+		// we're proving 3 => we need { 4, A, C++7 }
+		assert_eq!(
+			proofs[2],
+			(
+				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
+				BatchProof {
+					leaf_indices: vec![2],
+					leaf_count: 7,
+					items: vec![
+						hex("1b14c1dc7d3e4def11acdf31be0584f4b85c3673f1ff72a3af467b69a3b0d9d0"),
+						hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
+						hex("dca421199bdcc55bb773c6b6967e8d16675de69062b52285ca63685241fdf626"),
+					],
+				}
+			)
+		);
+		//   A
+		//  / \
+		// 1   2   3
+		//
+		// we're proving 3 => we need { A }
+		assert_eq!(
+			historical_proofs[2][0],
+			(
+				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
+				BatchProof {
+					leaf_indices: vec![2],
+					leaf_count: 3,
+					items: vec![hex(
+						"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
+					),],
+				}
+			)
+		);
+		//       D
+		//     /   \
+		//    /     \
+		//   A       B
+		//  / \     / \
+		// 1   2   3   4   5
+		// we're proving 3 => we need { 4, A, 5 }
+		assert_eq!(
+			historical_proofs[2][2],
+			(
+				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
+				BatchProof {
+					leaf_indices: vec![2],
+					leaf_count: 5,
+					items: vec![
+						hex("1b14c1dc7d3e4def11acdf31be0584f4b85c3673f1ff72a3af467b69a3b0d9d0"),
+						hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
+						hex("3b031d22e24f1126c8f7d2f394b663f9b960ed7abbedb7152e17ce16112656d0")
+					],
+				}
+			)
+		);
+		assert_eq!(historical_proofs[2][4], proofs[2]);
+
+		assert_eq!(
 			proofs[4],
 			(
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
@@ -274,6 +365,21 @@ fn should_generate_proofs_correctly() {
 			)
 		);
 		assert_eq!(
+			historical_proofs[4][0],
+			(
+				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
+				BatchProof {
+					leaf_indices: vec![4],
+					leaf_count: 5,
+					items: vec![hex(
+						"ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"
+					),],
+				}
+			)
+		);
+		assert_eq!(historical_proofs[4][2], proofs[4]);
+
+		assert_eq!(
 			proofs[6],
 			(
 				vec![Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),))],
@@ -287,6 +393,7 @@ fn should_generate_proofs_correctly() {
 				}
 			)
 		);
+		assert_eq!(historical_proofs[6][0], proofs[6]);
 	});
 }
 
@@ -302,9 +409,8 @@ fn should_generate_batch_proof_correctly() {
 	// to retrieve full leaf data.
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
-		// when generate proofs for all leaves
+		// when generate proofs for a batch of leaves
 		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap();
-
 		// then
 		assert_eq!(
 			proof,
@@ -318,6 +424,28 @@ fn should_generate_batch_proof_correctly() {
 				],
 			}
 		);
+
+		// when generate historical proofs for a batch of leaves
+		let (.., historical_proof) =
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![0, 4, 5], 6).unwrap();
+		// then
+		assert_eq!(
+			historical_proof,
+			BatchProof {
+				leaf_indices: vec![0, 4, 5],
+				leaf_count: 6,
+				items: vec![
+					hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
+					hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
+				],
+			}
+		);
+
+		// when generate historical proofs for a batch of leaves
+		let (.., historical_proof) =
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![0, 4, 5], 7).unwrap();
+		// then
+		assert_eq!(historical_proof, proof);
 	});
 }
 
@@ -338,11 +466,33 @@ fn should_verify() {
 		// when
 		crate::Pallet::<Test>::generate_batch_proof(vec![5]).unwrap()
 	});
+	let (simple_historical_leaves, simple_historical_proof5) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 6).unwrap()
+	});
+	let (advanced_historical_leaves, advanced_historical_proof5) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 7).unwrap()
+	});
 
 	ext.execute_with(|| {
 		add_blocks(7);
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof5), Ok(()));
+		assert_eq!(
+			crate::Pallet::<Test>::verify_leaves(
+				simple_historical_leaves,
+				simple_historical_proof5
+			),
+			Ok(())
+		);
+		assert_eq!(
+			crate::Pallet::<Test>::verify_leaves(
+				advanced_historical_leaves,
+				advanced_historical_proof5
+			),
+			Ok(())
+		);
 	});
 }
 
@@ -350,16 +500,40 @@ fn should_verify() {
 fn should_verify_batch_proofs() {
 	fn generate_and_verify_batch_proof(
 		ext: &mut sp_io::TestExternalities,
-		leaves: &Vec<u64>,
+		leaf_indices: &Vec<u64>,
 		blocks_to_add: usize,
 	) {
-		let (leaves, proof) = ext
-			.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(leaves.to_vec()).unwrap());
+		let (leaves, proof) = ext.execute_with(|| {
+			crate::Pallet::<Test>::generate_batch_proof(leaf_indices.to_vec()).unwrap()
+		});
+
+		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
+		let min_mmr_size = leaf_indices.iter().max().unwrap() + 1;
+
+		// generate historical proofs for all possible mmr sizes,
+		// lower bound being index of highest leaf to be proven
+		let historical_proofs = (min_mmr_size..=mmr_size)
+			.map(|mmr_size| {
+				ext.execute_with(|| {
+					crate::Pallet::<Test>::generate_historical_batch_proof(
+						leaf_indices.to_vec(),
+						mmr_size,
+					)
+					.unwrap()
+				})
+			})
+			.collect::<Vec<_>>();
 
 		ext.execute_with(|| {
 			add_blocks(blocks_to_add);
 			// then
 			assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proof), Ok(()));
+			historical_proofs.iter().for_each(|(leaves, proof)| {
+				assert_eq!(
+					crate::Pallet::<Test>::verify_leaves(leaves.clone(), proof.clone()),
+					Ok(())
+				);
+			});
 		})
 	}
 
@@ -378,7 +552,7 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().powerset().skip(1).collect();
+		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
@@ -393,7 +567,7 @@ fn should_verify_batch_proofs() {
 		ext.persist_offchain_overlay();
 
 		// generate all possible 2-leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..n).into_iter().combinations(2).collect();
+		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
@@ -414,7 +588,13 @@ fn verification_should_be_stateless() {
 	// Start off with chain initialisation and storing indexing data off-chain
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
-	ext.execute_with(|| add_blocks(7));
+	let (root_6, root_7) = ext.execute_with(|| {
+		add_blocks(6);
+		let root_6 = crate::Pallet::<Test>::mmr_root_hash();
+		add_blocks(1);
+		let root_7 = crate::Pallet::<Test>::mmr_root_hash();
+		(root_6, root_7)
+	});
 	ext.persist_offchain_overlay();
 
 	// Try to generate proof now. This requires the offchain extensions to be present
@@ -424,12 +604,27 @@ fn verification_should_be_stateless() {
 		// when
 		crate::Pallet::<Test>::generate_batch_proof(vec![5]).unwrap()
 	});
-	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
+	let (_, historical_proof5) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 6).unwrap()
+	});
 
 	// Verify proof without relying on any on-chain data.
 	let leaf = crate::primitives::DataOrHash::Data(leaves[0].clone());
 	assert_eq!(
-		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(root, vec![leaf], proof5),
+		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
+			root_7,
+			vec![leaf.clone()],
+			proof5
+		),
+		Ok(())
+	);
+	assert_eq!(
+		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
+			root_6,
+			vec![leaf],
+			historical_proof5
+		),
 		Ok(())
 	);
 }
@@ -441,7 +636,13 @@ fn should_verify_batch_proof_statelessly() {
 	// Start off with chain initialisation and storing indexing data off-chain
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
-	ext.execute_with(|| add_blocks(7));
+	let (root_6, root_7) = ext.execute_with(|| {
+		add_blocks(6);
+		let root_6 = crate::Pallet::<Test>::mmr_root_hash();
+		add_blocks(1);
+		let root_7 = crate::Pallet::<Test>::mmr_root_hash();
+		(root_6, root_7)
+	});
 	ext.persist_offchain_overlay();
 
 	// Try to generate proof now. This requires the offchain extensions to be present
@@ -451,17 +652,31 @@ fn should_verify_batch_proof_statelessly() {
 		// when
 		crate::Pallet::<Test>::generate_batch_proof(vec![0, 4, 5]).unwrap()
 	});
-	let root = ext.execute_with(|| crate::Pallet::<Test>::mmr_root_hash());
+	let (historical_leaves, historical_proof) = ext.execute_with(|| {
+		// when
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![0, 4, 5], 6).unwrap()
+	});
 
 	// Verify proof without relying on any on-chain data.
 	assert_eq!(
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
-			root,
+			root_7,
 			leaves
 				.into_iter()
 				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
 				.collect(),
 			proof
+		),
+		Ok(())
+	);
+	assert_eq!(
+		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
+			root_6,
+			historical_leaves
+				.into_iter()
+				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
+				.collect(),
+			historical_proof
 		),
 		Ok(())
 	);
@@ -719,5 +934,38 @@ fn should_verify_canonicalized() {
 	ext.execute_with(|| {
 		add_blocks(7);
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
+	});
+}
+
+#[test]
+fn does_not_panic_when_generating_historical_proofs() {
+	let _ = env_logger::try_init();
+	let mut ext = new_test_ext();
+
+	// given 7 blocks (7 MMR leaves)
+	ext.execute_with(|| add_blocks(7));
+	ext.persist_offchain_overlay();
+
+	// Try to generate historical proof with invalid arguments. This requires the offchain
+	// extensions to be present to retrieve full leaf data.
+	register_offchain_ext(&mut ext);
+	ext.execute_with(|| {
+		// when leaf index is invalid
+		assert_eq!(
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 7),
+			Err(Error::LeafNotFound),
+		);
+
+		// when leaves count is invalid
+		assert_eq!(
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![3], 100),
+			Err(Error::InvalidLeavesCount),
+		);
+
+		// when both leaf index and leaves count are invalid
+		assert_eq!(
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 100),
+			Err(Error::InvalidLeavesCount),
+		);
 	});
 }

@@ -130,7 +130,7 @@ benchmarks! {
 
 	set_identity {
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let x in 1 .. T::MaxAdditionalFields::get();
+		let x in 0 .. T::MaxAdditionalFields::get();
 		let caller = {
 			// The target user
 			let caller: T::AccountId = whitelisted_caller();
@@ -166,7 +166,7 @@ benchmarks! {
 	set_subs_new {
 		let caller: T::AccountId = whitelisted_caller();
 		// Create a new subs vec with s sub accounts
-		let s in 1 .. T::MaxSubAccounts::get() => ();
+		let s in 0 .. T::MaxSubAccounts::get() => ();
 		let subs = create_sub_accounts::<T>(&caller, s)?;
 		ensure!(SubsOf::<T>::get(&caller).1.len() == 0, "Caller already has subs");
 	}: set_subs(RawOrigin::Signed(caller.clone()), subs)
@@ -177,7 +177,7 @@ benchmarks! {
 	set_subs_old {
 		let caller: T::AccountId = whitelisted_caller();
 		// Give them p many previous sub accounts.
-		let p in 1 .. T::MaxSubAccounts::get() => {
+		let p in 0 .. T::MaxSubAccounts::get() => {
 			let _ = add_sub_accounts::<T>(&caller, p)?;
 		};
 		// Remove all subs.
@@ -198,12 +198,12 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let s in 1 .. T::MaxSubAccounts::get() => {
+		let s in 0 .. T::MaxSubAccounts::get() => {
 			// Give them s many sub accounts
 			let caller: T::AccountId = whitelisted_caller();
 			let _ = add_sub_accounts::<T>(&caller, s)?;
 		};
-		let x in 1 .. T::MaxAdditionalFields::get();
+		let x in 0 .. T::MaxAdditionalFields::get();
 
 		// Create their main identity with x additional fields
 		let info = create_identity_info::<T>(x);
@@ -233,7 +233,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let x in 1 .. T::MaxAdditionalFields::get() => {
+		let x in 0 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
@@ -251,7 +251,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let x in 1 .. T::MaxAdditionalFields::get() => {
+		let x in 0 .. T::MaxAdditionalFields::get() => {
 			// Create their main identity with x additional fields
 			let info = create_identity_info::<T>(x);
 			let caller: T::AccountId = whitelisted_caller();
@@ -332,7 +332,7 @@ benchmarks! {
 		let _ = T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let r in 1 .. T::MaxRegistrars::get() - 1 => add_registrars::<T>(r)?;
-		let x in 1 .. T::MaxAdditionalFields::get();
+		let x in 0 .. T::MaxAdditionalFields::get();
 
 		let info = create_identity_info::<T>(x);
 		let info_hash = T::Hashing::hash_of(&info);
@@ -348,8 +348,8 @@ benchmarks! {
 
 	kill_identity {
 		let r in 1 .. T::MaxRegistrars::get() => add_registrars::<T>(r)?;
-		let s in 1 .. T::MaxSubAccounts::get();
-		let x in 1 .. T::MaxAdditionalFields::get();
+		let s in 0 .. T::MaxSubAccounts::get();
+		let x in 0 .. T::MaxAdditionalFields::get();
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_origin: <T as frame_system::Config>::RuntimeOrigin = RawOrigin::Signed(target.clone()).into();
@@ -379,7 +379,7 @@ benchmarks! {
 	}
 
 	add_sub {
-		let s in 1 .. T::MaxSubAccounts::get() - 1;
+		let s in 0 .. T::MaxSubAccounts::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		let _ = add_sub_accounts::<T>(&caller, s)?;
@@ -415,7 +415,7 @@ benchmarks! {
 	}
 
 	quit_sub {
-		let s in 1 .. T::MaxSubAccounts::get() - 1;
+		let s in 0 .. T::MaxSubAccounts::get() - 1;
 
 		let caller: T::AccountId = whitelisted_caller();
 		let sup = account("super", 0, SEED);
