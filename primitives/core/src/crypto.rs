@@ -984,6 +984,11 @@ pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
 pub trait Wraps: Sized {
 	/// The inner type it is wrapping.
 	type Inner: IsWrappedBy<Self>;
+
+	/// Get a reference to the inner type that is wrapped.
+	fn as_inner_ref(&self) -> &Self::Inner {
+		Self::Inner::from_ref(self)
+	}
 }
 
 impl<T, Outer> IsWrappedBy<Outer> for T

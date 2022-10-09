@@ -88,6 +88,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	points_total += 10;
 	points_individual.push((v_stash.clone(), 10));
 
+	let original_nominator_count = Nominators::<T>::count();
 	let mut nominators = Vec::new();
 
 	// Give the validator n nominators, but keep total users in the system the same.
@@ -114,7 +115,7 @@ pub fn create_validator_with_nominators<T: Config>(
 	assert_eq!(new_validators.len(), 1);
 	assert_eq!(new_validators[0], v_stash, "Our validator was not selected!");
 	assert_ne!(Validators::<T>::count(), 0);
-	assert_ne!(Nominators::<T>::count(), 0);
+	assert_eq!(Nominators::<T>::count(), original_nominator_count + nominators.len() as u32);
 
 	// Give Era Points
 	let reward = EraRewardPoints::<T::AccountId> {
@@ -544,7 +545,7 @@ benchmarks! {
 	}
 
 	payout_stakers_dead_controller {
-		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let n in 0 .. T::MaxNominatorRewardedPerValidator::get() as u32;
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -577,7 +578,7 @@ benchmarks! {
 	}
 
 	payout_stakers_alive_staked {
-		let n in 1 .. T::MaxNominatorRewardedPerValidator::get() as u32;
+		let n in 0 .. T::MaxNominatorRewardedPerValidator::get() as u32;
 		let (validator, nominators) = create_validator_with_nominators::<T>(
 			n,
 			T::MaxNominatorRewardedPerValidator::get() as u32,
@@ -695,7 +696,7 @@ benchmarks! {
 
 	new_era {
 		let v in 1 .. 10;
-		let n in 1 .. 100;
+		let n in 0 .. 100;
 
 		create_validators_with_nominators_for_era::<T>(
 			v,
@@ -714,7 +715,7 @@ benchmarks! {
 	#[extra]
 	payout_all {
 		let v in 1 .. 10;
-		let n in 1 .. 100;
+		let n in 0 .. 100;
 		create_validators_with_nominators_for_era::<T>(
 			v,
 			n,
