@@ -341,10 +341,7 @@ where
 				iter::once(notifications::ProtocolConfig {
 					name: block_announces_protocol.notifications_protocol.clone(),
 					fallback_names: block_announces_protocol.fallback_names.clone(),
-					handshake: block_announces_protocol
-						.handshake
-						.as_ref()
-						.map_or(roles.encode(), |h| (*h).to_vec()),
+					handshake: block_announces_protocol.handshake.as_ref().unwrap().to_vec(),
 					max_notification_size: block_announces_protocol.max_notification_size,
 				})
 				.chain(network_config.extra_sets.iter().map(|s| notifications::ProtocolConfig {

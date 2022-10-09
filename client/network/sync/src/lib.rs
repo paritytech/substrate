@@ -31,6 +31,7 @@
 pub mod block_request_handler;
 pub mod blocks;
 mod schema;
+pub mod service;
 pub mod state;
 pub mod state_request_handler;
 pub mod warp;
@@ -2280,6 +2281,8 @@ where
 				best_hash,
 				genesis_hash,
 			))),
+			// NOTE: `set_config` will be ignored by `protocol.rs` as the block announcement
+			// protocol is still hardcoded into the peerset.
 			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,

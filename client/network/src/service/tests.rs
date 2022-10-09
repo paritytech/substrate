@@ -149,7 +149,7 @@ fn build_test_full_node(
 			client.info().best_number,
 			client.info().best_hash,
 			client
-				.block_hash(0u32.into())
+				.block_hash(Zero::zero())
 				.ok()
 				.flatten()
 				.expect("Genesis block exists; qed"),

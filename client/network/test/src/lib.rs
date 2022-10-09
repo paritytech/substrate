@@ -77,7 +77,7 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
@@ -887,7 +887,7 @@ where
 			client.info().best_number,
 			client.info().best_hash,
 			client
-				.block_hash(0u32.into())
+				.block_hash(Zero::zero())
 				.ok()
 				.flatten()
 				.expect("Genesis block exists; qed"),

@@ -53,7 +53,7 @@ pub enum Role {
 impl Role {
 	/// True for [`Role::Authority`].
 	pub fn is_authority(&self) -> bool {
-		matches!(self, Self::Authority { .. })
+		matches!(self, Self::Authority)
 	}
 }
 
@@ -61,7 +61,7 @@ impl std::fmt::Display for Role {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Full => write!(f, "FULL"),
-			Self::Authority { .. } => write!(f, "AUTHORITY"),
+			Self::Authority => write!(f, "AUTHORITY"),
 		}
 	}
 }
@@ -101,7 +101,7 @@ impl<'a> From<&'a Role> for Roles {
 	fn from(roles: &'a Role) -> Self {
 		match roles {
 			Role::Full => Self::FULL,
-			Role::Authority { .. } => Self::AUTHORITY,
+			Role::Authority => Self::AUTHORITY,
 		}
 	}
 }
