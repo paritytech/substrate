@@ -31,7 +31,6 @@
 pub mod block_request_handler;
 pub mod blocks;
 mod schema;
-pub mod service;
 pub mod state;
 pub mod state_request_handler;
 pub mod warp;
