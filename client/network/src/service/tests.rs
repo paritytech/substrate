@@ -36,7 +36,7 @@ use sc_network_sync::{
 	ChainSync,
 };
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-use sp_runtime::traits::{Block as BlockT, Header as _};
+use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
 use std::{sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
