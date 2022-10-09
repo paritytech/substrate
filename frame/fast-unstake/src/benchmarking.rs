@@ -140,7 +140,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::Terminated)
+			Some(Event::BatchFinished)
 		));
 	}
 
@@ -178,7 +178,7 @@ benchmarks! {
 		assert!(stashes.iter().all(|(s, _)| request.stashes.iter().find(|(ss, _)| ss == s).is_some()));
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::Checking { .. })
+			Some(Event::BatchChecked { .. })
 		));
 	}
 
