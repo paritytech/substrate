@@ -1980,7 +1980,7 @@ pub mod env {
 			//
 			// Unstable sorts are non-deterministic across architectures. The usage here is OK
 			// because we are rejecting duplicates which removes the non determinism.
-			items.sort_unstable();
+			items.sort();
 			// Find any two consecutive equal elements.
 			items.windows(2).any(|w| match &w {
 				&[a, b] => a == b,

@@ -155,7 +155,7 @@ pub fn trim_helpers() -> TrimHelpers {
 		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// sort by decreasing order of stake
-	assignments.sort_unstable_by_key(|assignment| {
+	assignments.sort_by_key(|assignment| {
 		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
 	});
 
