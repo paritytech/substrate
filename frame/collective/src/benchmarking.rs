@@ -34,6 +34,10 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
+fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> SystemCall<T> {
+	SystemCall::<T>::remark { remark: vec![id.try_into().unwrap(); length] }
+}
+
 benchmarks_instance_pallet! {
 	set_members {
 		let m in 0 .. T::MaxMembers::get();
@@ -64,9 +68,7 @@ benchmarks_instance_pallet! {
 			let length = 100;
 			for i in 0 .. p {
 				// Proposals should be different so that different proposal hashes are generated
-				let proposal: T::Proposal = SystemCall::<T>::remark_vec_u32 {
-					remark: vec![i; length]
-				}.into();
+				let proposal: T::Proposal = id_to_remark_data(i, length).into();
 				Collective::<T, I>::propose(
 					SystemOrigin::Signed(old_members.last().unwrap().clone()).into(),
 					threshold,
@@ -186,7 +188,7 @@ benchmarks_instance_pallet! {
 		// Add previous proposals.
 		for i in 0 .. p - 1 {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark_vec_u32 { remark: vec![i; b as usize] }.into();
+			let proposal: T::Proposal = id_to_remark_data(i, b as usize).into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -234,7 +236,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark_vec_u32 { remark: vec![i; b as usize] }.into();
+			let proposal: T::Proposal = id_to_remark_data(i, b as usize).into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -388,7 +390,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark_vec_u32 { remark: vec![i; b as usize] }.into();
+			let proposal: T::Proposal = id_to_remark_data(i, b as usize).into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -548,7 +550,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark_vec_u32 { remark: vec![i; b as usize] }.into();
+			let proposal: T::Proposal = id_to_remark_data(i, b as usize).into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -619,7 +621,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark_vec_u32 { remark: vec![i; b as usize] }.into();
+			let proposal: T::Proposal = id_to_remark_data(i, b as usize).into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
