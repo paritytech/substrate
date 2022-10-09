@@ -419,6 +419,14 @@ impl<T: Default> Get<T> for GetDefault {
 	}
 }
 
+/// A simple wrapper to turn a `Get<u16>` to `Get<u32>`.
+pub struct GetU16ToU32<T>(core::marker::PhantomData<T>);
+impl<T: Get<u16>> Get<u32> for GetU16ToU32<T> {
+	fn get() -> u32 {
+		T::get().into()
+	}
+}
+
 macro_rules! impl_const_get {
 	($name:ident, $t:ty) => {
 		#[doc = "Const getter for a basic type."]
