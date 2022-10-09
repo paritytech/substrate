@@ -112,7 +112,7 @@ fn on_idle_full_block<T: Config>() {
 }
 
 benchmarks! {
-	// on_idle, we we don't check anyone, but fully unbond them.
+	// on_idle, we don't check anyone, but fully unbond them.
 	on_idle_unstake {
 		ErasToCheckPerBlock::<T>::put(1);
 		for who in create_unexposed_nominators::<T>() {
