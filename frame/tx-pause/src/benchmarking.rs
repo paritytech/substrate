@@ -27,7 +27,7 @@ benchmarks! {
 		let call_name: CallNameOf<T> = b"some_call_name".to_vec().try_into().unwrap();
 		let origin = T::PauseOrigin::successful_origin();
 		let call = Call::<T>::pause_call { pallet_name: pallet_name.clone(), call_name: call_name.clone() };
-	
+
 	}: _<T::Origin>(origin, pallet_name.clone(), call_name.clone())
 	verify {
 		assert!(TxPause::<T>::paused_calls((pallet_name.clone(), call_name.clone())).is_some())
@@ -37,17 +37,17 @@ benchmarks! {
 		let pallet_name: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
 		let call_name: CallNameOf<T> = b"some_call_name".to_vec().try_into().unwrap();
 		let pause_origin = T::PauseOrigin::successful_origin();
-	
+
 			// Set
 		TxPause::<T>::pause_call(
 			pause_origin,
 			pallet_name.clone(),
 			call_name.clone(),
 			)?;
-	
+
 		let unpause_origin = T::UnpauseOrigin::successful_origin();
 		let call = Call::<T>::unpause_call { pallet_name: pallet_name.clone(), call_name: call_name.clone() };
-	
+
 		}: _<T::Origin>(unpause_origin, pallet_name.clone(), call_name.clone())
 	verify {
 		assert!(TxPause::<T>::paused_calls((pallet_name.clone(), call_name.clone())).is_none())

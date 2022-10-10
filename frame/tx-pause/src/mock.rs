@@ -85,17 +85,30 @@ parameter_types! {
 }
 
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
-pub struct MockUnfilterableCalls;
+pub struct UnfilterableCallNames;
 
 /// Filter example with Balances::transfer_keep_alive use as noop call in testing and benchmarking,
 /// accept all others
-impl Contains<RuntimeCall> for MockUnfilterableCalls {
-	fn contains(c: &RuntimeCall) -> bool {
-		match *c {
-			// set an example noop call in testing and benchmarking, accept all others
-			RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { .. }) => true,
-			_ => false,
+impl Contains<FullNameOf<Test>> for UnfilterableCallNames {
+	fn contains(full_name: &FullNameOf<Test>) -> bool {
+		let (pallet_name, maybe_call_name) = full_name;
+
+		let unpausables: Vec<FullNameOf<Test>> = vec![
+			(
+				b"UnpausablePalletWithCall".to_vec().try_into().unwrap(),
+				Some(b"UnpausablePalletCall".to_vec().try_into().unwrap()),
+			),
+			(b"UnpausablePalletWithoutCall".to_vec().try_into().unwrap(), None),
+		];
+
+		for i in unpausables.iter() {
+			match i {
+				(pallet_name, None) => return true,
+				(pallet_name, Some(call_name)) => return true,
+				_ => return false
+			}
 		}
+		false
 	}
 }
 
@@ -120,7 +133,7 @@ impl Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
-	type UnfilterableCalls = MockUnfilterableCalls;
+	type UnfilterableCallNames = UnfilterableCallNames;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();

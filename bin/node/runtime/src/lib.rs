@@ -215,12 +215,21 @@ impl Contains<RuntimeCall> for UnfilterableCalls {
 	}
 }
 
+pub struct UnfilterableCallNames;
+impl Contains<FullNameOf<Runtime> for UnfilterableCallNames {
+	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
+		let unpausables: Vec<PalletNameOf<Runtime>> =
+			vec![(b"Balances".to_vec().try_into().unwrap(), None)];
+		unpausables.iter().any(|i| i == pallet)
+	}
+}
+
 impl pallet_tx_pause::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
-	type UnfilterableCalls = UnfilterableCalls;
+	type UnfilterableCallNames = UnfilterableCalls;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;

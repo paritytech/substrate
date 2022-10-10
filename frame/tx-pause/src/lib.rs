@@ -38,6 +38,7 @@ pub use weights::*;
 
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+pub type FullNameOf<T> = (PalletNameOf<T>, Option<CallNameOf<T>>);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -71,7 +72,7 @@ pub mod pallet {
 		///
 		/// The `TxMode` pallet cannot pause it's own calls, and does not need to be explicitly
 		/// added here.
-		type UnfilterableCalls: Contains<<Self as Config>::RuntimeCall>;
+		type UnfilterableCallNames: Contains<FullNameOf<Self>>;
 
 		/// Maximum length for pallet and call SCALE encoded string names.
 		///
@@ -167,8 +168,8 @@ pub mod pallet {
 			if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 				return Err(Error::<T>::IsUnpausable)
 			}
-			let call = Self::try_get_valid_call(&pallet_name, &call_name)?;
-			if T::UnfilterableCalls::contains(&call) {
+			let full_name: FullNameOf<T> = (pallet_name, Some(call_name));
+			if T::UnfilterableCallNames::contains(&full_name) {
 				return Err(Error::<T>::IsUnpausable)
 			}
 			if Self::is_paused(&pallet_name, &call_name) {
@@ -179,16 +180,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-		// TODO add preset pause functionality (set of calls) See proxy and ProyType in node runtime
-		// pub fn pause_preset(
-		// 	origin: OriginFor<T>,
-		// 	preset: PausePresets,
-		// ) {
-		// 	loop
-		// 		do_pause_call() // run over a pre-config vec of calls for each type of PausePreset
-		// 		// we can use the same storage, a vec of all paused calls.
-		// }
 
 		/// Un-pause a call.
 		///
@@ -206,10 +197,7 @@ pub mod pallet {
 			if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 				return Err(Error::<T>::IsUnpausable)
 			}
-			let call = Self::try_get_call_from_names(&pallet_name, &call_name)?;
-			if T::UnfilterableCalls::contains(&call) {
-				return Err(Error::<T>::IsUnpausable)
-			}
+			// All items should be unpausable, no [`Config::UnfilterableCallNames`] check
 			if Self::is_paused(&pallet_name, &call_name) {
 				return Err(Error::<T>::IsPaused)
 			}
@@ -238,34 +226,17 @@ impl<T: Config> Pallet<T> {
 		<PausedCalls<T>>::contains_key((pallet_name, call_name))
 	}
 
-	
-
 	/// Ensure that this call can be un-paused.
-	pub fn ensure_can_unpause(pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T>) -> Result<(), Error<T>> {
-
+	pub fn ensure_can_unpause(
+		pallet_name: &PalletNameOf<T>,
+		call_name: &CallNameOf<T>,
+	) -> Result<(), Error<T>> {
 		if Self::is_paused(&pallet_name, &call_name) {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {
 			Err(Error::IsUnpaused)
 		}
-	}
-
-	/// TODO FIX ME
-	/// Check bounded pallet and call names match an existing runtime call.
-	pub fn try_get_valid_call( pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T> ) -> Result<<T as pallet::Config>::RuntimeCall, Error<T>> {
-		// iterate/match PalletsInfoAccess::infos() for the runtime... how to get this data?
-		// if pallet matched, only then check the call names via GetCallMetadata::get_call_names()
-		let pallet_names = <T as frame_system::Config>::RuntimeCall::get_module_names();
-		for name in pallet_names {
-			if name == pallet_name.into() {
-				let call_names = <T as frame_system::Config>::RuntimeCall::get_call_names(name);
-				for name in call_names {
-					return Ok(TODO_CALL_VARIANT)
-				}
-			}
-		}
-		Err(Error::NoSuchCall)
 	}
 }
 
