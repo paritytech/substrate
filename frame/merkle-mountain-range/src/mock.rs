@@ -98,7 +98,7 @@ impl LeafData {
 }
 
 parameter_types! {
-	pub static MaxLeafSize: u32 = u32::try_from(std::mem::size_of::<MmrLeaf>()).unwrap();
+	pub static MaxLeafSize: u32 = 2 * u32::try_from(std::mem::size_of::<MmrLeaf>()).unwrap();
 	pub static LeafDataTestValue: LeafData = Default::default();
 }
 
