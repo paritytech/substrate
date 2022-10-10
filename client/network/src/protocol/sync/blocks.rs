@@ -192,7 +192,7 @@ impl<B: BlockT> BlockCollection<B> {
 		for r in ranges {
 			self.blocks.remove(&r);
 		}
-		trace!(target: "sync", "Drained {} blocks", drained.len());
+		trace!(target: "sync", "Drained {} blocks from {:?}", drained.len(), from);
 		drained
 	}
 

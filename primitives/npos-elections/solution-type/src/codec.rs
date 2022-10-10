@@ -17,7 +17,7 @@
 
 //! Code generation for the ratio assignment type' encode/decode impl.
 
-use crate::field_name_for;
+use crate::vote_field;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
@@ -45,7 +45,7 @@ fn decode_impl(
 	count: usize,
 ) -> TokenStream2 {
 	let decode_impl_single = {
-		let name = field_name_for(1);
+		let name = vote_field(1);
 		quote! {
 			let #name =
 			<
@@ -60,29 +60,9 @@ fn decode_impl(
 		}
 	};
 
-	let decode_impl_double = {
-		let name = field_name_for(2);
-		quote! {
-			let #name =
-			<
-				_npos::sp_std::prelude::Vec<(
-					_npos::codec::Compact<#voter_type>,
-					(_npos::codec::Compact<#target_type>, _npos::codec::Compact<#weight_type>),
-					_npos::codec::Compact<#target_type>,
-				)>
-				as
-				_npos::codec::Decode
-			>::decode(value)?;
-			let #name = #name
-				.into_iter()
-				.map(|(v, (t1, w), t2)| (v.0, (t1.0, w.0), t2.0))
-				.collect::<_npos::sp_std::prelude::Vec<_>>();
-		}
-	};
-
-	let decode_impl_rest = (3..=count)
+	let decode_impl_rest = (2..=count)
 		.map(|c| {
-			let name = field_name_for(c);
+			let name = vote_field(c);
 
 			let inner_impl = (0..c - 1)
 				.map(|i| quote! { ( (inner[#i].0).0, (inner[#i].1).0 ), })
@@ -112,7 +92,7 @@ fn decode_impl(
 
 	let all_field_names = (1..=count)
 		.map(|c| {
-			let name = field_name_for(c);
+			let name = vote_field(c);
 			quote! { #name, }
 		})
 		.collect::<TokenStream2>();
@@ -121,7 +101,6 @@ fn decode_impl(
 		impl _npos::codec::Decode for #ident {
 			fn decode<I: _npos::codec::Input>(value: &mut I) -> Result<Self, _npos::codec::Error> {
 				#decode_impl_single
-				#decode_impl_double
 				#decode_impl_rest
 
 				// The above code generates variables with the decoded value with the same name as
@@ -137,7 +116,7 @@ fn decode_impl(
 // `Encode` implementation.
 fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 	let encode_impl_single = {
-		let name = field_name_for(1);
+		let name = vote_field(1);
 		quote! {
 			let #name = self.#name
 				.iter()
@@ -150,30 +129,12 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 		}
 	};
 
-	let encode_impl_double = {
-		let name = field_name_for(2);
-		quote! {
-			let #name = self.#name
-				.iter()
-				.map(|(v, (t1, w), t2)| (
-					_npos::codec::Compact(v.clone()),
-					(
-						_npos::codec::Compact(t1.clone()),
-						_npos::codec::Compact(w.clone())
-					),
-					_npos::codec::Compact(t2.clone()),
-				))
-				.collect::<_npos::sp_std::prelude::Vec<_>>();
-			#name.encode_to(&mut r);
-		}
-	};
-
-	let encode_impl_rest = (3..=count)
+	let encode_impl_rest = (2..=count)
 		.map(|c| {
-			let name = field_name_for(c);
+			let name = vote_field(c);
 
 			// we use the knowledge of the length to avoid copy_from_slice.
-			let inners_compact_array = (0..c - 1)
+			let inners_solution_array = (0..c - 1)
 				.map(|i| {
 					quote! {(
 						_npos::codec::Compact(inner[#i].0.clone()),
@@ -187,7 +148,7 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 					.iter()
 					.map(|(v, inner, t_last)| (
 						_npos::codec::Compact(v.clone()),
-						[ #inners_compact_array ],
+						[ #inners_solution_array ],
 						_npos::codec::Compact(t_last.clone()),
 					))
 					.collect::<_npos::sp_std::prelude::Vec<_>>();
@@ -201,7 +162,6 @@ fn encode_impl(ident: syn::Ident, count: usize) -> TokenStream2 {
 			fn encode(&self) -> _npos::sp_std::prelude::Vec<u8> {
 				let mut r = vec![];
 				#encode_impl_single
-				#encode_impl_double
 				#encode_impl_rest
 				r
 			}

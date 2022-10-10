@@ -17,7 +17,7 @@
 
 //! Some helper functions/macros for this crate.
 
-use super::{CompactTargetIndexOf, CompactVoterIndexOf, Config, VoteWeight};
+use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
 use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
 
 #[macro_export]
@@ -49,18 +49,18 @@ pub fn generate_voter_cache<T: Config>(
 
 /// Create a function that returns the index of a voter in the snapshot.
 ///
-/// The returning index type is the same as the one defined in `T::CompactSolution::Voter`.
+/// The returning index type is the same as the one defined in `T::Solution::Voter`.
 ///
 /// ## Warning
 ///
 /// Note that this will represent the snapshot data from which the `cache` is generated.
 pub fn voter_index_fn<T: Config>(
 	cache: &BTreeMap<T::AccountId, usize>,
-) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
+) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> + '_ {
 	move |who| {
 		cache
 			.get(who)
-			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+			.and_then(|i| <usize as TryInto<SolutionVoterIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
@@ -70,11 +70,11 @@ pub fn voter_index_fn<T: Config>(
 /// borrowed.
 pub fn voter_index_fn_owned<T: Config>(
 	cache: BTreeMap<T::AccountId, usize>,
-) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> {
+) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> {
 	move |who| {
 		cache
 			.get(who)
-			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(*i).ok())
+			.and_then(|i| <usize as TryInto<SolutionVoterIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
@@ -98,37 +98,37 @@ pub fn voter_index_fn_usize<T: Config>(
 #[cfg(test)]
 pub fn voter_index_fn_linear<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> impl Fn(&T::AccountId) -> Option<CompactVoterIndexOf<T>> + '_ {
+) -> impl Fn(&T::AccountId) -> Option<SolutionVoterIndexOf<T>> + '_ {
 	move |who| {
 		snapshot
 			.iter()
 			.position(|(x, _, _)| x == who)
-			.and_then(|i| <usize as TryInto<CompactVoterIndexOf<T>>>::try_into(i).ok())
+			.and_then(|i| <usize as TryInto<SolutionVoterIndexOf<T>>>::try_into(i).ok())
 	}
 }
 
 /// Create a function that returns the index of a target in the snapshot.
 ///
-/// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
+/// The returned index type is the same as the one defined in `T::Solution::Target`.
 ///
 /// Note: to the extent possible, the returned function should be cached and reused. Producing that
 /// function requires a `O(n log n)` data transform. Each invocation of that function completes
 /// in `O(log n)`.
 pub fn target_index_fn<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> impl Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_ {
+) -> impl Fn(&T::AccountId) -> Option<SolutionTargetIndexOf<T>> + '_ {
 	let cache: BTreeMap<_, _> =
 		snapshot.iter().enumerate().map(|(idx, account_id)| (account_id, idx)).collect();
 	move |who| {
 		cache
 			.get(who)
-			.and_then(|i| <usize as TryInto<CompactTargetIndexOf<T>>>::try_into(*i).ok())
+			.and_then(|i| <usize as TryInto<SolutionTargetIndexOf<T>>>::try_into(*i).ok())
 	}
 }
 
 /// Create a function the returns the index to a target in the snapshot.
 ///
-/// The returned index type is the same as the one defined in `T::CompactSolution::Target`.
+/// The returned index type is the same as the one defined in `T::Solution::Target`.
 ///
 /// ## Warning
 ///
@@ -136,34 +136,34 @@ pub fn target_index_fn<T: Config>(
 #[cfg(test)]
 pub fn target_index_fn_linear<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> impl Fn(&T::AccountId) -> Option<CompactTargetIndexOf<T>> + '_ {
+) -> impl Fn(&T::AccountId) -> Option<SolutionTargetIndexOf<T>> + '_ {
 	move |who| {
 		snapshot
 			.iter()
 			.position(|x| x == who)
-			.and_then(|i| <usize as TryInto<CompactTargetIndexOf<T>>>::try_into(i).ok())
+			.and_then(|i| <usize as TryInto<SolutionTargetIndexOf<T>>>::try_into(i).ok())
 	}
 }
 
-/// Create a function that can map a voter index ([`CompactVoterIndexOf`]) to the actual voter
+/// Create a function that can map a voter index ([`SolutionVoterIndexOf`]) to the actual voter
 /// account using a linearly indexible snapshot.
 pub fn voter_at_fn<T: Config>(
 	snapshot: &Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
-) -> impl Fn(CompactVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
+) -> impl Fn(SolutionVoterIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
-		<CompactVoterIndexOf<T> as TryInto<usize>>::try_into(i)
+		<SolutionVoterIndexOf<T> as TryInto<usize>>::try_into(i)
 			.ok()
 			.and_then(|i| snapshot.get(i).map(|(x, _, _)| x).cloned())
 	}
 }
 
-/// Create a function that can map a target index ([`CompactTargetIndexOf`]) to the actual target
+/// Create a function that can map a target index ([`SolutionTargetIndexOf`]) to the actual target
 /// account using a linearly indexible snapshot.
 pub fn target_at_fn<T: Config>(
 	snapshot: &Vec<T::AccountId>,
-) -> impl Fn(CompactTargetIndexOf<T>) -> Option<T::AccountId> + '_ {
+) -> impl Fn(SolutionTargetIndexOf<T>) -> Option<T::AccountId> + '_ {
 	move |i| {
-		<CompactTargetIndexOf<T> as TryInto<usize>>::try_into(i)
+		<SolutionTargetIndexOf<T> as TryInto<usize>>::try_into(i)
 			.ok()
 			.and_then(|i| snapshot.get(i).cloned())
 	}
