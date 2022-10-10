@@ -42,8 +42,8 @@ pub(crate) fn new_test_ext() -> TestExternalities {
 // Use `push_block_with_offchain()` if you need to also generate proofs for this block.
 fn new_block() -> (BlockNumber, H256, Weight) {
 	let number = frame_system::Pallet::<Test>::block_number() + 1;
-	let parent_hash = H256::repeat_byte(number as u8);
-	let hash = H256::repeat_byte((number + 1) as u8);
+	let parent_hash = H256::repeat_byte((number - 1) as u8);
+	let hash = H256::repeat_byte(number as u8);
 	LeafDataTestValue::mutate(|r| r.a = number);
 
 	frame_system::Pallet::<Test>::reset_events();
@@ -126,11 +126,11 @@ fn should_start_empty() {
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
 		assert_eq!(
 			crate::Peaks::<Test>::get(0),
-			Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0"))
+			Some(hex("c51a80dfad5ad167c7001f581065bea8db70b04aeca50eedf908cbb3ff859d0b"))
 		);
 		assert_eq!(
 			crate::RootHash::<Test>::get(),
-			hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")
+			hex("c51a80dfad5ad167c7001f581065bea8db70b04aeca50eedf908cbb3ff859d0b")
 		);
 		assert!(weight != Weight::zero());
 	});
@@ -153,9 +153,9 @@ fn should_append_to_mmr_after_on_initialize() {
 				crate::RootHash::<Test>::get(),
 			),
 			(
-				Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")),
+				Some(hex("c51a80dfad5ad167c7001f581065bea8db70b04aeca50eedf908cbb3ff859d0b")),
 				None,
-				hex("0x4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0"),
+				hex("0xc51a80dfad5ad167c7001f581065bea8db70b04aeca50eedf908cbb3ff859d0b"),
 			)
 		);
 
@@ -177,9 +177,9 @@ fn should_append_to_mmr_after_on_initialize() {
 			(
 				None,
 				None,
-				Some(hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854")),
+				Some(hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e")),
 				None,
-				hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
+				hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"),
 			)
 		);
 
@@ -191,16 +191,16 @@ fn should_append_to_mmr_after_on_initialize() {
 	let offchain_db = ext.offchain_db();
 	assert_eq!(
 		offchain_db.get(&MMR::node_offchain_key(hash1, 0)).map(decode_node),
-		Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1),)))
+		Some(mmr::Node::Data(((0, H256::repeat_byte(0)), LeafData::new(1),)))
 	);
 	assert_eq!(
 		offchain_db.get(&MMR::node_offchain_key(hash2, 1)).map(decode_node),
-		Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2),)))
+		Some(mmr::Node::Data(((1, H256::repeat_byte(1)), LeafData::new(2),)))
 	);
 	assert_eq!(
 		offchain_db.get(&MMR::node_offchain_key(hash2, 2)).map(decode_node),
 		Some(mmr::Node::Hash(hex(
-			"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
+			"843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"
 		)))
 	);
 	assert_eq!(offchain_db.get(&MMR::node_offchain_key(hash2, 3)), None);
@@ -233,10 +233,10 @@ fn should_construct_larger_mmr_correctly() {
 				crate::RootHash::<Test>::get(),
 			),
 			(
-				Some(hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252")),
-				Some(hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da")),
-				Some(hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c")),
-				hex("e45e25259f7930626431347fa4dd9aae7ac83b4966126d425ca70ab343709d2c"),
+				Some(hex("7da2dfae4fc5cdb4ea71672cbb36e1b9cc0e1dbc96f150bbc25ae520c4b0a47c")),
+				Some(hex("58d8f809c4f813ab84c777602ca4c6f6b47de2461f990767b9188c994b2085af")),
+				Some(hex("29d1b9d334844798b202520ed800c676af83e35d037978b63cf7ff1801e20420")),
+				hex("5e80aa6a5c45076b3be28c9c5ac297fd2069a455a76db075988c280257d5a7b4"),
 			)
 		);
 	});
@@ -282,14 +282,14 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			proofs[0],
 			(
-				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
+				vec![Compact::new(((0, H256::repeat_byte(0)).into(), LeafData::new(1).into(),))],
 				BatchProof {
 					leaf_indices: vec![0],
 					leaf_count: 7,
 					items: vec![
-						hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
-						hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
-						hex("dca421199bdcc55bb773c6b6967e8d16675de69062b52285ca63685241fdf626"),
+						hex("f5ee0f8e3a4a2eebc50a74552ce459259c4a14fc74d100413258b24dbb2172ad"),
+						hex("58c20b8520b2a85db7ee9fde973acc340b75bdcfbc6ca8642f66c0a927a9628f"),
+						hex("fbf72a451409d1f74ab3d52b7691019838dc9886594eec7c6a075b80d84003bf"),
 					],
 				}
 			)
@@ -297,7 +297,7 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			historical_proofs[0][0],
 			(
-				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
+				vec![Compact::new(((0, H256::repeat_byte(0)).into(), LeafData::new(1).into(),))],
 				BatchProof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
 			)
 		);
@@ -313,14 +313,14 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			proofs[2],
 			(
-				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
+				vec![Compact::new(((2, H256::repeat_byte(2)).into(), LeafData::new(3).into(),))],
 				BatchProof {
 					leaf_indices: vec![2],
 					leaf_count: 7,
 					items: vec![
-						hex("1b14c1dc7d3e4def11acdf31be0584f4b85c3673f1ff72a3af467b69a3b0d9d0"),
-						hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
-						hex("dca421199bdcc55bb773c6b6967e8d16675de69062b52285ca63685241fdf626"),
+						hex("6d424e7dc63c18a6e193b1d4b2c68306b166494e21c409824016c4671177d48c"),
+						hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"),
+						hex("fbf72a451409d1f74ab3d52b7691019838dc9886594eec7c6a075b80d84003bf"),
 					],
 				}
 			)
@@ -333,12 +333,12 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			historical_proofs[2][0],
 			(
-				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
+				vec![Compact::new(((2, H256::repeat_byte(2)).into(), LeafData::new(3).into(),))],
 				BatchProof {
 					leaf_indices: vec![2],
 					leaf_count: 3,
 					items: vec![hex(
-						"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
+						"843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"
 					),],
 				}
 			)
@@ -353,14 +353,14 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			historical_proofs[2][2],
 			(
-				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
+				vec![Compact::new(((2, H256::repeat_byte(2)).into(), LeafData::new(3).into(),))],
 				BatchProof {
 					leaf_indices: vec![2],
 					leaf_count: 5,
 					items: vec![
-						hex("1b14c1dc7d3e4def11acdf31be0584f4b85c3673f1ff72a3af467b69a3b0d9d0"),
-						hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
-						hex("3b031d22e24f1126c8f7d2f394b663f9b960ed7abbedb7152e17ce16112656d0")
+						hex("6d424e7dc63c18a6e193b1d4b2c68306b166494e21c409824016c4671177d48c"),
+						hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"),
+						hex("23b661b811fd03d596a0707caa6bf363e349f4d879eb655540c4b177a6b4b7cc")
 					],
 				}
 			)
@@ -370,14 +370,14 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			proofs[4],
 			(
-				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
+				vec![Compact::new(((4, H256::repeat_byte(4)).into(), LeafData::new(5).into(),))],
 				BatchProof {
 					leaf_indices: vec![4],
 					leaf_count: 7,
 					items: vec![
-						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
-						hex("8ed25570209d8f753d02df07c1884ddb36a3d9d4770e4608b188322151c657fe"),
-						hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
+						hex("7da2dfae4fc5cdb4ea71672cbb36e1b9cc0e1dbc96f150bbc25ae520c4b0a47c"),
+						hex("7a76a3de17cab4a41146b68e7f373be6ee88d7f6cf96f853b4ead9db792985fa"),
+						hex("29d1b9d334844798b202520ed800c676af83e35d037978b63cf7ff1801e20420"),
 					],
 				}
 			)
@@ -385,12 +385,12 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			historical_proofs[4][0],
 			(
-				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
+				vec![Compact::new(((4, H256::repeat_byte(4)).into(), LeafData::new(5).into(),))],
 				BatchProof {
 					leaf_indices: vec![4],
 					leaf_count: 5,
 					items: vec![hex(
-						"ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"
+						"7da2dfae4fc5cdb4ea71672cbb36e1b9cc0e1dbc96f150bbc25ae520c4b0a47c"
 					),],
 				}
 			)
@@ -400,13 +400,13 @@ fn should_generate_proofs_correctly() {
 		assert_eq!(
 			proofs[6],
 			(
-				vec![Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),))],
+				vec![Compact::new(((6, H256::repeat_byte(6)).into(), LeafData::new(7).into(),))],
 				BatchProof {
 					leaf_indices: vec![6],
 					leaf_count: 7,
 					items: vec![
-						hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252"),
-						hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da"),
+						hex("7da2dfae4fc5cdb4ea71672cbb36e1b9cc0e1dbc96f150bbc25ae520c4b0a47c"),
+						hex("58d8f809c4f813ab84c777602ca4c6f6b47de2461f990767b9188c994b2085af"),
 					],
 				}
 			)
@@ -434,9 +434,9 @@ fn should_generate_batch_proof_correctly() {
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 7,
 				items: vec![
-					hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
-					hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
-					hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c"),
+					hex("f5ee0f8e3a4a2eebc50a74552ce459259c4a14fc74d100413258b24dbb2172ad"),
+					hex("58c20b8520b2a85db7ee9fde973acc340b75bdcfbc6ca8642f66c0a927a9628f"),
+					hex("29d1b9d334844798b202520ed800c676af83e35d037978b63cf7ff1801e20420"),
 				],
 			}
 		);
@@ -451,8 +451,8 @@ fn should_generate_batch_proof_correctly() {
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 6,
 				items: vec![
-					hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705"),
-					hex("cb24f4614ad5b2a5430344c99545b421d9af83c46fd632d70a332200884b4d46"),
+					hex("f5ee0f8e3a4a2eebc50a74552ce459259c4a14fc74d100413258b24dbb2172ad"),
+					hex("58c20b8520b2a85db7ee9fde973acc340b75bdcfbc6ca8642f66c0a927a9628f"),
 				],
 			}
 		);
@@ -831,7 +831,7 @@ fn should_canonicalize_offchain() {
 			assert_eq!(
 				offchain_db.get(&key).map(decode_node),
 				Some(mmr::Node::Data((
-					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
+					(leaf_index, H256::repeat_byte(u8::try_from(leaf_index).unwrap())),
 					LeafData::new(block_num.into()),
 				)))
 			);
@@ -854,9 +854,9 @@ fn should_canonicalize_offchain() {
 			// but available in fork-proof storage.
 			assert_eq!(offchain_db.get(&key).map(decode_node), Some(mmr::Node::Hash(expected)));
 		};
-		verify(2, 1, hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"));
-		verify(13, 7, hex("441bf63abc7cf9b9e82eb57b8111c883d50ae468d9fd7f301e12269fc0fa1e75"));
-		verify(21, 11, hex("f323ac1a7f56de5f40ed8df3e97af74eec0ee9d72883679e49122ffad2ffd03b"));
+		verify(2, 1, hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"));
+		verify(13, 7, hex("4a170065d8c8d5360d0208f275de1895c892fcfed388decffd41e27fcaa2329f"));
+		verify(21, 11, hex("78668e549013242f30f8e810f9a6a5619df9b36a04705a72d2013191c177b8ee"));
 	});
 
 	// add another `frame_system::BlockHashCount` blocks and verify all nodes and leaves
@@ -882,7 +882,7 @@ fn should_canonicalize_offchain() {
 			assert_eq!(
 				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
 				Some(mmr::Node::Data((
-					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
+					(leaf_index, H256::repeat_byte(u8::try_from(leaf_index).unwrap())),
 					LeafData::new(block_num),
 				)))
 			);
@@ -902,9 +902,9 @@ fn should_canonicalize_offchain() {
 				Some(mmr::Node::Hash(expected))
 			);
 		};
-		verify(2, 1, hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"));
-		verify(13, 7, hex("441bf63abc7cf9b9e82eb57b8111c883d50ae468d9fd7f301e12269fc0fa1e75"));
-		verify(21, 11, hex("f323ac1a7f56de5f40ed8df3e97af74eec0ee9d72883679e49122ffad2ffd03b"));
+		verify(2, 1, hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"));
+		verify(13, 7, hex("4a170065d8c8d5360d0208f275de1895c892fcfed388decffd41e27fcaa2329f"));
+		verify(21, 11, hex("78668e549013242f30f8e810f9a6a5619df9b36a04705a72d2013191c177b8ee"));
 	});
 }
 
