@@ -358,12 +358,11 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let api = api();
 		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
-			api,
+			api(),
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
@@ -432,12 +431,11 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let api = api();
 		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
-			api,
+			api(),
 			None,
 			RevalidationType::Full,
 			spawner.clone(),
@@ -623,12 +621,11 @@ mod tests {
 		let (client, select_chain) = builder.build_with_longest_chain();
 		let client = Arc::new(client);
 		let spawner = sp_core::testing::TaskExecutor::new();
-		let api = api();
 		let genesis_hash = client.header(&BlockId::Number(0)).unwrap().unwrap().hash();
 		let pool = Arc::new(BasicPool::with_revalidation_type(
 			Options::default(),
 			true.into(),
-			api,
+			api(),
 			None,
 			RevalidationType::Full,
 			spawner.clone(),

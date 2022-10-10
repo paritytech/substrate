@@ -590,7 +590,7 @@ where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	/// Part of MaintainedTransactionPool::maintain procedure. Handles enactment and retraction of
+	/// Part of `MaintainedTransactionPool::maintain` procedure. Handles enactment and retraction of
 	/// blocks, sends transaction notifications.
 	async fn handle_enactment(&self, hash: Block::Hash, tree_route: TreeRoute<Block>) {
 		log::trace!(target: "txpool", "handle_enactment hash:{hash:?} tree_route: {tree_route:?}");
@@ -734,28 +734,35 @@ where
 	async fn maintain(&self, event: ChainEvent<Self::Block>) {
 		let prev_finalized_block = self.enactment_state.lock().recent_finalized_block;
 		let compute_tree_route = |from, to| -> Result<TreeRoute<Block>, String> {
-			EnactmentState::tree_route(&*self.api, from, to)
+			match self.api.tree_route(from, to) {
+				Ok(tree_route) => Ok(tree_route),
+				Err(e) =>
+					return Err(format!(
+						"Error [{e}] occured while computing tree_route from {from:?} to \
+					 previously finalized: {to:?}"
+					)),
+			}
 		};
 
-		let tree_route = match self
+		let result = self
 			.enactment_state
 			.lock()
-			.update_and_check_if_new_enactment_is_valid(&event, &compute_tree_route)
-		{
+			.update_and_check_if_new_enactment_is_valid(&event, &compute_tree_route);
+		match result {
 			Err(msg) => {
 				log::warn!(target: "txpool", "{msg}");
 				return
 			},
-			Ok(r) => r,
-		};
+			Ok(None) => {},
+			Ok(Some(tree_route)) => {
+				let hash = match event {
+					ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } =>
+						hash,
+				};
 
-		let hash = match event {
-			ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } => hash,
+				self.handle_enactment(hash, tree_route).await;
+			},
 		};
-
-		if let Some(tree_route) = tree_route {
-			self.handle_enactment(hash, tree_route).await;
-		}
 
 		if let ChainEvent::Finalized { hash, tree_route } = event {
 			log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized: \
@@ -764,8 +771,8 @@ where
 				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
 					log::warn!(
 						target: "txpool",
-						"Error [{}] occurred while attempting to notify watchers of finalization {}",
-						e, hash
+						"Error [{}] occurred while attempting to notify watchers about finalization {}",
+						hash, e
 					)
 				}
 			}
@@ -784,17 +791,17 @@ where
 ///  \
 ///   B2-C2-D2-E2
 ///
-/// Some scenarios and expected behavior:
-/// nbb(C1), f(C1) -> false (handle_enactment was already performed in nbb(C1))
-/// f(C1), nbb(C1) -> false (handle_enactment was already performed in f(C1))
+/// Some scenarios and expected behavior for seqeunce of `NewBestBlock` (nbb) and `Finalized` (f)
+/// events: `nbb(C1)`, `f(C1)` -> false (handle_enactment was already performed in `nbb(C1))`
+/// `f(C1)`, `nbb(C1)` -> false (handle_enactment was already performed in `f(C1))`
 ///
-/// f(C1), nbb(D2) -> false (handle_enactment was already performed in f(C1), we should not retract
-/// finalized block)
-/// f(C1), f(C2), nbb(C1) -> false
-/// nbb(C1), nbb(C2) -> true (switching fork is OK)
-/// nbb(B1), nbb(B2) -> true
-/// nbb(B1), nbb(C1), f(C1) -> false (handle_enactment was already performed in nbb(B1)
-/// nbb(C1), f(B1) -> false (handle_enactment was already performed in nbb(B2)
+/// `f(C1)`, `nbb(D2)` -> false (handle_enactment was already performed in `f(C1)`, we should not
+/// retract finalized block)
+/// `f(C1)`, `f(C2)`, `nbb(C1)` -> false
+/// `nbb(C1)`, `nbb(C2)` -> true (switching fork is OK)
+/// `nbb(B1)`, `nbb(B2)` -> true
+/// `nbb(B1)`, `nbb(C1)`, `f(C1)` -> false (handle_enactment was already performed in `nbb(B1)`
+/// `nbb(C1)`, `f(B1)` -> false (handle_enactment was already performed in `nbb(B2)`
 struct EnactmentState<Block>
 where
 	Block: BlockT,
@@ -811,31 +818,15 @@ where
 		EnactmentState { recent_best_block, recent_finalized_block }
 	}
 
-	/// computes tree route using provided ChainApi instance
-	fn tree_route<PoolApi: graph::ChainApi<Block = Block>>(
-		api: &PoolApi,
-		from: Block::Hash,
-		to: Block::Hash,
-	) -> Result<TreeRoute<Block>, String> {
-		match api.tree_route(from, to) {
-			Ok(tree_route) => Ok(tree_route),
-			Err(e) =>
-				return Err(format!(
-					"Error [{e}] occured while computing tree_route from {from:?} to \
-					 previously finalized: {to:?}"
-				)),
-		}
-	}
-
-	/// This function returns Some(tree_route) if blocks enact/retract process (implemented
-	/// in handle_enactment function) should be performed based on:
+	/// This function returns `Some(tree_route)` if blocks enact/retract process (implemented
+	/// in `handle_enactment` function) should be performed based on:
 	/// - recent_finalized_block
 	/// - recent_best_block
 	/// - newly provided block in event
-	/// tree_route contains blocks to be enacted/retracted.
+	/// `tree_route` contains blocks to be enacted/retracted.
 	///
-	/// if enactment process is not needed None is returned
-	/// error message is returned when computing tree_route fails
+	/// If enactment process is not needed then `None` is returned.
+	/// An error message is returned when computing `tree_route` fails.
 	fn update_and_check_if_new_enactment_is_valid<F>(
 		&mut self,
 		event: &ChainEvent<Block>,
@@ -962,15 +953,13 @@ mod enactment_state_tests {
 			.position(|bn| bn.hash == to)
 			.ok_or("existing block should be given")?;
 
-		/*
-		 *      B1-C1-D1-E1
-		 *     /
-		 *    A
-		 *     \
-		 *      B2-C2-D2-E2
-		 *
-		 *    [E1 D1 C1 B1 A B2 C2 D2 E2]
-		 */
+		//    B1-C1-D1-E1
+		//   /
+		//  A
+		//   \
+		//    B2-C2-D2-E2
+		//
+		//  [E1 D1 C1 B1 A B2 C2 D2 E2]
 
 		let vec: Vec<HashAndNumber<Block>> = if from < to {
 			chain.into_iter().skip(from).take(to - from + 1).collect()
@@ -1198,24 +1187,22 @@ mod enactment_state_tests {
 		sp_tracing::try_init_simple();
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
-		/*
-		 *      B1-C1-D1-E1
-		 *     /
-		 *    A
-		 *     \
-		 *      B2-C2-D2-E2
-		 */
+		//   B1-C1-D1-E1
+		//  /
+		// A
+		//  \
+		//   B2-C2-D2-E2
 
 		let result = trigger_new_best_block(&mut es, a(), d1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, d1(), a());
 
 		let result = trigger_new_best_block(&mut es, d1(), e1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e1(), a());
 
 		let result = trigger_finalized(&mut es, a(), d2());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, d2(), e1());
@@ -1247,7 +1234,7 @@ mod enactment_state_tests {
 		assert_es_eq(&es, d2(), d2());
 
 		let result = trigger_new_best_block(&mut es, d2(), e2());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e2(), d2());
 
 		let result = trigger_finalized(&mut es, d2(), e2());
@@ -1260,24 +1247,22 @@ mod enactment_state_tests {
 		sp_tracing::try_init_simple();
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
-		/*
-		 *   A-B1-C1-D1-E1
-		 */
+		// A-B1-C1-D1-E1
 
 		let result = trigger_new_best_block(&mut es, a(), b1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, b1(), a());
 
 		let result = trigger_new_best_block(&mut es, b1(), c1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, c1(), a());
 
 		let result = trigger_new_best_block(&mut es, c1(), d1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, d1(), a());
 
 		let result = trigger_new_best_block(&mut es, d1(), e1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e1(), a());
 
 		let result = trigger_finalized(&mut es, a(), c1());
@@ -1294,12 +1279,10 @@ mod enactment_state_tests {
 		sp_tracing::try_init_simple();
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
-		/*
-		 *   A-B1-C1-D1-E1
-		 */
+		// A-B1-C1-D1-E1
 
 		let result = trigger_new_best_block(&mut es, a(), e1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e1(), a());
 
 		let result = trigger_finalized(&mut es, a(), b1());
@@ -1312,12 +1295,10 @@ mod enactment_state_tests {
 		sp_tracing::try_init_simple();
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
-		/*
-		 *   A-B1-C1-D1-E1
-		 */
+		// A-B1-C1-D1-E1
 
 		let result = trigger_finalized(&mut es, a(), e1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e1(), e1());
 
 		let result = trigger_finalized(&mut es, e1(), b1());
@@ -1330,16 +1311,14 @@ mod enactment_state_tests {
 		sp_tracing::try_init_simple();
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
-		/*
-		 *      B1-C1-D1-E1
-		 *     /
-		 *    A
-		 *     \
-		 *      B2-C2-D2-E2
-		 */
+		//   B1-C1-D1-E1
+		//  /
+		// A
+		//  \
+		//   B2-C2-D2-E2
 
 		let result = trigger_finalized(&mut es, a(), e1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e1(), e1());
 
 		let result = trigger_finalized(&mut es, e1(), e2());
@@ -1352,20 +1331,18 @@ mod enactment_state_tests {
 		sp_tracing::try_init_simple();
 		let mut es = EnactmentState::new(a().hash, a().hash);
 
-		/*
-		 *    A-B1-C1-D1-E1
-		 */
+		// A-B1-C1-D1-E1
 
 		let result = trigger_new_best_block(&mut es, a(), b1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, b1(), a());
 
 		let result = trigger_finalized(&mut es, a(), d1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, d1(), d1());
 
 		let result = trigger_new_best_block(&mut es, a(), e1());
-		assert_eq!(result, true);
+		assert!(result);
 		assert_es_eq(&es, e1(), d1());
 
 		let result = trigger_new_best_block(&mut es, a(), c1());

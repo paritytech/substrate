@@ -37,7 +37,7 @@ use sp_runtime::{
 	traits::Block as _,
 	transaction_validity::{InvalidTransaction, TransactionSource, ValidTransaction},
 };
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, pin::Pin, sync::Arc};
 use substrate_test_runtime_client::{
 	runtime::{Block, Extrinsic, Hash, Header, Index, Transfer},
 	AccountKeyring::*,
@@ -50,34 +50,31 @@ fn pool() -> Pool<TestApi> {
 }
 
 fn maintained_pool() -> (BasicPool<TestApi, Block>, Arc<TestApi>, futures::executor::ThreadPool) {
-	let test_api = TestApi::with_alice_nonce(209);
-	let genesis_hash = {
-		let chain = test_api.chain().read();
-		chain
-			.block_by_number
-			.get(&0)
-			.map(|blocks| blocks[0].0.header.hash())
-			.expect("there is block 0. qed")
-	};
-	let api = Arc::new(test_api);
-	let (pool, background_task) = BasicPool::new_test(api.clone(), genesis_hash, genesis_hash);
+	let api = Arc::new(TestApi::with_alice_nonce(209));
+	let (pool, background_task) = create_basic_pool_with_genesis(api.clone());
 
 	let thread_pool = futures::executor::ThreadPool::new().unwrap();
 	thread_pool.spawn_ok(background_task);
 	(pool, api, thread_pool)
 }
 
-fn create_basic_pool(test_api: TestApi) -> BasicPool<TestApi, Block> {
+fn create_basic_pool_with_genesis(
+	test_api: Arc<TestApi>,
+) -> (BasicPool<TestApi, Block>, Pin<Box<dyn Future<Output = ()> + Send>>) {
 	let genesis_hash = {
-		let chain = test_api.chain().read();
-		chain
+		test_api
+			.chain()
+			.read()
 			.block_by_number
 			.get(&0)
 			.map(|blocks| blocks[0].0.header.hash())
 			.expect("there is block 0. qed")
 	};
-	let (pool, _) = BasicPool::new_test(Arc::new(test_api), genesis_hash, genesis_hash);
-	pool
+	BasicPool::new_test(test_api, genesis_hash, genesis_hash)
+}
+
+fn create_basic_pool(test_api: TestApi) -> BasicPool<TestApi, Block> {
+	create_basic_pool_with_genesis(Arc::from(test_api)).0
 }
 
 const SOURCE: TransactionSource = TransactionSource::External;
