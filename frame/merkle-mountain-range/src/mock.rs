@@ -80,6 +80,7 @@ impl Config for Test {
 	type Hash = H256;
 	type LeafData = MmrLeaf;
 	type MaxLeafSize = MaxLeafSize;
+	type MaxMmrHeight = MaxMmrHeight;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
@@ -98,6 +99,7 @@ impl LeafData {
 
 parameter_types! {
 	pub static MaxLeafSize: u32 = 2 * u32::try_from(sp_std::mem::size_of::<MmrLeaf>()).unwrap();
+	pub const MaxMmrHeight: u32 = 32;
 	pub static LeafDataTestValue: LeafData = Default::default();
 }
 

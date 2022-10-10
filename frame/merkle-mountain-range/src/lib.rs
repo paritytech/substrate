@@ -179,6 +179,9 @@ pub mod pallet {
 		/// The maximum leaf size.
 		type MaxLeafSize: Get<u32>;
 
+		/// The maximum MMR height - log2(max_leaves_count).
+		type MaxMmrHeight: Get<u32>;
+
 		/// A hook to act on the new MMR root.
 		///
 		/// For some applications it might be beneficial to make the MMR root available externally
@@ -210,13 +213,16 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn latest_leaf)]
 	pub type LatestLeaf<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<u8, T::MaxLeafSize>, OptionQuery>;
+		StorageValue<_, BoundedVec<u8, T::MaxLeafSize>, ValueQuery>;
 
 	/// TODO
 	#[pallet::storage]
 	#[pallet::getter(fn new_nodes)]
-	pub type NewNodes<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Identity, NodeIndex, <T as Config<I>>::Hash, OptionQuery>;
+	pub type NewNodes<T: Config<I>, I: 'static = ()> = StorageValue<
+		_,
+		BoundedVec<(NodeIndex, <T as Config<I>>::Hash), T::MaxMmrHeight>,
+		ValueQuery,
+	>;
 
 	/// Hashes of the peaks in the MMR.
 	///
@@ -240,16 +246,19 @@ pub mod pallet {
 				_n, leaves, peaks_before,
 			);
 
-			// clear out previous `NewNodes`; `LatestLeaf` will just be overwritten.
-			// FIXME: use proper limit (count_nodes_now - count_nodes_one_leaf_less).
-			let _ = NewNodes::<T, I>::clear(100, None);
+			let (leaves, root) = {
+				// append new leaf to MMR
+				let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage<T, I>, T, I> =
+					mmr::Mmr::new(leaves);
+				mmr.push(data).expect("MMR push never fails.");
 
-			// append new leaf to MMR
-			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
-			mmr.push(data).expect("MMR push never fails.");
+				// update the size
+				mmr.finalize().expect("MMR finalize never fails.")
 
-			// update the size
-			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
+				// When `mmr.inner` is dropped, `NewNodes` and `LatestLeaf` will just overwritten
+				// in runtime storage with in-mem batched values (built during `mmr.finalize()`).
+			};
+
 			<T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
 
 			<NumberOfLeaves<T, I>>::put(leaves);

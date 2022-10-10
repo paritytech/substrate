@@ -160,7 +160,7 @@ mod tests {
 		for s in &leaves[1..] {
 			crate::tests::new_test_ext().execute_with(|| {
 				let mut mmr = crate::mmr::Mmr::<
-					crate::mmr::storage::RuntimeStorage,
+					crate::mmr::storage::RuntimeStorage<crate::mock::Test, _>,
 					crate::mock::Test,
 					_,
 					_,

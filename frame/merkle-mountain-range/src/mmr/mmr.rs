@@ -80,6 +80,7 @@ where
 	T: Config<I>,
 	I: 'static,
 	L: primitives::FullLeaf,
+	StorageType: Default,
 	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
 	/// Create a pointer to an existing MMR with given number of leaves.
@@ -125,7 +126,7 @@ where
 }
 
 /// Runtime specific MMR functions.
-impl<T, I, L> Mmr<RuntimeStorage, T, I, L>
+impl<T, I, L> Mmr<RuntimeStorage<T, I>, T, I, L>
 where
 	T: Config<I>,
 	I: 'static,

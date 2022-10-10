@@ -38,13 +38,50 @@ use crate::{
 /// 1. We add nodes (leaves) hashes to the on-chain storage (see [crate::Nodes]).
 /// 2. We add full leaves (and all inner nodes as well) into the `IndexingAPI` during block
 ///    processing, so the values end up in the Offchain DB if indexing is enabled.
-pub struct RuntimeStorage;
+pub struct RuntimeStorage<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	// Data that will be committed to runtime storage db when this object is dropped.
+	// Allows batching multiple additions into a single db write.
+	batch_temp_nodes: Vec<(NodeIndex, <T as Config<I>>::Hash)>,
+}
+
+impl<T, I> Default for RuntimeStorage<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	fn default() -> Self {
+		Self { batch_temp_nodes: vec![] }
+	}
+}
+
+impl<T, I> Drop for RuntimeStorage<T, I>
+where
+	T: Config<I>,
+	I: 'static,
+{
+	fn drop(&mut self) {
+		let batch = sp_std::mem::replace(&mut self.batch_temp_nodes, vec![]);
+		if let Ok(bounded_temp_nodes) = BoundedVec::<_, _>::try_from(batch) {
+			<NewNodes<T, I>>::put(bounded_temp_nodes);
+		} else {
+			frame_support::log::error!(
+				target: "runtime::mmr",
+				"Batched `NewNodes` exceed configured storage bound, dropping..",
+			);
+		}
+	}
+}
 
 /// A marker type for offchain-specific storage implementation.
 ///
 /// Allows proof generation and verification, but does not support appending new items.
 /// MMR nodes are assumed to be stored in the Off-Chain DB. Note this storage type
 /// DOES NOT support adding new items to the MMR.
+#[derive(Default)]
 pub struct OffchainStorage;
 
 /// Suffix of key for the 'pruning_map'.
@@ -96,11 +133,14 @@ where
 ///
 /// There are two different implementations depending on the use case.
 /// See docs for [RuntimeStorage] and [OffchainStorage].
-pub struct Storage<StorageType, T, I, L>(sp_std::marker::PhantomData<(StorageType, T, I, L)>);
+pub struct Storage<StorageType, T, I, L> {
+	inner: StorageType,
+	_ph: sp_std::marker::PhantomData<(StorageType, T, I, L)>,
+}
 
-impl<StorageType, T, I, L> Default for Storage<StorageType, T, I, L> {
+impl<StorageType: Default, T, I, L> Default for Storage<StorageType, T, I, L> {
 	fn default() -> Self {
-		Self(Default::default())
+		Self { inner: Default::default(), _ph: Default::default() }
 	}
 }
 
@@ -128,23 +168,24 @@ where
 				value,
 			);
 		};
+
 		// Copy newly added leaf and nodes to offchain db keyed under this block's hash.
-		if let Some(elem) = LatestLeaf::<T, _>::get() {
-			// FIXME: fix expect
-			let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(number).expect("TODO");
-			let leaf_node_index = helper::leaf_index_to_pos(leaf_index);
-			frame_support::log::debug!(
-				target: "runtime::mmr::offchain", "move leaf idx {} pos {} to offchain",
-				leaf_index, leaf_node_index,
-			);
-			// Copy over leaf.
-			store_to_offchain(block_hash, leaf_node_index, &elem);
-			// Copy over all parent nodes.
-			NewNodes::<T, _>::iter().for_each(|(node_index, node_hash)| {
-				let node = NodeOf::<T, I, L>::Hash(node_hash);
-				store_to_offchain(block_hash, node_index, &node.encode());
-			});
-		}
+		let elem = LatestLeaf::<T, _>::get();
+		// FIXME: fix expect
+		let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(number).expect("TODO");
+		let leaf_node_index = helper::leaf_index_to_pos(leaf_index);
+		frame_support::log::debug!(
+			target: "runtime::mmr::offchain", "move leaf idx {} pos {} to offchain",
+			leaf_index, leaf_node_index,
+		);
+		// Copy over leaf.
+		store_to_offchain(block_hash, leaf_node_index, &elem);
+
+		// Copy over all parent nodes.
+		NewNodes::<T, _>::get().into_iter().for_each(|(node_index, node_hash)| {
+			let node = NodeOf::<T, I, L>::Hash(node_hash);
+			store_to_offchain(block_hash, node_index, &node.encode());
+		});
 	}
 
 	/// Move nodes and leaves added by block `N` in offchain db from _fork-aware key_ to
@@ -297,7 +338,7 @@ where
 	}
 }
 
-impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage, T, I, L>
+impl<T, I, L> mmr_lib::MMRStore<NodeOf<T, I, L>> for Storage<RuntimeStorage<T, I>, T, I, L>
 where
 	T: Config<I>,
 	I: 'static,
@@ -357,7 +398,7 @@ where
 					frame_support::log::debug!(
 						target: "runtime::mmr::offchain", "runtime append node {}", node_index,
 					);
-					<NewNodes<T, I>>::insert(node_index, elem.hash());
+					self.inner.batch_temp_nodes.push((node_index, elem.hash()));
 				},
 			}
 			node_index += 1;
