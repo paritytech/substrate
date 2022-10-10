@@ -539,9 +539,9 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		let invalid_change = peer.view.set_id > update.set_id ||
-			peer.view.round > update.round && peer.view.set_id == update.set_id ||
-			peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
+		let invalid_change = peer.view.set_id >= update.set_id ||
+			peer.view.round >= update.round && peer.view.set_id == update.set_id ||
+			peer.view.last_commit.as_ref() >= Some(&update.commit_finalized_height);
 
 		if invalid_change {
 			return Err(Misbehavior::InvalidViewChange)
@@ -758,13 +758,16 @@ impl<Block: BlockT> Inner<Block> {
 		}
 	}
 
-	/// Note a round in the current set has started.
+	/// Note a round in the current set has started. Does nothing if the last
+	/// call to the function was with the same `round`.
 	fn note_round(&mut self, round: Round) -> MaybeMessage<Block> {
 		{
 			let local_view = match self.local_view {
 				None => return None,
 				Some(ref mut v) =>
 					if v.round == round {
+						// Do not send neighbor packets out if `round` has not changed ---
+						// such behavior is punishable.
 						return None
 					} else {
 						v
@@ -803,6 +806,8 @@ impl<Block: BlockT> Inner<Block> {
 							);
 							self.authorities = authorities;
 						}
+						// Do not send neighbor packets out if the `set_id` has not changed ---
+						// such behavior is punishable.
 						return None
 					} else {
 						v
@@ -816,7 +821,9 @@ impl<Block: BlockT> Inner<Block> {
 		self.multicast_neighbor_packet()
 	}
 
-	/// Note that we've imported a commit finalizing a given block.
+	/// Note that we've imported a commit finalizing a given block. Does nothing if the last
+	/// call to the function was with the same or higher `finalized` number.
+	/// `set_id` & `round` are the ones the commit message is from.
 	fn note_commit_finalized(
 		&mut self,
 		round: Round,
@@ -1357,6 +1364,8 @@ impl<Block: BlockT> GossipValidator<Block> {
 	}
 
 	/// Note that we've imported a commit finalizing a given block.
+	/// `set_id` & `round` are the ones the commit message is from and not necessarily
+	/// the latest set ID & round started.
 	pub(super) fn note_commit_finalized<F>(
 		&self,
 		round: Round,
