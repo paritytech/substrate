@@ -186,21 +186,26 @@ pub enum CollectionSetting {
 	/// When is set then no deposit needed to hold items of this collection.
 	FreeHolding,
 }
-pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 
-/// Wrapper type for `CollectionSettings` that implements `Codec`.
+/// Wrapper type for `BitFlags<CollectionSetting>` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
-pub struct CollectionConfig(pub CollectionSettings);
+pub struct CollectionSettings(pub BitFlags<CollectionSetting>);
 
-impl CollectionConfig {
+impl CollectionSettings {
 	pub fn empty() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> CollectionSettings {
+	pub fn values(&self) -> BitFlags<CollectionSetting> {
 		self.0
 	}
 }
-impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
+impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
+
+#[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
+pub struct CollectionConfig {
+	/// Collection bitflag settings.
+	pub(super) settings: CollectionSettings,
+}
 
 // Support for up to 64 user-enabled features on an item.
 #[bitflags]

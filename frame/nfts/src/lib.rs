@@ -592,12 +592,12 @@ pub mod pallet {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			let mut settings = config.values();
+			let mut settings = config.settings.values();
 			// FreeHolding could be set by calling the force_create() only
 			if settings.contains(CollectionSetting::FreeHolding) {
 				settings.remove(CollectionSetting::FreeHolding);
 			}
-			let config = CollectionConfig(settings);
+			let config = CollectionConfig { settings: CollectionSettings(settings), ..config };
 
 			Self::do_create_collection(
 				collection,
@@ -910,10 +910,10 @@ pub mod pallet {
 		pub fn lock_collection(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			lock_config: CollectionConfig,
+			lock_settings: CollectionSettings,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_lock_collection(origin, collection, lock_config)
+			Self::do_lock_collection(origin, collection, lock_settings)
 		}
 
 		/// Change the Owner of a collection.

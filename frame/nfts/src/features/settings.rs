@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::*;
+use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 /// The helper methods bellow allow to read and validate different
@@ -25,10 +26,10 @@ use frame_support::pallet_prelude::*;
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn get_collection_settings(
 		collection_id: &T::CollectionId,
-	) -> Result<CollectionSettings, DispatchError> {
+	) -> Result<BitFlags<CollectionSetting>, DispatchError> {
 		let config = CollectionConfigOf::<T, I>::get(&collection_id)
 			.ok_or(Error::<T, I>::UnknownCollection)?;
-		Ok(config.values())
+		Ok(config.settings.values())
 	}
 
 	pub fn get_item_settings(
@@ -43,7 +44,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn is_collection_setting_disabled(
 		collection_id: &T::CollectionId,
 		setting: CollectionSetting,
-	) -> Result<(bool, CollectionSettings), DispatchError> {
+	) -> Result<(bool, BitFlags<CollectionSetting>), DispatchError> {
 		let settings = Self::get_collection_settings(&collection_id)?;
 		Ok((!settings.contains(setting), settings))
 	}

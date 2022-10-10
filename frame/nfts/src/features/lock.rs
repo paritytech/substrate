@@ -25,7 +25,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_lock_collection(
 		origin: T::AccountId,
 		collection: T::CollectionId,
-		lock_config: CollectionConfig,
+		lock_settings: CollectionSettings,
 	) -> DispatchResult {
 		let details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -33,8 +33,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
-			let mut settings = config.values();
-			let lock_settings = lock_config.values();
+			let mut settings = config.settings.values();
+			let lock_settings = lock_settings.values();
 
 			if lock_settings.contains(CollectionSetting::NonTransferableItems) {
 				settings.insert(CollectionSetting::NonTransferableItems);
@@ -46,7 +46,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				settings.insert(CollectionSetting::LockedAttributes);
 			}
 
-			config.0 = settings;
+			config.settings = CollectionSettings(settings);
 
 			Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
 			Ok(())
