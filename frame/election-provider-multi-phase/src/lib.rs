@@ -453,13 +453,13 @@ impl<C: Default> Default for RawSolution<C> {
 
 /// A checked solution, ready to be enacted.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
-#[scale_info(skip_type_params(B))]
-pub struct ReadySolution<A, B: Get<u32>> {
+#[scale_info(skip_type_params(T))]
+pub struct ReadySolution<T: Config> {
 	/// The final supports of the solution.
 	///
 	/// This is target-major vector, storing each winners, total backing, and each individual
 	/// backer.
-	pub supports: BoundedSupports<A, B>,
+	pub supports: BoundedSupports<T::AccountId, T::MaxWinners>,
 	/// The score of the solution.
 	///
 	/// This is needed to potentially challenge the solution.
@@ -1256,7 +1256,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn queued_solution)]
 	pub type QueuedSolution<T: Config> =
-		StorageValue<_, ReadySolution<T::AccountId, T::MaxWinners>>;
+		StorageValue<_, ReadySolution<T>>;
 
 	/// Snapshot data of the round.
 	///
@@ -1490,7 +1490,7 @@ impl<T: Config> Pallet<T> {
 	pub fn feasibility_check(
 		raw_solution: RawSolution<SolutionOf<T::MinerConfig>>,
 		compute: ElectionCompute,
-	) -> Result<ReadySolution<T::AccountId, T::MaxWinners>, FeasibilityError> {
+	) -> Result<ReadySolution<T>, FeasibilityError> {
 		let RawSolution { solution, score, round } = raw_solution;
 
 		// First, check round.
