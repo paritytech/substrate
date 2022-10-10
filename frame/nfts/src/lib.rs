@@ -287,11 +287,6 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	/// Keeps track of the number of items a collection might have.
-	pub(super) type CollectionMaxSupply<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::CollectionId, u32, OptionQuery>;
-
-	#[pallet::storage]
 	/// Stores the `CollectionId` that is going to be used for the next collection.
 	/// This gets incremented by 1 whenever a new collection is created.
 	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
@@ -525,8 +520,8 @@ pub mod pallet {
 		LockedCollectionMetadata,
 		/// All items have been minted.
 		MaxSupplyReached,
-		/// The max supply has already been set.
-		MaxSupplyAlreadySet,
+		/// The max supply is locked and can't be changed.
+		MaxSupplyLocked,
 		/// The provided max supply is less to the amount of items a collection already has.
 		MaxSupplyTooSmall,
 		/// The given item ID is unknown.
@@ -1660,8 +1655,6 @@ pub mod pallet {
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
 		///
-		/// Note: This function can only succeed once per collection.
-		///
 		/// - `collection`: The identifier of the collection to change.
 		/// - `max_supply`: The maximum amount of items a collection could have.
 		///
@@ -1676,10 +1669,11 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			ensure!(
-				!CollectionMaxSupply::<T, I>::contains_key(&collection),
-				Error::<T, I>::MaxSupplyAlreadySet
-			);
+			let (action_allowed, _) = Self::is_collection_setting_disabled(
+				&collection,
+				CollectionSetting::LockedMaxSupply,
+			)?;
+			ensure!(action_allowed, Error::<T, I>::MaxSupplyLocked);
 
 			let details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -1689,9 +1683,12 @@ pub mod pallet {
 
 			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
 
-			CollectionMaxSupply::<T, I>::insert(&collection, max_supply);
-			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
-			Ok(())
+			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
+				let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
+				config.max_supply = Some(max_supply);
+				Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
+				Ok(())
+			})
 		}
 
 		/// Set (or reset) the price for an item.

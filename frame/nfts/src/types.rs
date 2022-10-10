@@ -183,6 +183,8 @@ pub enum CollectionSetting {
 	LockedMetadata,
 	/// Disallow to modify attributes of this collection.
 	LockedAttributes,
+	/// Disallow to modify the supply of this collection.
+	LockedMaxSupply,
 	/// When is set then no deposit needed to hold items of this collection.
 	FreeHolding,
 }
@@ -201,10 +203,12 @@ impl CollectionSettings {
 }
 impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
-#[derive(Encode, Decode, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
+#[derive(Encode, Decode, Default, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
 pub struct CollectionConfig {
-	/// Collection bitflag settings.
+	/// Collection's bitflag settings.
 	pub(super) settings: CollectionSettings,
+	/// Collection's max supply.
+	pub(super) max_supply: Option<u32>,
 }
 
 // Support for up to 64 user-enabled features on an item.

@@ -144,7 +144,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
-			CollectionMaxSupply::<T, I>::remove(&collection);
 			CollectionConfigOf::<T, I>::remove(&collection);
 			#[allow(deprecated)]
 			ItemConfigOf::<T, I>::remove_prefix(&collection, None);
@@ -176,7 +175,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				with_details(collection_details)?;
 
-				if let Ok(max_supply) = CollectionMaxSupply::<T, I>::try_get(&collection) {
+				let collection_config =
+					CollectionConfigOf::<T, I>::get(&collection).ok_or(Error::<T, I>::NoConfig)?;
+
+				if let Some(max_supply) = collection_config.max_supply {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
 				}
 

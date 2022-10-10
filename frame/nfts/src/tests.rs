@@ -94,20 +94,26 @@ fn events() -> Vec<Event<Test>> {
 }
 
 fn default_collection_config() -> CollectionConfig {
-	CollectionConfig { settings: CollectionSettings(CollectionSetting::FreeHolding.into()) }
+	CollectionConfig {
+		settings: CollectionSettings(CollectionSetting::FreeHolding.into()),
+		..Default::default()
+	}
 }
 
 fn default_item_config() -> ItemConfig {
 	ItemConfig::empty()
 }
 
-fn make_collection_config(settings: BitFlags<CollectionSetting>) -> CollectionConfig {
-	CollectionConfig { settings: CollectionSettings(settings) }
+fn make_collection_config(
+	settings: BitFlags<CollectionSetting>,
+	max_supply: Option<u32>,
+) -> CollectionConfig {
+	CollectionConfig { settings: CollectionSettings(settings), max_supply }
 }
 
 impl CollectionConfig {
 	pub fn empty() -> Self {
-		Self { settings: CollectionSettings::empty() }
+		Self { settings: CollectionSettings::empty(), ..Default::default() }
 	}
 }
 
@@ -222,7 +228,8 @@ fn transfer_should_work() {
 			RuntimeOrigin::root(),
 			1,
 			make_collection_config(
-				CollectionSetting::NonTransferableItems | CollectionSetting::FreeHolding
+				CollectionSetting::NonTransferableItems | CollectionSetting::FreeHolding,
+				None
 			)
 		));
 
@@ -636,7 +643,7 @@ fn force_collection_status_should_work() {
 			1,
 			1,
 			1,
-			make_collection_config(CollectionSetting::FreeHolding.into()),
+			make_collection_config(CollectionSetting::FreeHolding.into(), None),
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, 1, default_item_config()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 169, 2, default_item_config()));
@@ -711,7 +718,8 @@ fn approval_lifecycle_works() {
 			RuntimeOrigin::root(),
 			1,
 			make_collection_config(
-				CollectionSetting::NonTransferableItems | CollectionSetting::FreeHolding
+				CollectionSetting::NonTransferableItems | CollectionSetting::FreeHolding,
+				None
 			)
 		));
 
@@ -828,7 +836,7 @@ fn approval_deadline_works() {
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
 			1,
-			make_collection_config(CollectionSetting::FreeHolding.into())
+			make_collection_config(CollectionSetting::FreeHolding.into(), None)
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 2, default_item_config()));
 
@@ -948,31 +956,44 @@ fn max_supply_should_work() {
 	new_test_ext().execute_with(|| {
 		let collection_id = 0;
 		let user_id = 1;
-		let max_supply = 2;
+		let max_supply = 1;
 
 		// validate set_collection_max_supply
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
-		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
+		assert_eq!(CollectionConfigOf::<Test>::get(collection_id).unwrap().max_supply, None);
 
 		assert_ok!(Nfts::set_collection_max_supply(
 			RuntimeOrigin::signed(user_id),
 			collection_id,
 			max_supply
 		));
-		assert_eq!(CollectionMaxSupply::<Test>::get(collection_id).unwrap(), max_supply);
+		assert_eq!(
+			CollectionConfigOf::<Test>::get(collection_id).unwrap().max_supply,
+			Some(max_supply)
+		);
 
 		assert!(events().contains(&Event::<Test>::CollectionMaxSupplySet {
 			collection: collection_id,
 			max_supply,
 		}));
 
+		assert_ok!(Nfts::set_collection_max_supply(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			max_supply + 1
+		));
+		assert_ok!(Nfts::lock_collection(
+			RuntimeOrigin::signed(user_id),
+			collection_id,
+			CollectionSettings(CollectionSetting::LockedMaxSupply.into())
+		));
 		assert_noop!(
 			Nfts::set_collection_max_supply(
 				RuntimeOrigin::signed(user_id),
 				collection_id,
-				max_supply + 1
+				max_supply + 2
 			),
-			Error::<Test>::MaxSupplyAlreadySet
+			Error::<Test>::MaxSupplyLocked
 		);
 
 		// validate we can't mint more to max supply
@@ -1000,14 +1021,6 @@ fn max_supply_should_work() {
 			),
 			Error::<Test>::MaxSupplyReached
 		);
-
-		// validate we remove the CollectionMaxSupply record when we destroy the collection
-		assert_ok!(Nfts::destroy(
-			RuntimeOrigin::signed(user_id),
-			collection_id,
-			Collection::<Test>::get(collection_id).unwrap().destroy_witness()
-		));
-		assert!(!CollectionMaxSupply::<Test>::contains_key(collection_id));
 	});
 }
 
@@ -1087,7 +1100,8 @@ fn set_price_should_work() {
 			RuntimeOrigin::root(),
 			user_id,
 			make_collection_config(
-				CollectionSetting::NonTransferableItems | CollectionSetting::FreeHolding
+				CollectionSetting::NonTransferableItems | CollectionSetting::FreeHolding,
+				None
 			)
 		));
 
@@ -1670,7 +1684,7 @@ fn claim_swap_should_work() {
 fn various_collection_settings() {
 	new_test_ext().execute_with(|| {
 		// when we set only one value it's required to call .into() on it
-		let config = make_collection_config(CollectionSetting::NonTransferableItems.into());
+		let config = make_collection_config(CollectionSetting::NonTransferableItems.into(), None);
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config));
 
 		let config = CollectionConfigOf::<Test>::get(0).unwrap();
@@ -1681,6 +1695,7 @@ fn various_collection_settings() {
 		// no need to call .into() for multiple values
 		let config = make_collection_config(
 			CollectionSetting::LockedMetadata | CollectionSetting::NonTransferableItems,
+			None,
 		);
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, config));
 
@@ -1699,11 +1714,7 @@ fn collection_locking_should_work() {
 		let user_id = 1;
 		let collection_id = 0;
 
-		assert_ok!(Nfts::force_create(
-			RuntimeOrigin::root(),
-			user_id,
-			CollectionConfig { settings: CollectionSettings::empty() }
-		));
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, CollectionConfig::empty(),));
 
 		// validate partial lock
 		let lock_settings = CollectionSettings(

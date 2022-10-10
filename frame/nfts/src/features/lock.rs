@@ -45,6 +45,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if lock_settings.contains(CollectionSetting::LockedAttributes) {
 				settings.insert(CollectionSetting::LockedAttributes);
 			}
+			if lock_settings.contains(CollectionSetting::LockedMaxSupply) {
+				settings.insert(CollectionSetting::LockedMaxSupply);
+			}
 
 			config.settings = CollectionSettings(settings);
 
