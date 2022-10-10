@@ -437,6 +437,9 @@ where
 		child_prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
+
+		// This is deprecated and will generate a warning which causes the CI to fail.
+		#[allow(warnings)]
 		let child_keys = substrate_rpc_client::ChildStateApi::storage_keys(
 			self.as_online().rpc_client(),
 			PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
