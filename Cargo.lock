@@ -2654,17 +2654,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hmac-drbg"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17ea0a1394df5b6574da6e0c1ade9e78868c9fb0a4e5ef4428e32da4676b85b1"
-dependencies = [
- "digest 0.9.0",
- "generic-array 0.14.4",
- "hmac 0.8.1",
-]
-
-[[package]]
 name = "honggfuzz"
 version = "0.5.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
