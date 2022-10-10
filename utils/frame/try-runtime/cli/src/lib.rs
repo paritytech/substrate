@@ -132,20 +132,20 @@
 //! added, given the right flag:
 //!
 //! ```ignore
+//! 
 //! #[cfg(feature = try-runtime)]
-//! fn pre_upgrade() -> Result<(), &'static str> {}
+//! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
 //! #[cfg(feature = try-runtime)]
-//! fn post_upgrade() -> Result<(), &'static str> {}
+//! fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {}
 //! ```
 //!
 //! (The pallet macro syntax will support this simply as a part of `#[pallet::hooks]`).
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
-//! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
-//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
-//! will not want to mutate any of the storage that is to be migrated.
+//! and after the migration. Moreover, `pre_upgrade` can return a `Vec<u8>` that contains arbitrary
+//! encoded data (usually some pre-upgrade state) which will be passed to `post_upgrade` after
+//! upgrading and used for post checking.
 //!
 //! #### Logging
 //!
@@ -421,9 +421,9 @@ pub struct SharedParams {
 	#[clap(long)]
 	pub heap_pages: Option<u64>,
 
-	/// When enabled, the spec name check will not panic, and instead only show a warning.
+	/// When enabled, the spec check will not panic, and instead only show a warning.
 	#[clap(long)]
-	pub no_spec_name_check: bool,
+	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
 	#[clap(long, default_value = "1", parse(try_from_str = parse::state_version))]
@@ -502,11 +502,10 @@ impl State {
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		Ok(match self {
-			State::Snap { snapshot_path } => {
+			State::Snap { snapshot_path } =>
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
-				}))
-			},
+				})),
 			State::Live { snapshot_path, pallet, uri, at, child_tree } => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
@@ -552,38 +551,34 @@ impl TryRuntimeCmd {
 		ExecDispatch: NativeExecutionDispatch + 'static,
 	{
 		match &self.command {
-			Command::OnRuntimeUpgrade(ref cmd) => {
+			Command::OnRuntimeUpgrade(ref cmd) =>
 				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await
-			},
-			Command::OffchainWorker(cmd) => {
+				.await,
+			Command::OffchainWorker(cmd) =>
 				commands::offchain_worker::offchain_worker::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await
-			},
-			Command::ExecuteBlock(cmd) => {
+				.await,
+			Command::ExecuteBlock(cmd) =>
 				commands::execute_block::execute_block::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await
-			},
-			Command::FollowChain(cmd) => {
+				.await,
+			Command::FollowChain(cmd) =>
 				commands::follow_chain::follow_chain::<Block, ExecDispatch>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
-				.await
-			},
+				.await,
 		}
 	}
 }

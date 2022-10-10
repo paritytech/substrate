@@ -50,15 +50,21 @@ use log::{debug, error, info, trace, warn};
 use prost::Message;
 use sc_client_api::{BlockBackend, ProofProvider};
 use sc_consensus::{BlockImportError, BlockImportStatus, IncomingBlock};
-use sc_network_common::sync::{
-	message::{
-		BlockAnnounce, BlockAttributes, BlockData, BlockRequest, BlockResponse, Direction,
-		FromBlock,
+use sc_network_common::{
+	config::{
+		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
 	},
-	warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
-	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, OnStateData,
-	OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PeerInfo,
-	PollBlockAnnounceValidation, SyncMode, SyncState, SyncStatus,
+	protocol::role::Roles,
+	sync::{
+		message::{
+			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
+			BlockResponse, Direction, FromBlock,
+		},
+		warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
+		BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification, OnStateData,
+		OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PeerInfo,
+		PollBlockAnnounceValidation, SyncMode, SyncState, SyncStatus,
+	},
 };
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
@@ -76,10 +82,12 @@ use sp_runtime::{
 };
 use std::{
 	collections::{hash_map::Entry, HashMap, HashSet},
+	iter,
 	ops::Range,
 	pin::Pin,
 	sync::Arc,
 };
+use warp::TargetBlockImportResult;
 
 mod extra_requests;
 
@@ -119,6 +127,9 @@ const MAJOR_SYNC_BLOCKS: u8 = 5;
 
 /// Number of peers that need to be connected before warp sync is started.
 const MIN_PEERS_TO_START_WARP_SYNC: usize = 3;
+
+/// Maximum allowed size for a block announce.
+const MAX_BLOCK_ANNOUNCE_SIZE: u64 = 1024 * 1024;
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
@@ -315,6 +326,8 @@ pub enum PeerSyncState<B: BlockT> {
 	DownloadingState,
 	/// Downloading warp proof.
 	DownloadingWarpProof,
+	/// Downloading warp sync target block.
+	DownloadingWarpTargetBlock,
 	/// Actively downloading block history after warp sync.
 	DownloadingGap(NumberFor<B>),
 }
@@ -647,7 +660,6 @@ where
 					id: 0,
 					fields: BlockAttributes::JUSTIFICATION,
 					from: FromBlock::Hash(request.0),
-					to: None,
 					direction: Direction::Ascending,
 					max: Some(1),
 				};
@@ -659,10 +671,11 @@ where
 	}
 
 	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<B>)> + '_> {
-		if self.allowed_requests.is_empty() ||
-			self.state_sync.is_some() ||
-			self.mode == SyncMode::Warp
-		{
+		if self.mode == SyncMode::Warp {
+			return Box::new(std::iter::once(self.warp_target_block_request()).flatten())
+		}
+
+		if self.allowed_requests.is_empty() || self.state_sync.is_some() {
 			return Box::new(std::iter::empty())
 		}
 
@@ -824,7 +837,7 @@ where
 				// Only one pending state request is allowed.
 				return None
 			}
-			if let Some(request) = sync.next_warp_poof_request() {
+			if let Some(request) = sync.next_warp_proof_request() {
 				let mut targets: Vec<_> = self.peers.values().map(|p| p.best_number).collect();
 				if !targets.is_empty() {
 					targets.sort();
@@ -1031,6 +1044,40 @@ where
 							Vec::new()
 						}
 					},
+					PeerSyncState::DownloadingWarpTargetBlock => {
+						peer.state = PeerSyncState::Available;
+						if let Some(warp_sync) = &mut self.warp_sync {
+							if blocks.len() == 1 {
+								validate_blocks::<B>(&blocks, who, Some(request))?;
+								match warp_sync.import_target_block(
+									blocks.pop().expect("`blocks` len checked above."),
+								) {
+									TargetBlockImportResult::Success =>
+										return Ok(OnBlockData::Continue),
+									TargetBlockImportResult::BadResponse =>
+										return Err(BadPeer(*who, rep::VERIFICATION_FAIL)),
+								}
+							} else if blocks.is_empty() {
+								debug!(target: "sync", "Empty block response from {}", who);
+								return Err(BadPeer(*who, rep::NO_BLOCK))
+							} else {
+								debug!(
+									target: "sync",
+									"Too many blocks ({}) in warp target block response from {}",
+									blocks.len(),
+									who,
+								);
+								return Err(BadPeer(*who, rep::NOT_REQUESTED))
+							}
+						} else {
+							debug!(
+								target: "sync",
+								"Logic error: we think we are downloading warp target block from {}, but no warp sync is happening.",
+								who,
+							);
+							return Ok(OnBlockData::Continue)
+						}
+					},
 					PeerSyncState::Available |
 					PeerSyncState::DownloadingJustification(..) |
 					PeerSyncState::DownloadingState |
@@ -1112,14 +1159,14 @@ where
 		};
 
 		match import_result {
-			state::ImportResult::Import(hash, header, state) => {
+			state::ImportResult::Import(hash, header, state, body, justifications) => {
 				let origin = BlockOrigin::NetworkInitialSync;
 				let block = IncomingBlock {
 					hash,
 					header: Some(header),
-					body: None,
+					body,
 					indexed_body: None,
-					justifications: None,
+					justifications,
 					origin: None,
 					allow_missing_state: true,
 					import_existing: true,
@@ -1399,8 +1446,13 @@ where
 							number,
 							hash,
 						);
-						self.state_sync =
-							Some(StateSync::new(self.client.clone(), header, *skip_proofs));
+						self.state_sync = Some(StateSync::new(
+							self.client.clone(),
+							header,
+							None,
+							None,
+							*skip_proofs,
+						));
 						self.allowed_requests.set_all();
 					}
 				}
@@ -1565,7 +1617,6 @@ where
 				FromBlock::Number(n) =>
 					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
 			},
-			to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 			direction: request.direction as i32,
 			max_blocks: request.max.unwrap_or(0),
 			support_multiple_justifications: true,
@@ -2163,6 +2214,80 @@ where
 			})
 			.collect()
 	}
+
+	/// Generate block request for downloading of the target block body during warp sync.
+	fn warp_target_block_request(&mut self) -> Option<(&PeerId, BlockRequest<B>)> {
+		if let Some(sync) = &self.warp_sync {
+			if self.allowed_requests.is_empty() ||
+				sync.is_complete() ||
+				self.peers
+					.iter()
+					.any(|(_, peer)| peer.state == PeerSyncState::DownloadingWarpTargetBlock)
+			{
+				// Only one pending warp target block request is allowed.
+				return None
+			}
+			if let Some((target_number, request)) = sync.next_target_block_request() {
+				// Find a random peer that has a block with the target number.
+				for (id, peer) in self.peers.iter_mut() {
+					if peer.state.is_available() && peer.best_number >= target_number {
+						trace!(target: "sync", "New warp target block request for {}", id);
+						peer.state = PeerSyncState::DownloadingWarpTargetBlock;
+						self.allowed_requests.clear();
+						return Some((id, request))
+					}
+				}
+			}
+		}
+		None
+	}
+
+	/// Get config for the block announcement protocol
+	pub fn get_block_announce_proto_config(
+		&self,
+		protocol_id: ProtocolId,
+		fork_id: &Option<String>,
+		roles: Roles,
+		best_number: NumberFor<B>,
+		best_hash: B::Hash,
+		genesis_hash: B::Hash,
+	) -> NonDefaultSetConfig {
+		let block_announces_protocol = {
+			let genesis_hash = genesis_hash.as_ref();
+			if let Some(ref fork_id) = fork_id {
+				format!(
+					"/{}/{}/block-announces/1",
+					array_bytes::bytes2hex("", genesis_hash),
+					fork_id
+				)
+			} else {
+				format!("/{}/block-announces/1", array_bytes::bytes2hex("", genesis_hash))
+			}
+		};
+
+		NonDefaultSetConfig {
+			notifications_protocol: block_announces_protocol.into(),
+			fallback_names: iter::once(
+				format!("/{}/block-announces/1", protocol_id.as_ref()).into(),
+			)
+			.collect(),
+			max_notification_size: MAX_BLOCK_ANNOUNCE_SIZE,
+			handshake: Some(NotificationHandshake::new(BlockAnnouncesHandshake::<B>::build(
+				roles,
+				best_number,
+				best_hash,
+				genesis_hash,
+			))),
+			// NOTE: `set_config` will be ignored by `protocol.rs` as the block announcement
+			// protocol is still hardcoded into the peerset.
+			set_config: SetConfig {
+				in_peers: 0,
+				out_peers: 0,
+				reserved_nodes: Vec::new(),
+				non_reserved_mode: NonReservedPeerMode::Deny,
+			},
+		}
+	}
 }
 
 // This is purely during a backwards compatible transitionary period and should be removed
@@ -2182,7 +2307,6 @@ fn ancestry_request<B: BlockT>(block: NumberFor<B>) -> BlockRequest<B> {
 		id: 0,
 		fields: BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
 		from: FromBlock::Number(block),
-		to: None,
 		direction: Direction::Ascending,
 		max: Some(1),
 	}
@@ -2298,7 +2422,6 @@ fn peer_block_request<B: BlockT>(
 		id: 0,
 		fields: attrs,
 		from,
-		to: None,
 		direction: Direction::Descending,
 		max: Some((range.end - range.start).saturated_into::<u32>()),
 	};
@@ -2332,7 +2455,6 @@ fn peer_gap_block_request<B: BlockT>(
 		id: 0,
 		fields: attrs,
 		from,
-		to: None,
 		direction: Direction::Descending,
 		max: Some((range.end - range.start).saturated_into::<u32>()),
 	};
@@ -2382,7 +2504,6 @@ fn fork_sync_request<B: BlockT>(
 					id: 0,
 					fields: attributes,
 					from: FromBlock::Hash(*hash),
-					to: None,
 					direction: Direction::Descending,
 					max: Some(count),
 				},
@@ -2632,8 +2753,7 @@ mod test {
 		assert!(sync.justification_requests().any(|(p, r)| {
 			p == peer_id3 &&
 				r.fields == BlockAttributes::JUSTIFICATION &&
-				r.from == FromBlock::Hash(b1_hash) &&
-				r.to == None
+				r.from == FromBlock::Hash(b1_hash)
 		}));
 
 		assert_eq!(

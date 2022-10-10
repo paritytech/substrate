@@ -12,10 +12,9 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+array-bytes = "4.1"
 fdlimit = "0.2.1"
 futures = "0.3.21"
-hex = "0.4"
-hex-literal = "0.3.4"
 log = "0.4.17"
 parity-scale-codec = "3.0.0"
 parking_lot = "0.12.1"

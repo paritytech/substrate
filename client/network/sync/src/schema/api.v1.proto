@@ -23,8 +23,6 @@ message BlockRequest {
 		// Start with given block number.
 		bytes number = 3;
 	}
-	// End at this block. An implementation defined maximum is used when unspecified.
-	bytes to_block = 4; // optional
 	// Sequence direction.
 	Direction direction = 5;
 	// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
