@@ -584,6 +584,12 @@ where
 		// as well.
 		frame_system::BlockHash::<System>::insert(header.number(), header.hash());
 
+		frame_support::log::debug!(
+			target: "runtime::mmr::offchain",
+			"frame_system: offchain_worker, block {:?} hash {:?} parent {:?}",
+			header.number(), header.hash(), header.parent_hash()
+		);
+
 		<AllPalletsWithSystem as OffchainWorker<System::BlockNumber>>::offchain_worker(
 			*header.number(),
 		)

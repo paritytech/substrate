@@ -135,6 +135,10 @@ where
 			// FIXME: fix expect
 			let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(number).expect("TODO");
 			let leaf_node_index = helper::leaf_index_to_pos(leaf_index);
+			frame_support::log::debug!(
+				target: "runtime::mmr::offchain", "move leaf idx {} pos {} to offchain",
+				leaf_index, leaf_node_index,
+			);
 			// Copy over leaf.
 			store_to_offchain(block_hash, leaf_node_index, &elem);
 			// Copy over all parent nodes.
@@ -346,12 +350,20 @@ where
 			node_index += 1;
 			match elem {
 				Node::Data(..) => {
+					frame_support::log::debug!(
+						target: "runtime::mmr::offchain", "runtime append leaf {}", leaf_index,
+					);
 					leaf_index += 1;
 					// TODO: 'try' bounded and throw error instead of truncating.
 					let bounded_encoded_leaf = BoundedVec::<_, _>::truncate_from(elem.encode());
 					LatestLeaf::<T, I>::put(bounded_encoded_leaf);
 				},
-				Node::Hash(..) => <NewNodes<T, I>>::insert(node_index, elem.hash()),
+				Node::Hash(..) => {
+					frame_support::log::debug!(
+						target: "runtime::mmr::offchain", "runtime append node {}", node_index,
+					);
+					<NewNodes<T, I>>::insert(node_index, elem.hash());
+				},
 			}
 		}
 

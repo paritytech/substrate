@@ -235,6 +235,11 @@ pub mod pallet {
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
 
+			frame_support::log::debug!(
+				target: "runtime::mmr::offchain", "on_initialize({:?}): leaves {}, peaks {}",
+				_n, leaves, peaks_before,
+			);
+
 			// clear out previous `NewNodes`; `LatestLeaf` will just be overwritten.
 			// FIXME: use proper limit (count_nodes_now - count_nodes_one_leaf_less).
 			let _ = NewNodes::<T, I>::clear(100, None);
@@ -251,6 +256,11 @@ pub mod pallet {
 			<RootHash<T, I>>::put(root);
 
 			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+
+			frame_support::log::debug!(
+				target: "runtime::mmr::offchain", "DONE on_initialize({:?}): leaves {}, peaks {}",
+				_n, leaves, peaks_after,
+			);
 
 			// TODO: add weight: 2*DbReadWrite*(nodes_before - nodes_now)
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
@@ -277,6 +287,12 @@ pub mod pallet {
 			// The offchain worker is responsible for maintaining the nodes' positions in
 			// offchain db as the chain progresses.
 			let hash = <frame_system::Pallet<T>>::block_hash(n);
+			let parent_hash = <frame_system::Pallet<T>>::parent_hash();
+
+			frame_support::log::debug!(
+				target: "runtime::mmr::offchain", "running offchain worker on block {:?} hash {:?} (parent {:?})",
+				n, hash, parent_hash,
+			);
 
 			// First it moves nodes newly added by current block from temporary runtime storage
 			// to offchain storage under fork-unique keys `(prefix, block_hash, pos)`.
