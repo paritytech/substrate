@@ -18,7 +18,7 @@
 pub mod v1 {
 	use frame_support::{
 		storage::unhashed,
-		traits::{GetStorageVersion, OnRuntimeUpgrade, Defensive},
+		traits::{Defensive, GetStorageVersion, OnRuntimeUpgrade},
 		BoundedVec,
 	};
 	use sp_std::collections::btree_map::BTreeMap;
@@ -44,7 +44,8 @@ pub mod v1 {
 					let now = frame_system::Pallet::<T>::block_number();
 					let map = unhashed::get::<BTreeMap<ElectionScore, u32>>(
 						&SignedSubmissionIndices::<T>::hashed_key(),
-					).defensive_unwrap_or_default();
+					)
+					.defensive_unwrap_or_default();
 					let vector = map
 						.into_iter()
 						.map(|(score, index)| (score, now, index))

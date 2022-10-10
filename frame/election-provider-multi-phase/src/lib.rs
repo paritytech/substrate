@@ -267,10 +267,10 @@ pub mod helpers;
 
 const LOG_TARGET: &str = "runtime::election-provider";
 
+pub mod migrations;
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
-pub mod migrations;
 use unsigned::VoterOf;
 pub use weights::WeightInfo;
 
