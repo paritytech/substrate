@@ -792,7 +792,7 @@ pub mod pallet {
 			// ensure desired targets requested is always lower than max winners
 			// supported by the election provider.
 			assert!(
-				ValidatorCount::<T>::get() ==
+				ValidatorCount::<T>::get() <=
 					<T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get()
 			);
 			sp_std::if_std! {
@@ -1277,9 +1277,9 @@ pub mod pallet {
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			// max winners supported by election provider
-			let max_winners = <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get();
-			ensure!(new <= max_winners, Error::<T>::TooManyElectionWinners);
+			// ensure new validator count does not exceed maximum winners
+			// support by election provider.
+			ensure!(new <= <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get(), Error::<T>::TooManyElectionWinners);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}

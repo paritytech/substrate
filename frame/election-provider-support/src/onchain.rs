@@ -144,6 +144,9 @@ fn elect_with<T: Config>(
 		DispatchClass::Mandatory,
 	);
 
+	// Since npos solver returns a result always bounded by `desired_targets`,
+	// this is never expected to happen as long as npos solver does what is
+	// expected for it to do.
 	let supports: OnChainBoundedSupportsOf<T> =
 		to_supports(&staked).try_into().map_err(|_| Error::TooManyWinners)?;
 
