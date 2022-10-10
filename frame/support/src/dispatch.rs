@@ -439,7 +439,7 @@ impl PerDispatchClass<Weight> {
 	/// occur.
 	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
 		let value = self.get_mut(class);
-		*value = value.checked_add(&weight).ok_or(())?;
+		*value = value.checked_add(weight).ok_or(())?;
 		Ok(())
 	}
 
