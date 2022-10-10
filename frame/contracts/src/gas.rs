@@ -121,7 +121,7 @@ where
 				amount.proof_size()
 			},
 		);
-		self.gas_left = self.gas_left.checked_sub(&amount).ok_or_else(|| <Error<T>>::OutOfGas)?;
+		self.gas_left = self.gas_left.checked_sub(amount).ok_or_else(|| <Error<T>>::OutOfGas)?;
 		Ok(GasMeter::new(amount))
 	}
 
@@ -171,7 +171,7 @@ where
 		let amount = token.weight();
 		// It is OK to not charge anything on failure because we always charge _before_ we perform
 		// any action
-		self.gas_left = self.gas_left.checked_sub(&amount).ok_or_else(|| Error::<T>::OutOfGas)?;
+		self.gas_left = self.gas_left.checked_sub(amount).ok_or_else(|| Error::<T>::OutOfGas)?;
 		Ok(ChargedAmount(amount))
 	}
 
