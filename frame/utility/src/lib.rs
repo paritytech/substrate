@@ -32,9 +32,9 @@
 //!   an alternative signed origin. Each account has 2 * 2**16 possible "pseudonyms" (alternative
 //!   account IDs) and these can be stacked. This can be useful as a key management tool, where you
 //!   need multiple distinct accounts (e.g. as controllers for many staking accounts), but where
-//!   it's perfectly fine to have each of them controlled by the same underlying keypair.
-//!   Derivative accounts are, for the purposes of proxy filtering considered exactly the same as
-//!   the origin and are thus hampered with the origin's filters.
+//!   it's perfectly fine to have each of them controlled by the same underlying keypair. Derivative
+//!   accounts are, for the purposes of proxy filtering considered exactly the same as the origin
+//!   and are thus hampered with the origin's filters.
 //!
 //! Since proxy filters are respected in all dispatches of this pallet, it should never need to be
 //! filtered by any proxy.
@@ -304,7 +304,7 @@ pub mod pallet {
 					// Don't allow users to nest `batch_all` calls.
 					filtered_origin.add_filter(move |c: &<T as frame_system::Config>::Call| {
 						let c = <T as Config>::Call::from_ref(c);
-						!matches!(c.is_sub_type(), Some(Call::batch_all(_)))
+						!matches!(c.is_sub_type(), Some(Call::batch_all { .. }))
 					});
 					call.dispatch(filtered_origin)
 				};

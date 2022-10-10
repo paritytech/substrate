@@ -22,6 +22,10 @@ use frame_support::{
 	traits::{ConstU32, Get},
 	BoundedVec, CloneNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
+use scale_info::{
+	build::{Fields, Variants},
+	meta_type, Path, Type, TypeInfo, TypeParameter,
+};
 use sp_runtime::{traits::Zero, RuntimeDebug};
 use sp_std::{fmt::Debug, iter::once, ops::Add, prelude::*};
 
@@ -89,6 +93,81 @@ impl Encode for Data {
 }
 impl codec::EncodeLike for Data {}
 
+/// Add a Raw variant with the given index and a fixed sized byte array
+macro_rules! data_raw_variants {
+    ($variants:ident, $(($index:literal, $size:literal)),* ) => {
+		$variants
+		$(
+			.variant(concat!("Raw", stringify!($size)), |v| v
+				.index($index)
+				.fields(Fields::unnamed().field(|f| f.ty::<[u8; $size]>()))
+			)
+		)*
+    }
+}
+
+impl TypeInfo for Data {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		let variants = Variants::new().variant("None", |v| v.index(0));
+
+		// create a variant for all sizes of Raw data from 0-32
+		let variants = data_raw_variants!(
+			variants,
+			(1, 0),
+			(2, 1),
+			(3, 2),
+			(4, 3),
+			(5, 4),
+			(6, 5),
+			(7, 6),
+			(8, 7),
+			(9, 8),
+			(10, 9),
+			(11, 10),
+			(12, 11),
+			(13, 12),
+			(14, 13),
+			(15, 14),
+			(16, 15),
+			(17, 16),
+			(18, 17),
+			(19, 18),
+			(20, 19),
+			(21, 20),
+			(22, 21),
+			(23, 22),
+			(24, 23),
+			(25, 24),
+			(26, 25),
+			(27, 26),
+			(28, 27),
+			(29, 28),
+			(30, 29),
+			(31, 30),
+			(32, 31),
+			(33, 32)
+		);
+
+		let variants = variants
+			.variant("BlakeTwo256", |v| {
+				v.index(34).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			})
+			.variant("Sha256", |v| {
+				v.index(35).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			})
+			.variant("Keccak256", |v| {
+				v.index(36).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			})
+			.variant("ShaThree256", |v| {
+				v.index(37).fields(Fields::unnamed().field(|f| f.ty::<[u8; 32]>()))
+			});
+
+		Type::builder().path(Path::new("Data", module_path!())).variant(variants)
+	}
+}
+
 impl Default for Data {
 	fn default() -> Self {
 		Self::None
@@ -102,7 +181,7 @@ pub type RegistrarIndex = u32;
 ///
 /// NOTE: Registrars may pay little attention to some fields. Registrars may want to make clear
 /// which fields their attestation is relevant for by off-chain means.
-#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub enum Judgement<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq>
 {
 	/// The default value; no opinion is held.
@@ -152,7 +231,7 @@ impl<Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + Part
 /// The fields that we use to identify the owner of an account with. Each corresponds to a field
 /// in the `IdentityInfo` struct.
 #[repr(u64)]
-#[derive(Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug)]
+#[derive(Clone, Copy, PartialEq, Eq, BitFlags, RuntimeDebug, TypeInfo)]
 pub enum IdentityField {
 	Display = 0b0000000000000000000000000000000000000000000000000000000000000001,
 	Legal = 0b0000000000000000000000000000000000000000000000000000000000000010,
@@ -186,16 +265,27 @@ impl Decode for IdentityFields {
 		Ok(Self(<BitFlags<IdentityField>>::from_bits(field as u64).map_err(|_| "invalid value")?))
 	}
 }
+impl TypeInfo for IdentityFields {
+	type Identity = Self;
+
+	fn type_info() -> Type {
+		Type::builder()
+			.path(Path::new("BitFlags", module_path!()))
+			.type_params(vec![TypeParameter::new("T", Some(meta_type::<IdentityField>()))])
+			.composite(Fields::unnamed().field(|f| f.ty::<u64>().type_name("IdentityField")))
+	}
+}
 
 /// Information concerning the identity of the controller of an account.
 ///
 /// NOTE: This should be stored at the end of the storage item to facilitate the addition of extra
 /// fields in a backwards compatible way through a specialized `Decode` impl.
 #[derive(
-	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound,
+	CloneNoBound, Encode, Decode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo,
 )]
 #[codec(mel_bound(FieldLimit: Get<u32>))]
 #[cfg_attr(test, derive(frame_support::DefaultNoBound))]
+#[scale_info(skip_type_params(FieldLimit))]
 pub struct IdentityInfo<FieldLimit: Get<u32>> {
 	/// Additional fields of the identity that are not catered for with the struct's explicit
 	/// fields.
@@ -246,12 +336,15 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 ///
 /// NOTE: This is stored separately primarily to facilitate the addition of extra fields in a
 /// backwards compatible way through a specialized `Decode` impl.
-#[derive(CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound)]
+#[derive(
+	CloneNoBound, Encode, Eq, MaxEncodedLen, PartialEqNoBound, RuntimeDebugNoBound, TypeInfo,
+)]
 #[codec(mel_bound(
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq + Zero + Add,
 	MaxJudgements: Get<u32>,
 	MaxAdditionalFields: Get<u32>,
 ))]
+#[scale_info(skip_type_params(MaxJudgements, MaxAdditionalFields))]
 pub struct Registration<
 	Balance: Encode + Decode + MaxEncodedLen + Copy + Clone + Debug + Eq + PartialEq,
 	MaxJudgements: Get<u32>,
@@ -296,7 +389,7 @@ impl<
 }
 
 /// Information concerning a registrar.
-#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct RegistrarInfo<
 	Balance: Encode + Decode + Clone + Debug + Eq + PartialEq,
 	AccountId: Encode + Decode + Clone + Debug + Eq + PartialEq,
@@ -310,4 +403,71 @@ pub struct RegistrarInfo<
 	/// Relevant fields for this registrar. Registrar judgements are limited to attestations on
 	/// these fields.
 	pub fields: IdentityFields,
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn manual_data_type_info() {
+		let mut registry = scale_info::Registry::new();
+		let type_id = registry.register_type(&scale_info::meta_type::<Data>());
+		let registry: scale_info::PortableRegistry = registry.into();
+		let type_info = registry.resolve(type_id.id()).unwrap();
+
+		let check_type_info = |data: &Data| {
+			let variant_name = match data {
+				Data::None => "None".to_string(),
+				Data::BlakeTwo256(_) => "BlakeTwo256".to_string(),
+				Data::Sha256(_) => "Sha256".to_string(),
+				Data::Keccak256(_) => "Keccak256".to_string(),
+				Data::ShaThree256(_) => "ShaThree256".to_string(),
+				Data::Raw(bytes) => format!("Raw{}", bytes.len()),
+			};
+			if let scale_info::TypeDef::Variant(variant) = type_info.type_def() {
+				let variant = variant
+					.variants()
+					.iter()
+					.find(|v| v.name() == &variant_name)
+					.expect(&format!("Expected to find variant {}", variant_name));
+
+				let field_arr_len = variant
+					.fields()
+					.first()
+					.and_then(|f| registry.resolve(f.ty().id()))
+					.map(|ty| {
+						if let scale_info::TypeDef::Array(arr) = ty.type_def() {
+							arr.len()
+						} else {
+							panic!("Should be an array type")
+						}
+					})
+					.unwrap_or(0);
+
+				let encoded = data.encode();
+				assert_eq!(encoded[0], variant.index());
+				assert_eq!(encoded.len() as u32 - 1, field_arr_len);
+			} else {
+				panic!("Should be a variant type")
+			};
+		};
+
+		let mut data = vec![
+			Data::None,
+			Data::BlakeTwo256(Default::default()),
+			Data::Sha256(Default::default()),
+			Data::Keccak256(Default::default()),
+			Data::ShaThree256(Default::default()),
+		];
+
+		// A Raw instance for all possible sizes of the Raw data
+		for n in 0..32 {
+			data.push(Data::Raw(vec![0u8; n as usize].try_into().unwrap()))
+		}
+
+		for d in data.iter() {
+			check_type_info(d);
+		}
+	}
 }

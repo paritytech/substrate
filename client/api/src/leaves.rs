@@ -125,7 +125,8 @@ where
 		displaced
 	}
 
-	/// Note a block height finalized, displacing all leaves with number less than the finalized block's.
+	/// Note a block height finalized, displacing all leaves with number less than the finalized
+	/// block's.
 	///
 	/// Although it would be more technically correct to also prune out leaves at the
 	/// same number as the finalized block, but with different hashes, the current behavior

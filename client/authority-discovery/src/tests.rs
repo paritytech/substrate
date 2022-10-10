@@ -56,7 +56,7 @@ fn get_addresses_and_authority_id() {
 	let remote_addr = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 		.parse::<Multiaddr>()
 		.unwrap()
-		.with(Protocol::P2p(remote_peer_id.clone().into()));
+		.with(Protocol::P2p(remote_peer_id.into()));
 
 	let test_api = Arc::new(TestApi { authorities: vec![] });
 

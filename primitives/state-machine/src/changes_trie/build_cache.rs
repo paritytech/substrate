@@ -39,7 +39,8 @@ pub struct BuildCache<H, N> {
 	/// Map of changes trie root => set of storage keys that are in this trie.
 	/// The `Option<Vec<u8>>` in inner `HashMap` stands for the child storage key.
 	/// If it is `None`, then the `HashSet` contains keys changed in top-level storage.
-	/// If it is `Some`, then the `HashSet` contains keys changed in child storage, identified by the key.
+	/// If it is `Some`, then the `HashSet` contains keys changed in child storage, identified by
+	/// the key.
 	changed_keys: HashMap<H, HashMap<Option<PrefixedStorageKey>, HashSet<StorageKey>>>,
 }
 

@@ -81,8 +81,9 @@ impl<L: TrieConfiguration> fmt::Display for Error<L> {
 			Error::TrieError(e) => write!(f, "Trie error: {}", e),
 			Error::IncompleteProof => write!(f, "Incomplete proof"),
 			Error::ExtraneousChildNode => write!(f, "Child node content with no root in proof"),
-			Error::ExtraneousChildProof(root) =>
-				write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref()),
+			Error::ExtraneousChildProof(root) => {
+				write!(f, "Proof of child trie {:x?} not in parent proof", root.as_ref())
+			},
 			Error::RootMismatch(root, expected) => write!(
 				f,
 				"Verification error, root is {:x?}, expected: {:x?}",

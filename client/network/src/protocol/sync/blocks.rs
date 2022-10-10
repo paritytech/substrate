@@ -44,8 +44,8 @@ enum BlockRangeState<B: BlockT> {
 impl<B: BlockT> BlockRangeState<B> {
 	pub fn len(&self) -> NumberFor<B> {
 		match *self {
-			BlockRangeState::Downloading { len, .. } => len,
-			BlockRangeState::Complete(ref blocks) => (blocks.len() as u32).into(),
+			Self::Downloading { len, .. } => len,
+			Self::Complete(ref blocks) => (blocks.len() as u32).into(),
 		}
 	}
 }
@@ -61,7 +61,7 @@ pub struct BlockCollection<B: BlockT> {
 impl<B: BlockT> BlockCollection<B> {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		BlockCollection { blocks: BTreeMap::new(), peer_requests: HashMap::new() }
+		Self { blocks: BTreeMap::new(), peer_requests: HashMap::new() }
 	}
 
 	/// Clear everything.
@@ -90,15 +90,13 @@ impl<B: BlockT> BlockCollection<B> {
 		self.blocks.insert(
 			start,
 			BlockRangeState::Complete(
-				blocks
-					.into_iter()
-					.map(|b| BlockData { origin: Some(who.clone()), block: b })
-					.collect(),
+				blocks.into_iter().map(|b| BlockData { origin: Some(who), block: b }).collect(),
 			),
 		);
 	}
 
-	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
+	/// Returns a set of block hashes that require a header download. The returned set is marked as
+	/// being downloaded.
 	pub fn needed_blocks(
 		&mut self,
 		who: PeerId,
@@ -171,7 +169,8 @@ impl<B: BlockT> BlockCollection<B> {
 		Some(range)
 	}
 
-	/// Get a valid chain of blocks ordered in descending order and ready for importing into blockchain.
+	/// Get a valid chain of blocks ordered in descending order and ready for importing into
+	/// blockchain.
 	pub fn drain(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
 		let mut drained = Vec::new();
 		let mut ranges = Vec::new();

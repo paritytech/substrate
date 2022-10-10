@@ -35,7 +35,7 @@
 //! A custom WASM blob will override on-chain WASM if the spec version matches. If it is
 //! required to overrides multiple runtimes, multiple WASM blobs matching each of the spec versions
 //! needed must be provided in the given directory.
-use sc_executor::RuntimeInfo;
+use sc_executor::RuntimeVersionOf;
 use sp_blockchain::Result;
 use sp_core::traits::{FetchRuntimeCode, RuntimeCode};
 use sp_state_machine::BasicExternalities;
@@ -104,22 +104,19 @@ impl From<WasmOverrideError> for sp_blockchain::Error {
 /// Scrapes WASM from a folder and returns WASM from that folder
 /// if the runtime spec version matches.
 #[derive(Clone, Debug)]
-pub struct WasmOverride<E> {
+pub struct WasmOverride {
 	// Map of runtime spec version -> Wasm Blob
 	overrides: HashMap<u32, WasmBlob>,
-	executor: E,
 }
 
-impl<E> WasmOverride<E>
-where
-	E: RuntimeInfo + Clone + 'static,
-{
-	pub fn new<P>(path: P, executor: E) -> Result<Self>
+impl WasmOverride {
+	pub fn new<P, E>(path: P, executor: &E) -> Result<Self>
 	where
 		P: AsRef<Path>,
+		E: RuntimeVersionOf,
 	{
-		let overrides = Self::scrape_overrides(path.as_ref(), &executor)?;
-		Ok(Self { overrides, executor })
+		let overrides = Self::scrape_overrides(path.as_ref(), executor)?;
+		Ok(Self { overrides })
 	}
 
 	/// Gets an override by it's runtime spec version.
@@ -131,7 +128,10 @@ where
 
 	/// Scrapes a folder for WASM runtimes.
 	/// Returns a hashmap of the runtime version and wasm runtime code.
-	fn scrape_overrides(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>> {
+	fn scrape_overrides<E>(dir: &Path, executor: &E) -> Result<HashMap<u32, WasmBlob>>
+	where
+		E: RuntimeVersionOf,
+	{
 		let handle_err = |e: std::io::Error| -> sp_blockchain::Error {
 			WasmOverrideError::Io(dir.to_owned(), e).into()
 		};
@@ -176,11 +176,14 @@ where
 		Ok(overrides)
 	}
 
-	fn runtime_version(
+	fn runtime_version<E>(
 		executor: &E,
 		code: &WasmBlob,
 		heap_pages: Option<u64>,
-	) -> Result<RuntimeVersion> {
+	) -> Result<RuntimeVersion>
+	where
+		E: RuntimeVersionOf,
+	{
 		let mut ext = BasicExternalities::default();
 		executor
 			.runtime_version(&mut ext, &code.runtime_code(heap_pages))
@@ -190,33 +193,31 @@ where
 
 /// Returns a WasmOverride struct filled with dummy data for testing.
 #[cfg(test)]
-pub fn dummy_overrides<E>(executor: &E) -> WasmOverride<E>
-where
-	E: RuntimeInfo + Clone + 'static,
-{
+pub fn dummy_overrides() -> WasmOverride {
 	let mut overrides = HashMap::new();
 	overrides.insert(0, WasmBlob::new(vec![0, 0, 0, 0, 0, 0, 0, 0]));
 	overrides.insert(1, WasmBlob::new(vec![1, 1, 1, 1, 1, 1, 1, 1]));
 	overrides.insert(2, WasmBlob::new(vec![2, 2, 2, 2, 2, 2, 2, 2]));
-	WasmOverride { overrides, executor: executor.clone() }
+	WasmOverride { overrides }
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sc_executor::{NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use std::fs::{self, File};
-	use substrate_test_runtime_client::LocalExecutor;
+	use substrate_test_runtime_client::LocalExecutorDispatch;
 
 	fn wasm_test<F>(fun: F)
 	where
-		F: Fn(&Path, &[u8], &NativeExecutor<LocalExecutor>),
+		F: Fn(&Path, &[u8], &NativeElseWasmExecutor<LocalExecutorDispatch>),
 	{
-		let exec = NativeExecutor::<substrate_test_runtime_client::LocalExecutor>::new(
-			WasmExecutionMethod::Interpreted,
-			Some(128),
-			1,
-		);
+		let exec =
+			NativeElseWasmExecutor::<substrate_test_runtime_client::LocalExecutorDispatch>::new(
+				WasmExecutionMethod::Interpreted,
+				Some(128),
+				1,
+			);
 		let bytes = substrate_test_runtime::wasm_binary_unwrap();
 		let dir = tempfile::tempdir().expect("Create a temporary directory");
 		fun(dir.path(), bytes, &exec);
@@ -226,8 +227,11 @@ mod tests {
 	#[test]
 	fn should_get_runtime_version() {
 		let wasm = WasmBlob::new(substrate_test_runtime::wasm_binary_unwrap().to_vec());
-		let executor =
-			NativeExecutor::<LocalExecutor>::new(WasmExecutionMethod::Interpreted, Some(128), 1);
+		let executor = NativeElseWasmExecutor::<LocalExecutorDispatch>::new(
+			WasmExecutionMethod::Interpreted,
+			Some(128),
+			1,
+		);
 
 		let version = WasmOverride::runtime_version(&executor, &wasm, Some(128))
 			.expect("should get the `RuntimeVersion` of the test-runtime wasm blob");

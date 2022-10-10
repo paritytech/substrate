@@ -108,7 +108,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	type Claim: Send + 'static;
 
 	/// Epoch data necessary for authoring.
-	type EpochData: Send + 'static;
+	type EpochData: Send + Sync + 'static;
 
 	/// The logging target to use when logging messages.
 	fn logging_target(&self) -> &'static str;
@@ -129,7 +129,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize>;
 
 	/// Tries to claim the given slot, returning an object with claim data if successful.
-	fn claim_slot(
+	async fn claim_slot(
 		&self,
 		header: &B::Header,
 		slot: Slot,
@@ -200,7 +200,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
-	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>> {
+	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>>
+	where
+		Self: Sync,
+	{
 		let (timestamp, slot) = (slot_info.timestamp, slot_info.slot);
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
@@ -259,7 +262,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			return None
 		}
 
-		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data)?;
+		let claim = self.claim_slot(&slot_info.chain_head, slot, &epoch_data).await?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
@@ -415,8 +418,8 @@ pub trait SimpleSlotWorker<B: BlockT> {
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Proposer<B>>::Proof>
-	for T
+impl<B: BlockT, T: SimpleSlotWorker<B> + Send + Sync>
+	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for T
 {
 	async fn on_slot(
 		&mut self,
@@ -428,7 +431,8 @@ impl<B: BlockT, T: SimpleSlotWorker<B> + Send> SlotWorker<B, <T::Proposer as Pro
 
 /// Slot specific extension that the inherent data provider needs to implement.
 pub trait InherentDataProviderExt {
-	/// The current timestamp that will be found in the [`InherentData`](`sp_inherents::InherentData`).
+	/// The current timestamp that will be found in the
+	/// [`InherentData`](`sp_inherents::InherentData`).
 	fn timestamp(&self) -> Timestamp;
 
 	/// The current slot that will be found in the [`InherentData`](`sp_inherents::InherentData`).
@@ -1059,7 +1063,8 @@ mod test {
 			})
 			.collect();
 
-		// Should always be true after a short while, since the chain is advancing but finality is stalled
+		// Should always be true after a short while, since the chain is advancing but finality is
+		// stalled
 		let expected: Vec<bool> = (slot_now..300).map(|s| s > 8).collect();
 		assert_eq!(should_backoff, expected);
 	}

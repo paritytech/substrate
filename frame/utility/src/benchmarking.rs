@@ -34,7 +34,7 @@ benchmarks! {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
+			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
 		}
 		let caller = whitelisted_caller();
@@ -45,7 +45,7 @@ benchmarks! {
 
 	as_derivative {
 		let caller = account("caller", SEED, SEED);
-		let call = Box::new(frame_system::Call::remark(vec![]).into());
+		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
 		// Whitelist caller account from further DB operations.
 		let caller_key = frame_system::Account::<T>::hashed_key_for(&caller);
 		frame_benchmarking::benchmarking::add_to_whitelist(caller_key.into());
@@ -55,7 +55,7 @@ benchmarks! {
 		let c in 0 .. 1000;
 		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
-			let call = frame_system::Call::remark(vec![]).into();
+			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
 		}
 		let caller = whitelisted_caller();

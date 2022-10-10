@@ -23,7 +23,7 @@ use crate::crypto::KeyTypeId;
 pub const ED25519: KeyTypeId = KeyTypeId(*b"ed25");
 /// Key type for generic Sr 25519 key.
 pub const SR25519: KeyTypeId = KeyTypeId(*b"sr25");
-/// Key type for generic Sr 25519 key.
+/// Key type for generic ECDSA key.
 pub const ECDSA: KeyTypeId = KeyTypeId(*b"ecds");
 
 /// Macro for exporting functions from wasm in with the expected signature for using it with the

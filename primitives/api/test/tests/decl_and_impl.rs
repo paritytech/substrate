@@ -136,7 +136,7 @@ mock_impl_runtime_apis! {
 
 type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
-	substrate_test_runtime_client::Executor,
+	substrate_test_runtime_client::ExecutorDispatch,
 	Block,
 	RuntimeApi,
 >;

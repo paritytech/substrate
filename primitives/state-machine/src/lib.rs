@@ -55,11 +55,19 @@ pub use tracing::trace;
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! warn {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
-	($($arg:tt)+) => {
-		()
+	($message:expr, $( $arg:expr, )*) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -68,11 +76,12 @@ macro_rules! warn {
 #[cfg(not(feature = "std"))]
 #[macro_export]
 macro_rules! debug {
-	(target: $target:expr, $($arg:tt)+) => {
-		()
-	};
-	($($arg:tt)+) => {
-		()
+	(target: $target:expr, $message:expr $( , $arg:ident )* $( , )?) => {
+		{
+			$(
+				let _ = &$arg;
+			)*
+		}
 	};
 }
 
@@ -206,7 +215,8 @@ mod execution {
 		NativeWhenPossible,
 		/// Use the given wasm module.
 		AlwaysWasm,
-		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy as an error.
+		/// Run with both the wasm and the native variant (if compatible). Report any discrepancy
+		/// as an error.
 		Both,
 		/// First native, then if that fails or is not possible, wasm.
 		NativeElseWasm,
@@ -230,10 +240,12 @@ mod execution {
 		/// otherwise fall back to the wasm.
 		NativeWhenPossible,
 		/// Use the given wasm module. The backend on which code is executed code could be
-		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to provide
-		/// for all storage queries since the storage entries it has come from an external node).
+		/// trusted to provide all storage or not (i.e. the light client cannot be trusted to
+		/// provide for all storage queries since the storage entries it has come from an external
+		/// node).
 		AlwaysWasm(BackendTrustLevel),
-		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepancy.
+		/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of
+		/// any discrepancy.
 		Both(F),
 		/// First native, then if that fails or is not possible, wasm.
 		NativeElseWasm,
@@ -278,12 +290,14 @@ mod execution {
 		ExecutionManager::NativeElseWasm
 	}
 
-	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out the type.
+	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out
+	/// the type.
 	fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
 	}
 
-	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out the type.
+	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out
+	/// the type.
 	fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 	}
@@ -390,8 +404,8 @@ mod execution {
 		///
 		/// Returns the SCALE encoded result of the executed function.
 		pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
-			// We are not giving a native call and thus we are sure that the result can never be a native
-			// value.
+			// We are not giving a native call and thus we are sure that the result can never be a
+			// native value.
 			self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
 				strategy.get_manager(),
 				None,
@@ -714,7 +728,7 @@ mod execution {
 	}
 
 	/// Generate storage read proof.
-	pub fn prove_read<B, H, I>(mut backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
+	pub fn prove_read<B, H, I>(backend: B, keys: I) -> Result<StorageProof, Box<dyn Error>>
 	where
 		B: Backend<H>,
 		H: Hasher,
@@ -730,7 +744,7 @@ mod execution {
 
 	/// Generate range storage read proof.
 	pub fn prove_range_read_with_size<B, H>(
-		mut backend: B,
+		backend: B,
 		child_info: Option<&ChildInfo>,
 		prefix: Option<&[u8]>,
 		size_limit: usize,
@@ -789,7 +803,7 @@ mod execution {
 
 	/// Generate child storage read proof.
 	pub fn prove_child_read<B, H, I>(
-		mut backend: B,
+		backend: B,
 		child_info: &ChildInfo,
 		keys: I,
 	) -> Result<StorageProof, Box<dyn Error>>
@@ -1192,7 +1206,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();
@@ -1345,7 +1359,7 @@ mod tests {
 	fn set_child_storage_works() {
 		let child_info = ChildInfo::new_default(b"sub1");
 		let child_info = &child_info;
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1367,7 +1381,7 @@ mod tests {
 	fn append_storage_works() {
 		let reference_data = vec![b"data1".to_vec(), b"2".to_vec(), b"D3".to_vec(), b"d4".to_vec()];
 		let key = b"key".to_vec();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 		let mut cache = StorageTransactionCache::default();
@@ -1422,7 +1436,7 @@ mod tests {
 
 		let key = b"events".to_vec();
 		let mut cache = StorageTransactionCache::default();
-		let mut state = new_in_mem::<BlakeTwo256>();
+		let state = new_in_mem::<BlakeTwo256>();
 		let backend = state.as_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges::default();
 
@@ -1574,7 +1588,8 @@ mod tests {
 		let mut seed = [0; 16];
 		for i in 0..50u32 {
 			let mut child_infos = Vec::new();
-			&seed[0..4].copy_from_slice(&i.to_be_bytes()[..]);
+			let seed_partial = &mut seed[0..4];
+			seed_partial.copy_from_slice(&i.to_be_bytes()[..]);
 			let mut rand = SmallRng::from_seed(seed);
 
 			let nb_child_trie = rand.next_u32() as usize % 25;
@@ -1716,7 +1731,7 @@ mod tests {
 		let child_info2 = ChildInfo::new_default(b"sub2");
 		// this root will be include in proof
 		let child_info3 = ChildInfo::new_default(b"sub");
-		let mut remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie();
 		let (remote_root, transaction) = remote_backend.full_storage_root(
 			std::iter::empty(),
 			vec![
@@ -1738,8 +1753,9 @@ mod tests {
 			]
 			.into_iter(),
 		);
-		remote_backend.backend_storage_mut().consolidate(transaction);
-		remote_backend.essence.set_root(remote_root.clone());
+		let mut remote_storage = remote_backend.into_storage();
+		remote_storage.consolidate(transaction);
+		let remote_backend = TrieBackend::new(remote_storage, remote_root);
 		let remote_proof = prove_child_read(remote_backend, &child_info1, &[b"key1"]).unwrap();
 		let remote_proof = test_compact(remote_proof, &remote_root);
 		let local_result1 = read_child_proof_check::<BlakeTwo256, _>(
@@ -1793,7 +1809,7 @@ mod tests {
 			b"aaa".to_vec() => b"0".to_vec(),
 			b"bbb".to_vec() => b"".to_vec()
 		];
-		let mut state = InMemoryBackend::<BlakeTwo256>::from(initial);
+		let state = InMemoryBackend::<BlakeTwo256>::from(initial);
 		let backend = state.as_trie_backend().unwrap();
 
 		let mut overlay = OverlayedChanges::default();

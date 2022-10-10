@@ -21,7 +21,9 @@ use super::*;
 use crate as pallet_session;
 #[cfg(feature = "historical")]
 use crate::historical as pallet_session_historical;
-use frame_support::{parameter_types, BasicExternalities};
+
+use std::cell::RefCell;
+
 use sp_core::{crypto::key_types::DUMMY, H256};
 use sp_runtime::{
 	impl_opaque_keys,
@@ -30,7 +32,8 @@ use sp_runtime::{
 	Perbill,
 };
 use sp_staking::SessionIndex;
-use std::cell::RefCell;
+
+use frame_support::{parameter_types, traits::GenesisBuild, BasicExternalities};
 
 impl_opaque_keys! {
 	pub struct MockSessionKeys {

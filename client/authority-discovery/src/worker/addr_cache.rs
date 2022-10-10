@@ -199,7 +199,7 @@ mod tests {
 			let multiaddr1 = "/ip6/2001:db8:0:0:0:0:0:2/tcp/30333"
 				.parse::<Multiaddr>()
 				.unwrap()
-				.with(Protocol::P2p(peer_id.clone().into()));
+				.with(Protocol::P2p(peer_id.into()));
 			let multiaddr2 = "/ip6/2002:db8:0:0:0:0:0:2/tcp/30133"
 				.parse::<Multiaddr>()
 				.unwrap()

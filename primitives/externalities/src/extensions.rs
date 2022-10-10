@@ -30,7 +30,8 @@ use sp_std::{
 	ops::DerefMut,
 };
 
-/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities) extension.
+/// Marker trait for types that should be registered as [`Externalities`](crate::Externalities)
+/// extension.
 ///
 /// As extensions are stored as `Box<Any>`, this trait should give more confidence that the correct
 /// type is registered and requested.
@@ -95,7 +96,8 @@ macro_rules! decl_extension {
 ///
 /// This is a super trait of the [`Externalities`](crate::Externalities).
 pub trait ExtensionStore {
-	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn Any`.
+	/// Tries to find a registered extension by the given `type_id` and returns it as a `&mut dyn
+	/// Any`.
 	///
 	/// It is advised to use [`ExternalitiesExt::extension`](crate::ExternalitiesExt::extension)
 	/// instead of this function to get type system support and automatic type downcasting.

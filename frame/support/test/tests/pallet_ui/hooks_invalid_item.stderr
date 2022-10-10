@@ -2,14 +2,14 @@ error[E0107]: missing generics for trait `Hooks`
    --> $DIR/hooks_invalid_item.rs:12:18
     |
 12  |     impl<T: Config> Hooks for Pallet<T> {}
-    |                     ^^^^^ expected 1 type argument
+    |                     ^^^^^ expected 1 generic argument
     |
-note: trait defined here, with 1 type parameter: `BlockNumber`
-   --> $DIR/hooks.rs:221:11
+note: trait defined here, with 1 generic parameter: `BlockNumber`
+   --> $DIR/hooks.rs:214:11
     |
-221 | pub trait Hooks<BlockNumber> {
+214 | pub trait Hooks<BlockNumber> {
     |           ^^^^^ -----------
-help: use angle brackets to add missing type argument
+help: add missing generic argument
     |
 12  |     impl<T: Config> Hooks<BlockNumber> for Pallet<T> {}
-    |                          ^^^^^^^^^^^^^
+    |                     ^^^^^^^^^^^^^^^^^^

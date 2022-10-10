@@ -147,3 +147,30 @@ impl<T: Config<I>, I: 'static> fungibles::Unbalanced<T::AccountId> for Pallet<T,
 		}
 	}
 }
+
+impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> {
+	fn create(
+		id: T::AssetId,
+		admin: T::AccountId,
+		is_sufficient: bool,
+		min_balance: Self::Balance,
+	) -> DispatchResult {
+		Self::do_force_create(id, admin, is_sufficient, min_balance)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
+	type DestroyWitness = DestroyWitness;
+
+	fn get_destroy_witness(asset: &T::AssetId) -> Option<Self::DestroyWitness> {
+		Asset::<T, I>::get(asset).map(|asset_details| asset_details.destroy_witness())
+	}
+
+	fn destroy(
+		id: T::AssetId,
+		witness: Self::DestroyWitness,
+		maybe_check_owner: Option<T::AccountId>,
+	) -> Result<Self::DestroyWitness, DispatchError> {
+		Self::do_destroy(id, witness, maybe_check_owner)
+	}
+}

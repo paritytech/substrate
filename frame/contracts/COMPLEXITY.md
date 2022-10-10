@@ -468,3 +468,20 @@ algorithms have different inherent complexity so users must expect the above
 mentioned crypto hashes to have varying gas costs.
 The complexity of each cryptographic hash function highly depends on the underlying
 implementation.
+
+### seal_ecdsa_recover
+
+This function receives the following arguments:
+
+- `signature` is 65 bytes buffer,
+- `message_hash` is 32 bytes buffer,
+- `output` is 33 bytes buffer to return compressed public key,
+
+It consists of the following steps:
+
+1. Loading `signature` buffer from the sandbox memory (see sandboxing memory get).
+2. Loading `message_hash` buffer from the sandbox memory.
+3. Invoking the executive function `secp256k1_ecdsa_recover_compressed`.
+4. Copy the bytes of compressed public key into the contract side output buffer.
+
+**complexity**: Complexity is partially constant(it doesn't depend on input) but still depends on points of ECDSA and calculation.

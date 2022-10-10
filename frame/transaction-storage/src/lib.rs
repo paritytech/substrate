@@ -37,7 +37,7 @@ use sp_runtime::traits::{BlakeTwo256, Hash, One, Saturating, Zero};
 use sp_std::{prelude::*, result};
 use sp_transaction_storage_proof::{
 	encode_index, random_chunk, InherentError, TransactionStorageProof, CHUNK_SIZE,
-	DEFAULT_STORAGE_PERIOD, INHERENT_IDENTIFIER,
+	INHERENT_IDENTIFIER,
 };
 
 /// A type alias for the balance type from this pallet's point of view.
@@ -57,7 +57,7 @@ pub const DEFAULT_MAX_TRANSACTION_SIZE: u32 = 8 * 1024 * 1024;
 pub const DEFAULT_MAX_BLOCK_TRANSACTIONS: u32 = 512;
 
 /// State data for a stored transaction.
-#[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, Eq, scale_info::TypeInfo)]
 pub struct TransactionInfo {
 	/// Chunk trie root.
 	chunk_root: <BlakeTwo256 as Hash>::Output,
@@ -169,9 +169,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is `MaxTransactionSize`.
-		/// Data will be removed after `STORAGE_PERIOD` blocks, unless `renew` is called.
-		/// # <weight>
+		/// Index and store data on chain. Minimum data size is 1 bytes, maximum is
+		/// `MaxTransactionSize`. Data will be removed after `STORAGE_PERIOD` blocks, unless `renew`
+		/// is called. # <weight>
 		/// - n*log(n) of data size, as all data is pushed to an in-memory trie.
 		/// Additionally contains a DB write.
 		/// # </weight>
@@ -258,7 +258,8 @@ pub mod pallet {
 		/// Check storage proof for block number `block_number() - StoragePeriod`.
 		/// If such block does not exist the proof is expected to be `None`.
 		/// # <weight>
-		/// - Linear w.r.t the number of indexed transactions in the proved block for random probing.
+		/// - Linear w.r.t the number of indexed transactions in the proved block for random
+		///   probing.
 		/// There's a DB read for each transaction.
 		/// Here we assume a maximum of 100 probed transactions.
 		/// # </weight>
@@ -379,7 +380,7 @@ pub mod pallet {
 			Self {
 				byte_fee: 10u32.into(),
 				entry_fee: 1000u32.into(),
-				storage_period: DEFAULT_STORAGE_PERIOD.into(),
+				storage_period: sp_transaction_storage_proof::DEFAULT_STORAGE_PERIOD.into(),
 				max_block_transactions: DEFAULT_MAX_BLOCK_TRANSACTIONS,
 				max_transaction_size: DEFAULT_MAX_TRANSACTION_SIZE,
 			}
@@ -407,7 +408,7 @@ pub mod pallet {
 			let proof = data
 				.get_data::<TransactionStorageProof>(&Self::INHERENT_IDENTIFIER)
 				.unwrap_or(None);
-			proof.map(Call::check_proof)
+			proof.map(|proof| Call::check_proof { proof })
 		}
 
 		fn check_inherent(
@@ -418,7 +419,7 @@ pub mod pallet {
 		}
 
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::check_proof(_))
+			matches!(call, Call::check_proof { .. })
 		}
 	}
 

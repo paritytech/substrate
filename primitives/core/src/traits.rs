@@ -126,13 +126,13 @@ pub trait ReadRuntimeVersion: Send + Sync {
 	/// The version information may be embedded into the wasm binary itself. If it is not present,
 	/// then this function may fallback to the legacy way of reading the version.
 	///
-	/// The legacy mechanism involves instantiating the passed wasm runtime and calling `Core_version`
-	/// on it. This is a very expensive operation.
+	/// The legacy mechanism involves instantiating the passed wasm runtime and calling
+	/// `Core_version` on it. This is a very expensive operation.
 	///
 	/// `ext` is only needed in case the calling into runtime happens. Otherwise it is ignored.
 	///
-	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression fails,
-	/// the error is returned.
+	/// Compressed wasm blobs are supported and will be decompressed if needed. If uncompression
+	/// fails, the error is returned.
 	///
 	/// # Errors
 	///

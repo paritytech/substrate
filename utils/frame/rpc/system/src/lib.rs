@@ -19,12 +19,9 @@
 
 use std::sync::Arc;
 
-use codec::{self, Codec, Decode, Encode};
-use futures::future::{ready, TryFutureExt};
-use jsonrpc_core::{
-	futures::future::{self as rpc_future, result, Future},
-	Error as RpcError, ErrorCode,
-};
+use codec::{Codec, Decode, Encode};
+use futures::{future::ready, FutureExt, TryFutureExt};
+use jsonrpc_core::{Error as RpcError, ErrorCode};
 use jsonrpc_derive::rpc;
 use sc_client_api::light::{future_header, Fetcher, RemoteBlockchain, RemoteCallRequest};
 use sc_rpc_api::DenyUnsafe;
@@ -38,7 +35,7 @@ pub use self::gen_client::Client as SystemClient;
 pub use frame_system_rpc_runtime_api::AccountNonceApi;
 
 /// Future that resolves to account nonce.
-pub type FutureResult<T> = Box<dyn Future<Item = T, Error = RpcError> + Send>;
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, RpcError>>;
 
 /// System RPC methods.
 #[rpc]
@@ -116,7 +113,8 @@ where
 			Ok(adjust_nonce(&*self.pool, account, nonce))
 		};
 
-		Box::new(result(get_nonce()))
+		let res = get_nonce();
+		async move { res }.boxed()
 	}
 
 	fn dry_run(
@@ -125,7 +123,7 @@ where
 		at: Option<<Block as traits::Block>::Hash>,
 	) -> FutureResult<Bytes> {
 		if let Err(err) = self.deny_unsafe.check_if_safe() {
-			return Box::new(rpc_future::err(err.into()))
+			return async move { Err(err.into()) }.boxed()
 		}
 
 		let dry_run = || {
@@ -150,7 +148,9 @@ where
 			Ok(Encode::encode(&result).into())
 		};
 
-		Box::new(result(dry_run()))
+		let res = dry_run();
+
+		async move { res }.boxed()
 	}
 }
 
@@ -197,19 +197,19 @@ where
 					.ok_or_else(|| ClientError::UnknownBlock(format!("{}", best_hash))),
 			)
 		});
-		let future_nonce = future_best_header
-			.and_then(move |best_header| {
-				fetcher.remote_call(RemoteCallRequest {
-					block: best_hash,
-					header: best_header,
-					method: "AccountNonceApi_account_nonce".into(),
-					call_data,
-					retry_count: None,
-				})
+
+		let future_nonce = future_best_header.and_then(move |best_header| {
+			fetcher.remote_call(RemoteCallRequest {
+				block: best_hash,
+				header: best_header,
+				method: "AccountNonceApi_account_nonce".into(),
+				call_data,
+				retry_count: None,
 			})
-			.compat();
-		let future_nonce = future_nonce.and_then(|nonce| {
-			Decode::decode(&mut &nonce[..])
+		});
+
+		let future_nonce = future_nonce.and_then(|nonce| async move {
+			Index::decode(&mut &nonce[..])
 				.map_err(|e| ClientError::CallResultDecode("Cannot decode account nonce", e))
 		});
 		let future_nonce = future_nonce.map_err(|e| RpcError {
@@ -219,9 +219,7 @@ where
 		});
 
 		let pool = self.pool.clone();
-		let future_nonce = future_nonce.map(move |nonce| adjust_nonce(&*pool, account, nonce));
-
-		Box::new(future_nonce)
+		future_nonce.map_ok(move |nonce| adjust_nonce(&*pool, account, nonce)).boxed()
 	}
 
 	fn dry_run(
@@ -229,11 +227,14 @@ where
 		_extrinsic: Bytes,
 		_at: Option<<Block as traits::Block>::Hash>,
 	) -> FutureResult<Bytes> {
-		Box::new(result(Err(RpcError {
-			code: ErrorCode::MethodNotFound,
-			message: "Unable to dry run extrinsic.".into(),
-			data: None,
-		})))
+		async {
+			Err(RpcError {
+				code: ErrorCode::MethodNotFound,
+				message: "Unable to dry run extrinsic.".into(),
+				data: None,
+			})
+		}
+		.boxed()
 	}
 }
 
@@ -317,7 +318,7 @@ mod tests {
 		let nonce = accounts.nonce(AccountKeyring::Alice.into());
 
 		// then
-		assert_eq!(nonce.wait().unwrap(), 2);
+		assert_eq!(block_on(nonce).unwrap(), 2);
 	}
 
 	#[test]
@@ -336,7 +337,7 @@ mod tests {
 		let res = accounts.dry_run(vec![].into(), None);
 
 		// then
-		assert_eq!(res.wait(), Err(RpcError::method_not_found()));
+		assert_eq!(block_on(res), Err(RpcError::method_not_found()));
 	}
 
 	#[test]
@@ -363,7 +364,7 @@ mod tests {
 		let res = accounts.dry_run(tx.encode().into(), None);
 
 		// then
-		let bytes = res.wait().unwrap().0;
+		let bytes = block_on(res).unwrap().0;
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(apply_res, Ok(Ok(())));
 	}
@@ -392,7 +393,7 @@ mod tests {
 		let res = accounts.dry_run(tx.encode().into(), None);
 
 		// then
-		let bytes = res.wait().unwrap().0;
+		let bytes = block_on(res).unwrap().0;
 		let apply_res: ApplyExtrinsicResult = Decode::decode(&mut bytes.as_slice()).unwrap();
 		assert_eq!(apply_res, Err(TransactionValidityError::Invalid(InvalidTransaction::Stale)));
 	}

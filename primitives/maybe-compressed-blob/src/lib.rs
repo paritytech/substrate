@@ -70,20 +70,10 @@ fn read_from_decoder(
 	}
 }
 
-#[cfg(not(target_os = "unknown"))]
 fn decompress_zstd(blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
 	let decoder = zstd::Decoder::new(blob).map_err(|_| Error::Invalid)?;
 
 	read_from_decoder(decoder, blob.len(), bomb_limit)
-}
-
-#[cfg(target_os = "unknown")]
-fn decompress_zstd(mut blob: &[u8], bomb_limit: usize) -> Result<Vec<u8>, Error> {
-	let blob_len = blob.len();
-	let decoder =
-		ruzstd::streaming_decoder::StreamingDecoder::new(&mut blob).map_err(|_| Error::Invalid)?;
-
-	read_from_decoder(decoder, blob_len, bomb_limit)
 }
 
 /// Decode a blob, if it indicates that it is compressed. Provide a `bomb_limit`, which
@@ -99,7 +89,6 @@ pub fn decompress(blob: &[u8], bomb_limit: usize) -> Result<Cow<[u8]>, Error> {
 /// Encode a blob as compressed. If the blob's size is over the bomb limit,
 /// this will not compress the blob, as the decoder will not be able to be
 /// able to differentiate it from a compression bomb.
-#[cfg(not(target_os = "unknown"))]
 pub fn compress(blob: &[u8], bomb_limit: usize) -> Option<Vec<u8>> {
 	use std::io::Write;
 

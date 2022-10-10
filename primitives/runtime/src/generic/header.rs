@@ -20,6 +20,7 @@
 use crate::{
 	codec::{Codec, Decode, Encode},
 	generic::Digest,
+	scale_info::TypeInfo,
 	traits::{
 		self, AtLeast32BitUnsigned, Hash as HashT, MaybeDisplay, MaybeMallocSizeOf, MaybeSerialize,
 		MaybeSerializeDeserialize, Member, SimpleBitOps,
@@ -31,7 +32,7 @@ use sp_core::U256;
 use sp_std::{convert::TryFrom, fmt::Debug};
 
 /// Abstraction over a block header for a substrate chain.
-#[derive(Encode, Decode, PartialEq, Eq, Clone, sp_core::RuntimeDebug)]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, sp_core::RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]

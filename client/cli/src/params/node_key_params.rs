@@ -53,17 +53,16 @@ pub struct NodeKeyParams {
 	///
 	/// The secret key of the node is obtained as follows:
 	///
-	///   * If the `--node-key` option is given, the value is parsed as a secret key
-	///     according to the type. See the documentation for `--node-key`.
+	///   * If the `--node-key` option is given, the value is parsed as a secret key according to
+	///     the type. See the documentation for `--node-key`.
 	///
-	///   * If the `--node-key-file` option is given, the secret key is read from the
-	///     specified file. See the documentation for `--node-key-file`.
+	///   * If the `--node-key-file` option is given, the secret key is read from the specified
+	///     file. See the documentation for `--node-key-file`.
 	///
-	///   * Otherwise, the secret key is read from a file with a predetermined,
-	///     type-specific name from the chain-specific network config directory
-	///     inside the base directory specified by `--base-dir`. If this file does
-	///     not exist, it is created with a newly generated secret key of the
-	///     chosen type.
+	///   * Otherwise, the secret key is read from a file with a predetermined, type-specific name
+	///     from the chain-specific network config directory inside the base directory specified by
+	///     `--base-dir`. If this file does not exist, it is created with a newly generated secret
+	///     key of the chosen type.
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.

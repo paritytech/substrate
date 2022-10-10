@@ -118,8 +118,8 @@ pub mod pallet {
 		type FieldDeposit: Get<BalanceOf<Self>>;
 
 		/// The amount held on deposit for a registered subaccount. This should account for the fact
-		/// that one storage item's value will increase by the size of an account ID, and there will be
-		/// another trie item whose value is the size of an account ID plus 32 bytes.
+		/// that one storage item's value will increase by the size of an account ID, and there will
+		/// be another trie item whose value is the size of an account ID plus 32 bytes.
 		#[pallet::constant]
 		type SubAccountDeposit: Get<BalanceOf<Self>>;
 
@@ -240,10 +240,6 @@ pub mod pallet {
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
-	#[pallet::metadata(
-		T::AccountId = "AccountId",
-		BalanceOf<T> = "Balance"
-	)]
 	pub enum Event<T: Config> {
 		/// A name was set or reset (which will remove all judgements). \[who\]
 		IdentitySet(T::AccountId),
@@ -451,7 +447,8 @@ pub mod pallet {
 
 			Ok(Some(
 				T::WeightInfo::set_subs_old(old_ids.len() as u32) // P: Real number of old accounts removed.
-					.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)), /* S: New subs added. */
+					// S: New subs added
+					.saturating_add(T::WeightInfo::set_subs_new(new_subs as u32)),
 			)
 			.into())
 		}

@@ -108,6 +108,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
@@ -135,7 +136,7 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 >>::NegativeImbalance;
 
 /// An indication that the renouncing account currently has which of the below roles.
-#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum Renouncing {
 	/// A member is renouncing.
 	Member,
@@ -146,7 +147,7 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
 	pub votes: Vec<AccountId>,
@@ -159,7 +160,7 @@ pub struct Voter<AccountId, Balance> {
 }
 
 /// A holder of a seat as either a member or a runner-up.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct SeatHolder<AccountId, Balance> {
 	/// The holder.
 	pub who: AccountId,
@@ -401,9 +402,9 @@ pub mod pallet {
 		///   origin is removed as a runner-up.
 		/// - `origin` is a current member. In this case, the deposit is unreserved and origin is
 		///   removed as a member, consequently not being a candidate for the next round anymore.
-		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists,
-		///   they are immediately used. If the prime is renouncing, then no prime will exist until
-		///   the next round.
+		///   Similar to [`remove_member`](Self::remove_member), if replacement runners exists, they
+		///   are immediately used. If the prime is renouncing, then no prime will exist until the
+		///   next round.
 		///
 		/// The dispatch origin of this call must be signed, and have one of the above roles.
 		///
@@ -474,7 +475,7 @@ pub mod pallet {
 		#[pallet::weight(if *has_replacement {
 			T::WeightInfo::remove_member_with_replacement()
 		} else {
-			T::BlockWeights::get().max_block
+			T::WeightInfo::remove_member_without_replacement()
 		})]
 		pub fn remove_member(
 			origin: OriginFor<T>,
@@ -531,11 +532,6 @@ pub mod pallet {
 	}
 
 	#[pallet::event]
-	#[pallet::metadata(
-		<T as frame_system::Config>::AccountId = "AccountId",
-		BalanceOf<T> = "Balance",
-		Vec<(<T as frame_system::Config>::AccountId, BalanceOf<T>)> = "Vec<(AccountId, Balance)>",
-	)]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new term with \[new_members\]. This indicates that enough candidates existed to run
@@ -673,13 +669,15 @@ pub mod pallet {
 						"Genesis member does not have enough stake.",
 					);
 
-					// Note: all members will only vote for themselves, hence they must be given exactly
-					// their own stake as total backing. Any sane election should behave as such.
-					// Nonetheless, stakes will be updated for term 1 onwards according to the election.
+					// Note: all members will only vote for themselves, hence they must be given
+					// exactly their own stake as total backing. Any sane election should behave as
+					// such. Nonetheless, stakes will be updated for term 1 onwards according to the
+					// election.
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
-							Ok(_) =>
-								panic!("Duplicate member in elections-phragmen genesis: {}", member),
+							Ok(_) => {
+								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+							},
 							Err(pos) => members.insert(
 								pos,
 								SeatHolder {
@@ -692,9 +690,9 @@ pub mod pallet {
 					});
 
 					// set self-votes to make persistent. Genesis voters don't have any bond, nor do
-					// they have any lock. NOTE: this means that we will still try to remove a lock once
-					// this genesis voter is removed, and for now it is okay because remove_lock is noop
-					// if lock is not there.
+					// they have any lock. NOTE: this means that we will still try to remove a lock
+					// once this genesis voter is removed, and for now it is okay because
+					// remove_lock is noop if lock is not there.
 					<Voting<T>>::insert(
 						&member,
 						Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },

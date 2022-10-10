@@ -19,13 +19,13 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::*;
-
 use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_support::ensure;
 use frame_system::RawOrigin;
 use sp_runtime::traits::Saturating;
 
-use crate::Module as TipsMod;
+use super::*;
+use crate::Pallet as TipsMod;
 
 const SEED: u32 = 0;
 

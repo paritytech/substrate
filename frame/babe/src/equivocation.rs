@@ -155,8 +155,10 @@ where
 	) -> DispatchResult {
 		use frame_system::offchain::SubmitTransaction;
 
-		let call =
-			Call::report_equivocation_unsigned(Box::new(equivocation_proof), key_owner_proof);
+		let call = Call::report_equivocation_unsigned {
+			equivocation_proof: Box::new(equivocation_proof),
+			key_owner_proof,
+		};
 
 		match SubmitTransaction::<T, Call<T>>::submit_unsigned_transaction(call.into()) {
 			Ok(()) => log::info!(
@@ -184,7 +186,7 @@ where
 /// unsigned equivocation reports.
 impl<T: Config> Pallet<T> {
 	pub fn validate_unsigned(source: TransactionSource, call: &Call<T>) -> TransactionValidity {
-		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
+		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			// discard equivocation report not coming from the local node
 			match source {
 				TransactionSource::Local | TransactionSource::InBlock => { /* allowed */ },
@@ -219,7 +221,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn pre_dispatch(call: &Call<T>) -> Result<(), TransactionValidityError> {
-		if let Call::report_equivocation_unsigned(equivocation_proof, key_owner_proof) = call {
+		if let Call::report_equivocation_unsigned { equivocation_proof, key_owner_proof } = call {
 			is_known_offence::<T>(equivocation_proof, key_owner_proof)
 		} else {
 			Err(InvalidTransaction::Call.into())

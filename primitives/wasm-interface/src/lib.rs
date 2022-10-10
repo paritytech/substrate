@@ -143,7 +143,8 @@ impl<T: PointerType> Pointer<T> {
 
 	/// Calculate the offset from this pointer.
 	///
-	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the pointer.
+	/// `offset` is in units of `T`. So, `3` means `3 * mem::size_of::<T>()` as offset to the
+	/// pointer.
 	///
 	/// Returns an `Option` to respect that the pointer could probably overflow.
 	pub fn offset(self, offset: u32) -> Option<Self> {

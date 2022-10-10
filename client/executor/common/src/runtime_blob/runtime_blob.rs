@@ -72,11 +72,13 @@ impl RuntimeBlob {
 		export_mutable_globals(&mut self.raw_module, "exported_internal_global");
 	}
 
-	/// Run a pass that instrument this module so as to introduce a deterministic stack height limit.
+	/// Run a pass that instrument this module so as to introduce a deterministic stack height
+	/// limit.
 	///
 	/// It will introduce a global mutable counter. The instrumentation will increase the counter
 	/// according to the "cost" of the callee. If the cost exceeds the `stack_depth_limit` constant,
-	/// the instrumentation will trap. The counter will be decreased as soon as the the callee returns.
+	/// the instrumentation will trap. The counter will be decreased as soon as the the callee
+	/// returns.
 	///
 	/// The stack cost of a function is computed based on how much locals there are and the maximum
 	/// depth of the wasm operand stack.
@@ -89,7 +91,8 @@ impl RuntimeBlob {
 		Ok(Self { raw_module: injected_module })
 	}
 
-	/// Perform an instrumentation that makes sure that a specific function `entry_point` is exported
+	/// Perform an instrumentation that makes sure that a specific function `entry_point` is
+	/// exported
 	pub fn entry_point_exists(&self, entry_point: &str) -> bool {
 		self.raw_module
 			.export_section()

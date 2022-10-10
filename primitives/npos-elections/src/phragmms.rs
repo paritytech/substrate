@@ -43,11 +43,11 @@ use sp_std::{prelude::*, rc::Rc, vec};
 /// `expect` this to return `Ok`.
 pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 	to_elect: usize,
-	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	balancing_config: Option<(usize, ExtendedBalance)>,
-) -> Result<ElectionResult<AccountId, P>, &'static str> {
-	let (candidates, mut voters) = setup_inputs(initial_candidates, initial_voters);
+	candidates: Vec<AccountId>,
+	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	balancing: Option<(usize, ExtendedBalance)>,
+) -> Result<ElectionResult<AccountId, P>, crate::Error> {
+	let (candidates, mut voters) = setup_inputs(candidates, voters);
 
 	let mut winners = vec![];
 	for round in 0..to_elect {
@@ -58,7 +58,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 			round_winner.borrow_mut().elected = true;
 			winners.push(round_winner);
 
-			if let Some((iterations, tolerance)) = balancing_config {
+			if let Some((iterations, tolerance)) = balancing {
 				balance(&mut voters, iterations, tolerance);
 			}
 		} else {
@@ -68,7 +68,11 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 
 	let mut assignments =
 		voters.into_iter().filter_map(|v| v.into_assignment()).collect::<Vec<_>>();
-	let _ = assignments.iter_mut().map(|a| a.try_normalize()).collect::<Result<(), _>>()?;
+	let _ = assignments
+		.iter_mut()
+		.map(|a| a.try_normalize())
+		.collect::<Result<(), _>>()
+		.map_err(|e| crate::Error::ArithmeticError(e))?;
 	let winners = winners
 		.into_iter()
 		.map(|w_ptr| (w_ptr.borrow().who.clone(), w_ptr.borrow().backed_stake))
@@ -237,7 +241,8 @@ mod tests {
 	#[test]
 	fn basic_election_manual_works() {
 		//! Manually run the internal steps of phragmms. In each round we select a new winner by
-		//! `max_score`, then apply this change by `apply_elected`, and finally do a `balance` round.
+		//! `max_score`, then apply this change by `apply_elected`, and finally do a `balance`
+		//! round.
 		let candidates = vec![1, 2, 3];
 		let voters = vec![(10, 10, vec![1, 2]), (20, 20, vec![1, 3]), (30, 30, vec![2, 3])];
 

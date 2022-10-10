@@ -50,11 +50,12 @@ pub fn digest_build_iterator<'a, Number: BlockNumber>(
 /// required for inclusion into changes trie of given block.
 #[derive(Debug)]
 pub struct DigestBuildIterator<Number: BlockNumber> {
-	/// Block we're building changes trie for. It could (logically) be a post-end block if we are creating
-	/// skewed digest.
+	/// Block we're building changes trie for. It could (logically) be a post-end block if we are
+	/// creating skewed digest.
 	block: Number,
-	/// Block that is a last block where current configuration is active. We have never yet created anything
-	/// after this block => digest that we're creating can't reference any blocks that are >= end.
+	/// Block that is a last block where current configuration is active. We have never yet created
+	/// anything after this block => digest that we're creating can't reference any blocks that are
+	/// >= end.
 	end: Number,
 	/// Interval of L1 digest blocks.
 	digest_interval: u32,
@@ -445,7 +446,8 @@ mod tests {
 					256, 512, 768, 1024, 1280,
 					// level3 MUST point to previous 16-1 level1 digests, BUT there are only 3:
 					1296, 1312, 1328,
-					// level3 MUST be a level1 digest of 16-1 previous blocks, BUT there are only 9:
+					// level3 MUST be a level1 digest of 16-1 previous blocks, BUT there are only
+					// 9:
 					1329, 1330, 1331, 1332, 1333, 1334, 1335, 1336, 1337,
 				]
 				.iter()
@@ -467,8 +469,9 @@ mod tests {
 				[
 					// level3 MUST point to previous 16-1 level2 digests, BUT there are only 5:
 					256, 512, 768, 1024, 1280,
-					// level3 MUST point to previous 16-1 level1 digests, BUT there are NO ANY L1-digests:
-					// level3 MUST be a level1 digest of 16-1 previous blocks, BUT there are only 3:
+					// level3 MUST point to previous 16-1 level1 digests, BUT there are NO ANY
+					// L1-digests: level3 MUST be a level1 digest of 16-1 previous blocks, BUT
+					// there are only 3:
 					1281, 1282, 1283,
 				]
 				.iter()

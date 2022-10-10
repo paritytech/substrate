@@ -286,15 +286,15 @@ benchmarks_instance_pallet! {
 	force_asset_status {
 		let (class, caller, caller_lookup) = create_class::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_asset_status(
+		let call = Call::<T, I>::force_asset_status {
 			class,
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			true,
-			false,
-		);
+			owner: caller_lookup.clone(),
+			issuer: caller_lookup.clone(),
+			admin: caller_lookup.clone(),
+			freezer: caller_lookup.clone(),
+			free_holding: true,
+			is_frozen: false,
+		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::AssetStatusChanged(class).into());

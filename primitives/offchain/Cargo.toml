@@ -17,13 +17,6 @@ sp-core = { version = "4.0.0-dev", default-features = false, path = "../core" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../runtime" }
 
-[dev-dependencies]
-sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../state-machine" }
-
 [features]
 default = ["std"]
-std = [
-	"sp-core/std",
-	"sp-api/std",
-	"sp-runtime/std"
-]
+std = ["sp-core/std", "sp-api/std", "sp-runtime/std"]

@@ -51,8 +51,8 @@ pub enum WithdrawConsequence<Balance> {
 }
 
 impl<Balance: Zero> WithdrawConsequence<Balance> {
-	/// Convert the type into a `Result` with `DispatchError` as the error or the additional `Balance`
-	/// by which the account will be reduced.
+	/// Convert the type into a `Result` with `DispatchError` as the error or the additional
+	/// `Balance` by which the account will be reduced.
 	pub fn into_result(self) -> Result<Balance, DispatchError> {
 		use WithdrawConsequence::*;
 		match self {
@@ -116,7 +116,7 @@ pub enum ExistenceRequirement {
 }
 
 /// Status of funds.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug)]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, scale_info::TypeInfo)]
 pub enum BalanceStatus {
 	/// Funds are free, as corresponding to `free` item in Balances.
 	Free,
@@ -165,8 +165,14 @@ pub trait AssetId: FullCodec + Copy + Eq + PartialEq + Debug {}
 impl<T: FullCodec + Copy + Eq + PartialEq + Debug> AssetId for T {}
 
 /// Simple amalgamation trait to collect together properties for a Balance under one roof.
-pub trait Balance: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug {}
-impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug> Balance for T {}
+pub trait Balance:
+	AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo
+{
+}
+impl<T: AtLeast32BitUnsigned + FullCodec + Copy + Default + Debug + scale_info::TypeInfo> Balance
+	for T
+{
+}
 
 /// Converts a balance value into an asset balance.
 pub trait BalanceConversion<InBalance, AssetId, OutBalance> {

@@ -100,3 +100,21 @@ pub fn clean_type_string(input: &str) -> String {
 		.replace("< ", "<")
 		.replace(" >", ">")
 }
+
+/// Return all doc attributes literals found.
+pub fn get_doc_literals(attrs: &[syn::Attribute]) -> Vec<syn::Lit> {
+	attrs
+		.iter()
+		.filter_map(|attr| {
+			if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+				if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+					Some(meta.lit)
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		})
+		.collect()
+}

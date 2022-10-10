@@ -16,7 +16,7 @@ proc-macro = true
 
 [dependencies]
 frame-support-procedural-tools = { version = "4.0.0-dev", path = "./tools" }
-proc-macro2 = "1.0.28"
+proc-macro2 = "1.0.29"
 quote = "1.0.3"
 Inflector = "0.11.4"
 syn = { version = "1.0.58", features = ["full"] }

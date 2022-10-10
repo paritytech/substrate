@@ -94,16 +94,15 @@ use log::{debug, trace};
 use prometheus_endpoint::{register, CounterVec, Opts, PrometheusError, Registry, U64};
 use rand::seq::SliceRandom;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG};
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 
 use super::{benefit, cost, Round, SetId};
 use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
-	time::Duration,
+	time::{Duration, Instant},
 };
-use wasm_timer::Instant;
 
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
 const CATCH_UP_REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
@@ -483,8 +482,8 @@ struct Peers<N> {
 	/// gossiping.
 	first_stage_peers: HashSet<PeerId>,
 	/// The randomly picked set of peers we'll gossip to in the second stage of gossiping if the
-	/// first stage didn't allow us to spread the voting data enough to conclude the round. This set
-	/// should have size `sqrt(connected_peers)`.
+	/// first stage didn't allow us to spread the voting data enough to conclude the round. This
+	/// set should have size `sqrt(connected_peers)`.
 	second_stage_peers: HashSet<PeerId>,
 	/// The randomly picked set of `LUCKY_PEERS` light clients we'll gossip commit messages to.
 	lucky_light_peers: HashSet<PeerId>,
@@ -583,16 +582,18 @@ impl<N: Ord> Peers<N> {
 
 	fn reshuffle(&mut self) {
 		// we want to randomly select peers into three sets according to the following logic:
-		// - first set: LUCKY_PEERS random peers where at least LUCKY_PEERS/2 are authorities (unless
+		// - first set: LUCKY_PEERS random peers where at least LUCKY_PEERS/2 are authorities
+		//   (unless
 		// we're not connected to that many authorities)
-		// - second set: max(LUCKY_PEERS, sqrt(peers)) peers where at least LUCKY_PEERS are authorities.
+		// - second set: max(LUCKY_PEERS, sqrt(peers)) peers where at least LUCKY_PEERS are
+		//   authorities.
 		// - third set: LUCKY_PEERS random light client peers
 
 		let shuffled_peers = {
 			let mut peers = self
 				.inner
 				.iter()
-				.map(|(peer_id, info)| (peer_id.clone(), info.clone()))
+				.map(|(peer_id, info)| (*peer_id, info.clone()))
 				.collect::<Vec<_>>();
 
 			peers.shuffle(&mut rand::thread_rng());
@@ -617,9 +618,9 @@ impl<N: Ord> Peers<N> {
 		let mut n_authorities_added = 0;
 		for peer_id in shuffled_authorities {
 			if n_authorities_added < half_lucky {
-				first_stage_peers.insert(peer_id.clone());
+				first_stage_peers.insert(*peer_id);
 			} else if n_authorities_added < one_and_a_half_lucky {
-				second_stage_peers.insert(peer_id.clone());
+				second_stage_peers.insert(*peer_id);
 			} else {
 				break
 			}
@@ -636,11 +637,11 @@ impl<N: Ord> Peers<N> {
 			}
 
 			if first_stage_peers.len() < LUCKY_PEERS {
-				first_stage_peers.insert(peer_id.clone());
+				first_stage_peers.insert(*peer_id);
 				second_stage_peers.remove(peer_id);
 			} else if second_stage_peers.len() < n_second_stage_peers {
 				if !first_stage_peers.contains(peer_id) {
-					second_stage_peers.insert(peer_id.clone());
+					second_stage_peers.insert(*peer_id);
 				}
 			} else {
 				break
@@ -1192,19 +1193,21 @@ impl<Block: BlockT> Inner<Block> {
 		catch_up_request: &CatchUpRequestMessage,
 	) -> (bool, Option<Report>) {
 		let report = match &self.pending_catch_up {
-			PendingCatchUp::Requesting { who: peer, instant, .. } =>
+			PendingCatchUp::Requesting { who: peer, instant, .. } => {
 				if instant.elapsed() <= CATCH_UP_REQUEST_TIMEOUT {
 					return (false, None)
 				} else {
 					// report peer for timeout
 					Some((peer.clone(), cost::CATCH_UP_REQUEST_TIMEOUT))
-				},
-			PendingCatchUp::Processing { instant, .. } =>
+				}
+			},
+			PendingCatchUp::Processing { instant, .. } => {
 				if instant.elapsed() < CATCH_UP_PROCESS_TIMEOUT {
 					return (false, None)
 				} else {
 					None
-				},
+				}
+			},
 			_ => None,
 		};
 
@@ -1220,8 +1223,10 @@ impl<Block: BlockT> Inner<Block> {
 	/// The initial logic for filtering round messages follows the given state
 	/// transitions:
 	///
-	/// - State 1: allowed to LUCKY_PEERS random peers (where at least LUCKY_PEERS/2 are authorities)
-	/// - State 2: allowed to max(LUCKY_PEERS, sqrt(random peers)) (where at least LUCKY_PEERS are authorities)
+	/// - State 1: allowed to LUCKY_PEERS random peers (where at least LUCKY_PEERS/2 are
+	///   authorities)
+	/// - State 2: allowed to max(LUCKY_PEERS, sqrt(random peers)) (where at least LUCKY_PEERS are
+	///   authorities)
 	/// - State 3: allowed to all peers
 	///
 	/// Transitions will be triggered on repropagation attempts by the underlying gossip layer.
@@ -1249,7 +1254,8 @@ impl<Block: BlockT> Inner<Block> {
 	/// The initial logic for filtering global messages follows the given state
 	/// transitions:
 	///
-	/// - State 1: allowed to max(LUCKY_PEERS, sqrt(peers)) (where at least LUCKY_PEERS are authorities)
+	/// - State 1: allowed to max(LUCKY_PEERS, sqrt(peers)) (where at least LUCKY_PEERS are
+	///   authorities)
 	/// - State 2: allowed to all peers
 	///
 	/// We are more lenient with global messages since there should be a lot
@@ -1625,7 +1631,8 @@ impl<Block: BlockT> sc_network_gossip::Validator<Block> for GossipValidator<Bloc
 			// it is expired.
 			match inner.live_topics.topic_info(&topic) {
 				None => return true,
-				Some((Some(_), _)) => return false, /* round messages don't require further checking. */
+				// round messages don't require further checking.
+				Some((Some(_), _)) => return false,
 				Some((None, _)) => {},
 			};
 

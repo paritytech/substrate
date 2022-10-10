@@ -23,9 +23,10 @@
 //! - Before running contract code we check if the cached code has the schedule version that
 //! is equal to the current saved schedule.
 //! If it is equal then run the code, if it isn't reinstrument with the current schedule.
-//! - When we update the schedule we want it to have strictly greater version than the current saved one:
-//! this guarantees that every instrumented contract code in cache cannot have the version equal to the current one.
-//! Thus, before executing a contract it should be reinstrument with new schedule.
+//! - When we update the schedule we want it to have strictly greater version than the current saved
+//!   one:
+//! this guarantees that every instrumented contract code in cache cannot have the version equal to
+//! the current one. Thus, before executing a contract it should be reinstrument with new schedule.
 
 #[cfg(feature = "runtime-benchmarks")]
 pub use self::private::reinstrument;
@@ -58,25 +59,9 @@ where
 		Some(module) => increment_64(&mut module.refcount),
 		None => {
 			*existing = Some(prefab_module);
-			Contracts::<T>::deposit_event(Event::CodeStored(code_hash))
+			Contracts::<T>::deposit_event(Event::CodeStored { code_hash })
 		},
 	});
-}
-
-/// Decrement the refcount and store.
-///
-/// Removes the code instead of storing it when the refcount drops to zero.
-pub fn store_decremented<T: Config>(mut prefab_module: PrefabWasmModule<T>)
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
-	prefab_module.refcount = prefab_module.refcount.saturating_sub(1);
-	if prefab_module.refcount > 0 {
-		<CodeStorage<T>>::insert(prefab_module.code_hash, prefab_module);
-	} else {
-		<CodeStorage<T>>::remove(prefab_module.code_hash);
-		finish_removal::<T>(prefab_module.code_hash);
-	}
 }
 
 /// Increment the refcount of a code in-storage by one.
@@ -185,7 +170,7 @@ where
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	<PristineCode<T>>::remove(code_hash);
-	Contracts::<T>::deposit_event(Event::CodeRemoved(code_hash))
+	Contracts::<T>::deposit_event(Event::CodeRemoved { code_hash })
 }
 
 /// Increment the refcount panicking if it should ever overflow (which will not happen).

@@ -142,7 +142,8 @@ pub type DebtOf<AccountId, B> = Imbalance<
 	<B as Balanced<AccountId>>::OnDropCredit,
 >;
 
-/// Imbalance implying that the total_issuance value is greater than the sum of all account balances.
+/// Imbalance implying that the total_issuance value is greater than the sum of all account
+/// balances.
 pub type CreditOf<AccountId, B> = Imbalance<
 	<B as Inspect<AccountId>>::Balance,
 	// This will generally be implemented by decreasing the total_issuance value.

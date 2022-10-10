@@ -68,6 +68,7 @@ use sc_client_api::{
 };
 use sc_consensus::BlockImport;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
 use sp_application_crypto::AppKey;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
@@ -78,7 +79,6 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, DigestFor, NumberFor, Zero},
 };
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 
 pub use finality_grandpa::BlockNumberOps;
 use finality_grandpa::{voter, voter_set::VoterSet, Error as GrandpaError};

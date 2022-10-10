@@ -20,7 +20,6 @@
 
 use futures::{future::ready, FutureExt, TryFutureExt};
 use jsonrpc_pubsub::manager::SubscriptionManager;
-use rpc::futures::future::{result, Either, Future};
 use std::sync::Arc;
 
 use sc_client_api::light::{Fetcher, RemoteBlockchain, RemoteBodyRequest};
@@ -61,6 +60,7 @@ impl<Block: BlockT, Client, F: Fetcher<Block>> LightChain<Block, Client, F> {
 impl<Block, Client, F> ChainBackend<Client, Block> for LightChain<Block, Client, F>
 where
 	Block: BlockT + 'static,
+	Block::Header: Unpin,
 	Client: BlockchainEvents<Block> + HeaderBackend<Block> + Send + Sync + 'static,
 	F: Fetcher<Block> + Send + Sync + 'static,
 {
@@ -82,33 +82,33 @@ where
 			BlockId::Hash(hash),
 		);
 
-		Box::new(
-			maybe_header
-				.then(move |result| ready(result.map_err(client_err)))
-				.boxed()
-				.compat(),
-		)
+		maybe_header.then(move |result| ready(result.map_err(client_err))).boxed()
 	}
 
 	fn block(&self, hash: Option<Block::Hash>) -> FutureResult<Option<SignedBlock<Block>>> {
 		let fetcher = self.fetcher.clone();
-		let block = self.header(hash).and_then(move |header| match header {
-			Some(header) => Either::A(
-				fetcher
-					.remote_body(RemoteBodyRequest {
-						header: header.clone(),
-						retry_count: Default::default(),
-					})
-					.boxed()
-					.compat()
-					.map(move |body| {
-						Some(SignedBlock { block: Block::new(header, body), justifications: None })
-					})
-					.map_err(client_err),
-			),
-			None => Either::B(result(Ok(None))),
-		});
+		self.header(hash)
+			.and_then(move |header| async move {
+				match header {
+					Some(header) => {
+						let body = fetcher
+							.remote_body(RemoteBodyRequest {
+								header: header.clone(),
+								retry_count: Default::default(),
+							})
+							.await;
 
-		Box::new(block)
+						body.map(|body| {
+							Some(SignedBlock {
+								block: Block::new(header, body),
+								justifications: None,
+							})
+						})
+						.map_err(client_err)
+					},
+					None => Ok(None),
+				}
+			})
+			.boxed()
 	}
 }

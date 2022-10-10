@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::EncodedJustification;
 
 /// Future's type for jsonrpc
-type FutureResult<T> = Box<dyn jsonrpc_core::futures::Future<Item = T, Error = Error> + Send>;
+type FutureResult<T> = jsonrpc_core::BoxFuture<Result<T, Error>>;
 /// sender passed to the authorship task to report errors or successes.
 pub type Sender<T> = Option<oneshot::Sender<std::result::Result<T, crate::Error>>>;
 
@@ -114,7 +114,7 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		parent_hash: Option<Hash>,
 	) -> FutureResult<CreatedBlock<Hash>> {
 		let mut sink = self.import_block_channel.clone();
-		let future = async move {
+		async move {
 			let (sender, receiver) = oneshot::channel();
 			let command = EngineCommand::SealNewBlock {
 				create_empty,
@@ -125,9 +125,8 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 			sink.send(command).await?;
 			receiver.await?
 		}
-		.boxed();
-
-		Box::new(future.map_err(Error::from).compat())
+		.map_err(Error::from)
+		.boxed()
 	}
 
 	fn finalize_block(
@@ -136,15 +135,15 @@ impl<Hash: Send + 'static> ManualSealApi<Hash> for ManualSeal<Hash> {
 		justification: Option<EncodedJustification>,
 	) -> FutureResult<bool> {
 		let mut sink = self.import_block_channel.clone();
-		let future = async move {
+		async move {
 			let (sender, receiver) = oneshot::channel();
 			sink.send(EngineCommand::FinalizeBlock { hash, sender: Some(sender), justification })
 				.await?;
 
 			receiver.await?.map(|_| true)
-		};
-
-		Box::new(future.boxed().map_err(Error::from).compat())
+		}
+		.map_err(Error::from)
+		.boxed()
 	}
 }
 

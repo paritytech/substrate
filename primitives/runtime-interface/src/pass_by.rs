@@ -40,8 +40,8 @@ use sp_std::vec::Vec;
 
 /// Derive macro for implementing [`PassBy`] with the [`Codec`] strategy.
 ///
-/// This requires that the type implements [`Encode`](codec::Encode) and [`Decode`](codec::Decode)
-/// from `parity-scale-codec`.
+/// This requires that the type implements [`Encode`](codec::Encode) and
+/// [`Decode`](codec::Decode) from `parity-scale-codec`.
 ///
 /// # Example
 ///
@@ -58,11 +58,12 @@ pub use sp_runtime_interface_proc_macro::PassByCodec;
 
 /// Derive macro for implementing [`PassBy`] with the [`Inner`] strategy.
 ///
-/// Besides implementing [`PassBy`], this derive also implements the helper trait [`PassByInner`].
+/// Besides implementing [`PassBy`], this derive also implements the helper trait
+/// [`PassByInner`].
 ///
 /// The type is required to be a struct with just one field. The field type needs to implement
-/// the required traits to pass it between the wasm and the native side. (See the runtime interface
-/// crate for more information about these traits.)
+/// the required traits to pass it between the wasm and the native side. (See the runtime
+/// interface crate for more information about these traits.)
 ///
 /// # Example
 ///
@@ -86,8 +87,8 @@ pub use sp_runtime_interface_proc_macro::PassByInner;
 /// Besides implementing [`PassBy`], this derive also implements `TryFrom<u8>` and
 /// `From<Self> for u8` for the type.
 ///
-/// The type is required to be an enum with only unit variants and at maximum `256` variants. Also
-/// it is required that the type implements `Copy`.
+/// The type is required to be an enum with only unit variants and at maximum `256` variants.
+/// Also it is required that the type implements `Copy`.
 ///
 /// # Example
 ///

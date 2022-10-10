@@ -16,10 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#[cfg(target_os = "unknown")]
-mod console_log;
 mod prefix_layer;
 
-#[cfg(target_os = "unknown")]
-pub use console_log::*;
 pub use prefix_layer::*;

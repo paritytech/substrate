@@ -3,7 +3,6 @@ resolver = "2"
 
 members = [
 	"bin/node/bench",
-	"bin/node/browser-testing",
 	"bin/node/cli",
 	"bin/node/test-runner-example",
 	"bin/node/executor",
@@ -17,6 +16,8 @@ members = [
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
+	"client/beefy",
+	"client/beefy/rpc",
 	"client/block-builder",
 	"client/chain-spec",
 	"client/chain-spec/derive",
@@ -59,6 +60,7 @@ members = [
 	"client/tracing/proc-macro",
 	"client/transaction-pool",
 	"client/transaction-pool/api",
+	"client/utils",
 	"frame/assets",
 	"frame/atomic-swap",
 	"frame/aura",
@@ -66,6 +68,9 @@ members = [
 	"frame/authorship",
 	"frame/babe",
 	"frame/balances",
+	"frame/beefy",
+	"frame/beefy-mmr",
+	"frame/beefy-mmr/primitives",
 	"frame/benchmarking",
 	"frame/bounties",
 	"frame/collective",
@@ -91,7 +96,6 @@ members = [
 	"frame/merkle-mountain-range",
 	"frame/merkle-mountain-range/primitives",
 	"frame/merkle-mountain-range/rpc",
-	"frame/metadata",
 	"frame/multisig",
 	"frame/nicks",
 	"frame/node-authorization",
@@ -126,6 +130,7 @@ members = [
 	"frame/uniques",
 	"frame/utility",
 	"frame/vesting",
+	"frame/bags-list",
 	"frame/ddc-pallet",
 	"primitives/api",
 	"primitives/api/proc-macro",
@@ -136,6 +141,7 @@ members = [
 	"primitives/arithmetic/fuzzer",
 	"primitives/authority-discovery",
 	"primitives/authorship",
+	"primitives/beefy",
 	"primitives/block-builder",
 	"primitives/blockchain",
 	"primitives/consensus/aura",
@@ -179,7 +185,6 @@ members = [
 	"primitives/transaction-pool",
 	"primitives/transaction-storage-proof",
 	"primitives/trie",
-	"primitives/utils",
 	"primitives/version",
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
@@ -190,7 +195,6 @@ members = [
 	"test-utils/runtime/transaction-pool",
 	"test-utils/test-runner",
 	"test-utils/test-crate",
-	"utils/browser",
 	"utils/build-script-utils",
 	"utils/fork-tree",
 	"utils/frame/benchmarking-cli",
@@ -199,6 +203,8 @@ members = [
 	"utils/frame/try-runtime/cli",
 	"utils/frame/rpc/support",
 	"utils/frame/rpc/system",
+	"utils/frame/generate-bags",
+	"utils/frame/generate-bags/node-runtime",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -227,14 +233,12 @@ cranelift-codegen = { opt-level = 3 }
 cranelift-wasm = { opt-level = 3 }
 crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
-crossbeam-queue = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
 ed25519-dalek = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }
-h2 = { opt-level = 3 }
 hash-db = { opt-level = 3 }
 hmac = { opt-level = 3 }
 httparse = { opt-level = 3 }
@@ -263,7 +267,6 @@ wasmi = { opt-level = 3 }
 x25519-dalek = { opt-level = 3 }
 yamux = { opt-level = 3 }
 zeroize = { opt-level = 3 }
-
 [profile.release]
 # Substrate runtime requires unwinding.
 panic = "unwind"

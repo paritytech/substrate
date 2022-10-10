@@ -272,8 +272,8 @@ where
 {
 	/// We are reading from the BlockIter structure, adding those blocks to the queue if possible.
 	Reading { block_iter: BlockIter<R, B> },
-	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it to
-	/// catch up.
+	/// The queue is full (contains at least MAX_PENDING_BLOCKS blocks) and we are waiting for it
+	/// to catch up.
 	WaitingForImportQueueToCatchUp {
 		block_iter: BlockIter<R, B>,
 		delay: Delay,

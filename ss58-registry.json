@@ -129,12 +129,12 @@
 		},
 		{
 			"prefix": 13,
-			"network": "substratee",
-			"displayName": "SubstraTEE",
-			"symbols": null,
-			"decimals": null,
+			"network": "integritee",
+			"displayName": "Integritee",
+			"symbols": ["TEER"],
+			"decimals": [12],
 			"standardAccount": "*25519",
-			"website": "https://www.substratee.com"
+			"website": "https://integritee.network"
 		},
 		{
 			"prefix": 14,
@@ -443,6 +443,24 @@
 			"website": "https://neatcoin.org"
 		},
 		{
+			"prefix": 49,
+			"network": "picasso",
+			"displayName": "Picasso",
+			"symbols": ["PICA"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://picasso.composable.finance"
+		},
+		{
+			"prefix": 50,
+			"network": "composable",
+			"displayName": "Composable",
+			"symbols": ["LAYR"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://composable.finance"
+		},
+		{
 			"prefix": 63,
 			"network": "hydradx",
 			"displayName": "HydraDX",
@@ -515,6 +533,15 @@
 			"website": "https://manta.network"
 		},
 		{
+			"prefix": 88,
+			"network": "polkadex",
+			"displayName": "Polkadex Mainnet",
+			"symbols": ["PDEX"],
+			"decimals": [12],
+			"standardAccount": "*25519",
+			"website": "https://polkadex.trade"
+		},
+		{
 			"prefix": 98,
 			"network": "polkasmith",
 			"displayName": "PolkaSmith Canary Network",
@@ -541,7 +568,7 @@
 			"standardAccount": "secp256k1",
 			"website": "https://origintrail.io"
 		},
-		{
+    {
 			"prefix": 110,
 			"network": "heiko",
 			"displayName": "Heiko",
@@ -550,6 +577,24 @@
 			"standardAccount": "*25519",
 			"website": "https://parallel.fi/"
 		},
+		{
+			"prefix": 113,
+			"network": "integritee-incognito",
+			"displayName": "Integritee Incognito",
+			"symbols": null,
+			"decimals": null,
+			"standardAccount": "*25519",
+			"website": "https://integritee.network"
+    },
+		{
+			"prefix": 128,
+			"network": "clover",
+			"displayName": "Clover Finance",
+			"symbols": ["CLV"],
+			"decimals": [18],
+			"standardAccount": "*25519",
+			"website": "https://clover.finance" 
+		},  
 		{
 			"prefix": 136,
 			"network": "altair",

@@ -12,7 +12,6 @@ readme = "README.md"
 
 [dependencies]
 parking_lot = "0.11.1"
-lazy_static = "1.4.0"
 hash-db = "0.15.2"
 sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
 sp-externalities = { version = "0.10.0-dev", path = "../../primitives/externalities" }

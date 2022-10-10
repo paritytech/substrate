@@ -217,7 +217,7 @@ impl Link {
 /// |            0 | next element link |
 /// +--------------+-------------------+
 /// ```
-///
+/// 
 /// ## Occupied header
 /// ```ignore
 /// 64             32                  0

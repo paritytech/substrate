@@ -26,7 +26,7 @@
 //! These roots and proofs of inclusion can be generated at any time during the current session.
 //! Afterwards, the proofs can be fed to a consensus module when reporting misbehavior.
 
-use super::{Module as SessionModule, SessionIndex};
+use super::{Pallet as SessionModule, SessionIndex};
 use codec::{Decode, Encode};
 use frame_support::{
 	decl_module, decl_storage, print,
@@ -114,11 +114,11 @@ impl<T: Config> ValidatorSet<T::AccountId> for Module<T> {
 	type ValidatorIdOf = T::ValidatorIdOf;
 
 	fn session_index() -> sp_staking::SessionIndex {
-		super::Module::<T>::current_index()
+		super::Pallet::<T>::current_index()
 	}
 
 	fn validators() -> Vec<Self::ValidatorId> {
-		super::Module::<T>::validators()
+		super::Pallet::<T>::validators()
 	}
 }
 
@@ -366,11 +366,13 @@ pub(crate) mod tests {
 	use crate::mock::{
 		force_new_session, set_next_validators, Session, System, Test, NEXT_VALIDATORS,
 	};
+
+	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId};
+
 	use frame_support::{
-		traits::{KeyOwnerProofSystem, OnInitialize},
+		traits::{GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 		BasicExternalities,
 	};
-	use sp_runtime::{key_types::DUMMY, testing::UintAuthorityId};
 
 	type Historical = Module<Test>;
 

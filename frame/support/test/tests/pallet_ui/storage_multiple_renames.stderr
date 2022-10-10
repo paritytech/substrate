@@ -1,4 +1,4 @@
-error: Invalid pallet::storage, multiple argument pallet::storage_prefix found
+error: Invalid attribute: Duplicate attribute
   --> $DIR/storage_multiple_renames.rs:20:3
    |
 20 |     #[pallet::storage_prefix = "Baz"]

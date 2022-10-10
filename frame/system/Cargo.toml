@@ -15,13 +15,13 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 serde = { version = "1.0.126", optional = true, features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io", default-features = false }
 sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../primitives/version" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
-impl-trait-for-tuples = "0.2.1"
 log = { version = "0.4.14", default-features = false }
 
 [dev-dependencies]
@@ -34,6 +34,7 @@ default = ["std"]
 std = [
 	"serde",
 	"codec/std",
+	"scale-info/std",
 	"sp-core/std",
 	"sp-std/std",
 	"sp-io/std",

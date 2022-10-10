@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{self, SaturatedConversion},
 	transaction_validity::{TransactionSource, TransactionTag as Tag, ValidTransaction},
 };
-use wasm_timer::Instant;
+use std::time::Instant;
 
 use super::{
 	base_pool::{self as base, PruneStatus},
@@ -111,7 +111,6 @@ pub struct ValidatedPool<B: ChainApi> {
 	rotator: PoolRotator<ExtrinsicHash<B>>,
 }
 
-#[cfg(not(target_os = "unknown"))]
 impl<B: ChainApi> parity_util_mem::MallocSizeOf for ValidatedPool<B>
 where
 	ExtrinsicFor<B>: parity_util_mem::MallocSizeOf,
@@ -393,8 +392,9 @@ impl<B: ChainApi> ValidatedPool<B> {
 							},
 							Err(err) => {
 								// we do not want to fail if single transaction import has failed
-								// nor we do want to propagate this error, because it could tx unknown to caller
-								// => let's just notify listeners (and issue debug message)
+								// nor we do want to propagate this error, because it could tx
+								// unknown to caller => let's just notify listeners (and issue debug
+								// message)
 								log::warn!(
 									target: "txpool",
 									"[{:?}] Removing invalid transaction from update: {}",
@@ -490,7 +490,8 @@ impl<B: ChainApi> ValidatedPool<B> {
 		// Resubmit pruned transactions
 		let results = self.submit(pruned_xts);
 
-		// Collect the hashes of transactions that now became invalid (meaning that they are successfully pruned).
+		// Collect the hashes of transactions that now became invalid (meaning that they are
+		// successfully pruned).
 		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| {
 			match r.map_err(error::IntoPoolError::into_pool_error) {
 				Err(Ok(error::Error::InvalidTransaction(_))) => Some(pruned_hashes[idx]),

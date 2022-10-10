@@ -349,7 +349,7 @@ mod tests {
 	use super::*;
 
 	use crate::{wasm_binary_unwrap, Header, Transfer};
-	use sc_executor::{native_executor_instance, NativeExecutor, WasmExecutionMethod};
+	use sc_executor::{NativeElseWasmExecutor, WasmExecutionMethod};
 	use sp_core::{
 		map,
 		traits::{CodeExecutor, RuntimeCode},
@@ -359,10 +359,22 @@ mod tests {
 	use substrate_test_runtime_client::{AccountKeyring, Sr25519Keyring};
 
 	// Declare an instance of the native executor dispatch for the test runtime.
-	native_executor_instance!(NativeDispatch, crate::api::dispatch, crate::native_version);
+	pub struct NativeDispatch;
 
-	fn executor() -> NativeExecutor<NativeDispatch> {
-		NativeExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
+	impl sc_executor::NativeExecutionDispatch for NativeDispatch {
+		type ExtendHostFunctions = ();
+
+		fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
+			crate::api::dispatch(method, data)
+		}
+
+		fn native_version() -> sc_executor::NativeVersion {
+			crate::native_version()
+		}
+	}
+
+	fn executor() -> NativeElseWasmExecutor<NativeDispatch> {
+		NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8)
 	}
 
 	fn new_test_ext() -> TestExternalities {

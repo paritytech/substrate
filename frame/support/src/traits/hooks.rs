@@ -19,7 +19,7 @@
 
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize};
+use sp_runtime::traits::AtLeast32BitUnsigned;
 
 /// The block initialization trait.
 ///
@@ -124,14 +124,7 @@ pub trait OnRuntimeUpgradeHelpersExt {
 	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
 	#[cfg(feature = "try-runtime")]
 	fn storage_key(ident: &str) -> [u8; 32] {
-		let prefix = sp_io::hashing::twox_128(ON_RUNTIME_UPGRADE_PREFIX);
-		let ident = sp_io::hashing::twox_128(ident.as_bytes());
-
-		let mut final_key = [0u8; 32];
-		final_key[..16].copy_from_slice(&prefix);
-		final_key[16..].copy_from_slice(&ident);
-
-		final_key
+		crate::storage::storage_prefix(ON_RUNTIME_UPGRADE_PREFIX, ident.as_bytes())
 	}
 
 	/// Get temporary storage data written by [`Self::set_temp_storage`].
@@ -301,7 +294,7 @@ pub trait Hooks<BlockNumber> {
 /// A trait to define the build function of a genesis config, T and I are placeholder for pallet
 /// trait and pallet instance.
 #[cfg(feature = "std")]
-pub trait GenesisBuild<T, I = ()>: Default + MaybeSerializeDeserialize {
+pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
 	/// The build function is called within an externalities allowing storage APIs.
 	/// Thus one can write to storage using regular pallet storages.
 	fn build(&self);

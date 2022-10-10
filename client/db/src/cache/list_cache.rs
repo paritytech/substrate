@@ -178,8 +178,8 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		} else {
 			// there are unfinalized entries
 			// => find the fork containing given block and read from this fork
-			// IF there's no matching fork, ensure that this isn't a block from a fork that has forked
-			// behind the best finalized block and search at finalized fork
+			// IF there's no matching fork, ensure that this isn't a block from a fork that has
+			// forked behind the best finalized block and search at finalized fork
 
 			match self.find_unfinalized_fork(&at)? {
 				Some(fork) => Some(&fork.head),
@@ -316,7 +316,8 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 			return Ok(None)
 		}
 
-		// if the block is not final, it is possibly appended to/forking from existing unfinalized fork
+		// if the block is not final, it is possibly appended to/forking from existing unfinalized
+		// fork
 		let is_final = entry_type == EntryType::Final || entry_type == EntryType::Genesis;
 		if !is_final {
 			let mut fork_and_action = None;
@@ -392,9 +393,10 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		}
 
 		// if we're here, then one of following is true:
-		// - either we're inserting final block => all ancestors are already finalized AND the only thing we can do
-		//   is to try to update last finalized entry
-		// - either we're inserting non-final blocks that has no ancestors in any known unfinalized forks
+		// - either we're inserting final block => all ancestors are already finalized AND the only
+		//   thing we can do is to try to update last finalized entry
+		// - either we're inserting non-final blocks that has no ancestors in any known unfinalized
+		//   forks
 
 		let new_storage_entry = match self.best_finalized_entry.as_ref() {
 			Some(best_finalized_entry) => best_finalized_entry.try_update(value),
@@ -1015,8 +1017,8 @@ mod tests {
 		.value_at_block(&ComplexBlockId::new(H256::from_low_u64_be(2), 100))
 		.is_err());
 
-		// when block is later than last finalized block AND there are no forks AND finalized value is Some
-		// ---> [100] --- 200
+		// when block is later than last finalized block AND there are no forks AND finalized value
+		// is Some ---> [100] --- 200
 		assert_eq!(
 			ListCache::new(
 				DummyStorage::new()
@@ -1088,8 +1090,8 @@ mod tests {
 			None
 		);
 
-		// when block is later than last finalized block AND it appends to unfinalized fork from the end
-		// AND unfinalized value is Some
+		// when block is later than last finalized block AND it appends to unfinalized fork from the
+		// end AND unfinalized value is Some
 		// ---> [2] ---> [4] ---> 5
 		assert_eq!(
 			ListCache::new(
@@ -1170,8 +1172,8 @@ mod tests {
 			.unwrap()
 			.is_none());
 
-		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
-		// AND new value is the same as in the fork' best block
+		// when trying to insert non-final block AND it appends to the best block of unfinalized
+		// fork AND new value is the same as in the fork' best block
 		let mut cache = ListCache::new(
 			DummyStorage::new()
 				.with_meta(None, vec![test_id(4)])
@@ -1198,8 +1200,8 @@ mod tests {
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
-		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
-		// AND new value is the same as in the fork' best block
+		// when trying to insert non-final block AND it appends to the best block of unfinalized
+		// fork AND new value is the same as in the fork' best block
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
 			cache
@@ -1221,8 +1223,8 @@ mod tests {
 			Some(Metadata { finalized: None, unfinalized: vec![test_id(5)] })
 		);
 
-		// when trying to insert non-final block AND it is the first block that appends to the best block of unfinalized fork
-		// AND new value is the same as in the fork' best block
+		// when trying to insert non-final block AND it is the first block that appends to the best
+		// block of unfinalized fork AND new value is the same as in the fork' best block
 		let cache = ListCache::new(
 			DummyStorage::new()
 				.with_meta(None, vec![correct_id(4)])
@@ -1249,8 +1251,8 @@ mod tests {
 		assert!(tx.inserted_entries().is_empty());
 		assert!(tx.removed_entries().is_empty());
 		assert!(tx.updated_meta().is_none());
-		// when trying to insert non-final block AND it is the first block that appends to the best block of unfinalized fork
-		// AND new value is the same as in the fork' best block
+		// when trying to insert non-final block AND it is the first block that appends to the best
+		// block of unfinalized fork AND new value is the same as in the fork' best block
 		let mut tx = DummyTransaction::new();
 		assert_eq!(
 			cache
@@ -2204,7 +2206,8 @@ mod tests {
 			cache.prune_finalized_entries(&mut tx, &test_id(20));
 			assert!(tx.removed_entries().is_empty());
 			assert!(tx.inserted_entries().is_empty());
-			// when finalizing entry #30: entry 10 pruned + entry 20 is truncated (if pruning is enabled)
+			// when finalizing entry #30: entry 10 pruned + entry 20 is truncated (if pruning is
+			// enabled)
 			cache.prune_finalized_entries(&mut tx, &test_id(30));
 			match strategy {
 				PruningStrategy::NeverPrune => {

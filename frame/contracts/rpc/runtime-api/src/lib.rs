@@ -25,7 +25,7 @@
 
 use codec::Codec;
 use pallet_contracts_primitives::{
-	Code, ContractExecResult, ContractInstantiateResult, GetStorageResult, RentProjectionResult,
+	Code, ContractExecResult, ContractInstantiateResult, GetStorageResult,
 };
 use sp_std::vec::Vec;
 
@@ -58,25 +58,16 @@ sp_api::decl_runtime_apis! {
 			code: Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
-		) -> ContractInstantiateResult<AccountId, BlockNumber>;
+		) -> ContractInstantiateResult<AccountId>;
 
 		/// Query a given storage key in a given contract.
 		///
 		/// Returns `Ok(Some(Vec<u8>))` if the storage value exists under the given key in the
 		/// specified account and `Ok(None)` if it doesn't. If the account specified by the address
-		/// doesn't exist, or doesn't have a contract or if the contract is a tombstone, then `Err`
-		/// is returned.
+		/// doesn't exist, or doesn't have a contract then `Err` is returned.
 		fn get_storage(
 			address: AccountId,
 			key: [u8; 32],
 		) -> GetStorageResult;
-
-		/// Returns the projected time a given contract will be able to sustain paying its rent.
-		///
-		/// The returned projection is relevant for the current block, i.e. it is as if the contract
-		/// was accessed at the current block.
-		///
-		/// Returns `Err` if the contract is in a tombstone state or doesn't exist.
-		fn rent_projection(address: AccountId) -> RentProjectionResult<BlockNumber>;
 	}
 }

@@ -55,7 +55,7 @@ type Error = sp_blockchain::Error;
 
 type TestClient = substrate_test_runtime_client::client::Client<
 	substrate_test_runtime_client::Backend,
-	substrate_test_runtime_client::Executor,
+	substrate_test_runtime_client::ExecutorDispatch,
 	TestBlock,
 	substrate_test_runtime_client::runtime::RuntimeApi,
 >;

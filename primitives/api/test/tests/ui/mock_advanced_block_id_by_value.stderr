@@ -10,4 +10,4 @@ error: `BlockId` needs to be taken by reference and not by value!
 19 | | }
    | |_^
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `sp_api::mock_impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)

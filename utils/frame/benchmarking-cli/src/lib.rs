@@ -21,8 +21,8 @@ mod writer;
 use sc_cli::{ExecutionStrategy, WasmExecutionMethod};
 use std::fmt::Debug;
 
-// Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be used
-// like crate names with `_`
+// Add a more relaxed parsing for pallet names by allowing pallet directory names with `-` to be
+// used like crate names with `_`
 fn parse_pallet_name(pallet: &str) -> String {
 	pallet.replace("-", "_")
 }
@@ -141,4 +141,11 @@ pub struct BenchmarkCmd {
 	/// When nothing is provided, we list all benchmarks.
 	#[structopt(long)]
 	pub list: bool,
+
+	/// If enabled, the storage info is not displayed in the output next to the analysis.
+	///
+	/// This is independent of the storage info appearing in the *output file*. Use a Handlebar
+	/// template for that purpose.
+	#[structopt(long)]
+	pub no_storage_info: bool,
 }

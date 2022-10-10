@@ -13,33 +13,31 @@ publish = true
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-pallet-balances = { version = "4.0.0-dev", path = "../../../frame/balances" }
-sc-service = { version = "0.10.0-dev", features = ["test-helpers", "db"],  path = "../../../client/service" }
-sc-client-db = { version = "0.10.0-dev", path = "../../../client/db/", features = ["kvdb-rocksdb", "parity-db"] }
+sc-service = { version = "0.10.0-dev", features = [
+    "test-helpers",
+    "db",
+], path = "../../../client/service" }
+sc-client-db = { version = "0.10.0-dev", path = "../../../client/db/", features = [
+    "kvdb-rocksdb",
+    "parity-db",
+] }
 sc-client-api = { version = "4.0.0-dev", path = "../../../client/api/" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 codec = { package = "parity-scale-codec", version = "2.0.0" }
-pallet-contracts = { version = "4.0.0-dev", path = "../../../frame/contracts" }
-pallet-grandpa = { version = "4.0.0-dev", path = "../../../frame/grandpa" }
-pallet-indices = { version = "4.0.0-dev", path = "../../../frame/indices" }
 sp-keyring = { version = "4.0.0-dev", path = "../../../primitives/keyring" }
 node-executor = { version = "3.0.0-dev", path = "../executor" }
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-runtime = { version = "3.0.0-dev", path = "../runtime" }
 sp-core = { version = "4.0.0-dev", path = "../../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../../primitives/io" }
-frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-pallet-session = { version = "4.0.0-dev", path = "../../../frame/session" }
-pallet-society = { version = "4.0.0-dev", path = "../../../frame/society" }
 sp-runtime = { version = "4.0.0-dev", path = "../../../primitives/runtime" }
-pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
-sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = ["wasmtime"] }
+sc-executor = { version = "0.10.0-dev", path = "../../../client/executor", features = [
+    "wasmtime",
+] }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }
-pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 pallet-transaction-payment = { version = "4.0.0-dev", path = "../../../frame/transaction-payment" }
-pallet-treasury = { version = "4.0.0-dev", path = "../../../frame/treasury" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../primitives/block-builder" }
@@ -50,7 +48,3 @@ log = "0.4.8"
 tempfile = "3.1.0"
 fs_extra = "1"
 futures = "0.3.1"
-
-[dev-dependencies]
-criterion = "0.3.0"
-sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

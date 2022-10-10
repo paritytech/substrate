@@ -5,6 +5,3 @@ updates:
     labels: ["A2-insubstantial", "B0-silent", "C1-low 📌"]
     schedule:
       interval: "daily"
-    ignore:
-        - dependency-name: "jsonrpc-*"
-          versions: [">= 16"]

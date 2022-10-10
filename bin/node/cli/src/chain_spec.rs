@@ -78,10 +78,13 @@ fn session_keys(
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
+	#[rustfmt::skip]
 	// stash, controller, session-key
 	// generated with secret:
 	// for i in 1 2 3 4 ; do for j in stash controller; do subkey inspect "$secret"/fir/$j/$i; done; done
+	//
 	// and
+	//
 	// for i in 1 2 3 4 ; do for j in session; do subkey --ed25519 inspect "$secret"//fir//$j//$i; done; done
 
 	let initial_authorities: Vec<(
@@ -262,7 +265,7 @@ pub fn testnet_genesis(
 		.map(|x| &x.0)
 		.chain(initial_nominators.iter())
 		.for_each(|x| {
-			if !endowed_accounts.contains(&x) {
+			if !endowed_accounts.contains(x) {
 				endowed_accounts.push(x.clone())
 			}
 		});
@@ -458,6 +461,8 @@ pub(crate) mod tests {
 	#[test]
 	#[ignore]
 	fn test_connectivity() {
+		sp_tracing::try_init_simple();
+
 		sc_service_test::connectivity(
 			integration_test_config_with_two_authorities(),
 			|config| {

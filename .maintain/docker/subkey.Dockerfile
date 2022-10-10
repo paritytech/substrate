@@ -1,4 +1,4 @@
-FROM debian:stretch-slim
+FROM docker.io/library/ubuntu:20.04
 
 # metadata
 ARG VCS_REF
@@ -28,4 +28,3 @@ USER subkey
 RUN /usr/local/bin/subkey --version
 
 ENTRYPOINT ["/usr/local/bin/subkey"]
-

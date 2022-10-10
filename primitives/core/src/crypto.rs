@@ -31,6 +31,7 @@ use parking_lot::Mutex;
 use rand::{rngs::OsRng, RngCore};
 #[cfg(feature = "std")]
 use regex::Regex;
+use scale_info::TypeInfo;
 /// Trait for accessing reference to `SecretString`.
 pub use secrecy::ExposeSecret;
 /// A store for sensitive data.
@@ -255,8 +256,8 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + Default {
 		let (prefix_len, ident) = match data[0] {
 			0..=63 => (1, data[0] as u16),
 			64..=127 => {
-				// weird bit manipulation owing to the combination of LE encoding and missing two bits
-				// from the left.
+				// weird bit manipulation owing to the combination of LE encoding and missing two
+				// bits from the left.
 				// d[0] d[1] are: 01aaaaaa bbcccccc
 				// they make the LE-encoded 16-bit value: aaaaaabb 00cccccc
 				// so the lower byte is formed of aaaaaabb and the higher byte is 00cccccc
@@ -576,6 +577,10 @@ ss58_address_format!(
 		(47, "reserved47", "Reserved for future use (47).")
 	NeatcoinAccount =>
 		(48, "neatcoin", "Neatcoin mainnet, standard account (*25519).")
+	PicassoAccount =>
+		(49, "picasso", "Composable Canary Network, standard account (*25519).")
+	ComposableAccount =>
+		(50, "composable", "Composable mainnet, standard account (*25519).")
 	HydraDXAccount =>
 		(63, "hydradx", "HydraDX standard account (*25519).")
 	AventusAccount =>
@@ -592,6 +597,8 @@ ss58_address_format!(
 		(77, "manta", "Manta Network, standard account (*25519).")
 	CalamariAccount =>
 		(78, "calamari", "Manta Canary Network, standard account (*25519).")
+	Polkadex =>
+		(88, "polkadex", "Polkadex Mainnet, standard account (*25519).")
 	PolkaSmith =>
 		(98, "polkasmith", "PolkaSmith Canary Network, standard account (*25519).")
 	PolkaFoundry =>
@@ -600,6 +607,8 @@ ss58_address_format!(
 		(101, "origintrail-parachain", "OriginTrail Parachain, ethereumm account (ECDSA).")
 	HeikoAccount =>
 		(110, "heiko", "Heiko, session key (*25519).")
+	CloverAccount =>
+		(128, "clover", "Clover Finance, standard account (*25519).")
 	ParallelAccount =>
 		(172, "parallel", "Parallel, session key (*25519).")
 	SocialAccount =>
@@ -709,7 +718,9 @@ pub trait Public:
 }
 
 /// An opaque 32-byte cryptographic identifier.
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen)]
+#[derive(
+	Clone, Eq, PartialEq, Ord, PartialOrd, Default, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
 #[cfg_attr(feature = "std", derive(Hash))]
 pub struct AccountId32([u8; 32]);
 
@@ -1029,9 +1040,9 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// Get the public key.
 	fn public(&self) -> Self::Public;
 
-	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an optional seed, in the
-	/// case that the pair can be expressed as a direct derivation from a seed (some cases, such as Sr25519 derivations
-	/// with path components, cannot).
+	/// Interprets the string `s` in order to generate a key Pair. Returns both the pair and an
+	/// optional seed, in the case that the pair can be expressed as a direct derivation from a seed
+	/// (some cases, such as Sr25519 derivations with path components, cannot).
 	///
 	/// This takes a helper function to do the key generation from a phrase, password and
 	/// junction iterator.
@@ -1043,7 +1054,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	///   - the phrase may be followed by one or more items delimited by `/` characters.
 	///   - the path may be followed by `///`, in which case everything after the `///` is treated
 	/// as a password.
-	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE` and
+	/// - If `s` begins with a `/` character it is prefixed with the Substrate public `DEV_PHRASE`
+	///   and
 	/// interpreted as above.
 	///
 	/// In this case they are interpreted as HDKD junctions; purely numeric items are interpreted as
@@ -1053,8 +1065,8 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 	/// There is no correspondence mapping between SURI strings and the keys they represent.
 	/// Two different non-identical strings can actually lead to the same secret being derived.
 	/// Notably, integer junction indices may be legally prefixed with arbitrary number of zeros.
-	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will generally
-	/// be equivalent to no password at all.
+	/// Similarly an empty password (ending the SURI with `///`) is perfectly valid and will
+	/// generally be equivalent to no password at all.
 	///
 	/// `None` is returned if no matches are found.
 	#[cfg(feature = "std")]
@@ -1168,6 +1180,7 @@ pub trait CryptoType {
 	Decode,
 	PassByInner,
 	crate::RuntimeDebug,
+	TypeInfo,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct KeyTypeId(pub [u8; 4]);

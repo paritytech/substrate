@@ -248,7 +248,7 @@ impl sc_transaction_pool_api::TransactionPool for Transactions {
 		_at: &BlockId<Self::Block>,
 		_source: TransactionSource,
 		_xt: TransactionFor<Self>,
-	) -> PoolFuture<Box<TransactionStatusStreamFor<Self>>, Self::Error> {
+	) -> PoolFuture<Pin<Box<TransactionStatusStreamFor<Self>>>, Self::Error> {
 		unimplemented!()
 	}
 

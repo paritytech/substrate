@@ -20,7 +20,7 @@
 use crate::{storage::StorageDecodeLength, traits::Get};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, fmt, marker::PhantomData,
+	borrow::Borrow, collections::btree_map::BTreeMap, convert::TryFrom, marker::PhantomData,
 	ops::Deref,
 };
 
@@ -31,7 +31,8 @@ use sp_std::{
 ///
 /// Unlike a standard `BTreeMap`, there is an enforced upper limit to the number of items in the
 /// map. All internal operations ensure this bound is respected.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedBTreeMap<K, V, S>(BTreeMap<K, V>, PhantomData<S>);
 
 impl<K, V, S> Decode for BoundedBTreeMap<K, V, S>
@@ -125,7 +126,8 @@ where
 		}
 	}
 
-	/// Remove a key from the map, returning the value at the key if the key was previously in the map.
+	/// Remove a key from the map, returning the value at the key if the key was previously in the
+	/// map.
 	///
 	/// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
 	/// form _must_ match the ordering on the key type.
@@ -137,7 +139,8 @@ where
 		self.0.remove(key)
 	}
 
-	/// Remove a key from the map, returning the value at the key if the key was previously in the map.
+	/// Remove a key from the map, returning the value at the key if the key was previously in the
+	/// map.
 	///
 	/// The key may be any borrowed form of the map's key type, but the ordering on the borrowed
 	/// form _must_ match the ordering on the key type.
@@ -170,12 +173,12 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<K, V, S> fmt::Debug for BoundedBTreeMap<K, V, S>
+impl<K, V, S> std::fmt::Debug for BoundedBTreeMap<K, V, S>
 where
-	BTreeMap<K, V>: fmt::Debug,
+	BTreeMap<K, V>: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedBTreeMap").field(&self.0).field(&Self::bound()).finish()
 	}
 }

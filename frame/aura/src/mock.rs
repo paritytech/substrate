@@ -87,6 +87,10 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
+parameter_types! {
+	pub const MaxAuthorities: u32 = 10;
+}
+
 thread_local! {
 	static DISABLED_VALIDATORS: RefCell<Vec<AuthorityIndex>> = RefCell::new(Default::default());
 }
@@ -113,6 +117,7 @@ impl DisabledValidators for MockDisabledValidators {
 impl pallet_aura::Config for Test {
 	type AuthorityId = AuthorityId;
 	type DisabledValidators = MockDisabledValidators;
+	type MaxAuthorities = MaxAuthorities;
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> sp_io::TestExternalities {

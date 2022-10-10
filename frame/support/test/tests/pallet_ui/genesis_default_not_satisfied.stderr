@@ -6,5 +6,5 @@ error[E0277]: the trait bound `pallet::GenesisConfig: std::default::Default` is 
     |
    ::: $WORKSPACE/frame/support/src/traits/hooks.rs
     |
-    | pub trait GenesisBuild<T, I = ()>: Default + MaybeSerializeDeserialize {
+    | pub trait GenesisBuild<T, I = ()>: Default + sp_runtime::traits::MaybeSerializeDeserialize {
     |                                    ------- required by this bound in `GenesisBuild`

@@ -147,8 +147,8 @@ where
 			|mut map: BTreeMap<&[u8], (ExtrinsicIndex<Number>, Vec<u32>)>, (k, extrinsics)| {
 				match map.entry(k) {
 					Entry::Vacant(entry) => {
-						// ignore temporary values (values that have null value at the end of operation
-						// AND are not in storage at the beginning of operation
+						// ignore temporary values (values that have null value at the end of
+						// operation AND are not in storage at the beginning of operation
 						if let Some(child_info) = child_info.as_ref() {
 							if !overlay
 								.child_storage(child_info, k)
@@ -177,8 +177,8 @@ where
 						));
 					},
 					Entry::Occupied(mut entry) => {
-						// we do not need to check for temporary values here, because entry is Occupied
-						// AND we are checking it before insertion
+						// we do not need to check for temporary values here, because entry is
+						// Occupied AND we are checking it before insertion
 						let entry_extrinsics = &mut entry.get_mut().1;
 						entry_extrinsics.extend(extrinsics.into_iter());
 						entry_extrinsics.sort();
@@ -246,11 +246,12 @@ where
 							));
 						},
 						Entry::Occupied(mut entry) => {
-							// DigestIndexValue must be sorted. Here we are relying on the fact that digest_build_iterator()
-							// returns blocks in ascending order => we only need to check for duplicates
+							// DigestIndexValue must be sorted. Here we are relying on the fact that
+							// digest_build_iterator() returns blocks in ascending order => we only
+							// need to check for duplicates
 							//
-							// is_dup_block could be true when key has been changed in both digest block
-							// AND other blocks that it covers
+							// is_dup_block could be true when key has been changed in both digest
+							// block AND other blocks that it covers
 							let is_dup_block = entry.get().1.last() == Some(&digest_build_block);
 							if !is_dup_block {
 								entry.get_mut().1.push(digest_build_block.clone());

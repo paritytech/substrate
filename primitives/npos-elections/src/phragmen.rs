@@ -68,16 +68,16 @@ const DEN: ExtendedBalance = ExtendedBalance::max_value();
 /// check where t is the standard threshold. The underlying algorithm is sound, but the conversions
 /// between numeric types can be lossy.
 pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
-	rounds: usize,
-	initial_candidates: Vec<AccountId>,
-	initial_voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
-	balance: Option<(usize, ExtendedBalance)>,
+	to_elect: usize,
+	candidates: Vec<AccountId>,
+	voters: Vec<(AccountId, VoteWeight, Vec<AccountId>)>,
+	balancing: Option<(usize, ExtendedBalance)>,
 ) -> Result<ElectionResult<AccountId, P>, crate::Error> {
-	let (candidates, voters) = setup_inputs(initial_candidates, initial_voters);
+	let (candidates, voters) = setup_inputs(candidates, voters);
 
-	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(rounds, candidates, voters)?;
+	let (candidates, mut voters) = seq_phragmen_core::<AccountId>(to_elect, candidates, voters)?;
 
-	if let Some((iterations, tolerance)) = balance {
+	if let Some((iterations, tolerance)) = balancing {
 		// NOTE: might create zero-edges, but we will strip them again when we convert voter into
 		// assignment.
 		let _iters = balancing::balance::<AccountId>(&mut voters, iterations, tolerance);
@@ -87,7 +87,7 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 		.into_iter()
 		.filter(|c_ptr| c_ptr.borrow().elected)
 		// defensive only: seq-phragmen-core returns only up to rounds.
-		.take(rounds)
+		.take(to_elect)
 		.collect::<Vec<_>>();
 
 	// sort winners based on desirability.
@@ -116,12 +116,12 @@ pub fn seq_phragmen<AccountId: IdentifierT, P: PerThing128>(
 /// This can only fail if the normalization fails.
 // To create the inputs needed for this function, see [`crate::setup_inputs`].
 pub fn seq_phragmen_core<AccountId: IdentifierT>(
-	rounds: usize,
+	to_elect: usize,
 	candidates: Vec<CandidatePtr<AccountId>>,
 	mut voters: Vec<Voter<AccountId>>,
 ) -> Result<(Vec<CandidatePtr<AccountId>>, Vec<Voter<AccountId>>), crate::Error> {
 	// we have already checked that we have more candidates than minimum_candidate_count.
-	let to_elect = rounds.min(candidates.len());
+	let to_elect = to_elect.min(candidates.len());
 
 	// main election loop
 	for round in 0..to_elect {

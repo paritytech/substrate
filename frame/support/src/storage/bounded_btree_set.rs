@@ -20,7 +20,7 @@
 use crate::{storage::StorageDecodeLength, traits::Get};
 use codec::{Decode, Encode, MaxEncodedLen};
 use sp_std::{
-	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, fmt, marker::PhantomData,
+	borrow::Borrow, collections::btree_set::BTreeSet, convert::TryFrom, marker::PhantomData,
 	ops::Deref,
 };
 
@@ -31,7 +31,8 @@ use sp_std::{
 ///
 /// Unlike a standard `BTreeSet`, there is an enforced upper limit to the number of items in the
 /// set. All internal operations ensure this bound is respected.
-#[derive(Encode)]
+#[derive(Encode, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(S))]
 pub struct BoundedBTreeSet<T, S>(BTreeSet<T>, PhantomData<S>);
 
 impl<T, S> Decode for BoundedBTreeSet<T, S>
@@ -157,12 +158,12 @@ where
 }
 
 #[cfg(feature = "std")]
-impl<T, S> fmt::Debug for BoundedBTreeSet<T, S>
+impl<T, S> std::fmt::Debug for BoundedBTreeSet<T, S>
 where
-	BTreeSet<T>: fmt::Debug,
+	BTreeSet<T>: std::fmt::Debug,
 	S: Get<u32>,
 {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("BoundedBTreeSet").field(&self.0).field(&Self::bound()).finish()
 	}
 }

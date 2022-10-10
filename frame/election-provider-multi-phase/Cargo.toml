@@ -14,7 +14,10 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 static_assertions = "1.1.0"
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = [
+	"derive",
+] }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
@@ -30,19 +33,22 @@ frame-election-provider-support = { version = "4.0.0-dev", default-features = fa
 
 # Optional imports for benchmarking
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
-rand = { version = "0.7.3", default-features = false, optional = true, features = ["alloc", "small_rng"] }
+rand = { version = "0.7.3", default-features = false, optional = true, features = [
+	"alloc",
+	"small_rng",
+] }
+strum = { optional = true, version = "0.21.0" }
+strum_macros = { optional = true, version = "0.21.1" }
 
 [dev-dependencies]
-paste = "1.0.3"
 parking_lot = "0.11.0"
 rand = { version = "0.7.3" }
-hex-literal = "0.3.1"
-substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-frame-election-provider-support = { version = "4.0.0-dev", features = ["runtime-benchmarks"], path = "../election-provider-support" }
+frame-election-provider-support = { version = "4.0.0-dev", features = [
+], path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
@@ -50,6 +56,7 @@ frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 default = ["std"]
 std = [
 	"codec/std",
+	"scale-info/std",
 	"log/std",
 
 	"frame-support/std",
@@ -66,6 +73,9 @@ std = [
 ]
 runtime-benchmarks = [
 	"frame-benchmarking",
+	"frame-election-provider-support/runtime-benchmarks",
 	"rand",
+	"strum",
+	"strum_macros",
 ]
 try-runtime = ["frame-support/try-runtime"]

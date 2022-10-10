@@ -27,6 +27,7 @@ use sc_consensus::{
 	BlockCheckParams, BlockImport, BlockImportParams, ImportResult, JustificationImport,
 };
 use sc_telemetry::TelemetryHandle;
+use sc_utils::mpsc::TracingUnboundedSender;
 use sp_api::{Core, RuntimeApiInfo, TransactionFor};
 use sp_blockchain::{well_known_cache_keys, BlockStatus};
 use sp_consensus::{BlockOrigin, Error as ConsensusError, SelectChain};
@@ -37,7 +38,6 @@ use sp_runtime::{
 	traits::{Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
-use sp_utils::mpsc::TracingUnboundedSender;
 
 use crate::{
 	authorities::{AuthoritySet, DelayKind, PendingChange, SharedAuthoritySet},
@@ -100,7 +100,8 @@ where
 		let mut out = Vec::new();
 		let chain_info = self.inner.info();
 
-		// request justifications for all pending changes for which change blocks have already been imported
+		// request justifications for all pending changes for which change blocks have already been
+		// imported
 		let pending_changes: Vec<_> =
 			self.authority_set.inner().pending_changes().cloned().collect();
 
@@ -117,10 +118,10 @@ where
 						)
 						.await
 				} else {
-					Ok(Some(pending_change.canon_hash))
+					Ok(pending_change.canon_hash)
 				};
 
-				if let Ok(Some(hash)) = effective_block_hash {
+				if let Ok(hash) = effective_block_hash {
 					if let Ok(Some(header)) = self.inner.header(BlockId::Hash(hash)) {
 						if *header.number() == pending_change.effective_number() {
 							out.push((header.hash(), *header.number()));

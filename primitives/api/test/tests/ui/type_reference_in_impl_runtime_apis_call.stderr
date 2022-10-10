@@ -38,7 +38,7 @@ error[E0053]: method `Api_test_runtime_api_impl` has an incompatible type for tr
    |
    = note: expected fn pointer `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &BlockId<__SR_API_BLOCK__>, ExecutionContext, std::option::Option<u64>, Vec<_>) -> Result<_, _>`
               found fn pointer `fn(&RuntimeApiImpl<__SR_API_BLOCK__, RuntimeApiImplCall>, &BlockId<__SR_API_BLOCK__>, ExecutionContext, std::option::Option<&u64>, Vec<_>) -> Result<_, _>`
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `sp_api::impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
   --> $DIR/type_reference_in_impl_runtime_apis_call.rs:17:1
@@ -52,7 +52,7 @@ error[E0308]: mismatched types
 35 | | }
    | |_^ expected `u64`, found `&u64`
    |
-   = note: this error originates in a macro (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `sp_api::impl_runtime_apis` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0308]: mismatched types
   --> $DIR/type_reference_in_impl_runtime_apis_call.rs:19:11

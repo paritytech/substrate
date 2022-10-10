@@ -29,10 +29,10 @@
 //! identify which substrate node is reporting the telemetry. Every task spawned using sc-service's
 //! `TaskManager` automatically inherit this span.
 //!
-//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a [`TelemetryWorkerHandle`].
-//! This handle can be cloned and passed around. It uses an asynchronous channel to communicate with
-//! the running [`TelemetryWorker`] dedicated to registration. Registering can happen at any point
-//! in time during the process execution.
+//! Substrate's nodes initialize/register with the [`TelemetryWorker`] using a
+//! [`TelemetryWorkerHandle`]. This handle can be cloned and passed around. It uses an asynchronous
+//! channel to communicate with the running [`TelemetryWorker`] dedicated to registration.
+//! Registering can happen at any point in time during the process execution.
 
 #![warn(missing_docs)]
 
@@ -46,7 +46,6 @@ use std::{
 	sync::{atomic, Arc},
 };
 
-pub use libp2p::wasm_ext::ExtTransport;
 pub use log;
 pub use serde_json;
 
@@ -124,15 +123,7 @@ impl TelemetryWorker {
 	///
 	/// Only one is needed per process.
 	pub fn new(buffer_size: usize) -> Result<Self> {
-		Self::with_transport(buffer_size, None)
-	}
-
-	/// Instantiate a new [`TelemetryWorker`] with the given [`ExtTransport`]
-	/// which can run in background.
-	///
-	/// Only one is needed per process.
-	pub fn with_transport(buffer_size: usize, transport: Option<ExtTransport>) -> Result<Self> {
-		let transport = initialize_transport(transport)?;
+		let transport = initialize_transport()?;
 		let (message_sender, message_receiver) = mpsc::channel(buffer_size);
 		let (register_sender, register_receiver) = mpsc::unbounded();
 

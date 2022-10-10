@@ -44,7 +44,7 @@ fn set_recovered_works() {
 		// Root can set a recovered account though
 		assert_ok!(Recovery::set_recovered(Origin::root(), 5, 1));
 		// Account 1 should now be able to make a call through account 5
-		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 100)));
+		let call = Box::new(Call::Balances(BalancesCall::transfer { dest: 1, value: 100 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 has successfully drained the funds from account 5
 		assert_eq!(Balances::free_balance(1), 200);
@@ -64,7 +64,8 @@ fn recovery_life_cycle_works() {
 		run_to_block(10);
 		// Using account 1, the user begins the recovery process to recover the lost account
 		assert_ok!(Recovery::initiate_recovery(Origin::signed(1), 5));
-		// Off chain, the user contacts their friends and asks them to vouch for the recovery attempt
+		// Off chain, the user contacts their friends and asks them to vouch for the recovery
+		// attempt
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(2), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(3), 5, 1));
 		assert_ok!(Recovery::vouch_recovery(Origin::signed(4), 5, 1));
@@ -75,15 +76,15 @@ fn recovery_life_cycle_works() {
 		assert_ok!(Recovery::claim_recovery(Origin::signed(1), 5));
 		// Account 1 can use account 5 to close the active recovery process, claiming the deposited
 		// funds used to initiate the recovery process into account 5.
-		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery(1)));
+		let call = Box::new(Call::Recovery(RecoveryCall::close_recovery { rescuer: 1 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 can then use account 5 to remove the recovery configuration, claiming the
 		// deposited funds used to create the recovery configuration into account 5.
-		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery()));
+		let call = Box::new(Call::Recovery(RecoveryCall::remove_recovery {}));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// Account 1 should now be able to make a call through account 5 to get all of their funds
 		assert_eq!(Balances::free_balance(5), 110);
-		let call = Box::new(Call::Balances(BalancesCall::transfer(1, 110)));
+		let call = Box::new(Call::Balances(BalancesCall::transfer { dest: 1, value: 110 }));
 		assert_ok!(Recovery::as_recovered(Origin::signed(1), 5, call));
 		// All funds have been fully recovered!
 		assert_eq!(Balances::free_balance(1), 200);

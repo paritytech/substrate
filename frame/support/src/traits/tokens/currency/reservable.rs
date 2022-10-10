@@ -193,8 +193,8 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 		Self::slash_reserved_named(id, who, value).0
 	}
 
-	/// Move all the named reserved balance of one account into the balance of another, according to `status`.
-	/// If `status` is `Reserved`, the balance will be reserved with given `id`.
+	/// Move all the named reserved balance of one account into the balance of another, according to
+	/// `status`. If `status` is `Reserved`, the balance will be reserved with given `id`.
 	///
 	/// Is a no-op if:
 	/// - the value to be moved is zero; or

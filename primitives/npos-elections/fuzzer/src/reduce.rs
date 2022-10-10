@@ -104,13 +104,11 @@ fn generate_random_phragmen_assignment(
 }
 
 fn assert_assignments_equal(
-	winners: &Vec<AccountId>,
 	ass1: &Vec<StakedAssignment<AccountId>>,
 	ass2: &Vec<StakedAssignment<AccountId>>,
 ) {
-	let support_1 = to_support_map::<AccountId>(winners, ass1).unwrap();
-	let support_2 = to_support_map::<AccountId>(winners, ass2).unwrap();
-
+	let support_1 = to_support_map::<AccountId>(ass1);
+	let support_2 = to_support_map::<AccountId>(ass2);
 	for (who, support) in support_1.iter() {
 		assert_eq!(support.total, support_2.get(who).unwrap().total);
 	}
@@ -134,7 +132,7 @@ fn reduce_and_compare(assignment: &Vec<StakedAssignment<AccountId>>, winners: &V
 		num_changed,
 	);
 
-	assert_assignments_equal(winners, &assignment, &altered_assignment);
+	assert_assignments_equal(&assignment, &altered_assignment);
 }
 
 fn assignment_len(assignments: &[StakedAssignment<AccountId>]) -> u32 {

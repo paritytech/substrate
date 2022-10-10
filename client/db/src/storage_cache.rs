@@ -366,8 +366,8 @@ impl<B: BlockT> CacheChanges<B> {
 		}
 		cache.sync(&enacted, &retracted);
 		// Propagate cache only if committing on top of the latest canonical state
-		// blocks are ordered by number and only one block with a given number is marked as canonical
-		// (contributed to canonical state cache)
+		// blocks are ordered by number and only one block with a given number is marked as
+		// canonical (contributed to canonical state cache)
 		if let Some(_) = self.parent_hash {
 			let mut local_cache = self.local_cache.write();
 			if is_best {
@@ -463,8 +463,8 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> CachingState<S, B> {
 		}
 	}
 
-	/// Check if the key can be returned from cache by matching current block parent hash against canonical
-	/// state and filtering out entries modified in later blocks.
+	/// Check if the key can be returned from cache by matching current block parent hash against
+	/// canonical state and filtering out entries modified in later blocks.
 	fn is_allowed(
 		key: Option<&[u8]>,
 		child_key: Option<&ChildStorageKey>,
@@ -703,7 +703,7 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>> for Cachin
 		self.state.child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.state.as_trie_backend()
 	}
 
@@ -901,9 +901,9 @@ impl<S: StateBackend<HashFor<B>>, B: BlockT> StateBackend<HashFor<B>>
 		self.caching_state().child_keys(child_info, prefix)
 	}
 
-	fn as_trie_backend(&mut self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
+	fn as_trie_backend(&self) -> Option<&TrieBackend<Self::TrieBackendStorage, HashFor<B>>> {
 		self.caching_state
-			.as_mut()
+			.as_ref()
 			.expect("`caching_state` is valid for the lifetime of the object; qed")
 			.as_trie_backend()
 	}
@@ -1418,6 +1418,7 @@ mod qc {
 	#[derive(Debug, Clone)]
 	struct Node {
 		hash: H256,
+		#[allow(unused)]
 		parent: H256,
 		state: KeyMap,
 		changes: KeySet,

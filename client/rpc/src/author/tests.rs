@@ -20,8 +20,7 @@ use super::*;
 
 use assert_matches::assert_matches;
 use codec::Encode;
-use futures::{compat::Future01CompatExt, executor};
-use rpc::futures::Stream as _;
+use futures::executor;
 use sc_transaction_pool::{BasicPool, FullChainApi};
 use sp_core::{
 	blake2_256,
@@ -86,10 +85,10 @@ fn submit_transaction_should_not_cause_error() {
 	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, xt.clone().into()).wait(),
+		executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
 		Ok(h2) if h == h2
 	);
-	assert!(AuthorApi::submit_extrinsic(&p, xt.into()).wait().is_err());
+	assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
 }
 
 #[test]
@@ -99,10 +98,10 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let h: H256 = blake2_256(&xt).into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, xt.clone().into()).wait(),
+		executor::block_on(AuthorApi::submit_extrinsic(&p, xt.clone().into())),
 		Ok(h2) if h == h2
 	);
-	assert!(AuthorApi::submit_extrinsic(&p, xt.into()).wait().is_err());
+	assert!(executor::block_on(AuthorApi::submit_extrinsic(&p, xt.into())).is_err());
 }
 
 #[test]
@@ -120,7 +119,7 @@ fn should_watch_extrinsic() {
 		uxt(AccountKeyring::Alice, 0).encode().into(),
 	);
 
-	let id = executor::block_on(id_rx.compat()).unwrap().unwrap();
+	let id = executor::block_on(id_rx).unwrap().unwrap();
 	assert_matches!(id, SubscriptionId::String(_));
 
 	let id = match id {
@@ -138,8 +137,8 @@ fn should_watch_extrinsic() {
 		};
 		tx.into_signed_tx()
 	};
-	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).wait().unwrap();
-	let (res, data) = executor::block_on(data.into_future().compat()).unwrap();
+	executor::block_on(AuthorApi::submit_extrinsic(&p, replacement.encode().into())).unwrap();
+	let (res, data) = executor::block_on(data.into_future());
 
 	let expected = Some(format!(
 		r#"{{"jsonrpc":"2.0","method":"test","params":{{"result":"ready","subscription":"{}"}}}}"#,
@@ -154,7 +153,7 @@ fn should_watch_extrinsic() {
 		id,
 	));
 
-	let res = executor::block_on(data.into_future().compat()).unwrap().0;
+	let res = executor::block_on(data.into_future()).0;
 	assert_eq!(res, expected);
 }
 
@@ -174,7 +173,7 @@ fn should_return_watch_validation_error() {
 	);
 
 	// then
-	let res = executor::block_on(id_rx.compat()).unwrap();
+	let res = executor::block_on(id_rx).unwrap();
 	assert!(res.is_err(), "Expected the transaction to be rejected as invalid.");
 }
 
@@ -183,7 +182,7 @@ fn should_return_pending_extrinsics() {
 	let p = TestSetup::default().author();
 
 	let ex = uxt(AccountKeyring::Alice, 0);
-	AuthorApi::submit_extrinsic(&p, ex.encode().into()).wait().unwrap();
+	executor::block_on(AuthorApi::submit_extrinsic(&p, ex.encode().into())).unwrap();
 	assert_matches!(
 		p.pending_extrinsics(),
 		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
@@ -196,11 +195,11 @@ fn should_remove_extrinsics() {
 	let p = setup.author();
 
 	let ex1 = uxt(AccountKeyring::Alice, 0);
-	p.submit_extrinsic(ex1.encode().into()).wait().unwrap();
+	executor::block_on(p.submit_extrinsic(ex1.encode().into())).unwrap();
 	let ex2 = uxt(AccountKeyring::Alice, 1);
-	p.submit_extrinsic(ex2.encode().into()).wait().unwrap();
+	executor::block_on(p.submit_extrinsic(ex2.encode().into())).unwrap();
 	let ex3 = uxt(AccountKeyring::Bob, 0);
-	let hash3 = p.submit_extrinsic(ex3.encode().into()).wait().unwrap();
+	let hash3 = executor::block_on(p.submit_extrinsic(ex3.encode().into())).unwrap();
 	assert_eq!(setup.pool.status().ready, 3);
 
 	// now remove all 3
