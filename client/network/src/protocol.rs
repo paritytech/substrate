@@ -338,6 +338,9 @@ where
 		let behaviour = {
 			Notifications::new(
 				peerset,
+				// NOTE: Block announcement protocol is still very much hardcoded into `Protocol`.
+				// 	This protocol must be the first notification protocol given to
+				// `Notifications`
 				iter::once(notifications::ProtocolConfig {
 					name: block_announces_protocol.notifications_protocol.clone(),
 					fallback_names: block_announces_protocol.fallback_names.clone(),

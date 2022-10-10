@@ -200,14 +200,17 @@ impl Default for SetConfig {
 	}
 }
 
+/// Custom handshake for the notification protocol
 #[derive(Debug, Clone)]
 pub struct NotificationHandshake(Vec<u8>);
 
 impl NotificationHandshake {
+	/// Create new `NotificationHandshake` from an object that implements `Encode`
 	pub fn new<H: Encode>(handshake: H) -> Self {
 		Self(handshake.encode())
 	}
 
+	/// Create new `NotificationHandshake` from raw bytes
 	pub fn from_bytes(bytes: Vec<u8>) -> Self {
 		Self(bytes)
 	}
@@ -240,7 +243,7 @@ pub struct NonDefaultSetConfig {
 	/// If a fallback is used, it will be reported in
 	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
 	pub fallback_names: Vec<protocol::ProtocolName>,
-	/// Handshake for the protocol
+	/// Handshake of the protocol
 	pub handshake: Option<NotificationHandshake>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
