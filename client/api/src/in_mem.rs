@@ -516,7 +516,7 @@ where
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
+		let child_delta = storage.children_default.values().map(|child_content| {
 			(
 				&child_content.child_info,
 				child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
