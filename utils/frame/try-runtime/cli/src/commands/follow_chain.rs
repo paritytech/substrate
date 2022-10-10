@@ -54,10 +54,6 @@ pub struct FollowChainCmd {
 	///   round-robin fashion.
 	#[clap(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
-
-	/// If present, a single connection to a node will be kept and reused for fetching blocks.
-	#[clap(long)]
-	keep_connection: bool,
 }
 
 /// Start listening for with `SUB` at `url`.
