@@ -93,9 +93,9 @@ impl Weight {
 	}
 
 	/// Try to add some `other` weight while upholding the `limit`.
-	pub fn try_add(&self, other: &Self, limit: &Self) -> Option<Self> {
+	pub fn try_add(&self, other: Self, limit: Self) -> Option<Self> {
 		let total = self.checked_add(other)?;
-		if total.any_gt(*limit) {
+		if total.any_gt(limit) {
 			None
 		} else {
 			Some(total)
@@ -168,7 +168,7 @@ impl Weight {
 	}
 
 	/// Checked [`Weight`] addition. Computes `self + rhs`, returning `None` if overflow occurred.
-	pub const fn checked_add(&self, rhs: &Self) -> Option<Self> {
+	pub const fn checked_add(&self, rhs: Self) -> Option<Self> {
 		let ref_time = match self.ref_time.checked_add(rhs.ref_time) {
 			Some(t) => t,
 			None => return None,
@@ -182,7 +182,7 @@ impl Weight {
 
 	/// Checked [`Weight`] subtraction. Computes `self - rhs`, returning `None` if overflow
 	/// occurred.
-	pub const fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+	pub const fn checked_sub(&self, rhs: Self) -> Option<Self> {
 		let ref_time = match self.ref_time.checked_sub(rhs.ref_time) {
 			Some(t) => t,
 			None => return None,
@@ -405,13 +405,13 @@ where
 
 impl CheckedAdd for Weight {
 	fn checked_add(&self, rhs: &Self) -> Option<Self> {
-		self.checked_add(rhs)
+		self.checked_add(*rhs)
 	}
 }
 
 impl CheckedSub for Weight {
 	fn checked_sub(&self, rhs: &Self) -> Option<Self> {
-		self.checked_sub(rhs)
+		self.checked_sub(*rhs)
 	}
 }
 
