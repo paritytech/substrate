@@ -57,11 +57,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_support::weights::Weight;
+use frame_support::{traits::Get, weights::Weight};
 use sp_runtime::{
-	traits::{self, One, Saturating},
+	traits::{self, One, Saturating, UniqueSaturatedInto},
 	SaturatedConversion,
 };
+use sp_std::prelude::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -74,7 +75,6 @@ mod tests;
 
 pub use pallet::*;
 pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafIndex, NodeIndex};
-use sp_std::prelude::*;
 
 /// The most common use case for MMRs is to store historical block hashes,
 /// so that any point in time in the future we can receive a proof about some past
@@ -356,6 +356,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Used for nodes added by now finalized blocks.
 	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
+	}
+
+	/// Return size of rolling window of leaves saved in offchain under fork-unique keys.
+	///
+	/// Leaves outside this window are canonicalized.
+	/// Window size is `frame_system::BlockHashCount - 1` to make sure fork-unique keys
+	/// can be built using `frame_system::block_hash` map.
+	fn offchain_canonicalization_window() -> LeafIndex {
+		let window_size: LeafIndex =
+			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
+		window_size.saturating_sub(1)
 	}
 
 	/// Provide the number for the block that added `leaf_index` to the MMR.

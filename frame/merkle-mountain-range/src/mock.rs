@@ -29,7 +29,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 };
-use sp_std::prelude::*;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -98,7 +97,7 @@ impl LeafData {
 }
 
 parameter_types! {
-	pub static MaxLeafSize: u32 = 2 * u32::try_from(std::mem::size_of::<MmrLeaf>()).unwrap();
+	pub static MaxLeafSize: u32 = 2 * u32::try_from(sp_std::mem::size_of::<MmrLeaf>()).unwrap();
 	pub static LeafDataTestValue: LeafData = Default::default();
 }
 

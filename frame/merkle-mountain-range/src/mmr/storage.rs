@@ -18,11 +18,9 @@
 //! A MMR storage implementations.
 
 use codec::Encode;
-use frame_support::traits::Get;
 use mmr_lib::helper;
 use sp_core::{bounded::BoundedVec, offchain::StorageKind};
 use sp_io::offchain;
-use sp_runtime::traits::UniqueSaturatedInto;
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
@@ -169,8 +167,7 @@ where
 		// Effectively move a rolling window of fork-unique leaves. Once out of the window, leaves
 		// are "canonicalized" in offchain by moving them under `Pallet::node_canon_offchain_key`.
 		let leaves = NumberOfLeaves::<T, I>::get();
-		let window_size =
-			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
+		let window_size = Pallet::<T, I>::offchain_canonicalization_window();
 		if leaves >= window_size {
 			// Move the rolling window towards the end of `block_num->hash` mappings available
 			// in the runtime: we "canonicalize" the leaf at the end,
@@ -255,8 +252,7 @@ where
 		// Find out which leaf added node `pos` in the MMR.
 		let ancestor_leaf_idx = NodesUtils::leaf_index_that_added_node(pos);
 
-		let window_size =
-			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
+		let window_size = Pallet::<T, I>::offchain_canonicalization_window();
 		// Leaves older than this window should have been canonicalized.
 		if leaves.saturating_sub(ancestor_leaf_idx) > window_size {
 			let key = Pallet::<T, I>::node_canon_offchain_key(pos);
