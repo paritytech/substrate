@@ -539,11 +539,12 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		let invalid_change = peer.view.set_id > update.set_id ||
-			peer.view.round >= update.round && peer.view.set_id == update.set_id ||
-			peer.view.last_commit.as_ref() >= Some(&update.commit_finalized_height);
+		let valid_change = update.set_id > peer.view.set_id ||
+			update.set_id == peer.view.set_id && update.round > peer.view.round ||
+			update.set_id == peer.view.set_id && update.round == peer.view.round && 
+			Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
 
-		if invalid_change {
+		if !valid_change {
 			return Err(Misbehavior::InvalidViewChange)
 		}
 
