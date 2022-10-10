@@ -63,7 +63,7 @@ use std::time::Instant;
 use crate::metrics::MetricsLink as PrometheusMetrics;
 use prometheus_endpoint::Registry as PrometheusRegistry;
 
-use sp_blockchain::TreeRoute;
+use sp_blockchain::{HashAndNumber, TreeRoute};
 
 type BoxedReadyIterator<Hash, Data> =
 	Box<dyn ReadyTransactions<Item = Arc<graph::base_pool::Transaction<Hash, Data>>> + Send>;
@@ -592,33 +592,28 @@ where
 {
 	/// Part of `MaintainedTransactionPool::maintain` procedure. Handles enactment and retraction of
 	/// blocks, sends transaction notifications.
-	async fn handle_enactment(&self, hash: Block::Hash, tree_route: TreeRoute<Block>) {
-		log::trace!(target: "txpool", "handle_enactment hash:{hash:?} tree_route: {tree_route:?}");
+	async fn handle_enactment(&self, tree_route: TreeRoute<Block>) {
+		log::trace!(target: "txpool", "handle_enactment tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
 		let api = self.api.clone();
 
-		let id = BlockId::hash(hash);
-		let block_number = match api.block_id_to_number(&id) {
-			Ok(Some(number)) => number,
-			_ => {
+		let (hash, block_number) = match tree_route.last() {
+			Some(HashAndNumber { hash, number }) => (hash, number),
+			None => {
 				log::trace!(
-				target: "txpool",
-				"Skipping chain event - no number for that block {:?}",
-				id,
+					target: "txpool",
+					"Skipping chain event - no last block in enacted path {:?}",
+					tree_route,
 				);
 				return
 			},
 		};
 
 		let next_action = self.revalidation_strategy.lock().next(
-			block_number,
+			*block_number,
 			Some(std::time::Duration::from_secs(60)),
 			Some(20u32.into()),
 		);
-		let revalidation_strategy = self.revalidation_strategy.clone();
-		let revalidation_queue = self.revalidation_queue.clone();
-		let ready_poll = self.ready_poll.clone();
-		let metrics = self.metrics.clone();
 
 		// We keep track of everything we prune so that later we won't add
 		// transactions with those hashes from the retracted blocks.
@@ -646,7 +641,8 @@ where
 			pruned_log.extend(enacted_log);
 		});
 
-		metrics.report(|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64));
+		self.metrics
+			.report(|metrics| metrics.block_transactions_pruned.inc_by(pruned_log.len() as u64));
 
 		if next_action.resubmit {
 			let mut resubmit_transactions = Vec::new();
@@ -676,23 +672,23 @@ where
 
 					if !contains {
 						log::debug!(
-						target: "txpool",
-						"[{:?}]: Resubmitting from retracted block {:?}",
-						tx_hash,
-						hash,
+							target: "txpool",
+							"[{:?}]: Resubmitting from retracted block {:?}",
+							tx_hash,
+							hash,
 						);
 					}
 					!contains
 				}));
 
-				metrics.report(|metrics| {
+				self.metrics.report(|metrics| {
 					metrics.block_transactions_resubmitted.inc_by(resubmitted_to_report)
 				});
 			}
 
 			if let Err(e) = pool
 				.resubmit_at(
-					&id,
+					&BlockId::Hash(*hash),
 					// These transactions are coming from retracted blocks, we should
 					// simply consider them external.
 					TransactionSource::External,
@@ -703,7 +699,7 @@ where
 				log::debug!(
 				target: "txpool",
 				"[{:?}] Error re-submitting transactions: {}",
-				id,
+				hash,
 				e,
 				)
 			}
@@ -712,15 +708,15 @@ where
 		let extra_pool = pool.clone();
 		// After #5200 lands, this arguably might be moved to the
 		// handler of "all blocks notification".
-		ready_poll
+		self.ready_poll
 			.lock()
-			.trigger(block_number, move || Box::new(extra_pool.validated_pool().ready()));
+			.trigger(*block_number, move || Box::new(extra_pool.validated_pool().ready()));
 
 		if next_action.revalidate {
 			let hashes = pool.validated_pool().ready().map(|tx| tx.hash).collect();
-			revalidation_queue.revalidate_later(block_number, hashes).await;
+			self.revalidation_queue.revalidate_later(*block_number, hashes).await;
 
-			revalidation_strategy.lock().clear();
+			self.revalidation_strategy.lock().clear();
 		}
 	}
 }
@@ -738,7 +734,7 @@ where
 				Ok(tree_route) => Ok(tree_route),
 				Err(e) =>
 					return Err(format!(
-						"Error [{e}] occured while computing tree_route from {from:?} to \
+						"Error [{e}] occurred while computing tree_route from {from:?} to \
 					 previously finalized: {to:?}"
 					)),
 			}
@@ -755,12 +751,7 @@ where
 			},
 			Ok(None) => {},
 			Ok(Some(tree_route)) => {
-				let hash = match event {
-					ChainEvent::NewBestBlock { hash, .. } | ChainEvent::Finalized { hash, .. } =>
-						hash,
-				};
-
-				self.handle_enactment(hash, tree_route).await;
+				self.handle_enactment(tree_route).await;
 			},
 		};
 
