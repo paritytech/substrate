@@ -89,17 +89,21 @@ fn fails_to_release_reservations_with_wrong_block() {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
 
-		assert_err!(SafeMode::release_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
-			0,
-			activated_at_block + 1),
+		assert_err!(
+			SafeMode::release_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block + 1
+			),
 			Error::<Test>::NoReservation
 		);
 
-		assert_err!(SafeMode::slash_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
-			0,
-			activated_at_block + 1),
+		assert_err!(
+			SafeMode::slash_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block + 1
+			),
 			Error::<Test>::NoReservation
 		);
 	});
@@ -184,7 +188,9 @@ fn can_extend_with_signed_origin() {
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + mock::SignedActivationDuration::get() + mock::SignedExtendDuration::get()
+			System::block_number() +
+				mock::SignedActivationDuration::get() +
+				mock::SignedExtendDuration::get()
 		);
 		assert_eq!(
 			Balances::reserved_balance(0),
@@ -286,7 +292,11 @@ fn can_release_reservation_with_config_origin() {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			SafeMode::release_reservation(Origin::signed(mock::RepayOrigin::get()), 0, activated_at_block),
+			SafeMode::release_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block
+			),
 			Error::<Test>::IsActive
 		);
 		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
@@ -324,7 +334,11 @@ fn can_slash_reservation_with_config_origin() {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			SafeMode::slash_reservation(Origin::signed(mock::RepayOrigin::get()), 0, activated_at_block),
+			SafeMode::slash_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block
+			),
 			Error::<Test>::IsActive
 		);
 		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
@@ -359,7 +373,6 @@ fn can_slash_reservation_with_config_origin() {
 	});
 }
 
-
 #[test]
 fn fails_when_explicit_origin_required() {
 	new_test_ext().execute_with(|| {
@@ -379,7 +392,11 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::release_reservation(ForceActivateOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::release_reservation(
+				ForceActivateOrigin::Weak.signed(),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 

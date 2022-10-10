@@ -61,7 +61,8 @@ pub mod pallet {
 			ReserveIdentifier = Self::BlockNumber,
 		>;
 
-		/// Contains all runtime calls in any pallet that can be dispatched even while the safe-mode is activated.
+		/// Contains all runtime calls in any pallet that can be dispatched even while the safe-mode
+		/// is activated.
 		///
 		/// The safe-mode pallet cannot disable it's own calls, and does not need to be explicitly
 		/// added here.
@@ -102,7 +103,8 @@ pub mod pallet {
 		/// The origin that may call [`Pallet::force_activate`].
 		type ForceDeactivateOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The origin that may call [`Pallet::release_reservation`] and [`Pallet::slash_reservation`].
+		/// The origin that may call [`Pallet::release_reservation`] and
+		/// [`Pallet::slash_reservation`].
 		type RepayOrigin: EnsureOrigin<Self::Origin>;
 
 		// Weight information for extrinsics in this pallet.
@@ -136,7 +138,8 @@ pub mod pallet {
 		/// Exited safe-mode for a specific \[reason\].
 		Exited { reason: ExitReason },
 
-		/// An account had reserve repaid previously reserved at a block. \[block, account, amount\]
+		/// An account had reserve repaid previously reserved at a block. \[block, account,
+		/// amount\]
 		ReservationRepaid { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
 
 		/// An account had reserve slashed previously reserved at a block. \[account, amount\]
@@ -211,8 +214,9 @@ pub mod pallet {
 		///
 		/// ### Safety
 		///
-		/// This may be called by any signed origin with [`Config::ActivateReservationAmount`] free currency to reserve.
-		/// This call can be disabled for all origins by configuring [`Config::ActivateReservationAmount`] to `None`.
+		/// This may be called by any signed origin with [`Config::ActivateReservationAmount`] free
+		/// currency to reserve. This call can be disabled for all origins by configuring
+		/// [`Config::ActivateReservationAmount`] to `None`.
 		#[pallet::weight(T::WeightInfo::activate())]
 		pub fn activate(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -244,8 +248,9 @@ pub mod pallet {
 		///
 		/// ### Safety
 		///
-		/// This may be called by any signed origin with [`Config::ExtendReservationAmount`] free currency to reserve.
-		/// This call can be disabled for all origins by configuring [`Config::ExtendReservationAmount`] to `None`.
+		/// This may be called by any signed origin with [`Config::ExtendReservationAmount`] free
+		/// currency to reserve. This call can be disabled for all origins by configuring
+		/// [`Config::ExtendReservationAmount`] to `None`.
 		#[pallet::weight(T::WeightInfo::extend())]
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -272,11 +277,11 @@ pub mod pallet {
 		///
 		/// Emits an [`Event::Exited`] with [`ExitReason::Force`] event on success.
 		/// Errors with [`Error::IsInactive`] if the safe-mode is inactive.
-		/// 
+		///
 		/// Note: `safe-mode` will be automatically deactivated by [`Pallet::on_initialize`] hook
 		/// after the block height is greater than [`ActiveUntil`] found in storage.
 		/// Emits an [`Event::Exited`] with [`ExitReason::Timeout`] event on hook.
-		/// 
+		///
 		///
 		/// ### Safety
 		///
@@ -288,12 +293,13 @@ pub mod pallet {
 			Self::do_deactivate(ExitReason::Force)
 		}
 
-		/// Release a currency reservation for an account that activated safe-mode at a specific block earlier.
-		/// This cannot be called while safe-mode is active.
+		/// Release a currency reservation for an account that activated safe-mode at a specific
+		/// block earlier. This cannot be called while safe-mode is active.
 		///
 		/// Emits a [`Event::ReservationRepaid`] event on success.
 		/// Errors with [`Error::IsActive`] if the safe-mode presently activated.
-		/// Errors with [`Error::NoReservation`] if the payee has no named reserved currency at the block specified.
+		/// Errors with [`Error::NoReservation`] if the payee has no named reserved currency at the
+		/// block specified.
 		///
 		/// ### Safety
 		///
@@ -309,8 +315,8 @@ pub mod pallet {
 			Self::do_release_reservation(account, block)
 		}
 
-		/// Slash a reservation for an account that activated or extended safe-mode at a specific block earlier.
-		/// This cannot be called while safe-mode is active.
+		/// Slash a reservation for an account that activated or extended safe-mode at a specific
+		/// block earlier. This cannot be called while safe-mode is active.
 		///
 		/// Emits a [`Event::ReservationSlashed`] event on success.
 		/// Errors with [`Error::IsActive`] if the safe-mode presently activated.

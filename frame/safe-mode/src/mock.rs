@@ -78,8 +78,8 @@ impl pallet_balances::Config for Test {
 }
 
 /// Filter to block balance pallet calls
-pub struct MockUnfilterableCalls;
-impl Contains<RuntimeCall> for MockUnfilterableCalls {
+pub struct UnfilterableCalls;
+impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
@@ -226,7 +226,7 @@ impl SortedMembers<u64> for RepayOrigin {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type UnfilterableCalls = MockUnfilterableCalls;
+	type UnfilterableCalls = UnfilterableCalls;
 	type SignedActivationDuration = SignedActivationDuration;
 	type ActivateReservationAmount = ActivateReservationAmount;
 	type SignedExtendDuration = SignedExtendDuration;
