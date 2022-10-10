@@ -34,6 +34,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sc-peerset = { version = "4.0.0-dev", path = "../../peerset" }
+sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-arithmetic = { version = "5.0.0", path = "../../../primitives/arithmetic" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
@@ -42,6 +43,7 @@ sp-finality-grandpa = { version = "4.0.0-dev", path = "../../../primitives/final
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
+async-std = { version = "1.11.0", features = ["attributes"] }
 quickcheck = { version = "1.0.3", default-features = false }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
 sp-test-primitives = { version = "2.0.0", path = "../../../primitives/test-primitives" }

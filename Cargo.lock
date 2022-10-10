@@ -8638,6 +8638,7 @@ name = "sc-network-sync"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
+ "async-std",
  "fork-tree",
  "futures",
  "libp2p",
@@ -8653,6 +8654,7 @@ dependencies = [
  "sc-consensus",
  "sc-network-common",
  "sc-peerset",
+ "sc-utils",
  "smallvec",
  "sp-arithmetic",
  "sp-blockchain",
