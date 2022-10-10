@@ -238,7 +238,7 @@ use frame_support::{
 	dispatch::DispatchClass,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::Weight,
+	weights::Weight, EqNoBound, PartialEqNoBound, DefaultNoBound,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -452,7 +452,7 @@ impl<C: Default> Default for RawSolution<C> {
 }
 
 /// A checked solution, ready to be enacted.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, Default, scale_info::TypeInfo)]
+#[derive(PartialEqNoBound, EqNoBound, Clone, Encode, Decode, RuntimeDebug, DefaultNoBound, scale_info::TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct ReadySolution<T: Config> {
 	/// The final supports of the solution.
