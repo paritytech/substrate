@@ -541,8 +541,9 @@ impl<N: Ord> Peers<N> {
 
 		let valid_change = update.set_id > peer.view.set_id ||
 			update.set_id == peer.view.set_id && update.round > peer.view.round ||
-			update.set_id == peer.view.set_id && update.round == peer.view.round && 
-			Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
+			update.set_id == peer.view.set_id &&
+				update.round == peer.view.round &&
+				Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
 
 		if !valid_change {
 			return Err(Misbehavior::InvalidViewChange)
@@ -1804,16 +1805,22 @@ mod tests {
 			set_id: SetId(10),
 			commit_finalized_height: 10,
 		});
+		// set ID moves backwards.
+		check_update(NeighborPacket {
+			round: Round(10),
+			set_id: SetId(9),
+			commit_finalized_height: 10,
+		});
 		// commit finalized height moves backwards.
 		check_update(NeighborPacket {
 			round: Round(10),
 			set_id: SetId(10),
 			commit_finalized_height: 9,
 		});
-		// set ID moves backwards.
+		// commit finalized height stays the same (duplicate packet).
 		check_update(NeighborPacket {
 			round: Round(10),
-			set_id: SetId(9),
+			set_id: SetId(10),
 			commit_finalized_height: 10,
 		});
 	}
