@@ -650,7 +650,6 @@ where
 					id: 0,
 					fields: BlockAttributes::JUSTIFICATION,
 					from: FromBlock::Hash(request.0),
-					to: None,
 					direction: Direction::Ascending,
 					max: Some(1),
 				};
@@ -1608,7 +1607,6 @@ where
 				FromBlock::Number(n) =>
 					Some(schema::v1::block_request::FromBlock::Number(n.encode())),
 			},
-			to_block: request.to.map(|h| h.encode()).unwrap_or_default(),
 			direction: request.direction as i32,
 			max_blocks: request.max.unwrap_or(0),
 			support_multiple_justifications: true,
@@ -2252,7 +2250,6 @@ fn ancestry_request<B: BlockT>(block: NumberFor<B>) -> BlockRequest<B> {
 		id: 0,
 		fields: BlockAttributes::HEADER | BlockAttributes::JUSTIFICATION,
 		from: FromBlock::Number(block),
-		to: None,
 		direction: Direction::Ascending,
 		max: Some(1),
 	}
@@ -2368,7 +2365,6 @@ fn peer_block_request<B: BlockT>(
 		id: 0,
 		fields: attrs,
 		from,
-		to: None,
 		direction: Direction::Descending,
 		max: Some((range.end - range.start).saturated_into::<u32>()),
 	};
@@ -2402,7 +2398,6 @@ fn peer_gap_block_request<B: BlockT>(
 		id: 0,
 		fields: attrs,
 		from,
-		to: None,
 		direction: Direction::Descending,
 		max: Some((range.end - range.start).saturated_into::<u32>()),
 	};
@@ -2452,7 +2447,6 @@ fn fork_sync_request<B: BlockT>(
 					id: 0,
 					fields: attributes,
 					from: FromBlock::Hash(*hash),
-					to: None,
 					direction: Direction::Descending,
 					max: Some(count),
 				},
@@ -2702,8 +2696,7 @@ mod test {
 		assert!(sync.justification_requests().any(|(p, r)| {
 			p == peer_id3 &&
 				r.fields == BlockAttributes::JUSTIFICATION &&
-				r.from == FromBlock::Hash(b1_hash) &&
-				r.to == None
+				r.from == FromBlock::Hash(b1_hash)
 		}));
 
 		assert_eq!(
