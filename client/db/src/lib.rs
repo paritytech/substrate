@@ -1017,6 +1017,46 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
+/// The state of the pinned blocks.
+struct PinnedBlockState<Block: BlockT> {
+	/// The number of active users that need this block alive.
+	pub ref_count: u64,
+	/// True if the block was pruned by any previous finalization.
+	///
+	/// # Note
+	///
+	/// If this is true, when the reference count drops to zero the
+	/// block must be pruned with the next finalization.
+	///
+	/// This is introduced to avoid the following edge-case:
+	///
+	/// 1. Block tree:
+	///    G ... X -> A1
+	///          X -> A2
+	///
+	/// - user1: pin_block A1
+	/// - user2: pin_block A1
+	/// - user1: unpin_block A1
+	/// - user2: unpin_block A1
+	///
+	/// - block A2 is finalized (A1 is considered a fork)
+	/// - finalize block A2
+	/// - block A1 should be pruned only once
+	///
+	/// 2. From (1.) there exists a case where not every hash that
+	/// has its reference count equal to zero should also be added
+	/// to a special queue for deletion.
+	pub was_pruned: bool,
+	/// The state of the block as tracked by the `state-db`.
+	pub state: RefTrackingState<Block>,
+}
+
+impl<Block: BlockT> PinnedBlockState<Block> {
+	fn new(state: RefTrackingState<Block>) -> Self {
+		Self { ref_count: 0, was_pruned: false, state }
+	}
+}
+
 /// Disk backend.
 ///
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
@@ -1033,7 +1073,16 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 	shared_trie_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
-	track_pin_blocks: Arc<RwLock<HashMap<Block::Hash, (u64, RefTrackingState<Block>)>>>,
+	/// Keep track of pinned blocks, called via [`Self::pin_block`] and [`Self::unpin_block`].
+	/// The pruning of these blocks is delayed as long as the reference count is positive.
+	track_pin_blocks: Arc<RwLock<HashMap<Block::Hash, PinnedBlockState<Block>>>>,
+	/// Blocks added to this queue will be pruned on the next finalization.
+	///
+	/// Block hashes from [`Self::track_pin_blocks`] are added to the
+	/// pruning queue when:
+	///   - [`PinnedBlockState::ref_count`] equals to zero
+	///   - the block was previously marked as pruned [`PinnedBlockState::was_pruned`]
+	to_prune_queue: Arc<RwLock<Vec<Block::Hash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1210,7 +1259,8 @@ impl<Block: BlockT> Backend<Block> {
 			shared_trie_cache: config.trie_cache_maximum_size.map(|maximum_size| {
 				SharedTrieCache::new(sp_trie::cache::CacheSize::Maximum(maximum_size))
 			}),
-			track_pin_blocks: Arc::new(RwLock::new(HashMap::new())),
+			track_pin_blocks: Default::default(),
+			to_prune_queue: Default::default(),
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -2352,11 +2402,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut cache = self.track_pin_blocks.write();
 
 		if let Some(entry) = cache.get_mut(&hash) {
-			entry.0 = entry.0 + 1;
+			entry.ref_count = entry.ref_count + 1;
 		} else {
 			// This function also verified if the block's hash exists.
 			let state = self.state_at_ref(BlockId::hash(hash.clone()))?;
-			cache.insert(hash.clone(), (1, state));
+			let state = PinnedBlockState::new(state);
+			cache.insert(hash.clone(), state);
 		}
 
 		Ok(())
@@ -2366,10 +2417,10 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut cache = self.track_pin_blocks.write();
 
 		if let Some(entry) = cache.get_mut(&hash) {
-			entry.0 = entry.0 - 1;
+			entry.ref_count = entry.ref_count - 1;
 
-			if entry.0 == 0 {
-				// TODO: is cleanup needed?
+			if entry.ref_count == 0 {
+				// TODO: Add to queue
 			}
 		}
 
