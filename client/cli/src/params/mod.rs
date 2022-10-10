@@ -40,9 +40,6 @@ pub use crate::params::{
 	transaction_pool_params::*,
 };
 
-#[derive(Clone, Debug)]
-struct FormatRegistryWrapper(Ss58AddressFormatRegistry);
-
 /// Parse Ss58AddressFormat
 pub fn parse_ss58_address_format(x: &str) -> Result<Ss58AddressFormat, String> {
 	match Ss58AddressFormatRegistry::try_from(x) {

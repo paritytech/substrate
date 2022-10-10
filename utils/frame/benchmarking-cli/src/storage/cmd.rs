@@ -26,10 +26,7 @@ use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
 use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
-use clap::{
-	builder::{PossibleValuesParser, TypedValueParser},
-	Args, Parser,
-};
+use clap::{Args, Parser};
 use log::info;
 use rand::prelude::*;
 use serde::Serialize;
