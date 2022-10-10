@@ -398,15 +398,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
-		pub fn remark_vec_u32(
-			origin: OriginFor<T>,
-			_remark: Vec<u32>,
-		) -> DispatchResultWithPostInfo {
-			ensure_signed_or_root(origin)?;
-			Ok(().into())
-		}
-
 		/// Set the number of pages in the WebAssembly environment's heap.
 		#[pallet::weight((T::SystemWeightInfo::set_heap_pages(), DispatchClass::Operational))]
 		pub fn set_heap_pages(origin: OriginFor<T>, pages: u64) -> DispatchResultWithPostInfo {
