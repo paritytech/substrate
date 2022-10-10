@@ -627,7 +627,7 @@ frame_election_provider_support::generate_solution_type!(
 parameter_types! {
 	pub MaxNominations: u32 = <NposSolution16 as frame_election_provider_support::NposSolution>::LIMIT as u32;
 	pub MaxElectingVoters: u32 = 10_000;
-	pub MaxWinners: u32 = 1000;
+	pub MaxActiveValidators: u32 = 1000;
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -731,7 +731,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Solver = SequentialPhragmen<AccountId, SolutionAccuracyOf<Self>, OffchainRandomBalancing>;
 	type ForceOrigin = EnsureRootOrHalfCouncil;
 	type MaxElectableTargets = ConstU16<{ u16::MAX }>;
-	type MaxWinners = MaxWinners;
+	type MaxWinners = MaxActiveValidators;
 	type MaxElectingVoters = MaxElectingVoters;
 	type BenchmarkingConfig = ElectionProviderBenchmarkConfig;
 	type WeightInfo = pallet_election_provider_multi_phase::weights::SubstrateWeight<Self>;
