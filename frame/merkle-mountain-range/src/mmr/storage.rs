@@ -142,7 +142,8 @@ where
 			// Copy over leaf.
 			store_to_offchain(block_hash, leaf_node_index, &elem);
 			// Copy over all parent nodes.
-			NewNodes::<T, _>::iter().for_each(|(node_index, node)| {
+			NewNodes::<T, _>::iter().for_each(|(node_index, node_hash)| {
+				let node = NodeOf::<T, I, L>::Hash(node_hash);
 				store_to_offchain(block_hash, node_index, &node.encode());
 			});
 		}
