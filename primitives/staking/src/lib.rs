@@ -148,8 +148,6 @@ pub trait StakingInterface {
 	fn force_unstake(stash: T::AccountId) -> DispatchResult;
 
 	/// Checks whether an account `staker` has been exposed in an era.
-	/// TODO: shall we have this helper here or just expose ErasStakers
-	/// storage instead for the caller to do as they please?
 	fn is_exposed_in_era(staker: &T::AccountId, era: &EraIndex) -> bool;
 
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
