@@ -1117,8 +1117,15 @@ impl<Block: BlockT> Backend<Block> {
 			})?,
 		};
 
-		let cache = self.track_pin_blocks.read();
-		Ok(cache.contains_key(&block_hash))
+		let mut cache = self.track_pin_blocks.write();
+		let res = if let Some(entry) = cache.get_mut(&block_hash) {
+			entry.was_pruned = true;
+			true
+		} else {
+			false
+		};
+
+		Ok(res)
 	}
 
 	fn state_at_ref(&self, block: BlockId<Block>) -> ClientResult<RefTrackingState<Block>> {
@@ -2419,8 +2426,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		if let Some(entry) = cache.get_mut(&hash) {
 			entry.ref_count = entry.ref_count - 1;
 
-			if entry.ref_count == 0 {
-				// TODO: Add to queue
+			if entry.ref_count == 0 && entry.was_pruned {
+				let mut queue = self.to_prune_queue.write();
+				queue.push(*hash);
 			}
 		}
 
