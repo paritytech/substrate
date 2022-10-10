@@ -39,8 +39,8 @@ fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8
 	let mut value = id.clone();
 	let mut value_size = 0;
 
-	while value > 255 {
-		value -= 255;
+	while value > u8::MAX as u32 {
+		value -= u8::MAX as u32;
 		value_size += 1;
 	}
 
