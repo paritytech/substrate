@@ -1087,7 +1087,7 @@ impl<Block: BlockT> Backend<Block> {
 					.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
 					.build();
 
-				return Ok(RefTrackingState::new(db_state, self.storage.clone(), None));
+				return Ok(RefTrackingState::new(db_state, self.storage.clone(), None))
 			}
 		}
 
@@ -1814,11 +1814,10 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		id: BlockId<Block>,
 	) -> ClientResult<()> {
-
 		if self.is_pinned(id).unwrap_or(false) {
 			println!("Not prunning pinned block {}", id);
 			debug!(target: "db", "Not prunning pinned block #{}", id);
-			return Ok(());
+			return Ok(())
 		}
 
 		debug!(target: "db", "Removing block #{}", id);
@@ -2347,22 +2346,31 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		&self.blockchain
 	}
 
-	fn pin_block(&self, block: BlockId<Block>) -> ClientResult<()> {
-		println!("Pinned block {}", block);
-
-		let block_hash = match block {
-			BlockId::Hash(h) => h,
-			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
-				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
-			})?,
-		};
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		println!("Pinned block {}", hash);
 
 		let mut cache = self.track_pin_blocks.write();
-		if let Some(entry) = cache.get_mut(&block_hash) {
+
+		if let Some(entry) = cache.get_mut(&hash) {
 			entry.0 = entry.0 + 1;
 		} else {
-			let state = self.state_at_ref(block)?;
-			cache.insert(block_hash.clone(), (1, state));
+			// This function also verified if the block's hash exists.
+			let state = self.state_at_ref(BlockId::hash(hash.clone()))?;
+			cache.insert(hash.clone(), (1, state));
+		}
+
+		Ok(())
+	}
+
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		let mut cache = self.track_pin_blocks.write();
+
+		if let Some(entry) = cache.get_mut(&hash) {
+			entry.0 = entry.0 - 1;
+
+			if entry.0 == 0 {
+				// TODO: is cleanup needed?
+			}
 		}
 
 		Ok(())

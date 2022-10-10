@@ -768,7 +768,12 @@ where
 		None
 	}
 
-	fn pin_block(&self, block: BlockId<Block>) -> sp_blockchain::Result<()> {
+	fn pin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		// Blocks are always pinned in memory for this database.
+		Ok(())
+	}
+
+	fn unpin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
 		// Blocks are always pinned in memory for this database.
 		Ok(())
 	}

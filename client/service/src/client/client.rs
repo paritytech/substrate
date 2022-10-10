@@ -419,8 +419,13 @@ where
 	}
 
 	/// Pin the block to avoid pruning.
-	fn pin_block(&self, block: &BlockId<Block>) -> sp_blockchain::Result<()> {
-		self.backend.pin_block(*block)
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.backend.pin_block(hash)
+	}
+
+	/// Pin the block to avoid pruning.
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.backend.unpin_block(hash)
 	}
 
 	/// Get the code at a given block.
@@ -1954,8 +1959,12 @@ where
 		self.body(id)
 	}
 
-	fn pin_block(&self, block: &BlockId<Block>) -> sp_blockchain::Result<()> {
-		self.pin_block(block)
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.pin_block(hash)
+	}
+
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.unpin_block(hash)
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {

@@ -509,7 +509,10 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	}
 
 	/// Pin the block for the RPC Spec V2 to have access to any details about it.
-	fn pin_block(&self, block: BlockId<Block>) -> sp_blockchain::Result<()>;
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+
+	/// Pin the block for the RPC Spec V2 to have access to any details about it.
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
 
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;

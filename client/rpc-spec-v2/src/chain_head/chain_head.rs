@@ -135,8 +135,6 @@ where
 				// 	println!("Calling client.pin_block on hash = {:?}", notification.hash);
 				// }
 
-
-				
 				// let pinned = client.state_at(&BlockId::Hash(notification.hash));
 				// if let Ok(pinned) = pinned {
 				// 	println!(
