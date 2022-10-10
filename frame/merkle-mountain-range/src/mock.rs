@@ -72,12 +72,15 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
+type MmrLeaf = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
+
 impl Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr-";
 
 	type Hashing = Keccak256;
 	type Hash = H256;
-	type LeafData = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
+	type LeafData = MmrLeaf;
+	type MaxLeafSize = MaxLeafSize;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
@@ -95,6 +98,7 @@ impl LeafData {
 }
 
 parameter_types! {
+	pub static MaxLeafSize: u32 = u32::try_from(std::mem::size_of::<MmrLeaf>()).unwrap();
 	pub static LeafDataTestValue: LeafData = Default::default();
 }
 
