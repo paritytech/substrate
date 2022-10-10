@@ -344,19 +344,17 @@ where
 				<Peaks<T, I>>::insert(node_index, elem.hash());
 			}
 
-			// Increase the indices.
-			// Store all newly added nodes and leaves to temporary storage,
-			// offchain worker will copy them over to offchain db once block is finished.
-			node_index += 1;
+			// Store all newly added nodes and leaves to temporary storage, offchain worker will
+			// copy them over to offchain db once block is finished. Increase the indices.
 			match elem {
 				Node::Data(..) => {
 					frame_support::log::debug!(
-						target: "runtime::mmr::offchain", "runtime append leaf {}", leaf_index,
+						target: "runtime::mmr::offchain", "runtime append leaf {} (node {})", leaf_index, node_index,
 					);
-					leaf_index += 1;
 					// TODO: 'try' bounded and throw error instead of truncating.
 					let bounded_encoded_leaf = BoundedVec::<_, _>::truncate_from(elem.encode());
 					LatestLeaf::<T, I>::put(bounded_encoded_leaf);
+					leaf_index += 1;
 				},
 				Node::Hash(..) => {
 					frame_support::log::debug!(
@@ -365,6 +363,7 @@ where
 					<NewNodes<T, I>>::insert(node_index, elem.hash());
 				},
 			}
+			node_index += 1;
 		}
 
 		// Update current number of leaves.
