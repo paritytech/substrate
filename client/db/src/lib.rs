@@ -1862,6 +1862,14 @@ impl<Block: BlockT> Backend<Block> {
 					}
 				}
 			}
+
+			// Also discard all previously pinned blocks
+			let mut blocks = self.to_prune_queue.write();
+			for hash in &*blocks {
+				let id = BlockId::<Block>::hash(*hash);
+				self.prune_block(transaction, id)?;
+			}
+			blocks.clear();
 		}
 		Ok(())
 	}
