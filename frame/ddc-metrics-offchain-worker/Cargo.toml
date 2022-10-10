@@ -29,6 +29,7 @@ serde_json = { version = "1", default-features = false, git = "https://github.co
 # pallet-contracts-rpc-runtime-api = { version = "0.8.0", default-features = false, path = "../contracts/rpc/runtime-api/" }
 hex-literal = "^0.3.1"
 hex = { version = "0.4", default-features = false }
+scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 
 [features]
 default = ["std"]

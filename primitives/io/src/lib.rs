@@ -731,14 +731,6 @@ pub trait Crypto {
 		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
 	}
 
-	/// Verify `ecdsa` signature.
-	///
-	/// Returns `true` when the verification was successful.
-	#[version(2)]
-	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
-		ecdsa::Pair::verify(sig, msg, pub_key)
-	}
-
 	/// Register a `ecdsa` signature for batch verification.
 	///
 	/// Batch verification must be enabled by calling [`start_batch_verify`].
