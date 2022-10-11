@@ -3978,4 +3978,74 @@ pub(crate) mod tests {
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
 		assert_eq!(backend.blockchain().info().best_hash, block2);
 	}
+
+	#[test]
+	fn test_pinned_blocks_on_finalize() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+
+			// Avoid block pruning.
+			backend.pin_block(&blocks[i as usize]).unwrap();
+
+			prev_hash = hash;
+		}
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
+		for i in 1..5 {
+			op.mark_finalized(BlockId::hash(blocks[i]), None).unwrap();
+		}
+		backend.commit_operation(op).unwrap();
+
+		let bc = backend.blockchain();
+		// Block 0, 1, 2, 3 are pinned and pruning is delayed,
+		// while block 4 is never delayed for pruning as it is finalized.
+		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+
+		// Unpin all blocks.
+		for block in &blocks {
+			backend.unpin_block(&block).unwrap();
+		}
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		let hash =
+			insert_block(&backend, 5, prev_hash, None, Default::default(), vec![5.into()], None)
+				.unwrap();
+		blocks.push(hash);
+
+		// Mark block 5 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[5])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[5]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert!(bc.body(BlockId::hash(blocks[0])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[1])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[3])).unwrap().is_none());
+		// Block 4 was unpinned before pruning, it must also get pruned.
+		assert!(bc.body(BlockId::hash(blocks[4])).unwrap().is_none());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+	}
 }
