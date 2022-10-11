@@ -547,12 +547,14 @@ fn should_verify_batch_proofs() {
 	// to retrieve full leaf data when generating proofs
 	register_offchain_ext(&mut ext);
 
-	// verify that up to n=10, valid proofs are generated for all possible block number combinations.
+	// verify that up to n=10, valid proofs are generated for all possible block number
+	// combinations.
 	for n in 1..=10 {
 		ext.execute_with(|| new_block());
 		ext.persist_offchain_overlay();
 
-		// generate powerset (skipping empty set) of all possible block number combinations for mmr size n.
+		// generate powerset (skipping empty set) of all possible block number combinations for mmr
+		// size n.
 		let blocks_set: Vec<Vec<u64>> = (1..=n).into_iter().powerset().skip(1).collect();
 
 		blocks_set.iter().for_each(|blocks_subset| {
@@ -561,7 +563,8 @@ fn should_verify_batch_proofs() {
 		});
 	}
 
-	// verify that up to n=15, valid proofs are generated for all possible 2-block number combinations.
+	// verify that up to n=15, valid proofs are generated for all possible 2-block number
+	// combinations.
 	for n in 11..=15 {
 		ext.execute_with(|| new_block());
 		ext.persist_offchain_overlay();
