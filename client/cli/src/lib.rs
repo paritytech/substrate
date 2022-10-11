@@ -153,8 +153,8 @@ pub trait SubstrateCli: Sized {
 	///
 	/// **NOTE:** This method WILL NOT exit when `--help` or `--version` (or short versions) are
 	/// used. It will return a [`clap::Error`], where the [`clap::Error::kind`] is a
-	/// [`clap::ErrorKind::DisplayHelp`] or [`clap::ErrorKind::DisplayVersion`] respectively.
-	/// You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
+	/// [`clap::error::ErrorKind::DisplayHelp`] or [`clap::error::ErrorKind::DisplayVersion`]
+	/// respectively. You must call [`clap::Error::exit`] or perform a [`std::process::exit`].
 	fn try_from_iter<I>(iter: I) -> clap::error::Result<Self>
 	where
 		Self: Parser + Sized,
