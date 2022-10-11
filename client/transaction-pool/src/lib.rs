@@ -697,10 +697,10 @@ where
 				.await
 			{
 				log::debug!(
-				target: "txpool",
-				"[{:?}] Error re-submitting transactions: {}",
-				hash,
-				e,
+					target: "txpool",
+					"[{:?}] Error re-submitting transactions: {}",
+					hash,
+					e,
 				)
 			}
 		}
