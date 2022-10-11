@@ -546,11 +546,11 @@ impl<N: Ord> Peers<N> {
 		let finalized_height_in_round_increased = update.set_id == peer.view.set_id &&
 			update.round == peer.view.round &&
 			Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
-		let finalized_height_decreased =
-			Some(&update.commit_finalized_height) < peer.view.last_commit.as_ref();
+		let finalized_height_not_decreased =
+			Some(&update.commit_finalized_height) >= peer.view.last_commit.as_ref();
 
 		let valid_change = (set_id_increased || round_in_set_increased) &&
-			!finalized_height_decreased ||
+			finalized_height_not_decreased ||
 			finalized_height_in_round_increased;
 
 		if !valid_change {
