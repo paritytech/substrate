@@ -6513,6 +6513,8 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-proxy",
+ "pallet-utility",
  "parity-scale-codec",
  "scale-info",
  "sp-core",

@@ -77,6 +77,28 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+impl pallet_utility::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
+}
+
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ProxyType;
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<4>;
+	type WeightInfo = ();
+	type CallHasher = BlakeTwo256;
+	type MaxPending = ConstU32<2>;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
 parameter_types! {
 	pub const PauseOrigin: u64 = 1;
 	pub const UnpauseOrigin: u64 = 2;
@@ -150,6 +172,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		Balances: pallet_balances,
+		Utility: pallet_utility,
+		Proxy: pallet_proxy,
 		TxPause: pallet_tx_pause,
 	}
 );
