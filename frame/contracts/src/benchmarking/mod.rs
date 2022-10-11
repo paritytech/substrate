@@ -425,7 +425,7 @@ benchmarks! {
 			.map(|n| account::<T::AccountId>("account", n, 0))
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
-		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let accounts_bytes = accounts.iter().flat_map(|a| a.encode()).collect::<Vec<_>>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
@@ -462,7 +462,7 @@ benchmarks! {
 			.map(|n| account::<T::AccountId>("account", n, 0))
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
-		let accounts_bytes = accounts.iter().map(|a| a.encode()).flatten().collect::<Vec<_>>();
+		let accounts_bytes = accounts.iter().flat_map(|a| a.encode()).collect::<Vec<_>>();
 		let accounts_len = accounts_bytes.len();
 		let pages = code::max_pages::<T>();
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2014,10 +2014,9 @@ benchmarks! {
 		let r in 0 .. 1;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
-			.map(|_| {
+			.flat_map(|_| {
 				sp_io::crypto::ecdsa_generate(key_type, None).0
 			})
-		.flatten()
 		.collect::<Vec<_>>();
 		let pub_keys_bytes_len = pub_keys_bytes.len() as i32;
 		let code = WasmModule::<T>::from(ModuleDefinition {
@@ -2868,7 +2867,7 @@ benchmarks! {
 	#[extra]
 	ink_erc20_transfer {
 		let g in 0 .. 1;
-		let gas_metering = if g == 0 { false } else { true };
+		let gas_metering = g != 0;
 		let code = load_benchmark!("ink_erc20");
 		let data = {
 			let new: ([u8; 4], BalanceOf<T>) = ([0x9b, 0xae, 0x9d, 0x5e], 1000u32.into());
@@ -2906,7 +2905,7 @@ benchmarks! {
 	#[extra]
 	solang_erc20_transfer {
 		let g in 0 .. 1;
-		let gas_metering = if g == 0 { false } else { true };
+		let gas_metering = g != 0;
 		let code = include_bytes!("../../benchmarks/solang_erc20.wasm");
 		let caller = account::<T::AccountId>("instantiator", 0, 0);
 		let mut balance = [0u8; 32];

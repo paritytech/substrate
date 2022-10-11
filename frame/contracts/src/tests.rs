@@ -514,7 +514,7 @@ fn calling_plain_account_fails() {
 
 #[test]
 fn instantiate_and_call_and_deposit_event() {
-	let (wasm, code_hash) = compile_module::<Test>("return_from_start_fn").unwrap();
+	let (wasm, code_hash) = compile_module::<Test>("event_and_return_on_deploy").unwrap();
 
 	ExtBuilder::default().existential_deposit(500).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -3720,10 +3720,36 @@ fn contract_reverted() {
 
 #[test]
 fn code_rejected_error_works() {
-	let (wasm, _) = compile_module::<Test>("invalid_import").unwrap();
 	ExtBuilder::default().existential_deposit(200).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
+		let (wasm, _) = compile_module::<Test>("invalid_module").unwrap();
+		assert_noop!(
+			Contracts::upload_code(
+				RuntimeOrigin::signed(ALICE),
+				wasm.clone(),
+				None,
+				Determinism::Deterministic
+			),
+			<Error<Test>>::CodeRejected,
+		);
+		let result = Contracts::bare_instantiate(
+			ALICE,
+			0,
+			GAS_LIMIT,
+			None,
+			Code::Upload(wasm),
+			vec![],
+			vec![],
+			true,
+		);
+		assert_err!(result.result, <Error<Test>>::CodeRejected);
+		assert_eq!(
+			std::str::from_utf8(&result.debug_message).unwrap(),
+			"validation of new code failed"
+		);
+
+		let (wasm, _) = compile_module::<Test>("invalid_contract").unwrap();
 		assert_noop!(
 			Contracts::upload_code(
 				RuntimeOrigin::signed(ALICE),
@@ -3747,7 +3773,7 @@ fn code_rejected_error_works() {
 		assert_err!(result.result, <Error<Test>>::CodeRejected);
 		assert_eq!(
 			std::str::from_utf8(&result.debug_message).unwrap(),
-			"module imports a non-existent function"
+			"call function isn't exported"
 		);
 	});
 }
