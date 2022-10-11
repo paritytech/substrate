@@ -591,7 +591,6 @@ fn fork_aware_finalization() {
 
 	// block E1
 	{
-		// let header = pool.api().push_block(5, vec![from_dave, from_bob], true);
 		let header = pool.api().push_block_with_parent(d1, vec![from_dave, from_bob], true);
 		log::trace!(target:"txpool", ">> E1: {:?} {:?}", header.hash(), header);
 		e1 = header.hash();
