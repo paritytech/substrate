@@ -2434,7 +2434,28 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		Ok(())
 	}
 
-	fn unpin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		if self.blocks_pruning == BlocksPruning::KeepAll {
+			return Ok(())
+		}
+
+		let mut cache = self.pinned_blocks.lock();
+		if let Entry::Occupied(mut entry) = cache.entry(*hash) {
+			let state = entry.get_mut();
+			state.ref_count = state.ref_count.saturating_sub(1);
+			if state.ref_count == 0 {
+				// Ensure the block is pruned with the next finalization.
+				if state.was_pruned {
+					trace!(target: "db-pin", "Unpinned block: {:?} to be pruned", hash);
+					let mut queue = self.pruning_queue.lock();
+					queue.push(*hash);
+				}
+
+				trace!(target: "db-pin", "Unpinned block: {:?}", hash);
+				entry.remove_entry();
+			}
+		}
+
 		Ok(())
 	}
 
