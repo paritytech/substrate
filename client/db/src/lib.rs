@@ -1017,7 +1017,7 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
-/// The state of the pinned blocks.
+/// The state of the pinned block.
 struct PinnedBlockState<Block: BlockT> {
 	/// The number of active users that need this block alive.
 	pub ref_count: u64,
@@ -1074,15 +1074,15 @@ pub struct Backend<Block: BlockT> {
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 	shared_trie_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
 	/// Keep track of pinned blocks, called via [`Self::pin_block`] and [`Self::unpin_block`].
-	/// The pruning of these blocks is delayed as long as the reference count is positive.
-	track_pin_blocks: Arc<RwLock<HashMap<Block::Hash, PinnedBlockState<Block>>>>,
+	/// The pruning of these blocks is delayed for as long as their reference count is positive.
+	track_pin_blocks: Arc<Mutex<HashMap<Block::Hash, PinnedBlockState<Block>>>>,
 	/// Blocks added to this queue will be pruned on the next finalization.
 	///
 	/// Block hashes from [`Self::track_pin_blocks`] are added to the
 	/// pruning queue when:
 	///   - [`PinnedBlockState::ref_count`] equals to zero
 	///   - the block was previously marked as pruned [`PinnedBlockState::was_pruned`]
-	to_prune_queue: Arc<RwLock<Vec<Block::Hash>>>,
+	to_prune_queue: Arc<Mutex<Vec<Block::Hash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1126,7 +1126,7 @@ impl<Block: BlockT> Backend<Block> {
 			})?,
 		};
 
-		let mut cache = self.track_pin_blocks.write();
+		let mut cache = self.track_pin_blocks.lock();
 		let res = if let Some(entry) = cache.get_mut(&hash) {
 			println!("[should_delay_pruning] hash {:?} ref_count {:?}", hash, entry.ref_count);
 			entry.was_pruned = true;
@@ -1875,7 +1875,7 @@ impl<Block: BlockT> Backend<Block> {
 			// Also discard all previously pinned blocks
 			println!("prune_blocks: pruning delayed blocks");
 
-			let mut blocks = self.to_prune_queue.write();
+			let mut blocks = self.to_prune_queue.lock();
 			for hash in &*blocks {
 				println!("prune_blocks: Pruning delayed block: {:?}", hash);
 				let id = BlockId::<Block>::hash(*hash);
@@ -2429,17 +2429,19 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			return Ok(())
 		}
 
-		let mut cache = self.track_pin_blocks.write();
-
-		if let Some(entry) = cache.get_mut(&hash) {
-			println!("  pin_block: [exists] hash {:?} ref_count = {:?}", hash, entry.ref_count);
-			entry.ref_count += 1;
-		} else {
-			// This function also verified if the block's hash exists.
-			let state = self.state_at_ref(BlockId::hash(hash.clone()))?;
-			let state = PinnedBlockState::new(state);
-			println!("  pin_block: [creates] hash {:?} ref_count = {:?}", hash, state.ref_count);
-			cache.insert(hash.clone(), state);
+		let mut cache = self.track_pin_blocks.lock();
+		match cache.entry(*hash) {
+			Entry::Occupied(mut entry) => {
+				let state = entry.get_mut();
+				state.ref_count = state.ref_count.saturating_add(1);
+			}
+			Entry::Vacant(entry) => {
+				// The `state_at_ref` verifies if the block exists.
+				let state = self.state_at_ref(BlockId::hash(*hash))?;
+				let state = PinnedBlockState::new(state);
+				println!("  pin_block: [creates] hash {:?} ref_count = {:?}", hash, state.ref_count);
+				entry.insert(state);
+			}
 		}
 
 		Ok(())
@@ -2450,15 +2452,17 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			return Ok(())
 		}
 
-		let mut cache = self.track_pin_blocks.write();
+		let mut cache = self.track_pin_blocks.lock();
 		if let Entry::Occupied(mut entry) = cache.entry(*hash) {
-			entry.get_mut().ref_count -= 1;
-			println!("  unpin_block: hash {:?} ref_count = {:?}", hash, entry.get().ref_count);
+			let state = entry.get_mut();
 
-			if entry.get().ref_count == 0 {
+			state.ref_count = state.ref_count.saturating_sub(1);
+			// println!("  unpin_block: hash {:?} ref_count = {:?}", hash, entry.get().ref_count);
+
+			if state.ref_count == 0 {
 				// Ensure the block is pruned with the next finalization.
-				if entry.get().was_pruned {
-					let mut queue = self.to_prune_queue.write();
+				if state.was_pruned {
+					let mut queue = self.to_prune_queue.lock();
 					queue.push(*hash);
 				}
 
