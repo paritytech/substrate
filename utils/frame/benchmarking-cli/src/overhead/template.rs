@@ -129,7 +129,8 @@ impl TemplateData {
 		// Prepend any header with a separating new-line.
 		match &self.params.header {
 			Some(header) => {
-				let header = fs::read_to_string(header)?;
+				let header = fs::read_to_string(header)
+					.map_error(|e| format!("Reading header file: {:?}", e))?;
 				Ok(format!("{}\n{}", header, rendered))
 			},
 			None => Ok(rendered),
@@ -139,7 +140,8 @@ impl TemplateData {
 	/// Write the rendered `weights.hbs` template to `path` which can be a directory or a file.
 	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
 		let out_path = self.build_path(path)?;
-		let mut fd = fs::File::create(&out_path)?;
+		let mut fd = fs::File::create(&out_path)
+			.map_error(|e| format!("Creating file: {:?}: {:?}", out_path, e))?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
 
 		let rendered = self.render()?;
