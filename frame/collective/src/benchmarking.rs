@@ -35,24 +35,21 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8> {
-	// this variable is equal to the number of times we have to substract `u8` from id so that we
-	// get a u8.
-	let mut until_u8 = 0;
-	while id - (u8::MAX * until_u8) as u32 > u8::MAX as u32 {
-		until_u8 += 1;
+	let mut remark_data: Vec<u8> = vec![];
+	let mut value = id;
+	let mut counter = 0;
+	while value > u8::MAX as u32 {
+		value -= u8::MAX as u32;
+		remark_data.push(u8::MAX);
+		counter += 1;
 	}
-
-	let id_as_u8 = id - (u8::MAX * until_u8) as u32;
-
-	(0..length)
-		.map(|i| {
-			if i as u8 == until_u8 {
-				// this should never panic.
-				return id_as_u8.try_into().unwrap()
-			}
-			until_u8.try_into().unwrap()
-		})
-		.collect::<Vec<u8>>()
+	remark_data.push(value.try_into().unwrap());
+	counter += 1;
+	for _i in counter..length {
+		// fill the rest of the array with zeros.
+		remark_data.push(0);
+	}
+	remark_data
 }
 
 benchmarks_instance_pallet! {
