@@ -44,7 +44,7 @@ use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	io,
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -1053,7 +1053,7 @@ struct PinnedBlockState<Block: BlockT> {
 
 impl<Block: BlockT> PinnedBlockState<Block> {
 	fn new(state: RefTrackingState<Block>) -> Self {
-		Self { ref_count: 0, was_pruned: false, state }
+		Self { ref_count: 1, was_pruned: false, state }
 	}
 }
 
@@ -1109,8 +1109,13 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	/// Check if the provided block was previously marked as pinned.
-	fn is_pinned(&self, block: BlockId<Block>) -> ClientResult<bool> {
-		let block_hash = match block {
+	///
+	/// If the block is pinned this function sets the `pruned` flag on the block's status.
+	///
+	/// Returns true if pruning should be delayed. Otherwise return false to complete the
+	/// pruning.
+	fn should_delay_pruning(&self, block: BlockId<Block>) -> ClientResult<bool> {
+		let hash = match block {
 			BlockId::Hash(h) => h,
 			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
 				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
@@ -1118,13 +1123,13 @@ impl<Block: BlockT> Backend<Block> {
 		};
 
 		let mut cache = self.track_pin_blocks.write();
-		let res = if let Some(entry) = cache.get_mut(&block_hash) {
+		let res = if let Some(entry) = cache.get_mut(&hash) {
+			println!("[should_delay_pruning] hash {:?} ref_count {:?}", hash, entry.ref_count);
 			entry.was_pruned = true;
 			true
 		} else {
 			false
 		};
-
 		Ok(res)
 	}
 
@@ -1864,8 +1869,11 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			// Also discard all previously pinned blocks
+			println!("prune_blocks: pruning delayed blocks");
+
 			let mut blocks = self.to_prune_queue.write();
 			for hash in &*blocks {
+				println!("prune_blocks: Pruning delayed block: {:?}", hash);
 				let id = BlockId::<Block>::hash(*hash);
 				self.prune_block(transaction, id)?;
 			}
@@ -1879,12 +1887,14 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		id: BlockId<Block>,
 	) -> ClientResult<()> {
-		if self.is_pinned(id).unwrap_or(false) {
-			println!("Not prunning pinned block {}", id);
+		if self.should_delay_pruning(id).unwrap_or(false) {
+			println!("             Not prunning pinned block {}", id);
 			debug!(target: "db", "Not prunning pinned block #{}", id);
 			return Ok(())
 		}
 
+
+		println!(" Removing block #{}", id);
 		debug!(target: "db", "Removing block #{}", id);
 		utils::remove_from_db(
 			transaction,
@@ -2412,16 +2422,23 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
-		println!("Pinned block {}", hash);
+		// TODO: do this only if pruning is enabled!
+		// if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
+
+		// match self.mode {
+		// 	PruningMode::ArchiveAll => Ok(()),
+		// 	PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
 
 		let mut cache = self.track_pin_blocks.write();
 
 		if let Some(entry) = cache.get_mut(&hash) {
-			entry.ref_count = entry.ref_count + 1;
+			println!("  pin_block: [exists] hash {:?} ref_count = {:?}", hash, entry.ref_count);
+			entry.ref_count += 1;
 		} else {
 			// This function also verified if the block's hash exists.
 			let state = self.state_at_ref(BlockId::hash(hash.clone()))?;
 			let state = PinnedBlockState::new(state);
+			println!("  pin_block: [creates] hash {:?} ref_count = {:?}", hash, state.ref_count);
 			cache.insert(hash.clone(), state);
 		}
 
@@ -2431,12 +2448,19 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
 		let mut cache = self.track_pin_blocks.write();
 
-		if let Some(entry) = cache.get_mut(&hash) {
-			entry.ref_count = entry.ref_count - 1;
+		if let Entry::Occupied(mut entry) = cache.entry(*hash) {
+			entry.get_mut().ref_count -= 1;
+			println!("  unpin_block: hash {:?} ref_count = {:?}", hash, entry.get().ref_count);
 
-			if entry.ref_count == 0 && entry.was_pruned {
-				let mut queue = self.to_prune_queue.write();
-				queue.push(*hash);
+			if entry.get().ref_count == 0 {
+				// Ensure the block is pruned with the next finalization.
+				if entry.get().was_pruned {
+					let mut queue = self.to_prune_queue.write();
+					queue.push(*hash);
+				}
+
+				println!("       HAVE REMOVED: hash {:?}", hash);
+				entry.remove_entry();
 			}
 		}
 
@@ -3821,7 +3845,7 @@ pub(crate) mod tests {
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 
-		// block tree:
+		// Block tree:
 		//   0 -> 1 -> 2 -> 3 -> 4
 		for i in 0..5 {
 			let hash = insert_block(
@@ -3850,7 +3874,10 @@ pub(crate) mod tests {
 			}
 			backend.commit_operation(op).unwrap();
 		}
+
 		let bc = backend.blockchain();
+		// Block 0, 1, 2, 3 are pinned and pruning is delayed,
+		// while block 4 is never delayed for pruning as it is finalized.
 		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
 		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
 		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
@@ -3862,7 +3889,7 @@ pub(crate) mod tests {
 			backend.unpin_block(&block).unwrap();
 		}
 
-		// block tree:
+		// Block tree:
 		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
 		let hash =
 			insert_block(&backend, 5, prev_hash, None, Default::default(), vec![5.into()], None)
@@ -3877,11 +3904,12 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 		}
 
-		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
-		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
-		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert!(bc.body(BlockId::hash(blocks[0])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[1])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[3])).unwrap().is_none());
+		// Block 4 was unpinned before pruning, it must also get pruned.
+		assert!(bc.body(BlockId::hash(blocks[4])).unwrap().is_none());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 	}
 }
