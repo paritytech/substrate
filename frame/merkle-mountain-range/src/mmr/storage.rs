@@ -17,9 +17,9 @@
 
 //! A MMR storage implementations.
 
-use codec::Encode;
+use codec::{Decode, Encode, MaxEncodedLen};
 use mmr_lib::helper;
-use sp_core::{bounded::BoundedVec, offchain::StorageKind};
+use sp_core::{bounded::BoundedVec, offchain::StorageKind, Get};
 use sp_io::offchain;
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
@@ -28,8 +28,30 @@ use sp_std::prelude::*;
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
 	primitives::{self, NodeIndex},
-	Config, LatestLeaf, NewNodes, NumberOfLeaves, Pallet, Peaks,
+	Config, NewNodes, NumberOfLeaves, Pallet, Peaks,
 };
+
+/// Leaf (data) and parent nodes (hashes) added by current block.
+///
+/// This is single value storage overwritten by each block. It is used as temporary
+/// runtime storage until after block is built and offchain worker can move/copy this
+/// leaf in offchain database under `node_offchain_key()`.
+#[derive(Encode, Decode, MaxEncodedLen, scale_info::TypeInfo)]
+#[scale_info(skip_type_params(MaxLeafSize, MaxMmrHeight))]
+pub struct NewLeafNodesBatched<Hash, MaxLeafSize, MaxMmrHeight> {
+	// Already encoded `LeafData` (easier to use bounds on encoded data).
+	encoded_leaf_data: BoundedVec<u8, MaxLeafSize>,
+	// Parent nodes - only hashes.
+	parent_nodes: BoundedVec<(NodeIndex, Hash), MaxMmrHeight>,
+}
+
+impl<Hash, MaxLeafSize, MaxMmrHeight> Default
+	for NewLeafNodesBatched<Hash, MaxLeafSize, MaxMmrHeight>
+{
+	fn default() -> Self {
+		Self { encoded_leaf_data: BoundedVec::default(), parent_nodes: BoundedVec::default() }
+	}
+}
 
 /// A marker type for runtime-specific storage implementation.
 ///
@@ -38,41 +60,21 @@ use crate::{
 /// 1. We add nodes (leaves) hashes to the on-chain storage (see [crate::Nodes]).
 /// 2. We add full leaves (and all inner nodes as well) into the `IndexingAPI` during block
 ///    processing, so the values end up in the Offchain DB if indexing is enabled.
-pub struct RuntimeStorage<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
+pub struct RuntimeStorage<T: Config<I>, I: 'static> {
 	// Data that will be committed to runtime storage db when this object is dropped.
 	// Allows batching multiple additions into a single db write.
-	batch_temp_nodes: Vec<(NodeIndex, <T as Config<I>>::Hash)>,
+	batch_temp_nodes: NewLeafNodesBatched<<T as Config<I>>::Hash, T::MaxLeafSize, T::MaxMmrHeight>,
 }
 
-impl<T, I> Default for RuntimeStorage<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
+impl<T: Config<I>, I: 'static> Default for RuntimeStorage<T, I> {
 	fn default() -> Self {
-		Self { batch_temp_nodes: vec![] }
+		Self { batch_temp_nodes: Default::default() }
 	}
 }
 
-impl<T, I> Drop for RuntimeStorage<T, I>
-where
-	T: Config<I>,
-	I: 'static,
-{
+impl<T: Config<I>, I: 'static> Drop for RuntimeStorage<T, I> {
 	fn drop(&mut self) {
-		let batch = sp_std::mem::replace(&mut self.batch_temp_nodes, vec![]);
-		if let Ok(bounded_temp_nodes) = BoundedVec::<_, _>::try_from(batch) {
-			<NewNodes<T, I>>::put(bounded_temp_nodes);
-		} else {
-			frame_support::log::error!(
-				target: "runtime::mmr",
-				"Batched `NewNodes` exceed configured storage bound, dropping..",
-			);
-		}
+		<NewNodes<T, I>>::put(&self.batch_temp_nodes);
 	}
 }
 
@@ -170,19 +172,17 @@ where
 		};
 
 		// Copy newly added leaf and nodes to offchain db keyed under this block's hash.
-		let elem = LatestLeaf::<T, _>::get();
-		// FIXME: fix expect
-		let leaf_index = Pallet::<T, I>::block_num_to_leaf_index(number).expect("TODO");
+		let leaf_index = match Pallet::<T, I>::block_num_to_leaf_index(number) {
+			Ok(leaf_index) => leaf_index,
+			Err(_) => return,
+		};
 		let leaf_node_index = helper::leaf_index_to_pos(leaf_index);
-		frame_support::log::debug!(
-			target: "runtime::mmr::offchain", "move leaf idx {} pos {} to offchain",
-			leaf_index, leaf_node_index,
-		);
-		// Copy over leaf.
-		store_to_offchain(block_hash, leaf_node_index, &elem);
-
-		// Copy over all parent nodes.
-		NewNodes::<T, _>::get().into_iter().for_each(|(node_index, node_hash)| {
+		// Get leaf and nodes from runtime storage.
+		let new_nodes = NewNodes::<T, _>::get();
+		// Copy leaf to offchain.
+		store_to_offchain(block_hash, leaf_node_index, new_nodes.encoded_leaf_data.as_ref());
+		// Copy all parent nodes to offchain.
+		new_nodes.parent_nodes.into_iter().for_each(|(node_index, node_hash)| {
 			let node = NodeOf::<T, I, L>::Hash(node_hash);
 			store_to_offchain(block_hash, node_index, &node.encode());
 		});
@@ -384,22 +384,33 @@ where
 
 			// Store all newly added nodes and leaves to temporary storage, offchain worker will
 			// copy them over to offchain db once block is finished. Increase the indices.
-			match elem {
+			let batch = &mut self.inner.batch_temp_nodes;
+			if let Err(err_msg) = match elem {
 				Node::Data(..) => {
 					frame_support::log::debug!(
 						target: "runtime::mmr::offchain", "runtime append leaf {} (node {})", leaf_index, node_index,
 					);
-					// TODO: 'try' bounded and throw error instead of truncating.
-					let bounded_encoded_leaf = BoundedVec::<_, _>::truncate_from(elem.encode());
-					LatestLeaf::<T, I>::put(bounded_encoded_leaf);
 					leaf_index += 1;
+					BoundedVec::<_, _>::try_from(elem.encode())
+						.map(|bounded| batch.encoded_leaf_data = bounded)
+						.map_err(|_| {
+							format!(
+								"LeafData encoded size exceeded configured {}",
+								T::MaxLeafSize::get()
+							)
+						})
 				},
 				Node::Hash(..) => {
 					frame_support::log::debug!(
 						target: "runtime::mmr::offchain", "runtime append node {}", node_index,
 					);
-					self.inner.batch_temp_nodes.push((node_index, elem.hash()));
+					batch.parent_nodes.try_push((node_index, elem.hash())).map_err(|_| {
+						format!("Mmr height exceeded configured {}", T::MaxMmrHeight::get())
+					})
 				},
+			} {
+				frame_support::log::error!(target: "runtime::mmr", "{}", err_msg);
+				return Err(mmr_lib::Error::StoreError(err_msg))
 			}
 			node_index += 1;
 		}

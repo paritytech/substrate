@@ -115,6 +115,7 @@ pub trait WeightInfo {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use crate::mmr::storage::NewLeafNodesBatched;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -205,22 +206,16 @@ pub mod pallet {
 	#[pallet::getter(fn mmr_leaves)]
 	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, LeafIndex, ValueQuery>;
 
-	/// Leaf data added by current block (leaf index: `NumberOfLeaves-1`).
+	/// Leaf (data) and parent nodes (hashes) added by current block.
 	///
 	/// This is single value storage overwritten by each block. It is used as temporary
 	/// leaf storage until after block is built and offchain worker can move/copy this
-	/// leaf in offchain database under `node_offchain_key()`.
-	#[pallet::storage]
-	#[pallet::getter(fn latest_leaf)]
-	pub type LatestLeaf<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, BoundedVec<u8, T::MaxLeafSize>, ValueQuery>;
-
-	/// TODO
+	/// leaf and its parent nodes in offchain database under `node_offchain_key()`.
 	#[pallet::storage]
 	#[pallet::getter(fn new_nodes)]
 	pub type NewNodes<T: Config<I>, I: 'static = ()> = StorageValue<
 		_,
-		BoundedVec<(NodeIndex, <T as Config<I>>::Hash), T::MaxMmrHeight>,
+		NewLeafNodesBatched<<T as Config<I>>::Hash, T::MaxLeafSize, T::MaxMmrHeight>,
 		ValueQuery,
 	>;
 
