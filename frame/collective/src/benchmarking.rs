@@ -35,24 +35,24 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8> {
-	let mut data: Vec<u8> = vec![];
-	let mut value = id.clone();
-	let mut value_size = 0;
+	let mut value = id;
+	let mut value_index = 0;
 
 	while value > u8::MAX as u32 {
 		value -= u8::MAX as u32;
-		value_size += 1;
+		value_index += 1;
 	}
 
-	for i in 0..length {
-		if i == value_size {
-			// this should never panic.
-			data.push(value.try_into().unwrap());
-			continue
-		}
-		data.push(value_size.try_into().unwrap());
-	}
-	data
+	(0..length)
+		.map(|i| {
+			if i == value_index {
+				// this should never panic.
+				return value.try_into().unwrap()
+			} else {
+				return value_index.try_into().unwrap()
+			}
+		})
+		.collect::<Vec<u8>>()
 }
 
 benchmarks_instance_pallet! {
