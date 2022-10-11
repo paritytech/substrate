@@ -1815,6 +1815,14 @@ impl<Block: BlockT> Backend<Block> {
 				}
 			}
 		}
+
+		// Also discard all previously pinned blocks
+		let mut blocks = self.pruning_queue.lock();
+		for hash in &*blocks {
+			let id = BlockId::<Block>::hash(*hash);
+			self.prune_block(transaction, id)?;
+		}
+		blocks.clear();
 		Ok(())
 	}
 
@@ -1823,6 +1831,13 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		id: BlockId<Block>,
 	) -> ClientResult<()> {
+		if self.should_delay_pruning(id).unwrap_or(false) {
+			// Trace for easily identifying `db-pin` paths only.
+			trace!(target: "db-pin", "Not pruning pinned block #{}", id);
+			debug!(target: "db", "Not pruning pinned block #{}", id);
+			return Ok(())
+		}
+
 		debug!(target: "db", "Removing block #{}", id);
 		utils::remove_from_db(
 			transaction,
@@ -1872,6 +1887,37 @@ impl<Block: BlockT> Backend<Block> {
 			.build();
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
+	}
+
+	/// Return true if the pruning should be delayed for the provided block.
+	///
+	/// If the given block is part of the `pinned_blocks`, then sets the block's `was_pruned`
+	/// flag to be later included to the pruning queue when its reference count drops
+	/// to zero.
+	///
+	/// If the given block is not part of the `pinned_blocks`, then return false to complete
+	/// the pruning immediately.
+	fn should_delay_pruning(&self, block: BlockId<Block>) -> ClientResult<bool> {
+		if self.blocks_pruning == BlocksPruning::KeepAll {
+			return Ok(false)
+		}
+
+		let hash = match block {
+			BlockId::Hash(h) => h,
+			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
+				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
+			})?,
+		};
+
+		let mut cache = self.pinned_blocks.lock();
+		let res = if let Some(entry) = cache.get_mut(&hash) {
+			trace!(target: "db-pin", "Pinned block: {:?} delay pruning", hash);
+			entry.was_pruned = true;
+			true
+		} else {
+			false
+		};
+		Ok(res)
 	}
 
 	fn state_at_ref(&self, block: BlockId<Block>) -> ClientResult<RefTrackingState<Block>> {
