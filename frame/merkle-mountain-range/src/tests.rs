@@ -615,7 +615,7 @@ fn verification_should_be_stateless() {
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
 			root_7,
 			vec![leaf.clone()],
-			proof5
+			&proof5
 		),
 		Ok(())
 	);
@@ -623,7 +623,7 @@ fn verification_should_be_stateless() {
 		crate::verify_leaves_proof::<<Test as Config>::Hashing, _>(
 			root_6,
 			vec![leaf],
-			historical_proof5
+			&historical_proof5
 		),
 		Ok(())
 	);
@@ -665,7 +665,7 @@ fn should_verify_batch_proof_statelessly() {
 				.into_iter()
 				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
 				.collect(),
-			proof
+			&proof
 		),
 		Ok(())
 	);
@@ -676,7 +676,7 @@ fn should_verify_batch_proof_statelessly() {
 				.into_iter()
 				.map(|leaf| crate::primitives::DataOrHash::Data(leaf))
 				.collect(),
-			historical_proof
+			&historical_proof
 		),
 		Ok(())
 	);

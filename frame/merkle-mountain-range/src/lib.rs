@@ -271,13 +271,13 @@ pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<mmr::Node<H, L>>,
-	proof: primitives::BatchProof<H::Output>,
+	proof: &primitives::BatchProof<H::Output>,
 ) -> Result<(), primitives::Error>
 where
 	H: traits::Hash,
 	L: primitives::FullLeaf,
 {
-	let is_valid = mmr::verify_leaves_proof::<H, L>(root, leaves, proof)?;
+	let is_valid = mmr::verify_leaves_proof::<H, L>(root, leaves, &proof)?;
 	if is_valid {
 		Ok(())
 	} else {

@@ -33,7 +33,7 @@ use sp_std::prelude::*;
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<Node<H, L>>,
-	proof: primitives::BatchProof<H::Output>,
+	proof: &primitives::BatchProof<H::Output>,
 ) -> Result<bool, Error>
 where
 	H: sp_runtime::traits::Hash,
@@ -47,14 +47,14 @@ where
 
 	let leaves_and_position_data = proof
 		.leaf_indices
-		.into_iter()
-		.map(|index| mmr_lib::leaf_index_to_pos(index))
+		.iter()
+		.map(|index| mmr_lib::leaf_index_to_pos(*index))
 		.zip(leaves.into_iter())
 		.collect();
 
 	let p = mmr_lib::MerkleProof::<Node<H, L>, Hasher<H, L>>::new(
 		size,
-		proof.items.into_iter().map(Node::Hash).collect(),
+		proof.items.iter().map(|item| Node::Hash(*item)).collect(),
 	);
 	p.verify(Node::Hash(root), leaves_and_position_data)
 		.map_err(|e| Error::Verify.log_debug(e))

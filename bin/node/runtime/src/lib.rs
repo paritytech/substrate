@@ -2044,7 +2044,7 @@ impl_runtime_apis! {
 			proof: mmr::Proof<mmr::Hash>
 		) -> Result<(), mmr::Error> {
 			let node = mmr::DataOrHash::Data(leaf.into_opaque_leaf());
-			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, vec![node], mmr::Proof::into_batch_proof(proof))
+			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, vec![node], &mmr::Proof::into_batch_proof(proof))
 		}
 
 		fn mmr_root() -> Result<mmr::Hash, mmr::Error> {
@@ -2098,7 +2098,7 @@ impl_runtime_apis! {
 			proof: mmr::BatchProof<mmr::Hash>
 		) -> Result<(), mmr::Error> {
 			let nodes = leaves.into_iter().map(|leaf|mmr::DataOrHash::Data(leaf.into_opaque_leaf())).collect();
-			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, proof)
+			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, &proof)
 		}
 	}
 
