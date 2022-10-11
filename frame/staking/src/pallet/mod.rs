@@ -793,10 +793,10 @@ pub mod pallet {
 			);
 			// ensure desired targets requested is always lower than max winners
 			// supported by the election provider.
-			assert!(
-				ValidatorCount::<T>::get() <=
-					<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
-			);
+			// assert!(
+			// 	ValidatorCount::<T>::get() <=
+			// 		<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+			// );
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(
