@@ -33,7 +33,7 @@ use sc_network::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 // How often to rebroadcast, in cases where no new packets are created.
-const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
+pub(crate) const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
 
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]

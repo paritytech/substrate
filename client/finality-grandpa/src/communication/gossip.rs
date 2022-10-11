@@ -99,7 +99,10 @@ use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
 use super::{benefit, cost, Round, SetId};
-use crate::{environment, CatchUp, CompactCommit, SignedMessage};
+use crate::{
+	communication::periodic::REBROADCAST_AFTER as NEIGHBOR_REBROADCAST_AFTER, environment, CatchUp,
+	CompactCommit, SignedMessage,
+};
 
 use std::{
 	collections::{HashSet, VecDeque},
@@ -149,14 +152,15 @@ enum Consider {
 /// A view of protocol state.
 #[derive(Debug)]
 struct View<N> {
-	round: Round,           // the current round we are at.
-	set_id: SetId,          // the current voter set id.
-	last_commit: Option<N>, // commit-finalized block height, if any.
+	round: Round,                 // the current round we are at.
+	set_id: SetId,                // the current voter set id.
+	last_commit: Option<N>,       // commit-finalized block height, if any.
+	last_update: Option<Instant>, // last time we heard from peer, used for spamming detection.
 }
 
 impl<N> Default for View<N> {
 	fn default() -> Self {
-		View { round: Round(1), set_id: SetId(0), last_commit: None }
+		View { round: Round(1), set_id: SetId(0), last_commit: None, last_update: None }
 	}
 }
 
@@ -226,7 +230,12 @@ impl<N> LocalView<N> {
 	/// Converts the local view to a `View` discarding round and set id
 	/// information about the last commit.
 	fn as_view(&self) -> View<&N> {
-		View { round: self.round, set_id: self.set_id, last_commit: self.last_commit_height() }
+		View {
+			round: self.round,
+			set_id: self.set_id,
+			last_commit: self.last_commit_height(),
+			last_update: None,
+		}
 	}
 
 	/// Update the set ID. implies a reset to round 1.
@@ -543,27 +552,22 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		let set_id_increased = update.set_id > peer.view.set_id;
-		let round_in_set_increased =
-			update.set_id == peer.view.set_id && update.round > peer.view.round;
-		let finalized_height_in_round_increased = update.set_id == peer.view.set_id &&
-			update.round == peer.view.round &&
-			Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
-		let finalized_height_not_decreased =
-			Some(&update.commit_finalized_height) >= peer.view.last_commit.as_ref();
+		let invalid_change = peer.view.set_id > update.set_id ||
+			peer.view.round > update.round && peer.view.set_id == update.set_id ||
+			peer.view.last_commit.as_ref() > Some(&update.commit_finalized_height);
 
-		let valid_change = (set_id_increased || round_in_set_increased) &&
-			finalized_height_not_decreased ||
-			finalized_height_in_round_increased;
+		if invalid_change {
+			return Err(Misbehavior::InvalidViewChange)
+		}
 
-		if !valid_change {
-			let duplicate_packet =
-				(update.set_id, update.round, Some(&update.commit_finalized_height)) ==
-					(peer.view.set_id, peer.view.round, peer.view.last_commit.as_ref());
-			if duplicate_packet {
-				return Err(Misbehavior::DuplicateNeighborMessage)
-			} else {
-				return Err(Misbehavior::InvalidViewChange)
+		let now = Instant::now();
+		let duplicate_packet = (update.set_id, update.round, Some(&update.commit_finalized_height)) ==
+			(peer.view.set_id, peer.view.round, peer.view.last_commit.as_ref());
+		if duplicate_packet {
+			if let Some(last_update) = peer.view.last_update {
+				if now < last_update + NEIGHBOR_REBROADCAST_AFTER / 2 {
+					return Err(Misbehavior::DuplicateNeighborMessage)
+				}
 			}
 		}
 
@@ -571,6 +575,7 @@ impl<N: Ord> Peers<N> {
 			round: update.round,
 			set_id: update.set_id,
 			last_commit: Some(update.commit_finalized_height),
+			last_update: Some(now),
 		};
 
 		trace!(target: "afg", "Peer {} updated view. Now at {:?}, {:?}",
@@ -1677,10 +1682,13 @@ pub(super) struct PeerReport {
 #[cfg(test)]
 mod tests {
 	use super::{environment::SharedVoterSetState, *};
-	use crate::communication;
+	use crate::{
+		communication, communication::periodic::REBROADCAST_AFTER as NEIGHBOR_REBROADCAST_AFTER,
+	};
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sp_core::{crypto::UncheckedFrom, H256};
+	use std::time::Instant;
 	use substrate_test_runtime_client::runtime::{Block, Header};
 
 	// some random config (not really needed)
@@ -1713,7 +1721,12 @@ mod tests {
 
 	#[test]
 	fn view_vote_rules() {
-		let view = View { round: Round(100), set_id: SetId(1), last_commit: Some(1000u64) };
+		let view = View {
+			round: Round(100),
+			set_id: SetId(1),
+			last_commit: Some(1000u64),
+			last_update: None,
+		};
 
 		assert_eq!(view.consider_vote(Round(98), SetId(1)), Consider::RejectPast);
 		assert_eq!(view.consider_vote(Round(1), SetId(0)), Consider::RejectPast);
@@ -1730,7 +1743,12 @@ mod tests {
 
 	#[test]
 	fn view_global_message_rules() {
-		let view = View { round: Round(100), set_id: SetId(2), last_commit: Some(1000u64) };
+		let view = View {
+			round: Round(100),
+			set_id: SetId(2),
+			last_commit: Some(1000u64),
+			last_update: None,
+		};
 
 		assert_eq!(view.consider_global(SetId(3), 1), Consider::RejectFuture);
 		assert_eq!(view.consider_global(SetId(3), 1000), Consider::RejectFuture);
@@ -1784,17 +1802,22 @@ mod tests {
 
 		peers.new_peer(id, ObservedRole::Authority);
 
-		let mut check_update = move |update: NeighborPacket<_>| {
+		let check_update = |peers: &mut Peers<_>, update: NeighborPacket<_>| {
 			let view = peers.update_peer_state(&id, update.clone()).unwrap().unwrap();
 			assert_eq!(view.round, update.round);
 			assert_eq!(view.set_id, update.set_id);
 			assert_eq!(view.last_commit, Some(update.commit_finalized_height));
 		};
 
-		check_update(update1);
-		check_update(update2);
-		check_update(update3);
-		check_update(update4);
+		check_update(&mut peers, update1);
+		check_update(&mut peers, update2);
+		check_update(&mut peers, update3);
+		check_update(&mut peers, update4.clone());
+
+		// allow duplicate neighbor packets if enough time has passed
+		peers.inner.get_mut(&id).unwrap().view.last_update =
+			Some(Instant::now() - NEIGHBOR_REBROADCAST_AFTER);
+		check_update(&mut peers, update4);
 	}
 
 	#[test]
@@ -1832,7 +1855,7 @@ mod tests {
 			NeighborPacket { round: Round(10), set_id: SetId(10), commit_finalized_height: 9 },
 			Misbehavior::InvalidViewChange,
 		);
-		// commit finalized height stays the same (duplicate packet).
+		// duplicate packet without grace period.
 		check_update(
 			NeighborPacket { round: Round(10), set_id: SetId(10), commit_finalized_height: 10 },
 			Misbehavior::DuplicateNeighborMessage,

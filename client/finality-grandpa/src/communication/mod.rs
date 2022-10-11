@@ -104,7 +104,7 @@ mod cost {
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
 	pub(super) const DUPLICATE_NEIGHBOR_MESSAGE: Rep =
-		Rep::new(-100, "Grandpa: Duplicate neighbor message");
+		Rep::new(-500, "Grandpa: Duplicate neighbor message without grace period");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
