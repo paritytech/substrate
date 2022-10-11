@@ -19,7 +19,7 @@ use super::*;
 use crate::{self as multi_phase, unsigned::MinerConfig};
 use frame_election_provider_support::{
 	data_provider,
-	onchain::{self, UnboundedExecution},
+	onchain::{self},
 	ElectionDataProvider, NposSolution, SequentialPhragmen,
 };
 pub use frame_support::{assert_noop, assert_ok, pallet_prelude::GetDefault};
@@ -310,6 +310,8 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type DataProvider = StakingMock;
 	type WeightInfo = ();
 	type MaxWinners = MaxWinners;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 pub struct MockFallback;
@@ -318,35 +320,19 @@ impl ElectionProviderBase for MockFallback {
 	type BlockNumber = u64;
 	type Error = &'static str;
 	type DataProvider = StakingMock;
-
-	fn ongoing() -> bool {
-		false
-	}
-}
-
-impl BoundedElectionProvider for MockFallback {
 	type MaxWinners = MaxWinners;
-	fn elect() -> Result<BoundedSupports<AccountId, MaxWinners>, Self::Error> {
-		Self::elect_with_bounds(Bounded::max_value(), Bounded::max_value())
-	}
 }
 
 impl InstantElectionProvider for MockFallback {
-	fn elect_with_bounds(
-		max_voters: usize,
-		max_targets: usize,
-	) -> Result<
-		BoundedSupports<Self::AccountId, <Self as BoundedElectionProvider>::MaxWinners>,
-		Self::Error,
-	> {
+	fn instant_elect(
+		max_voters: Option<u32>,
+		max_targets: Option<u32>,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		if OnChainFallback::get() {
-			onchain::UnboundedExecution::<OnChainSeqPhragmen>::elect_with_bounds(
-				max_voters,
-				max_targets,
-			)
-			.map_err(|_| "onchain::UnboundedExecution failed.")
+			onchain::OnChainExecution::<OnChainSeqPhragmen>::instant_elect(max_voters, max_targets)
+				.map_err(|_| "onchain::OnChainExecution failed.")
 		} else {
-			super::NoFallback::<Runtime>::elect_with_bounds(max_voters, max_targets)
+			Err("NoFallback.")
 		}
 	}
 }
@@ -411,7 +397,8 @@ impl crate::Config for Runtime {
 	type WeightInfo = ();
 	type BenchmarkingConfig = TestBenchmarkingConfig;
 	type Fallback = MockFallback;
-	type GovernanceFallback = UnboundedExecution<OnChainSeqPhragmen>;
+	type GovernanceFallback =
+		frame_election_provider_support::onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type MaxElectingVoters = MaxElectingVoters;
 	type MaxElectableTargets = MaxElectableTargets;

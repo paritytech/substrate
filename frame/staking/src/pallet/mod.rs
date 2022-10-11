@@ -1279,7 +1279,10 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// ensure new validator count does not exceed maximum winners
 			// support by election provider.
-			ensure!(new <= <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get(), Error::<T>::TooManyElectionWinners);
+			ensure!(
+				new <= <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get(),
+				Error::<T>::TooManyElectionWinners
+			);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
