@@ -756,8 +756,11 @@ where
 		};
 
 		if let ChainEvent::Finalized { hash, tree_route } = event {
-			log::trace!(target:"txpool", "on-finalized enacted: {tree_route:?}, previously finalized: \
-						{prev_finalized_block:?}");
+			log::trace!(
+				target:"txpool", 
+				"on-finalized enacted: {tree_route:?}, previously finalized: \
+				{prev_finalized_block:?}",
+			);
 			for hash in tree_route.iter().chain(std::iter::once(&hash)) {
 				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
 					log::warn!(
@@ -772,8 +775,6 @@ where
 }
 
 /// Helper struct for deciding if core part of maintenance procedure shall be executed.
-/// It is publicly exposed only for tests purposes (due to cyclic deps sc_transaction_pool and
-/// substrate_test_runtime_transaction_pool).
 ///
 /// For the following chain:
 ///   B1-C1-D1-E1
@@ -835,7 +836,7 @@ where
 		// tree_route provided with event
 		let tree_route = tree_route(self.recent_best_block, new_hash)?;
 
-		log::trace!(
+		log::debug!(
 			target: "txpool",
 			"resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} finalized_block:{:?}",
 			new_hash, finalized, tree_route, self.recent_best_block, self.recent_finalized_block
@@ -843,11 +844,13 @@ where
 
 		// block was already finalized
 		if self.recent_finalized_block == new_hash {
-			log::trace!(target:"txpool", "handle_enactment: block already finalized");
+			log::debug!(target:"txpool", "handle_enactment: block already finalized");
 			return Ok(None)
 		}
 
-		// check if recently finalized block is on retracted path...
+		// Check if recently finalized block is on retracted path.
+		// This could be happening if we first received a finalization event and then
+		// a new best event for some old stale best head.
 		if tree_route.retracted().iter().any(|x| x.hash == self.recent_finalized_block) {
 			log::debug!(
 				target: "txpool",
