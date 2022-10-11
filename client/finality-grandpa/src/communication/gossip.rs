@@ -35,7 +35,8 @@
 //! impolite to send messages about r+1 or later. "future-round" messages can
 //!  be dropped and ignored.
 //!
-//! It is impolite to send a neighbor packet which moves backwards in protocol state.
+//! It is impolite to send a neighbor packet which moves backwards or does not progress
+//! protocol state.
 //!
 //! This is beneficial if it conveys some progress in the protocol state of the peer.
 //!
@@ -539,11 +540,18 @@ impl<N: Ord> Peers<N> {
 			Some(p) => p,
 		};
 
-		let valid_change = update.set_id > peer.view.set_id ||
-			update.set_id == peer.view.set_id && update.round > peer.view.round ||
-			update.set_id == peer.view.set_id &&
-				update.round == peer.view.round &&
-				Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
+		let set_id_increased = update.set_id > peer.view.set_id;
+		let round_in_set_increased =
+			update.set_id == peer.view.set_id && update.round > peer.view.round;
+		let finalized_height_in_round_increased = update.set_id == peer.view.set_id &&
+			update.round == peer.view.round &&
+			Some(&update.commit_finalized_height) > peer.view.last_commit.as_ref();
+		let finalized_height_decreased =
+			Some(&update.commit_finalized_height) < peer.view.last_commit.as_ref();
+
+		let valid_change = (set_id_increased || round_in_set_increased) &&
+			!finalized_height_decreased ||
+			finalized_height_in_round_increased;
 
 		if !valid_change {
 			return Err(Misbehavior::InvalidViewChange)
@@ -1822,6 +1830,18 @@ mod tests {
 			round: Round(10),
 			set_id: SetId(10),
 			commit_finalized_height: 10,
+		});
+		// commit finalized height moves backwards while round moves forward.
+		check_update(NeighborPacket {
+			round: Round(11),
+			set_id: SetId(10),
+			commit_finalized_height: 9,
+		});
+		// commit finalized height moves backwards while set ID moves forward.
+		check_update(NeighborPacket {
+			round: Round(10),
+			set_id: SetId(11),
+			commit_finalized_height: 9,
 		});
 	}
 
