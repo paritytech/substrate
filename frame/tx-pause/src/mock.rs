@@ -87,27 +87,27 @@ parameter_types! {
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
 pub struct UnfilterableCallNames;
 
-/// Filter example with Balances::transfer_keep_alive use as noop call in testing and benchmarking,
-/// accept all others
+/// Make Balances::transfer_keep_alive and all DummyPallet calls unfilterable, accept all others.
 impl Contains<FullNameOf<Test>> for UnfilterableCallNames {
 	fn contains(full_name: &FullNameOf<Test>) -> bool {
-		let (pallet_name, maybe_call_name) = full_name;
-
 		let unpausables: Vec<FullNameOf<Test>> = vec![
 			(
-				b"UnpausablePalletWithCall".to_vec().try_into().unwrap(),
-				Some(b"UnpausablePalletCall".to_vec().try_into().unwrap()),
+				b"Balances".to_vec().try_into().unwrap(),
+				Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
 			),
-			(b"UnpausablePalletWithoutCall".to_vec().try_into().unwrap(), None),
+			(b"DummyPallet".to_vec().try_into().unwrap(), None),
 		];
 
-		for i in unpausables.iter() {
-			match i {
-				(pallet_name, None) => return true,
-				(pallet_name, Some(call_name)) => return true,
-				_ => return false
+		for unpausable_call in unpausables {
+			let (pallet_name, maybe_call_name) = full_name;
+			if pallet_name == &unpausable_call.0 {
+				if unpausable_call.1.is_none() {
+					return true
+				}
+				return maybe_call_name == &unpausable_call.1
 			}
 		}
+
 		false
 	}
 }

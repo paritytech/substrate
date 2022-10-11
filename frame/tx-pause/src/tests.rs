@@ -87,6 +87,20 @@ fn fails_to_pause_unpausable_pallet() {
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
+				name(b"DummyPallet"),
+				name(b"any-call")
+			),
+			Error::<Test>::IsUnpausable
+		);
+	});
+}
+
+#[test]
+fn fails_to_pause_unpausable_call() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(
+			TxPause::pause_call(
+				Origin::signed(mock::PauseOrigin::get()),
 				name(b"Balances"),
 				name(b"transfer_keep_alive"),
 			),

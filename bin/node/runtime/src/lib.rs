@@ -34,8 +34,7 @@ use frame_support::{
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
 		EitherOfDiverse, EnsureOrigin, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		U128CurrencyToVote,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -215,12 +214,29 @@ impl Contains<RuntimeCall> for UnfilterableCalls {
 	}
 }
 
+use pallet_tx_pause::FullNameOf;
 pub struct UnfilterableCallNames;
-impl Contains<FullNameOf<Runtime> for UnfilterableCallNames {
+/// Make Balances::transfer_keep_alive unfilterable, accept all others.
+impl Contains<FullNameOf<Runtime>> for UnfilterableCallNames {
 	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
-		let unpausables: Vec<PalletNameOf<Runtime>> =
-			vec![(b"Balances".to_vec().try_into().unwrap(), None)];
-		unpausables.iter().any(|i| i == pallet)
+		let unpausables: Vec<FullNameOf<Runtime>> = vec![
+			(
+				b"Balances".to_vec().try_into().unwrap(),
+				Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
+			),
+		];
+
+		for unpausable_call in unpausables {
+			let (pallet_name, maybe_call_name) = full_name;
+			if pallet_name == &unpausable_call.0 {
+				if unpausable_call.1.is_none() {
+					return true
+				}
+				return maybe_call_name == &unpausable_call.1
+			}
+		}
+
+		false
 	}
 }
 
@@ -229,7 +245,7 @@ impl pallet_tx_pause::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
-	type UnfilterableCallNames = UnfilterableCalls;
+	type UnfilterableCallNames = UnfilterableCallNames;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
@@ -262,9 +278,9 @@ impl ForceActivateOrigin {
 	/// Account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak   => sp_core::ed25519::Public::from_raw([0;32]).into(),
-			Self::Medium => sp_core::ed25519::Public::from_raw([1;32]).into(),
-			Self::Strong => sp_core::ed25519::Public::from_raw([2;32]).into(),
+			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
 		}
 	}
 
@@ -287,9 +303,9 @@ impl ForceExtendOrigin {
 	/// Account id of the origin.
 	pub fn acc(&self) -> AccountId {
 		match self {
-			Self::Weak   => sp_core::ed25519::Public::from_raw([0;32]).into(),
-			Self::Medium => sp_core::ed25519::Public::from_raw([1;32]).into(),
-			Self::Strong => sp_core::ed25519::Public::from_raw([2;32]).into(),
+			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
 		}
 	}
 
@@ -299,8 +315,8 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
-	EnsureOrigin<O> for ForceActivateOrigin
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
+	for ForceActivateOrigin
 {
 	type Success = u32;
 
@@ -322,8 +338,8 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
 	}
 }
 
-impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>>
-	EnsureOrigin<O> for ForceExtendOrigin
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
+	for ForceExtendOrigin
 {
 	type Success = u32;
 

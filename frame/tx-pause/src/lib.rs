@@ -164,17 +164,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			// The `TxPause` pallet can never be paused.
-			if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-				return Err(Error::<T>::IsUnpausable)
-			}
-			let full_name: FullNameOf<T> = (pallet_name, Some(call_name));
-			if T::UnfilterableCallNames::contains(&full_name) {
-				return Err(Error::<T>::IsUnpausable)
-			}
-			if Self::is_paused(&pallet_name, &call_name) {
-				return Err(Error::<T>::IsPaused)
-			}
+			Self::ensure_can_pause(&pallet_name, &call_name)?;
 			PausedCalls::<T>::insert((&pallet_name, &call_name), ());
 			Self::deposit_event(Event::CallPaused { pallet_name, call_name });
 
@@ -193,14 +183,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			// The `TxPause` pallet can never be paused.
-			if pallet_name == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-				return Err(Error::<T>::IsUnpausable)
-			}
-			// All items should be unpausable, no [`Config::UnfilterableCallNames`] check
-			if Self::is_paused(&pallet_name, &call_name) {
-				return Err(Error::<T>::IsPaused)
-			}
+			Self::ensure_can_unpause(&pallet_name, &call_name)?;
 			PausedCalls::<T>::remove((&pallet_name, &call_name));
 			Self::deposit_event(Event::CallUnpaused { pallet_name, call_name });
 
@@ -224,6 +207,25 @@ impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
 	pub fn is_paused(pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T>) -> bool {
 		<PausedCalls<T>>::contains_key((pallet_name, call_name))
+	}
+
+	/// Ensure that this call can be paused.
+	pub fn ensure_can_pause(
+		pallet_name: &PalletNameOf<T>,
+		call_name: &CallNameOf<T>,
+	) -> Result<(), Error<T>> {
+		// The `TxPause` pallet can never be paused.
+		if pallet_name.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+			return Err(Error::<T>::IsUnpausable)
+		}
+		let full_name: FullNameOf<T> = (pallet_name.clone(), Some(call_name.clone()));
+		if T::UnfilterableCallNames::contains(&full_name) {
+			return Err(Error::<T>::IsUnpausable)
+		}
+		if Self::is_paused(&pallet_name, &call_name) {
+			return Err(Error::<T>::IsPaused)
+		}
+		Ok(())
 	}
 
 	/// Ensure that this call can be un-paused.
