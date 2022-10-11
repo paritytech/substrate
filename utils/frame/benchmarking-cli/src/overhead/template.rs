@@ -24,9 +24,10 @@ use sc_service::Configuration;
 use handlebars::Handlebars;
 use log::info;
 use serde::Serialize;
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, io::Write, path::PathBuf};
 
 use crate::{
+	extrinsic::bench::{BlockProofSize, BlockWeight},
 	overhead::cmd::{BenchmarkType, OverheadParams},
 	shared::{Stats, UnderscoreHelper},
 };
@@ -51,65 +52,99 @@ pub(crate) struct TemplateData {
 	hostname: String,
 	/// CPU name of the machine that executed the benchmarks.
 	cpuname: String,
-	/// Header for the generated file.
-	header: String,
 	/// Command line arguments that were passed to the CLI.
 	args: Vec<String>,
 	/// Params of the executed command.
 	params: OverheadParams,
-	/// Stats about the benchmark result.
-	stats: Stats,
-	/// The resulting weight in ns.
-	weight: u64,
+	/// Statistical analysis of the recorded reference times.
+	ref_time_stats: Stats,
+	/// The resulting reference time.
+	ref_time_weight: u64,
+	/// The resulting proof size in bytes.
+	block_proof_size: BlockProofSize,
 }
 
 impl TemplateData {
-	/// Returns a new [`Self`] from the given params.
-	pub(crate) fn new(
-		t: BenchmarkType,
+	/// Creates a [`Self`] with all the data to render a `block_weights.rs` file.
+	pub(crate) fn new_block(
 		cfg: &Configuration,
 		params: &OverheadParams,
-		stats: &Stats,
+		block: BlockWeight,
 	) -> Result<Self> {
-		let weight = params.weight.calc_weight(stats)?;
-		let header = params
-			.header
-			.as_ref()
-			.map(|p| std::fs::read_to_string(p))
-			.transpose()?
-			.unwrap_or_default();
+		Self::new(
+			BenchmarkType::Block,
+			cfg.chain_spec.name(),
+			params,
+			block.base_time,
+			Some(block.proof),
+		)
+	}
+
+	/// Creates a [`Self`] with all the data to render a `extrinsic_weights.rs` file.
+	pub(crate) fn new_extrinsic(
+		cfg: &Configuration,
+		params: &OverheadParams,
+		time_stats: Stats,
+	) -> Result<Self> {
+		Self::new(BenchmarkType::Extrinsic, cfg.chain_spec.name(), params, time_stats, None)
+	}
+
+	/// Creates a [`Self`] with all the data to render a weights file.
+	pub(crate) fn new(
+		t: BenchmarkType,
+		runtime_name: &str,
+		params: &OverheadParams,
+		ref_time_stats: Stats,
+		block_proof_size: Option<BlockProofSize>,
+	) -> Result<Self> {
+		let ref_time_weight = params.weight.calc_ref_time(&ref_time_stats)?;
 
 		Ok(TemplateData {
 			short_name: t.short_name().into(),
 			long_name: t.long_name().into(),
-			runtime_name: cfg.chain_spec.name().into(),
+			runtime_name: runtime_name.into(),
 			version: VERSION.into(),
 			date: chrono::Utc::now().format("%Y-%m-%d (Y/M/D)").to_string(),
 			hostname: params.hostinfo.hostname(),
 			cpuname: params.hostinfo.cpuname(),
-			header,
 			args: env::args().collect::<Vec<String>>(),
 			params: params.clone(),
-			stats: stats.clone(),
-			weight,
+			ref_time_weight,
+			ref_time_stats,
+			block_proof_size: block_proof_size.unwrap_or_default(),
 		})
 	}
 
-	/// Fill out the `weights.hbs` HBS template with its own data.
-	/// Writes the result to `path` which can be a directory or a file.
-	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
+	/// Render the `weights.hbs` template with data from `self`.
+	pub fn render(&self) -> Result<String> {
 		let mut handlebars = Handlebars::new();
 		// Format large integers with underscores.
 		handlebars.register_helper("underscore", Box::new(UnderscoreHelper));
 		// Don't HTML escape any characters.
 		handlebars.register_escape_fn(|s| -> String { s.to_string() });
 
+		let rendered = handlebars
+			.render_template(TEMPLATE, &self)
+			.map_err(|e| format!("Rendering HBS template: {:?}", e))?;
+		// Prepend any header with a separating new-line.
+		match &self.params.header {
+			Some(header) => {
+				let header = fs::read_to_string(header)?;
+				Ok(format!("{}\n{}", header, rendered))
+			},
+			None => Ok(rendered),
+		}
+	}
+
+	/// Write the rendered `weights.hbs` template to `path` which can be a directory or a file.
+	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
 		let out_path = self.build_path(path)?;
 		let mut fd = fs::File::create(&out_path)?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
-		handlebars
-			.render_template_to_write(TEMPLATE, &self, &mut fd)
-			.map_err(|e| format!("HBS template write: {:?}", e).into())
+
+		let rendered = self.render()?;
+		fd.write_all(rendered.as_bytes())
+			.map_err(|e| format!("Writing weight file: {:?}", e).into())
 	}
 
 	/// Build a path for the weight file.

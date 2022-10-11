@@ -38,7 +38,7 @@ use serde::Serialize;
 use std::{marker::PhantomData, sync::Arc, time::Instant};
 
 use super::ExtrinsicBuilder;
-use crate::shared::{StatSelect, Stats};
+use crate::shared::{StatSelect, Stats as TimeStats};
 
 /// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -59,7 +59,36 @@ pub struct BenchmarkParams {
 }
 
 /// The results of multiple runs in nano seconds.
-pub(crate) type BenchRecord = Vec<u64>;
+pub(crate) type TimeRecord = Vec<u64>;
+
+/// Proof size in bytes.
+#[derive(Debug, Default, Serialize, Clone)]
+pub(crate) struct ProofSize {
+	/// The storage proof size.
+	pub storage: u64,
+	/// The compacted storage proof size.
+	pub storage_compact: u64,
+	/// The compacted and `zstd` compressed storage proof size.
+	///
+	/// NOTE: This is not a stable feature and just for eyeballing of how much we can save.
+	pub storage_compressed_zstd: u64,
+}
+
+/// Proof size for proving the execution of a block.
+#[derive(Debug, Default, Serialize, Clone)]
+pub(crate) struct BlockProofSize {
+	pub empty: ProofSize,
+	pub non_empty: ProofSize,
+}
+
+/// Weight of execution a block.
+#[derive(Debug, Default, Serialize, Clone)]
+pub(crate) struct BlockWeight {
+	/// The ref time that it took to execute the block.
+	pub base_time: TimeStats,
+	/// The proof size that is required to prove the execution of the block.
+	pub proof: BlockProofSize,
+}
 
 /// Holds all objects needed to run the *overhead* benchmarks.
 pub(crate) struct Benchmark<Block, BA, C> {
@@ -87,11 +116,20 @@ where
 		Self { client, params, inherent_data, digest_items, _p: PhantomData }
 	}
 
-	/// Benchmark a block with only inherents.
-	pub fn bench_block(&self) -> Result<Stats> {
-		let (block, _) = self.build_block(None)?;
-		let record = self.measure_block(&block)?;
-		Stats::new(&record)
+	/// Benchmark a block with only inherents and one block with one NO-OP extrinsic.
+	///
+	/// Returns the execution ref time of the empty block and the proof sizes of both.
+	pub fn bench_block(&self, noop_builder: &dyn ExtrinsicBuilder) -> Result<BlockWeight> {
+		let (empty_block, _) = self.build_block(None, None)?;
+		let empty_record = self.measure_block(&empty_block)?;
+
+		let (non_empty_block, _) = self.build_block(Some(noop_builder), Some(1))?;
+		let non_empty_record = self.measure_block(&non_empty_block)?;
+
+		Ok(BlockWeight {
+			base_time: TimeStats::new(&empty_record.0)?,
+			proof: BlockProofSize { empty: empty_record.1, non_empty: non_empty_record.1 },
+		})
 	}
 
 	/// Benchmark the time of an extrinsic in a full block.
@@ -100,23 +138,23 @@ where
 	/// Then benchmarks a full block built with the given `ext_builder` and subtracts the baseline
 	/// from the result.
 	/// This is necessary to account for the time the inherents use.
-	pub fn bench_extrinsic(&self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
-		let (block, _) = self.build_block(None)?;
-		let base = self.measure_block(&block)?;
-		let base_time = Stats::new(&base)?.select(StatSelect::Average);
+	pub fn bench_extrinsic(&self, ext_builder: &dyn ExtrinsicBuilder) -> Result<TimeStats> {
+		let (block, _) = self.build_block(None, None)?;
+		let (base, _proof) = self.measure_block(&block)?;
+		let base_time = TimeStats::new(&base)?.select(StatSelect::Average);
 
-		let (block, num_ext) = self.build_block(Some(ext_builder))?;
+		let (block, num_ext) = self.build_block(Some(ext_builder), None)?;
 		let num_ext = num_ext.ok_or_else(|| Error::Input("Block was empty".into()))?;
-		let mut records = self.measure_block(&block)?;
+		let (mut full, _proof) = self.measure_block(&block)?;
 
-		for r in &mut records {
+		for r in &mut full {
 			// Subtract the base time.
 			*r = r.saturating_sub(base_time);
 			// Divide by the number of extrinsics in the block.
 			*r = ((*r as f64) / (num_ext as f64)).ceil() as u64;
 		}
 
-		Stats::new(&records)
+		TimeStats::new(&full)
 	}
 
 	/// Builds a block with some optional extrinsics.
@@ -127,6 +165,7 @@ where
 	fn build_block(
 		&self,
 		ext_builder: Option<&dyn ExtrinsicBuilder>,
+		override_max_ext_per_block: Option<u32>,
 	) -> Result<(Block, Option<u64>)> {
 		let mut builder = self.client.new_block(Digest { logs: self.digest_items.clone() })?;
 		// Create and insert the inherents.
@@ -145,7 +184,7 @@ where
 		// Put as many extrinsics into the block as possible and count them.
 		info!("Building block, this takes some time...");
 		let mut num_ext = 0;
-		for nonce in 0..self.max_ext_per_block() {
+		for nonce in 0..override_max_ext_per_block.unwrap_or(self.max_ext_per_block()) {
 			let ext = ext_builder.build(nonce)?;
 			match builder.push(ext.clone()) {
 				Ok(()) => {},
@@ -166,8 +205,8 @@ where
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
-		let mut record = BenchRecord::new();
+	fn measure_block(&self, block: &Block) -> Result<(TimeRecord, ProofSize)> {
+		let mut time = TimeRecord::new();
 		let parent_hash = block.header().parent_hash();
 		let parent_header = self
 			.client
@@ -218,10 +257,17 @@ where
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
-			record.push(elapsed as u64);
+			time.push(elapsed as u64);
 		}
 
-		Ok(record)
+		Ok((
+			time,
+			ProofSize {
+				storage: proof_len,
+				storage_compact: compact_proof.encoded_size() as u64,
+				storage_compressed_zstd: compressed_proof.len() as u64,
+			},
+		))
 	}
 
 	fn max_ext_per_block(&self) -> u32 {

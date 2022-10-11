@@ -118,16 +118,16 @@ impl OverheadCmd {
 
 		// per-block execution overhead
 		{
-			let stats = bench.bench_block()?;
-			info!("Per-block execution overhead [ns]:\n{:?}", stats);
-			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
+			let stats = bench.bench_block(ext_builder)?;
+			info!("Per-block execution overhead [ns]:\n{:?}", &stats);
+			let template = TemplateData::new_block(&cfg, &self.params, stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 		// per-extrinsic execution overhead
 		{
 			let stats = bench.bench_extrinsic(ext_builder)?;
-			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
-			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
+			info!("Per-extrinsic execution overhead [ns]:\n{:?}", &stats);
+			let template = TemplateData::new_extrinsic(&cfg, &self.params, stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 

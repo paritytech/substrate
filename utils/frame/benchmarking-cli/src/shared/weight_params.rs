@@ -53,15 +53,20 @@ pub struct WeightParams {
 
 /// Calculates the final weight by multiplying the selected metric with
 /// `weight_mul` and adding `weight_add`.
-/// Does not use safe casts and can overflow.
+///
+/// Uses best-effort `f64` to `u64` conversion which may result in rounding errors.
 impl WeightParams {
-	pub fn calc_weight(&self, stat: &Stats) -> Result<u64> {
+	pub fn calc_ref_time(&self, stat: &Stats) -> Result<u64> {
 		if self.weight_mul.is_sign_negative() || !self.weight_mul.is_normal() {
 			return Err("invalid floating number for `weight_mul`".into())
 		}
 		let s = stat.select(self.weight_metric) as f64;
 		let w = s.mul_add(self.weight_mul, self.weight_add as f64).ceil();
-		Ok(w as u64) // No safe cast here since there is no `From<f64>` for `u64`.
+		if w > u64::MAX as f64 || w < 0. {
+			Err("Overflow in the weight calculation".into())
+		} else {
+			Ok(w as u64)
+		}
 	}
 }
 
@@ -71,7 +76,7 @@ mod test_weight_params {
 	use crate::shared::{StatSelect, Stats};
 
 	#[test]
-	fn calc_weight_works() {
+	fn calc_ref_time_works() {
 		let stats = Stats { avg: 113, ..Default::default() };
 		let params = WeightParams {
 			weight_metric: StatSelect::Average,
@@ -81,15 +86,28 @@ mod test_weight_params {
 		};
 
 		let want = (113.0f64 * 0.75 + 3.0).ceil() as u64; // Ceil for overestimation.
-		let got = params.calc_weight(&stats).unwrap();
+		let got = params.calc_ref_time(&stats).unwrap();
 		assert_eq!(want, got);
 	}
 
 	#[test]
-	fn calc_weight_detects_negative_mul() {
+	fn calc_ref_time_negative_mul_errors() {
 		let stats = Stats::default();
 		let params = WeightParams { weight_mul: -0.75, ..Default::default() };
 
-		assert!(params.calc_weight(&stats).is_err());
+		assert!(params.calc_ref_time(&stats).is_err());
+	}
+
+	#[test]
+	fn calc_ref_time_overflow_errors() {
+		let series = vec![1u64, 2, 3];
+		let stats = Stats::new(&series).unwrap();
+
+		// Overflow in the multiplication.
+		let params = WeightParams { weight_mul: f64::MAX, ..Default::default() };
+		assert!(params.calc_ref_time(&stats).is_err());
+		// Overflow in the addition.
+		let params = WeightParams { weight_add: u64::MAX, ..Default::default() };
+		assert!(params.calc_ref_time(&stats).is_err());
 	}
 }

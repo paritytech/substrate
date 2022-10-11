@@ -94,11 +94,11 @@ impl TemplateData {
 		write: Option<(Stats, Stats)>,
 	) -> Result<()> {
 		if let Some(read) = read {
-			self.read_weight = self.params.weight_params.calc_weight(&read.0)?;
+			self.read_weight = self.params.weight_params.calc_ref_time(&read.0)?;
 			self.read = Some(read);
 		}
 		if let Some(write) = write {
-			self.write_weight = self.params.weight_params.calc_weight(&write.0)?;
+			self.write_weight = self.params.weight_params.calc_ref_time(&write.0)?;
 			self.write = Some(write);
 		}
 		Ok(())

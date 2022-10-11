@@ -1,4 +1,3 @@
-{{header}}
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION {{version}}
 //! DATE: {{date}}
 //! HOSTNAME: `{{hostname}}`, CPU: `{{cpuname}}`
@@ -20,28 +19,64 @@ parameter_types! {
 	{{#if (eq short_name "block")}}
 	/// Time to execute an empty block.
 	{{else}}
-	/// Time to execute a NO-OP extrinsic, for example `System::remark`.
+	/// Time to execute a NO-OP extrinsic. For example `System::remark`.
 	{{/if}}
 	/// Calculated by multiplying the *{{params.weight.weight_metric}}* with `{{params.weight.weight_mul}}` and adding `{{params.weight.weight_add}}`.
 	///
-	/// Stats nanoseconds:
-	///   Min, Max: {{underscore stats.min}}, {{underscore stats.max}}
-	///   Average:  {{underscore stats.avg}}
-	///   Median:   {{underscore stats.median}}
-	///   Std-Dev:  {{stats.stddev}}
+	/// Statistics in nanoseconds:
+	///   Min, Max: {{underscore ref_time_stats.min}}, {{underscore ref_time_stats.max}}
+	///   Average:  {{underscore ref_time_stats.avg}}
+	///   Median:   {{underscore ref_time_stats.median}}
+	///   Std-Dev:  {{ref_time_stats.stddev}}
 	///
-	/// Percentiles nanoseconds:
-	///   99th: {{underscore stats.p99}}
-	///   95th: {{underscore stats.p95}}
-	///   75th: {{underscore stats.p75}}
-	pub const {{long_name}}Weight: Weight = WEIGHT_PER_NANOS.saturating_mul({{underscore weight}});
+	/// Percentiles in nanoseconds:
+	///   99th: {{underscore ref_time_stats.p99}}
+	///   95th: {{underscore ref_time_stats.p95}}
+	///   75th: {{underscore ref_time_stats.p75}}
+	pub const {{long_name}}RefTime: u64 = WEIGHT_PER_NANOS.ref_time().saturating_mul({{underscore ref_time_weight}});
+
+	{{#if (eq short_name "block")}}
+	/// Storage proof size to prove the execution of an empty block.
+	///
+	/// THIS IS NOT THE POV SIZE. The PoV size additionally includes the block size.
+	///
+	/// Compaction would result in `{{underscore block_proof_size.empty.storage_compact}}` byte.
+	/// Compaction and compression would result in `{{underscore block_proof_size.empty.storage_compressed_zstd}}` byte.
+	pub const EmptyBlockProofSize: u64 = {{underscore block_proof_size.empty.storage}};
+
+	/// Storage proof size to prove the execution of a block with at least one extrinsic.
+	///
+	/// THIS IS NOT THE POV SIZE. The PoV size additionally includes the block size.
+	///
+	/// Compaction would result in `{{underscore block_proof_size.non_empty.storage_compact}}` byte.
+	/// Compaction and compression would result in `{{underscore block_proof_size.non_empty.storage_compressed_zstd}}` byte.
+	pub const NonEmptyBlockProofSize: u64 = {{underscore block_proof_size.non_empty.storage}};
+
+	{{/if}}
+	{{#if (eq short_name "block")}}
+	/// Weight to execute an empty block.
+	///
+	/// We do not distinguish between the weight of empty or non-empty blocks and
+	/// therefore use the assumed larger one, being non-empty.
+	pub const {{long_name}}Weight: Weight = Weight::from_components(
+			{{long_name}}RefTime::get(),
+			NonEmptyBlockProofSize::get(),
+		);
+	{{else}}
+	/// Weight to execute a NO-OP extrinsic. For example `System::remark`.
+	pub const {{long_name}}Weight: Weight = Weight::from_components(
+			{{long_name}}RefTime::get(),
+			// There is no proof size consumed by a NO-OP extrinsic.
+			0,
+		);
+	{{/if}}
 }
 
 #[cfg(test)]
 mod test_weights {
-	use sp_weights::constants;
+	use sp_weights::constants::{WEIGHT_PER_MICROS, WEIGHT_PER_MILLIS};
 
-	/// Checks that the weight exists and is sane.
+	/// Checks that the weight constants exists and are sane.
 	// NOTE: If this test fails but you are sure that the generated values are fine,
 	// you can delete it.
 	#[test]
@@ -49,26 +84,44 @@ mod test_weights {
 		let w = super::{{long_name}}Weight::get();
 
 		{{#if (eq short_name "block")}}
-		// At least 100 µs.
 		assert!(
-			w.ref_time() >= 100u64 * constants::WEIGHT_PER_MICROS.ref_time(),
-			"Weight should be at least 100 µs."
+			w.ref_time() >= 100u64 * WEIGHT_PER_MICROS.ref_time(),
+			"Ref time of executing an empty block should be at least 100 µs."
 		);
-		// At most 50 ms.
 		assert!(
-			w.ref_time() <= 50u64 * constants::WEIGHT_PER_MILLIS.ref_time(),
-			"Weight should be at most 50 ms."
+			w.ref_time() <= 50u64 * WEIGHT_PER_MILLIS.ref_time(),
+			"Ref time of executing an empty block should be at most 50 ms."
+		);
+		assert!(EmptyBlockProofSize::get() > 0, "The proof size of an empty block cannot be zero");
+		assert!(
+			NonEmptyBlockProofSize::get() > 0,
+			"The proof size of a non-empty block cannot be zero"
+		);
+		assert!(
+			EmptyBlockProofSize::get() <= 1024 * 1024,
+			"The proof size of an empty block should be smaller than 1 MiB"
+		);
+		assert!(
+			NonEmptyBlockProofSize::get() <= 2 * 1024 * 1024,
+			"The proof size of a non-empty block should be smaller than 2 MiB"
+		);
+		assert!(
+			EmptyBlockProofSize::get() >= NonEmptyBlockProofSize::get(),
+			"The proof size of a non-empty block should be at least that of an empty block"
+		);
+		assert!(
+			BlockExecutionWeight::get().proof_size ==
+				EmptyBlockProofSize::get().max(NonEmptyBlockProofSize::get()),
+			"Block weight is has wrong proof size"
 		);
 		{{else}}
-		// At least 10 µs.
 		assert!(
-			w.ref_time() >= 10u64 * constants::WEIGHT_PER_MICROS.ref_time(),
-			"Weight should be at least 10 µs."
+			w.ref_time() >= 10u64 * WEIGHT_PER_MICROS.ref_time(),
+			"Ref time of executing a NO-OP extrinsic should be at least 10 µs."
 		);
-		// At most 1 ms.
 		assert!(
-			w.ref_time() <= constants::WEIGHT_PER_MILLIS.ref_time(),
-			"Weight should be at most 1 ms."
+			w.ref_time() <= WEIGHT_PER_MILLIS.ref_time(),
+			"Ref time of executing a NO-OP extrinsic should be at least 1 ms."
 		);
 		{{/if}}
 	}

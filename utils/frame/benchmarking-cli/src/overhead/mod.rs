@@ -17,5 +17,6 @@
 
 pub mod cmd;
 pub mod template;
+mod tests;
 
 pub use cmd::OverheadCmd;
