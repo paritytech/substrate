@@ -367,13 +367,14 @@ pub trait ElectionProviderBase {
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
-	/// The upper bound on election winners that cab be returned.
+	/// The upper bound on election winners that can be returned.
 	///
 	/// # WARNING
 	///
 	/// when communicating with the data provider, one must ensure that
-	/// `DataProvider::desired_targets` returns a value less than this bound. An implementation can
-	/// chose to either return an error and/or sort and truncate the output to meet this bound.
+	/// `DataProvider::desired_targets` returns a value less than this bound. An
+	/// implementation can chose to either return an error and/or sort and
+	/// truncate the output to meet this bound.
 	type MaxWinners: Get<u32>;
 
 	/// The data provider of the election.

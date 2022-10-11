@@ -109,7 +109,7 @@ fn elect_with_input_bounds<T: Config>(
 
 	if desired_targets > T::MaxWinners::get() {
 		// TODO: make sure a test for this exists in this crate.
-		// early exist
+		// early exit
 		return Err(Error::TooManyWinners)
 	}
 
