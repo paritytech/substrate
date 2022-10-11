@@ -208,6 +208,7 @@ where
 	fn measure_block(&self, block: &Block) -> Result<(TimeRecord, ProofSize)> {
 		let mut time = TimeRecord::new();
 		let parent_hash = block.header().parent_hash();
+		let parent_id = BlockId::Hash(*parent_hash);
 		let parent_header = self
 			.client
 			.header(BlockId::Hash(*parent_hash))?
@@ -218,15 +219,16 @@ where
 		for _ in 0..self.params.warmup {
 			self.client
 				.runtime_api()
-				.execute_block(&BlockId::Hash(parent_hash.clone()), block.clone())
+				.execute_block(&parent_id, block.clone())
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
 
 		// One round just for recording the PoV size.
+		info!("Recording storage proof size...");
 		let mut runtime_api = self.client.runtime_api();
 		runtime_api.record_proof();
 		runtime_api
-			.execute_block(&BlockId::Hash(parent_hash.clone()), block.clone())
+			.execute_block(&parent_id, block.clone())
 			.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		let proof = runtime_api
 			.extract_proof()
@@ -234,17 +236,19 @@ where
 		let proof_len = proof.encoded_size() as u64;
 		let compact_proof = proof
 			.clone()
-			.into_compact_proof::<<<Block as BlockT>::Header as Header>::Hashing>(
-				parent_state_root.clone(),
-			)
+			.into_compact_proof::<<<Block as BlockT>::Header as Header>::Hashing>(parent_state_root)
 			.unwrap();
-		let compressed_proof = zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap();
+		let compressed_proof =
+			zstd::stream::encode_all(&compact_proof.encode()[..], 0).unwrap().len() as u64;
 
-		info!("Proof size: {} bytes", proof_len);
-		info!("Compact proof size: {} bytes", compact_proof.encoded_size());
-		info!("Compressed proof size: {} byte", compressed_proof.len());
+		info!(
+			"Proof size in bytes: Raw {}, Compact {}, Compressed {}",
+			proof_len,
+			compact_proof.encoded_size(),
+			compressed_proof
+		);
 
-		info!("Executing block {} times", self.params.repeat);
+		info!("Executing block {} times...", self.params.repeat);
 		// Interesting part here:
 		// Execute a block multiple times and record each execution time.
 		for _ in 0..self.params.repeat {
@@ -253,7 +257,7 @@ where
 			let start = Instant::now();
 
 			runtime_api
-				.execute_block(&BlockId::Hash(parent_hash.clone()), block)
+				.execute_block(&parent_id, block)
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
@@ -265,7 +269,7 @@ where
 			ProofSize {
 				storage: proof_len,
 				storage_compact: compact_proof.encoded_size() as u64,
-				storage_compressed_zstd: compressed_proof.len() as u64,
+				storage_compressed_zstd: compressed_proof,
 			},
 		))
 	}
