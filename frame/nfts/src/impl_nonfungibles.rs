@@ -84,7 +84,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 		) {
 			(Some(cc), Some(ic))
 				if !cc.settings.values().contains(CollectionSetting::NonTransferableItems) &&
-					!ic.values().contains(ItemSetting::NonTransferable) =>
+					!ic.settings.values().contains(ItemSetting::NonTransferable) =>
 				true,
 			_ => false,
 		}
@@ -133,16 +133,13 @@ impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettings>
-	for Pallet<T, I>
-{
+impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
 	fn mint_into(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		who: &T::AccountId,
-		settings: &ItemSettings,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings), |_| Ok(()))
+		Self::do_mint(*collection, *item, who.clone(), |_| Ok(()))
 	}
 
 	fn burn(

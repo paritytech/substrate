@@ -72,7 +72,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownItem)?;
-			let mut settings = config.values();
+			let mut settings = config.settings.values();
 
 			if lock_metadata {
 				settings.insert(ItemSetting::LockedMetadata);
@@ -81,7 +81,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				settings.insert(ItemSetting::LockedAttributes);
 			}
 
-			config.0 = settings;
+			config.settings = ItemSettings(settings);
 
 			Self::deposit_event(Event::<T, I>::ItemLocked {
 				collection,

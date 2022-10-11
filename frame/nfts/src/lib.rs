@@ -698,12 +698,11 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			owner: AccountIdLookupOf<T>,
-			config: ItemConfig,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, item, owner, config, |collection_details| {
+			Self::do_mint(collection, item, owner, |collection_details| {
 				ensure!(collection_details.issuer == origin, Error::<T, I>::NoPermission);
 				Ok(())
 			})
@@ -1365,7 +1364,7 @@ pub mod pallet {
 						)
 					},
 					Some(item) => {
-						// NOTE: if the item was previously burned, the ItemSettings record might
+						// NOTE: if the item was previously burned, the ItemConfigOf record might
 						// not exists. In that case, we allow to clear the attribute.
 						let maybe_is_locked = Self::get_item_settings(&collection, &item)
 							.map_or(false, |v| v.contains(ItemSetting::LockedAttributes));
@@ -1485,7 +1484,7 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			// NOTE: if the item was previously burned, the ItemSettings record might not exists
+			// NOTE: if the item was previously burned, the ItemConfigOf record might not exists
 			let is_locked = Self::get_item_settings(&collection, &item)
 				.map_or(false, |v| v.contains(ItemSetting::LockedMetadata));
 

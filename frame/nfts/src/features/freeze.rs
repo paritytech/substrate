@@ -35,7 +35,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if !settings.contains(ItemSetting::NonTransferable) {
 			settings.insert(ItemSetting::NonTransferable);
 		}
-		ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
+		ItemConfigOf::<T, I>::insert(
+			&collection,
+			&item,
+			ItemConfig { settings: ItemSettings(settings) },
+		);
 
 		Self::deposit_event(Event::<T, I>::Frozen { collection, item });
 		Ok(())
@@ -54,7 +58,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if settings.contains(ItemSetting::NonTransferable) {
 			settings.remove(ItemSetting::NonTransferable);
 		}
-		ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
+		ItemConfigOf::<T, I>::insert(
+			&collection,
+			&item,
+			ItemConfig { settings: ItemSettings(settings) },
+		);
 
 		Self::deposit_event(Event::<T, I>::Thawed { collection, item });
 		Ok(())

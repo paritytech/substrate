@@ -24,21 +24,28 @@ use frame_support::pallet_prelude::*;
 /// For example, those settings allow to disable NFTs trading on a pallet level, or for a particular
 /// collection, or for a specific item.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub fn get_collection_config(
+		collection_id: &T::CollectionId,
+	) -> Result<CollectionConfig, DispatchError> {
+		let config =
+			CollectionConfigOf::<T, I>::get(&collection_id).ok_or(Error::<T, I>::NoConfig)?;
+		Ok(config)
+	}
+
 	pub fn get_collection_settings(
 		collection_id: &T::CollectionId,
 	) -> Result<BitFlags<CollectionSetting>, DispatchError> {
-		let config = CollectionConfigOf::<T, I>::get(&collection_id)
-			.ok_or(Error::<T, I>::UnknownCollection)?;
+		let config = Self::get_collection_config(collection_id)?;
 		Ok(config.settings.values())
 	}
 
 	pub fn get_item_settings(
 		collection_id: &T::CollectionId,
 		item_id: &T::ItemId,
-	) -> Result<ItemSettings, DispatchError> {
+	) -> Result<BitFlags<ItemSetting>, DispatchError> {
 		let config = ItemConfigOf::<T, I>::get(&collection_id, &item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
-		Ok(config.values())
+		Ok(config.settings.values())
 	}
 
 	pub fn is_collection_setting_disabled(
@@ -53,7 +60,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection_id: &T::CollectionId,
 		item_id: &T::ItemId,
 		setting: ItemSetting,
-	) -> Result<(bool, ItemSettings), DispatchError> {
+	) -> Result<(bool, BitFlags<ItemSetting>), DispatchError> {
 		let settings = Self::get_item_settings(&collection_id, &item_id)?;
 		Ok((!settings.contains(setting), settings))
 	}

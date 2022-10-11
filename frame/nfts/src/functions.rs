@@ -162,7 +162,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		owner: T::AccountId,
-		config: ItemConfig,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
@@ -175,8 +174,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				with_details(collection_details)?;
 
-				let collection_config =
-					CollectionConfigOf::<T, I>::get(&collection).ok_or(Error::<T, I>::NoConfig)?;
+				let collection_config = Self::get_collection_config(&collection)?;
+				let settings = collection_config.settings.values();
+				let mint_item_settings = collection_config.mint_item_settings;
+				let item_config = ItemConfig { settings: mint_item_settings };
 
 				if let Some(max_supply) = collection_config.max_supply {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
@@ -185,8 +186,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let items =
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
-
-				let settings = Self::get_collection_settings(&collection)?;
 
 				let deposit = match settings.contains(CollectionSetting::FreeHolding) {
 					true => Zero::zero(),
@@ -199,9 +198,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Account::<T, I>::insert((&owner, &collection, &item), ());
 
 				if let Ok(existing_config) = ItemConfigOf::<T, I>::try_get(&collection, &item) {
-					ensure!(existing_config == config, Error::<T, I>::InconsistentItemConfig);
+					ensure!(existing_config == item_config, Error::<T, I>::InconsistentItemConfig);
 				} else {
-					ItemConfigOf::<T, I>::insert(&collection, &item, config);
+					ItemConfigOf::<T, I>::insert(&collection, &item, item_config);
 				}
 
 				let details =

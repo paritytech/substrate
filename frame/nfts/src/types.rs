@@ -205,10 +205,12 @@ impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
 #[derive(Encode, Decode, Default, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
 pub struct CollectionConfig {
-	/// Collection's bitflag settings.
+	/// Collection's settings.
 	pub(super) settings: CollectionSettings,
 	/// Collection's max supply.
 	pub(super) max_supply: Option<u32>,
+	/// Default settings each item will get during the mint.
+	pub(super) mint_item_settings: ItemSettings,
 }
 
 // Support for up to 64 user-enabled features on an item.
@@ -223,21 +225,26 @@ pub enum ItemSetting {
 	/// Disallow to modify attributes of this item.
 	LockedAttributes,
 }
-pub(super) type ItemSettings = BitFlags<ItemSetting>;
 
-/// Wrapper type for `ItemSettings` that implements `Codec`.
+/// Wrapper type for `BitFlags<ItemSetting>` that implements `Codec`.
 #[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
-pub struct ItemConfig(pub ItemSettings);
+pub struct ItemSettings(pub BitFlags<ItemSetting>);
 
-impl ItemConfig {
+impl ItemSettings {
 	pub fn empty() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> ItemSettings {
+	pub fn values(&self) -> BitFlags<ItemSetting> {
 		self.0
 	}
 }
-impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
+impl_codec_bitflags!(ItemSettings, u64, ItemSetting);
+
+#[derive(Encode, Decode, Default, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
+pub struct ItemConfig {
+	/// Item's settings.
+	pub(super) settings: ItemSettings,
+}
 
 // Support for up to 64 system-enabled features on a collection.
 #[bitflags]
