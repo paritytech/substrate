@@ -81,7 +81,7 @@ mod tests {
 	use super::*;
 	use codec::Decode;
 
-	use crate::{crypto, known_payload_ids, Payload, KEY_TYPE};
+	use crate::{crypto, known_payloads, Payload, KEY_TYPE};
 
 	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
@@ -111,8 +111,10 @@ mod tests {
 	}
 
 	fn signed_commitment() -> TestSignedCommitment {
-		let payload =
-			Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".as_bytes().to_vec());
+		let payload = Payload::from_single_entry(
+			known_payloads::MMR_ROOT_ID,
+			"Hello World!".as_bytes().to_vec(),
+		);
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
