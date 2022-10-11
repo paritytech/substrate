@@ -161,8 +161,6 @@ where
 				_ => (),
 			}
 
-			let info = self.client.info();
-
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
@@ -174,11 +172,24 @@ where
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 					})?;
 
-				// restrict info logging during initial sync to avoid spam
-				let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
-					log::Level::Debug
-				} else {
-					log::Level::Info
+				// TODO-SASS-P2: test me
+				if viable_epoch.as_ref().end_slot() <= slot {
+					// Some epochs were skipped, reuse the configuration of the first skipped epoch.
+					// The headers in the epoch changes tree is left untouched even if the slots
+					// are not updated.
+					let epoch_data = viable_epoch.as_mut();
+					epoch_data.start_slot = slot;
+					epoch_data.epoch_index = u64::from(slot) / self.genesis_config.epoch_duration;
+					log::warn!(
+						target: "sassafras",
+						"🌳 Detected skipped epochs, starting recovery epoch"
+					);
+				}
+
+				// Restrict info logging during initial sync to avoid spam
+				let log_level = match block.origin {
+					BlockOrigin::NetworkInitialSync => log::Level::Debug,
+					_ => log::Level::Info,
 				};
 
 				log!(target: "sassafras",
@@ -189,15 +200,6 @@ where
 					 slot,
 					 viable_epoch.as_ref().start_slot,
 				);
-
-				// TODO-SASS-P2: test me
-				if viable_epoch.as_ref().end_slot() <= slot {
-					viable_epoch.as_mut().start_slot = slot;
-					log::warn!(
-						target: "sassafras",
-						"🌳 Detected skipped epochs, starting recovery epoch"
-					);
-				}
 
 				let next_epoch = viable_epoch.increment(next_epoch_descriptor);
 
@@ -258,6 +260,7 @@ where
 			// The fork choice rule is that we pick the heaviest chain (i.e. more blocks built
 			// using primary mechanism), if there's a tie we go with the longest chain.
 			block.fork_choice = {
+				let info = self.client.info();
 				let best_weight = if &info.best_hash == block.header.parent_hash() {
 					// the parent=genesis case is already covered for loading parent weight,
 					// so we don't need to cover again here.

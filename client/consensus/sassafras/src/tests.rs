@@ -25,13 +25,14 @@ use futures::executor::block_on;
 use std::sync::Arc;
 
 use sc_block_builder::BlockBuilderProvider;
+use sc_client_api::Finalizer;
 use sc_consensus::{BlockImport, BoxJustificationImport};
 use sc_keystore::LocalKeystore;
 use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::inherents::InherentDataProvider;
-use sp_runtime::{Digest, DigestItem};
+use sp_runtime::{traits::HashFor, Digest, DigestItem};
 use sp_timestamp::Timestamp;
 
 use substrate_test_runtime_client::runtime::Block as TestBlock;
@@ -169,6 +170,9 @@ struct TestEnvironment {
 
 impl TestEnvironment {
 	fn new(client: Arc<TestClient>, mutator: Option<Mutator>) -> Self {
+		// Note: configuration is loaded using the `TestClient` instance as the runtime-api
+		// provider. In practice this will use the values defined within the test runtime
+		// defined in the `substrate_test_runtime` crate.
 		let config = crate::configuration(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
@@ -336,17 +340,98 @@ fn importing_block_one_sets_genesis_epoch() {
 }
 
 #[test]
+fn allows_to_skip_epochs() {
+	let (client, _backend) = TestClientBuilder::with_default_backend().build_with_backend();
+	let client = Arc::new(client);
+
+	let mut env = TestEnvironment::new(client.clone(), None);
+
+	let epoch_changes = env.link.epoch_changes.clone();
+
+	// Test scenario.
+	// Epoch lenght: 6 slots
+	//
+	// Block# :  [ 1 2 3 4 5 6 ][ 7 - -  -  -  - ][  -  -  -  -  -  - ][  8  ... ]
+	// Slot#  :  [ 1 2 3 4 5 6 ][ 7 8 9 10 11 12 ][ 13 14 15 16 17 18 ][ 19  ... ]
+	// Epoch# :  [      0      ][       1        ][      skipped      ][    2    ]
+	//
+	// As a recovery strategy, a fallback epoch 2 is created by reusing the configuration
+	// meant to be used by the "real" epoch 2 but with start slot set to the slot
+	// of the first block after the skipped epoch.
+
+	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
+
+	// First block after the a skipped epoch (block #8 @ slot #19)
+	let block =
+		env.propose_and_import_block(BlockId::Hash(*blocks.last().unwrap()), Some(19.into()));
+
+	let epoch_changes = epoch_changes.shared_data();
+	let epochs: Vec<_> = epoch_changes.tree().iter().collect();
+	assert_eq!(epochs.len(), 3);
+	assert_eq!(*epochs[0].0, blocks[0]);
+	assert_eq!(*epochs[0].1, 1);
+	assert_eq!(*epochs[1].0, blocks[6]);
+	assert_eq!(*epochs[1].1, 7);
+	assert_eq!(*epochs[2].0, block);
+	assert_eq!(*epochs[2].1, 8);
+
+	println!("{:#?}", epochs);
+
+	let data = epoch_changes
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis0,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap();
+	assert_eq!(data.epoch_index, 0);
+	assert_eq!(data.start_slot, Slot::from(1));
+
+	let data = epoch_changes
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis1,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap();
+	assert_eq!(data.epoch_index, 1);
+	assert_eq!(data.start_slot, Slot::from(7));
+
+	let data = epoch_changes
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: blocks[6],
+			number: 7,
+		})
+		.unwrap();
+	assert_eq!(data.epoch_index, 3);
+	assert_eq!(data.start_slot, Slot::from(19));
+
+	let data = epoch_changes
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: block,
+			number: 19,
+		})
+		.unwrap();
+	assert_eq!(data.epoch_index, 4);
+	assert_eq!(data.start_slot, Slot::from(25));
+}
+
+// TODO-SASS-P2: test import blocks with tickets aux data
+// TODO-SASS-P2: test finalization prunes tree
+
+#[test]
 fn revert_prunes_epoch_changes_and_removes_weights() {
 	let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
 	let client = Arc::new(client);
 
 	let mut env = TestEnvironment::new(client.clone(), None);
 
-	let mut propose_and_import_blocks_wrap =
-		|parent_id, n| env.propose_and_import_blocks(parent_id, n);
-
 	// Test scenario.
-	// Information for epoch 19 is produced on three different forks at block #13.
+	// X(#y): a block (number y) announcing the next epoch data.
+	// Information for epoch starting at block #19 is produced on three different forks
+	// at block #13.
 	// One branch starts before the revert point (epoch data should be maintained).
 	// One branch starts after the revert point (epoch data should be removed).
 	//
@@ -358,10 +443,10 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	//     \                   to #10
 	//      *-----E(#7)---#11                                          < fork #1
 
-	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 21);
-	let fork1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
-	let fork2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[7]), 10);
-	let fork3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[11]), 8);
+	let canon = env.propose_and_import_blocks(BlockId::Number(0), 21);
+	let fork1 = env.propose_and_import_blocks(BlockId::Hash(canon[0]), 10);
+	let fork2 = env.propose_and_import_blocks(BlockId::Hash(canon[7]), 10);
+	let fork3 = env.propose_and_import_blocks(BlockId::Hash(canon[11]), 8);
 
 	let epoch_changes = env.link.epoch_changes.clone();
 
@@ -371,7 +456,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
 	// Revert canon chain to block #10 (best(21) - 11)
-	crate::aux_schema::revert(backend, 11).unwrap();
+	crate::revert(backend, 11).unwrap();
 
 	// Load and check epoch changes.
 
@@ -402,6 +487,29 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	assert!(weight_data_check(&fork1, true));
 	assert!(weight_data_check(&fork2, true));
 	assert!(weight_data_check(&fork3, false));
+}
+
+#[test]
+fn revert_not_allowed_for_finalized() {
+	let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
+	let client = Arc::new(client);
+
+	let mut env = TestEnvironment::new(client.clone(), None);
+
+	let canon = env.propose_and_import_blocks(BlockId::Number(0), 3);
+
+	// Finalize best block
+	client.finalize_block(BlockId::Hash(canon[2]), None, false).unwrap();
+
+	// Revert canon chain to last finalized block
+	crate::revert(backend, 100).expect("revert should work for baked test scenario");
+
+	let weight_data_check = |hashes: &[Hash], expected: bool| {
+		hashes.iter().all(|hash| {
+			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+		})
+	};
+	assert!(weight_data_check(&canon, true));
 }
 
 ////=================================================================================================
@@ -556,7 +664,7 @@ fn sassafras_network_progress() {
 			keystore,
 			select_chain,
 			env,
-			block_import: data.block_import.clone(),//.lock().take().expect("import set up during init"),
+			block_import: data.block_import.clone(),
 			sassafras_link: data.link.clone(),
 			sync_oracle: DummyOracle,
 			justification_sync_link: (),
