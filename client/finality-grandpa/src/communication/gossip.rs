@@ -418,6 +418,8 @@ pub(super) struct FullCatchUpMessage<Block: BlockT> {
 pub(super) enum Misbehavior {
 	// invalid neighbor message, considering the last one.
 	InvalidViewChange,
+	// duplicate neighbor message.
+	DuplicateNeighborMessage,
 	// could not decode neighbor message. bytes-length of the packet.
 	UndecodablePacket(i32),
 	// Bad catch up message (invalid signatures).
@@ -439,6 +441,7 @@ impl Misbehavior {
 
 		match *self {
 			InvalidViewChange => cost::INVALID_VIEW_CHANGE,
+			DuplicateNeighborMessage => cost::DUPLICATE_NEIGHBOR_MESSAGE,
 			UndecodablePacket(bytes) => ReputationChange::new(
 				bytes.saturating_mul(cost::PER_UNDECODABLE_BYTE),
 				"Grandpa: Bad packet",
@@ -554,7 +557,14 @@ impl<N: Ord> Peers<N> {
 			finalized_height_in_round_increased;
 
 		if !valid_change {
-			return Err(Misbehavior::InvalidViewChange)
+			let duplicate_packet =
+				(update.set_id, update.round, Some(&update.commit_finalized_height)) ==
+					(peer.view.set_id, peer.view.round, peer.view.last_commit.as_ref());
+			if duplicate_packet {
+				return Err(Misbehavior::DuplicateNeighborMessage)
+			} else {
+				return Err(Misbehavior::InvalidViewChange)
+			}
 		}
 
 		peer.view = View {
@@ -1802,47 +1812,41 @@ mod tests {
 			.unwrap()
 			.unwrap();
 
-		let mut check_update = move |update: NeighborPacket<_>| {
+		let mut check_update = move |update: NeighborPacket<_>, misbehavior| {
 			let err = peers.update_peer_state(&id, update.clone()).unwrap_err();
-			assert_eq!(err, Misbehavior::InvalidViewChange);
+			assert_eq!(err, misbehavior);
 		};
 
 		// round moves backwards.
-		check_update(NeighborPacket {
-			round: Round(9),
-			set_id: SetId(10),
-			commit_finalized_height: 10,
-		});
+		check_update(
+			NeighborPacket { round: Round(9), set_id: SetId(10), commit_finalized_height: 10 },
+			Misbehavior::InvalidViewChange,
+		);
 		// set ID moves backwards.
-		check_update(NeighborPacket {
-			round: Round(10),
-			set_id: SetId(9),
-			commit_finalized_height: 10,
-		});
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(9), commit_finalized_height: 10 },
+			Misbehavior::InvalidViewChange,
+		);
 		// commit finalized height moves backwards.
-		check_update(NeighborPacket {
-			round: Round(10),
-			set_id: SetId(10),
-			commit_finalized_height: 9,
-		});
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(10), commit_finalized_height: 9 },
+			Misbehavior::InvalidViewChange,
+		);
 		// commit finalized height stays the same (duplicate packet).
-		check_update(NeighborPacket {
-			round: Round(10),
-			set_id: SetId(10),
-			commit_finalized_height: 10,
-		});
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(10), commit_finalized_height: 10 },
+			Misbehavior::DuplicateNeighborMessage,
+		);
 		// commit finalized height moves backwards while round moves forward.
-		check_update(NeighborPacket {
-			round: Round(11),
-			set_id: SetId(10),
-			commit_finalized_height: 9,
-		});
+		check_update(
+			NeighborPacket { round: Round(11), set_id: SetId(10), commit_finalized_height: 9 },
+			Misbehavior::InvalidViewChange,
+		);
 		// commit finalized height moves backwards while set ID moves forward.
-		check_update(NeighborPacket {
-			round: Round(10),
-			set_id: SetId(11),
-			commit_finalized_height: 9,
-		});
+		check_update(
+			NeighborPacket { round: Round(10), set_id: SetId(11), commit_finalized_height: 9 },
+			Misbehavior::InvalidViewChange,
+		);
 	}
 
 	#[test]
