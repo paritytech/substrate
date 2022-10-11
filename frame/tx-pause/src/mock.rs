@@ -22,7 +22,7 @@ use crate as pallet_tx_pause;
 
 use frame_support::{
 	parameter_types,
-	traits::{Everything, InsideBoth, SortedMembers},
+	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, SortedMembers},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -84,6 +84,43 @@ impl pallet_utility::Config for Test {
 	type WeightInfo = ();
 }
 
+#[derive(
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+	Any,
+	JustTransfer,
+	JustUtility,
+}
+impl Default for ProxyType {
+	fn default() -> Self {
+		Self::Any
+	}
+}
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, c: &RuntimeCall) -> bool {
+		match self {
+			ProxyType::Any => true,
+			ProxyType::JustTransfer => {
+				matches!(c, RuntimeCall::Balances(pallet_balances::Call::transfer { .. }))
+			},
+			ProxyType::JustUtility => matches!(c, RuntimeCall::Utility { .. }),
+		}
+	}
+	fn is_superset(&self, o: &Self) -> bool {
+		self == &ProxyType::Any || self == o
+	}
+}
 impl pallet_proxy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
