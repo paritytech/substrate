@@ -592,8 +592,9 @@ where
 	Block: BlockT,
 	PoolApi: 'static + graph::ChainApi<Block = Block>,
 {
-	/// Part of `MaintainedTransactionPool::maintain` procedure. Handles enactment and retraction of
-	/// blocks, sends transaction notifications.
+	/// Handles enactment and retraction of blocks, prunes stale transactions
+	/// (that have already been enacted) and resubmits transactions that were
+	/// retracted.
 	async fn handle_enactment(&self, tree_route: TreeRoute<Block>) {
 		log::trace!(target: "txpool", "handle_enactment tree_route: {tree_route:?}");
 		let pool = self.pool.clone();
@@ -741,10 +742,8 @@ where
 			}
 		};
 
-		let result = self
-			.enactment_state
-			.lock()
-			.update_and_check_if_new_enactment_is_valid(&event, &compute_tree_route);
+		let result = self.enactment_state.lock().update(&event, &compute_tree_route);
+
 		match result {
 			Err(msg) => {
 				log::warn!(target: "txpool", "{msg}");
@@ -762,6 +761,7 @@ where
 				"on-finalized enacted: {tree_route:?}, previously finalized: \
 				{prev_finalized_block:?}",
 			);
+
 			for hash in tree_route.iter().chain(std::iter::once(&hash)) {
 				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
 					log::warn!(

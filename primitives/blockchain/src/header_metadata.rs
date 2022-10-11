@@ -176,7 +176,7 @@ pub struct TreeRoute<Block: BlockT> {
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
-	/// Creates new TreeRoute
+	/// Creates a new `TreeRoute`.
 	///
 	/// It is required that `pivot >= route.len()`, otherwise it may panics.
 	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Self {

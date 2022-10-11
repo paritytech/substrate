@@ -22,9 +22,12 @@ use sc_transaction_pool_api::ChainEvent;
 use sp_blockchain::TreeRoute;
 use sp_runtime::traits::Block as BlockT;
 
-/// Helper struct for deciding if core part of maintenance procedure shall be executed.
+/// Helper struct for keeping track of the current state of processed new best
+/// block and finalized events. The main purpose of keeping track of this state
+/// is to figure out if a transaction pool enactment is needed or not.
 ///
-/// For the following chain:
+/// Given the following chain:
+///
 ///   B1-C1-D1-E1
 ///  /
 /// A
@@ -33,16 +36,16 @@ use sp_runtime::traits::Block as BlockT;
 ///
 /// Some scenarios and expected behavior for sequence of `NewBestBlock` (`nbb`) and `Finalized`
 /// (`f`) events:
-/// `nbb(C1)`, `f(C1)` -> false (handle_enactment was already performed in `nbb(C1))`
-/// `f(C1)`, `nbb(C1)` -> false (handle_enactment was already performed in `f(C1))`
 ///
-/// `f(C1)`, `nbb(D2)` -> false (handle_enactment was already performed in `f(C1)`, we should not
-/// retract finalized block)
-/// `f(C1)`, `f(C2)`, `nbb(C1)` -> false
-/// `nbb(C1)`, `nbb(C2)` -> true (switching fork is OK)
-/// `nbb(B1)`, `nbb(B2)` -> true
-/// `nbb(B1)`, `nbb(C1)`, `f(C1)` -> false (handle_enactment was already performed in `nbb(B1)`
-/// `nbb(C1)`, `f(B1)` -> false (handle_enactment was already performed in `nbb(B2)`
+/// - `nbb(C1)`, `f(C1)` -> false (enactment was already performed in `nbb(C1))`
+/// - `f(C1)`, `nbb(C1)` -> false (enactment was already performed in `f(C1))`
+/// - `f(C1)`, `nbb(D2)` -> false (enactment was already performed in `f(C1)`,
+/// we should not retract finalized block)
+/// - `f(C1)`, `f(C2)`, `nbb(C1)` -> false
+/// - `nbb(C1)`, `nbb(C2)` -> true (switching fork is OK)
+/// - `nbb(B1)`, `nbb(B2)` -> true
+/// - `nbb(B1)`, `nbb(C1)`, `f(C1)` -> false (enactment was already performed in `nbb(B1)`)
+/// - `nbb(C1)`, `f(B1)` -> false (enactment was already performed in `nbb(B2)`)
 pub struct EnactmentState<Block>
 where
 	Block: BlockT,
@@ -55,25 +58,20 @@ impl<Block> EnactmentState<Block>
 where
 	Block: BlockT,
 {
+	/// Returns a new `EnactmentState` initialized with the given parameters.
 	pub fn new(recent_best_block: Block::Hash, recent_finalized_block: Block::Hash) -> Self {
 		EnactmentState { recent_best_block, recent_finalized_block }
 	}
 
-	/// Returns recently finalized block
+	/// Returns the recently finalized block.
 	pub fn recent_finalized_block(&self) -> Block::Hash {
 		self.recent_finalized_block
 	}
 
-	/// This function returns `Some(tree_route)` if blocks enact/retract process (implemented
-	/// in `handle_enactment` function) should be performed based on:
-	/// - recent_finalized_block
-	/// - recent_best_block
-	/// - newly provided block in event
-	/// `tree_route` contains blocks to be enacted/retracted.
-	///
-	/// If enactment process is not needed then `None` is returned.
-	/// An error message is returned when computing `tree_route` fails.
-	pub fn update_and_check_if_new_enactment_is_valid<F>(
+	/// Updates the state according to the given `ChainEvent`, returning
+	/// `Some(tree_route)` with a tree route including the blocks that need to
+	/// be enacted/retracted. If no enactment is needed then `None` is returned.
+	pub fn update<F>(
 		&mut self,
 		event: &ChainEvent<Block>,
 		tree_route: &F,
@@ -92,8 +90,8 @@ where
 			return Ok(None)
 		}
 
-		// compute actual tree route from best_block to notified block, and use it instead of
-		// tree_route provided with event
+		// compute actual tree route from best_block to notified block, and use
+		// it instead of tree_route provided with event
 		let tree_route = tree_route(self.recent_best_block, new_hash)?;
 
 		log::debug!(
@@ -102,9 +100,9 @@ where
 			new_hash, finalized, tree_route, self.recent_best_block, self.recent_finalized_block
 		);
 
-		// Check if recently finalized block is on retracted path.
-		// This could be happening if we first received a finalization event and then
-		// a new best event for some old stale best head.
+		// check if recently finalized block is on retracted path. this could be
+		// happening if we first received a finalization event and then a new
+		// best event for some old stale best head.
 		if tree_route.retracted().iter().any(|x| x.hash == self.recent_finalized_block) {
 			log::debug!(
 				target: "txpool",
@@ -116,9 +114,11 @@ where
 
 		if finalized {
 			self.recent_finalized_block = new_hash;
-			// If there are no enacted blocks in best_block -> hash tree_route, it means that
-			// block being finalized was already enacted. (This case also covers best_block ==
-			// new_hash) recent_best_block remains valid
+
+			// if there are no enacted blocks in best_block -> hash tree_route,
+			// it means that block being finalized was already enacted (this
+			// case also covers best_block == new_hash), recent_best_block
+			// remains valid.
 			if tree_route.enacted().is_empty() {
 				log::trace!(
 					target: "txpool",
@@ -126,7 +126,8 @@ where
 				);
 				return Ok(None)
 			}
-			//otherwise enacted finalized block becomes best block...
+
+			// otherwise enacted finalized block becomes best block...
 		}
 
 		self.recent_best_block = new_hash;
@@ -137,7 +138,10 @@ where
 
 #[cfg(test)]
 mod enactment_state_tests {
+	use super::EnactmentState;
+	use sc_transaction_pool_api::ChainEvent;
 	use sp_blockchain::{HashAndNumber, TreeRoute};
+	use std::sync::Arc;
 	use substrate_test_runtime_client::runtime::{Block, Hash};
 
 	// some helpers for convenient blocks' hash naming
@@ -355,10 +359,6 @@ mod enactment_state_tests {
 		}
 	}
 
-	use super::EnactmentState;
-	use sc_transaction_pool_api::ChainEvent;
-	use std::sync::Arc;
-
 	fn trigger_new_best_block(
 		state: &mut EnactmentState<Block>,
 		from: HashAndNumber<Block>,
@@ -369,7 +369,7 @@ mod enactment_state_tests {
 		let event_tree_route = tree_route(from, acted_on).expect("Tree route exists");
 
 		state
-			.update_and_check_if_new_enactment_is_valid(
+			.update(
 				&ChainEvent::NewBestBlock {
 					hash: acted_on,
 					tree_route: Some(Arc::new(event_tree_route)),
@@ -395,10 +395,7 @@ mod enactment_state_tests {
 			.collect::<Vec<_>>();
 
 		state
-			.update_and_check_if_new_enactment_is_valid(
-				&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() },
-				&tree_route,
-			)
+			.update(&ChainEvent::Finalized { hash: acted_on, tree_route: v.into() }, &tree_route)
 			.unwrap()
 			.is_some()
 	}
