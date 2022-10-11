@@ -734,8 +734,7 @@ where
 				Ok(tree_route) => Ok(tree_route),
 				Err(e) =>
 					return Err(format!(
-						"Error [{e}] occurred while computing tree_route from {from:?} to \
-					 previously finalized: {to:?}"
+						"Error [{e}] occurred while computing tree_route from {from:?} to {to:?}"
 					)),
 			}
 		};
@@ -757,7 +756,7 @@ where
 
 		if let ChainEvent::Finalized { hash, tree_route } = event {
 			log::trace!(
-				target:"txpool", 
+				target: "txpool",
 				"on-finalized enacted: {tree_route:?}, previously finalized: \
 				{prev_finalized_block:?}",
 			);
@@ -766,7 +765,7 @@ where
 					log::warn!(
 						target: "txpool",
 						"Error [{}] occurred while attempting to notify watchers about finalization {}",
-						hash, e
+						e, hash
 					)
 				}
 			}
@@ -832,6 +831,12 @@ where
 			ChainEvent::Finalized { hash, .. } => (*hash, true),
 		};
 
+		// block was already finalized
+		if self.recent_finalized_block == new_hash {
+			log::debug!(target: "txpool", "handle_enactment: block already finalized");
+			return Ok(None)
+		}
+
 		// compute actual tree route from best_block to notified block, and use it instead of
 		// tree_route provided with event
 		let tree_route = tree_route(self.recent_best_block, new_hash)?;
@@ -841,12 +846,6 @@ where
 			"resolve hash:{:?} finalized:{:?} tree_route:{:?} best_block:{:?} finalized_block:{:?}",
 			new_hash, finalized, tree_route, self.recent_best_block, self.recent_finalized_block
 		);
-
-		// block was already finalized
-		if self.recent_finalized_block == new_hash {
-			log::debug!(target:"txpool", "handle_enactment: block already finalized");
-			return Ok(None)
-		}
 
 		// Check if recently finalized block is on retracted path.
 		// This could be happening if we first received a finalization event and then
