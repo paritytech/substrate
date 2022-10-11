@@ -1019,6 +1019,46 @@ impl<T: Clone> FrozenForDuration<T> {
 	}
 }
 
+/// The state of the pinned block.
+struct PinnedBlockState<Block: BlockT> {
+	/// The number of active users that need this block alive.
+	ref_count: u64,
+	/// True if the block was pruned by any previous finalization.
+	///
+	/// # Note
+	///
+	/// The block must be pruned with the pruning window
+	/// if and only if this field is set and the reference count drops to zero.
+	///
+	/// Added to avoid the following edge-case:
+	///
+	/// Block tree:
+	///    G ... X -> A1
+	///          X -> A2
+	///
+	/// - user1: pin_block A1
+	/// - user2: pin_block A1
+	/// - user1: unpin_block A1
+	/// - user2: unpin_block A1
+	///
+	/// - block A2 is finalized (A1 is considered a fork)
+	/// - finalize block A2
+	/// - block A1 should be pruned only once
+	///
+	/// Therefore, not every block that has its reference count
+	/// equal to zero should also be pruned with the next finalization.
+	was_pruned: bool,
+	/// The state of the block as tracked by the `state-db`.
+	_state: RefTrackingState<Block>,
+}
+
+impl<Block: BlockT> PinnedBlockState<Block> {
+	/// Construct a new [`PinnedBlockState`].
+	fn new(state: RefTrackingState<Block>) -> Self {
+		Self { ref_count: 1, was_pruned: false, _state: state }
+	}
+}
+
 /// Disk backend.
 ///
 /// Disk backend keeps data in a key-value store. In archive mode, trie nodes are kept from all
