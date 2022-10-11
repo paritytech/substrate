@@ -20,6 +20,7 @@
 
 use crate::protocol;
 
+use codec::Encode;
 use libp2p::{multiaddr, Multiaddr, PeerId};
 use std::{fmt, str, str::FromStr};
 
@@ -199,6 +200,30 @@ impl Default for SetConfig {
 	}
 }
 
+/// Custom handshake for the notification protocol
+#[derive(Debug, Clone)]
+pub struct NotificationHandshake(Vec<u8>);
+
+impl NotificationHandshake {
+	/// Create new `NotificationHandshake` from an object that implements `Encode`
+	pub fn new<H: Encode>(handshake: H) -> Self {
+		Self(handshake.encode())
+	}
+
+	/// Create new `NotificationHandshake` from raw bytes
+	pub fn from_bytes(bytes: Vec<u8>) -> Self {
+		Self(bytes)
+	}
+}
+
+impl std::ops::Deref for NotificationHandshake {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
 /// Extension to [`SetConfig`] for sets that aren't the default set.
 ///
 /// > **Note**: As new fields might be added in the future, please consider using the `new` method
@@ -218,6 +243,8 @@ pub struct NonDefaultSetConfig {
 	/// If a fallback is used, it will be reported in
 	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
 	pub fallback_names: Vec<protocol::ProtocolName>,
+	/// Handshake of the protocol
+	pub handshake: Option<NotificationHandshake>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
 	/// Base configuration.
@@ -231,6 +258,7 @@ impl NonDefaultSetConfig {
 			notifications_protocol,
 			max_notification_size,
 			fallback_names: Vec::new(),
+			handshake: None,
 			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,
