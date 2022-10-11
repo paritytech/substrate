@@ -13,13 +13,13 @@ error: `Pallet` does not have #[pallet::inherent] defined, perhaps you should re
 58 | | }
    | |_- in this macro invocation
    |
-   = note: this error originates in the macro `pallet::__substrate_inherent_check::is_inherent_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `pallet::__substrate_inherent_check::is_inherent_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0599]: no function or associated item named `create_inherent` found for struct `pallet::Pallet` in the current scope
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
-   |       ------------------------ function or associated item `create_inherent` not found for this
+   |       -------------------- function or associated item `create_inherent` not found for this struct
 ...
 49 | / construct_runtime! {
 50 | |     pub enum Runtime where
@@ -39,7 +39,7 @@ error[E0599]: no function or associated item named `is_inherent` found for struc
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
-   |       ------------------------ function or associated item `is_inherent` not found for this
+   |       -------------------- function or associated item `is_inherent` not found for this struct
 ...
 49 | / construct_runtime! {
 50 | |     pub enum Runtime where
@@ -59,7 +59,7 @@ error[E0599]: no function or associated item named `check_inherent` found for st
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
-   |       ------------------------ function or associated item `check_inherent` not found for this
+   |       -------------------- function or associated item `check_inherent` not found for this struct
 ...
 49 | / construct_runtime! {
 50 | |     pub enum Runtime where
@@ -79,7 +79,7 @@ error[E0599]: no associated item named `INHERENT_IDENTIFIER` found for struct `p
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
-   |       ------------------------ associated item `INHERENT_IDENTIFIER` not found for this
+   |       -------------------- associated item `INHERENT_IDENTIFIER` not found for this struct
 ...
 49 | / construct_runtime! {
 50 | |     pub enum Runtime where
@@ -99,7 +99,7 @@ error[E0599]: no function or associated item named `is_inherent_required` found 
   --> tests/construct_runtime_ui/undefined_inherent_part.rs:49:1
    |
 11 |       pub struct Pallet<T>(_);
-   |       ------------------------ function or associated item `is_inherent_required` not found for this
+   |       -------------------- function or associated item `is_inherent_required` not found for this struct
 ...
 49 | / construct_runtime! {
 50 | |     pub enum Runtime where

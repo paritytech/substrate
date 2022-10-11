@@ -34,14 +34,10 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{
-		self, message::generic::Roles, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol,
-		Ready,
-	},
+	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
 	transport, ReputationChange,
 };
 
-use codec::Encode as _;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -222,19 +218,13 @@ where
 			local_peer_id.to_base58(),
 		);
 
-		let default_notif_handshake_message = Roles::from(&params.role).encode();
-
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			params.chain.clone(),
-			params.protocol_id.clone(),
-			&params.fork_id,
 			&params.network_config,
-			(0..params.network_config.extra_sets.len())
-				.map(|_| default_notif_handshake_message.clone())
-				.collect(),
 			params.metrics_registry.as_ref(),
 			params.chain_sync,
+			params.block_announce_config,
 		)?;
 
 		// List of multiaddresses that we know in the network.
