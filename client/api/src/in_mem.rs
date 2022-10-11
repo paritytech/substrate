@@ -768,6 +768,14 @@ where
 		None
 	}
 
+	fn pin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		Ok(())
+	}
+
+	fn unpin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		Ok(())
+	}
+
 	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
 		match block {
 			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),

@@ -123,6 +123,12 @@ pub trait BlockBackend<Block: BlockT> {
 		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
 
+	/// Pin the block to prevent pruning.
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+
+	/// Unpin the block to allow pruning.
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
+
 	/// Get full block by id.
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
 

@@ -413,6 +413,16 @@ where
 		&self.finality_notification_sinks
 	}
 
+	/// Pin the block to prevent pruning.
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.backend.pin_block(hash)
+	}
+
+	/// Unpin the block to allow pruning.
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.backend.unpin_block(hash)
+	}
+
 	/// Get a reference to the state at a given block.
 	pub fn state_at(&self, block: &BlockId<Block>) -> sp_blockchain::Result<B::State> {
 		self.backend.state_at(*block)
@@ -1947,6 +1957,16 @@ where
 		id: &BlockId<Block>,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
+	}
+
+	/// Pin the block to prevent pruning.
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.pin_block(hash)
+	}
+
+	/// Unpin the block to allow pruning.
+	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		self.unpin_block(hash)
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {

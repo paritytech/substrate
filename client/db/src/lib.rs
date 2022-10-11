@@ -2302,6 +2302,14 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		&self.blockchain
 	}
 
+	fn pin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		Ok(())
+	}
+
+	fn unpin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		Ok(())
+	}
+
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
