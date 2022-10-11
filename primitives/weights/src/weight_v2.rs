@@ -112,7 +112,7 @@ impl Weight {
 		Self { ref_time: 0, proof_size }
 	}
 
-	/// Construct [`Weight`] from weight parts, namely reference time and storage size weights.
+	/// Construct [`Weight`] from weight parts, namely reference time and proof size weights.
 	pub const fn from_parts(ref_time: u64, proof_size: u64) -> Self {
 		Self { ref_time, proof_size }
 	}
