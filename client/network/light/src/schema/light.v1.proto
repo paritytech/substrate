@@ -18,6 +18,7 @@ message Request {
 		RemoteCallRequest remote_call_request = 1;
 		RemoteReadRequest remote_read_request = 2;
 		RemoteReadChildRequest remote_read_child_request = 4;
+		// Note: ids 3 and 5 were used in the past. It would be preferable to not re-use them.
 	}
 }
 
@@ -26,6 +27,7 @@ message Response {
 	oneof response {
 		RemoteCallResponse remote_call_response = 1;
 		RemoteReadResponse remote_read_response = 2;
+		// Note: ids 3 and 4 were used in the past. It would be preferable to not re-use them.
 	}
 }
 
