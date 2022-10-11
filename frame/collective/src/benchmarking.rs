@@ -35,21 +35,21 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8> {
-	let mut value = id;
-	let mut value_index = 0;
-
-	while value > u8::MAX as u32 {
-		value -= u8::MAX as u32;
-		value_index += 1;
+	// this variable contains the how many `u8::MAX` can we substract from id.
+	let mut u8_max_count = 0;
+	while id - (u8::MAX * u8_max_count) as u32 > u8::MAX as u32 {
+		u8_max_count += 1;
 	}
+
+	let id_as_u8 = id - (u8::MAX * u8_max_count) as u32;
 
 	(0..length)
 		.map(|i| {
-			if i == value_index {
+			if i as u8 == u8_max_count {
 				// this should never panic.
-				return value.try_into().unwrap()
+				return id_as_u8.try_into().unwrap()
 			}
-			value_index.try_into().unwrap()
+			u8_max_count.try_into().unwrap()
 		})
 		.collect::<Vec<u8>>()
 }
