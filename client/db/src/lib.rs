@@ -4048,4 +4048,126 @@ pub(crate) mod tests {
 		assert!(bc.body(BlockId::hash(blocks[4])).unwrap().is_none());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 	}
+
+	#[test]
+	fn test_pinned_blocks_on_finalize_with_fork() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		for i in 0..5 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+
+			// Avoid block pruning.
+			backend.pin_block(&blocks[i as usize]).unwrap();
+
+			prev_hash = hash;
+		}
+
+		// Insert a fork at the second block.
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4
+		//        1 -> 2 -> 3
+		let fork_hash_root =
+			insert_block(&backend, 2, blocks[1], None, H256::random(), vec![2.into()], None)
+				.unwrap();
+		let fork_hash_3 = insert_block(
+			&backend,
+			3,
+			fork_hash_root,
+			None,
+			H256::random(),
+			vec![3.into(), 11.into()],
+			None,
+		)
+		.unwrap();
+
+		// Do not prune the fork hash.
+		backend.pin_block(&fork_hash_3).unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
+		op.mark_head(BlockId::hash(blocks[4])).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		for i in 1..5 {
+			let mut op = backend.begin_operation().unwrap();
+			backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
+			op.mark_finalized(BlockId::hash(blocks[i]), None).unwrap();
+			backend.commit_operation(op).unwrap();
+		}
+
+		let bc = backend.blockchain();
+		// Block 0, 1, 2, 3 are pinned and pruning is delayed,
+		// while block 4 is never delayed for pruning as it is finalized.
+		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		// Check the fork hashes.
+		assert_eq!(None, bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(Some(vec![3.into(), 11.into()]), bc.body(BlockId::hash(fork_hash_3)).unwrap());
+
+		// Unpin all blocks, except the forked one.
+		for block in &blocks {
+			backend.unpin_block(&block).unwrap();
+		}
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		//        1 -> ..-> 3
+		let hash =
+			insert_block(&backend, 5, prev_hash, None, Default::default(), vec![5.into()], None)
+				.unwrap();
+		blocks.push(hash);
+
+		// Mark block 5 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[5])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[5]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert!(bc.body(BlockId::hash(blocks[0])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[1])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[3])).unwrap().is_none());
+		// Block 4 was unpinned before pruning, it must also get pruned.
+		assert!(bc.body(BlockId::hash(blocks[4])).unwrap().is_none());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		// Fork 3 was kept around.
+		assert_eq!(Some(vec![3.into(), 11.into()]), bc.body(BlockId::hash(fork_hash_3)).unwrap());
+
+		backend.unpin_block(&fork_hash_3).unwrap();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6
+		//        1 -> ..-> 3
+		let hash =
+			insert_block(&backend, 6, blocks[5], None, Default::default(), vec![6.into()], None)
+				.unwrap();
+		blocks.push(hash);
+
+		// Mark block 6 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[6])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[6]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		// Block 6 must be the only one around.
+		assert!(bc.body(BlockId::hash(fork_hash_3)).unwrap().is_none());
+		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
+	}
 }
