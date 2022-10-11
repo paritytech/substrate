@@ -404,9 +404,9 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// A (almost) marker trait that signifies an election provider as working synchronously. i.e. being
 /// *instant*.
 ///
-/// This must still use the same data provider as with [`ElectionProviderBase::DataProvider`]. However, it can
-/// optionally overwrite the amount of voters and targets that are fetched from the data provider at
-/// runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
+/// This must still use the same data provider as with [`ElectionProviderBase::DataProvider`].
+/// However, it can optionally overwrite the amount of voters and targets that are fetched from the
+/// data provider at runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
 pub trait InstantElectionProvider: ElectionProviderBase {
 	fn instant_elect(
 		forced_input_voters_bound: Option<u32>,

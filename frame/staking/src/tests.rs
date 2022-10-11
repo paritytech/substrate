@@ -5639,3 +5639,43 @@ fn cannot_set_unsupported_validator_count() {
 		);
 	})
 }
+
+#[test]
+fn increase_validator_count_is_capped() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 40));
+
+		// increased by full value
+		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 6));
+		assert_eq!(ValidatorCount::<Test>::get(), 46);
+
+		// capped to max winners
+		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 5));
+		assert_eq!(ValidatorCount::<Test>::get(), 50);
+
+		// further increment does not do anything
+		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 4));
+		assert_eq!(ValidatorCount::<Test>::get(), 50);
+	})
+}
+
+#[test]
+fn scale_validator_count_is_capped() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 20));
+
+		// scaled by full value
+		assert_ok!(Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(200)));
+		assert_eq!(ValidatorCount::<Test>::get(), 40);
+
+		// capped to max winners
+		assert_ok!(Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(200)));
+		assert_eq!(ValidatorCount::<Test>::get(), 50);
+
+		// further scale does not do anything
+		assert_ok!(Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(200)));
+		assert_eq!(ValidatorCount::<Test>::get(), 50);
+	})
+}

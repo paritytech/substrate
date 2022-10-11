@@ -1289,7 +1289,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Increments the ideal number of validators.
+		/// Increments the ideal number of validators upto maximum of
+		/// `ElectionProviderBase::MaxWinners`.
 		///
 		/// The dispatch origin must be Root.
 		///
@@ -1302,11 +1303,15 @@ pub mod pallet {
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += additional);
+			ValidatorCount::<T>::mutate(|n| {
+				*n = <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+					.min(*n + additional);
+			});
 			Ok(())
 		}
 
-		/// Scale up the ideal number of validators by a factor.
+		/// Scale up the ideal number of validators by a factor upto maximum of
+		/// `ElectionProviderBase::MaxWinners`.
 		///
 		/// The dispatch origin must be Root.
 		///
@@ -1316,7 +1321,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += factor * *n);
+			ValidatorCount::<T>::mutate(|n| {
+				*n = <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+					.min(*n + factor * *n)
+			});
 			Ok(())
 		}
 
