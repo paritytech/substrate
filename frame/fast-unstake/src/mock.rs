@@ -32,7 +32,9 @@ pub type T = Runtime;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+		);
 }
 
 impl frame_system::Config for Runtime {
@@ -104,7 +106,7 @@ parameter_types! {
 }
 
 pub struct MockElection;
-impl frame_election_provider_support::ElectionProvider for MockElection {
+impl frame_election_provider_support::ElectionProviderBase for MockElection {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type DataProvider = Staking;
@@ -113,7 +115,9 @@ impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn ongoing() -> bool {
 		Ongoing::get()
 	}
+}
 
+impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn elect() -> Result<frame_election_provider_support::Supports<AccountId>, Self::Error> {
 		Err(())
 	}
