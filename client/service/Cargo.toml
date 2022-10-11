@@ -31,7 +31,7 @@ parking_lot = "0.12.1"
 log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
-pin-project = "1.0.10"
+pin-project = "1.0.12"
 hash-db = "0.15.2"
 serde = "1.0.136"
 serde_json = "1.0.85"
@@ -69,6 +69,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../primitives/transaction-storage-proof" }
 sc-rpc-server = { version = "4.0.0-dev", path = "../rpc-servers" }
 sc-rpc = { version = "4.0.0-dev", path = "../rpc" }
+sc-rpc-spec-v2 = { version = "0.10.0-dev", path = "../rpc-spec-v2" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sc-informant = { version = "0.10.0-dev", path = "../informant" }
@@ -80,7 +81,7 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.11.0", default-features = false, features = [
+parity-util-mem = { version = "0.12.0", default-features = false, features = [
 	"primitive-types",
 ] }
 async-trait = "0.1.57"

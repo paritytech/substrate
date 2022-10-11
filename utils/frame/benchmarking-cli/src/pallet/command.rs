@@ -297,16 +297,15 @@ impl PalletCmd {
 			for (s, selected_components) in all_components.iter().enumerate() {
 				// First we run a verification
 				if !self.no_verify {
-					// Dont use these results since verification code will add overhead
 					let state = &state_without_tracking;
-					let _results = StateMachine::new(
+					let result = StateMachine::new(
 						state,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
 						&(
-							&pallet.clone(),
-							&extrinsic.clone(),
+							&pallet,
+							&extrinsic,
 							&selected_components.clone(),
 							true, // run verification code
 							1,    // no need to do internal repeats
@@ -321,6 +320,20 @@ impl PalletCmd {
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
+					// Dont use these results since verification code will add overhead.
+					let _batch =
+						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
+							&mut &result[..],
+						)
+						.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?
+						.map_err(|e| {
+							format!(
+								"Benchmark {}::{} failed: {}",
+								String::from_utf8_lossy(&pallet),
+								String::from_utf8_lossy(&extrinsic),
+								e
+							)
+						})?;
 				}
 				// Do one loop of DB tracking.
 				{

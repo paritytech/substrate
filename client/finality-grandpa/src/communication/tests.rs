@@ -28,10 +28,7 @@ use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
 	config::MultiaddrWithPeerId,
-	protocol::{
-		event::{Event as NetworkEvent, ObservedRole},
-		ProtocolName,
-	},
+	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
