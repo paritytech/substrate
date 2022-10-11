@@ -48,9 +48,8 @@ fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8
 			if i == value_index {
 				// this should never panic.
 				return value.try_into().unwrap()
-			} else {
-				return value_index.try_into().unwrap()
 			}
+			value_index.try_into().unwrap()
 		})
 		.collect::<Vec<u8>>()
 }
