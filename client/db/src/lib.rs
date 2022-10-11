@@ -44,7 +44,7 @@ use linked_hash_map::LinkedHashMap;
 use log::{debug, trace, warn};
 use parking_lot::{Mutex, RwLock};
 use std::{
-	collections::{HashMap, HashSet},
+	collections::{hash_map::Entry, HashMap, HashSet},
 	io,
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -1075,6 +1075,18 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 	shared_trie_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
+	/// Keep track of the pinned blocks. A block is pinned when calling [`Self::pin_block`].
+	///
+	/// The pruning of these blocks is delayed for as long as their reference count is positive.
+	///
+	/// # Note
+	///
+	/// Block hashes from here are moved to the pruning queue when:
+	///   - [`PinnedBlockState::ref_count`] equals to zero
+	///   - the block was previously marked as pruned [`PinnedBlockState::was_pruned`]
+	pinned_blocks: Arc<Mutex<HashMap<Block::Hash, PinnedBlockState<Block>>>>,
+	/// Blocks added here will be pruned on the next finalization.
+	pruning_queue: Arc<Mutex<Vec<Block::Hash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1191,6 +1203,8 @@ impl<Block: BlockT> Backend<Block> {
 			shared_trie_cache: config.trie_cache_maximum_size.map(|maximum_size| {
 				SharedTrieCache::new(sp_trie::cache::CacheSize::Maximum(maximum_size))
 			}),
+			pinned_blocks: Default::default(),
+			pruning_queue: Default::default(),
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -2397,7 +2411,26 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		&self.blockchain
 	}
 
-	fn pin_block(&self, _hash: &Block::Hash) -> sp_blockchain::Result<()> {
+	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
+		if self.blocks_pruning == BlocksPruning::KeepAll {
+			return Ok(())
+		}
+
+		let mut cache = self.pinned_blocks.lock();
+		match cache.entry(*hash) {
+			Entry::Occupied(mut entry) => {
+				let state = entry.get_mut();
+				state.ref_count = state.ref_count.saturating_add(1);
+			},
+			Entry::Vacant(entry) => {
+				// The `state_at_ref` verifies if the block exists.
+				let state = self.state_at_ref(BlockId::hash(*hash))?;
+				let state = PinnedBlockState::new(state);
+				trace!(target: "db-pin", "Pinned block: {:?}", hash);
+				entry.insert(state);
+			},
+		}
+
 		Ok(())
 	}
 
