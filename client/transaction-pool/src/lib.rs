@@ -602,9 +602,9 @@ where
 		let (hash, block_number) = match tree_route.last() {
 			Some(HashAndNumber { hash, number }) => (hash, number),
 			None => {
-				log::trace!(
+				log::warn!(
 					target: "txpool",
-					"Skipping chain event - no last block in enacted path {:?}",
+					"Skipping ChainEvent - no last block in tree route {:?}",
 					tree_route,
 				);
 				return
@@ -736,7 +736,7 @@ where
 				Ok(tree_route) => Ok(tree_route),
 				Err(e) =>
 					return Err(format!(
-						"Error [{e}] occurred while computing tree_route from {from:?} to {to:?}"
+						"Error occurred while computing tree_route from {from:?} to {to:?}: {e}"
 					)),
 			}
 		};
@@ -766,8 +766,8 @@ where
 				if let Err(e) = self.pool.validated_pool().on_block_finalized(*hash).await {
 					log::warn!(
 						target: "txpool",
-						"Error [{}] occurred while attempting to notify watchers about finalization {}",
-						e, hash
+						"Error occurred while attempting to notify watchers about finalization {}: {}",
+						hash, e
 					)
 				}
 			}

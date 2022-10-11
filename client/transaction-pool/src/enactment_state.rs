@@ -31,8 +31,9 @@ use sp_runtime::traits::Block as BlockT;
 ///  \
 ///   B2-C2-D2-E2
 ///
-/// Some scenarios and expected behavior for seqeunce of `NewBestBlock` (nbb) and `Finalized` (f)
-/// events: `nbb(C1)`, `f(C1)` -> false (handle_enactment was already performed in `nbb(C1))`
+/// Some scenarios and expected behavior for sequence of `NewBestBlock` (`nbb`) and `Finalized`
+/// (`f`) events:
+/// `nbb(C1)`, `f(C1)` -> false (handle_enactment was already performed in `nbb(C1))`
 /// `f(C1)`, `nbb(C1)` -> false (handle_enactment was already performed in `f(C1))`
 ///
 /// `f(C1)`, `nbb(D2)` -> false (handle_enactment was already performed in `f(C1)`, we should not
