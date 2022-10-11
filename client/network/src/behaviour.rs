@@ -19,7 +19,7 @@
 use crate::{
 	discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryOut},
 	peer_info,
-	protocol::{message::Roles, CustomMessageOutcome, NotificationsSink, Protocol},
+	protocol::{CustomMessageOutcome, NotificationsSink, Protocol},
 	request_responses,
 };
 
@@ -41,7 +41,8 @@ use sc_consensus::import_queue::{IncomingBlock, RuntimeOrigin};
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::{
-		event::{DhtEvent, ObservedRole},
+		event::DhtEvent,
+		role::{ObservedRole, Roles},
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},

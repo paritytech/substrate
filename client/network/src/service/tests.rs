@@ -20,10 +20,15 @@ use crate::{config, NetworkService, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
+use sc_client_api::{BlockBackend, HeaderBackend};
 use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
-	protocol::event::Event,
+	config::{
+		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake,
+		ProtocolId, SetConfig, TransportConfig,
+	},
+	protocol::{event::Event, role::Roles},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers, NetworkStateInfo},
+	sync::message::BlockAnnouncesHandshake,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -31,7 +36,7 @@ use sc_network_sync::{
 	ChainSync,
 };
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
-use sp_runtime::traits::{Block as BlockT, Header as _};
+use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
 use std::{sync::Arc, time::Duration};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
 
@@ -132,7 +137,33 @@ fn build_test_full_node(
 		None,
 	)
 	.unwrap();
+
+	let block_announce_config = NonDefaultSetConfig {
+		notifications_protocol: BLOCK_ANNOUNCE_PROTO_NAME.into(),
+		fallback_names: vec![],
+		max_notification_size: 1024 * 1024,
+		handshake: Some(NotificationHandshake::new(BlockAnnouncesHandshake::<
+			substrate_test_runtime_client::runtime::Block,
+		>::build(
+			Roles::from(&config::Role::Full),
+			client.info().best_number,
+			client.info().best_hash,
+			client
+				.block_hash(Zero::zero())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+		))),
+		set_config: SetConfig {
+			in_peers: 0,
+			out_peers: 0,
+			reserved_nodes: Vec::new(),
+			non_reserved_mode: NonReservedPeerMode::Deny,
+		},
+	};
+
 	let worker = NetworkWorker::new(config::Params {
+		block_announce_config,
 		role: config::Role::Full,
 		executor: None,
 		network_config,
@@ -161,6 +192,7 @@ fn build_test_full_node(
 	(service, event_stream)
 }
 
+const BLOCK_ANNOUNCE_PROTO_NAME: &str = "/block-announces";
 const PROTOCOL_NAME: &str = "/foo";
 
 /// Builds two nodes and their associated events stream.
@@ -178,6 +210,7 @@ fn build_nodes_one_proto() -> (
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: Default::default(),
 		}],
 		listen_addresses: vec![listen_addr.clone()],
@@ -190,6 +223,7 @@ fn build_nodes_one_proto() -> (
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
@@ -368,6 +402,7 @@ fn lots_of_incoming_peers_works() {
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: SetConfig { in_peers: u32::MAX, ..Default::default() },
 		}],
 		transport: TransportConfig::MemoryOnly,
@@ -387,6 +422,7 @@ fn lots_of_incoming_peers_works() {
 				notifications_protocol: PROTOCOL_NAME.into(),
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
+				handshake: None,
 				set_config: SetConfig {
 					reserved_nodes: vec![MultiaddrWithPeerId {
 						multiaddr: listen_addr.clone(),
@@ -504,6 +540,7 @@ fn fallback_name_working() {
 			notifications_protocol: NEW_PROTOCOL_NAME.into(),
 			fallback_names: vec![PROTOCOL_NAME.into()],
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: Default::default(),
 		}],
 		listen_addresses: vec![listen_addr.clone()],
@@ -516,6 +553,7 @@ fn fallback_name_working() {
 			notifications_protocol: PROTOCOL_NAME.into(),
 			fallback_names: Vec::new(),
 			max_notification_size: 1024 * 1024,
+			handshake: None,
 			set_config: SetConfig {
 				reserved_nodes: vec![MultiaddrWithPeerId {
 					multiaddr: listen_addr,
@@ -559,6 +597,72 @@ fn fallback_name_working() {
 
 		receiver.await;
 	});
+}
+
+// Disconnect peer by calling `Protocol::disconnect_peer()` with the supplied block announcement
+// protocol name and verify that `SyncDisconnected` event is emitted
+#[async_std::test]
+async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let (node1, mut events_stream1) = build_test_full_node(config::NetworkConfiguration {
+		extra_sets: vec![NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME.into(),
+			fallback_names: vec![],
+			max_notification_size: 1024 * 1024,
+			handshake: None,
+			set_config: Default::default(),
+		}],
+		listen_addresses: vec![listen_addr.clone()],
+		transport: TransportConfig::MemoryOnly,
+		..config::NetworkConfiguration::new_local()
+	});
+
+	let (node2, mut events_stream2) = build_test_full_node(config::NetworkConfiguration {
+		extra_sets: vec![NonDefaultSetConfig {
+			notifications_protocol: PROTOCOL_NAME.into(),
+			fallback_names: Vec::new(),
+			max_notification_size: 1024 * 1024,
+			handshake: None,
+			set_config: SetConfig {
+				reserved_nodes: vec![MultiaddrWithPeerId {
+					multiaddr: listen_addr,
+					peer_id: node1.local_peer_id(),
+				}],
+				..Default::default()
+			},
+		}],
+		listen_addresses: vec![],
+		transport: TransportConfig::MemoryOnly,
+		..config::NetworkConfiguration::new_local()
+	});
+
+	loop {
+		match events_stream1.next().await.unwrap() {
+			Event::NotificationStreamOpened { .. } => break,
+			_ => {},
+		};
+	}
+
+	loop {
+		match events_stream2.next().await.unwrap() {
+			Event::NotificationStreamOpened { .. } => break,
+			_ => {},
+		};
+	}
+
+	// disconnect peer using `PROTOCOL_NAME`, verify `NotificationStreamClosed` event is emitted
+	node2.disconnect_peer(node1.local_peer_id(), PROTOCOL_NAME.into());
+	assert!(std::matches!(
+		events_stream2.next().await,
+		Some(Event::NotificationStreamClosed { .. })
+	));
+	let _ = events_stream2.next().await; // ignore the reopen event
+
+	// now disconnect using the block announcement protocol, verify that `SyncDisconnected` is
+	// emitted
+	node2.disconnect_peer(node1.local_peer_id(), BLOCK_ANNOUNCE_PROTO_NAME.into());
+	assert!(std::matches!(events_stream2.next().await, Some(Event::SyncDisconnected { .. })));
 }
 
 #[test]

@@ -328,7 +328,7 @@ fn should_revalidate_across_many_blocks() {
 
 	block_on(
 		watcher1
-			.take_while(|s| future::ready(*s != TransactionStatus::InBlock(block_hash)))
+			.take_while(|s| future::ready(*s != TransactionStatus::InBlock((block_hash, 0))))
 			.collect::<Vec<_>>(),
 	);
 
@@ -398,24 +398,24 @@ fn should_push_watchers_during_maintenance() {
 		futures::executor::block_on_stream(watcher0).collect::<Vec<_>>(),
 		vec![
 			TransactionStatus::Ready,
-			TransactionStatus::InBlock(header_hash),
-			TransactionStatus::Finalized(header_hash)
+			TransactionStatus::InBlock((header_hash, 0)),
+			TransactionStatus::Finalized((header_hash, 0))
 		],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher1).collect::<Vec<_>>(),
 		vec![
 			TransactionStatus::Ready,
-			TransactionStatus::InBlock(header_hash),
-			TransactionStatus::Finalized(header_hash)
+			TransactionStatus::InBlock((header_hash, 1)),
+			TransactionStatus::Finalized((header_hash, 1))
 		],
 	);
 	assert_eq!(
 		futures::executor::block_on_stream(watcher2).collect::<Vec<_>>(),
 		vec![
 			TransactionStatus::Ready,
-			TransactionStatus::InBlock(header_hash),
-			TransactionStatus::Finalized(header_hash)
+			TransactionStatus::InBlock((header_hash, 2)),
+			TransactionStatus::Finalized((header_hash, 2))
 		],
 	);
 }
@@ -450,8 +450,8 @@ fn finalization() {
 
 	let mut stream = futures::executor::block_on_stream(watcher);
 	assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-	assert_eq!(stream.next(), Some(TransactionStatus::InBlock(header.hash())));
-	assert_eq!(stream.next(), Some(TransactionStatus::Finalized(header.hash())));
+	assert_eq!(stream.next(), Some(TransactionStatus::InBlock((header.hash(), 0))));
+	assert_eq!(stream.next(), Some(TransactionStatus::Finalized((header.hash(), 0))));
 	assert_eq!(stream.next(), None);
 }
 
@@ -573,30 +573,31 @@ fn fork_aware_finalization() {
 	for (canon_watcher, h) in canon_watchers {
 		let mut stream = futures::executor::block_on_stream(canon_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(h)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(h)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((h, 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((h, 0))));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_dave_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c2)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((c2, 0))));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(c2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((e1, 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((e1, 0))));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d2)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((d2, 0))));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(d2)));
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(e1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(e1)));
+		// In block e1 we submitted: [dave, bob] xts in this order.
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((e1, 1))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((e1, 1))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -646,10 +647,10 @@ fn prune_and_retract_tx_at_same_time() {
 	{
 		let mut stream = futures::executor::block_on_stream(watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1, 0))));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1)));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2)));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2)));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2, 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b2, 0))));
 		assert_eq!(stream.next(), None);
 	}
 }

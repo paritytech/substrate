@@ -770,7 +770,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 
@@ -803,7 +803,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 
