@@ -121,7 +121,7 @@ benchmarks_instance_pallet! {
 	}
 
 	execute {
-		let b in 10 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		let m in 1 .. T::MaxMembers::get();
 
 		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
@@ -151,7 +151,7 @@ benchmarks_instance_pallet! {
 
 	// This tests when execution would happen immediately after proposal
 	propose_execute {
-		let b in 10 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		let m in 1 .. T::MaxMembers::get();
 
 		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
@@ -182,7 +182,7 @@ benchmarks_instance_pallet! {
 
 	// This tests when proposal is created and queued as "proposed"
 	propose_proposed {
-		let b in 10 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		let m in 2 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 
@@ -378,7 +378,7 @@ benchmarks_instance_pallet! {
 	}
 
 	close_early_approved {
-		let b in 10 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
@@ -531,7 +531,7 @@ benchmarks_instance_pallet! {
 	}
 
 	close_approved {
-		let b in 10 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
