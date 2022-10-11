@@ -1128,7 +1128,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let mut cache = self.track_pin_blocks.lock();
 		let res = if let Some(entry) = cache.get_mut(&hash) {
-			println!("[should_delay_pruning] hash {:?} ref_count {:?}", hash, entry.ref_count);
+			trace!(target: "db-pin", "Pinned block: {:?} delay prunning", hash);
 			entry.was_pruned = true;
 			true
 		} else {
@@ -1873,11 +1873,8 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			// Also discard all previously pinned blocks
-			println!("prune_blocks: pruning delayed blocks");
-
 			let mut blocks = self.to_prune_queue.lock();
 			for hash in &*blocks {
-				println!("prune_blocks: Pruning delayed block: {:?}", hash);
 				let id = BlockId::<Block>::hash(*hash);
 				self.prune_block(transaction, id)?;
 			}
@@ -1892,12 +1889,12 @@ impl<Block: BlockT> Backend<Block> {
 		id: BlockId<Block>,
 	) -> ClientResult<()> {
 		if self.should_delay_pruning(id).unwrap_or(false) {
-			println!("             Not prunning pinned block {}", id);
+			// Trace for easily identifying `db-pin` paths only.
+			trace!(target: "db-pin", "Not prunning pinned block #{}", id);
 			debug!(target: "db", "Not prunning pinned block #{}", id);
 			return Ok(())
 		}
 
-		println!(" Removing block #{}", id);
 		debug!(target: "db", "Removing block #{}", id);
 		utils::remove_from_db(
 			transaction,
@@ -2439,7 +2436,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				// The `state_at_ref` verifies if the block exists.
 				let state = self.state_at_ref(BlockId::hash(*hash))?;
 				let state = PinnedBlockState::new(state);
-				println!("  pin_block: [creates] hash {:?} ref_count = {:?}", hash, state.ref_count);
+				trace!(target: "db-pin", "Pinned block: {:?}", hash);
 				entry.insert(state);
 			}
 		}
@@ -2455,18 +2452,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let mut cache = self.track_pin_blocks.lock();
 		if let Entry::Occupied(mut entry) = cache.entry(*hash) {
 			let state = entry.get_mut();
-
 			state.ref_count = state.ref_count.saturating_sub(1);
-			// println!("  unpin_block: hash {:?} ref_count = {:?}", hash, entry.get().ref_count);
-
 			if state.ref_count == 0 {
 				// Ensure the block is pruned with the next finalization.
 				if state.was_pruned {
+					trace!(target: "db-pin", "Unpinned block: {:?} to be pruned", hash);
 					let mut queue = self.to_prune_queue.lock();
 					queue.push(*hash);
 				}
 
-				println!("       HAVE REMOVED: hash {:?}", hash);
+				trace!(target: "db-pin", "Unpinned block: {:?}", hash);
 				entry.remove_entry();
 			}
 		}
