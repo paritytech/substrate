@@ -29,10 +29,9 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		let activated_at_block = System::block_number();
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
@@ -41,7 +40,7 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		assert_ok!(SafeMode::force_extend(ForceExtendOrigin::Weak.signed()));
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
@@ -54,7 +53,7 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 		next_block();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
@@ -125,15 +124,51 @@ fn can_automatically_deactivate_after_timeout() {
 #[test]
 fn can_filter_balance_calls_when_activated() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
-
-		assert_ok!(call.clone().dispatch(Origin::signed(0)));
+		assert_ok!(call_transfer().dispatch(Origin::signed(0)));
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
+	});
+}
+
+
+#[test]
+fn can_filter_balance_in_batch_when_activated() {
+	new_test_ext().execute_with(|| {
+		let batch_call = RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer()]});
+
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+		System::assert_last_event(
+			pallet_utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn can_filter_balance_in_proxy_when_activated() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
+
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, Box::new(call_transfer())));
+		System::assert_last_event( pallet_proxy::Event::ProxyExecuted { result: Ok(()) }.into() );
+		
+		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
+
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, Box::new(call_transfer())));
+		System::assert_last_event(
+			pallet_proxy::Event::ProxyExecuted { result:  DispatchError::from(frame_system::Error::<Test>::CallFiltered).into() }.into(),
+		);
 	});
 }
 
@@ -455,4 +490,8 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 	});
+}
+
+fn call_transfer() -> RuntimeCall {
+	RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 })
 }
