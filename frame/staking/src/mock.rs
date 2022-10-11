@@ -546,10 +546,8 @@ impl ExtBuilder {
 		sp_tracing::try_init_simple();
 		let mut ext = self.build();
 		ext.execute_with(test);
-		ext.execute_with(|| {
-			let try_state = Staking::do_try_state(0);
-			assert!(try_state.is_ok(), "{}", try_state.unwrap_err());
-		});
+		#[cfg(feature = "try-runtime")]
+		ext.execute_with(|| Staking::try_state(0).unwrap());
 	}
 }
 
