@@ -83,20 +83,6 @@ fn add_blocks(blocks: usize) {
 	}
 }
 
-fn leaf_indices_to_block_numbers(
-	ext: &mut sp_io::TestExternalities,
-	leaf_indices: &Vec<LeafIndex>,
-) -> Vec<u64> {
-	leaf_indices
-		.iter()
-		.map(|l| {
-			let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
-			ext.execute_with(|| crate::Pallet::<Test>::leaf_index_to_parent_block_num(*l, mmr_size))
-				.saturating_add(1u32.into())
-		})
-		.collect()
-}
-
 #[test]
 fn should_start_empty() {
 	let _ = env_logger::try_init();
@@ -561,33 +547,30 @@ fn should_verify_batch_proofs() {
 	// to retrieve full leaf data when generating proofs
 	register_offchain_ext(&mut ext);
 
-	// verify that up to n=10, valid proofs are generated for all possible leaf combinations
-	for n in 0..10 {
+	// verify that up to n=10, valid proofs are generated for all possible block number combinations.
+	for n in 1..=10 {
 		ext.execute_with(|| new_block());
 		ext.persist_offchain_overlay();
 
-		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().powerset().skip(1).collect();
+		// generate powerset (skipping empty set) of all possible block number combinations for mmr size n.
+		let blocks_set: Vec<Vec<u64>> = (1..=n).into_iter().powerset().skip(1).collect();
 
-		leaves_set.iter().for_each(|leaves_subset| {
-			let block_numbers = leaf_indices_to_block_numbers(&mut ext, leaves_subset);
-			generate_and_verify_batch_proof(&mut ext, &block_numbers, 0);
+		blocks_set.iter().for_each(|blocks_subset| {
+			generate_and_verify_batch_proof(&mut ext, &blocks_subset, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
 
-	// verify that up to n=15, valid proofs are generated for all possible 2-leaf combinations
-	for n in 10..15 {
-		// (MMR Leafs)
+	// verify that up to n=15, valid proofs are generated for all possible 2-block number combinations.
+	for n in 11..=15 {
 		ext.execute_with(|| new_block());
 		ext.persist_offchain_overlay();
 
-		// generate all possible 2-leaf combinations for mmr size n
-		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().combinations(2).collect();
+		// generate all possible 2-block number combinations for mmr size n.
+		let blocks_set: Vec<Vec<u64>> = (1..=n).into_iter().combinations(2).collect();
 
-		leaves_set.iter().for_each(|leaves_subset| {
-			let block_numbers = leaf_indices_to_block_numbers(&mut ext, leaves_subset);
-			generate_and_verify_batch_proof(&mut ext, &block_numbers, 0);
+		blocks_set.iter().for_each(|blocks_subset| {
+			generate_and_verify_batch_proof(&mut ext, &blocks_subset, 0);
 			ext.persist_offchain_overlay();
 		});
 	}
