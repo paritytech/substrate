@@ -477,7 +477,6 @@ fn finalization() {
 
 #[test]
 fn fork_aware_finalization() {
-	// sp_tracing::try_init_simple();
 	let api = TestApi::empty();
 	// starting block A1 (last finalized.)
 	let a_header = api.push_block(1, vec![], true);
