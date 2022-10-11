@@ -1607,8 +1607,8 @@ impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
-	type DataProvider = T::DataProvider;
 	type MaxWinners = T::MaxWinners;
+	type DataProvider = T::DataProvider;
 }
 
 impl<T: Config> ElectionProvider for Pallet<T> {

@@ -110,16 +110,15 @@ pub struct MockElection;
 impl frame_election_provider_support::ElectionProviderBase for MockElection {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
+	type MaxWinners = MaxWinners;
 	type DataProvider = Staking;
 	type Error = ();
+}
 
+impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn ongoing() -> bool {
 		Ongoing::get()
 	}
-}
-
-impl frame_election_provider_support::BoundedElectionProvider for MockElection {
-	type MaxWinners = MaxWinners;
 	fn elect() -> Result<frame_election_provider_support::BoundedSupportsOf<Self>, Self::Error> {
 		Err(())
 	}

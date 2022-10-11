@@ -638,7 +638,7 @@ pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId,
 pub type VoterOf<D> =
 	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
 
-/// Same as `BoundedSupports` but parameterized by a `BoundedElectionProvider`.
+/// Same as `BoundedSupports` but parameterized by a `ElectionProviderBase`.
 pub type BoundedSupportsOf<E> = BoundedSupports<
 	<E as ElectionProviderBase>::AccountId,
 	<E as ElectionProviderBase>::MaxWinners,

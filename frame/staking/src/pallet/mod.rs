@@ -17,7 +17,7 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::{BoundedElectionProvider, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{ElectionProvider, ElectionProviderBase, SortedListProvider, VoteWeight};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -107,7 +107,7 @@ pub mod pallet {
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
-		type ElectionProvider: BoundedElectionProvider<
+		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
@@ -115,7 +115,7 @@ pub mod pallet {
 		>;
 
 		/// Something that provides the election functionality at genesis.
-		type GenesisElectionProvider: BoundedElectionProvider<
+		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
@@ -786,14 +786,14 @@ pub mod pallet {
 
 			// ensure election results are always bounded with the same value
 			assert!(
-				<T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get() ==
-					<T::GenesisElectionProvider as BoundedElectionProvider>::MaxWinners::get()
+				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get() ==
+					<T::GenesisElectionProvider as ElectionProviderBase>::MaxWinners::get()
 			);
 			// ensure desired targets requested is always lower than max winners
 			// supported by the election provider.
 			assert!(
 				ValidatorCount::<T>::get() <=
-					<T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get()
+					<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
 			);
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
@@ -1279,10 +1279,7 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// ensure new validator count does not exceed maximum winners
 			// support by election provider.
-			ensure!(
-				new <= <T::ElectionProvider as BoundedElectionProvider>::MaxWinners::get(),
-				Error::<T>::TooManyElectionWinners
-			);
+			ensure!(new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(), Error::<T>::TooManyElectionWinners);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
