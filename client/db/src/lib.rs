@@ -1025,12 +1025,12 @@ struct PinnedBlockState<Block: BlockT> {
 	///
 	/// # Note
 	///
-	/// If this is true, when the reference count drops to zero the
-	/// block must be pruned with the next finalization.
+	/// The block must be pruned with the pruning window
+	/// if and only if this field is set and the reference count drops to zero.
 	///
-	/// This is introduced to avoid the following edge-case:
+	/// Added to avoid the following edge-case:
 	///
-	/// 1. Block tree:
+	/// Block tree:
 	///    G ... X -> A1
 	///          X -> A2
 	///
@@ -1043,9 +1043,8 @@ struct PinnedBlockState<Block: BlockT> {
 	/// - finalize block A2
 	/// - block A1 should be pruned only once
 	///
-	/// 2. From (1.) there exists a case where not every hash that
-	/// has its reference count equal to zero should also be added
-	/// to a special queue for deletion.
+	/// Therefore, not every block that has its reference count
+	/// equal to zero should also be pruned with the next finalization.
 	pub was_pruned: bool,
 	/// The state of the block as tracked by the `state-db`.
 	pub state: RefTrackingState<Block>,
@@ -1073,16 +1072,18 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 	shared_trie_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
-	/// Keep track of pinned blocks, called via [`Self::pin_block`] and [`Self::unpin_block`].
-	/// The pruning of these blocks is delayed for as long as their reference count is positive.
-	track_pin_blocks: Arc<Mutex<HashMap<Block::Hash, PinnedBlockState<Block>>>>,
-	/// Blocks added to this queue will be pruned on the next finalization.
+	/// Keep track of the pinned blocks. A block is pinned when calling [`Self::pin_block`].
 	///
-	/// Block hashes from [`Self::track_pin_blocks`] are added to the
-	/// pruning queue when:
+	/// The pruning of these blocks is delayed for as long as their reference count is positive.
+	///
+	/// # Note
+	///
+	/// Block hashes from here are moved to the pruning queue when:
 	///   - [`PinnedBlockState::ref_count`] equals to zero
 	///   - the block was previously marked as pruned [`PinnedBlockState::was_pruned`]
-	to_prune_queue: Arc<Mutex<Vec<Block::Hash>>>,
+	pinned_blocks: Arc<Mutex<HashMap<Block::Hash, PinnedBlockState<Block>>>>,
+	/// Blocks added here will be pruned on the next finalization.
+	pruning_queue: Arc<Mutex<Vec<Block::Hash>>>,
 }
 
 impl<Block: BlockT> Backend<Block> {
@@ -1108,12 +1109,14 @@ impl<Block: BlockT> Backend<Block> {
 		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
 	}
 
-	/// Check if the provided block was previously marked as pinned.
+	/// Return true if the pruning should be delayed for the provided block.
 	///
-	/// If the block is pinned this function sets the `pruned` flag on the block's status.
+	/// If the given block is part of the `pinned_blocks`, then sets the block's `was_pruned`
+	/// flag to be later included to the pruning queue when its reference count drops
+	/// to zero.
 	///
-	/// Returns true if pruning should be delayed. Otherwise return false to complete the
-	/// pruning.
+	/// If the given block is not part of the `pinned_blocks`, then return false to complete
+	/// the pruning immediately.
 	fn should_delay_pruning(&self, block: BlockId<Block>) -> ClientResult<bool> {
 		if self.blocks_pruning == BlocksPruning::All {
 			return Ok(false)
@@ -1126,7 +1129,7 @@ impl<Block: BlockT> Backend<Block> {
 			})?,
 		};
 
-		let mut cache = self.track_pin_blocks.lock();
+		let mut cache = self.pinned_blocks.lock();
 		let res = if let Some(entry) = cache.get_mut(&hash) {
 			trace!(target: "db-pin", "Pinned block: {:?} delay prunning", hash);
 			entry.was_pruned = true;
@@ -1275,8 +1278,8 @@ impl<Block: BlockT> Backend<Block> {
 			shared_trie_cache: config.trie_cache_maximum_size.map(|maximum_size| {
 				SharedTrieCache::new(sp_trie::cache::CacheSize::Maximum(maximum_size))
 			}),
-			track_pin_blocks: Default::default(),
-			to_prune_queue: Default::default(),
+			pinned_blocks: Default::default(),
+			pruning_queue: Default::default(),
 		};
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
@@ -1873,7 +1876,7 @@ impl<Block: BlockT> Backend<Block> {
 			}
 
 			// Also discard all previously pinned blocks
-			let mut blocks = self.to_prune_queue.lock();
+			let mut blocks = self.pruning_queue.lock();
 			for hash in &*blocks {
 				let id = BlockId::<Block>::hash(*hash);
 				self.prune_block(transaction, id)?;
@@ -2426,19 +2429,19 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			return Ok(())
 		}
 
-		let mut cache = self.track_pin_blocks.lock();
+		let mut cache = self.pinned_blocks.lock();
 		match cache.entry(*hash) {
 			Entry::Occupied(mut entry) => {
 				let state = entry.get_mut();
 				state.ref_count = state.ref_count.saturating_add(1);
-			}
+			},
 			Entry::Vacant(entry) => {
 				// The `state_at_ref` verifies if the block exists.
 				let state = self.state_at_ref(BlockId::hash(*hash))?;
 				let state = PinnedBlockState::new(state);
 				trace!(target: "db-pin", "Pinned block: {:?}", hash);
 				entry.insert(state);
-			}
+			},
 		}
 
 		Ok(())
@@ -2449,7 +2452,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 			return Ok(())
 		}
 
-		let mut cache = self.track_pin_blocks.lock();
+		let mut cache = self.pinned_blocks.lock();
 		if let Entry::Occupied(mut entry) = cache.entry(*hash) {
 			let state = entry.get_mut();
 			state.ref_count = state.ref_count.saturating_sub(1);
@@ -2457,7 +2460,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 				// Ensure the block is pruned with the next finalization.
 				if state.was_pruned {
 					trace!(target: "db-pin", "Unpinned block: {:?} to be pruned", hash);
-					let mut queue = self.to_prune_queue.lock();
+					let mut queue = self.pruning_queue.lock();
 					queue.push(*hash);
 				}
 
