@@ -570,7 +570,7 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type ElectionProvider = ElectionProviderMultiPhase;
-	type GenesisElectionProvider = onchain::OnChainExecution::<OnChainSeqPhragmen>;
+	type GenesisElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type VoterList = VoterList;
 	// This a placeholder, to be introduced in the next PR as an instance of bags-list
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;

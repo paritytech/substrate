@@ -386,7 +386,7 @@ pub trait ElectionProviderBase {
 
 /// Elect a new set of winners, bounded by `MaxWinners`.
 ///
-/// It must always use `Config::DataProvider` to fetch the data it needs.
+/// It must always use [`ElectionProviderBase::DataProvider`] to fetch the data it needs.
 ///
 /// This election provider that could function asynchronously. This implies that this election might
 /// needs data ahead of time (ergo, receives no arguments to `elect`), and might be `ongoing` at
@@ -404,7 +404,7 @@ pub trait ElectionProvider: ElectionProviderBase {
 /// A (almost) marker trait that signifies an election provider as working synchronously. i.e. being
 /// *instant*.
 ///
-/// This must still use the same data provider as with [`Config::DataProvider`]. However, it can
+/// This must still use the same data provider as with [`ElectionProviderBase::DataProvider`]. However, it can
 /// optionally overwrite the amount of voters and targets that are fetched from the data provider at
 /// runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
 pub trait InstantElectionProvider: ElectionProviderBase {

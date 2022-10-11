@@ -17,7 +17,9 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::{ElectionProvider, ElectionProviderBase, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{
+	ElectionProvider, ElectionProviderBase, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -1279,7 +1281,10 @@ pub mod pallet {
 			ensure_root(origin)?;
 			// ensure new validator count does not exceed maximum winners
 			// support by election provider.
-			ensure!(new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(), Error::<T>::TooManyElectionWinners);
+			ensure!(
+				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				Error::<T>::TooManyElectionWinners
+			);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}

@@ -18,7 +18,7 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionProvider, BoundedSupportsOf, ElectionDataProvider, ScoreProvider,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
 	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
@@ -461,11 +461,10 @@ impl<T: Config> Pallet<T> {
 		is_genesis: bool,
 	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
 		let election_result: BoundedVec<_, MaxWinnersOf<T>> = if is_genesis {
-			let result =
-				<T::GenesisElectionProvider>::elect().map_err(|e| {
-					log!(warn, "genesis election provider failed due to {:?}", e);
-					Self::deposit_event(Event::StakingElectionFailed);
-				});
+			let result = <T::GenesisElectionProvider>::elect().map_err(|e| {
+				log!(warn, "genesis election provider failed due to {:?}", e);
+				Self::deposit_event(Event::StakingElectionFailed);
+			});
 
 			result
 				.ok()?

@@ -206,7 +206,7 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = onchain::OnChainExecution::<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
