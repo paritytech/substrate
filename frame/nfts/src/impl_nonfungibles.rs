@@ -91,7 +91,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfig>
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
 	for Pallet<T, I>
 {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
@@ -99,7 +99,7 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
-		config: &CollectionConfig,
+		config: &CollectionConfigFor<T, I>,
 	) -> DispatchResult {
 		let mut settings = config.settings.values();
 		// FreeHolding could be set by calling the force_create() only

@@ -42,6 +42,11 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
+pub(super) type CollectionConfigFor<T, I = ()> = CollectionConfig<
+	BalanceOf<T, I>,
+	<T as SystemConfig>::BlockNumber,
+	<T as Config<I>>::CollectionId,
+>;
 
 pub trait Incrementable {
 	fn increment(&self) -> Self;
@@ -203,14 +208,47 @@ impl CollectionSettings {
 }
 impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
-#[derive(Encode, Decode, Default, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
-pub struct CollectionConfig {
+#[derive(
+	Clone, Copy, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
+pub enum MintType<CollectionId> {
+	#[default]
+	Private,
+	Public,
+	HolderOf(CollectionId),
+}
+
+#[derive(
+	Clone, Copy, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen,
+)]
+pub struct MintSettings<Price, BlockNumber, CollectionId> {
+	/// Mint type.
+	pub(super) mint_type: MintType<CollectionId>,
+	/// An optional price per mint.
+	pub(super) price: Option<Price>,
+	/// When the mint starts.
+	pub(super) start_block: Option<BlockNumber>,
+	/// When the mint ends.
+	pub(super) end_block: Option<BlockNumber>,
+	/// Whether the mint is limited. If `true` then only one `item` per account is possible to
+	/// `mint`.
+	/// NOTE: In order this to work, put the `NonTransferable` setting into
+	/// `default_item_settings`.
+	pub(super) limited: bool,
+	/// Default settings each item will get during the mint.
+	pub(super) default_item_settings: ItemSettings,
+}
+
+#[derive(
+	Clone, Copy, RuntimeDebug, Decode, Default, Encode, MaxEncodedLen, PartialEq, TypeInfo,
+)]
+pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 	/// Collection's settings.
 	pub(super) settings: CollectionSettings,
 	/// Collection's max supply.
 	pub(super) max_supply: Option<u32>,
 	/// Default settings each item will get during the mint.
-	pub(super) mint_item_settings: ItemSettings,
+	pub(super) mint_settings: MintSettings<Price, BlockNumber, CollectionId>,
 }
 
 // Support for up to 64 user-enabled features on an item.
@@ -240,7 +278,9 @@ impl ItemSettings {
 }
 impl_codec_bitflags!(ItemSettings, u64, ItemSetting);
 
-#[derive(Encode, Decode, Default, PartialEq, Debug, Clone, Copy, MaxEncodedLen, TypeInfo)]
+#[derive(
+	Encode, Decode, Default, PartialEq, RuntimeDebug, Clone, Copy, MaxEncodedLen, TypeInfo,
+)]
 pub struct ItemConfig {
 	/// Item's settings.
 	pub(super) settings: ItemSettings,

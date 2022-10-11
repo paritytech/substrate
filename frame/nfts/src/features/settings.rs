@@ -26,7 +26,7 @@ use frame_support::pallet_prelude::*;
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn get_collection_config(
 		collection_id: &T::CollectionId,
-	) -> Result<CollectionConfig, DispatchError> {
+	) -> Result<CollectionConfigFor<T, I>, DispatchError> {
 		let config =
 			CollectionConfigOf::<T, I>::get(&collection_id).ok_or(Error::<T, I>::NoConfig)?;
 		Ok(config)

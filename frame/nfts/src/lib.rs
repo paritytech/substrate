@@ -312,7 +312,7 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Config of a collection.
 	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfig, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfigFor<T, I>, OptionQuery>;
 
 	#[pallet::storage]
 	/// Config of an item.
@@ -579,7 +579,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			admin: AccountIdLookupOf<T>,
-			config: CollectionConfig,
+			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
 			let collection =
 				NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
@@ -624,7 +624,7 @@ pub mod pallet {
 		pub fn force_create(
 			origin: OriginFor<T>,
 			owner: AccountIdLookupOf<T>,
-			config: CollectionConfig,
+			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -1190,7 +1190,7 @@ pub mod pallet {
 			issuer: AccountIdLookupOf<T>,
 			admin: AccountIdLookupOf<T>,
 			freezer: AccountIdLookupOf<T>,
-			config: CollectionConfig,
+			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
 
@@ -1689,6 +1689,47 @@ pub mod pallet {
 				Ok(())
 			})
 		}
+
+		/// Set the maximum amount of items a collection could have.
+		///
+		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
+		/// the `collection`.
+		///
+		/// - `collection`: The identifier of the collection to change.
+		/// - `max_supply`: The maximum amount of items a collection could have.
+		///
+		/// Emits `CollectionMaxSupplySet` event when successful.
+		/*#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
+		pub fn set_collection_max_supply(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			max_supply: u32,
+		) -> DispatchResult {
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some))?;
+
+			let (action_allowed, _) = Self::is_collection_setting_disabled(
+				&collection,
+				CollectionSetting::LockedMaxSupply,
+			)?;
+			ensure!(action_allowed, Error::<T, I>::MaxSupplyLocked);
+
+			let details =
+				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+			if let Some(check_owner) = &maybe_check_owner {
+				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+			}
+
+			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
+
+			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
+				let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
+				config.max_supply = Some(max_supply);
+				Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
+				Ok(())
+			})
+		}*/
 
 		/// Set (or reset) the price for an item.
 		///

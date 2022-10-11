@@ -79,7 +79,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		owner: T::AccountId,
 		admin: T::AccountId,
-		config: CollectionConfig,
+		config: CollectionConfigFor<T, I>,
 		deposit: DepositBalanceOf<T, I>,
 		event: Event<T, I>,
 	) -> DispatchResult {
@@ -176,8 +176,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let collection_config = Self::get_collection_config(&collection)?;
 				let settings = collection_config.settings.values();
-				let mint_item_settings = collection_config.mint_item_settings;
-				let item_config = ItemConfig { settings: mint_item_settings };
+				let item_settings = collection_config.mint_settings.default_item_settings;
+				let item_config = ItemConfig { settings: item_settings };
 
 				if let Some(max_supply) = collection_config.max_supply {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
