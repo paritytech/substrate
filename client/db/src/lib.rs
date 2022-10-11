@@ -1859,6 +1859,61 @@ impl<Block: BlockT> Backend<Block> {
 		let state = RefTrackingState::new(db_state, self.storage.clone(), None);
 		Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
 	}
+
+	fn state_at_ref(&self, block: BlockId<Block>) -> ClientResult<RefTrackingState<Block>> {
+		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
+
+		let is_genesis = match &block {
+			BlockId::Number(n) if n.is_zero() => true,
+			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => true,
+			_ => false,
+		};
+		if is_genesis {
+			if let Some(genesis_state) = &*self.genesis_state.read() {
+				let root = genesis_state.root;
+				let db_state = DbStateBuilder::<Block>::new(genesis_state.clone(), root)
+					.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
+					.build();
+
+				return Ok(RefTrackingState::new(db_state, self.storage.clone(), None))
+			}
+		}
+
+		let hash = match block {
+			BlockId::Hash(h) => h,
+			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
+				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
+			})?,
+		};
+
+		match self.blockchain.header_metadata(hash) {
+			Ok(ref hdr) => {
+				let hint = || {
+					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
+						.unwrap_or(None)
+						.is_some()
+				};
+				if let Ok(()) =
+					self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>(), hint)
+				{
+					let root = hdr.state_root;
+					let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
+						.with_optional_cache(
+							self.shared_trie_cache.as_ref().map(|c| c.local_cache()),
+						)
+						.build();
+
+					Ok(RefTrackingState::new(db_state, self.storage.clone(), Some(hash)))
+				} else {
+					Err(sp_blockchain::Error::UnknownBlock(format!(
+						"State already discarded for {:?}",
+						block
+					)))
+				}
+			},
+			Err(e) => Err(e),
+		}
+	}
 }
 
 fn apply_state_commit(
@@ -2353,57 +2408,21 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
 		use sc_client_api::blockchain::HeaderBackend as BcHeaderBackend;
 
-		let is_genesis = match &block {
-			BlockId::Number(n) if n.is_zero() => true,
-			BlockId::Hash(h) if h == &self.blockchain.meta.read().genesis_hash => true,
-			_ => false,
-		};
-		if is_genesis {
-			if let Some(genesis_state) = &*self.genesis_state.read() {
-				let root = genesis_state.root;
-				let db_state = DbStateBuilder::<Block>::new(genesis_state.clone(), root)
-					.with_optional_cache(self.shared_trie_cache.as_ref().map(|c| c.local_cache()))
-					.build();
-
-				let state = RefTrackingState::new(db_state, self.storage.clone(), None);
-				return Ok(RecordStatsState::new(state, None, self.state_usage.clone()))
-			}
-		}
-
-		let hash = match block {
-			BlockId::Hash(h) => h,
-			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
-				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
-			})?,
+		let state = self.state_at_ref(block)?;
+		let block_hash = if state.parent_hash.is_none() {
+			// This is genesis.
+			None
+		} else {
+			let hash = match block {
+				BlockId::Hash(h) => h,
+				BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
+					sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", n))
+				})?,
+			};
+			Some(hash)
 		};
 
-		match self.blockchain.header_metadata(hash) {
-			Ok(ref hdr) => {
-				let hint = || {
-					sc_state_db::NodeDb::get(self.storage.as_ref(), hdr.state_root.as_ref())
-						.unwrap_or(None)
-						.is_some()
-				};
-				if let Ok(()) =
-					self.storage.state_db.pin(&hash, hdr.number.saturated_into::<u64>(), hint)
-				{
-					let root = hdr.state_root;
-					let db_state = DbStateBuilder::<Block>::new(self.storage.clone(), root)
-						.with_optional_cache(
-							self.shared_trie_cache.as_ref().map(|c| c.local_cache()),
-						)
-						.build();
-					let state = RefTrackingState::new(db_state, self.storage.clone(), Some(hash));
-					Ok(RecordStatsState::new(state, Some(hash), self.state_usage.clone()))
-				} else {
-					Err(sp_blockchain::Error::UnknownBlock(format!(
-						"State already discarded for {:?}",
-						block
-					)))
-				}
-			},
-			Err(e) => Err(e),
-		}
+		Ok(RecordStatsState::new(state, block_hash, self.state_usage.clone()))
 	}
 
 	fn have_state_at(&self, hash: &Block::Hash, number: NumberFor<Block>) -> bool {
