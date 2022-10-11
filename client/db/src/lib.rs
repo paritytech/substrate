@@ -320,7 +320,7 @@ pub struct DatabaseSettings {
 }
 
 /// Block pruning settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlocksPruning {
 	/// Keep full block history.
 	All,
@@ -1115,6 +1115,10 @@ impl<Block: BlockT> Backend<Block> {
 	/// Returns true if pruning should be delayed. Otherwise return false to complete the
 	/// pruning.
 	fn should_delay_pruning(&self, block: BlockId<Block>) -> ClientResult<bool> {
+		if self.blocks_pruning == BlocksPruning::All {
+			return Ok(false)
+		}
+
 		let hash = match block {
 			BlockId::Hash(h) => h,
 			BlockId::Number(n) => self.blockchain.hash(n)?.ok_or_else(|| {
@@ -2421,12 +2425,9 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn pin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
-		// TODO: do this only if pruning is enabled!
-		// if let BlocksPruning::Some(blocks_pruning) = self.blocks_pruning {
-
-		// match self.mode {
-		// 	PruningMode::ArchiveAll => Ok(()),
-		// 	PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+		if self.blocks_pruning == BlocksPruning::All {
+			return Ok(())
+		}
 
 		let mut cache = self.track_pin_blocks.write();
 
@@ -2445,8 +2446,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	}
 
 	fn unpin_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
-		let mut cache = self.track_pin_blocks.write();
+		if self.blocks_pruning == BlocksPruning::All {
+			return Ok(())
+		}
 
+		let mut cache = self.track_pin_blocks.write();
 		if let Entry::Occupied(mut entry) = cache.entry(*hash) {
 			entry.get_mut().ref_count -= 1;
 			println!("  unpin_block: hash {:?} ref_count = {:?}", hash, entry.get().ref_count);
