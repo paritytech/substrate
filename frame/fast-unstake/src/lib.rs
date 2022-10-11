@@ -86,12 +86,11 @@ pub mod pallet {
 		traits::{Defensive, ReservableCurrency},
 	};
 	use frame_system::{pallet_prelude::*, RawOrigin};
-	use pallet_staking::Pallet as Staking;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		DispatchResult,
 	};
-	use sp_staking::EraIndex;
+	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
 	pub use weights::WeightInfo;
 
@@ -101,7 +100,7 @@ pub mod pallet {
 	pub struct MaxChecking<T: Config>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> frame_support::traits::Get<u32> for MaxChecking<T> {
 		fn get() -> u32 {
-			<T as pallet_staking::Config>::BondingDuration::get() + 1
+			T::StakingInterface::bonding_duration() + 1
 		}
 	}
 
@@ -126,7 +125,10 @@ pub mod pallet {
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The access to staking functionality.
-		type Staking: StakingInterface<Balance = BalanceOf<Self>, AccountId = Self::AccountId>;
+		type StakingInterface: StakingInterface<
+			Balance = BalanceOf<Self>,
+			AccountId = Self::AccountId,
+		>;
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
@@ -224,23 +226,19 @@ pub mod pallet {
 			let ctrl = ensure_signed(origin)?;
 
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
-
-			let ledger =
-				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
-			ensure!(!Queue::<T>::contains_key(&ledger.stash), Error::<T>::AlreadyQueued);
+			let stash = T::StakingInterface::can_control(&ctrl)?;
+			ensure!(!Queue::<T>::contains_key(&stash), Error::<T>::AlreadyQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != ledger.stash),
 				Error::<T>::AlreadyHead
 			);
+
 			// second part of the && is defensive.
-			ensure!(
-				ledger.active == ledger.total && ledger.unlocking.is_empty(),
-				Error::<T>::NotFullyBonded
-			);
+			ensure!(!T::StakingInterface::is_unbonding(&who), Error::<T>::NotFullyBonded);
 
 			// chill and fully unstake.
-			Staking::<T>::chill(RawOrigin::Signed(ctrl.clone()).into())?;
-			Staking::<T>::unbond(RawOrigin::Signed(ctrl).into(), ledger.total)?;
+			T::StakingInterface::chill(&stash)?;
+			T::StakingInterface::fully_unbond(&stash)?;
 
 			T::DepositCurrency::reserve(&ledger.stash, T::Deposit::get())?;
 
@@ -262,9 +260,7 @@ pub mod pallet {
 
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
 
-			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
-				.map(|l| l.stash)
-				.ok_or(Error::<T>::NotController)?;
+			let stash = T::StakingInterface::can_control(&ctrl)?;
 			ensure!(Queue::<T>::contains_key(&stash), Error::<T>::NotQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
@@ -317,7 +313,7 @@ pub mod pallet {
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
 			// meaning that the number of exposures to check is either this per era, or less.
-			let validator_count = pallet_staking::ValidatorCount::<T>::get();
+			let validator_count = T::StakingInterface::desired_validator_count();
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
@@ -333,8 +329,7 @@ pub mod pallet {
 				}
 			}
 
-			if <<T as pallet_staking::Config>::ElectionProvider as ElectionProviderBase>::ongoing()
-			{
+			if T::StakingInterface::election_ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
@@ -369,8 +364,8 @@ pub mod pallet {
 			);
 
 			// the range that we're allowed to check in this round.
-			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
-			let bonding_duration = <T as pallet_staking::Config>::BondingDuration::get();
+			let current_era = T::StakingInterface::current_era();
+			let bonding_duration = T::StakingInterface::bonding_duration();
 			// prune all the old eras that we don't care about. This will help us keep the bound
 			// of `checked`.
 			checked.retain(|e| *e >= current_era.saturating_sub(bonding_duration));
@@ -407,11 +402,7 @@ pub mod pallet {
 				// `stash` is not exposed in any era now -- we can let go of them now.
 				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
 
-				let result = pallet_staking::Pallet::<T>::force_unstake(
-					RawOrigin::Root.into(),
-					stash.clone(),
-					num_slashing_spans,
-				);
+				let result = T::StakingInterface::force_unstake(stash.clone());
 
 				let remaining = T::DepositCurrency::unreserve(&stash, deposit);
 				if !remaining.is_zero() {

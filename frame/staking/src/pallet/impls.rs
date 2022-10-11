@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, ScoreProvider, SortedListProvider,
-	Supports, VoteWeight, VoterOf,
+	data_provider, ElectionDataProvider, ElectionProvider, ElectionProviderBase, ScoreProvider,
+	SortedListProvider, Supports, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -1482,12 +1482,37 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	}
 }
 
+// NOTE: in this entire impl block, the assumption is that `who` is a stash account.
 impl<T: Config> StakingInterface for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = BalanceOf<T>;
 
-	fn minimum_bond() -> Self::Balance {
+	fn minimum_nominator_bond() -> Self::Balance {
 		MinNominatorBond::<T>::get()
+	}
+
+	fn minimum_validator_bond() -> Self::Balance {
+		MinValidatorBond::<T>::get()
+	}
+
+	fn desired_validator_count() -> u32 {
+		ValidatorCount::<T>::get()
+	}
+
+	fn election_ongoing() -> bool {
+		<T::ElectionProvider as ElectionProviderBase>::ongoing()
+	}
+
+	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
+		todo!();
+	}
+
+	fn can_control(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+		Self::ledger(controller).map(|l| l.stash).ok_or(Error::<T>::NotController)
+	}
+
+	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
+		todo!()
 	}
 
 	fn bonding_duration() -> EraIndex {
@@ -1498,52 +1523,57 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn active_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
-		Self::ledger(controller).map(|l| l.active)
+	fn active_stake(who: &Self::AccountId) -> Option<Self::Balance> {
+		Self::bonded(who).and_then(|c| Self::ledger(c)).map(|l| l.active)
 	}
 
-	fn total_stake(controller: &Self::AccountId) -> Option<Self::Balance> {
-		Self::ledger(controller).map(|l| l.total)
+	fn total_stake(who: &Self::AccountId) -> Option<Self::Balance> {
+		Self::bonded(who).and_then(|c| Self::ledger(c)).map(|l| l.active)
 	}
 
-	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult {
-		Self::bond_extra(RawOrigin::Signed(stash).into(), extra)
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
+		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
 	}
 
-	fn unbond(controller: Self::AccountId, value: Self::Balance) -> DispatchResult {
-		Self::unbond(RawOrigin::Signed(controller).into(), value)
+	fn unbond(who: Self::AccountId, value: Self::Balance) -> DispatchResult {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
 	}
 
-	fn chill(controller: Self::AccountId) -> DispatchResult {
-		Self::chill(RawOrigin::Signed(controller).into())
+	fn chill(who: &Self::AccountId) -> DispatchResult {
+		// defensive-only: any account bonded via this interface has the stash set as the
+		// controller, but we have to be sure. Same comment anywhere else that we read this.
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::chill(RawOrigin::Signed(ctrl).into())
 	}
 
 	fn withdraw_unbonded(
-		controller: Self::AccountId,
+		who: Self::AccountId,
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError> {
-		Self::withdraw_unbonded(RawOrigin::Signed(controller.clone()).into(), num_slashing_spans)
-			.map(|_| !Ledger::<T>::contains_key(&controller))
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
+		Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
+			.map(|_| !Ledger::<T>::contains_key(&ctrl))
 			.map_err(|with_post| with_post.error)
 	}
 
 	fn bond(
-		stash: Self::AccountId,
-		controller: Self::AccountId,
+		who: &Self::AccountId,
 		value: Self::Balance,
-		payee: Self::AccountId,
+		payee: &Self::AccountId,
 	) -> DispatchResult {
 		Self::bond(
-			RawOrigin::Signed(stash).into(),
-			T::Lookup::unlookup(controller),
+			RawOrigin::Signed(who.clone()).into(),
+			T::Lookup::unlookup(who.clone()),
 			value,
-			RewardDestination::Account(payee),
+			RewardDestination::Account(payee.clone()),
 		)
 	}
 
-	fn nominate(controller: Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+	fn nominate(who: &Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
+		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		let targets = targets.into_iter().map(T::Lookup::unlookup).collect::<Vec<_>>();
-		Self::nominate(RawOrigin::Signed(controller).into(), targets)
+		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
