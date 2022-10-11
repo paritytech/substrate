@@ -299,8 +299,6 @@ pub enum PalletFeature {
 	NoApprovals,
 	/// Disallow atomic items swap.
 	NoSwaps,
-	/// Disallow public mints.
-	NoPublicMints,
 }
 
 /// Wrapper type for `BitFlags<PalletFeature>` that implements `Codec`.

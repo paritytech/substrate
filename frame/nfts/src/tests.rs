@@ -609,8 +609,17 @@ fn preserve_config_for_frozen_items() {
 			Error::<Test>::InconsistentItemConfig
 		);
 
-		// TODO:
-		// assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1, expect_config));
+		assert_ok!(Nfts::update_mint_settings(
+			RuntimeOrigin::signed(1),
+			0,
+			MintSettings {
+				default_item_settings: ItemSettings(
+					ItemSetting::LockedAttributes | ItemSetting::LockedMetadata
+				),
+				..Default::default()
+			}
+		));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, 1));
 	});
 }
 
@@ -987,6 +996,42 @@ fn max_supply_should_work() {
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, 2, user_id),
 			Error::<Test>::MaxSupplyReached
+		);
+	});
+}
+
+#[test]
+fn mint_settings_should_work() {
+	new_test_ext().execute_with(|| {
+		let collection_id = 0;
+		let user_id = 1;
+		let item_id = 0;
+
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_id, default_collection_config()));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_id, user_id));
+		assert_eq!(
+			ItemConfigOf::<Test>::get(collection_id, item_id).unwrap().settings,
+			ItemSettings::empty()
+		);
+
+		let collection_id = 1;
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			user_id,
+			CollectionConfig {
+				mint_settings: MintSettings {
+					default_item_settings: ItemSettings(
+						ItemSetting::NonTransferable | ItemSetting::LockedMetadata
+					),
+					..Default::default()
+				},
+				..default_collection_config()
+			}
+		));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_id), collection_id, item_id, user_id));
+		assert_eq!(
+			ItemConfigOf::<Test>::get(collection_id, item_id).unwrap().settings,
+			ItemSettings(ItemSetting::NonTransferable | ItemSetting::LockedMetadata)
 		);
 	});
 }

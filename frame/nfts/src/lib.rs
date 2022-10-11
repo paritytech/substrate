@@ -420,6 +420,8 @@ pub mod pallet {
 		OwnershipAcceptanceChanged { who: T::AccountId, maybe_collection: Option<T::CollectionId> },
 		/// Max supply has been set for a collection.
 		CollectionMaxSupplySet { collection: T::CollectionId, max_supply: u32 },
+		/// Mint settings for a collection had changed.
+		CollectionMintSettingsUpdated { collection: T::CollectionId },
 		/// Event gets emmited when the `NextCollectionId` gets incremented.
 		NextCollectionIdIncremented { next_id: T::CollectionId },
 		/// The config of a collection has change.
@@ -1690,30 +1692,28 @@ pub mod pallet {
 			})
 		}
 
-		/// Set the maximum amount of items a collection could have.
+		/// Update mint settings.
 		///
 		/// Origin must be either `ForceOrigin` or `Signed` and the sender should be the Owner of
 		/// the `collection`.
 		///
 		/// - `collection`: The identifier of the collection to change.
-		/// - `max_supply`: The maximum amount of items a collection could have.
+		/// - `mint_settings`: The new mint settings.
 		///
-		/// Emits `CollectionMaxSupplySet` event when successful.
-		/*#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
-		pub fn set_collection_max_supply(
+		/// Emits `CollectionMintSettingsUpdated` event when successful.
+		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
+		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			max_supply: u32,
+			mint_settings: MintSettings<
+				BalanceOf<T, I>,
+				<T as SystemConfig>::BlockNumber,
+				T::CollectionId,
+			>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let (action_allowed, _) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::LockedMaxSupply,
-			)?;
-			ensure!(action_allowed, Error::<T, I>::MaxSupplyLocked);
 
 			let details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -1721,15 +1721,13 @@ pub mod pallet {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
-			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
-
 			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 				let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
-				config.max_supply = Some(max_supply);
-				Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
+				config.mint_settings = mint_settings;
+				Self::deposit_event(Event::CollectionMintSettingsUpdated { collection });
 				Ok(())
 			})
-		}*/
+		}
 
 		/// Set (or reset) the price for an item.
 		///
