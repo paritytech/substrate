@@ -603,9 +603,6 @@ fn can_sync_explicit_forks() {
 	}));
 }
 
-// Todo: Enable this test when polkadot-v0.9.11 is merged
-// https://github.com/paritytech/substrate/tree/polkadot-v0.9.11
-#[ignore]
 #[test]
 fn syncs_header_only_forks() {
 	sp_tracing::try_init_simple();
@@ -838,9 +835,6 @@ fn wait_until_deferred_block_announce_validation_is_ready() {
 
 /// When we don't inform the sync protocol about the best block, a node will not sync from us as the
 /// handshake is not does not contain our best block.
-// Todo: Enable this test when polkadot-v0.9.11 is merged
-// https://github.com/paritytech/substrate/tree/polkadot-v0.9.11
-#[ignore]
 #[test]
 fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	sp_tracing::try_init_simple();
