@@ -28,7 +28,7 @@
 //!
 //! ## Key terms
 //!
-//!  * pool id: A unique identifier of each pool. Set to u32
+//!  * pool id: A unique identifier of each pool. Set to u32.
 //!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
 //! [`BondedPoolInner`].
 //! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
@@ -1454,8 +1454,8 @@ pub mod pallet {
 		PartialUnbondNotAllowedPermissionlessly,
 		/// Pool id currently in use.
 		PoolIdInUse,
-		/// Claim exceeds the last pool id.
-		PoolIdCountExceeded,
+		/// Pool id provided is not correct/usable.
+		InvalidPoolId,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1892,8 +1892,7 @@ pub mod pallet {
 		/// # Arguments
 		///
 		/// same as `create` with the inclusion of
-		/// * `pool_id` - `Option<PoolId>`, if `None` this is similar to `create`. if `Some(claim)`
-		///   the caller is claiming that `claim` A.K.A PoolId is not in use.
+		/// * `pool_id` - `A valid PoolId.
 		#[pallet::weight(T::WeightInfo::create())]
 		#[transactional]
 		pub fn create_with_pool_id(
@@ -1902,22 +1901,10 @@ pub mod pallet {
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
-			state_claim: Option<PoolId>,
+			pool_id: PoolId,
 		) -> DispatchResult {
-			let pool_id = match state_claim {
-				Some(claim) => {
-					ensure!(!BondedPools::<T>::contains_key(claim), Error::<T>::PoolIdInUse);
-					ensure!(claim < LastPoolId::<T>::get(), Error::<T>::PoolIdCountExceeded);
-					claim
-				},
-				None => {
-					let inc_pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
-						*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
-						Ok(*id)
-					})?;
-					inc_pool_id
-				},
-			};
+			ensure!(!BondedPools::<T>::contains_key(pool_id), Error::<T>::PoolIdInUse);
+			ensure!(pool_id < LastPoolId::<T>::get(), Error::<T>::InvalidPoolId);
 
 			Self::do_create(origin, amount, root, nominator, state_toggler, pool_id)
 		}

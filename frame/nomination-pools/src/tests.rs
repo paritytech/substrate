@@ -4229,8 +4229,13 @@ mod create {
 			// delete the initial pool created, then pool_Id `1` will be free
 
 			assert_noop!(
-				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, Some(1)),
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 1),
 				Error::<Runtime>::PoolIdInUse
+			);
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 3),
+				Error::<Runtime>::InvalidPoolId
 			);
 
 			// start dismantling the pool.
@@ -4240,14 +4245,7 @@ mod create {
 			CurrentEra::set(3);
 			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 10));
 
-			assert_ok!(Pools::create_with_pool_id(
-				RuntimeOrigin::signed(10),
-				20,
-				234,
-				654,
-				783,
-				Some(1)
-			));
+			assert_ok!(Pools::create_with_pool_id(RuntimeOrigin::signed(10), 20, 234, 654, 783, 1));
 		});
 	}
 }
