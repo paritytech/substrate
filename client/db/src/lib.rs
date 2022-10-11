@@ -1075,7 +1075,8 @@ pub struct Backend<Block: BlockT> {
 	state_usage: Arc<StateUsageStats>,
 	genesis_state: RwLock<Option<Arc<DbGenesisStorage<Block>>>>,
 	shared_trie_cache: Option<sp_trie::cache::SharedTrieCache<HashFor<Block>>>,
-	/// Keep track of the pinned blocks. A block is pinned when calling [`Self::pin_block`].
+	/// Keep track of the pinned blocks. A block is pinned when calling
+	/// [`sc_client_api::backend::Backend::pin_block`].
 	///
 	/// The pruning of these blocks is delayed for as long as their reference count is positive.
 	///
