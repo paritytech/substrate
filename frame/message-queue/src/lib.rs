@@ -163,7 +163,14 @@ pub enum ProcessMessageError {
 
 pub trait ProcessMessage {
 	/// The transport from where a message originates.
-	type Origin: FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + sp_std::fmt::Debug;
+	type Origin: FullCodec
+		+ MaxEncodedLen
+		+ Clone
+		+ Eq
+		+ PartialEq
+		+ TypeInfo
+		+ sp_std::fmt::Debug
+		+ Arity;
 
 	/// Process the given message, using no more than `weight_limit` in weight to do so.
 	fn process_message(
@@ -191,6 +198,54 @@ pub struct BookState {
 	/// "manually" by having a transaction to bump it. However, it probably doesn't actually matter
 	/// anyway since reaping can happen perfectly well without it.
 	earliest: PageIndex,
+}
+
+/// Type which has a finite and small total possible number of values.
+pub trait Arity {
+	/// Get the total number of distinct values `Self` can take.
+	fn arity() -> usize;
+}
+impl Arity for sp_std::convert::Infallible {
+	fn arity() -> usize {
+		0
+	}
+}
+impl Arity for () {
+	fn arity() -> usize {
+		1
+	}
+}
+impl Arity for bool {
+	fn arity() -> usize {
+		2
+	}
+}
+impl Arity for u8 {
+	fn arity() -> usize {
+		256
+	}
+}
+impl Arity for u16 {
+	fn arity() -> usize {
+		65536
+	}
+}
+impl Arity for i8 {
+	fn arity() -> usize {
+		256
+	}
+}
+impl Arity for i16 {
+	fn arity() -> usize {
+		65536
+	}
+}
+
+pub struct GetArity<T>(sp_std::marker::PhantomData<T>);
+impl<T: Arity> Get<u32> for GetArity<T> {
+	fn get() -> u32 {
+		T::arity() as u32
+	}
 }
 
 #[frame_support::pallet]
@@ -254,6 +309,10 @@ pub mod pallet {
 	pub(super) type BookStateOf<T: Config> =
 		StorageMap<_, Twox64Concat, MessageOriginOf<T>, BookState, ValueQuery>;
 
+	#[pallet::storage]
+	pub(super) type ReadyBooks<T: Config> =
+		StorageValue<_, BoundedVec<MessageOriginOf<T>, GetArity<MessageOriginOf<T>>>, ValueQuery>;
+
 	/// The map of page indices to pages.
 	#[pallet::storage]
 	pub(super) type Pages<T: Config> = StorageDoubleMap<
@@ -291,7 +350,7 @@ impl<T: Config> Pallet<T> {
 		origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
 		let mut book_state = BookStateOf::<T>::get(origin);
-		if book_state.end > book_state.begin {
+		let was_empty = if book_state.end > book_state.begin {
 			// Already have a page in progress - attempt to append.
 			let last = book_state.end - 1;
 			let mut page = match Pages::<T>::get(origin, last) {
@@ -305,7 +364,10 @@ impl<T: Config> Pallet<T> {
 				Pages::<T>::insert(origin, last, &page);
 				return
 			}
-		}
+			false
+		} else {
+			true
+		};
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
 		Pages::<T>::insert(
@@ -314,6 +376,15 @@ impl<T: Config> Pallet<T> {
 			Page::from_message(&message[..], &origin_data[..]),
 		);
 		BookStateOf::<T>::insert(origin, book_state);
+		if was_empty {
+			ReadyBooks::<T>::mutate(|b| {
+				let is_ok = b.try_push(origin.clone()).is_ok();
+				debug_assert!(
+					is_ok,
+					"ready books can never overflow because duplicates cannot be pushed"
+				);
+			});
+		}
 	}
 }
 
@@ -357,6 +428,15 @@ pub trait ServiceQueue<Origin> {
 	///
 	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
 	fn service_queue(origin: Origin, weight_limit: Weight) -> Weight;
+}
+
+pub trait ServiceQueues {
+	/// Service all message queues in some fair manner.
+	///
+	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
+	///
+	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
+	fn service_queues(weight_limit: Weight) -> Weight;
 }
 
 impl<T: Config> ServiceQueue<MessageOriginOf<T>> for Pallet<T> {
@@ -449,8 +529,31 @@ impl<T: Config> ServiceQueue<MessageOriginOf<T>> for Pallet<T> {
 			}
 			book_state.begin.saturating_inc();
 		}
+		if book_state.begin >= book_state.end && processed > 0 {
+			// empty now having processed at least one.
+			ReadyBooks::<T>::mutate(|b| {
+				b.retain(|b| b != &origin);
+			});
+		}
 		BookStateOf::<T>::insert(&origin, book_state);
 		weight_limit.saturating_sub(weight_left)
+	}
+}
+
+impl<T: Config> ServiceQueues for Pallet<T> {
+	fn service_queues(weight_limit: Weight) -> Weight {
+		let queues = ReadyBooks::<T>::get();
+		// TODO: take a random number and shuffle the queues rather than the next stuff.
+		let mut weight_used = Weight::zero();
+		for origin in queues.into_iter() {
+			let left = weight_limit - weight_used;
+			if left.any_lte(Weight::zero()) {
+				break
+			}
+			let used = Self::service_queue(origin, left);
+			weight_used.saturating_accrue(used);
+		}
+		weight_used
 	}
 }
 

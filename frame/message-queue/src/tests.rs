@@ -95,6 +95,12 @@ pub enum MessageOrigin {
 	Parent,
 	Peer(u8),
 }
+// NOTE: Would be nice to have a derive for this.
+impl Arity for MessageOrigin {
+	fn arity() -> usize {
+		u8::arity() + 2
+	}
+}
 
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
@@ -146,21 +152,18 @@ fn enqueue_within_one_page_works() {
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Here);
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), Here);
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"gav"[..]), Here);
-		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 2.into_weight());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
 			vec![(b"hello".to_vec(), Here), (b"world".to_vec(), Here)]
 		);
 
 		MessagesProcessed::set(vec![]);
-		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 1.into_weight());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::get(), vec![(b"gav".to_vec(), Here)]);
 
 		MessagesProcessed::set(vec![]);
-		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
-		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
-		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
-		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
 		assert_eq!(MessagesProcessed::get(), vec![]);
 
 		MessageQueue::enqueue_messages(
@@ -174,8 +177,7 @@ fn enqueue_within_one_page_works() {
 		);
 
 		MessagesProcessed::set(vec![]);
-		assert_eq!(MessageQueue::service_queue(Peer(1), 2.into_weight()), 0.into_weight());
-		assert_eq!(MessageQueue::service_queue(Parent, 2.into_weight()), 2.into_weight());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
 			vec![(b"boo".to_vec(), Parent), (b"yah".to_vec(), Parent),]
@@ -184,11 +186,11 @@ fn enqueue_within_one_page_works() {
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Peer(1));
 
 		MessagesProcessed::set(vec![]);
-		assert_eq!(MessageQueue::service_queue(Peer(1), 2.into_weight()), 1.into_weight());
-		assert_eq!(MessageQueue::service_queue(Parent, 2.into_weight()), 1.into_weight());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"sha".to_vec(), Peer(1)), (b"kah".to_vec(), Parent),]
+			vec![(b"kah".to_vec(), Parent), (b"sha".to_vec(), Peer(1)),]
 		);
 	});
 }
