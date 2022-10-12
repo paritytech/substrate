@@ -22,34 +22,27 @@
 mod tests;
 mod weights;
 
-use codec::{Decode, Encode, Codec, MaxEncodedLen};
-use frame_support::{parameter_types, BoundedSlice};
-use scale_info::TypeInfo;
-use sp_std::{prelude::*, vec};
-use sp_runtime::Saturating;
-use frame_support::pallet_prelude::*;
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use frame_support::{pallet_prelude::*, parameter_types, BoundedSlice};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
+use scale_info::TypeInfo;
+use sp_arithmetic::traits::{BaseArithmetic, Unsigned};
+use sp_runtime::{
+	traits::{Hash, One, Zero},
+	SaturatedConversion, Saturating,
+};
+use sp_std::{prelude::*, vec};
 pub use weights::WeightInfo;
 
 /// Type for identifying an overweight message.
 type OverweightIndex = u64;
 /// Type for identifying a page.
 type PageIndex = u32;
-/// Type for representing the size of an offset into a page heap.
-type Offset = u16;
-/// Type for representing the size of an individual encoded `MessageItem`.
-type Size = u16;
-/// Maximum size of a page's heap.
-const HEAP_SIZE: u32 = 1u32 << 16;
-
-parameter_types! {
-	pub const HeapSize: u32 = HEAP_SIZE;
-}
 
 /// Data encoded and prefixed to the encoded `MessageItem`.
 #[derive(Encode, Decode, MaxEncodedLen)]
-pub struct ItemHeader {
+pub struct ItemHeader<Size> {
 	/// The length of this item, not including the size of this header. The next item of the page
 	/// follows immediately after the payload of this item.
 	payload_len: Size,
@@ -58,43 +51,50 @@ pub struct ItemHeader {
 }
 
 /// A page of messages. Pages always contain at least one item.
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Default)]
-pub struct Page {
+#[derive(Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(HeapSize))]
+#[codec(mel_bound(Size: MaxEncodedLen))]
+pub struct Page<Size: Into<u32>, HeapSize: Get<Size>> {
 	/// Messages remaining to be processed; this includes overweight messages which have been
 	/// skipped.
 	remaining: Size,
 	/// The heap-offset of the header of the first message item in this page which is ready for
 	/// processing.
-	first: Offset,
+	first: Size,
 	/// The heap-offset of the header of the last message item in this page.
-	last: Offset,
+	last: Size,
 	/// The heap. If `self.offset == self.heap.len()` then the page is empty and should be deleted.
-	heap: BoundedVec<u8, HeapSize>,
+	heap: BoundedVec<u8, IntoU32<HeapSize, Size>>,
 }
 
-impl Page {
+impl<
+		Size: BaseArithmetic + Unsigned + Copy + Into<u32> + Codec + MaxEncodedLen,
+		HeapSize: Get<Size>,
+	> Page<Size, HeapSize>
+{
 	fn from_message(message: &[u8], origin: &[u8]) -> Self {
-		let len = ItemHeader::max_encoded_len() + origin.len() + message.len();
+		let len = ItemHeader::<Size>::max_encoded_len() + origin.len() + message.len();
 		let mut heap = Vec::with_capacity(len);
-		let payload_len = (origin.len() + message.len()) as Size;// TODO: bounded inputs for safety
+		let payload_len: Size = (origin.len() + message.len()).saturated_into(); // TODO: bounded inputs for safety
 		let h = ItemHeader { payload_len, is_processed: false };
 		h.using_encoded(|d| heap.extend_from_slice(d));
 		heap.extend_from_slice(origin);
 		heap.extend_from_slice(message);
 		Page {
-			remaining: 1,
-			first: 0,
-			last: 0,
+			remaining: One::one(),
+			first: Zero::zero(),
+			last: Zero::zero(),
 			heap: BoundedVec::truncate_from(heap),
 		}
 	}
 
 	fn try_append_message(&mut self, message: &[u8], origin: &[u8]) -> Result<(), ()> {
 		let pos = self.heap.len();
-		let len = ItemHeader::max_encoded_len() + origin.len() + message.len();
-		let payload_len = (origin.len() + message.len()) as Size;// TODO: bounded inputs for safety
+		let len = (ItemHeader::<Size>::max_encoded_len() + origin.len() + message.len()) as u32;
+		let payload_len: Size = (origin.len() + message.len()).saturated_into(); // TODO: bounded inputs for safety
 		let h = ItemHeader { payload_len, is_processed: false };
-		if (HEAP_SIZE as usize).saturating_sub(self.heap.len()) < len {
+		let heap_size: u32 = HeapSize::get().into();
+		if heap_size.saturating_sub(self.heap.len() as u32) < len {
 			// Can't fit.
 			return Err(())
 		}
@@ -103,23 +103,24 @@ impl Page {
 		h.using_encoded(|d| heap.extend_from_slice(d));
 		heap.extend_from_slice(origin);
 		heap.extend_from_slice(message);
-		debug_assert!((heap.len() as u32) < HEAP_SIZE, "already checked size; qed");
+		debug_assert!(heap.len() as u32 <= HeapSize::get().into(), "already checked size; qed");
 		self.heap = BoundedVec::truncate_from(heap);
-		self.last = pos as Offset;
+		self.last = pos.saturated_into();
 		self.remaining.saturating_inc();
 		Ok(())
 	}
 
-	fn peek_first(&self) -> Option<BoundedSlice<u8, HeapSize>> {
-		if self.first >= self.last {
+	fn peek_first(&self) -> Option<BoundedSlice<u8, IntoU32<HeapSize, Size>>> {
+		if self.first > self.last {
 			return None
 		}
-		let mut item_slice = &self.heap[self.first as usize..];
-		if let Ok(h) = ItemHeader::decode(&mut item_slice) {
-			let payload_len = h.payload_len as usize;
-			if payload_len <= item_slice.len() {
-				// impossible to truncate since is sliced up from `self.heap: BoundedVec<u8, HeapSize>`
-				return Some(BoundedSlice::truncate_from(&item_slice[..payload_len]))
+		let mut item_slice = &self.heap[(self.first.into() as usize)..];
+		if let Ok(h) = ItemHeader::<Size>::decode(&mut item_slice) {
+			let payload_len = h.payload_len.into();
+			if payload_len <= item_slice.len() as u32 {
+				// impossible to truncate since is sliced up from `self.heap: BoundedVec<u8,
+				// HeapSize>`
+				return Some(BoundedSlice::truncate_from(&item_slice[..(payload_len as usize)]))
 			}
 		}
 		debug_assert!(false, "message-queue: heap corruption");
@@ -128,21 +129,21 @@ impl Page {
 
 	/// Point `first` at the next message, marking the first as processed if `is_processed` is true.
 	fn skip_first(&mut self, is_processed: bool) {
-		let f = self.first as usize;
+		let f = self.first.into() as usize;
 		if let Ok(mut h) = ItemHeader::decode(&mut &self.heap[f..]) {
 			if is_processed && !h.is_processed {
 				h.is_processed = true;
-				h.using_encoded(|d|
-					self.heap[f..f + d.len()].copy_from_slice(d)
-				);
+				h.using_encoded(|d| self.heap[f..f + d.len()].copy_from_slice(d));
 				self.remaining.saturating_dec();
 			}
-			self.first.saturating_accrue(ItemHeader::max_encoded_len() as Size + h.payload_len);
+			self.first
+				.saturating_accrue(ItemHeader::<Size>::max_encoded_len().saturated_into());
+			self.first.saturating_accrue(h.payload_len);
 		}
 	}
 
 	fn is_complete(&self) -> bool {
-		self.remaining == 0
+		self.remaining.is_zero()
 	}
 }
 
@@ -165,7 +166,11 @@ pub trait ProcessMessage {
 	type Origin: Codec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + sp_std::fmt::Debug;
 
 	/// Process the given message, using no more than `weight_limit` in weight to do so.
-	fn process_message(message: &[u8], origin: Self::Origin, weight_limit: Weight) -> Result<(bool, Weight), ProcessMessageError>;
+	fn process_message(
+		message: &[u8],
+		origin: Self::Origin,
+		weight_limit: Weight,
+	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Default)]
@@ -203,6 +208,21 @@ pub mod pallet {
 
 		/// Processor for a message.
 		type MessageProcessor: ProcessMessage;
+
+		/// Page/heap size type.
+		type Size: BaseArithmetic
+			+ Unsigned
+			+ Copy
+			+ Into<u32>
+			+ Member
+			+ Encode
+			+ Decode
+			+ MaxEncodedLen
+			+ TypeInfo;
+
+		/// The size of the page; this implies the maximum message size which can be sent.
+		#[pallet::constant]
+		type HeapSize: Get<Self::Size>;
 	}
 
 	#[pallet::event]
@@ -235,7 +255,8 @@ pub mod pallet {
 
 	/// The map of page indices to pages.
 	#[pallet::storage]
-	pub(super) type Pages<T: Config> = StorageMap<_, Blake2_256, PageIndex, Page, OptionQuery>;
+	pub(super) type Pages<T: Config> =
+		StorageMap<_, Blake2_256, PageIndex, Page<T::Size, T::HeapSize>, OptionQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -248,9 +269,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn send(
-			origin: OriginFor<T>,
-		) -> DispatchResult {
+		pub fn send(origin: OriginFor<T>) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
 			Ok(())
 		}
@@ -258,12 +277,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn new_page() -> PageIndex {
-		let page = NextPage::<T>::get();
-		NextPage::<T>::put(page + 1);
-		page
-	}
-
 	fn do_enqueue_message(
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
 		origin: BoundedSlice<u8, MaxOriginLenOf<T>>,
@@ -277,7 +290,7 @@ impl<T: Config> Pallet<T> {
 				None => {
 					debug_assert!(false, "Corruption: referenced page doesn't exist.");
 					return
-				}
+				},
 			};
 			if let Ok(_) = page.try_append_message(&message[..], &origin[..]) {
 				Pages::<T>::insert(last, &page);
@@ -289,7 +302,7 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::insert(book_state.end - 1, Page::from_message(&message[..], &origin[..]));
 		BookStateOf::<T>::put(book_state);
 	}
-/*
+
 	/// Service the message queue.
 	///
 	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
@@ -299,74 +312,90 @@ impl<T: Config> Pallet<T> {
 		let mut processed = 0;
 		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight_left = weight_limit;
-		let mut maybe_book_state = BookStateOf::<T>::get();
-		while let Some(ref mut book_state) = maybe_book_state {
-			let page_index = book_state.head;
+		let mut book_state = BookStateOf::<T>::get();
+		while book_state.end > book_state.begin {
+			let page_index = book_state.begin;
 			// TODO: Check `weight_left` and bail before doing this storage read.
-			let mut page = Pages::<T>::get(page_index);
+			let mut page = match Pages::<T>::get(page_index) {
+				Some(p) => p,
+				None => {
+					debug_assert!(false, "message-queue: referenced page not found");
+					break
+				},
+			};
 
 			let bail = loop {
-				let mut message = page.peek_first();
+				let mut message = &match page.peek_first() {
+					Some(m) => m,
+					None => break false,
+				}[..];
 
-				let was_processed = match MessageOriginOf::<T>::decode(&mut message) {
+				let is_processed = match MessageOriginOf::<T>::decode(&mut message) {
 					Ok(origin) => {
-						let hash = T::Hashing::hash_of(message);
+						let hash = T::Hashing::hash(message);
 						use ProcessMessageError::Overweight;
-						match T::MessageProcessor::process_message(message, origin.clone(), weight_left) {
-							Err(Overweight(w)) if processed == 0 || w.any_gte(max_weight) => {
-								// Permanently overweight - place into overweight queue.
-								// TODO: record the weight used.
-								let index = 0;//Self::insert_overweight(origin, message);
-								Self::deposit_event(Event::<T>::Overweight { hash, origin, index });
+						match T::MessageProcessor::process_message(
+							message,
+							origin.clone(),
+							weight_left,
+						) {
+							Err(Overweight(w)) if processed == 0 || w.any_gt(max_weight) => {
+								// Permanently overweight.
+								Self::deposit_event(Event::<T>::Overweight {
+									hash,
+									origin,
+									index: 0,
+								}); // TODO page + index
 								false
 							},
 							Err(Overweight(_)) => {
-								// Temporarily overweight - save progress and stop processing this queue.
-								Pages::<T>::insert(page_index, page);
+								// Temporarily overweight - save progress and stop processing this
+								// queue.
 								break true
-							}
+							},
 							Err(error) => {
 								// Permanent error - drop
-								Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+								Self::deposit_event(Event::<T>::ProcessingFailed {
+									hash,
+									origin,
+									error,
+								});
 								true
 							},
 							Ok((success, weight_used)) => {
 								// Success
-								weight_left.saturating_reduce(weight_used);
-								let event = Event::<T>::Processed { hash, origin, weight_used, success };
+								processed.saturating_inc();
+								weight_left = weight_left.saturating_sub(weight_used);
+								let event =
+									Event::<T>::Processed { hash, origin, weight_used, success };
 								Self::deposit_event(event);
 								true
 							},
 						}
 					},
 					Err(_) => {
-						let hash = T::Hashing::hash_of(message);
+						let hash = T::Hashing::hash(message);
 						Self::deposit_event(Event::<T>::Discarded { hash });
-					}
-				};
-
-				page = match page.without_first(was_processed) {
-					Ok(p) => p,
-					Err(maybe_next_page) => {
-						Pages::<T>::remove(page_index);
-						if let Some(next_page) = maybe_next_page {
-							book_state.head = next_page;
-							break false
-						} else {
-							BookStateOf::<T>::kill();
-							break true
-						}
+						false
 					},
 				};
+				page.skip_first(is_processed);
 			};
+
+			if page.is_complete() {
+				Pages::<T>::remove(page_index);
+			} else {
+				Pages::<T>::insert(page_index, page);
+			}
+
 			if bail {
 				break
 			}
+			book_state.begin.saturating_inc();
 		}
-		BookStateOf::<T>::set(maybe_book_state);
+		BookStateOf::<T>::put(book_state);
 		weight_limit.saturating_sub(weight_left)
 	}
-	*/
 }
 
 pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
@@ -376,18 +405,37 @@ impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
 	}
 }
 
-pub struct MaxMessageLen<Origin, HeapSize>(sp_std::marker::PhantomData<(Origin, HeapSize)>);
-impl<Origin: MaxEncodedLen, HeapSize: Get<u32>> Get<u32> for MaxMessageLen<Origin, HeapSize> {
+pub struct MaxMessageLen<Origin, Size, HeapSize>(
+	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
+);
+impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>> Get<u32>
+	for MaxMessageLen<Origin, Size, HeapSize>
+{
 	fn get() -> u32 {
-		HeapSize::get()
+		(HeapSize::get().into())
 			.saturating_sub(Origin::max_encoded_len() as u32)
-			.saturating_sub(ItemHeader::max_encoded_len() as u32)
+			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
 	}
 }
 
-pub type MaxMessageLenOf<T> = MaxMessageLen<MessageOriginOf<T>, HeapSize>;
+pub type MaxMessageLenOf<T> =
+	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
+
+pub struct HeapSizeU32Of<T>(sp_std::marker::PhantomData<T>);
+impl<T: Config> Get<u32> for HeapSizeU32Of<T> {
+	fn get() -> u32 {
+		T::HeapSize::get().into()
+	}
+}
+
+pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
+impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
+	fn get() -> u32 {
+		T::get().into()
+	}
+}
 
 pub trait EnqueueMessage<Origin: MaxEncodedLen> {
 	type MaxMessageLen: Get<u32>;
@@ -407,15 +455,24 @@ pub trait EnqueueMessage<Origin: MaxEncodedLen> {
 }
 
 impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
-	type MaxMessageLen = MaxMessageLen<<T::MessageProcessor as ProcessMessage>::Origin, HeapSize>;
+	type MaxMessageLen =
+		MaxMessageLen<<T::MessageProcessor as ProcessMessage>::Origin, T::Size, T::HeapSize>;
 
-	fn enqueue_message(message: BoundedSlice<u8, Self::MaxMessageLen>, origin: <T::MessageProcessor as ProcessMessage>::Origin) {
+	fn enqueue_message(
+		message: BoundedSlice<u8, Self::MaxMessageLen>,
+		origin: <T::MessageProcessor as ProcessMessage>::Origin,
+	) {
 		// the `truncate_from` is just for safety - it will never fail since the bound is the
 		// maximum encoded length of the type.
-		origin.using_encoded(|data| Self::do_enqueue_message(message, BoundedSlice::truncate_from(data)))
+		origin.using_encoded(|data| {
+			Self::do_enqueue_message(message, BoundedSlice::truncate_from(data))
+		})
 	}
 
-	fn enqueue_messages(messages: &[BoundedSlice<u8, Self::MaxMessageLen>], origin: <T::MessageProcessor as ProcessMessage>::Origin) {
+	fn enqueue_messages(
+		messages: &[BoundedSlice<u8, Self::MaxMessageLen>],
+		origin: <T::MessageProcessor as ProcessMessage>::Origin,
+	) {
 		origin.using_encoded(|data| {
 			// the `truncate_from` is just for safety - it will never fail since the bound is the
 			// maximum encoded length of the type.

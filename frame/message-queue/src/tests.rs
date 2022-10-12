@@ -23,8 +23,8 @@ use super::*;
 
 use crate as pallet_message_queue;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Contains},
+	parameter_types,
+	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -77,16 +77,27 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
+parameter_types! {
+	pub const HeapSize: u32 = 131072;
+}
+
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type MessageProcessor = TestMessageProcessor;
+	type Size = u32;
+	type HeapSize = HeapSize;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
 pub enum MessageOrigin {
+	Here,
 	Parent,
 	Peer(u8),
+}
+
+parameter_types! {
+	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
 }
 
 pub struct TestMessageProcessor;
@@ -95,21 +106,69 @@ impl ProcessMessage for TestMessageProcessor {
 	type Origin = MessageOrigin;
 
 	/// Process the given message, using no more than `weight_limit` in weight to do so.
-	fn process_message(message: &[u8], origin: Self::Origin, weight_limit: Weight) -> Result<(bool, Weight), ProcessMessageError> {
-		Ok((true, Weight::zero()))
+	fn process_message(
+		message: &[u8],
+		origin: Self::Origin,
+		weight_limit: Weight,
+	) -> Result<(bool, Weight), ProcessMessageError> {
+		let weight = Weight::from_components(1, 1);
+		if weight.all_lte(weight_limit) {
+			let mut m = MessagesProcessed::get();
+			m.push((message.to_vec(), origin));
+			MessagesProcessed::set(m);
+			Ok((true, weight))
+		} else {
+			Err(ProcessMessageError::Overweight(weight))
+		}
 	}
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
 }
 
 #[test]
-fn enqueue_works() {
+fn enqueue_within_one_page_works() {
 	new_test_ext().execute_with(|| {
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), MessageOrigin::Parent);
+		use MessageOrigin::*;
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Parent);
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), Peer(0));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"gav"[..]), Here);
+		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(
+			MessagesProcessed::get(),
+			vec![(b"hello".to_vec(), Parent), (b"world".to_vec(), Peer(0)),]
+		);
+
+		MessagesProcessed::set(vec![]);
+		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(MessagesProcessed::get(), vec![(b"gav".to_vec(), Here),]);
+
+		MessagesProcessed::set(vec![]);
+		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(MessagesProcessed::get(), vec![]);
+
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"boo"[..]), Peer(0));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"yah"[..]), Peer(1));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"kah"[..]), Peer(0));
+
+		MessagesProcessed::set(vec![]);
+		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(
+			MessagesProcessed::get(),
+			vec![(b"boo".to_vec(), Peer(0)), (b"yah".to_vec(), Peer(1)),]
+		);
+
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Peer(1));
+
+		MessagesProcessed::set(vec![]);
+		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(
+			MessagesProcessed::get(),
+			vec![(b"kah".to_vec(), Peer(0)), (b"sha".to_vec(), Peer(1)),]
+		);
 	});
 }
