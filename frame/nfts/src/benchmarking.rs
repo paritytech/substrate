@@ -38,7 +38,10 @@ use crate::Pallet as Nfts;
 const SEED: u32 = 0;
 
 fn create_collection<T: Config<I>, I: 'static>(
-) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
+) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>)
+where
+	<T as Config<I>>::CollectionId: sp_std::default::Default,
+{
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
@@ -46,7 +49,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 	assert_ok!(Nfts::<T, I>::force_create(
 		SystemOrigin::Root.into(),
 		caller_lookup.clone(),
-		CollectionConfig::empty()
+		default_collection_config::<T, I>()
 	));
 	(collection, caller, caller_lookup)
 }
@@ -78,8 +81,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		item,
-		caller_lookup.clone(),
-		ItemConfig::empty(),
+		None,
 	));
 	(item, caller, caller_lookup)
 }
@@ -128,6 +130,13 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	assert_eq!(event, &system_event);
 }
 
+fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<T, I>
+where
+	<T as Config<I>>::CollectionId: sp_std::default::Default,
+{
+	CollectionConfig::default()
+}
+
 benchmarks_instance_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
@@ -136,7 +145,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { admin, config: CollectionConfig::empty() };
+		let call = Call::<T, I>::create { admin, config: default_collection_config::<T, I>() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -145,7 +154,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, caller_lookup, CollectionConfig::empty())
+	}: _(SystemOrigin::Root, caller_lookup, default_collection_config::<T, I>())
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
@@ -169,7 +178,7 @@ benchmarks_instance_pallet! {
 	mint {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let item = T::Helper::item(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, ItemConfig::empty())
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, None)
 	verify {
 		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
 	}
@@ -204,7 +213,7 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup,
-			CollectionConfig(CollectionSetting::FreeHolding.into()),
+			CollectionConfig { settings: CollectionSetting::FreeHolding.into(), ..Default::default() },
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
@@ -234,12 +243,10 @@ benchmarks_instance_pallet! {
 
 	lock_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let lock_config = CollectionConfig(
-			CollectionSetting::NonTransferableItems |
+		let lock_settings = CollectionSettings(CollectionSetting::NonTransferableItems |
 				CollectionSetting::LockedMetadata |
-				CollectionSetting::LockedAttributes,
-		);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_config)
+				CollectionSetting::LockedAttributes);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_settings)
 	verify {
 		assert_last_event::<T, I>(Event::CollectionLocked { collection }.into());
 	}
@@ -280,7 +287,7 @@ benchmarks_instance_pallet! {
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			config: CollectionConfig(CollectionSetting::FreeHolding.into()),
+			config: CollectionConfig { settings: CollectionSetting::FreeHolding.into(), ..Default::default() },
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {

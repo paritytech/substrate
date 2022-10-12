@@ -94,18 +94,15 @@ fn events() -> Vec<Event<Test>> {
 }
 
 fn default_collection_config() -> CollectionConfigFor<Test> {
-	CollectionConfig {
-		settings: CollectionSettings(CollectionSetting::FreeHolding.into()),
-		..Default::default()
-	}
+	CollectionConfig { settings: CollectionSetting::FreeHolding.into(), ..Default::default() }
 }
 
 fn default_item_config() -> ItemConfig {
-	ItemConfig { settings: ItemSettings::empty() }
+	ItemConfig { settings: ItemSettings::default() }
 }
 
 fn make_collection_config(settings: BitFlags<CollectionSetting>) -> CollectionConfigFor<Test> {
-	CollectionConfig { settings: CollectionSettings(settings), ..Default::default() }
+	CollectionConfig { settings: settings.into(), ..Default::default() }
 }
 
 #[test]

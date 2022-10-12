@@ -211,6 +211,11 @@ impl From<CollectionSetting> for CollectionSettings {
 		Self(input.into())
 	}
 }
+impl From<BitFlags<CollectionSetting>> for CollectionSettings {
+	fn from(input: BitFlags<CollectionSetting>) -> Self {
+		Self(input)
+	}
+}
 impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
 #[derive(
