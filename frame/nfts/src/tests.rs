@@ -191,6 +191,51 @@ fn mint_should_work() {
 		assert_eq!(Nfts::owner(0, 42).unwrap(), 1);
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_eq!(items(), vec![(1, 0, 42)]);
+
+		// validate minting start and end settings
+		assert_ok!(Nfts::update_mint_settings(
+			RuntimeOrigin::signed(1),
+			0,
+			MintSettings { start_block: Some(2), end_block: Some(3), ..Default::default() }
+		));
+
+		System::set_block_number(1);
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(1), 0, 43, None),
+			Error::<Test>::MintNotStated
+		);
+		System::set_block_number(4);
+		assert_noop!(Nfts::mint(RuntimeOrigin::signed(1), 0, 43, None), Error::<Test>::MintEnded);
+
+		// validate price
+		assert_ok!(Nfts::update_mint_settings(
+			RuntimeOrigin::signed(1),
+			0,
+			MintSettings { mint_type: MintType::Public, price: Some(1), ..Default::default() }
+		));
+		Balances::make_free_balance_be(&2, 100);
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 0, 43, None));
+		assert_eq!(Balances::total_balance(&2), 99);
+
+		// validate types
+		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
+		assert_ok!(Nfts::update_mint_settings(
+			RuntimeOrigin::signed(1),
+			1,
+			MintSettings { mint_type: MintType::HolderOf(0), ..Default::default() }
+		));
+		assert_noop!(Nfts::mint(RuntimeOrigin::signed(3), 1, 42, None), Error::<Test>::BadWitness);
+		assert_noop!(Nfts::mint(RuntimeOrigin::signed(2), 1, 42, None), Error::<Test>::BadWitness);
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(2), 1, 42, Some(MintWitness { owner_of_item: 42 })),
+			Error::<Test>::BadWitness
+		);
+		assert_ok!(Nfts::mint(
+			RuntimeOrigin::signed(2),
+			1,
+			42,
+			Some(MintWitness { owner_of_item: 43 })
+		));
 	});
 }
 

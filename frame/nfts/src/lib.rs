@@ -722,10 +722,10 @@ pub mod pallet {
 					let now = frame_system::Pallet::<T>::block_number();
 
 					if let Some(start_block) = mint_settings.start_block {
-						ensure!(start_block >= now, Error::<T, I>::MintNotStated);
+						ensure!(start_block <= now, Error::<T, I>::MintNotStated);
 					}
 					if let Some(end_block) = mint_settings.end_block {
-						ensure!(end_block <= now, Error::<T, I>::MintEnded);
+						ensure!(end_block >= now, Error::<T, I>::MintEnded);
 					}
 
 					match mint_settings.mint_type {
@@ -745,7 +745,7 @@ pub mod pallet {
 									)),
 								None => false,
 							};
-							ensure!(correct_witness, Error::<T, I>::NoPermission)
+							ensure!(correct_witness, Error::<T, I>::BadWitness)
 						},
 						_ => {},
 					}
