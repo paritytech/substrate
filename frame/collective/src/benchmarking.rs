@@ -35,21 +35,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 }
 
 fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8> {
-	let mut remark_data: Vec<u8> = vec![];
-	let mut value = id;
-	let mut counter = 0;
-	while value > u8::MAX as u32 {
-		value -= u8::MAX as u32;
-		remark_data.push(u8::MAX);
-		counter += 1;
-	}
-	remark_data.push(value.try_into().unwrap());
-	counter += 1;
-	for _i in counter..length {
-		// fill the rest of the array with zeros.
-		remark_data.push(0);
-	}
-	remark_data
+	id.to_le_bytes().into_iter().cycle().take(length).collect()
 }
 
 benchmarks_instance_pallet! {
@@ -124,7 +110,7 @@ benchmarks_instance_pallet! {
 		let b in 2 .. MAX_BYTES;
 		let m in 1 .. T::MaxMembers::get();
 
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -154,7 +140,7 @@ benchmarks_instance_pallet! {
 		let b in 2 .. MAX_BYTES;
 		let m in 1 .. T::MaxMembers::get();
 
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -186,7 +172,7 @@ benchmarks_instance_pallet! {
 		let m in 2 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -229,7 +215,7 @@ benchmarks_instance_pallet! {
 
 		let p = T::MaxProposals::get();
 		let b = MAX_BYTES;
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -304,7 +290,7 @@ benchmarks_instance_pallet! {
 		let p in 1 .. T::MaxProposals::get();
 
 		let bytes = 100;
-		let bytes_in_storage = 4 * (bytes + size_of::<u32>() as u32);
+		let bytes_in_storage = bytes + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -383,7 +369,7 @@ benchmarks_instance_pallet! {
 		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -464,7 +450,7 @@ benchmarks_instance_pallet! {
 		let p in 1 .. T::MaxProposals::get();
 
 		let bytes = 100;
-		let bytes_in_storage = 4 * (bytes + size_of::<u32>() as u32);
+		let bytes_in_storage = bytes + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -536,7 +522,7 @@ benchmarks_instance_pallet! {
 		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
@@ -607,7 +593,7 @@ benchmarks_instance_pallet! {
 
 		let m = 3;
 		let b = MAX_BYTES;
-		let bytes_in_storage = 4 * (b + size_of::<u32>() as u32);
+		let bytes_in_storage = b + size_of::<u32>() as u32;
 
 		// Construct `members`.
 		let mut members = vec![];
