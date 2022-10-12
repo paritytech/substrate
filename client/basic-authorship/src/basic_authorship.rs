@@ -668,6 +668,8 @@ mod tests {
 		);
 	}
 
+	// This test is flaky https://github.com/paritytech/substrate/pull/9663#issuecomment-930473973
+	#[ignore]
 	#[test]
 	fn should_not_remove_invalid_transactions_when_skipping() {
 		// given

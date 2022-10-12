@@ -33,6 +33,9 @@ use tempfile::tempdir;
 
 pub mod common;
 
+// This test is flaky https://github.com/paritytech/substrate/issues/11321
+// Todo: enable when v0.9.24 is merged
+#[ignore]
 #[tokio::test]
 async fn running_the_node_works_and_can_be_interrupted() {
 	async fn run_command_and_kill(signal: Signal) {
