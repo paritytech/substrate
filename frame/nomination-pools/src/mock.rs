@@ -196,7 +196,7 @@ impl pools::Config for Runtime {
 	type RewardCounter = RewardCounter;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type StakingInterface = StakingMock;
+	type Staking = StakingMock;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;
