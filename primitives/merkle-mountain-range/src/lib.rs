@@ -40,7 +40,7 @@ pub type LeafIndex = u64;
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
 	/// A type that should end up in the leaf of MMR.
-	type LeafData: FullLeaf + codec::Decode;
+	type LeafData: FullLeaf + codec::MaxEncodedLen + codec::Decode;
 
 	/// The method to return leaf data that should be placed
 	/// in the leaf node appended MMR at this block.
@@ -88,7 +88,7 @@ pub trait FullLeaf: Clone + PartialEq + fmt::Debug {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, compact: bool) -> R;
 }
 
-impl<T: codec::Encode + codec::Decode + Clone + PartialEq + fmt::Debug> FullLeaf for T {
+impl<T: codec::Encode + codec::Decode + Clone + Default + PartialEq + fmt::Debug> FullLeaf for T {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F, _compact: bool) -> R {
 		codec::Encode::using_encoded(self, f)
 	}
@@ -178,14 +178,20 @@ impl EncodableOpaqueLeaf {
 /// [DataOrHash::hash] method calculates the hash of this element in its compact form,
 /// so should be used instead of hashing the encoded form (which will always be non-compact).
 #[derive(RuntimeDebug, Clone, PartialEq)]
-pub enum DataOrHash<H: traits::Hash, L> {
+pub enum DataOrHash<H: traits::Hash, L: FullLeaf> {
 	/// Arbitrary data in its full form.
 	Data(L),
 	/// A hash of some data.
 	Hash(H::Output),
 }
 
-impl<H: traits::Hash, L> From<L> for DataOrHash<H, L> {
+impl<H: traits::Hash, L: FullLeaf> Default for DataOrHash<H, L> {
+	fn default() -> Self {
+		DataOrHash::Hash(Default::default())
+	}
+}
+
+impl<H: traits::Hash, L: FullLeaf> From<L> for DataOrHash<H, L> {
 	fn from(l: L) -> Self {
 		Self::Data(l)
 	}
@@ -195,7 +201,7 @@ mod encoding {
 	use super::*;
 
 	/// A helper type to implement [codec::Codec] for [DataOrHash].
-	#[derive(codec::Encode, codec::Decode)]
+	#[derive(codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	enum Either<A, B> {
 		Left(A),
 		Right(B),
@@ -220,6 +226,12 @@ mod encoding {
 				Either::Left(l) => DataOrHash::Data(L::decode(&mut &*l)?),
 				Either::Right(r) => DataOrHash::Hash(r),
 			})
+		}
+	}
+
+	impl<H: traits::Hash, L: FullLeaf + codec::MaxEncodedLen> codec::MaxEncodedLen for DataOrHash<H, L> {
+		fn max_encoded_len() -> usize {
+			Either::<H::Output, L>::max_encoded_len()
 		}
 	}
 }
@@ -248,7 +260,7 @@ impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
 /// into [DataOrHash] and each tuple element is hashed first before constructing
 /// the final hash of the entire tuple. This allows you to replace tuple elements
 /// you don't care about with their hashes.
-#[derive(RuntimeDebug, Clone, PartialEq)]
+#[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::MaxEncodedLen)]
 pub struct Compact<H, T> {
 	/// Internal tuple representation.
 	pub tuple: T,

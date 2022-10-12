@@ -18,7 +18,7 @@
 use crate as pallet_mmr;
 use crate::*;
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -89,6 +89,12 @@ impl Config for Test {
 pub struct LeafData {
 	pub a: u64,
 	pub b: Vec<u8>,
+}
+
+impl MaxEncodedLen for LeafData {
+	fn max_encoded_len() -> usize {
+		MaxLeafSize::get().try_into().unwrap()
+	}
 }
 
 impl LeafData {
