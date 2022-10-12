@@ -483,6 +483,10 @@ pub mod pallet {
 			Ok(None.into())
 		}
 
+		/// This comment seems incorrect. As per implementation, rerun_election will force
+		/// an election even if a replacement was found.
+		/// Based on Shoeb comment: https://github.com/mangata-finance/substrate/pull/69#discussion_r993216128
+
 		/// Remove a particular member from the set. This is effective immediately and the bond of
 		/// the outgoing member is slashed.
 		///
