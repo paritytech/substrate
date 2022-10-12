@@ -422,13 +422,7 @@ pub type MaxMessageLenOf<T> =
 	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
-
-pub struct HeapSizeU32Of<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> Get<u32> for HeapSizeU32Of<T> {
-	fn get() -> u32 {
-		T::HeapSize::get().into()
-	}
-}
+pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
 
 pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
 impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
