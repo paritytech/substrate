@@ -61,7 +61,7 @@ pub mod v1 {
 				current.put::<Pallet<T>>();
 				T::DbWeight::get().reads_writes(2, 1)
 			} else {
-				log!(info, "Migration did not executed. This probably should be removed");
+				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
 			}
 		}
