@@ -8793,10 +8793,19 @@ dependencies = [
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
+ "futures",
  "hex",
  "jsonrpsee",
+ "parity-scale-codec",
  "sc-chain-spec",
+ "sc-transaction-pool-api",
+ "serde",
  "serde_json",
+ "sp-api",
+ "sp-blockchain",
+ "sp-core",
+ "sp-runtime",
+ "thiserror",
  "tokio",
 ]
 
@@ -8849,6 +8858,7 @@ dependencies = [
  "sc-offchain",
  "sc-rpc",
  "sc-rpc-server",
+ "sc-rpc-spec-v2",
  "sc-sysinfo",
  "sc-telemetry",
  "sc-tracing",
@@ -9036,6 +9046,7 @@ version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
  "assert_matches",
+ "async-trait",
  "criterion",
  "futures",
  "futures-timer",
@@ -9067,9 +9078,11 @@ dependencies = [
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
 dependencies = [
+ "async-trait",
  "futures",
  "log",
  "serde",
+ "serde_json",
  "sp-blockchain",
  "sp-runtime",
  "thiserror",

@@ -16,15 +16,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate JSON-RPC interface v2.
-//!
-//! Specification [document](https://paritytech.github.io/json-rpc-interface-spec/).
+//! API trait for transactions.
 
-#![warn(missing_docs)]
-#![deny(unused_crate_dependencies)]
+use crate::transaction::event::TransactionEvent;
+use jsonrpsee::proc_macros::rpc;
+use sp_core::Bytes;
 
-pub mod chain_spec;
-pub mod transaction;
-
-/// Task executor that is being used by RPC subscriptions.
-pub type SubscriptionTaskExecutor = std::sync::Arc<dyn sp_core::traits::SpawnNamed>;
+#[rpc(client, server)]
+pub trait TransactionApi<Hash: Clone> {
+	/// Submit an extrinsic to watch.
+	///
+	/// See [`TransactionEvent`](crate::transaction::event::TransactionEvent) for details on
+	/// transaction life cycle.
+	#[subscription(
+		name = "transaction_unstable_submitAndWatch" => "transaction_unstable_submitExtrinsic",
+		unsubscribe = "transaction_unstable_unwatch",
+		item = TransactionEvent<Hash>,
+	)]
+	fn submit_and_watch(&self, bytes: Bytes);
+}
