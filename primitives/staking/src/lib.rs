@@ -54,13 +54,32 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 	}
 }
 
+/// A struct that reflects stake that an account has in the staking system. Provides a set of
+/// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
+pub struct Stake<T: StakingInterface + ?Sized> {
+	/// The stash account whose balance is actually locked and at stake.
+	pub stash: T::AccountId,
+	/// The total stake that `stash` has in the staking system. This includes the
+	/// `active` stake, and any funds currently in the process of unbonding via
+	/// [`StakingInterface::unbond`].
+	///
+	/// # Note
+	///
+	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
+	/// non-staking locks on the bonded pair's balance this may not be accurate.
+	pub total: T::Balance,
+	/// The total amount of the stash's balance that will be at stake in any forthcoming
+	/// rounds.
+	pub active: T::Balance,
+}
+
 /// A generic representation of a staking implementation.
 ///
 /// This interface uses the terminology of NPoS, but it is aims to be generic enough to cover other
 /// implementations as well.
 pub trait StakingInterface {
 	/// Balance type used by the staking system.
-	type Balance;
+	type Balance: PartialEq;
 
 	/// AccountId type used by the staking system
 	type AccountId;
@@ -74,13 +93,13 @@ pub trait StakingInterface {
 	/// The minimum amount required to bond in order to set validation intentions.
 	fn minimum_validator_bond() -> Self::Balance;
 
-	/// Return an account that can be potentially controlled by `controller`.
+	/// Return a stash account that is controlled by a `controller`.
 	///
 	/// ## Note
 	///
 	/// The controller abstraction is not permanent and might go away. Avoid using this as much as
 	/// possible.
-	fn can_control(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError>;
+	fn stash(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError>;
 
 	/// Number of eras that staked funds must remain bonded for.
 	fn bonding_duration() -> EraIndex;
@@ -90,29 +109,19 @@ pub trait StakingInterface {
 	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
-	/// The amount of active stake `who` has in the staking system.
-	fn active_stake(who: &Self::AccountId) -> Option<Self::Balance>;
+	/// Returns the stake of `who`.
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
 
-	/// The total stake that `who` has in the staking system. This includes the
-	/// [`Self::active_stake`], and any funds currently in the process of unbonding via
-	/// [`Self::unbond`].
-	///
-	/// # Note
-	///
-	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
-	/// non-staking locks on the bonded pair's balance this may not be accurate.
-	fn total_stake(who: &Self::AccountId) -> Option<Self::Balance>;
-
+	/// TODO: Possibly return a result here too for consistency.
 	fn is_unbonding(who: &Self::AccountId) -> bool {
-		match (Self::active_stake(who), Self::total_stake(who)) {
-			(Some(x), Some(y)) if x == y => true,
-			_ => false
+		match Self::stake(who) {
+			Ok(stake) if stake.active == stake.total => true,
+			_ => false,
 		}
 	}
 
 	fn fully_unbond(who: &Self::AccountId) -> DispatchResult {
-		// TODO: active_stake and others should also return `Result`.
-		Self::unbond(who, Self::active_stake(who).unwrap())
+		Self::unbond(who, Self::stake(who)?.active)
 	}
 
 	/// Bond (lock) `value` of `who`'s balance, while forwarding any rewards to `payee`.
