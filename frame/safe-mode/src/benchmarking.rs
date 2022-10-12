@@ -55,6 +55,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
+		System::<T>::set_block_number(1u32.into());
 		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
 	}: _(origin)
 	verify {
