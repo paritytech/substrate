@@ -26,7 +26,7 @@ use serde::{
 };
 use sp_std::{fmt, fmt::Formatter};
 
-pub fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
 where
 	S: Serializer,
 {
@@ -70,7 +70,7 @@ impl<'de> Visitor<'de> for ThroughputVisitor {
 	}
 }
 
-pub fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
+fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
 where
 	D: Deserializer<'de>,
 {

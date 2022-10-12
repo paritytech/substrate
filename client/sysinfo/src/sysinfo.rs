@@ -33,7 +33,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-/// The unit in which the [`Throughput`] (bytes per second) is denoted. 
+/// The unit in which the [`Throughput`] (bytes per second) is denoted.
 pub enum Unit {
 	GiBs,
 	MiBs,
@@ -54,26 +54,28 @@ impl fmt::Display for Unit {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Throughput(f64);
 
-const KIBIBYTE: f64 = 1024.0;
+const KIBIBYTE: f64 = (1 << 10) as f64;
+const MEBIBYTE: f64 = (1 << 20) as f64;
+const GIBIBYTE: f64 = (1 << 30) as f64;
 
 impl Throughput {
-	/// `f64` kibibyte/s to byte/s.
+	/// Construct [`Self`] from kibibyte/s.
 	pub fn from_kibs(kibs: f64) -> Throughput {
 		Throughput(kibs * KIBIBYTE)
 	}
 
-	/// `f64` mebibyte/s to byte/s.
+	/// Construct [`Self`] from mebibyte/s.
 	pub fn from_mibs(mibs: f64) -> Throughput {
-		Throughput(mibs * KIBIBYTE * KIBIBYTE)
+		Throughput(mibs * MEBIBYTE)
 	}
 
-	/// `f64` gibibyte/s to byte/s.
+	/// Construct [`Self`] from gibibyte/s.
 	pub fn from_gibs(gibs: f64) -> Throughput {
-		Throughput(gibs * KIBIBYTE * KIBIBYTE * KIBIBYTE)
+		Throughput(gibs * GIBIBYTE)
 	}
 
-	/// [`Self`] as f64.
-	pub fn as_f64(&self) -> f64 {
+	/// [`Self`] as number of byte/s.
+	pub fn as_byte(&self) -> f64 {
 		self.0
 	}
 
@@ -84,21 +86,21 @@ impl Throughput {
 
 	/// [`Self`] as number of mebibyte/s.
 	pub fn as_mibs(&self) -> f64 {
-		self.0 / (KIBIBYTE * KIBIBYTE)
+		self.0 / MEBIBYTE
 	}
 
 	/// [`Self`] as number of gibibyte/s.
 	pub fn as_gibs(&self) -> f64 {
-		self.0 / (KIBIBYTE * KIBIBYTE * KIBIBYTE)
+		self.0 / GIBIBYTE
 	}
 
 	/// Normalizes [`Self`] to use the largest unit possible.
 	pub fn normalize(&self) -> (f64, Unit) {
 		let bs = self.0;
 
-		if bs >= KIBIBYTE * KIBIBYTE * KIBIBYTE {
+		if bs >= GIBIBYTE {
 			(self.as_gibs(), Unit::GiBs)
-		} else if bs >= KIBIBYTE * KIBIBYTE {
+		} else if bs >= MEBIBYTE {
 			(self.as_mibs(), Unit::MiBs)
 		} else {
 			(self.as_kibs(), Unit::KiBs)
@@ -555,19 +557,19 @@ mod tests {
 
 	#[test]
 	fn test_benchmark_cpu() {
-		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > Throughput(0.0));
+		assert!(benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT) > Throughput::from_mibs(0.0));
 	}
 
 	#[test]
 	fn test_benchmark_memory() {
-		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > Throughput(0.0));
+		assert!(benchmark_memory(DEFAULT_MEMORY_EXECUTION_LIMIT) > Throughput::from_mibs(0.0));
 	}
 
 	#[test]
 	fn test_benchmark_disk_sequential_writes() {
 		assert!(
 			benchmark_disk_sequential_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				Throughput(0.0)
+				Throughput::from_mibs(0.0)
 		);
 	}
 
@@ -575,13 +577,15 @@ mod tests {
 	fn test_benchmark_disk_random_writes() {
 		assert!(
 			benchmark_disk_random_writes(DEFAULT_DISK_EXECUTION_LIMIT, "./".as_ref()).unwrap() >
-				Throughput(0.0)
+				Throughput::from_mibs(0.0)
 		);
 	}
 
 	#[test]
 	fn test_benchmark_sr25519_verify() {
-		assert!(benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > Throughput(0.0));
+		assert!(
+			benchmark_sr25519_verify(ExecutionLimit::MaxIterations(1)) > Throughput::from_mibs(0.0)
+		);
 	}
 
 	/// Test the [`Throughput`].
