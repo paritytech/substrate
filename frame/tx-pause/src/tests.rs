@@ -65,6 +65,50 @@ fn can_unpause_specific_call() {
 	});
 }
 
+#[test]
+fn can_filter_balance_in_batch_when_paused() {
+	new_test_ext().execute_with(|| {
+		let batch_call =
+			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
+
+		assert_ok!(TxPause::pause_call(
+			Origin::signed(mock::PauseOrigin::get()),
+			name(b"Balances"),
+			name(b"transfer"),
+		));
+
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+		System::assert_last_event(
+			pallet_utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn can_filter_balance_in_proxy_when_paused() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(TxPause::pause_call(
+			Origin::signed(mock::PauseOrigin::get()),
+			name(b"Balances"),
+			name(b"transfer"),
+		));
+
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
+
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, Box::new(call_transfer(1, 1))));
+		System::assert_last_event(
+			pallet_proxy::Event::ProxyExecuted {
+				result: DispatchError::from(frame_system::Error::<Test>::CallFiltered).into(),
+			}
+			.into(),
+		);
+	});
+}
+
 // GENERAL FAIL/NEGATIVE TESTS ---------------------
 
 #[test]

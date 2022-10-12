@@ -219,12 +219,10 @@ pub struct UnfilterableCallNames;
 /// Make Balances::transfer_keep_alive unfilterable, accept all others.
 impl Contains<FullNameOf<Runtime>> for UnfilterableCallNames {
 	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
-		let unpausables: Vec<FullNameOf<Runtime>> = vec![
-			(
-				b"Balances".to_vec().try_into().unwrap(),
-				Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
-			),
-		];
+		let unpausables: Vec<FullNameOf<Runtime>> = vec![(
+			b"Balances".to_vec().try_into().unwrap(),
+			Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
+		)];
 
 		for unpausable_call in unpausables {
 			let (pallet_name, maybe_call_name) = full_name;

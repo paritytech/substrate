@@ -141,7 +141,7 @@ pub struct UnfilterableCalls;
 impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
-			RuntimeCall::Balances(_)  => false,
+			RuntimeCall::Balances(_) => false,
 			_ => true,
 		}
 	}
@@ -211,7 +211,7 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	for ForceActivateOrigin
 {
 	type Success = u64;
@@ -234,7 +234,7 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	for ForceExtendOrigin
 {
 	type Success = u64;
