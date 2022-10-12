@@ -691,7 +691,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Destroy accounts associated with a given asset up to the max (T::RemoveKeysLimit).
 	///
-	/// Each call emits the `Event::DestroyedAccountss` event.
+	/// Each call emits the `Event::DestroyedAccounts` event.
 	pub(super) fn do_destroy_accounts(id: T::AssetId) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
 		let mut removed_accounts = 0;
