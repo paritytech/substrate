@@ -25,7 +25,10 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
-use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
+use frame_support::{
+	dispatch::{DispatchClass, OneOrMany, PerDispatchClass},
+	weights::{constants, Weight},
+};
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
 
@@ -204,7 +207,10 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::with_sensible_defaults(1u32 * constants::WEIGHT_PER_SECOND, DEFAULT_NORMAL_RATIO)
+		Self::with_sensible_defaults(
+			Weight::from_parts(constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			DEFAULT_NORMAL_RATIO,
+		)
 	}
 }
 

@@ -133,7 +133,14 @@ where
 		.add_directive(
 			parse_default_directive("cranelift_wasm=warn").expect("provided directive is valid"),
 		)
-		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"));
+		.add_directive(parse_default_directive("hyper=warn").expect("provided directive is valid"))
+		.add_directive(
+			parse_default_directive("trust_dns_proto=off").expect("provided directive is valid"),
+		)
+		.add_directive(
+			parse_default_directive("libp2p_mdns::behaviour::iface=off")
+				.expect("provided directive is valid"),
+		);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		if lvl != "" {
