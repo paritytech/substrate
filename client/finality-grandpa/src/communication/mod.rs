@@ -37,6 +37,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
+	time::Duration,
 };
 
 use finality_grandpa::{
@@ -67,6 +68,9 @@ mod periodic;
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+// How often to rebroadcast neighbor packets, in cases where no new packets are created.
+pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 * 60);
 
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
@@ -281,7 +285,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		}
 
 		let (neighbor_packet_worker, neighbor_packet_sender) =
-			periodic::NeighborPacketWorker::new();
+			periodic::NeighborPacketWorker::new(NEIGHBOR_REBROADCAST_PERIOD);
 
 		NetworkBridge {
 			service,

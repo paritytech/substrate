@@ -98,11 +98,8 @@ use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnbound
 use sp_finality_grandpa::AuthorityId;
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 
-use super::{benefit, cost, Round, SetId};
-use crate::{
-	communication::periodic::REBROADCAST_AFTER as NEIGHBOR_REBROADCAST_AFTER, environment, CatchUp,
-	CompactCommit, SignedMessage,
-};
+use super::{benefit, cost, Round, SetId, NEIGHBOR_REBROADCAST_PERIOD};
+use crate::{environment, CatchUp, CompactCommit, SignedMessage};
 
 use std::{
 	collections::{HashSet, VecDeque},
@@ -501,20 +498,22 @@ struct Peers<N> {
 	second_stage_peers: HashSet<PeerId>,
 	/// The randomly picked set of `LUCKY_PEERS` light clients we'll gossip commit messages to.
 	lucky_light_peers: HashSet<PeerId>,
+	/// Neighbor packet rebroadcast period --- we reduce the reputation of peers sending duplicate
+	/// packets too often.
+	neighbor_rebroadcast_period: Duration,
 }
 
-impl<N> Default for Peers<N> {
-	fn default() -> Self {
+impl<N: Ord> Peers<N> {
+	fn new(neighbor_rebroadcast_period: Duration) -> Self {
 		Peers {
 			inner: Default::default(),
 			first_stage_peers: Default::default(),
 			second_stage_peers: Default::default(),
 			lucky_light_peers: Default::default(),
+			neighbor_rebroadcast_period,
 		}
 	}
-}
 
-impl<N: Ord> Peers<N> {
 	fn new_peer(&mut self, who: PeerId, role: ObservedRole) {
 		match role {
 			ObservedRole::Authority if self.first_stage_peers.len() < LUCKY_PEERS => {
@@ -566,7 +565,7 @@ impl<N: Ord> Peers<N> {
 
 		if duplicate_packet {
 			if let Some(last_update) = peer.view.last_update {
-				if now < last_update + NEIGHBOR_REBROADCAST_AFTER / 2 {
+				if now < last_update + self.neighbor_rebroadcast_period / 2 {
 					return Err(Misbehavior::DuplicateNeighborMessage)
 				}
 			}
@@ -774,7 +773,7 @@ impl<Block: BlockT> Inner<Block> {
 
 		Inner {
 			local_view: None,
-			peers: Peers::default(),
+			peers: Peers::new(NEIGHBOR_REBROADCAST_PERIOD),
 			live_topics: KeepTopics::new(),
 			next_rebroadcast: Instant::now() + REBROADCAST_AFTER,
 			authorities: Vec::new(),
@@ -1682,10 +1681,8 @@ pub(super) struct PeerReport {
 
 #[cfg(test)]
 mod tests {
-	use super::{environment::SharedVoterSetState, *};
-	use crate::{
-		communication, communication::periodic::REBROADCAST_AFTER as NEIGHBOR_REBROADCAST_AFTER,
-	};
+	use super::{super::NEIGHBOR_REBROADCAST_PERIOD, environment::SharedVoterSetState, *};
+	use crate::communication;
 	use sc_network::config::Role;
 	use sc_network_gossip::Validator as GossipValidatorT;
 	use sp_core::{crypto::UncheckedFrom, H256};
@@ -1767,7 +1764,7 @@ mod tests {
 
 	#[test]
 	fn unknown_peer_cannot_be_updated() {
-		let mut peers = Peers::default();
+		let mut peers = Peers::new(NEIGHBOR_REBROADCAST_PERIOD);
 		let id = PeerId::random();
 
 		let update =
@@ -1798,7 +1795,10 @@ mod tests {
 		let update4 =
 			NeighborPacket { round: Round(3), set_id: SetId(11), commit_finalized_height: 80 };
 
-		let mut peers = Peers::default();
+		// Use shorter rebroadcast period to safely roll the clock back in the last test
+		// and don't hit the system boot time on systems with unsigned time.
+		const SHORT_NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(1);
+		let mut peers = Peers::new(SHORT_NEIGHBOR_REBROADCAST_PERIOD);
 		let id = PeerId::random();
 
 		peers.new_peer(id, ObservedRole::Authority);
@@ -1815,15 +1815,15 @@ mod tests {
 		check_update(&mut peers, update3);
 		check_update(&mut peers, update4.clone());
 
-		// allow duplicate neighbor packets if enough time has passed
+		// Allow duplicate neighbor packets if enough time has passed.
 		peers.inner.get_mut(&id).unwrap().view.last_update =
-			Some(Instant::now() - NEIGHBOR_REBROADCAST_AFTER);
+			Some(Instant::now() - SHORT_NEIGHBOR_REBROADCAST_PERIOD);
 		check_update(&mut peers, update4);
 	}
 
 	#[test]
 	fn invalid_view_change() {
-		let mut peers = Peers::default();
+		let mut peers = Peers::new(NEIGHBOR_REBROADCAST_PERIOD);
 
 		let id = PeerId::random();
 		peers.new_peer(id, ObservedRole::Authority);
