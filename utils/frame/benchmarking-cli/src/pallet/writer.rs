@@ -69,6 +69,7 @@ struct BenchmarkData {
 	component_writes: Vec<ComponentSlope>,
 	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
+	min_execution_time: u128,
 }
 
 // This forwards some specific metadata from the `PalletCmd`
@@ -257,6 +258,7 @@ fn get_benchmark_data(
 		component_writes: used_writes,
 		component_ranges,
 		comments,
+		min_execution_time: extrinsic_time.minimum,
 	}
 }
 
