@@ -316,8 +316,8 @@ async fn on_block_finalized() {
 		.unwrap()
 		.block;
 	let header = block.header.clone();
-	let block_number = header.number().clone();
-	let hash = block.hash().clone();
+	let block_number = *header.number();
+	let hash = block.hash();
 
 	chain_sync
 		.expect_on_block_finalized()

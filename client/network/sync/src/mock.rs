@@ -16,8 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Contains a mock implementation of [`ChainSync`] that can be used
-//! for testing calls made to [`ChainSync`].
+//! Contains a mock implementation of `ChainSync` that can be used
+//! for testing calls made to `ChainSync`.
 
 use futures::task::Poll;
 use libp2p::PeerId;
