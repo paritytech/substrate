@@ -75,7 +75,7 @@ impl Throughput {
 	}
 
 	/// [`Self`] as number of byte/s.
-	pub fn as_byte(&self) -> f64 {
+	pub fn as_bytes(&self) -> f64 {
 		self.0
 	}
 

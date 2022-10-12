@@ -130,7 +130,7 @@ impl MachineCmd {
 		// Dispatch the concrete function from `sc-sysinfo`.
 
 		let score = self.measure(&requirement.metric, dir)?;
-		let rel_score = score.as_byte() / requirement.minimum.as_byte();
+		let rel_score = score.as_bytes() / requirement.minimum.as_bytes();
 
 		// Sanity check if the result is off by factor >100x.
 		if rel_score >= 100.0 || rel_score <= 0.01 {
