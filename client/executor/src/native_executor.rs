@@ -87,13 +87,123 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	fn native_version() -> NativeVersion;
 }
 
+fn unwrap_heap_pages(pages: Option<HeapPages>) -> HeapPages {
+	pages.unwrap_or_else(|| DEFAULT_HEAP_PAGES)
+}
+
+pub struct WasmExecutorBuilder<H> {
+	_phantom: PhantomData<H>,
+	method: WasmExecutionMethod,
+	onchain_heap_pages: Option<HeapPages>,
+	offchain_heap_pages: Option<HeapPages>,
+	max_runtime_instances: usize,
+	cache_path: Option<PathBuf>,
+	allow_missing_host_functions: bool,
+	runtime_cache_size: u8,
+}
+
+impl<H> WasmExecutorBuilder<H> {
+	/// Create a new instance of `Self`
+	///
+	/// - `method`: The wasm execution method that should be used by the
+	pub fn new(method: WasmExecutionMethod) -> Self {
+		Self {
+			_phantom: PhantomData,
+			method,
+			onchain_heap_pages: None,
+			offchain_heap_pages: None,
+			max_runtime_instances: 2,
+			runtime_cache_size: 4,
+			allow_missing_host_functions: false,
+			cache_path: None,
+		}
+	}
+
+	/// Create the wasm executor with the given number of `heap_pages` for onchain runtime calls.
+	pub fn with_onchain_heap_pages(mut self, heap_pages: HeapPages) -> Self {
+		self.onchain_heap_pages = Some(heap_pages);
+		self
+	}
+
+	/// Create the wasm executor with the given number of `heap_pages` for offchain runtime calls.
+	pub fn with_offchain_heap_pages(mut self, heap_pages: HeapPages) -> Self {
+		self.offchain_heap_pages = Some(heap_pages);
+		self
+	}
+
+	/// Create the wasm executor with the given maximum number of `instances`.
+	///
+	/// The number of `instances` defines how many different instances of a runtime the cache is
+	/// storing.
+	///
+	/// By default the maximum number of `instances` is `2`.
+	pub fn with_max_runtime_instances(mut self, instances: usize) -> Self {
+		self.max_runtime_instances = instances;
+		self
+	}
+
+	/// Create the wasm executor with the given `cache_path`.
+	///
+	/// The `cache_path` is A path to a directory where the executor can place its files for
+	/// purposes of caching. This may be important in cases when there are many different modules
+	/// with the compiled execution method is used.
+	///
+	/// By default there is no `cache_path` given.
+	pub fn with_cache_path(mut self, cache_path: impl Into<PathBuf>) -> Self {
+		self.cache_path = Some(cache_path.into());
+		self
+	}
+
+	/// Create the wasm executor and allow/forbid missing host functions.
+	///
+	/// If missing host functions are forbidden, the instantiation of a wasm blob will fail
+	/// for imported host functions that the executor is not aware of. If they are allowed,
+	/// a stub is generated that will return an error when being called while executing the wasm.
+	///
+	/// By default missing host functions are forbidden.
+	pub fn with_allow_missing_host_functions(mut self, allow: bool) -> Self {
+		self.allow_missing_host_functions = allow;
+		self
+	}
+
+	/// Create the wasm executor with the given `runtime_cache_size`.
+	///
+	/// Defines the number of different runtimes/instantiated wasm blobs the cache stores.
+	/// Runtimes/wasm blobs are differentiated based on the hash and the number of heap pages.
+	///
+	/// By default this value is set to `4`.
+	pub fn with_runtime_cache_size(mut self, runtime_cache_size: u8) -> Self {
+		self.runtime_cache_size = runtime_cache_size;
+		self
+	}
+
+	/// Build the configured [`WasmExecutor`].
+	pub fn build(self) -> WasmExecutor<H> {
+		WasmExecutor {
+			method: self.method,
+			default_offchain_heap_pages: unwrap_heap_pages(self.offchain_heap_pages),
+			default_onchain_heap_pages: unwrap_heap_pages(self.onchain_heap_pages),
+			cache: Arc::new(RuntimeCache::new(
+				self.max_runtime_instances,
+				self.cache_path.clone(),
+				self.runtime_cache_size,
+			)),
+			cache_path: self.cache_path,
+			allow_missing_host_functions: self.allow_missing_host_functions,
+			phantom: PhantomData,
+		}
+	}
+}
+
 /// An abstraction over Wasm code executor. Supports selecting execution backend and
 /// manages runtime cache.
 pub struct WasmExecutor<H> {
 	/// Method used to execute fallback Wasm code.
 	method: WasmExecutionMethod,
-	/// The number of 64KB pages to allocate for Wasm execution.
-	default_heap_pages: HeapPages,
+	/// The number of 64KB pages to allocate for Wasm execution for onchain calls.
+	default_onchain_heap_pages: HeapPages,
+	/// The number of 64KB pages to allocate for Wasm execution for offchain calls.
+	default_offchain_heap_pages: HeapPages,
 	/// WASM runtime cache.
 	cache: Arc<RuntimeCache>,
 	/// The path to a directory which the executor can leverage for a file cache, e.g. put there
@@ -108,7 +218,8 @@ impl<H> Clone for WasmExecutor<H> {
 	fn clone(&self) -> Self {
 		Self {
 			method: self.method,
-			default_heap_pages: self.default_heap_pages,
+			default_onchain_heap_pages: self.default_onchain_heap_pages,
+			default_offchain_heap_pages: self.default_offchain_heap_pages,
 			cache: self.cache.clone(),
 			cache_path: self.cache_path.clone(),
 			allow_missing_host_functions: self.allow_missing_host_functions,
@@ -146,9 +257,12 @@ where
 	) -> Self {
 		WasmExecutor {
 			method,
-			default_heap_pages: default_heap_pages
-				.map(|h| HeapPages::ExtraMax(h as _))
-				.unwrap_or(DEFAULT_HEAP_PAGES),
+			default_onchain_heap_pages: unwrap_heap_pages(
+				default_heap_pages.map(|h| HeapPages::ExtraMax(h as _)),
+			),
+			default_offchain_heap_pages: unwrap_heap_pages(
+				default_heap_pages.map(|h| HeapPages::ExtraMax(h as _)),
+			),
 			cache: Arc::new(RuntimeCache::new(
 				max_runtime_instances,
 				cache_path.clone(),
@@ -158,6 +272,11 @@ where
 			allow_missing_host_functions: false,
 			phantom: PhantomData,
 		}
+	}
+
+	/// Instantiate a builder for creating an instance of `Self`.
+	pub fn builder(method: WasmExecutionMethod) -> WasmExecutorBuilder<H> {
+		WasmExecutorBuilder::new(method)
 	}
 
 	/// Ignore missing function imports if set true.
@@ -270,7 +389,7 @@ where
 	) -> std::result::Result<Vec<u8>, Error> {
 		let module = crate::wasm_runtime::create_wasm_runtime_with_code::<H>(
 			self.method,
-			self.default_heap_pages,
+			self.default_onchain_heap_pages,
 			runtime_blob,
 			allow_missing_host_functions,
 			self.cache_path.as_deref(),
@@ -358,10 +477,10 @@ where
 		let on_chain_heap_pages = runtime_code
 			.heap_pages
 			.map(|h| HeapPages::ExtraMax(h as _))
-			.unwrap_or_else(|| self.default_heap_pages);
+			.unwrap_or_else(|| self.default_onchain_heap_pages);
 
 		let heap_pages = match context {
-			CallContext::Offchain => HeapPages::Dynamic,
+			CallContext::Offchain => self.default_offchain_heap_pages,
 			CallContext::Onchain => on_chain_heap_pages,
 		};
 
@@ -390,10 +509,15 @@ where
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
+		let on_chain_heap_pages = runtime_code
+			.heap_pages
+			.map(|h| HeapPages::ExtraMax(h as _))
+			.unwrap_or_else(|| self.default_onchain_heap_pages);
+
 		self.with_instance(
 			runtime_code,
 			ext,
-			self.default_heap_pages,
+			on_chain_heap_pages,
 			|_module, _instance, version, _ext| {
 				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
 			},
@@ -403,12 +527,7 @@ where
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
 /// and dispatch to native code when possible, falling back on `WasmExecutor` when not.
-pub struct NativeElseWasmExecutor<D>
-where
-	D: NativeExecutionDispatch,
-{
-	/// Dummy field to avoid the compiler complaining about us not using `D`.
-	_dummy: PhantomData<D>,
+pub struct NativeElseWasmExecutor<D: NativeExecutionDispatch> {
 	/// Native runtime version info.
 	native_version: NativeVersion,
 	/// Fallback wasm executor.
@@ -443,11 +562,16 @@ impl<D: NativeExecutionDispatch> NativeElseWasmExecutor<D> {
 			runtime_cache_size,
 		);
 
-		NativeElseWasmExecutor {
-			_dummy: Default::default(),
-			native_version: D::native_version(),
-			wasm,
-		}
+		NativeElseWasmExecutor { native_version: D::native_version(), wasm }
+	}
+
+	/// Create a new instance using the given [`WasmExecutor`].
+	pub fn new_with_wasm_executor(
+		executor: WasmExecutor<
+			ExtendedHostFunctions<sp_io::SubstrateHostFunctions, D::ExtendHostFunctions>,
+		>,
+	) -> Self {
+		Self { native_version: D::native_version(), wasm: executor }
 	}
 
 	/// Ignore missing function imports if set true.
@@ -462,14 +586,7 @@ impl<D: NativeExecutionDispatch> RuntimeVersionOf for NativeElseWasmExecutor<D> 
 		ext: &mut dyn Externalities,
 		runtime_code: &RuntimeCode,
 	) -> Result<RuntimeVersion> {
-		self.wasm.with_instance(
-			runtime_code,
-			ext,
-			self.wasm.default_heap_pages,
-			|_module, _instance, version, _ext| {
-				Ok(version.cloned().ok_or_else(|| Error::ApiError("Unknown version".into())))
-			},
-		)
+		self.wasm.runtime_version(ext, runtime_code)
 	}
 }
 
@@ -632,10 +749,10 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 		let on_chain_heap_pages = runtime_code
 			.heap_pages
 			.map(|h| HeapPages::ExtraMax(h as _))
-			.unwrap_or_else(|| self.wasm.default_heap_pages);
+			.unwrap_or_else(|| self.wasm.default_onchain_heap_pages);
 
 		let heap_pages = match context {
-			CallContext::Offchain => HeapPages::Dynamic,
+			CallContext::Offchain => self.wasm.default_offchain_heap_pages,
 			CallContext::Onchain => on_chain_heap_pages,
 		};
 
@@ -685,11 +802,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 
 impl<D: NativeExecutionDispatch> Clone for NativeElseWasmExecutor<D> {
 	fn clone(&self) -> Self {
-		NativeElseWasmExecutor {
-			_dummy: Default::default(),
-			native_version: D::native_version(),
-			wasm: self.wasm.clone(),
-		}
+		NativeElseWasmExecutor { native_version: D::native_version(), wasm: self.wasm.clone() }
 	}
 }
 
