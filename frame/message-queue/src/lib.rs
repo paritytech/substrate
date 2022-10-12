@@ -23,7 +23,7 @@ mod tests;
 mod weights;
 
 use codec::{Codec, Decode, Encode, MaxEncodedLen};
-use frame_support::{pallet_prelude::*, parameter_types, BoundedSlice};
+use frame_support::{pallet_prelude::*, BoundedSlice};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use scale_info::TypeInfo;
@@ -306,12 +306,51 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::insert(book_state.end - 1, Page::from_message(&message[..], &origin[..]));
 		BookStateOf::<T>::put(book_state);
 	}
+}
 
+pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
+impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
+	fn get() -> u32 {
+		T::max_encoded_len() as u32
+	}
+}
+
+pub struct MaxMessageLen<Origin, Size, HeapSize>(
+	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
+);
+impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>> Get<u32>
+	for MaxMessageLen<Origin, Size, HeapSize>
+{
+	fn get() -> u32 {
+		(HeapSize::get().into())
+			.saturating_sub(Origin::max_encoded_len() as u32)
+			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
+	}
+}
+
+pub type MaxMessageLenOf<T> =
+	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
+pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
+pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
+pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
+
+pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
+impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
+	fn get() -> u32 {
+		T::get().into()
+	}
+}
+
+pub trait ServiceQueue {
 	/// Service the message queue.
 	///
 	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
 	///
 	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
+	fn service_queue(weight_limit: Weight) -> Weight;
+}
+
+impl<T: Config> ServiceQueue for Pallet<T> {
 	fn service_queue(weight_limit: Weight) -> Weight {
 		let mut processed = 0;
 		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
@@ -403,39 +442,6 @@ impl<T: Config> Pallet<T> {
 		}
 		BookStateOf::<T>::put(book_state);
 		weight_limit.saturating_sub(weight_left)
-	}
-}
-
-pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
-impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
-	fn get() -> u32 {
-		T::max_encoded_len() as u32
-	}
-}
-
-pub struct MaxMessageLen<Origin, Size, HeapSize>(
-	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
-);
-impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>> Get<u32>
-	for MaxMessageLen<Origin, Size, HeapSize>
-{
-	fn get() -> u32 {
-		(HeapSize::get().into())
-			.saturating_sub(Origin::max_encoded_len() as u32)
-			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
-	}
-}
-
-pub type MaxMessageLenOf<T> =
-	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
-pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
-pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
-pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
-
-pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
-impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
-	fn get() -> u32 {
-		T::get().into()
 	}
 }
 
