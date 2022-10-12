@@ -37,6 +37,7 @@ benchmarks! {
 	// This will measure the execution time of `set_dummy`.
 	set_dummy_benchmark {
 		// This is the benchmark setup phase.
+		// `set_dummy` is a constant time function, hence we hard-code some random value here.
 		let value = 1000u32.into();
 	}: set_dummy(RawOrigin::Root, value) // The execution phase is just running `set_dummy` extrinsic call
 	verify {
