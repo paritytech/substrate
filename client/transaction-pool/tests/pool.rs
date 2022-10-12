@@ -1058,8 +1058,8 @@ fn finalized_only_handled_correctly() {
 	{
 		let mut stream = futures::executor::block_on_stream(watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(header.clone().hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((header.clone().hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -1087,8 +1087,8 @@ fn best_block_after_finalized_handled_correctly() {
 	{
 		let mut stream = futures::executor::block_on_stream(watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(header.clone().hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((header.clone().hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -1155,18 +1155,18 @@ fn switching_fork_with_finalized_works() {
 	{
 		let mut stream = futures::executor::block_on_stream(from_alice_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1_header.hash(), 0))));
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b2_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2_header.hash(), 1))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b2_header.hash(), 1))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -1250,17 +1250,17 @@ fn switching_fork_multiple_times_works() {
 		let mut stream = futures::executor::block_on_stream(from_alice_watcher);
 		//phase-0
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1_header.hash(), 0))));
 		//phase-1
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2_header.hash(), 0))));
 		//phase-2
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b2_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1_header.hash(), 0))));
 		//phase-3
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b2_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 
@@ -1268,13 +1268,13 @@ fn switching_fork_multiple_times_works() {
 		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		//phase-1
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2_header.hash(), 1))));
 		//phase-2
 		assert_eq!(stream.next(), Some(TransactionStatus::Retracted(b2_header.hash())));
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		//phase-3
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b2_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b2_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b2_header.hash(), 1))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b2_header.hash(), 1))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -1373,24 +1373,24 @@ fn two_blocks_delayed_finalization_works() {
 	{
 		let mut stream = futures::executor::block_on_stream(from_alice_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(c1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((c1_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((c1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_charlie_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(d1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(d1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((d1_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((d1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -1472,9 +1472,9 @@ fn delayed_finalization_does_not_retract() {
 		let mut stream = futures::executor::block_on_stream(from_alice_watcher);
 		//phase-0
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1_header.hash(), 0))));
 		//phase-2
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 
@@ -1483,9 +1483,9 @@ fn delayed_finalization_does_not_retract() {
 		//phase-0
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 		//phase-1
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((c1_header.hash(), 0))));
 		//phase-3
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(c1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((c1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 }
@@ -1559,16 +1559,16 @@ fn best_block_after_finalization_does_not_retract() {
 	{
 		let mut stream = futures::executor::block_on_stream(from_alice_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(b1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(b1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((b1_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((b1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 
 	{
 		let mut stream = futures::executor::block_on_stream(from_bob_watcher);
 		assert_eq!(stream.next(), Some(TransactionStatus::Ready));
-		assert_eq!(stream.next(), Some(TransactionStatus::InBlock(c1_header.hash())));
-		assert_eq!(stream.next(), Some(TransactionStatus::Finalized(c1_header.hash())));
+		assert_eq!(stream.next(), Some(TransactionStatus::InBlock((c1_header.hash(), 0))));
+		assert_eq!(stream.next(), Some(TransactionStatus::Finalized((c1_header.hash(), 0))));
 		assert_eq!(stream.next(), None);
 	}
 }
