@@ -8510,7 +8510,6 @@ dependencies = [
  "linked_hash_set",
  "log",
  "lru",
- "mockall",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
