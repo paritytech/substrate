@@ -20,39 +20,38 @@
 use super::{Pallet as TxPause, *};
 
 use frame_benchmarking::benchmarks;
-use frame_support::traits::UnfilteredDispatchable;
 
 benchmarks! {
-  pause_call {
-	let pallet: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
-	let function: FunctionNameOf<T> = b"some_fn_name".to_vec().try_into().unwrap();
-	let origin = T::PauseOrigin::successful_origin();
-	let call = Call::<T>::pause_call { pallet: pallet.clone(), function: function.clone() };
+	pause_call {
+		let pallet_name: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
+		let call_name: CallNameOf<T> = b"some_call_name".to_vec().try_into().unwrap();
+		let origin = T::PauseOrigin::successful_origin();
+		let call = Call::<T>::pause_call { pallet_name: pallet_name.clone(), call_name: call_name.clone() };
 
-  }: { call.dispatch_bypass_filter(origin)?}
-  verify {
-		assert![TxPause::<T>::paused_calls((pallet.clone(),function.clone())).is_some()]
-  }
+	}: _<T::Origin>(origin, pallet_name.clone(), call_name.clone())
+	verify {
+		assert!(TxPause::<T>::paused_calls((pallet_name.clone(), call_name.clone())).is_some())
+	}
 
   unpause_call {
-	let pallet: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
-	let function: FunctionNameOf<T> = b"some_fn_name".to_vec().try_into().unwrap();
-	let pause_origin = T::PauseOrigin::successful_origin();
+		let pallet_name: PalletNameOf<T> = b"SomePalletName".to_vec().try_into().unwrap();
+		let call_name: CallNameOf<T> = b"some_call_name".to_vec().try_into().unwrap();
+		let pause_origin = T::PauseOrigin::successful_origin();
 
-	  // Set
-	TxPause::<T>::pause_call(
-	  pause_origin,
-	  pallet.clone(),
-	  function.clone(),
-	  )?;
+			// Set
+		TxPause::<T>::pause_call(
+			pause_origin,
+			pallet_name.clone(),
+			call_name.clone(),
+			)?;
 
-	let unpause_origin = T::UnpauseOrigin::successful_origin();
-	let call = Call::<T>::unpause_call { pallet: pallet.clone(), function: function.clone() };
+		let unpause_origin = T::UnpauseOrigin::successful_origin();
+		let call = Call::<T>::unpause_call { pallet_name: pallet_name.clone(), call_name: call_name.clone() };
 
-  }: { call.dispatch_bypass_filter(unpause_origin)?}
-  verify {
-		assert![TxPause::<T>::paused_calls((pallet.clone(),function.clone())).is_none()]
-  }
+		}: _<T::Origin>(unpause_origin, pallet_name.clone(), call_name.clone())
+	verify {
+		assert!(TxPause::<T>::paused_calls((pallet_name.clone(), call_name.clone())).is_none())
+	}
 
-  impl_benchmark_test_suite!(TxPause, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(TxPause, crate::mock::new_test_ext(), crate::mock::Test);
 }

@@ -22,7 +22,7 @@ use crate as pallet_safe_mode;
 
 use frame_support::{
 	parameter_types,
-	traits::{Everything, InsideBoth, SortedMembers},
+	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, SortedMembers},
 };
 use frame_system::{EnsureSignedBy, RawOrigin};
 use sp_core::H256;
@@ -63,7 +63,7 @@ impl frame_system::Config for Test {
 
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
-	pub const MaxLocks: u32 = 10;
+	pub const MaxReserves: u32 = 10;
 }
 impl pallet_balances::Config for Test {
 	type Balance = u64;
@@ -72,18 +72,77 @@ impl pallet_balances::Config for Test {
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
-	type MaxLocks = MaxLocks;
-	type MaxReserves = ();
-	type ReserveIdentifier = [u8; 8];
+	type MaxLocks = ();
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = Self::BlockNumber;
 }
 
-/// Filter to block balance pallet calls
-pub struct MockSafeModeFilter;
-impl Contains<RuntimeCall> for MockSafeModeFilter {
+impl pallet_utility::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
+}
+
+#[derive(
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+	Any,
+	JustTransfer,
+	JustUtility,
+}
+impl Default for ProxyType {
+	fn default() -> Self {
+		Self::Any
+	}
+}
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, c: &RuntimeCall) -> bool {
+		match self {
+			ProxyType::Any => true,
+			ProxyType::JustTransfer => {
+				matches!(c, RuntimeCall::Balances(pallet_balances::Call::transfer { .. }))
+			},
+			ProxyType::JustUtility => matches!(c, RuntimeCall::Utility { .. }),
+		}
+	}
+	fn is_superset(&self, o: &Self) -> bool {
+		self == &ProxyType::Any || self == o
+	}
+}
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ProxyType;
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<4>;
+	type WeightInfo = ();
+	type CallHasher = BlakeTwo256;
+	type MaxPending = ConstU32<2>;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
+/// Filter to allow all everything except balance calls
+pub struct UnfilterableCalls;
+impl Contains<RuntimeCall> for UnfilterableCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
-			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) => true,
 			RuntimeCall::Balances(_) => false,
+			_ => true,
 		}
 	}
 }
@@ -152,7 +211,7 @@ impl ForceExtendOrigin {
 	}
 }
 
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	for ForceActivateOrigin
 {
 	type Success = u64;
@@ -168,9 +227,14 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc()))
+	}
 }
 
-impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug> EnsureOrigin<O>
+impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 	for ForceExtendOrigin
 {
 	type Success = u64;
@@ -186,19 +250,24 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>> + std::fmt::Debug
 			r => Err(O::from(r)),
 		})
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(ForceExtendOrigin::Strong.acc()))
+	}
 }
 
 parameter_types! {
-	pub const ActivateDuration: u64 = 3;
-	pub const ExtendDuration: u64 = 30;
-	pub const ActivateStakeAmount: u64 = 100;
-	pub const ExtendStakeAmount: u64 = 100;
-	pub const DeactivateOrigin: u64 =3;
+	pub const SignedActivationDuration: u64 = 3;
+	pub const SignedExtendDuration: u64 = 30;
+	pub const ActivateReservationAmount: u64 = 100;
+	pub const ExtendReservationAmount: u64 = 100;
+	pub const ForceDeactivateOrigin: u64 = 3;
 	pub const RepayOrigin: u64 = 4;
 }
 
 // Required impl to use some <Configured Origin>::get() in tests
-impl SortedMembers<u64> for DeactivateOrigin {
+impl SortedMembers<u64> for ForceDeactivateOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
@@ -216,14 +285,14 @@ impl SortedMembers<u64> for RepayOrigin {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type SafeModeFilter = MockSafeModeFilter;
-	type ActivateDuration = ActivateDuration;
-	type ExtendDuration = ExtendDuration;
-	type ActivateStakeAmount = ActivateStakeAmount;
+	type UnfilterableCalls = UnfilterableCalls;
+	type SignedActivationDuration = SignedActivationDuration;
+	type ActivateReservationAmount = ActivateReservationAmount;
+	type SignedExtendDuration = SignedExtendDuration;
+	type ExtendReservationAmount = ExtendReservationAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
-	type ExtendStakeAmount = ExtendStakeAmount;
-	type ForceInactivateOrigin = EnsureSignedBy<DeactivateOrigin, Self::AccountId>;
+	type ForceDeactivateOrigin = EnsureSignedBy<ForceDeactivateOrigin, Self::AccountId>;
 	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
 	type WeightInfo = ();
 }
@@ -239,6 +308,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		Balances: pallet_balances,
+		Utility: pallet_utility,
+		Proxy: pallet_proxy,
 		SafeMode: pallet_safe_mode,
 	}
 );
@@ -264,11 +335,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		System::set_block_number(1);
 	});
 	ext
-}
-
-#[cfg(feature = "runtime-benchmarks")]
-pub fn new_bench_ext() -> sp_io::TestExternalities {
-	GenesisConfig::default().build_storage().unwrap().into()
 }
 
 pub fn next_block() {

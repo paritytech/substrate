@@ -33,9 +33,8 @@ use frame_support::{
 	parameter_types,
 	traits::{
 		AsEnsureOriginWithArg, ConstBool, ConstU128, ConstU16, ConstU32, Contains, Currency,
-		EitherOfDiverse, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
-		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, PalletInfoAccess,
-		U128CurrencyToVote,
+		EitherOfDiverse, EnsureOrigin, EqualPrivilegeOnly, Imbalance, InsideBoth, InstanceFilter,
+		KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -45,7 +44,7 @@ use frame_support::{
 };
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
-	EnsureRoot, EnsureRootWithSuccess, EnsureSigned,
+	EnsureRoot, EnsureRootWithSuccess, EnsureSigned, RawOrigin,
 };
 pub use node_primitives::{AccountId, Signature};
 use node_primitives::{AccountIndex, Balance, BlockNumber, Hash, Index, Moment};
@@ -201,57 +200,189 @@ parameter_types! {
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
-pub struct UnpausablePallets;
-impl Contains<pallet_tx_pause::PalletNameOf<Runtime>> for UnpausablePallets {
-	fn contains(pallet: &pallet_tx_pause::PalletNameOf<Runtime>) -> bool {
-		pallet.as_ref() ==
-			<pallet_safe_mode::Pallet<Runtime> as PalletInfoAccess>::name()
-				.as_bytes()
-				.to_vec()
+/// Filter to block balance pallet calls
+/// Used for both SafeMode and TxPause pallets
+/// Therefor we include both so they cannot affect each other
+pub struct UnfilterableCalls;
+impl Contains<RuntimeCall> for UnfilterableCalls {
+	fn contains(call: &RuntimeCall) -> bool {
+		match call {
+			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
+			RuntimeCall::Balances(_) => false,
+			_ => false,
+		}
+	}
+}
+
+use pallet_tx_pause::FullNameOf;
+pub struct UnfilterableCallNames;
+/// Make Balances::transfer_keep_alive unfilterable, accept all others.
+impl Contains<FullNameOf<Runtime>> for UnfilterableCallNames {
+	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
+		let unpausables: Vec<FullNameOf<Runtime>> = vec![(
+			b"Balances".to_vec().try_into().unwrap(),
+			Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
+		)];
+
+		for unpausable_call in unpausables {
+			let (pallet_name, maybe_call_name) = full_name;
+			if pallet_name == &unpausable_call.0 {
+				if unpausable_call.1.is_none() {
+					return true
+				}
+				return maybe_call_name == &unpausable_call.1
+			}
+		}
+
+		false
 	}
 }
 
 impl pallet_tx_pause::Config for Runtime {
-	type Event = Event;
-	type UnpausablePallets = UnpausablePallets;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
+	type UnfilterableCallNames = UnfilterableCallNames;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
 }
 
-parameter_types! {
-	// signed config
-	pub const ActivateStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
+/// An origin that can enable the safe-mode by force.
+pub enum ForceActivateOrigin {
+	Weak,
+	Medium,
+	Strong,
+}
+
+/// An origin that can extend the safe-mode by force.
+pub enum ForceExtendOrigin {
+	Weak,
+	Medium,
+	Strong,
+}
+
+impl ForceActivateOrigin {
+	/// The duration of how long the safe-mode will be activated.
+	pub fn duration(&self) -> u32 {
+		match self {
+			Self::Weak => 5,
+			Self::Medium => 7,
+			Self::Strong => 11,
+		}
+	}
+
+	/// Account id of the origin.
+	pub fn acc(&self) -> AccountId {
+		match self {
+			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
+		}
+	}
+
+	/// Signed origin.
+	pub fn signed(&self) -> <Runtime as frame_system::Config>::Origin {
+		RawOrigin::Signed(self.acc()).into()
+	}
+}
+
+impl ForceExtendOrigin {
+	/// The duration of how long the safe-mode will be extended.
+	pub fn duration(&self) -> u32 {
+		match self {
+			Self::Weak => 13,
+			Self::Medium => 17,
+			Self::Strong => 19,
+		}
+	}
+
+	/// Account id of the origin.
+	pub fn acc(&self) -> AccountId {
+		match self {
+			Self::Weak => sp_core::ed25519::Public::from_raw([0; 32]).into(),
+			Self::Medium => sp_core::ed25519::Public::from_raw([1; 32]).into(),
+			Self::Strong => sp_core::ed25519::Public::from_raw([2; 32]).into(),
+		}
+	}
+
+	/// Signed origin.
+	pub fn signed(&self) -> <Runtime as frame_system::Config>::Origin {
+		RawOrigin::Signed(self.acc()).into()
+	}
+}
+
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
+	for ForceActivateOrigin
+{
+	type Success = u32;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Weak.acc() =>
+				Ok(ForceActivateOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Medium.acc() =>
+				Ok(ForceActivateOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceActivateOrigin::Strong.acc() =>
+				Ok(ForceActivateOrigin::Strong.duration()),
+			r => Err(O::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc()))
+	}
+}
+
+impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> EnsureOrigin<O>
+	for ForceExtendOrigin
+{
+	type Success = u32;
+
+	fn try_origin(o: O) -> Result<Self::Success, O> {
+		o.into().and_then(|o| match o {
+			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Weak.acc() =>
+				Ok(ForceExtendOrigin::Weak.duration()),
+			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Medium.acc() =>
+				Ok(ForceExtendOrigin::Medium.duration()),
+			RawOrigin::Signed(acc) if acc == ForceExtendOrigin::Strong.acc() =>
+				Ok(ForceExtendOrigin::Strong.duration()),
+			r => Err(O::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn successful_origin() -> O {
+		O::from(RawOrigin::Signed(ForceActivateOrigin::Strong.acc()))
+	}
 }
 
 parameter_types! {
-	// signed config
-	pub const ActivateStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendStakeAmount: Balance = 1 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub BlockHeight: BlockNumber = System::block_number(); // TODO ensure this plus config below is correct
+	pub const SignedActivationDuration: u32 = 3;
+	pub const SignedExtendDuration: u32 = 30;
+	pub const ActivateReservationAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const ExtendReservationAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
 }
 
 impl pallet_safe_mode::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type SafeModeFilter = Nothing; // TODO add TxPause pallet
-	type ActivateDuration = ConstU32<{ 2 * DAYS }>;
-	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
-	type EnableOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
-	type ExtendOrigin = EnsureRootWithSuccess<AccountId, BlockHeight>;
-	type DeactivateOrigin = EnsureRoot<AccountId>;
-	type RepayOrigin = EnsureRoot<AccountId>;
-	type ActivateStakeAmount = ActivateStakeAmount;
-	type ExtendStakeAmount = ExtendStakeAmount;
+	type UnfilterableCalls = UnfilterableCalls;
+	type SignedActivationDuration = ConstU32<{ 2 * DAYS }>;
+	type ActivateReservationAmount = ActivateReservationAmount;
+	type SignedExtendDuration = ConstU32<{ 1 * DAYS }>;
+	type ExtendReservationAmount = ExtendReservationAmount;
+	type ForceActivateOrigin = ForceActivateOrigin;
+	type ForceExtendOrigin = ForceExtendOrigin;
+	type ForceDeactivateOrigin = EnsureRoot<Self::AccountId>;
+	type RepayOrigin = EnsureRoot<Self::AccountId>;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = InsideBoth<SafeMode, TxPause>;
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for UnfilterableCalls -> see TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;
@@ -311,6 +442,11 @@ parameter_types! {
 	pub const AnnouncementDepositBase: Balance = deposit(1, 8);
 	pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
 }
+
+// pub enum PausePresets {
+// 	..., // todo
+
+// }
 
 /// The type used to represent the kinds of proxying allowed.
 #[derive(
@@ -482,7 +618,7 @@ parameter_types! {
 impl pallet_balances::Config for Runtime {
 	type MaxLocks = MaxLocks;
 	type MaxReserves = MaxReserves;
-	type ReserveIdentifier = [u8; 8];
+	type ReserveIdentifier = Self::BlockNumber;
 	type Balance = Balance;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;

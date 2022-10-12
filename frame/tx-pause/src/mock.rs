@@ -22,7 +22,7 @@ use crate as pallet_tx_pause;
 
 use frame_support::{
 	parameter_types,
-	traits::{Everything, InsideBoth, SortedMembers},
+	traits::{ConstU64, Everything, InsideBoth, InstanceFilter, SortedMembers},
 };
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
@@ -77,6 +77,65 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
+impl pallet_utility::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type PalletsOrigin = OriginCaller;
+	type WeightInfo = ();
+}
+
+#[derive(
+	Copy,
+	Clone,
+	Eq,
+	PartialEq,
+	Ord,
+	PartialOrd,
+	Encode,
+	Decode,
+	RuntimeDebug,
+	MaxEncodedLen,
+	scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+	Any,
+	JustTransfer,
+	JustUtility,
+}
+impl Default for ProxyType {
+	fn default() -> Self {
+		Self::Any
+	}
+}
+impl InstanceFilter<RuntimeCall> for ProxyType {
+	fn filter(&self, c: &RuntimeCall) -> bool {
+		match self {
+			ProxyType::Any => true,
+			ProxyType::JustTransfer => {
+				matches!(c, RuntimeCall::Balances(pallet_balances::Call::transfer { .. }))
+			},
+			ProxyType::JustUtility => matches!(c, RuntimeCall::Utility { .. }),
+		}
+	}
+	fn is_superset(&self, o: &Self) -> bool {
+		self == &ProxyType::Any || self == o
+	}
+}
+impl pallet_proxy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type Currency = Balances;
+	type ProxyType = ProxyType;
+	type ProxyDepositBase = ConstU64<1>;
+	type ProxyDepositFactor = ConstU64<1>;
+	type MaxProxies = ConstU32<4>;
+	type WeightInfo = ();
+	type CallHasher = BlakeTwo256;
+	type MaxPending = ConstU32<2>;
+	type AnnouncementDepositBase = ConstU64<1>;
+	type AnnouncementDepositFactor = ConstU64<1>;
+}
+
 parameter_types! {
 	pub const PauseOrigin: u64 = 1;
 	pub const UnpauseOrigin: u64 = 2;
@@ -84,16 +143,34 @@ parameter_types! {
   pub const PauseTooLongNames: bool = false;
 }
 
-pub struct MockUnpausablePallets;
+#[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
+pub struct UnfilterableCallNames;
 
-impl Contains<PalletNameOf<Test>> for MockUnpausablePallets {
-	fn contains(pallet: &PalletNameOf<Test>) -> bool {
-		let unpausables: Vec<PalletNameOf<Test>> =
-			vec![b"UnpausablePallet".to_vec().try_into().unwrap()];
+/// Make Balances::transfer_keep_alive and all DummyPallet calls unfilterable, accept all others.
+impl Contains<FullNameOf<Test>> for UnfilterableCallNames {
+	fn contains(full_name: &FullNameOf<Test>) -> bool {
+		let unpausables: Vec<FullNameOf<Test>> = vec![
+			(
+				b"Balances".to_vec().try_into().unwrap(),
+				Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
+			),
+			(b"DummyPallet".to_vec().try_into().unwrap(), None),
+		];
 
-		unpausables.iter().any(|i| i == pallet)
+		for unpausable_call in unpausables {
+			let (pallet_name, maybe_call_name) = full_name;
+			if pallet_name == &unpausable_call.0 {
+				if unpausable_call.1.is_none() {
+					return true
+				}
+				return maybe_call_name == &unpausable_call.1
+			}
+		}
+
+		false
 	}
 }
+
 // Required impl to use some <Configured Origin>::get() in tests
 impl SortedMembers<u64> for PauseOrigin {
 	fn sorted_members() -> Vec<u64> {
@@ -112,9 +189,10 @@ impl SortedMembers<u64> for UnpauseOrigin {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
-	type UnpausablePallets = MockUnpausablePallets;
+	type UnfilterableCallNames = UnfilterableCallNames;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();
@@ -131,6 +209,8 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		Balances: pallet_balances,
+		Utility: pallet_utility,
+		Proxy: pallet_proxy,
 		TxPause: pallet_tx_pause,
 	}
 );

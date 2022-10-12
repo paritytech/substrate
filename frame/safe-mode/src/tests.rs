@@ -29,10 +29,9 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		let activated_at_block = System::block_number();
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
 
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
@@ -41,11 +40,11 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		assert_ok!(SafeMode::force_extend(ForceExtendOrigin::Weak.signed()));
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
-		assert_ok!(SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())));
-		assert_ok!(SafeMode::repay_stake(
+		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
+		assert_ok!(SafeMode::release_reservation(
 			Origin::signed(mock::RepayOrigin::get()),
 			0,
 			activated_at_block
@@ -54,15 +53,23 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 		next_block();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
-		assert_ok!(SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())));
-		assert_ok!(SafeMode::slash_stake(
+		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
+		assert_ok!(SafeMode::slash_reservation(
 			Origin::signed(mock::RepayOrigin::get()),
 			0,
 			activated_at_block + 2
 		));
+	});
+}
+
+#[test]
+fn fails_to_activate_if_activated() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_noop!(SafeMode::activate(Origin::signed(2)), Error::<Test>::IsActive);
 	});
 }
 
@@ -74,15 +81,42 @@ fn fails_to_extend_if_not_activated() {
 	});
 }
 
+#[test]
+fn fails_to_release_reservations_with_wrong_block() {
+	new_test_ext().execute_with(|| {
+		let activated_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
+
+		assert_err!(
+			SafeMode::release_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block + 1
+			),
+			Error::<Test>::NoReservation
+		);
+
+		assert_err!(
+			SafeMode::slash_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block + 1
+			),
+			Error::<Test>::NoReservation
+		);
+	});
+}
+
 // GENERAL SUCCESS/POSITIVE TESTS ---------------------
 
 #[test]
-fn can_automatically_inactivate_after_timeout() {
+fn can_automatically_deactivate_after_timeout() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
 		run_to(ForceActivateOrigin::Weak.duration() + activated_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
+
 		assert_eq!(SafeMode::active_until(), None);
 	});
 }
@@ -90,15 +124,81 @@ fn can_automatically_inactivate_after_timeout() {
 #[test]
 fn can_filter_balance_calls_when_activated() {
 	new_test_ext().execute_with(|| {
-		let call = RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 });
-
-		assert_ok!(call.clone().dispatch(Origin::signed(0)));
+		assert_ok!(call_transfer().dispatch(Origin::signed(0)));
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			call.clone().dispatch(Origin::signed(0)),
+			call_transfer().dispatch(Origin::signed(0)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 		// TODO ^^^ consider refactor to throw a safe mode error, not generic `CallFiltered`
+	});
+}
+
+#[test]
+fn can_filter_balance_in_batch_when_activated() {
+	new_test_ext().execute_with(|| {
+		let batch_call =
+			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer()] });
+
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+		System::assert_last_event(
+			pallet_utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn can_filter_balance_in_proxy_when_activated() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
+
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, Box::new(call_transfer())));
+		System::assert_last_event(pallet_proxy::Event::ProxyExecuted { result: Ok(()) }.into());
+
+		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
+
+		assert_ok!(Proxy::proxy(Origin::signed(2), 1, None, Box::new(call_transfer())));
+		System::assert_last_event(
+			pallet_proxy::Event::ProxyExecuted {
+				result: DispatchError::from(frame_system::Error::<Test>::CallFiltered).into(),
+			}
+			.into(),
+		);
+	});
+}
+
+#[test]
+fn can_repay_independent_reservations_by_block() {
+	new_test_ext().execute_with(|| {
+		let activated_at_block_0 = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		run_to(mock::SignedActivationDuration::get() + activated_at_block_0 + 1);
+
+		let activated_at_block_1 = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		run_to(mock::SignedActivationDuration::get() + activated_at_block_1 + 1);
+
+		assert_ok!(SafeMode::release_reservation(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_at_block_0
+		));
+		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
+
+		assert_ok!(SafeMode::slash_reservation(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_at_block_1
+		));
+		assert_eq!(Balances::total_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
 	});
 }
 
@@ -110,12 +210,12 @@ fn can_activate_with_signed_origin() {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + mock::ActivateDuration::get()
+			System::block_number() + mock::SignedActivationDuration::get()
 		);
-		assert_eq!(Balances::reserved_balance(0), mock::ActivateStakeAmount::get());
+		assert_eq!(Balances::reserved_balance(0), mock::ActivateReservationAmount::get());
 		assert_noop!(SafeMode::activate(Origin::signed(0)), Error::<Test>::IsActive);
 		// Assert the stake.
-		assert_eq!(Stakes::<Test>::get(0, 1), Some(mock::ActivateStakeAmount::get()));
+		assert_eq!(Reservations::<Test>::get(0, 1), Some(mock::ActivateReservationAmount::get()));
 	});
 }
 
@@ -126,11 +226,13 @@ fn can_extend_with_signed_origin() {
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + mock::ActivateDuration::get() + mock::ExtendDuration::get()
+			System::block_number() +
+				mock::SignedActivationDuration::get() +
+				mock::SignedExtendDuration::get()
 		);
 		assert_eq!(
 			Balances::reserved_balance(0),
-			mock::ActivateStakeAmount::get() + mock::ExtendStakeAmount::get()
+			mock::ActivateReservationAmount::get() + mock::ExtendReservationAmount::get()
 		);
 	});
 }
@@ -143,13 +245,13 @@ fn fails_signed_origin_when_explicit_origin_required() {
 
 		assert_err!(SafeMode::force_activate(Origin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(SafeMode::force_extend(Origin::signed(0)), DispatchError::BadOrigin);
-		assert_err!(SafeMode::force_inactivate(Origin::signed(0)), DispatchError::BadOrigin);
+		assert_err!(SafeMode::force_deactivate(Origin::signed(0)), DispatchError::BadOrigin);
 		assert_err!(
-			SafeMode::slash_stake(Origin::signed(0), 0, activated_at_block),
+			SafeMode::slash_reservation(Origin::signed(0), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::repay_stake(Origin::signed(0), 0, activated_at_block),
+			SafeMode::release_reservation(Origin::signed(0), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 	});
@@ -158,14 +260,14 @@ fn fails_signed_origin_when_explicit_origin_required() {
 // CONFIGURED ORIGIN CALL TESTS ---------------------
 
 #[test]
-fn fails_force_inactivate_if_not_activated() {
+fn fails_force_deactivate_if_not_activated() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())),
+			SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())),
 			Error::<Test>::IsInactive
 		);
 		assert_noop!(
-			SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())),
+			SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())),
 			Error::<Test>::IsInactive
 		);
 	});
@@ -188,16 +290,16 @@ fn can_force_activate_with_config_origin() {
 }
 
 #[test]
-fn can_force_inactivate_with_config_origin() {
+fn can_force_deactivate_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(SafeMode::active_until(), None);
 		assert_err!(
-			SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())),
+			SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())),
 			Error::<Test>::IsInactive
 		);
 		assert_ok!(SafeMode::force_activate(ForceActivateOrigin::Weak.signed()));
 		assert_eq!(Balances::reserved_balance(ForceActivateOrigin::Weak.acc()), 0);
-		assert_ok!(SafeMode::force_inactivate(Origin::signed(mock::DeactivateOrigin::get())));
+		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
 	});
 }
 
@@ -218,47 +320,94 @@ fn can_force_extend_with_config_origin() {
 				ForceExtendOrigin::Medium.duration()
 		);
 		assert_eq!(Balances::reserved_balance(ForceActivateOrigin::Weak.acc()), 0);
-		assert_eq!(Balances::reserved_balance(mock::ExtendDuration::get()), 0);
+		assert_eq!(Balances::reserved_balance(mock::SignedExtendDuration::get()), 0);
 	});
 }
 
 #[test]
-fn can_repay_stake_with_config_origin() {
+fn can_release_reservation_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			SafeMode::repay_stake(Origin::signed(mock::RepayOrigin::get()), 0, activated_at_block),
+			SafeMode::release_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block
+			),
 			Error::<Test>::IsActive
 		);
-		run_to(mock::ActivateDuration::get() + activated_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
-		assert_ok!(SafeMode::repay_stake(
+		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
+
+		assert_ok!(SafeMode::release_reservation(
 			Origin::signed(mock::RepayOrigin::get()),
 			0,
 			activated_at_block
 		));
-		// TODO: test accounting is correct
+		assert_eq!(Balances::free_balance(&0), 1234); // accounts set in mock genesis
+
+		Balances::make_free_balance_be(&0, 1234);
+		let activated_and_extended_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_ok!(SafeMode::extend(Origin::signed(0)));
+		run_to(
+			mock::SignedActivationDuration::get() +
+				mock::SignedExtendDuration::get() +
+				activated_and_extended_at_block +
+				1,
+		);
+
+		assert_ok!(SafeMode::release_reservation(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_and_extended_at_block
+		));
+		assert_eq!(Balances::free_balance(&0), 1234); // accounts set in mock genesis
 	});
 }
 
 #[test]
-fn can_slash_stake_with_config_origin() {
+fn can_slash_reservation_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			SafeMode::slash_stake(Origin::signed(mock::RepayOrigin::get()), 0, activated_at_block),
+			SafeMode::slash_reservation(
+				Origin::signed(mock::RepayOrigin::get()),
+				0,
+				activated_at_block
+			),
 			Error::<Test>::IsActive
 		);
-		run_to(mock::ActivateDuration::get() + activated_at_block + 1);
-		SafeMode::on_initialize(System::block_number());
-		assert_ok!(SafeMode::slash_stake(
+		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
+
+		assert_ok!(SafeMode::slash_reservation(
 			Origin::signed(mock::RepayOrigin::get()),
 			0,
 			activated_at_block
 		));
-		// TODO: test accounting is correct
+		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
+
+		Balances::make_free_balance_be(&0, 1234);
+		let activated_and_extended_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_ok!(SafeMode::extend(Origin::signed(0)));
+		run_to(
+			mock::SignedActivationDuration::get() +
+				mock::SignedExtendDuration::get() +
+				activated_and_extended_at_block +
+				1,
+		);
+
+		assert_ok!(SafeMode::slash_reservation(
+			Origin::signed(mock::RepayOrigin::get()),
+			0,
+			activated_and_extended_at_block
+		));
+		assert_eq!(
+			Balances::free_balance(&0),
+			1234 - mock::ActivateReservationAmount::get() - mock::ExtendReservationAmount::get()
+		); // accounts set in mock genesis
 	});
 }
 
@@ -273,15 +422,19 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_inactivate(ForceActivateOrigin::Weak.signed()),
+			SafeMode::force_deactivate(ForceActivateOrigin::Weak.signed()),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_stake(ForceActivateOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::slash_reservation(ForceActivateOrigin::Weak.signed(), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::repay_stake(ForceActivateOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::release_reservation(
+				ForceActivateOrigin::Weak.signed(),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 
@@ -290,37 +443,37 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_inactivate(ForceExtendOrigin::Weak.signed()),
+			SafeMode::force_deactivate(ForceExtendOrigin::Weak.signed()),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_stake(ForceExtendOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::slash_reservation(ForceExtendOrigin::Weak.signed(), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::repay_stake(ForceExtendOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::release_reservation(ForceExtendOrigin::Weak.signed(), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 
 		assert_err!(
-			SafeMode::force_activate(Origin::signed(mock::DeactivateOrigin::get())),
+			SafeMode::force_activate(Origin::signed(mock::ForceDeactivateOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_extend(Origin::signed(mock::DeactivateOrigin::get())),
+			SafeMode::force_extend(Origin::signed(mock::ForceDeactivateOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::slash_stake(
-				Origin::signed(mock::DeactivateOrigin::get()),
+			SafeMode::slash_reservation(
+				Origin::signed(mock::ForceDeactivateOrigin::get()),
 				0,
 				activated_at_block
 			),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::repay_stake(
-				Origin::signed(mock::DeactivateOrigin::get()),
+			SafeMode::release_reservation(
+				Origin::signed(mock::ForceDeactivateOrigin::get()),
 				0,
 				activated_at_block
 			),
@@ -336,8 +489,12 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_inactivate(Origin::signed(mock::RepayOrigin::get())),
+			SafeMode::force_deactivate(Origin::signed(mock::RepayOrigin::get())),
 			DispatchError::BadOrigin
 		);
 	});
+}
+
+fn call_transfer() -> RuntimeCall {
+	RuntimeCall::Balances(pallet_balances::Call::transfer { dest: 1, value: 1 })
 }

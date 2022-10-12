@@ -17,7 +17,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
 pub mod mock;
@@ -26,10 +25,12 @@ mod tests;
 pub mod weights;
 
 use frame_support::{
+	dispatch::GetDispatchInfo,
 	pallet_prelude::*,
-	traits::{CallMetadata, Contains, GetCallMetadata},
+	traits::{CallMetadata, Contains, GetCallMetadata, IsSubType, IsType},
 };
 use frame_system::pallet_prelude::*;
+use sp_runtime::{traits::Dispatchable, DispatchResult};
 use sp_std::{convert::TryInto, prelude::*};
 
 pub use pallet::*;
@@ -37,6 +38,7 @@ pub use weights::*;
 
 pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
+pub type FullNameOf<T> = (PalletNameOf<T>, Option<CallNameOf<T>>);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,18 +53,28 @@ pub mod pallet {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+		/// The overarching call type.
+		type RuntimeCall: Parameter
+			+ Dispatchable<Origin = Self::Origin>
+			+ GetDispatchInfo
+			+ GetCallMetadata
+			+ From<frame_system::Call<Self>>
+			+ IsSubType<Call<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 		/// The only origin that can pause calls.
 		type PauseOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The only origin that can un-pause calls.
 		type UnpauseOrigin: EnsureOrigin<Self::Origin>;
 
-		/// Pallets that are safe and can never be paused.
+		/// Contains all calls that cannot be paused.
 		///
-		/// The tx-pause pallet is always assumed to be safe itself.
-		type UnpausablePallets: Contains<PalletNameOf<Self>>;
+		/// The `TxMode` pallet cannot pause it's own calls, and does not need to be explicitly
+		/// added here.
+		type UnfilterableCallNames: Contains<FullNameOf<Self>>;
 
-		/// Maximum length for pallet- and function-names.
+		/// Maximum length for pallet and call SCALE encoded string names.
 		///
 		/// Too long names will not be truncated but handled like
 		/// [`Self::PauseTooLongNames`] specifies.
@@ -92,15 +104,18 @@ pub mod pallet {
 
 		/// The call is listed as safe and cannot be paused.
 		IsUnpausable,
+
+		// The call does not exist in the runtime.
+		NoSuchCall,
 	}
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// This call got paused.
-		CallPaused(PalletNameOf<T>, CallNameOf<T>),
-		/// This call got un-paused.
-		CallUnpaused(PalletNameOf<T>, CallNameOf<T>),
+		/// This call is now paused. \[pallet_name, call_name\]
+		CallPaused { pallet_name: PalletNameOf<T>, call_name: CallNameOf<T> },
+		/// This call is now unpaused. \[pallet_name, call_name\]
+		CallUnpaused { pallet_name: PalletNameOf<T>, call_name: CallNameOf<T> },
 	}
 
 	/// The set of calls that are explicitly paused.
@@ -129,8 +144,8 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			for (pallet, function) in &self.paused {
-				PausedCalls::<T>::insert((pallet, function), ());
+			for (pallet_name, call_name) in &self.paused {
+				PausedCalls::<T>::insert((pallet_name, call_name), ());
 			}
 		}
 	}
@@ -144,14 +159,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::pause_call())]
 		pub fn pause_call(
 			origin: OriginFor<T>,
-			pallet: PalletNameOf<T>,
-			call: CallNameOf<T>,
+			pallet_name: PalletNameOf<T>,
+			call_name: CallNameOf<T>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_pause(&pallet, &call)?;
-			PausedCalls::<T>::insert((&pallet, &call), ());
-			Self::deposit_event(Event::CallPaused(pallet, call));
+			Self::ensure_can_pause(&pallet_name, &call_name)?;
+			PausedCalls::<T>::insert((&pallet_name, &call_name), ());
+			Self::deposit_event(Event::CallPaused { pallet_name, call_name });
 
 			Ok(())
 		}
@@ -163,14 +178,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::unpause_call())]
 		pub fn unpause_call(
 			origin: OriginFor<T>,
-			pallet: PalletNameOf<T>,
-			call: CallNameOf<T>,
+			pallet_name: PalletNameOf<T>,
+			call_name: CallNameOf<T>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unpause(&pallet, &call)?;
-			PausedCalls::<T>::remove((&pallet, &call));
-			Self::deposit_event(Event::CallUnpaused(pallet, call));
+			Self::ensure_can_unpause(&pallet_name, &call_name)?;
+			PausedCalls::<T>::remove((&pallet_name, &call_name));
+			Self::deposit_event(Event::CallUnpaused { pallet_name, call_name });
 
 			Ok(())
 		}
@@ -179,34 +194,35 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	/// Return whether this call is paused.
-	pub fn is_paused_unbound(pallet: Vec<u8>, call: Vec<u8>) -> bool {
-		let pallet = PalletNameOf::<T>::try_from(pallet);
-		let call = CallNameOf::<T>::try_from(call);
+	pub fn is_paused_unbound(pallet_name: Vec<u8>, call_name: Vec<u8>) -> bool {
+		let pallet_name = PalletNameOf::<T>::try_from(pallet_name);
+		let call_name = CallNameOf::<T>::try_from(call_name);
 
-		match (pallet, call) {
-			(Ok(pallet), Ok(call)) => Self::is_paused(&pallet, &call),
+		match (pallet_name, call_name) {
+			(Ok(pallet_name), Ok(call_name)) => Self::is_paused(&pallet_name, &call_name),
 			_ => T::PauseTooLongNames::get(),
 		}
 	}
 
 	/// Return whether this call is paused.
-	pub fn is_paused(pallet: &PalletNameOf<T>, call: &CallNameOf<T>) -> bool {
-		<PausedCalls<T>>::contains_key((pallet, call))
+	pub fn is_paused(pallet_name: &PalletNameOf<T>, call_name: &CallNameOf<T>) -> bool {
+		<PausedCalls<T>>::contains_key((pallet_name, call_name))
 	}
 
 	/// Ensure that this call can be paused.
 	pub fn ensure_can_pause(
-		pallet: &PalletNameOf<T>,
-		call: &CallNameOf<T>,
+		pallet_name: &PalletNameOf<T>,
+		call_name: &CallNameOf<T>,
 	) -> Result<(), Error<T>> {
 		// The `TxPause` pallet can never be paused.
-		if pallet.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+		if pallet_name.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if T::UnpausablePallets::contains(&pallet) {
+		let full_name: FullNameOf<T> = (pallet_name.clone(), Some(call_name.clone()));
+		if T::UnfilterableCallNames::contains(&full_name) {
 			return Err(Error::<T>::IsUnpausable)
 		}
-		if Self::is_paused(pallet, call) {
+		if Self::is_paused(&pallet_name, &call_name) {
 			return Err(Error::<T>::IsPaused)
 		}
 		Ok(())
@@ -214,10 +230,10 @@ impl<T: Config> Pallet<T> {
 
 	/// Ensure that this call can be un-paused.
 	pub fn ensure_can_unpause(
-		pallet: &PalletNameOf<T>,
-		call: &CallNameOf<T>,
+		pallet_name: &PalletNameOf<T>,
+		call_name: &CallNameOf<T>,
 	) -> Result<(), Error<T>> {
-		if Self::is_paused(pallet, call) {
+		if Self::is_paused(&pallet_name, &call_name) {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {
@@ -226,12 +242,12 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: pallet::Config> Contains<T::RuntimeCall> for Pallet<T>
+impl<T: pallet::Config> Contains<<T as frame_system::Config>::RuntimeCall> for Pallet<T>
 where
 	<T as frame_system::Config>::RuntimeCall: GetCallMetadata,
 {
 	/// Return whether the call is allowed to be dispatched.
-	fn contains(call: &T::RuntimeCall) -> bool {
+	fn contains(call: &<T as frame_system::Config>::RuntimeCall) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
 		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
 	}
