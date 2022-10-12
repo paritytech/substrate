@@ -563,6 +563,7 @@ impl<N: Ord> Peers<N> {
 		let now = Instant::now();
 		let duplicate_packet = (update.set_id, update.round, Some(&update.commit_finalized_height)) ==
 			(peer.view.set_id, peer.view.round, peer.view.last_commit.as_ref());
+
 		if duplicate_packet {
 			if let Some(last_update) = peer.view.last_update {
 				if now < last_update + NEIGHBOR_REBROADCAST_AFTER / 2 {
