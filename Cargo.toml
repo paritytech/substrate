@@ -115,6 +115,7 @@ members = [
 	"frame/offences",
 	"frame/preimage",
 	"frame/proxy",
+	"frame/message-queue",
 	"frame/nomination-pools",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
