@@ -432,13 +432,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_admin: Option<T::AccountId>,
 		f: DebitFlags,
 	) -> Result<T::Balance, DispatchError> {
+		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
+
 		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
 			// Check admin rights.
 			if let Some(check_admin) = maybe_check_admin {
 				ensure!(check_admin == details.admin, Error::<T, I>::NoPermission);
 			}
 
-			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			debug_assert!(details.supply >= actual, "checked in prep; qed");
 			details.supply = details.supply.saturating_sub(actual);
 
@@ -470,13 +472,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok(amount)
 		}
 
+		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
+
 		let actual = Self::prep_debit(id, target, amount, f)?;
 		let mut target_died: Option<DeadConsequence> = None;
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-
 			check(actual, details)?;
 
 			Account::<T, I>::try_mutate(id, target, |maybe_account| -> DispatchResult {
@@ -544,6 +547,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if amount.is_zero() {
 			return Ok((amount, None))
 		}
+		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 		// Figure out the debit and credit, together with side-effects.
 		let debit = Self::prep_debit(id, source, amount, f.into())?;
@@ -555,8 +560,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-
-			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 			// Check admin rights.
 			if let Some(need_admin) = maybe_need_admin {
