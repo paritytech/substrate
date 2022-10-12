@@ -33,6 +33,9 @@ use std::{
 
 pub mod common;
 
+// This test is flaky https://github.com/paritytech/substrate/issues/11321
+// Todo: enable when v0.9.24 is merged
+#[ignore]
 #[tokio::test]
 async fn temp_base_path_works() {
 	let mut cmd = Command::new(cargo_bin("cere"));

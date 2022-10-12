@@ -345,6 +345,9 @@ mod tests {
 		(meta, rx)
 	}
 
+	// This test is flaky https://github.com/paritytech/substrate/issues/11321
+	// Todo: enable when v0.9.24 is merged
+	#[ignore]
 	#[test]
 	fn subscribe_and_unsubscribe_to_justifications() {
 		let (io, _) = setup_io_handler(TestVoterState);
