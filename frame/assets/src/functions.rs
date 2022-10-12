@@ -692,6 +692,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn do_destroy_accounts(id: T::AssetId) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
 		let mut removed_accounts = 0;
+		let mut remaining_accounts = 0;
 		let _ =
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
@@ -707,19 +708,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						break
 					}
 				}
-
-				Self::deposit_event(Event::DestroyedAccounts {
-					asset_id: id,
-					accounts_destroyed: removed_accounts as u32,
-					accounts_remaining: details.accounts as u32,
-				});
-
+				remaining_accounts = details.accounts;
 				Ok(())
 			})?;
 
 		for who in dead_accounts {
 			T::Freezer::died(id, &who);
 		}
+
+		Self::deposit_event(Event::DestroyedAccounts {
+			asset_id: id,
+			accounts_destroyed: removed_accounts as u32,
+			accounts_remaining: remaining_accounts as u32,
+		});
 		Ok(removed_accounts)
 	}
 
