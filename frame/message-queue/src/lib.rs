@@ -184,9 +184,13 @@ pub struct BookState {
 	count: PageIndex,
 	/// The earliest page still in storage. If this is `>= end`, then there are
 	/// no pages in storage. Pages up to `head` are reapable if they have a `remaining`
-	/// field of zero or if `head - page_number` is sufficiently large compared to
+	/// field of zero or if `begin - page_number` is sufficiently large compared to
 	/// `count - (end - begin)`.
-	historical_head: PageIndex,
+	/// NOTE: This currently doesn't really work and will become "holey" when pages are removed
+	/// out of order. This can be maintained "automatically" with a doubly-linked-list or
+	/// "manually" by having a transaction to bump it. However, it probably doesn't actually matter
+	/// anyway since reaping can happen perfectly well without it.
+	earliest: PageIndex,
 }
 
 #[frame_support::pallet]
@@ -383,7 +387,11 @@ impl<T: Config> Pallet<T> {
 			};
 
 			if page.is_complete() {
+				debug_assert!(!bail, "we never bail if a page became complete");
 				Pages::<T>::remove(page_index);
+				if book_state.earliest == page_index {
+					book_state.earliest.saturating_inc();
+				}
 			} else {
 				Pages::<T>::insert(page_index, page);
 			}
