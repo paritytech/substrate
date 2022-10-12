@@ -84,7 +84,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 			.map(|(k, v)| (k.clone(), Some(v.clone())))
 			.collect::<Vec<_>>();
 
-		let (state_root, tx) = db.state_at(BlockId::Number(number - 1)).unwrap().storage_root(
+		let (state_root, tx) = db.state_at(BlockId::Hash(parent_hash)).unwrap().storage_root(
 			changes.iter().map(|(k, v)| (k.as_slice(), v.as_deref())),
 			StateVersion::V1,
 		);
