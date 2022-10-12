@@ -65,7 +65,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -546,6 +546,10 @@ pub mod pallet {
 		InconsistentItemConfig,
 		/// Config for a collection or an item can't be found.
 		NoConfig,
+		/// Mint has not started yet.
+		MintNotStated,
+		/// Mint has already ended.
+		MintEnded,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -689,6 +693,8 @@ pub mod pallet {
 		///
 		/// - `collection`: The collection of the item to be minted.
 		/// - `item`: An identifier of the new item.
+		/// - `witness_data`: When the mint type is `HolderOf(collection_id)`, then the owned
+		///   item_id from that collection needs to be provided within the witness data object.
 		///
 		/// Emits `Issued` event when successful.
 		///
@@ -698,6 +704,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
+			witness_data: Option<MintWitness<T::ItemId>>,
 		) -> DispatchResult {
 			let caller = ensure_signed(origin)?;
 
@@ -705,10 +712,56 @@ pub mod pallet {
 			let item_settings = collection_config.mint_settings.default_item_settings;
 			let item_config = ItemConfig { settings: item_settings };
 
-			Self::do_mint(collection, item, caller.clone(), item_config, |collection_details| {
-				ensure!(collection_details.issuer == caller, Error::<T, I>::NoPermission);
-				Ok(())
-			})
+			Self::do_mint(
+				collection,
+				item,
+				caller.clone(),
+				item_config,
+				|collection_details, collection_config| {
+					let mint_settings = collection_config.mint_settings;
+					let now = frame_system::Pallet::<T>::block_number();
+
+					if let Some(start_block) = mint_settings.start_block {
+						ensure!(start_block >= now, Error::<T, I>::MintNotStated);
+					}
+					if let Some(end_block) = mint_settings.end_block {
+						ensure!(end_block <= now, Error::<T, I>::MintEnded);
+					}
+
+					match mint_settings.mint_type {
+						MintType::Private => {
+							ensure!(
+								collection_details.issuer == caller,
+								Error::<T, I>::NoPermission
+							)
+						},
+						MintType::HolderOf(collection_id) => {
+							let correct_witness = match witness_data {
+								Some(MintWitness { owner_of_item }) =>
+									Account::<T, I>::contains_key((
+										&caller,
+										&collection_id,
+										&owner_of_item,
+									)),
+								None => false,
+							};
+							ensure!(correct_witness, Error::<T, I>::NoPermission)
+						},
+						_ => {},
+					}
+
+					if let Some(price) = mint_settings.price {
+						T::Currency::transfer(
+							&caller,
+							&collection_details.owner,
+							price,
+							ExistenceRequirement::KeepAlive,
+						)?;
+					}
+
+					Ok(())
+				},
+			)
 		}
 
 		/// Mint an item of a particular collection from a privileged origin.
@@ -738,7 +791,7 @@ pub mod pallet {
 			};
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, item, owner, item_config, |collection_details| {
+			Self::do_mint(collection, item, owner, item_config, |collection_details, _| {
 				if let Some(check_origin) = maybe_check_origin {
 					ensure!(collection_details.issuer == check_origin, Error::<T, I>::NoPermission);
 				}

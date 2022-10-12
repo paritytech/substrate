@@ -206,6 +206,11 @@ impl CollectionSettings {
 		self.0
 	}
 }
+impl From<CollectionSetting> for CollectionSettings {
+	fn from(input: CollectionSetting) -> Self {
+		Self(input.into())
+	}
+}
 impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
 #[derive(
@@ -230,17 +235,18 @@ pub struct MintSettings<Price, BlockNumber, CollectionId> {
 	pub(super) start_block: Option<BlockNumber>,
 	/// When the mint ends.
 	pub(super) end_block: Option<BlockNumber>,
-	/// Whether the mint is limited. If `true` then only one `item` per account is possible to
-	/// `mint`.
-	/// NOTE: In order this to work, put the `NonTransferable` setting into
-	/// `default_item_settings`.
-	pub(super) limited: bool,
 	/// Default settings each item will get during the mint.
 	pub(super) default_item_settings: ItemSettings,
 }
 
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct MintWitness<ItemId> {
+	/// The total number of outstanding items of this collection.
+	pub owner_of_item: ItemId,
+}
+
 #[derive(
-	Clone, Copy, RuntimeDebug, Decode, Default, Encode, MaxEncodedLen, PartialEq, TypeInfo,
+	Clone, Copy, Decode, Default, Encode, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo,
 )]
 pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 	/// Collection's settings.

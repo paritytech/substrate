@@ -163,7 +163,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		owner: T::AccountId,
 		item_config: ItemConfig,
-		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
+		with_details_and_config: impl FnOnce(
+			&CollectionDetailsFor<T, I>,
+			&CollectionConfigFor<T, I>,
+		) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
 
@@ -173,10 +176,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let collection_details =
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 
-				with_details(collection_details)?;
-
 				let collection_config = Self::get_collection_config(&collection)?;
-				let settings = collection_config.settings.values();
+				with_details_and_config(collection_details, &collection_config)?;
 
 				if let Some(max_supply) = collection_config.max_supply {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
@@ -186,6 +187,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
 
+				let settings = collection_config.settings.values();
 				let deposit = match settings.contains(CollectionSetting::FreeHolding) {
 					true => Zero::zero(),
 					false => T::ItemDeposit::get(),
