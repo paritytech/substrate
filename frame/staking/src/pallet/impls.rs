@@ -38,7 +38,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, StakingInterface,
+	EraIndex, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -1504,15 +1504,20 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
-		todo!();
+		let num_slashing_spans = Self::slashing_spans(&who).iter().count() as u32;
+		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
 	}
 
-	fn can_control(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
-		Self::ledger(controller).map(|l| l.stash).ok_or(Error::<T>::NotController)
+	fn stash(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+		Self::ledger(controller)
+			.map(|l| l.stash)
+			.ok_or(Error::<T>::NotController.into())
 	}
 
 	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
-		todo!()
+		ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
+			validator == *who || exposures.others.iter().any(|i| i.who == *who)
+		})
 	}
 
 	fn bonding_duration() -> EraIndex {
@@ -1523,19 +1528,27 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn active_stake(who: &Self::AccountId) -> Option<Self::Balance> {
-		Self::bonded(who).and_then(|c| Self::ledger(c)).map(|l| l.active)
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+		Self::bonded(who)
+			.and_then(|c| Self::ledger(c))
+			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
+			.ok_or(Error::<T>::NotStash.into())
 	}
 
-	fn total_stake(who: &Self::AccountId) -> Option<Self::Balance> {
-		Self::bonded(who).and_then(|c| Self::ledger(c)).map(|l| l.active)
-	}
+	/// TODO: Find usages and depreacte those in favour of stake
+	// fn active_stake(who: &Self::AccountId) -> Option<Self::Balance> {
+	// 	Self::bonded(who).and_then(|c| Self::stake(c)).map(|l| l.active)
+	// }
+	//
+	// fn total_stake(who: &Self::AccountId) -> Option<Self::Balance> {
+	// 	Self::bonded(who).and_then(|c| Self::ledger(c)).map(|l| l.active)
+	// }
 
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
 	}
 
-	fn unbond(who: Self::AccountId, value: Self::Balance) -> DispatchResult {
+	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
 	}
