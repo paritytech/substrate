@@ -622,8 +622,9 @@ impl<T: Config> BondedPool<T> {
 	///
 	/// This is often used for bonding and issuing new funds into the pool.
 	fn balance_to_point(&self, new_funds: BalanceOf<T>) -> BalanceOf<T> {
-		let bonded_balance =
-			T::Staking::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
+		let bonded_balance = T::Staking::stake(&self.bonded_account())
+			.map(|s| s.active)
+			.unwrap_or(Zero::zero());
 		Pallet::<T>::balance_to_point(bonded_balance, self.points, new_funds)
 	}
 
@@ -631,8 +632,9 @@ impl<T: Config> BondedPool<T> {
 	///
 	/// This is often used for unbonding.
 	fn points_to_balance(&self, points: BalanceOf<T>) -> BalanceOf<T> {
-		let bonded_balance =
-			T::Staking::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
+		let bonded_balance = T::Staking::stake(&self.bonded_account())
+			.map(|s| s.active)
+			.unwrap_or(Zero::zero());
 		Pallet::<T>::point_to_balance(bonded_balance, self.points, points)
 	}
 
@@ -683,7 +685,7 @@ impl<T: Config> BondedPool<T> {
 	fn transferrable_balance(&self) -> BalanceOf<T> {
 		let account = self.bonded_account();
 		T::Currency::free_balance(&account)
-			.saturating_sub(T::Staking::active_stake(&account).unwrap_or_default())
+			.saturating_sub(T::Staking::stake(&account).map(|s| s.active).unwrap_or_default())
 	}
 
 	fn is_root(&self, who: &T::AccountId) -> bool {
@@ -737,8 +739,9 @@ impl<T: Config> BondedPool<T> {
 	fn ok_to_be_open(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
 		ensure!(!self.is_destroying(), Error::<T>::CanNotChangeState);
 
-		let bonded_balance =
-			T::Staking::active_stake(&self.bonded_account()).unwrap_or(Zero::zero());
+		let bonded_balance = T::Staking::stake(&self.bonded_account())
+			.map(|s| s.active)
+			.unwrap_or(Zero::zero());
 		ensure!(!bonded_balance.is_zero(), Error::<T>::OverflowRisk);
 
 		let points_to_balance_ratio_floor = self
@@ -889,16 +892,11 @@ impl<T: Config> BondedPool<T> {
 		let points_issued = self.issue(amount);
 
 		match ty {
-			BondType::Create => T::Staking::bond(
-				bonded_account.clone(),
-				bonded_account,
-				amount,
-				self.reward_account(),
-			)?,
+			BondType::Create => T::Staking::bond(&bonded_account, amount, &self.reward_account())?,
 			// The pool should always be created in such a way its in a state to bond extra, but if
 			// the active balance is slashed below the minimum bonded or the account cannot be
 			// found, we exit early.
-			BondType::Later => T::Staking::bond_extra(bonded_account, amount)?,
+			BondType::Later => T::Staking::bond_extra(&bonded_account, amount)?,
 		}
 
 		Ok(points_issued)
@@ -1652,7 +1650,7 @@ pub mod pallet {
 
 			// Unbond in the actual underlying nominator.
 			let unbonding_balance = bonded_pool.dissolve(unbonding_points);
-			T::Staking::unbond(bonded_pool.bonded_account(), unbonding_balance)?;
+			T::Staking::unbond(&bonded_pool.bonded_account(), unbonding_balance)?;
 
 			// Note that we lazily create the unbonding pools here if they don't already exist
 			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
@@ -1955,7 +1953,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
-			T::Staking::nominate(bonded_pool.bonded_account(), validators)
+			T::Staking::nominate(&bonded_pool.bonded_account(), validators)
 		}
 
 		/// Set a new state for the pool.
@@ -2127,7 +2125,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
-			T::Staking::chill(bonded_pool.bonded_account())
+			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 	}
 
@@ -2180,7 +2178,7 @@ impl<T: Config> Pallet<T> {
 	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
 	/// is coming from the staking pallet and the latter two are configured in this pallet.
 	pub fn depositor_min_bond() -> BalanceOf<T> {
-		T::Staking::minimum_bond()
+		T::Staking::minimum_nominator_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
 			.max(T::Currency::minimum_balance())
@@ -2207,7 +2205,7 @@ impl<T: Config> Pallet<T> {
 		debug_assert_eq!(frame_system::Pallet::<T>::consumers(&reward_account), 0);
 		debug_assert_eq!(frame_system::Pallet::<T>::consumers(&bonded_account), 0);
 		debug_assert_eq!(
-			T::Staking::total_stake(&bonded_account).unwrap_or_default(),
+			T::Staking::stake(&bonded_account).map(|s| s.total).unwrap_or_default(),
 			Zero::zero()
 		);
 
@@ -2482,7 +2480,8 @@ impl<T: Config> Pallet<T> {
 			let subs = SubPoolsStorage::<T>::get(pool_id).unwrap_or_default();
 
 			let sum_unbonding_balance = subs.sum_unbonding_balance();
-			let bonded_balance = T::Staking::active_stake(&pool_account).unwrap_or_default();
+			let bonded_balance =
+				T::Staking::stake(&pool_account).map(|s| s.active).unwrap_or_default();
 			let total_balance = T::Currency::total_balance(&pool_account);
 
 			assert!(
