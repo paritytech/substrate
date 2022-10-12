@@ -115,7 +115,7 @@ pub trait WeightInfo {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::mmr::storage::NewLeafNodesBatched;
+	use crate::mmr::storage::MmrBranch;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -177,12 +177,6 @@ pub mod pallet {
 		/// block number as an easiest way to ensure that.
 		type LeafData: primitives::LeafDataProvider;
 
-		/// The maximum leaf size.
-		type MaxLeafSize: Get<u32>;
-
-		/// The maximum MMR height - log2(max_leaves_count).
-		type MaxMmrHeight: Get<u32>;
-
 		/// A hook to act on the new MMR root.
 		///
 		/// For some applications it might be beneficial to make the MMR root available externally
@@ -206,18 +200,15 @@ pub mod pallet {
 	#[pallet::getter(fn mmr_leaves)]
 	pub type NumberOfLeaves<T, I = ()> = StorageValue<_, LeafIndex, ValueQuery>;
 
-	/// Leaf (data) and parent nodes (hashes) added by current block.
+	/// New branch added by current block - the leaf (data) and parent nodes (hashes).
 	///
 	/// This is single value storage overwritten by each block. It is used as temporary
 	/// leaf storage until after block is built and offchain worker can move/copy this
 	/// leaf and its parent nodes in offchain database under `node_offchain_key()`.
 	#[pallet::storage]
-	#[pallet::getter(fn new_nodes)]
-	pub type NewNodes<T: Config<I>, I: 'static = ()> = StorageValue<
-		_,
-		NewLeafNodesBatched<<T as Config<I>>::Hash, T::MaxLeafSize, T::MaxMmrHeight>,
-		ValueQuery,
-	>;
+	#[pallet::getter(fn new_mmr_branch)]
+	pub type NewBranch<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, MmrBranch<<T as Config<I>>::Hash, LeafOf<T, I>>, OptionQuery>;
 
 	/// Hashes of the peaks in the MMR.
 	///
@@ -243,7 +234,7 @@ pub mod pallet {
 
 			let (leaves, root) = {
 				// append new leaf to MMR
-				let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage<T, I>, T, I> =
+				let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage<T, I, LeafOf<T, I>>, T, I> =
 					mmr::Mmr::new(leaves);
 				mmr.push(data).expect("MMR push never fails.");
 

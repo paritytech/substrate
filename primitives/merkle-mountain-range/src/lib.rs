@@ -40,7 +40,7 @@ pub type LeafIndex = u64;
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
 	/// A type that should end up in the leaf of MMR.
-	type LeafData: FullLeaf + codec::MaxEncodedLen + codec::Decode;
+	type LeafData: FullLeaf + codec::MaxEncodedLen + codec::Decode + TypeInfo + 'static;
 
 	/// The method to return leaf data that should be placed
 	/// in the leaf node appended MMR at this block.
@@ -177,7 +177,8 @@ impl EncodableOpaqueLeaf {
 ///
 /// [DataOrHash::hash] method calculates the hash of this element in its compact form,
 /// so should be used instead of hashing the encoded form (which will always be non-compact).
-#[derive(RuntimeDebug, Clone, PartialEq)]
+#[derive(RuntimeDebug, Clone, PartialEq, TypeInfo)]
+#[scale_info(skip_type_params(H))]
 pub enum DataOrHash<H: traits::Hash, L: FullLeaf> {
 	/// Arbitrary data in its full form.
 	Data(L),
@@ -260,7 +261,8 @@ impl<H: traits::Hash, L: FullLeaf> DataOrHash<H, L> {
 /// into [DataOrHash] and each tuple element is hashed first before constructing
 /// the final hash of the entire tuple. This allows you to replace tuple elements
 /// you don't care about with their hashes.
-#[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::MaxEncodedLen)]
+#[derive(RuntimeDebug, Clone, PartialEq, codec::Encode, codec::MaxEncodedLen, TypeInfo)]
+#[scale_info(skip_type_params(H))]
 pub struct Compact<H, T> {
 	/// Internal tuple representation.
 	pub tuple: T,

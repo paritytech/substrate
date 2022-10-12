@@ -72,6 +72,7 @@ impl frame_system::Config for Test {
 }
 
 type MmrLeaf = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
+const MAX_LEAF_SIZE: usize = 2 * sp_std::mem::size_of::<MmrLeaf>();
 
 impl Config for Test {
 	const INDEXING_PREFIX: &'static [u8] = b"mmr-";
@@ -79,13 +80,11 @@ impl Config for Test {
 	type Hashing = Keccak256;
 	type Hash = H256;
 	type LeafData = MmrLeaf;
-	type MaxLeafSize = MaxLeafSize;
-	type MaxMmrHeight = MaxMmrHeight;
 	type OnNewRoot = ();
 	type WeightInfo = ();
 }
 
-#[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug)]
+#[derive(Encode, Decode, Clone, Default, Eq, PartialEq, Debug, scale_info::TypeInfo)]
 pub struct LeafData {
 	pub a: u64,
 	pub b: Vec<u8>,
@@ -93,7 +92,7 @@ pub struct LeafData {
 
 impl MaxEncodedLen for LeafData {
 	fn max_encoded_len() -> usize {
-		MaxLeafSize::get().try_into().unwrap()
+		MAX_LEAF_SIZE
 	}
 }
 
@@ -104,8 +103,6 @@ impl LeafData {
 }
 
 parameter_types! {
-	pub static MaxLeafSize: u32 = 2 * u32::try_from(sp_std::mem::size_of::<MmrLeaf>()).unwrap();
-	pub const MaxMmrHeight: u32 = 32;
 	pub static LeafDataTestValue: LeafData = Default::default();
 }
 

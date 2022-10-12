@@ -126,7 +126,7 @@ where
 }
 
 /// Runtime specific MMR functions.
-impl<T, I, L> Mmr<RuntimeStorage<T, I>, T, I, L>
+impl<T, I, L> Mmr<RuntimeStorage<T, I, L>, T, I, L>
 where
 	T: Config<I>,
 	I: 'static,
