@@ -22,7 +22,7 @@
 mod tests;
 mod weights;
 
-use codec::{Codec, Decode, Encode, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{pallet_prelude::*, BoundedSlice};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -163,7 +163,7 @@ pub enum ProcessMessageError {
 
 pub trait ProcessMessage {
 	/// The transport from where a message originates.
-	type Origin: Codec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + sp_std::fmt::Debug;
+	type Origin: FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + sp_std::fmt::Debug;
 
 	/// Process the given message, using no more than `weight_limit` in weight to do so.
 	fn process_message(
@@ -251,16 +251,20 @@ pub mod pallet {
 
 	/// The index of the first and last (non-empty) pages.
 	#[pallet::storage]
-	pub(super) type BookStateOf<T: Config> = StorageValue<_, BookState, ValueQuery>;
-
-	/// The lowest known unused page index.
-	#[pallet::storage]
-	pub(super) type NextPage<T: Config> = StorageValue<_, PageIndex, ValueQuery>;
+	pub(super) type BookStateOf<T: Config> =
+		StorageMap<_, Twox64Concat, MessageOriginOf<T>, BookState, ValueQuery>;
 
 	/// The map of page indices to pages.
 	#[pallet::storage]
-	pub(super) type Pages<T: Config> =
-		StorageMap<_, Blake2_256, PageIndex, Page<T::Size, T::HeapSize>, OptionQuery>;
+	pub(super) type Pages<T: Config> = StorageDoubleMap<
+		_,
+		Twox64Concat,
+		MessageOriginOf<T>,
+		Twox64Concat,
+		PageIndex,
+		Page<T::Size, T::HeapSize>,
+		OptionQuery,
+	>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -282,29 +286,34 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
 	fn do_enqueue_message(
+		origin: &MessageOriginOf<T>,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
-		origin: BoundedSlice<u8, MaxOriginLenOf<T>>,
+		origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
-		let mut book_state = BookStateOf::<T>::get();
+		let mut book_state = BookStateOf::<T>::get(origin);
 		if book_state.end > book_state.begin {
 			// Already have a page in progress - attempt to append.
 			let last = book_state.end - 1;
-			let mut page = match Pages::<T>::get(last) {
+			let mut page = match Pages::<T>::get(origin, last) {
 				Some(p) => p,
 				None => {
 					debug_assert!(false, "Corruption: referenced page doesn't exist.");
 					return
 				},
 			};
-			if let Ok(_) = page.try_append_message(&message[..], &origin[..]) {
-				Pages::<T>::insert(last, &page);
+			if let Ok(_) = page.try_append_message(&message[..], &origin_data[..]) {
+				Pages::<T>::insert(origin, last, &page);
 				return
 			}
 		}
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
-		Pages::<T>::insert(book_state.end - 1, Page::from_message(&message[..], &origin[..]));
-		BookStateOf::<T>::put(book_state);
+		Pages::<T>::insert(
+			origin,
+			book_state.end - 1,
+			Page::from_message(&message[..], &origin_data[..]),
+		);
+		BookStateOf::<T>::insert(origin, book_state);
 	}
 }
 
@@ -341,25 +350,25 @@ impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
 	}
 }
 
-pub trait ServiceQueue {
-	/// Service the message queue.
+pub trait ServiceQueue<Origin> {
+	/// Service the given message queue.
 	///
 	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
 	///
 	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
-	fn service_queue(weight_limit: Weight) -> Weight;
+	fn service_queue(origin: Origin, weight_limit: Weight) -> Weight;
 }
 
-impl<T: Config> ServiceQueue for Pallet<T> {
-	fn service_queue(weight_limit: Weight) -> Weight {
+impl<T: Config> ServiceQueue<MessageOriginOf<T>> for Pallet<T> {
+	fn service_queue(origin: MessageOriginOf<T>, weight_limit: Weight) -> Weight {
 		let mut processed = 0;
 		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight_left = weight_limit;
-		let mut book_state = BookStateOf::<T>::get();
+		let mut book_state = BookStateOf::<T>::get(&origin);
 		while book_state.end > book_state.begin {
 			let page_index = book_state.begin;
 			// TODO: Check `weight_left` and bail before doing this storage read.
-			let mut page = match Pages::<T>::get(page_index) {
+			let mut page = match Pages::<T>::get(&origin, page_index) {
 				Some(p) => p,
 				None => {
 					debug_assert!(false, "message-queue: referenced page not found");
@@ -427,12 +436,12 @@ impl<T: Config> ServiceQueue for Pallet<T> {
 
 			if page.is_complete() {
 				debug_assert!(!bail, "we never bail if a page became complete");
-				Pages::<T>::remove(page_index);
+				Pages::<T>::remove(&origin, page_index);
 				if book_state.earliest == page_index {
 					book_state.earliest.saturating_inc();
 				}
 			} else {
-				Pages::<T>::insert(page_index, page);
+				Pages::<T>::insert(&origin, page_index, page);
 			}
 
 			if bail {
@@ -440,7 +449,7 @@ impl<T: Config> ServiceQueue for Pallet<T> {
 			}
 			book_state.begin.saturating_inc();
 		}
-		BookStateOf::<T>::put(book_state);
+		BookStateOf::<T>::insert(&origin, book_state);
 		weight_limit.saturating_sub(weight_left)
 	}
 }
@@ -476,7 +485,7 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		// the `truncate_from` is just for safety - it will never fail since the bound is the
 		// maximum encoded length of the type.
 		origin.using_encoded(|data| {
-			Self::do_enqueue_message(message, BoundedSlice::truncate_from(data))
+			Self::do_enqueue_message(&origin, message, BoundedSlice::truncate_from(data))
 		})
 	}
 
@@ -489,7 +498,7 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 			// maximum encoded length of the type.
 			let origin_data = BoundedSlice::truncate_from(data);
 			for message in messages {
-				Self::do_enqueue_message(message, origin_data);
+				Self::do_enqueue_message(&origin, message, origin_data);
 			}
 		})
 	}

@@ -130,25 +130,37 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
+pub trait IntoWeight {
+	fn into_weight(self) -> Weight;
+}
+impl IntoWeight for u64 {
+	fn into_weight(self) -> Weight {
+		Weight::from_components(self, self)
+	}
+}
+
 #[test]
 fn enqueue_within_one_page_works() {
 	new_test_ext().execute_with(|| {
 		use MessageOrigin::*;
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Parent);
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), Peer(0));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Here);
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), Here);
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"gav"[..]), Here);
-		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"hello".to_vec(), Parent), (b"world".to_vec(), Peer(0)),]
+			vec![(b"hello".to_vec(), Here), (b"world".to_vec(), Here)]
 		);
 
 		MessagesProcessed::set(vec![]);
-		MessageQueue::service_queue(Weight::from_components(2, 2));
-		assert_eq!(MessagesProcessed::get(), vec![(b"gav".to_vec(), Here),]);
+		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::get(), vec![(b"gav".to_vec(), Here)]);
 
 		MessagesProcessed::set(vec![]);
-		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
+		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
+		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
+		assert_eq!(MessageQueue::service_queue(Here, 2.into_weight()), 0.into_weight());
 		assert_eq!(MessagesProcessed::get(), vec![]);
 
 		MessageQueue::enqueue_messages(
@@ -158,23 +170,25 @@ fn enqueue_within_one_page_works() {
 				BoundedSlice::truncate_from(&b"kah"[..]),
 			]
 			.into_iter(),
-			Peer(0),
+			Parent,
 		);
 
 		MessagesProcessed::set(vec![]);
-		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(MessageQueue::service_queue(Peer(1), 2.into_weight()), 0.into_weight());
+		assert_eq!(MessageQueue::service_queue(Parent, 2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"boo".to_vec(), Peer(0)), (b"yah".to_vec(), Peer(0)),]
+			vec![(b"boo".to_vec(), Parent), (b"yah".to_vec(), Parent),]
 		);
 
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Peer(1));
 
 		MessagesProcessed::set(vec![]);
-		MessageQueue::service_queue(Weight::from_components(2, 2));
+		assert_eq!(MessageQueue::service_queue(Peer(1), 2.into_weight()), 1.into_weight());
+		assert_eq!(MessageQueue::service_queue(Parent, 2.into_weight()), 1.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"kah".to_vec(), Peer(0)), (b"sha".to_vec(), Peer(1)),]
+			vec![(b"sha".to_vec(), Peer(1)), (b"kah".to_vec(), Parent),]
 		);
 	});
 }
