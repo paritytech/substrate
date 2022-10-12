@@ -33,7 +33,7 @@ use std::{
 	time::{Duration, Instant},
 };
 
-/// Used to represent the unit used in the benchmarks.
+/// The unit in which the [`Throughput`] (bytes per second) is denoted. 
 pub enum Unit {
 	GiBs,
 	MiBs,
