@@ -20,6 +20,6 @@ RUN apt-get update && \
 	apt-get install -y cmake pkg-config libssl-dev git clang
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	export PATH=$PATH:$HOME/.cargo/bin && \
-	scripts/init-tests.sh && \
-	TRYBUILD=overwrite cargo +nightly-2021-09-12 test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml && \
-	WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 cargo +nightly-2021-09-12 test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
+	scripts/init.sh && \
+	TRYBUILD=overwrite RUSTC_BOOTSTRAP=1 cargo +1.54.0 test --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path bin/node/cli/Cargo.toml && \
+	WASM_BUILD_NO_COLOR=1 SUBSTRATE_TEST_TIMEOUT=1 cargo +1.54.0 test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
