@@ -10,4 +10,4 @@ error[E0080]: evaluation of constant value failed
 83 | | }
    | |_^ the evaluated program panicked at 'The maximum encoded size of the error type in the `Pallet` pallet exceeds `MAX_MODULE_ERROR_ENCODED_SIZE`', $DIR/tests/construct_runtime_ui/pallet_error_too_large.rs:74:1
    |
-   = note: this error originates in the macro `$crate::panic::panic_2021` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `$crate::panic::panic_2021` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
