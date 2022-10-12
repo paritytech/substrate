@@ -688,8 +688,7 @@ pub mod pallet {
 		/// The origin must be Signed and the sender must be the Issuer of the `collection`.
 		///
 		/// - `collection`: The collection of the item to be minted.
-		/// - `item`: The item value of the item to be minted.
-		/// - `beneficiary`: The initial owner of the minted item.
+		/// - `item`: An identifier of the new item.
 		///
 		/// Emits `Issued` event when successful.
 		///
@@ -699,13 +698,50 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let caller = ensure_signed(origin)?;
+
+			let collection_config = Self::get_collection_config(&collection)?;
+			let item_settings = collection_config.mint_settings.default_item_settings;
+			let item_config = ItemConfig { settings: item_settings };
+
+			Self::do_mint(collection, item, caller.clone(), item_config, |collection_details| {
+				ensure!(collection_details.issuer == caller, Error::<T, I>::NoPermission);
+				Ok(())
+			})
+		}
+
+		/// Mint an item of a particular collection from a privileged origin.
+		///
+		/// The origin must conform to `ForceOrigin` or must be `Signed` and the sender must be the
+		/// Issuer of the `collection`.
+		///
+		/// - `collection`: The collection of the item to be minted.
+		/// - `item`: An identifier of the new item.
+		/// - `owner`: An owner of the minted item.
+		/// - `item_config`: A config of the new item.
+		///
+		/// Emits `Issued` event when successful.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::mint())]
+		pub fn force_mint(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			item: T::ItemId,
+			owner: AccountIdLookupOf<T>,
+			item_config: ItemConfig,
+		) -> DispatchResult {
+			let maybe_check_origin = match T::ForceOrigin::try_origin(origin) {
+				Ok(_) => None,
+				Err(origin) => Some(ensure_signed(origin)?),
+			};
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, item, owner, |collection_details| {
-				ensure!(collection_details.issuer == origin, Error::<T, I>::NoPermission);
+			Self::do_mint(collection, item, owner, item_config, |collection_details| {
+				if let Some(check_origin) = maybe_check_origin {
+					ensure!(collection_details.issuer == check_origin, Error::<T, I>::NoPermission);
+				}
 				Ok(())
 			})
 		}

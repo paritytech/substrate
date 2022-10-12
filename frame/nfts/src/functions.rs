@@ -162,6 +162,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		owner: T::AccountId,
+		item_config: ItemConfig,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
@@ -176,8 +177,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let collection_config = Self::get_collection_config(&collection)?;
 				let settings = collection_config.settings.values();
-				let item_settings = collection_config.mint_settings.default_item_settings;
-				let item_config = ItemConfig { settings: item_settings };
 
 				if let Some(max_supply) = collection_config.max_supply {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);

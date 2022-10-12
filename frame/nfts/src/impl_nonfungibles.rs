@@ -133,13 +133,14 @@ impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig> for Pallet<T, I> {
 	fn mint_into(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		who: &T::AccountId,
+		item_config: &ItemConfig,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), |_| Ok(()))
+		Self::do_mint(*collection, *item, who.clone(), *item_config, |_| Ok(()))
 	}
 
 	fn burn(
