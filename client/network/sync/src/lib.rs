@@ -30,6 +30,7 @@
 
 pub mod block_request_handler;
 pub mod blocks;
+pub mod mock;
 mod schema;
 pub mod state;
 pub mod state_request_handler;
@@ -643,9 +644,9 @@ where
 			.extend(peers);
 	}
 
-	fn justification_requests(
-		&mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<B>)> + '_> {
+	fn justification_requests<'a>(
+		&'a mut self,
+	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<B>)> + 'a> {
 		let peers = &mut self.peers;
 		let mut matcher = self.extra_justifications.matcher();
 		Box::new(std::iter::from_fn(move || {
@@ -670,7 +671,9 @@ where
 		}))
 	}
 
-	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<B>)> + '_> {
+	fn block_requests<'a>(
+		&'a mut self,
+	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<B>)> + 'a> {
 		if self.mode == SyncMode::Warp {
 			return Box::new(std::iter::once(self.warp_target_block_request()).flatten())
 		}
@@ -695,8 +698,8 @@ where
 		let allowed_requests = self.allowed_requests.take();
 		let max_parallel = if major_sync { 1 } else { self.max_parallel_downloads };
 		let gap_sync = &mut self.gap_sync;
-		let iter = self.peers.iter_mut().filter_map(move |(id, peer)| {
-			if !peer.state.is_available() || !allowed_requests.contains(id) {
+		let iter = self.peers.iter_mut().filter_map(move |(&id, peer)| {
+			if !peer.state.is_available() || !allowed_requests.contains(&id) {
 				return None
 			}
 
@@ -725,7 +728,7 @@ where
 				};
 				Some((id, ancestry_request::<B>(current)))
 			} else if let Some((range, req)) = peer_block_request(
-				id,
+				&id,
 				peer,
 				blocks,
 				attrs,
@@ -744,7 +747,7 @@ where
 				);
 				Some((id, req))
 			} else if let Some((hash, req)) =
-				fork_sync_request(id, fork_targets, best_queued, last_finalized, attrs, |hash| {
+				fork_sync_request(&id, fork_targets, best_queued, last_finalized, attrs, |hash| {
 					if queue.contains(hash) {
 						BlockStatus::Queued
 					} else {
@@ -756,7 +759,7 @@ where
 				Some((id, req))
 			} else if let Some((range, req)) = gap_sync.as_mut().and_then(|sync| {
 				peer_gap_block_request(
-					id,
+					&id,
 					peer,
 					&mut sync.blocks,
 					attrs,
@@ -2216,7 +2219,7 @@ where
 	}
 
 	/// Generate block request for downloading of the target block body during warp sync.
-	fn warp_target_block_request(&mut self) -> Option<(&PeerId, BlockRequest<B>)> {
+	fn warp_target_block_request(&mut self) -> Option<(PeerId, BlockRequest<B>)> {
 		if let Some(sync) = &self.warp_sync {
 			if self.allowed_requests.is_empty() ||
 				sync.is_complete() ||
@@ -2234,7 +2237,7 @@ where
 						trace!(target: "sync", "New warp target block request for {}", id);
 						peer.state = PeerSyncState::DownloadingWarpTargetBlock;
 						self.allowed_requests.clear();
-						return Some((id, request))
+						return Some((*id, request))
 					}
 				}
 			}
@@ -2482,7 +2485,7 @@ fn fork_sync_request<B: BlockT>(
 		true
 	});
 	for (hash, r) in targets {
-		if !r.peers.contains(id) {
+		if !r.peers.contains(&id) {
 			continue
 		}
 		// Download the fork only if it is behind or not too far ahead our tip of the chain
