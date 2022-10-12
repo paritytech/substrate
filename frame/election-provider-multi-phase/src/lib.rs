@@ -560,6 +560,7 @@ pub mod pallet {
 	use super::*;
 	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
 	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
+	use frame_support::traits::DefensiveResult;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
@@ -1079,7 +1080,7 @@ pub mod pallet {
 			let supports: BoundedVec<_, T::MaxWinners> = supports
 				.into_inner()
 				.try_into()
-				.expect("integrity test guarantees both bounds are equal; qed");
+				.defensive_map_err(|_| Error::<T>::BoundNotMet)?;
 
 			let solution = ReadySolution {
 				supports,
