@@ -151,15 +151,21 @@ fn enqueue_within_one_page_works() {
 		MessageQueue::service_queue(Weight::from_components(2, 2));
 		assert_eq!(MessagesProcessed::get(), vec![]);
 
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"boo"[..]), Peer(0));
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"yah"[..]), Peer(1));
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"kah"[..]), Peer(0));
+		MessageQueue::enqueue_messages(
+			[
+				BoundedSlice::truncate_from(&b"boo"[..]),
+				BoundedSlice::truncate_from(&b"yah"[..]),
+				BoundedSlice::truncate_from(&b"kah"[..]),
+			]
+			.into_iter(),
+			Peer(0),
+		);
 
 		MessagesProcessed::set(vec![]);
 		MessageQueue::service_queue(Weight::from_components(2, 2));
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"boo".to_vec(), Peer(0)), (b"yah".to_vec(), Peer(1)),]
+			vec![(b"boo".to_vec(), Peer(0)), (b"yah".to_vec(), Peer(0)),]
 		);
 
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Peer(1));

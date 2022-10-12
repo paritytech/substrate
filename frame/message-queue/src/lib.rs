@@ -457,7 +457,10 @@ pub trait EnqueueMessage<Origin: MaxEncodedLen> {
 	///
 	/// If no `message.len()` is greater than `HEAP_SIZE - Origin::max_encoded_len()`, then this
 	/// is guaranteed to succeed. In the case of `Err`, no messages are queued.
-	fn enqueue_messages(messages: &[BoundedSlice<u8, Self::MaxMessageLen>], origin: Origin);
+	fn enqueue_messages<'a>(
+		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
+		origin: Origin,
+	);
 
 	// TODO: consider: `fn enqueue_mqc_page(page: &[u8], origin: Origin);`
 }
@@ -477,15 +480,15 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		})
 	}
 
-	fn enqueue_messages(
-		messages: &[BoundedSlice<u8, Self::MaxMessageLen>],
+	fn enqueue_messages<'a>(
+		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
 		origin: <T::MessageProcessor as ProcessMessage>::Origin,
 	) {
 		origin.using_encoded(|data| {
 			// the `truncate_from` is just for safety - it will never fail since the bound is the
 			// maximum encoded length of the type.
 			let origin_data = BoundedSlice::truncate_from(data);
-			for &message in messages.iter() {
+			for message in messages {
 				Self::do_enqueue_message(message, origin_data);
 			}
 		})
