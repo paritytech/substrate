@@ -328,6 +328,11 @@ pub enum BlocksPruning {
 	KeepFinalized,
 	/// Keep N recent finalized blocks.
 	Some(u32),
+	/// Delay pruning by N block finalizations.
+	///
+	/// Pruning that was supposed to happen for the
+	/// finalized block X will happen on the (X + N) finalization.
+	Delayed(u32),
 }
 
 /// Where to find the database..
@@ -1786,6 +1791,9 @@ impl<Block: BlockT> Backend<Block> {
 			BlocksPruning::KeepFinalized => {
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
+			BlocksPruning::Delayed(_delayed) => {
+				// TODO: Handle pruning of block (N - delayed)
+			}
 		}
 		Ok(())
 	}
