@@ -189,7 +189,8 @@ fn linear_regression(
 	}
 
 	let (intercept, params, errors) = raw_linear_regression(&xs, &ys, x_vars, false)?;
-	Some((intercept + min, params, errors[1..].to_vec()))
+	assert!(intercept.abs() <= 0.0001);
+	Some((min, params, errors[1..].to_vec()))
 }
 
 impl Analysis {
