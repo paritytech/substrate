@@ -90,7 +90,7 @@ impl<T, S> WeakBoundedVec<T, S> {
 		self.0.retain(f)
 	}
 
-	/// Exactly the same semantics as [`Vec::get_mut`].
+	/// Exactly the same semantics as [`slice::get_mut`].
 	pub fn get_mut<I: SliceIndex<[T]>>(
 		&mut self,
 		index: I,

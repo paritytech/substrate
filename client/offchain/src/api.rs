@@ -37,10 +37,11 @@ mod http;
 mod timestamp;
 
 fn unavailable_yet<R: Default>(name: &str) -> R {
-	log::error!(
-		target: "sc_offchain",
+	tracing::error!(
+		target: super::LOG_TARGET,
 		"The {:?} API is not available for offchain workers yet. Follow \
-		https://github.com/paritytech/substrate/issues/1458 for details", name
+		https://github.com/paritytech/substrate/issues/1458 for details",
+		name
 	);
 	Default::default()
 }
@@ -75,9 +76,12 @@ impl<Storage: OffchainStorage> Db<Storage> {
 
 impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	fn local_storage_set(&mut self, kind: StorageKind, key: &[u8], value: &[u8]) {
-		log::debug!(
-			target: "sc_offchain",
-			"{:?}: Write: {:?} <= {:?}", kind, hex::encode(key), hex::encode(value)
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			value = ?hex::encode(value),
+			"Write",
 		);
 		match kind {
 			StorageKind::PERSISTENT => self.persistent.set(STORAGE_PREFIX, key, value),
@@ -86,9 +90,11 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 	}
 
 	fn local_storage_clear(&mut self, kind: StorageKind, key: &[u8]) {
-		log::debug!(
-			target: "sc_offchain",
-			"{:?}: Clear: {:?}", kind, hex::encode(key)
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			"Clear",
 		);
 		match kind {
 			StorageKind::PERSISTENT => self.persistent.remove(STORAGE_PREFIX, key),
@@ -103,13 +109,13 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 		old_value: Option<&[u8]>,
 		new_value: &[u8],
 	) -> bool {
-		log::debug!(
-			target: "sc_offchain",
-			"{:?}: CAS: {:?} <= {:?} vs {:?}",
-			kind,
-			hex::encode(key),
-			hex::encode(new_value),
-			old_value.as_ref().map(hex::encode),
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			new_value = ?hex::encode(new_value),
+			old_value = ?old_value.as_ref().map(hex::encode),
+			"CAS",
 		);
 		match kind {
 			StorageKind::PERSISTENT =>
@@ -123,12 +129,12 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 			StorageKind::PERSISTENT => self.persistent.get(STORAGE_PREFIX, key),
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		};
-		log::debug!(
-			target: "sc_offchain",
-			"{:?}: Read: {:?} => {:?}",
-			kind,
-			hex::encode(key),
-			result.as_ref().map(hex::encode)
+		tracing::debug!(
+			target: "offchain-worker::storage",
+			?kind,
+			key = ?hex::encode(key),
+			result = ?result.as_ref().map(hex::encode),
+			"Read",
 		);
 		result
 	}
@@ -298,9 +304,9 @@ impl AsyncApi {
 	pub fn new(
 		network_provider: Arc<dyn NetworkProvider + Send + Sync>,
 		is_validator: bool,
-		shared_client: SharedClient,
+		shared_http_client: SharedClient,
 	) -> (Api, Self) {
-		let (http_api, http_worker) = http::http(shared_client);
+		let (http_api, http_worker) = http::http(shared_http_client);
 
 		let api = Api { network_provider, is_validator, http: http_api };
 
@@ -310,10 +316,8 @@ impl AsyncApi {
 	}
 
 	/// Run a processing task for the API
-	pub fn process(mut self) -> impl Future<Output = ()> {
-		let http = self.http.take().expect("Take invoked only once.");
-
-		http
+	pub fn process(self) -> impl Future<Output = ()> {
+		self.http.expect("`process` is only called once; qed")
 	}
 }
 
@@ -328,7 +332,7 @@ mod tests {
 		time::SystemTime,
 	};
 
-	struct TestNetwork();
+	pub(super) struct TestNetwork();
 
 	impl NetworkProvider for TestNetwork {
 		fn set_authorized_peers(&self, _peers: HashSet<PeerId>) {

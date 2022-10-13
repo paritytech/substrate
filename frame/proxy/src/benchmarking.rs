@@ -86,7 +86,7 @@ benchmarks! {
 		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 	}: _(RawOrigin::Signed(caller), real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
-		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
+		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
 	}
 
 	proxy_announced {
@@ -107,7 +107,7 @@ benchmarks! {
 		add_announcements::<T>(a, Some(delegate.clone()), None)?;
 	}: _(RawOrigin::Signed(caller), delegate, real, Some(T::ProxyType::default()), Box::new(call))
 	verify {
-		assert_last_event::<T>(Event::ProxyExecuted(Ok(())).into())
+		assert_last_event::<T>(Event::ProxyExecuted { result: Ok(()) }.into())
 	}
 
 	remove_announcement {
@@ -165,7 +165,7 @@ benchmarks! {
 		let call_hash = T::CallHasher::hash_of(&call);
 	}: _(RawOrigin::Signed(caller.clone()), real.clone(), call_hash)
 	verify {
-		assert_last_event::<T>(Event::Announced(real, caller, call_hash).into());
+		assert_last_event::<T>(Event::Announced { real, proxy: caller, call_hash }.into());
 	}
 
 	add_proxy {
@@ -216,12 +216,12 @@ benchmarks! {
 	)
 	verify {
 		let anon_account = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
-		assert_last_event::<T>(Event::AnonymousCreated(
-			anon_account,
-			caller,
-			T::ProxyType::default(),
-			0,
-		).into());
+		assert_last_event::<T>(Event::AnonymousCreated {
+			anonymous: anon_account,
+			who: caller,
+			proxy_type: T::ProxyType::default(),
+			disambiguation_index: 0,
+		}.into());
 	}
 
 	kill_anonymous {

@@ -58,7 +58,7 @@ pub mod logger {
 			// Ensure that the `origin` is `Root`.
 			ensure_root(origin)?;
 			<I32Log<T>>::append(i);
-			Self::deposit_event(Event::AppendI32(i, weight));
+			Self::deposit_event(Event::AppendI32 { value: i, weight });
 			Ok(().into())
 		}
 
@@ -72,7 +72,7 @@ pub mod logger {
 			let sender = ensure_signed(origin)?;
 			<I32Log<T>>::append(i);
 			<AccountLog<T>>::append(sender.clone());
-			Self::deposit_event(Event::AppendI32AndAccount(sender, i, weight));
+			Self::deposit_event(Event::AppendI32AndAccount { sender, value: i, weight });
 			Ok(().into())
 		}
 	}
@@ -80,8 +80,8 @@ pub mod logger {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		AppendI32(i32, Weight),
-		AppendI32AndAccount(T::AccountId, i32, Weight),
+		AppendI32 { value: i32, weight: Weight },
+		AppendI32AndAccount { sender: T::AccountId, value: i32, weight: Weight },
 	}
 
 	#[pallet::storage]

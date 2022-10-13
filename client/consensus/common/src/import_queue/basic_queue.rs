@@ -89,7 +89,11 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 			metrics,
 		);
 
-		spawner.spawn_essential_blocking("basic-block-import-worker", future.boxed());
+		spawner.spawn_essential_blocking(
+			"basic-block-import-worker",
+			Some("block-import"),
+			future.boxed(),
+		);
 
 		Self { justification_sender, block_import_sender, result_port, _phantom: PhantomData }
 	}

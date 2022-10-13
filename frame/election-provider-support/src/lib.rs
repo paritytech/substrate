@@ -384,7 +384,7 @@ pub trait NposSolver {
 	) -> Result<ElectionResult<Self::AccountId, Self::Accuracy>, Self::Error>;
 }
 
-/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`super::NposSolver`]. See the
+/// A wrapper for [`sp_npos_elections::seq_phragmen`] that implements [`NposSolver`]. See the
 /// documentation of [`sp_npos_elections::seq_phragmen`] for more info.
 pub struct SequentialPhragmen<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
@@ -408,8 +408,8 @@ impl<
 	}
 }
 
-/// A wrapper for [`sp_npos_elections::phragmms`] that implements [`NposSolver`]. See the
-/// documentation of [`sp_npos_elections::phragmms`] for more info.
+/// A wrapper for [`sp_npos_elections::phragmms()`] that implements [`NposSolver`]. See the
+/// documentation of [`sp_npos_elections::phragmms()`] for more info.
 pub struct PhragMMS<AccountId, Accuracy, Balancing = ()>(
 	sp_std::marker::PhantomData<(AccountId, Accuracy, Balancing)>,
 );

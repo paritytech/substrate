@@ -2,7 +2,7 @@
 name = "substrate-test-runtime"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
@@ -40,7 +40,7 @@ sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = 
 sp-trie = { version = "4.0.0-dev", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.22.6", default-features = false }
-parity-util-mem = { version = "0.10.0", default-features = false, features = ["primitive-types"] }
+parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
 sp-state-machine = { version = "0.10.0-dev", default-features = false, path = "../../primitives/state-machine" }
 sp-externalities = { version = "0.10.0-dev", default-features = false, path = "../../primitives/externalities" }

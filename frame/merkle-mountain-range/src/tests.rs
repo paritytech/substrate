@@ -15,9 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{mock::*, *};
+use crate::{mmr::utils, mock::*, *};
 
 use frame_support::traits::OnInitialize;
+use mmr_lib::helper;
 use pallet_mmr_primitives::{Compact, Proof};
 use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
@@ -46,6 +47,12 @@ fn new_block() -> u64 {
 		frame_system::InitKind::Full,
 	);
 	MMR::on_initialize(number)
+}
+
+fn peaks_from_leaves_count(leaves_count: NodeIndex) -> Vec<NodeIndex> {
+	let size = utils::NodesUtils::new(leaves_count).size();
+
+	helper::get_peaks(size)
 }
 
 pub(crate) fn hex(s: &str) -> H256 {
@@ -115,10 +122,29 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 	ext.execute_with(|| {
 		// when
 		new_block();
+
+		// then
+		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 1);
+		assert_eq!(
+			(
+				crate::Nodes::<Test>::get(0),
+				crate::Nodes::<Test>::get(1),
+				crate::RootHash::<Test>::get(),
+			),
+			(
+				Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")),
+				None,
+				hex("0x4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0"),
+			)
+		);
+
+		// when
 		new_block();
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 2);
+		let peaks = peaks_from_leaves_count(2);
+		assert_eq!(peaks, vec![2]);
 		assert_eq!(
 			(
 				crate::Nodes::<Test>::get(0),
@@ -128,8 +154,8 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 				crate::RootHash::<Test>::get(),
 			),
 			(
-				Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")),
-				Some(hex("ad4cbc033833612ccd4626d5f023b9dfc50a35e838514dd1f3c86f8506728705")),
+				None,
+				None,
 				Some(hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854")),
 				None,
 				hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"),
@@ -166,14 +192,21 @@ fn should_construct_larger_mmr_correctly() {
 
 		// then
 		assert_eq!(crate::NumberOfLeaves::<Test>::get(), 7);
+		let peaks = peaks_from_leaves_count(7);
+		assert_eq!(peaks, vec![6, 9, 10]);
+		for i in (0..=10).filter(|p| !peaks.contains(p)) {
+			assert!(crate::Nodes::<Test>::get(i).is_none());
+		}
 		assert_eq!(
 			(
-				crate::Nodes::<Test>::get(0),
+				crate::Nodes::<Test>::get(6),
+				crate::Nodes::<Test>::get(9),
 				crate::Nodes::<Test>::get(10),
 				crate::RootHash::<Test>::get(),
 			),
 			(
-				Some(hex("4320435e8c3318562dba60116bdbcc0b82ffcecb9bb39aae3300cfda3ad0b8b0")),
+				Some(hex("ae88a0825da50e953e7a359c55fe13c8015e48d03d301b8bdfc9193874da9252")),
+				Some(hex("7e4316ae2ebf7c3b6821cb3a46ca8b7a4f9351a9b40fcf014bb0a4fd8e8f29da")),
 				Some(hex("611c2174c6164952a66d985cfe1ec1a623794393e3acff96b136d198f37a648c")),
 				hex("e45e25259f7930626431347fa4dd9aae7ac83b4966126d425ca70ab343709d2c"),
 			)
@@ -265,11 +298,7 @@ fn should_verify() {
 		crate::Pallet::<Test>::generate_proof(5).unwrap()
 	});
 
-	// Now to verify the proof, we really shouldn't require offchain storage or extension.
-	// Hence we initialize the storage once again, using different externalities and then
-	// verify.
-	let mut ext2 = new_test_ext();
-	ext2.execute_with(|| {
+	ext.execute_with(|| {
 		init_chain(7);
 		// then
 		assert_eq!(crate::Pallet::<Test>::verify_leaf(leaf, proof5), Ok(()));

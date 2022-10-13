@@ -49,6 +49,14 @@ pub struct SharedParams {
 	#[structopt(short = "l", long, value_name = "LOG_PATTERN")]
 	pub log: Vec<String>,
 
+	/// Enable detailed log output.
+	///
+	/// This includes displaying the log target, log level and thread name.
+	///
+	/// This is automatically enabled when something is logged with any higher level than `info`.
+	#[structopt(long)]
+	pub detailed_log_output: bool,
+
 	/// Disable log color output.
 	#[structopt(long)]
 	pub disable_log_color: bool,
@@ -105,6 +113,11 @@ impl SharedParams {
 	/// Get the filters for the logging
 	pub fn log_filters(&self) -> &[String] {
 		&self.log
+	}
+
+	/// Should the detailed log output be enabled.
+	pub fn detailed_log_output(&self) -> bool {
+		self.detailed_log_output
 	}
 
 	/// Should the log color output be disabled?

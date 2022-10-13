@@ -31,7 +31,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, MaybeDisplay},
 };
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 #[rpc]
 pub trait TransactionPaymentApi<BlockHash, ResponseType> {

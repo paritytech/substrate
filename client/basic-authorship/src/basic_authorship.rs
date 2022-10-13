@@ -41,7 +41,8 @@ use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{BlakeTwo256, Block as BlockT, DigestFor, Hash as HashT, Header as HeaderT},
+	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
+	Digest, Percent, SaturatedConversion,
 };
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
@@ -57,6 +58,8 @@ use sc_proposer_metrics::MetricsLink as PrometheusMetrics;
 /// transferred to other nodes.
 pub const DEFAULT_BLOCK_SIZE_LIMIT: usize = 4 * 1024 * 1024 + 512;
 
+const DEFAULT_SOFT_DEADLINE_PERCENT: Percent = Percent::from_percent(50);
+
 /// [`Proposer`] factory.
 pub struct ProposerFactory<A, B, C, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
@@ -71,6 +74,14 @@ pub struct ProposerFactory<A, B, C, PR> {
 	/// If no `block_size_limit` is passed to [`sp_consensus::Proposer::propose`], this block size
 	/// limit will be used.
 	default_block_size_limit: usize,
+	/// Soft deadline percentage of hard deadline.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	/// When estimating the block size, should the proof be included?
 	include_proof_in_block_size_estimation: bool,
@@ -95,6 +106,7 @@ impl<A, B, C> ProposerFactory<A, B, C, DisableProofRecording> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
 			telemetry,
 			client,
 			include_proof_in_block_size_estimation: false,
@@ -123,6 +135,7 @@ impl<A, B, C> ProposerFactory<A, B, C, EnableProofRecording> {
 			transaction_pool,
 			metrics: PrometheusMetrics::new(prometheus),
 			default_block_size_limit: DEFAULT_BLOCK_SIZE_LIMIT,
+			soft_deadline_percent: DEFAULT_SOFT_DEADLINE_PERCENT,
 			telemetry,
 			include_proof_in_block_size_estimation: true,
 			_phantom: PhantomData,
@@ -145,6 +158,22 @@ impl<A, B, C, PR> ProposerFactory<A, B, C, PR> {
 	/// will be used.
 	pub fn set_default_block_size_limit(&mut self, limit: usize) {
 		self.default_block_size_limit = limit;
+	}
+
+	/// Set soft deadline percentage.
+	///
+	/// The value is used to compute soft deadline during block production.
+	/// The soft deadline indicates where we should stop attempting to add transactions
+	/// to the block, which exhaust resources. After soft deadline is reached,
+	/// we switch to a fixed-amount mode, in which after we see `MAX_SKIPPED_TRANSACTIONS`
+	/// transactions which exhaust resrouces, we will conclude that the block is full.
+	///
+	/// Setting the value too low will significantly limit the amount of transactions
+	/// we try in case they exhaust resources. Setting the value too high can
+	/// potentially open a DoS vector, where many "exhaust resources" transactions
+	/// are being tried with no success, hence block producer ends up creating an empty block.
+	pub fn set_soft_deadline(&mut self, percent: Percent) {
+		self.soft_deadline_percent = percent;
 	}
 }
 
@@ -183,6 +212,7 @@ where
 			now,
 			metrics: self.metrics.clone(),
 			default_block_size_limit: self.default_block_size_limit,
+			soft_deadline_percent: self.soft_deadline_percent,
 			telemetry: self.telemetry.clone(),
 			_phantom: PhantomData,
 			include_proof_in_block_size_estimation: self.include_proof_in_block_size_estimation,
@@ -228,6 +258,7 @@ pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	metrics: PrometheusMetrics,
 	default_block_size_limit: usize,
 	include_proof_in_block_size_estimation: bool,
+	soft_deadline_percent: Percent,
 	telemetry: Option<TelemetryHandle>,
 	_phantom: PhantomData<(B, PR)>,
 }
@@ -261,7 +292,7 @@ where
 	fn propose(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		max_duration: time::Duration,
 		block_size_limit: Option<usize>,
 	) -> Self::Proposal {
@@ -270,6 +301,7 @@ where
 
 		spawn_handle.spawn_blocking(
 			"basic-authorship-proposer",
+			None,
 			Box::pin(async move {
 				// leave some time for evaluation and block finalization (33%)
 				let deadline = (self.now)() + max_duration - max_duration / 3;
@@ -309,15 +341,28 @@ where
 	async fn propose_with(
 		self,
 		inherent_data: InherentData,
-		inherent_digests: DigestFor<Block>,
+		inherent_digests: Digest,
 		deadline: time::Instant,
 		block_size_limit: Option<usize>,
 	) -> Result<Proposal<Block, backend::TransactionFor<B, Block>, PR::Proof>, sp_blockchain::Error>
 	{
+		let propose_with_start = time::Instant::now();
 		let mut block_builder =
 			self.client.new_block_at(&self.parent_id, inherent_digests, PR::ENABLED)?;
 
-		for inherent in block_builder.create_inherents(inherent_data)? {
+		let create_inherents_start = time::Instant::now();
+		let inherents = block_builder.create_inherents(inherent_data)?;
+		let create_inherents_end = time::Instant::now();
+
+		self.metrics.report(|metrics| {
+			metrics.create_inherents_time.observe(
+				create_inherents_end
+					.saturating_duration_since(create_inherents_start)
+					.as_secs_f64(),
+			);
+		});
+
+		for inherent in inherents {
 			match block_builder.push(inherent) {
 				Err(ApplyExtrinsicFailed(Validity(e))) if e.exhausted_resources() => {
 					warn!("⚠️  Dropping non-mandatory inherent from overweight block.")
@@ -338,7 +383,10 @@ where
 		// proceed with transactions
 		// We calculate soft deadline used only in case we start skipping transactions.
 		let now = (self.now)();
-		let soft_deadline = now + deadline.saturating_duration_since(now) / 2;
+		let left = deadline.saturating_duration_since(now);
+		let left_micros: u64 = left.as_micros().saturated_into();
+		let soft_deadline =
+			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
@@ -462,8 +510,9 @@ where
 		});
 
 		info!(
-			"🎁 Prepared block for proposing at {} [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
+			"🎁 Prepared block for proposing at {} ({} ms) [hash: {:?}; parent_hash: {}; extrinsics ({}): [{}]]",
 			block.header().number(),
+			block_timer.elapsed().as_millis(),
 			<Block as BlockT>::Hash::from(block.header().hash()),
 			block.header().parent_hash(),
 			block.extrinsics().len(),
@@ -493,6 +542,14 @@ where
 
 		let proof =
 			PR::into_proof(proof).map_err(|e| sp_blockchain::Error::Application(Box::new(e)))?;
+
+		let propose_with_end = time::Instant::now();
+		self.metrics.report(|metrics| {
+			metrics.create_block_proposal_time.observe(
+				propose_with_end.saturating_duration_since(propose_with_start).as_secs_f64(),
+			);
+		});
+
 		Ok(Proposal { block, proof, storage_changes })
 	}
 }
@@ -688,13 +745,8 @@ mod tests {
 		api.execute_block(&block_id, proposal.block).unwrap();
 
 		let state = backend.state_at(block_id).unwrap();
-		let changes_trie_state =
-			backend::changes_tries_state_at_block(&block_id, backend.changes_trie_storage())
-				.unwrap();
 
-		let storage_changes = api
-			.into_storage_changes(&state, changes_trie_state.as_ref(), genesis_hash)
-			.unwrap();
+		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 
 		assert_eq!(
 			proposal.storage_changes.transaction_storage_root,

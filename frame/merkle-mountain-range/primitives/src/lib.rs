@@ -26,6 +26,16 @@ use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
 
+/// A type to describe node position in the MMR (node index).
+pub type NodeIndex = u64;
+
+/// A type to describe leaf position in the MMR.
+///
+/// Note this is different from [`NodeIndex`], which can be applied to
+/// both leafs and inner nodes. Leafs will always have consecutive `LeafIndex`,
+/// but might be actually at different positions in the MMR `NodeIndex`.
+pub type LeafIndex = u64;
+
 /// A provider of the MMR's leaf data.
 pub trait LeafDataProvider {
 	/// A type that should end up in the leaf of MMR.
@@ -275,9 +285,9 @@ impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
 pub struct Proof<Hash> {
 	/// The index of the leaf the proof is for.
-	pub leaf_index: u64,
+	pub leaf_index: LeafIndex,
 	/// Number of leaves in MMR, when the proof was generated.
-	pub leaf_count: u64,
+	pub leaf_count: NodeIndex,
 	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
 	pub items: Vec<Hash>,
 }
@@ -402,7 +412,7 @@ sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec> {
 		/// Generate MMR proof for a leaf under given index.
-		fn generate_proof(leaf_index: u64) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
+		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
 		///

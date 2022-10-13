@@ -315,13 +315,13 @@ benchmarks! {
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
 		);
 		let balance_slash = |id| core::iter::once(
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed(id, slash_amount.into()))
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
 		);
 		let balance_deposit = |id, amount: u32|
-			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(id, amount.into()));
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});
 		let mut first = true;
 		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
@@ -344,7 +344,7 @@ benchmarks! {
 							balance_deposit(reporter.clone(), reward.into()).into(),
 							frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
 							<T as BalancesConfig>::Event::from(
-								pallet_balances::Event::<T>::Endowed(reporter.clone(), reward.into())
+								pallet_balances::Event::<T>::Endowed{account: reporter.clone(), free_balance: reward.into()}
 							).into(),
 						])
 						.collect::<Vec<_>>();
@@ -371,10 +371,10 @@ benchmarks! {
 				std::iter::empty()
 					.chain(slash_events.into_iter().map(Into::into))
 					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
-						pallet_offences::Event::Offence(
-							UnresponsivenessOffence::<T>::ID,
-							0_u32.to_le_bytes().to_vec(),
-						)
+						pallet_offences::Event::Offence{
+							kind: UnresponsivenessOffence::<T>::ID,
+							timeslot: 0_u32.to_le_bytes().to_vec(),
+						}
 					).into()))
 			);
 		}

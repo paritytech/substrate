@@ -54,21 +54,28 @@ Import the System module and derive your module's configuration trait from the s
 ### Example - Get extrinsic count and parent hash for the current block
 
 ```rust
-use frame_support::{decl_module, dispatch};
-use frame_system::{self as system, ensure_signed};
+#[frame_support::pallet]
+pub mod pallet {
+    use super::*;
+    use frame_support::pallet_prelude::*;
+    use frame_system::pallet_prelude::*;
 
-pub trait Config: system::Config {}
+    #[pallet::config]
+    pub trait Config: frame_system::Config {}
 
-decl_module! {
-	pub struct Module<T: Config> for enum Call where origin: T::Origin {
-		#[weight = 0]
-		pub fn system_module_example(origin) -> dispatch::DispatchResult {
-			let _sender = ensure_signed(origin)?;
-			let _extrinsic_count = <system::Pallet<T>>::extrinsic_count();
-			let _parent_hash = <system::Pallet<T>>::parent_hash();
-			Ok(())
-		}
-	}
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        #[pallet::weight(0)]
+        pub fn system_module_example(origin: OriginFor<T>) -> DispatchResult {
+            let _sender = ensure_signed(origin)?;
+            let _extrinsic_count = <system::Pallet<T>>::extrinsic_count();
+            let _parent_hash = <system::Pallet<T>>::parent_hash();
+            Ok(())
+        }
+    }
 }
 ```
 

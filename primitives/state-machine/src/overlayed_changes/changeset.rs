@@ -69,7 +69,6 @@ struct InnerValue<V> {
 	/// Current value. None if value has been deleted.
 	value: V,
 	/// The set of extrinsic indices where the values has been changed.
-	/// Is filled only if runtime has announced changes trie support.
 	extrinsics: Extrinsics,
 }
 

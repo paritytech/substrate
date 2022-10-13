@@ -20,7 +20,6 @@ use std::vec;
 use beefy_primitives::ValidatorSet;
 use codec::Encode;
 
-use sp_core::H256;
 use sp_runtime::DigestItem;
 
 use frame_support::traits::OnInitialize;
@@ -32,7 +31,7 @@ fn init_block(block: u64) {
 	Session::on_initialize(block);
 }
 
-pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem<H256> {
+pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
 	DigestItem::Consensus(BEEFY_ENGINE_ID, log.encode())
 }
 

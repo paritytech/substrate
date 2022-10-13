@@ -364,8 +364,7 @@ impl KeystoreInner {
 		let path = path.into();
 		fs::create_dir_all(&path)?;
 
-		let instance = Self { path: Some(path), additional: HashMap::new(), password };
-		Ok(instance)
+		Ok(Self { path: Some(path), additional: HashMap::new(), password })
 	}
 
 	/// Get the password for this store.
@@ -397,10 +396,9 @@ impl KeystoreInner {
 	/// Places it into the file system store, if a path is configured.
 	fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<()> {
 		if let Some(path) = self.key_file_path(public, key_type) {
-			let mut file = File::create(path).map_err(Error::Io)?;
-			serde_json::to_writer(&file, &suri).map_err(Error::Json)?;
-			file.flush().map_err(Error::Io)?;
+			Self::write_to_file(path, suri)?;
 		}
+
 		Ok(())
 	}
 
@@ -411,13 +409,27 @@ impl KeystoreInner {
 	fn generate_by_type<Pair: PairT>(&mut self, key_type: KeyTypeId) -> Result<Pair> {
 		let (pair, phrase, _) = Pair::generate_with_phrase(self.password());
 		if let Some(path) = self.key_file_path(pair.public().as_slice(), key_type) {
-			let mut file = File::create(path)?;
-			serde_json::to_writer(&file, &phrase)?;
-			file.flush()?;
+			Self::write_to_file(path, &phrase)?;
 		} else {
 			self.insert_ephemeral_pair(&pair, &phrase, key_type);
 		}
+
 		Ok(pair)
+	}
+
+	/// Write the given `data` to `file`.
+	fn write_to_file(file: PathBuf, data: &str) -> Result<()> {
+		let mut file = File::create(file)?;
+		serde_json::to_writer(&file, data)?;
+		file.flush()?;
+
+		#[cfg(target_family = "unix")]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			file.set_permissions(fs::Permissions::from_mode(0o600))?;
+		}
+
+		Ok(())
 	}
 
 	/// Create a new key from seed.
@@ -734,5 +746,21 @@ mod tests {
 		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 1);
 		SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
 		assert_eq!(SyncCryptoStore::sr25519_public_keys(&store, TEST_KEY_TYPE).len(), 2);
+	}
+
+	#[test]
+	#[cfg(target_family = "unix")]
+	fn uses_correct_file_permissions_on_unix() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp_dir = TempDir::new().unwrap();
+		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
+
+		let public = SyncCryptoStore::sr25519_generate_new(&store, TEST_KEY_TYPE, None).unwrap();
+
+		let path = store.0.read().key_file_path(public.as_ref(), TEST_KEY_TYPE).unwrap();
+		let permissions = File::open(path).unwrap().metadata().unwrap().permissions();
+
+		assert_eq!(0o100600, permissions.mode());
 	}
 }

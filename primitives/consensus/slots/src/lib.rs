@@ -24,6 +24,7 @@ use scale_info::TypeInfo;
 
 /// Unit type wrapper that represents a slot.
 #[derive(Debug, Encode, MaxEncodedLen, Decode, Eq, Clone, Copy, Default, Ord, TypeInfo)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct Slot(u64);
 
 impl core::ops::Deref for Slot {

@@ -19,7 +19,6 @@
 //! Substrate state API.
 
 mod state_full;
-mod state_light;
 
 #[cfg(test)]
 mod tests;
@@ -29,7 +28,6 @@ use jsonrpc_pubsub::{manager::SubscriptionManager, typed::Subscriber, Subscripti
 use rpc::Result as RpcResult;
 use std::sync::Arc;
 
-use sc_client_api::light::{Fetcher, RemoteBlockchain};
 use sc_rpc_api::{state::ReadProof, DenyUnsafe};
 use sp_core::{
 	storage::{PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey},
@@ -214,45 +212,6 @@ where
 	));
 	let backend =
 		Box::new(self::state_full::FullState::new(client, subscriptions, rpc_max_payload));
-	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
-}
-
-/// Create new state API that works on light node.
-pub fn new_light<BE, Block: BlockT, Client, F: Fetcher<Block>>(
-	client: Arc<Client>,
-	subscriptions: SubscriptionManager,
-	remote_blockchain: Arc<dyn RemoteBlockchain<Block>>,
-	fetcher: Arc<F>,
-	deny_unsafe: DenyUnsafe,
-) -> (State<Block, Client>, ChildState<Block, Client>)
-where
-	Block: BlockT + 'static,
-	Block::Hash: Unpin,
-	BE: Backend<Block> + 'static,
-	Client: ExecutorProvider<Block>
-		+ StorageProvider<Block, BE>
-		+ HeaderMetadata<Block, Error = sp_blockchain::Error>
-		+ ProvideRuntimeApi<Block>
-		+ HeaderBackend<Block>
-		+ BlockchainEvents<Block>
-		+ Send
-		+ Sync
-		+ 'static,
-	F: Send + Sync + 'static,
-{
-	let child_backend = Box::new(self::state_light::LightState::new(
-		client.clone(),
-		subscriptions.clone(),
-		remote_blockchain.clone(),
-		fetcher.clone(),
-	));
-
-	let backend = Box::new(self::state_light::LightState::new(
-		client,
-		subscriptions,
-		remote_blockchain,
-		fetcher,
-	));
 	(State { backend, deny_unsafe }, ChildState { backend: child_backend })
 }
 

@@ -33,7 +33,7 @@ use sp_core::offchain::{
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{fmt::Debug, sync::Arc, time};
 
@@ -152,9 +152,8 @@ impl BenchmarkCmd {
 
 		// Get Benchmark List
 		let state = &state_without_tracking;
-		let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+		let result = StateMachine::new(
 			state,
-			None,
 			&mut changes,
 			&executor,
 			"Benchmark_benchmark_metadata",
@@ -243,9 +242,8 @@ impl BenchmarkCmd {
 				if !self.no_verify {
 					// Dont use these results since verification code will add overhead
 					let state = &state_without_tracking;
-					let _results = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					let _results = StateMachine::new(
 						state,
-						None,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
@@ -270,9 +268,8 @@ impl BenchmarkCmd {
 				// Do one loop of DB tracking.
 				{
 					let state = &state_with_tracking;
-					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					let result = StateMachine::new(
 						state, // todo remove tracking
-						None,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
@@ -303,9 +300,8 @@ impl BenchmarkCmd {
 				// Finally run a bunch of loops to get extrinsic timing information.
 				for r in 0..self.external_repeat {
 					let state = &state_without_tracking;
-					let result = StateMachine::<_, _, NumberFor<BB>, _>::new(
+					let result = StateMachine::new(
 						state, // todo remove tracking
-						None,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",

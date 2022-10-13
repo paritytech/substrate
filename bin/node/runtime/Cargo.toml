@@ -2,7 +2,7 @@
 name = "node-runtime"
 version = "3.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
@@ -20,7 +20,7 @@ codec = { package = "parity-scale-codec", version = "2.2.0", default-features = 
 ] }
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 static_assertions = "1.1.0"
-hex-literal = { version = "0.3.3", optional = true }
+hex-literal = { version = "0.3.4", optional = true }
 log = { version = "0.4.14", default-features = false }
 
 # primitives
@@ -41,6 +41,7 @@ sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = 
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
@@ -90,6 +91,7 @@ pallet-treasury = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-utility = { version = "4.0.0-dev", default-features = false, path = "../../../frame/utility" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 pallet-transaction-payment-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/rpc/runtime-api/" }
+pallet-asset-tx-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment/asset-tx-payment/" }
 pallet-transaction-storage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-storage" }
 pallet-uniques = { version = "4.0.0-dev", default-features = false, path = "../../../frame/uniques" }
 pallet-vesting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/vesting" }
@@ -174,7 +176,7 @@ std = [
 	"pallet-ddc-metrics-offchain-worker/std",
 ]
 runtime-benchmarks = [
-	"frame-benchmarking",
+	"frame-benchmarking/runtime-benchmarks",
 	"frame-support/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
 	"pallet-election-provider-multi-phase/runtime-benchmarks",

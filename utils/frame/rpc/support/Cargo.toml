@@ -5,7 +5,7 @@ authors = [
     "Parity Technologies <admin@parity.io>",
     "Andrew Dirksen <andrew@dirksen.com>",
 ]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -26,4 +26,4 @@ sc-rpc-api = { version = "0.10.0-dev", path = "../../../../client/rpc-api" }
 [dev-dependencies]
 frame-system = { version = "4.0.0-dev", path = "../../../../frame/system" }
 scale-info = "1.0"
-tokio = "1.10"
+tokio = "1.13"

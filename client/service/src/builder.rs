@@ -18,7 +18,7 @@
 
 use crate::{
 	build_network_future,
-	client::{light, Client, ClientConfig},
+	client::{Client, ClientConfig},
 	config::{Configuration, KeystoreConfig, PrometheusConfig, TransactionStorageMode},
 	error::Error,
 	metrics::MetricsService,
@@ -30,9 +30,8 @@ use log::info;
 use prometheus_endpoint::Registry;
 use sc_chain_spec::get_extension;
 use sc_client_api::{
-	execution_extensions::ExecutionExtensions, light::RemoteBlockchain,
-	proof_provider::ProofProvider, BadBlocks, BlockBackend, BlockchainEvents, ExecutorProvider,
-	ForkBlocks, StorageProvider, UsageProvider,
+	execution_extensions::ExecutionExtensions, proof_provider::ProofProvider, BadBlocks,
+	BlockBackend, BlockchainEvents, ExecutorProvider, ForkBlocks, StorageProvider, UsageProvider,
 };
 use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
@@ -40,7 +39,7 @@ use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
 use sc_network::{
 	block_request_handler::{self, BlockRequestHandler},
-	config::{OnDemand, Role, SyncMode},
+	config::{Role, SyncMode},
 	light_client_requests::{self, handler::LightClientRequestHandler},
 	state_request_handler::{self, StateRequestHandler},
 	warp_request_handler::{self, RequestHandler as WarpSyncRequestHandler, WarpSyncProvider},
@@ -58,7 +57,7 @@ use sp_core::traits::{CodeExecutor, SpawnNamed};
 use sp_keystore::{CryptoStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, BlockIdTo, HashFor, Zero},
+	traits::{Block as BlockT, BlockIdTo, Zero},
 	BuildStorage,
 };
 use std::{str::FromStr, sync::Arc, time::SystemTime};
@@ -137,46 +136,8 @@ pub type TFullBackend<TBl> = sc_client_db::Backend<TBl>;
 pub type TFullCallExecutor<TBl, TExec> =
 	crate::client::LocalCallExecutor<TBl, sc_client_db::Backend<TBl>, TExec>;
 
-/// Light client type.
-pub type TLightClient<TBl, TRtApi, TExec> =
-	TLightClientWithBackend<TBl, TRtApi, TExec, TLightBackend<TBl>>;
-
-/// Light client backend type.
-pub type TLightBackend<TBl> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>;
-
-/// Light call executor type.
-pub type TLightCallExecutor<TBl, TExec> = sc_light::GenesisCallExecutor<
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
-	crate::client::LocalCallExecutor<
-		TBl,
-		sc_light::Backend<sc_client_db::light::LightStorage<TBl>, HashFor<TBl>>,
-		TExec,
-	>,
->;
-
 type TFullParts<TBl, TRtApi, TExec> =
 	(TFullClient<TBl, TRtApi, TExec>, Arc<TFullBackend<TBl>>, KeystoreContainer, TaskManager);
-
-type TLightParts<TBl, TRtApi, TExec> = (
-	Arc<TLightClient<TBl, TRtApi, TExec>>,
-	Arc<TLightBackend<TBl>>,
-	KeystoreContainer,
-	TaskManager,
-	Arc<OnDemand<TBl>>,
-);
-
-/// Light client backend type with a specific hash type.
-pub type TLightBackendWithHash<TBl, THash> =
-	sc_light::Backend<sc_client_db::light::LightStorage<TBl>, THash>;
-
-/// Light client type with a specific backend.
-pub type TLightClientWithBackend<TBl, TRtApi, TExec, TBackend> = Client<
-	TBackend,
-	sc_light::GenesisCallExecutor<TBackend, crate::client::LocalCallExecutor<TBl, TBackend, TExec>>,
-	TBl,
-	TRtApi,
->;
 
 trait AsCryptoStoreRef {
 	fn keystore_ref(&self) -> Arc<dyn CryptoStore>;
@@ -359,53 +320,6 @@ where
 	Ok((client, backend, keystore_container, task_manager))
 }
 
-/// Create the initial parts of a light node.
-pub fn new_light_parts<TBl, TRtApi, TExec>(
-	config: &Configuration,
-	telemetry: Option<TelemetryHandle>,
-	executor: TExec,
-) -> Result<TLightParts<TBl, TRtApi, TExec>, Error>
-where
-	TBl: BlockT,
-	TExec: CodeExecutor + RuntimeVersionOf + Clone,
-{
-	let keystore_container = KeystoreContainer::new(&config.keystore)?;
-	let task_manager = {
-		let registry = config.prometheus_config.as_ref().map(|cfg| &cfg.registry);
-		TaskManager::new(config.tokio_handle.clone(), registry)?
-	};
-
-	let db_storage = {
-		let db_settings = sc_client_db::DatabaseSettings {
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
-			state_pruning: config.state_pruning.clone(),
-			source: config.database.clone(),
-			keep_blocks: config.keep_blocks.clone(),
-			transaction_storage: config.transaction_storage.clone(),
-		};
-		sc_client_db::light::LightStorage::new(db_settings)?
-	};
-	let light_blockchain = sc_light::new_light_blockchain(db_storage);
-	let fetch_checker = Arc::new(sc_light::new_fetch_checker::<_, TBl, _>(
-		light_blockchain.clone(),
-		executor.clone(),
-		Box::new(task_manager.spawn_handle()),
-	));
-	let on_demand = Arc::new(sc_network::config::OnDemand::new(fetch_checker));
-	let backend = sc_light::new_light_backend(light_blockchain);
-	let client = Arc::new(light::new_light(
-		backend.clone(),
-		config.chain_spec.as_storage_builder(),
-		executor,
-		Box::new(task_manager.spawn_handle()),
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()),
-		telemetry,
-	)?);
-
-	Ok((client, backend, keystore_container, task_manager, on_demand))
-}
-
 /// Create an instance of default DB-backend backend.
 pub fn new_db_backend<Block>(
 	settings: DatabaseSettings,
@@ -466,23 +380,19 @@ where
 pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// The service configuration.
 	pub config: Configuration,
-	/// A shared client returned by `new_full_parts`/`new_light_parts`.
+	/// A shared client returned by `new_full_parts`.
 	pub client: Arc<TCl>,
-	/// A shared backend returned by `new_full_parts`/`new_light_parts`.
+	/// A shared backend returned by `new_full_parts`.
 	pub backend: Arc<Backend>,
-	/// A task manager returned by `new_full_parts`/`new_light_parts`.
+	/// A task manager returned by `new_full_parts`.
 	pub task_manager: &'a mut TaskManager,
-	/// A shared keystore returned by `new_full_parts`/`new_light_parts`.
+	/// A shared keystore returned by `new_full_parts`.
 	pub keystore: SyncCryptoStorePtr,
-	/// An optional, shared data fetcher for light clients.
-	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
 	/// A RPC extension builder. Use `NoopRpcExtensionBuilder` if you just want to pass in the
 	/// extensions directly.
 	pub rpc_extensions_builder: Box<dyn RpcExtensionBuilder<Output = TRpc> + Send>,
-	/// An optional, shared remote blockchain instance. Used for light clients.
-	pub remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	/// A shared network instance.
 	pub network: Arc<NetworkService<TBl, <TBl as BlockT>::Hash>>,
 	/// A Sender for RPC requests.
@@ -509,6 +419,7 @@ where
 	if let Some(offchain) = offchain_workers.clone() {
 		spawn_handle.spawn(
 			"offchain-notifications",
+			Some("offchain-worker"),
 			sc_offchain::notification_future(
 				config.role.is_authority(),
 				client.clone(),
@@ -559,12 +470,10 @@ where
 		mut config,
 		task_manager,
 		client,
-		on_demand,
 		backend,
 		keystore,
 		transaction_pool,
 		rpc_extensions_builder,
-		remote_blockchain,
 		network,
 		system_rpc_tx,
 		telemetry,
@@ -590,11 +499,13 @@ where
 	// Inform the tx pool about imported and finalized blocks.
 	spawn_handle.spawn(
 		"txpool-notifications",
+		Some("transaction-pool"),
 		sc_transaction_pool::notification_future(client.clone(), transaction_pool.clone()),
 	);
 
 	spawn_handle.spawn(
 		"on-transaction-imported",
+		Some("transaction-pool"),
 		transaction_notifications(transaction_pool.clone(), network.clone(), telemetry.clone()),
 	);
 
@@ -605,6 +516,7 @@ where
 			let metrics = MetricsService::with_prometheus(telemetry.clone(), &registry, &config)?;
 			spawn_handle.spawn(
 				"prometheus-endpoint",
+				None,
 				prometheus_endpoint::init_prometheus(port, registry).map(drop),
 			);
 
@@ -616,6 +528,7 @@ where
 	// Periodically updated metrics and telemetry updates.
 	spawn_handle.spawn(
 		"telemetry-periodic-send",
+		None,
 		metrics_service.run(client.clone(), transaction_pool.clone(), network.clone()),
 	);
 
@@ -630,8 +543,6 @@ where
 			client.clone(),
 			transaction_pool.clone(),
 			keystore.clone(),
-			on_demand.clone(),
-			remote_blockchain.clone(),
 			&*rpc_extensions_builder,
 			backend.offchain_storage(),
 			system_rpc_tx.clone(),
@@ -654,6 +565,7 @@ where
 	// Spawn informant task
 	spawn_handle.spawn(
 		"informant",
+		None,
 		sc_informant::build(
 			client.clone(),
 			network.clone(),
@@ -729,8 +641,6 @@ fn gen_handler<TBl, TBackend, TExPool, TRpc, TCl>(
 	client: Arc<TCl>,
 	transaction_pool: Arc<TExPool>,
 	keystore: SyncCryptoStorePtr,
-	on_demand: Option<Arc<OnDemand<TBl>>>,
-	remote_blockchain: Option<Arc<dyn RemoteBlockchain<TBl>>>,
 	rpc_extensions_builder: &(dyn RpcExtensionBuilder<Output = TRpc> + Send),
 	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
@@ -769,34 +679,17 @@ where
 	let task_executor = sc_rpc::SubscriptionTaskExecutor::new(spawn_handle);
 	let subscriptions = SubscriptionManager::new(Arc::new(task_executor.clone()));
 
-	let (chain, state, child_state) =
-		if let (Some(remote_blockchain), Some(on_demand)) = (remote_blockchain, on_demand) {
-			// Light clients
-			let chain = sc_rpc::chain::new_light(
-				client.clone(),
-				subscriptions.clone(),
-				remote_blockchain.clone(),
-				on_demand.clone(),
-			);
-			let (state, child_state) = sc_rpc::state::new_light(
-				client.clone(),
-				subscriptions.clone(),
-				remote_blockchain.clone(),
-				on_demand,
-				deny_unsafe,
-			);
-			(chain, state, child_state)
-		} else {
-			// Full nodes
-			let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
-			let (state, child_state) = sc_rpc::state::new_full(
-				client.clone(),
-				subscriptions.clone(),
-				deny_unsafe,
-				config.rpc_max_payload,
-			);
-			(chain, state, child_state)
-		};
+	let (chain, state, child_state) = {
+		// Full nodes
+		let chain = sc_rpc::chain::new_full(client.clone(), subscriptions.clone());
+		let (state, child_state) = sc_rpc::state::new_full(
+			client.clone(),
+			subscriptions.clone(),
+			deny_unsafe,
+			config.rpc_max_payload,
+		);
+		(chain, state, child_state)
+	};
 
 	let author =
 		sc_rpc::author::Author::new(client, transaction_pool, subscriptions, keystore, deny_unsafe);
@@ -825,7 +718,7 @@ where
 pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// The service configuration.
 	pub config: &'a Configuration,
-	/// A shared client returned by `new_full_parts`/`new_light_parts`.
+	/// A shared client returned by `new_full_parts`.
 	pub client: Arc<TCl>,
 	/// A shared transaction pool.
 	pub transaction_pool: Arc<TExPool>,
@@ -833,8 +726,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	pub spawn_handle: SpawnTaskHandle,
 	/// An import queue.
 	pub import_queue: TImpQu,
-	/// An optional, shared data fetcher for light clients.
-	pub on_demand: Option<Arc<OnDemand<TBl>>>,
 	/// A block announce validator builder.
 	pub block_announce_validator_builder:
 		Option<Box<dyn FnOnce(Arc<TCl>) -> Box<dyn BlockAnnounceValidator<TBl> + Send> + Send>>,
@@ -873,7 +764,6 @@ where
 		transaction_pool,
 		spawn_handle,
 		import_queue,
-		on_demand,
 		block_announce_validator_builder,
 		warp_sync,
 	} = params;
@@ -904,7 +794,7 @@ where
 				config.network.default_peers_set.in_peers as usize +
 					config.network.default_peers_set.out_peers as usize,
 			);
-			spawn_handle.spawn("block_request_handler", handler.run());
+			spawn_handle.spawn("block-request-handler", Some("networking"), handler.run());
 			protocol_config
 		}
 	};
@@ -921,7 +811,7 @@ where
 				config.network.default_peers_set.in_peers as usize +
 					config.network.default_peers_set.out_peers as usize,
 			);
-			spawn_handle.spawn("state_request_handler", handler.run());
+			spawn_handle.spawn("state-request-handler", Some("networking"), handler.run());
 			protocol_config
 		}
 	};
@@ -934,7 +824,7 @@ where
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) =
 				WarpSyncRequestHandler::new(protocol_id.clone(), provider.clone());
-			spawn_handle.spawn("warp_sync_request_handler", handler.run());
+			spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
 			protocol_config
 		};
 		(provider, protocol_config)
@@ -948,7 +838,7 @@ where
 			// Allow both outgoing and incoming requests.
 			let (handler, protocol_config) =
 				LightClientRequestHandler::new(&protocol_id, client.clone());
-			spawn_handle.spawn("light_client_request_handler", handler.run());
+			spawn_handle.spawn("light-client-request-handler", Some("networking"), handler.run());
 			protocol_config
 		}
 	};
@@ -958,18 +848,17 @@ where
 		executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
 			Some(Box::new(move |fut| {
-				spawn_handle.spawn("libp2p-node", fut);
+				spawn_handle.spawn("libp2p-node", Some("networking"), fut);
 			}))
 		},
 		transactions_handler_executor: {
 			let spawn_handle = Clone::clone(&spawn_handle);
 			Box::new(move |fut| {
-				spawn_handle.spawn("network-transactions-handler", fut);
+				spawn_handle.spawn("network-transactions-handler", Some("networking"), fut);
 			})
 		},
 		network_config: config.network.clone(),
 		chain: client.clone(),
-		on_demand,
 		transaction_pool: transaction_pool_adapter as _,
 		import_queue: Box::new(import_queue),
 		protocol_id,
@@ -1026,7 +915,7 @@ where
 	// issue, and ideally we would like to fix the network future to take as little time as
 	// possible, but we also take the extra harm-prevention measure to execute the networking
 	// future using `spawn_blocking`.
-	spawn_handle.spawn_blocking("network-worker", async move {
+	spawn_handle.spawn_blocking("network-worker", Some("networking"), async move {
 		if network_start_rx.await.is_err() {
 			log::warn!(
 				"The NetworkStart returned as part of `build_network` has been silently dropped"

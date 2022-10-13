@@ -48,7 +48,7 @@ pub fn decl_and_impl(def: &DeclStorageDefExt) -> TokenStream {
 		#visibility trait #store_trait {
 			#decl_store_items
 		}
-		impl#module_impl #store_trait for #module_struct #where_clause {
+		impl #module_impl #store_trait for #module_struct #where_clause {
 			#impl_store_items
 		}
 	)

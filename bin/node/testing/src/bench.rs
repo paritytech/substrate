@@ -243,11 +243,21 @@ impl TaskExecutor {
 }
 
 impl SpawnNamed for TaskExecutor {
-	fn spawn(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 
-	fn spawn_blocking(&self, _: &'static str, future: futures::future::BoxFuture<'static, ()>) {
+	fn spawn_blocking(
+		&self,
+		_: &'static str,
+		_: Option<&'static str>,
+		future: futures::future::BoxFuture<'static, ()>,
+	) {
 		self.pool.spawn_ok(future);
 	}
 }
@@ -581,7 +591,6 @@ impl BenchKeyring {
 	/// Generate genesis with accounts from this keyring endowed with some balance.
 	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
-			false,
 			Some(node_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)

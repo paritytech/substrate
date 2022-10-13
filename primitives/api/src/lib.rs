@@ -97,7 +97,7 @@ pub use sp_runtime::{
 #[doc(hidden)]
 #[cfg(feature = "std")]
 pub use sp_state_machine::{
-	Backend as StateBackend, ChangesTrieState, InMemoryBackend, OverlayedChanges, StorageProof,
+	Backend as StateBackend, InMemoryBackend, OverlayedChanges, StorageProof,
 };
 #[cfg(feature = "std")]
 use sp_std::result;
@@ -394,14 +394,12 @@ pub type ProofRecorder<B> = sp_state_machine::ProofRecorder<<B as BlockT>::Hash>
 pub type StorageTransactionCache<Block, Backend> = sp_state_machine::StorageTransactionCache<
 	<Backend as StateBackend<HashFor<Block>>>::Transaction,
 	HashFor<Block>,
-	NumberFor<Block>,
 >;
 
 #[cfg(feature = "std")]
 pub type StorageChanges<SBackend, Block> = sp_state_machine::StorageChanges<
 	<SBackend as StateBackend<HashFor<Block>>>::Transaction,
 	HashFor<Block>,
-	NumberFor<Block>,
 >;
 
 /// Extract the state backend type for a type that implements `ProvideRuntimeApi`.
@@ -514,7 +512,6 @@ pub trait ApiExt<Block: BlockT> {
 	fn into_storage_changes(
 		&self,
 		backend: &Self::StateBackend,
-		changes_trie_state: Option<&ChangesTrieState<HashFor<Block>, NumberFor<Block>>>,
 		parent_hash: Block::Hash,
 	) -> Result<StorageChanges<Self::StateBackend, Block>, String>
 	where
@@ -644,8 +641,6 @@ pub const fn serialize_runtime_api_info(id: [u8; 8], version: u32) -> [u8; RUNTI
 
 /// Deserialize the runtime API info serialized by [`serialize_runtime_api_info`].
 pub fn deserialize_runtime_api_info(bytes: [u8; RUNTIME_API_INFO_SIZE]) -> ([u8; 8], u32) {
-	use sp_std::convert::TryInto;
-
 	let id: [u8; 8] = bytes[0..8]
 		.try_into()
 		.expect("the source slice size is equal to the dest array length; qed");

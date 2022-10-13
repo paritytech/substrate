@@ -26,6 +26,7 @@ mod debug_no_bound;
 mod default_no_bound;
 mod dummy_part_checker;
 mod key_prefix;
+mod match_and_insert;
 mod pallet;
 mod partial_eq_no_bound;
 mod storage;
@@ -297,52 +298,91 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// # Example:
 ///
-/// ```nocompile
+/// ```ignore
 /// construct_runtime!(
 ///     pub enum Runtime where
 ///         Block = Block,
 ///         NodeBlock = node::Block,
 ///         UncheckedExtrinsic = UncheckedExtrinsic
 ///     {
-///         System: system::{Pallet, Call, Event<T>, Config<T>} = 0,
-///         Test: test::{Pallet, Call} = 1,
-///         Test2: test_with_long_module::{Pallet, Event<T>},
+///         System: frame_system::{Pallet, Call, Event<T>, Config<T>} = 0,
+///         Test: path::to::test::{Pallet, Call} = 1,
 ///
 ///         // Pallets with instances
-///         Test3_Instance1: test3::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
-///         Test3_DefaultInstance: test3::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
+///         Test2_Instance1: test2::<Instance1>::{Pallet, Call, Storage, Event<T, I>, Config<T, I>, Origin<T, I>},
+///         Test2_DefaultInstance: test2::{Pallet, Call, Storage, Event<T>, Config<T>, Origin<T>} = 4,
+///
+///         // Pallets declared with `pallet` attribute macro: no need to define the parts
+///         Test3_Instance1: test3::<Instance1>,
+///         Test3_DefaultInstance: test3,
+///
+///         // with `exclude_parts` keyword some part can be excluded.
+///         Test4_Instance1: test4::<Instance1> exclude_parts { Call, Origin },
+///         Test4_DefaultInstance: test4 exclude_parts { Storage },
+///
+///         // with `use_parts` keyword, a subset of the pallet parts can be specified.
+///         Test4_Instance1: test4::<Instance1> use_parts { Pallet, Call},
+///         Test4_DefaultInstance: test4 use_parts { Pallet },
 ///     }
 /// )
 /// ```
 ///
-/// The identifier `System` is the name of the pallet and the lower case identifier `system` is the
-/// name of the Rust module/crate for this Substrate pallet. The identifiers between the braces are
-/// the pallet parts provided by the pallet. It is important to list these parts here to export
-/// them correctly in the metadata or to make the pallet usable in the runtime.
+/// Each pallet is declared as such:
+/// * `Identifier`: name given to the pallet that uniquely identifies it.
 ///
-/// We provide support for the following module parts in a pallet:
+/// * `:`: colon separator
 ///
-/// - `Pallet` - Required for all pallets
-/// - `Call` - If the pallet has callable functions
-/// - `Storage` - If the pallet uses storage
-/// - `Event` or `Event<T>` (if the event is generic) - If the pallet emits events
-/// - `Origin` or `Origin<T>` (if the origin is generic) - If the pallet has instanciable origins
-/// - `Config` or `Config<T>` (if the config is generic) - If the pallet builds the genesis storage
-///   with `GenesisConfig`
-/// - `Inherent` - If the pallet provides/can check inherents.
-/// - `ValidateUnsigned` - If the pallet validates unsigned extrinsics.
+/// * `path::to::pallet`: identifiers separated by colons which declare the path to a pallet
+///   definition.
 ///
-/// `= $n` is an optional part allowing to define at which index the pallet variants in
-/// `OriginCaller`, `Call` and `Event` are encoded, and to define the ModuleToIndex value.
+/// * `::<InstanceN>` optional: specify the instance of the pallet to use. If not specified it will
+///   use the default instance (or the only instance in case of non-instantiable pallets).
 ///
-/// if `= $n` is not given, then index is resolved same as fieldless enum in Rust
-/// (i.e. incrementedly from previous index):
-/// ```nocompile
-/// pallet1 .. = 2,
-/// pallet2 .., // Here pallet2 is given index 3
-/// pallet3 .. = 0,
-/// pallet4 .., // Here pallet4 is given index 1
-/// ```
+/// * `::{ Part1, Part2<T>, .. }` optional if pallet declared with `frame_support::pallet`: Comma
+///   separated parts declared with their generic. If a pallet is declared with
+///   `frame_support::pallet` macro then the parts can be automatically derived if not explicitly
+///   provided. We provide support for the following module parts in a pallet:
+///
+///   - `Pallet` - Required for all pallets
+///   - `Call` - If the pallet has callable functions
+///   - `Storage` - If the pallet uses storage
+///   - `Event` or `Event<T>` (if the event is generic) - If the pallet emits events
+///   - `Origin` or `Origin<T>` (if the origin is generic) - If the pallet has instanciable origins
+///   - `Config` or `Config<T>` (if the config is generic) - If the pallet builds the genesis
+///     storage with `GenesisConfig`
+///   - `Inherent` - If the pallet provides/can check inherents.
+///   - `ValidateUnsigned` - If the pallet validates unsigned extrinsics.
+///
+///   It is important to list these parts here to export them correctly in the metadata or to make
+/// the pallet usable in the runtime.
+///
+/// * `exclude_parts { Part1, Part2 }` optional: comma separated parts without generics. I.e. one of
+///   `Pallet`, `Call`, `Storage`, `Event`, `Origin`, `Config`, `Inherent`, `ValidateUnsigned`. It
+///   is incompatible with `use_parts`. This specifies the part to exclude. In order to select
+///   subset of the pallet parts.
+///
+///   For example excluding the part `Call` can be useful if the runtime doesn't want to make the
+///   pallet calls available.
+///
+/// * `use_parts { Part1, Part2 }` optional: comma separated parts without generics. I.e. one of
+///   `Pallet`, `Call`, `Storage`, `Event`, `Origin`, `Config`, `Inherent`, `ValidateUnsigned`. It
+///   is incompatible with `exclude_parts`. This specifies the part to use. In order to select a
+///   subset of the pallet parts.
+///
+///   For example not using the part `Call` can be useful if the runtime doesn't want to make the
+///   pallet calls available.
+///
+/// * `= $n` optional: number to define at which index the pallet variants in `OriginCaller`, `Call`
+///   and `Event` are encoded, and to define the ModuleToIndex value.
+///
+///   if `= $n` is not given, then index is resolved in the same way as fieldless enum in Rust
+///   (i.e. incrementedly from previous index):
+///   ```nocompile
+///   pallet1 .. = 2,
+///   pallet2 .., // Here pallet2 is given index 3
+///   pallet3 .. = 0,
+///   pallet4 .., // Here pallet4 is given index 1
+///   ```
 ///
 /// # Note
 ///
@@ -352,8 +392,8 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///
 /// # Type definitions
 ///
-/// * The macro generates a type alias for each pallet to their `Module` (or `Pallet`). E.g. `type
-///   System = frame_system::Pallet<Runtime>`
+/// * The macro generates a type alias for each pallet to their `Pallet`. E.g. `type System =
+///   frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
@@ -497,4 +537,28 @@ pub fn impl_key_prefix_for_tuples(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 	dummy_part_checker::generate_dummy_part_checker(input)
+}
+
+/// Macro that inserts some tokens after the first match of some pattern.
+///
+/// # Example:
+///
+/// ```nocompile
+/// match_and_insert!(
+///     target = [{ Some content with { at some point match pattern } other match pattern are ignored }]
+///     pattern = [{ match pattern }] // the match pattern cannot contain any group: `[]`, `()`, `{}`
+/// 								  // can relax this constraint, but will require modifying the match logic in code
+///     tokens = [{ expansion tokens }] // content inside braces can be anything including groups
+/// );
+/// ```
+///
+/// will generate:
+///
+/// ```nocompile
+///     Some content with { at some point match pattern expansion tokens } other match patterns are
+///     ignored
+/// ```
+#[proc_macro]
+pub fn match_and_insert(input: TokenStream) -> TokenStream {
+	match_and_insert::match_and_insert(input)
 }

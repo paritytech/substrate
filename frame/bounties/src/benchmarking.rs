@@ -172,7 +172,7 @@ benchmarks! {
 		let bounty_id = BountyCount::<T>::get() - 1;
 	}: close_bounty(RawOrigin::Root, bounty_id)
 	verify {
-		assert_last_event::<T>(Event::BountyCanceled(bounty_id).into())
+		assert_last_event::<T>(Event::BountyCanceled { index: bounty_id }.into())
 	}
 
 	extend_bounty_expiry {
@@ -184,7 +184,7 @@ benchmarks! {
 		let curator = T::Lookup::lookup(curator_lookup).map_err(<&str>::from)?;
 	}: _(RawOrigin::Signed(curator), bounty_id, Vec::new())
 	verify {
-		assert_last_event::<T>(Event::BountyExtended(bounty_id).into())
+		assert_last_event::<T>(Event::BountyExtended { index: bounty_id }.into())
 	}
 
 	spend_funds {
@@ -207,7 +207,7 @@ benchmarks! {
 	verify {
 		ensure!(budget_remaining < BalanceOf::<T>::max_value(), "Budget not used");
 		ensure!(missed_any == false, "Missed some");
-		assert_last_event::<T>(Event::BountyBecameActive(b - 1).into())
+		assert_last_event::<T>(Event::BountyBecameActive { index: b - 1 }.into())
 	}
 
 	impl_benchmark_test_suite!(Bounties, crate::tests::new_test_ext(), crate::tests::Test)

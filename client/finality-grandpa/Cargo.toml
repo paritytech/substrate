@@ -2,7 +2,7 @@
 name = "sc-finality-grandpa"
 version = "0.10.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
-derive_more = "0.99.2"
+derive_more = "0.99.16"
 dyn-clone = "1.0"
 fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
 futures = "0.3.9"
@@ -35,13 +35,13 @@ sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-serde_json = "1.0.68"
+serde_json = "1.0.71"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-gossip = { version = "0.10.0-dev", path = "../network-gossip" }
 sp-finality-grandpa = { version = "4.0.0-dev", path = "../../primitives/finality-grandpa" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.9.0" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 finality-grandpa = { version = "0.14.4", features = ["derive-codec"] }
 async-trait = "0.1.50"
@@ -57,5 +57,5 @@ sc-network-test = { version = "0.8.0", path = "../network/test" }
 sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-tokio = "1.10"
+tokio = "1.13"
 tempfile = "3.1.0"

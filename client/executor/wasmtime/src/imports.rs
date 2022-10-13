@@ -17,6 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
+	host::HostContext,
 	runtime::{Store, StoreData},
 	util,
 };
@@ -191,19 +192,7 @@ fn call_static<'a>(
 	mut caller: Caller<'a, StoreData>,
 ) -> Result<(), wasmtime::Trap> {
 	let unwind_result = {
-		let host_state = caller
-			.data()
-			.host_state()
-			.expect(
-				"host functions can be called only from wasm instance;
-				wasm instance is always called initializing context;
-				therefore host_ctx cannot be None;
-				qed
-				",
-			)
-			.clone();
-
-		let mut host_ctx = host_state.materialize(&mut caller);
+		let mut host_ctx = HostContext { caller: &mut caller };
 
 		// `from_wasmtime_val` panics if it encounters a value that doesn't fit into the values
 		// available in substrate.

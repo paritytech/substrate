@@ -23,7 +23,6 @@ use sc_service::client::genesis;
 use sp_core::{
 	map,
 	storage::{well_known_keys, Storage},
-	ChangesTrieConfiguration,
 };
 use sp_io::hashing::{blake2_256, twox_128};
 use sp_runtime::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
@@ -31,7 +30,6 @@ use std::collections::BTreeMap;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
-	changes_trie_config: Option<ChangesTrieConfiguration>,
 	authorities: Vec<AuthorityId>,
 	balances: Vec<(AccountId, u64)>,
 	heap_pages_override: Option<u64>,
@@ -41,7 +39,6 @@ pub struct GenesisConfig {
 
 impl GenesisConfig {
 	pub fn new(
-		changes_trie_config: Option<ChangesTrieConfiguration>,
 		authorities: Vec<AuthorityId>,
 		endowed_accounts: Vec<AccountId>,
 		balance: u64,
@@ -49,7 +46,6 @@ impl GenesisConfig {
 		extra_storage: Storage,
 	) -> Self {
 		GenesisConfig {
-			changes_trie_config,
 			authorities,
 			balances: endowed_accounts.into_iter().map(|a| (a, balance)).collect(),
 			heap_pages_override,
@@ -77,9 +73,6 @@ impl GenesisConfig {
 				.into_iter(),
 			)
 			.collect();
-		if let Some(ref changes_trie_config) = self.changes_trie_config {
-			map.insert(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), changes_trie_config.encode());
-		}
 		map.insert(twox_128(&b"sys:auth"[..])[..].to_vec(), self.authorities.encode());
 		// Add the extra storage entries.
 		map.extend(self.extra_storage.top.clone().into_iter());

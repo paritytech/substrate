@@ -2,7 +2,7 @@
 name = "substrate-test-runtime-client"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -12,7 +12,6 @@ publish = false
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-sc-light = { version = "4.0.0-dev", path = "../../../client/light" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-block-builder = { version = "0.10.0-dev", path = "../../../client/block-builder" }

@@ -35,8 +35,11 @@ use pwasm_utils::parity_wasm::{
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
-use sp_sandbox::{EnvironmentDefinitionBuilder, Memory};
-use sp_std::{borrow::ToOwned, convert::TryFrom, prelude::*};
+use sp_sandbox::{
+	default_executor::{EnvironmentDefinitionBuilder, Memory},
+	SandboxEnvironmentBuilder, SandboxMemory,
+};
+use sp_std::{borrow::ToOwned, prelude::*};
 
 /// Pass to `create_code` in order to create a compiled `WasmModule`.
 ///
@@ -492,11 +495,11 @@ pub mod body {
 					vec![Instruction::I32Const(current as i32)]
 				},
 				DynInstr::RandomUnaligned(low, high) => {
-					let unaligned = rng.gen_range(*low, *high) | 1;
+					let unaligned = rng.gen_range(*low..*high) | 1;
 					vec![Instruction::I32Const(unaligned as i32)]
 				},
 				DynInstr::RandomI32(low, high) => {
-					vec![Instruction::I32Const(rng.gen_range(*low, *high))]
+					vec![Instruction::I32Const(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomI32Repeated(num) => (&mut rng)
 					.sample_iter(Standard)
@@ -509,19 +512,19 @@ pub mod body {
 					.map(|val| Instruction::I64Const(val))
 					.collect(),
 				DynInstr::RandomGetLocal(low, high) => {
-					vec![Instruction::GetLocal(rng.gen_range(*low, *high))]
+					vec![Instruction::GetLocal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomSetLocal(low, high) => {
-					vec![Instruction::SetLocal(rng.gen_range(*low, *high))]
+					vec![Instruction::SetLocal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomTeeLocal(low, high) => {
-					vec![Instruction::TeeLocal(rng.gen_range(*low, *high))]
+					vec![Instruction::TeeLocal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomGetGlobal(low, high) => {
-					vec![Instruction::GetGlobal(rng.gen_range(*low, *high))]
+					vec![Instruction::GetGlobal(rng.gen_range(*low..*high))]
 				},
 				DynInstr::RandomSetGlobal(low, high) => {
-					vec![Instruction::SetGlobal(rng.gen_range(*low, *high))]
+					vec![Instruction::SetGlobal(rng.gen_range(*low..*high))]
 				},
 			})
 			.chain(sp_std::iter::once(Instruction::End))

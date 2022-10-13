@@ -786,7 +786,7 @@ fn generate_runtime_info_impl(trait_: &ItemTrait, version: u64) -> TokenStream {
 	quote!(
 		#[cfg(any(feature = "std", test))]
 		impl < #( #impl_generics, )* > #crate_::RuntimeApiInfo
-			for #trait_name < #( #ty_generics, )* >
+			for dyn #trait_name < #( #ty_generics, )* >
 		{
 			#id
 			#version

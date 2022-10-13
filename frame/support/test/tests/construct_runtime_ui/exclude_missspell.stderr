@@ -1,0 +1,5 @@
+error: Unexpected tokens, expected one of `::$ident` `::{`, `exclude_parts`, `use_parts`, `=`, `,`
+ --> $DIR/exclude_missspell.rs:9:24
+  |
+9 |         System: frame_system exclude_part { Call },
+  |                              ^^^^^^^^^^^^

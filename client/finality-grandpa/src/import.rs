@@ -19,7 +19,7 @@
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use log::debug;
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::Decode;
 
 use sc_client_api::{backend::Backend, utils::is_descendent_of};
 use sc_consensus::{
@@ -35,7 +35,7 @@ use sp_core::hashing::twox_128;
 use sp_finality_grandpa::{ConsensusLog, GrandpaApi, ScheduledChange, SetId, GRANDPA_ENGINE_ID};
 use sp_runtime::{
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, DigestFor, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification,
 };
 
@@ -89,7 +89,6 @@ impl<BE, Block: BlockT, Client, SC> JustificationImport<Block>
 	for GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	SC: SelectChain<Block>,
@@ -229,7 +228,6 @@ pub fn find_forced_change<B: BlockT>(
 impl<BE, Block: BlockT, Client, SC> GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,
@@ -515,7 +513,6 @@ where
 impl<BE, Block: BlockT, Client, SC> BlockImport<Block> for GrandpaBlockImport<BE, Block, Client, SC>
 where
 	NumberFor<Block>: finality_grandpa::BlockNumberOps,
-	DigestFor<Block>: Encode,
 	BE: Backend<Block>,
 	Client: ClientForGrandpa<Block, BE>,
 	Client::Api: GrandpaApi<Block>,

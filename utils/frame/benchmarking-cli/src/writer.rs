@@ -17,7 +17,6 @@
 
 // Outputs benchmark results to Rust files that can be ingested by the runtime.
 
-use core::convert::TryInto;
 use std::{
 	collections::{HashMap, HashSet},
 	fs,

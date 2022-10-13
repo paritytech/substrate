@@ -18,7 +18,7 @@
 //! Some helper functions/macros for this crate.
 
 use super::{Config, SolutionTargetIndexOf, SolutionVoterIndexOf, VoteWeight};
-use sp_std::{collections::btree_map::BTreeMap, convert::TryInto, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 #[macro_export]
 macro_rules! log {

@@ -29,4 +29,4 @@ error[E0369]: binary operation `==` cannot be applied to type `&<T as pallet::Co
 help: consider further restricting this bound
    |
 17 |     #[pallet::call + std::cmp::PartialEq]
-   |                    ^^^^^^^^^^^^^^^^^^^^^
+   |                    +++++++++++++++++++++

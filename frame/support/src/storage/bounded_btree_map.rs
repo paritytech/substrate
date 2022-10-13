@@ -307,7 +307,6 @@ pub mod test {
 	use super::*;
 	use crate::Twox128;
 	use sp_io::TestExternalities;
-	use sp_std::convert::TryInto;
 
 	crate::parameter_types! {
 		pub const Seven: u32 = 7;

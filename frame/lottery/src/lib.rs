@@ -115,8 +115,8 @@ impl<T: Config> ValidateCall<T> for Pallet<T> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::EnsureOrigin, weights::Weight, Parameter};
-	use frame_system::{ensure_signed, pallet_prelude::*};
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -176,9 +176,9 @@ pub mod pallet {
 		/// A new set of calls have been set!
 		CallsUpdated,
 		/// A winner has been chosen!
-		Winner(T::AccountId, BalanceOf<T>),
+		Winner { winner: T::AccountId, lottery_balance: BalanceOf<T> },
 		/// A ticket has been bought!
-		TicketBought(T::AccountId, CallIndex),
+		TicketBought { who: T::AccountId, call_index: CallIndex },
 	}
 
 	#[pallet::error]
@@ -250,7 +250,7 @@ pub mod pallet {
 						);
 						debug_assert!(res.is_ok());
 
-						Self::deposit_event(Event::<T>::Winner(winner, lottery_balance));
+						Self::deposit_event(Event::<T>::Winner { winner, lottery_balance });
 
 						TicketsCount::<T>::kill();
 
@@ -452,7 +452,7 @@ impl<T: Config> Pallet<T> {
 			},
 		)?;
 
-		Self::deposit_event(Event::<T>::TicketBought(caller.clone(), call_index));
+		Self::deposit_event(Event::<T>::TicketBought { who: caller.clone(), call_index });
 
 		Ok(())
 	}

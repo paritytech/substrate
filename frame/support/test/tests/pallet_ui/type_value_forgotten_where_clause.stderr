@@ -1,47 +1,53 @@
 error[E0277]: the trait bound `<T as frame_system::Config>::AccountId: From<u32>` is not satisfied
   --> $DIR/type_value_forgotten_where_clause.rs:24:34
    |
-7  |     pub trait Config: frame_system::Config
-   |               ------ required by a bound in this
-8  |     where <Self as frame_system::Config>::AccountId: From<u32>
-   |                                                      --------- required by this bound in `pallet::Config`
-...
 24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 { 3u32 }
    |                                     ^^^^^^ the trait `From<u32>` is not implemented for `<T as frame_system::Config>::AccountId`
    |
-help: consider further restricting the associated type
-   |
-24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 where <T as frame_system::Config>::AccountId: From<u32> { 3u32 }
-   |                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error[E0277]: the trait bound `<T as frame_system::Config>::AccountId: From<u32>` is not satisfied
-  --> $DIR/type_value_forgotten_where_clause.rs:24:12
+note: required by a bound in `pallet::Config`
+  --> $DIR/type_value_forgotten_where_clause.rs:8:51
    |
 7  |     pub trait Config: frame_system::Config
    |               ------ required by a bound in this
 8  |     where <Self as frame_system::Config>::AccountId: From<u32>
-   |                                                      --------- required by this bound in `pallet::Config`
-...
+   |                                                      ^^^^^^^^^ required by this bound in `pallet::Config`
+help: consider further restricting the associated type
+   |
+24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 where <T as frame_system::Config>::AccountId: From<u32> { 3u32 }
+   |                                                      +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0277]: the trait bound `<T as frame_system::Config>::AccountId: From<u32>` is not satisfied
+  --> $DIR/type_value_forgotten_where_clause.rs:24:12
+   |
 24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 { 3u32 }
    |               ^^^^^^^^^^ the trait `From<u32>` is not implemented for `<T as frame_system::Config>::AccountId`
    |
+note: required by a bound in `pallet::Config`
+  --> $DIR/type_value_forgotten_where_clause.rs:8:51
+   |
+7  |     pub trait Config: frame_system::Config
+   |               ------ required by a bound in this
+8  |     where <Self as frame_system::Config>::AccountId: From<u32>
+   |                                                      ^^^^^^^^^ required by this bound in `pallet::Config`
 help: consider further restricting the associated type
    |
 24 |     #[pallet::type_value where <T as frame_system::Config>::AccountId: From<u32>] fn Foo<T: Config>() -> u32 { 3u32 }
-   |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                          +++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 error[E0277]: the trait bound `<T as frame_system::Config>::AccountId: From<u32>` is not satisfied
   --> $DIR/type_value_forgotten_where_clause.rs:24:12
    |
-7  |     pub trait Config: frame_system::Config
-   |               ------ required by a bound in this
-8  |     where <Self as frame_system::Config>::AccountId: From<u32>
-   |                                                      --------- required by this bound in `pallet::Config`
-...
 24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 { 3u32 }
    |               ^^^^^^^^^^ the trait `From<u32>` is not implemented for `<T as frame_system::Config>::AccountId`
    |
+note: required by a bound in `pallet::Config`
+  --> $DIR/type_value_forgotten_where_clause.rs:8:51
+   |
+7  |     pub trait Config: frame_system::Config
+   |               ------ required by a bound in this
+8  |     where <Self as frame_system::Config>::AccountId: From<u32>
+   |                                                      ^^^^^^^^^ required by this bound in `pallet::Config`
 help: consider further restricting the associated type
    |
 24 |     #[pallet::type_value] fn Foo<T: Config>() -> u32 where <T as frame_system::Config>::AccountId: From<u32> { 3u32 }
-   |                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                                                      +++++++++++++++++++++++++++++++++++++++++++++++++++++++

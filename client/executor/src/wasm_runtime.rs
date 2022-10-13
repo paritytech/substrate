@@ -344,7 +344,7 @@ fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 		})?
 		.into();
 
-	let core_api_id = sp_core::hashing::blake2_64(b"Core");
+	let core_api_id = sp_core_hashing_proc_macro::blake2b_64!(b"Core");
 	if v.has_api_with(&core_api_id, |v| v >= 3) {
 		sp_api::RuntimeVersion::decode(&mut version).map_err(|_| {
 			WasmError::Instantiation("failed to decode \"Core_version\" result".into())
@@ -356,7 +356,6 @@ fn decode_version(mut version: &[u8]) -> Result<RuntimeVersion, WasmError> {
 
 fn decode_runtime_apis(apis: &[u8]) -> Result<Vec<([u8; 8], u32)>, WasmError> {
 	use sp_api::RUNTIME_API_INFO_SIZE;
-	use std::convert::TryFrom;
 
 	apis.chunks(RUNTIME_API_INFO_SIZE)
 		.map(|chunk| {

@@ -43,6 +43,7 @@ use sp_finality_grandpa::{
 use sp_keyring::Ed25519Keyring;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
+	codec::Encode,
 	generic::{BlockId, DigestItem},
 	traits::{Block as BlockT, Header as HeaderT},
 	Justifications,
@@ -139,26 +140,16 @@ impl TestNetFactory for GrandpaTestNet {
 		&self,
 		client: PeersClient,
 	) -> (BlockImportAdapter<Self::BlockImport>, Option<BoxJustificationImport<Block>>, PeerData) {
-		match client {
-			PeersClient::Full(ref client, ref backend) => {
-				let (import, link) = block_import(
-					client.clone(),
-					&self.test_config,
-					LongestChain::new(backend.clone()),
-					None,
-				)
-				.expect("Could not create block import for fresh peer.");
-				let justification_import = Box::new(import.clone());
-				(
-					BlockImportAdapter::new(import),
-					Some(justification_import),
-					Mutex::new(Some(link)),
-				)
-			},
-			PeersClient::Light(..) => {
-				panic!("Light client is not used in tests.");
-			},
-		}
+		let (client, backend) = (client.as_client(), client.as_backend());
+		let (import, link) = block_import(
+			client.clone(),
+			&self.test_config,
+			LongestChain::new(backend.clone()),
+			None,
+		)
+		.expect("Could not create block import for fresh peer.");
+		let justification_import = Box::new(import.clone());
+		(BlockImportAdapter::new(import), Some(justification_import), Mutex::new(Some(link)))
 	}
 
 	fn peer(&mut self, i: usize) -> &mut GrandpaPeer {
@@ -466,7 +457,7 @@ fn finalize_3_voters_1_full_observer() {
 
 	// all peers should have stored the justification for the best finalized block #20
 	for peer_id in 0..4 {
-		let client = net.lock().peers[peer_id].client().as_full().unwrap();
+		let client = net.lock().peers[peer_id].client().as_client();
 		let justification =
 			crate::aux_schema::best_justification::<_, Block>(&*client).unwrap().unwrap();
 
@@ -539,7 +530,7 @@ fn transition_3_voters_twice_1_full_observer() {
 	net.lock().block_until_sync();
 
 	for (i, peer) in net.lock().peers().iter().enumerate() {
-		let full_client = peer.client().as_full().expect("only full clients are used in test");
+		let full_client = peer.client().as_client();
 		assert_eq!(full_client.chain_info().best_number, 1, "Peer #{} failed to sync", i);
 
 		let set: AuthoritySet<Hash, BlockNumber> =
@@ -614,7 +605,7 @@ fn transition_3_voters_twice_1_full_observer() {
 				.take_while(|n| future::ready(n.header.number() < &30))
 				.for_each(move |_| future::ready(()))
 				.map(move |()| {
-					let full_client = client.as_full().expect("only full clients are used in test");
+					let full_client = client.as_client();
 					let set: AuthoritySet<Hash, BlockNumber> =
 						crate::aux_schema::load_authorities(&*full_client).unwrap();
 
@@ -835,7 +826,7 @@ fn force_change_to_new_set() {
 	for (i, peer) in net.lock().peers().iter().enumerate() {
 		assert_eq!(peer.client().info().best_number, 26, "Peer #{} failed to sync", i);
 
-		let full_client = peer.client().as_full().expect("only full clients are used in test");
+		let full_client = peer.client().as_client();
 		let set: AuthoritySet<Hash, BlockNumber> =
 			crate::aux_schema::load_authorities(&*full_client).unwrap();
 
@@ -861,7 +852,7 @@ fn allows_reimporting_change_blocks() {
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().unwrap();
+	let full_client = client.as_client();
 	let builder = full_client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap();
@@ -908,7 +899,7 @@ fn test_bad_justification() {
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().expect("only full clients are used in test");
+	let full_client = client.as_client();
 	let builder = full_client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap();
@@ -1148,7 +1139,7 @@ fn voter_persists_its_votes() {
 						.await;
 
 					let block_30_hash =
-						net.lock().peer(0).client().as_full().unwrap().hash(30).unwrap().unwrap();
+						net.lock().peer(0).client().as_client().hash(30).unwrap().unwrap();
 
 					// we restart alice's voter
 					abort.abort();
@@ -1581,7 +1572,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	let client = net.peer(0).client().clone();
 	let (mut block_import, ..) = net.make_block_import(client.clone());
 
-	let full_client = client.as_full().expect("only full clients are used in test");
+	let full_client = client.as_client();
 	let builder = full_client
 		.new_block_at(&BlockId::Number(0), Default::default(), false)
 		.unwrap();

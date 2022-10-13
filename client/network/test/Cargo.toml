@@ -4,7 +4,7 @@ name = "sc-network-test"
 version = "0.8.0"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 publish = false
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -20,7 +20,7 @@ parking_lot = "0.11.1"
 futures = "0.3.9"
 futures-timer = "3.0.1"
 rand = "0.7.2"
-libp2p = { version = "0.39.1", default-features = false }
+libp2p = { version = "0.40.0", default-features = false }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../../consensus/common" }
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }

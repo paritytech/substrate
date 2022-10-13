@@ -19,11 +19,11 @@
 //!
 //! A semi-sorted list, where items hold an `AccountId` based on some `VoteWeight`. The `AccountId`
 //! (`id` for short) might be synonym to a `voter` or `nominator` in some context, and `VoteWeight`
-//! signifies the chance of each id being included in the final [`VoteWeightProvider::iter`].
+//! signifies the chance of each id being included in the final [`SortedListProvider::iter`].
 //!
-//! It implements [`sp_election_provider_support::SortedListProvider`] to provide a semi-sorted list
-//! of accounts to another pallet. It needs some other pallet to give it some information about the
-//! weights of accounts via [`sp_election_provider_support::VoteWeightProvider`].
+//! It implements [`frame_election_provider_support::SortedListProvider`] to provide a semi-sorted
+//! list of accounts to another pallet. It needs some other pallet to give it some information about
+//! the weights of accounts via [`frame_election_provider_support::VoteWeightProvider`].
 //!
 //! This pallet is not configurable at genesis. Whoever uses it should call appropriate functions of
 //! the `SortedListProvider` (e.g. `on_insert`, or `regenerate`) at their genesis.
@@ -38,7 +38,8 @@
 //!
 //! # Details
 //!
-//! - items are kept in bags, which are delineated by their range of weight (See [`BagThresholds`]).
+//! - items are kept in bags, which are delineated by their range of weight (See
+//!   [`Config::BagThresholds`]).
 //! - for iteration, bags are chained together from highest to lowest and elements within the bag
 //!   are iterated from head to tail.
 //! - items within a bag are iterated in order of insertion. Thus removing an item and re-inserting
@@ -59,17 +60,16 @@ use sp_std::prelude::*;
 mod benchmarks;
 
 mod list;
-#[cfg(test)]
-mod mock;
+pub mod migrations;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
 
+pub use list::{notional_bag_for, Bag, Error, List, Node};
 pub use pallet::*;
 pub use weights::WeightInfo;
-
-pub use list::Error;
-use list::List;
 
 pub(crate) const LOG_TARGET: &'static str = "runtime::bags_list";
 
@@ -153,17 +153,12 @@ pub mod pallet {
 		type BagThresholds: Get<&'static [VoteWeight]>;
 	}
 
-	/// How many ids are registered.
-	// NOTE: This is merely a counter for `ListNodes`. It should someday be replaced by the
-	// `CountedMaop` storage.
-	#[pallet::storage]
-	pub(crate) type CounterForListNodes<T> = StorageValue<_, u32, ValueQuery>;
-
 	/// A single node, within some bag.
 	///
 	/// Nodes store links forward and back within their respective bags.
 	#[pallet::storage]
-	pub(crate) type ListNodes<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
+	pub(crate) type ListNodes<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, list::Node<T>>;
 
 	/// A bag stored in storage.
 	///
@@ -174,8 +169,8 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(crate) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Moved an account from one bag to another. \[who, from, to\].
-		Rebagged(T::AccountId, VoteWeight, VoteWeight),
+		/// Moved an account from one bag to another.
+		Rebagged { who: T::AccountId, from: VoteWeight, to: VoteWeight },
 	}
 
 	#[pallet::call]
@@ -222,7 +217,7 @@ impl<T: Config> Pallet<T> {
 		let maybe_movement = list::Node::<T>::get(&account)
 			.and_then(|node| List::update_position_for(node, new_weight));
 		if let Some((from, to)) = maybe_movement {
-			Self::deposit_event(Event::<T>::Rebagged(account.clone(), from, to));
+			Self::deposit_event(Event::<T>::Rebagged { who: account.clone(), from, to });
 		};
 		maybe_movement
 	}
@@ -242,7 +237,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for Pallet<T> {
 	}
 
 	fn count() -> u32 {
-		CounterForListNodes::<T>::get()
+		ListNodes::<T>::count()
 	}
 
 	fn contains(id: &T::AccountId) -> bool {

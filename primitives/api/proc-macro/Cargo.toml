@@ -2,7 +2,7 @@
 name = "sp-api-proc-macro"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -17,10 +17,10 @@ proc-macro = true
 
 [dependencies]
 quote = "1.0.10"
-syn = { version = "1.0.80", features = ["full", "fold", "extra-traits", "visit"] }
+syn = { version = "1.0.81", features = ["full", "fold", "extra-traits", "visit"] }
 proc-macro2 = "1.0.29"
 blake2-rfc = { version = "0.2.18", default-features = false }
-proc-macro-crate = "1.0.0"
+proc-macro-crate = "1.1.0"
 
 # Required for the doc tests
 [features]
