@@ -258,12 +258,13 @@ impl<O: Into<Result<RawOrigin<u64>, O>> + From<RawOrigin<u64>>> EnsureOrigin<O>
 }
 
 parameter_types! {
-	pub const SignedActivationDuration: u64 = 3;
-	pub const SignedExtendDuration: u64 = 30;
+	pub const ActivationDuration: u64 = 3;
+	pub const ExtendDuration: u64 = 30;
 	pub const ActivateReservationAmount: u64 = 100;
 	pub const ExtendReservationAmount: u64 = 100;
 	pub const ForceDeactivateOrigin: u64 = 3;
-	pub const RepayOrigin: u64 = 4;
+	pub const ForceReservationOrigin: u64 = 4;
+	pub const ReleaseDelay: u64 = 2;
 }
 
 // Required impl to use some <Configured Origin>::get() in tests
@@ -274,7 +275,7 @@ impl SortedMembers<u64> for ForceDeactivateOrigin {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add(_m: &u64) {}
 }
-impl SortedMembers<u64> for RepayOrigin {
+impl SortedMembers<u64> for ForceReservationOrigin {
 	fn sorted_members() -> Vec<u64> {
 		vec![Self::get()]
 	}
@@ -286,14 +287,15 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type UnfilterableCalls = UnfilterableCalls;
-	type SignedActivationDuration = SignedActivationDuration;
+	type ActivationDuration = ActivationDuration;
 	type ActivateReservationAmount = ActivateReservationAmount;
-	type SignedExtendDuration = SignedExtendDuration;
+	type ExtendDuration = ExtendDuration;
 	type ExtendReservationAmount = ExtendReservationAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
 	type ForceDeactivateOrigin = EnsureSignedBy<ForceDeactivateOrigin, Self::AccountId>;
-	type RepayOrigin = EnsureSignedBy<RepayOrigin, Self::AccountId>;
+	type ForceReservationOrigin = EnsureSignedBy<ForceReservationOrigin, Self::AccountId>;
+	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = ();
 }
 

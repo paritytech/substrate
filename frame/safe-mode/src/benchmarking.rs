@@ -22,7 +22,7 @@ use super::{Pallet as SafeMode, *};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, UnfilteredDispatchable};
 use frame_system::{Pallet as System, RawOrigin};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, One};
 
 benchmarks! {
 	activate {
@@ -33,7 +33,7 @@ benchmarks! {
 	verify {
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::SignedActivationDuration::get()
+			System::<T>::block_number() + T::ActivationDuration::get()
 		);
 	}
 
@@ -61,7 +61,7 @@ benchmarks! {
 	verify {
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() + T::SignedActivationDuration::get() + T::SignedExtendDuration::get()
+			System::<T>::block_number() + T::ActivationDuration::get() + T::ExtendDuration::get()
 		);
 	}
 
@@ -80,7 +80,7 @@ benchmarks! {
 	verify {
 		assert_eq!(
 			SafeMode::<T>::active_until().unwrap(),
-			System::<T>::block_number() +  T::SignedActivationDuration::get() + extension
+			System::<T>::block_number() +  T::ActivationDuration::get() + extension
 		);
 	}
 
@@ -117,9 +117,42 @@ benchmarks! {
 		let force_origin = T::ForceDeactivateOrigin::successful_origin();
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
-		let repay_origin = T::RepayOrigin::successful_origin();
+		System::<T>::set_block_number(System::<T>::block_number() + One::one());
+		System::<T>::on_initialize(System::<T>::block_number());
+		SafeMode::<T>::on_initialize(System::<T>::block_number());
+
 		let call = Call::<T>::release_reservation { account: caller.clone(), block: activated_at_block.clone()};
-	}: { call.dispatch_bypass_filter(repay_origin)? }
+	}: { call.dispatch_bypass_filter(origin.into())? }
+	verify {
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			BalanceOf::<T>::max_value()
+		);
+	}
+
+	force_release_reservation {
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = RawOrigin::Signed(caller.clone());
+		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
+
+		let activated_at_block: T::BlockNumber = System::<T>::block_number();
+		assert!(SafeMode::<T>::activate(origin.clone().into()).is_ok());
+		let current_reservation = Reservations::<T>::get(&caller, activated_at_block).unwrap_or_default();
+		assert_eq!(
+			T::Currency::free_balance(&caller),
+			BalanceOf::<T>::max_value() - T::ActivateReservationAmount::get().unwrap()
+		);
+
+		let force_origin = T::ForceDeactivateOrigin::successful_origin();
+		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
+
+		System::<T>::set_block_number(System::<T>::block_number() + One::one());
+		System::<T>::on_initialize(System::<T>::block_number());
+		SafeMode::<T>::on_initialize(System::<T>::block_number());
+
+		let release_origin = T::ForceReservationOrigin::successful_origin();
+		let call = Call::<T>::force_release_reservation { account: caller.clone(), block: activated_at_block.clone()};
+	}: { call.dispatch_bypass_filter(release_origin)? }
 	verify {
 		assert_eq!(
 			T::Currency::free_balance(&caller),
@@ -143,9 +176,9 @@ benchmarks! {
 		let force_origin = T::ForceDeactivateOrigin::successful_origin();
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
-		let repay_origin = T::RepayOrigin::successful_origin();
+		let release_origin = T::ForceReservationOrigin::successful_origin();
 		let call = Call::<T>::slash_reservation { account: caller.clone(), block: activated_at_block.clone()};
-	}: { call.dispatch_bypass_filter(repay_origin)? }
+	}: { call.dispatch_bypass_filter(release_origin)? }
 	verify {
 		assert_eq!(
 			T::Currency::free_balance(&caller),

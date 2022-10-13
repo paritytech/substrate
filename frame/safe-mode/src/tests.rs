@@ -44,8 +44,8 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 			frame_system::Error::<Test>::CallFiltered
 		);
 		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
-		assert_ok!(SafeMode::release_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
+		assert_ok!(SafeMode::force_release_reservation(
+			Origin::signed(mock::ForceReservationOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -58,7 +58,7 @@ fn fails_to_filter_calls_to_safe_mode_pallet() {
 		);
 		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
 		assert_ok!(SafeMode::slash_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
+			Origin::signed(mock::ForceReservationOrigin::get()),
 			0,
 			activated_at_block + 2
 		));
@@ -82,15 +82,15 @@ fn fails_to_extend_if_not_activated() {
 }
 
 #[test]
-fn fails_to_release_reservations_with_wrong_block() {
+fn fails_to_force_release_reservations_with_wrong_block() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
-		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
+		run_to(mock::ActivationDuration::get() + activated_at_block + 1);
 
 		assert_err!(
-			SafeMode::release_reservation(
-				Origin::signed(mock::RepayOrigin::get()),
+			SafeMode::force_release_reservation(
+				Origin::signed(mock::ForceReservationOrigin::get()),
 				0,
 				activated_at_block + 1
 			),
@@ -99,12 +99,27 @@ fn fails_to_release_reservations_with_wrong_block() {
 
 		assert_err!(
 			SafeMode::slash_reservation(
-				Origin::signed(mock::RepayOrigin::get()),
+				Origin::signed(mock::ForceReservationOrigin::get()),
 				0,
 				activated_at_block + 1
 			),
 			Error::<Test>::NoReservation
 		);
+	});
+}
+
+#[test]
+fn fails_to_release_reservations_too_early() {
+	new_test_ext().execute_with(|| {
+		let activated_at_block = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
+		assert_err!(
+			SafeMode::release_reservation(Origin::signed(2), 0, activated_at_block),
+			Error::<Test>::CannotReleaseYet
+		);
+		run_to(activated_at_block + mock::ReleaseDelay::get() + 1);
+		assert_ok!(SafeMode::release_reservation(Origin::signed(2), 0, activated_at_block));
 	});
 }
 
@@ -176,41 +191,12 @@ fn can_filter_balance_in_proxy_when_activated() {
 }
 
 #[test]
-fn can_repay_independent_reservations_by_block() {
-	new_test_ext().execute_with(|| {
-		let activated_at_block_0 = System::block_number();
-		assert_ok!(SafeMode::activate(Origin::signed(0)));
-		run_to(mock::SignedActivationDuration::get() + activated_at_block_0 + 1);
-
-		let activated_at_block_1 = System::block_number();
-		assert_ok!(SafeMode::activate(Origin::signed(0)));
-		run_to(mock::SignedActivationDuration::get() + activated_at_block_1 + 1);
-
-		assert_ok!(SafeMode::release_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
-			0,
-			activated_at_block_0
-		));
-		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
-
-		assert_ok!(SafeMode::slash_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
-			0,
-			activated_at_block_1
-		));
-		assert_eq!(Balances::total_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
-	});
-}
-
-// SIGNED ORIGIN CALL TESTS ---------------------
-
-#[test]
-fn can_activate_with_signed_origin() {
+fn can_activate() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() + mock::SignedActivationDuration::get()
+			System::block_number() + mock::ActivationDuration::get()
 		);
 		assert_eq!(Balances::reserved_balance(0), mock::ActivateReservationAmount::get());
 		assert_noop!(SafeMode::activate(Origin::signed(0)), Error::<Test>::IsActive);
@@ -220,20 +206,51 @@ fn can_activate_with_signed_origin() {
 }
 
 #[test]
-fn can_extend_with_signed_origin() {
+fn can_extend() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		assert_eq!(
 			SafeMode::active_until().unwrap(),
-			System::block_number() +
-				mock::SignedActivationDuration::get() +
-				mock::SignedExtendDuration::get()
+			System::block_number() + mock::ActivationDuration::get() + mock::ExtendDuration::get()
 		);
 		assert_eq!(
 			Balances::reserved_balance(0),
 			mock::ActivateReservationAmount::get() + mock::ExtendReservationAmount::get()
 		);
+	});
+}
+
+#[test]
+fn can_release_independent_reservations_by_block() {
+	new_test_ext().execute_with(|| {
+		let activated_at_block_0 = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+
+		run_to(
+			mock::ActivationDuration::get() + mock::ReleaseDelay::get() + activated_at_block_0 + 1,
+		);
+
+		let activated_at_block_1 = System::block_number();
+		assert_ok!(SafeMode::activate(Origin::signed(0)));
+
+		assert_eq!(Balances::free_balance(&0), 1234 - (2 * mock::ActivateReservationAmount::get())); // accounts set in mock genesis
+
+		assert_ok!(SafeMode::force_deactivate(Origin::signed(mock::ForceDeactivateOrigin::get())));
+
+		assert_ok!(SafeMode::release_reservation(Origin::signed(2), 0, activated_at_block_0));
+		assert_err!(
+			SafeMode::release_reservation(Origin::signed(2), 0, activated_at_block_1),
+			Error::<Test>::CannotReleaseYet
+		);
+		assert_eq!(Balances::free_balance(&0), 1234 - mock::ActivateReservationAmount::get()); // accounts set in mock genesis
+
+		run_to(
+			mock::ActivationDuration::get() + mock::ReleaseDelay::get() + activated_at_block_1 + 1,
+		);
+
+		assert_ok!(SafeMode::release_reservation(Origin::signed(2), 0, activated_at_block_1));
+		assert_eq!(Balances::total_balance(&0), 1234); // accounts set in mock genesis
 	});
 }
 
@@ -251,7 +268,7 @@ fn fails_signed_origin_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::release_reservation(Origin::signed(0), 0, activated_at_block),
+			SafeMode::force_release_reservation(Origin::signed(0), 0, activated_at_block),
 			DispatchError::BadOrigin
 		);
 	});
@@ -320,27 +337,27 @@ fn can_force_extend_with_config_origin() {
 				ForceExtendOrigin::Medium.duration()
 		);
 		assert_eq!(Balances::reserved_balance(ForceActivateOrigin::Weak.acc()), 0);
-		assert_eq!(Balances::reserved_balance(mock::SignedExtendDuration::get()), 0);
+		assert_eq!(Balances::reserved_balance(mock::ExtendDuration::get()), 0);
 	});
 }
 
 #[test]
-fn can_release_reservation_with_config_origin() {
+fn can_force_release_reservation_with_config_origin() {
 	new_test_ext().execute_with(|| {
 		let activated_at_block = System::block_number();
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
-			SafeMode::release_reservation(
-				Origin::signed(mock::RepayOrigin::get()),
+			SafeMode::force_release_reservation(
+				Origin::signed(mock::ForceReservationOrigin::get()),
 				0,
 				activated_at_block
 			),
 			Error::<Test>::IsActive
 		);
-		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
+		run_to(mock::ActivationDuration::get() + activated_at_block + 1);
 
-		assert_ok!(SafeMode::release_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
+		assert_ok!(SafeMode::force_release_reservation(
+			Origin::signed(mock::ForceReservationOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -351,14 +368,14 @@ fn can_release_reservation_with_config_origin() {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		run_to(
-			mock::SignedActivationDuration::get() +
-				mock::SignedExtendDuration::get() +
+			mock::ActivationDuration::get() +
+				mock::ExtendDuration::get() +
 				activated_and_extended_at_block +
 				1,
 		);
 
-		assert_ok!(SafeMode::release_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
+		assert_ok!(SafeMode::force_release_reservation(
+			Origin::signed(mock::ForceReservationOrigin::get()),
 			0,
 			activated_and_extended_at_block
 		));
@@ -373,16 +390,16 @@ fn can_slash_reservation_with_config_origin() {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_err!(
 			SafeMode::slash_reservation(
-				Origin::signed(mock::RepayOrigin::get()),
+				Origin::signed(mock::ForceReservationOrigin::get()),
 				0,
 				activated_at_block
 			),
 			Error::<Test>::IsActive
 		);
-		run_to(mock::SignedActivationDuration::get() + activated_at_block + 1);
+		run_to(mock::ActivationDuration::get() + activated_at_block + 1);
 
 		assert_ok!(SafeMode::slash_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
+			Origin::signed(mock::ForceReservationOrigin::get()),
 			0,
 			activated_at_block
 		));
@@ -393,14 +410,14 @@ fn can_slash_reservation_with_config_origin() {
 		assert_ok!(SafeMode::activate(Origin::signed(0)));
 		assert_ok!(SafeMode::extend(Origin::signed(0)));
 		run_to(
-			mock::SignedActivationDuration::get() +
-				mock::SignedExtendDuration::get() +
+			mock::ActivationDuration::get() +
+				mock::ExtendDuration::get() +
 				activated_and_extended_at_block +
 				1,
 		);
 
 		assert_ok!(SafeMode::slash_reservation(
-			Origin::signed(mock::RepayOrigin::get()),
+			Origin::signed(mock::ForceReservationOrigin::get()),
 			0,
 			activated_and_extended_at_block
 		));
@@ -430,7 +447,7 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::release_reservation(
+			SafeMode::force_release_reservation(
 				ForceActivateOrigin::Weak.signed(),
 				0,
 				activated_at_block
@@ -451,7 +468,11 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::release_reservation(ForceExtendOrigin::Weak.signed(), 0, activated_at_block),
+			SafeMode::force_release_reservation(
+				ForceExtendOrigin::Weak.signed(),
+				0,
+				activated_at_block
+			),
 			DispatchError::BadOrigin
 		);
 
@@ -472,7 +493,7 @@ fn fails_when_explicit_origin_required() {
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::release_reservation(
+			SafeMode::force_release_reservation(
 				Origin::signed(mock::ForceDeactivateOrigin::get()),
 				0,
 				activated_at_block
@@ -481,15 +502,15 @@ fn fails_when_explicit_origin_required() {
 		);
 
 		assert_err!(
-			SafeMode::force_activate(Origin::signed(mock::RepayOrigin::get())),
+			SafeMode::force_activate(Origin::signed(mock::ForceReservationOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_extend(Origin::signed(mock::RepayOrigin::get())),
+			SafeMode::force_extend(Origin::signed(mock::ForceReservationOrigin::get())),
 			DispatchError::BadOrigin
 		);
 		assert_err!(
-			SafeMode::force_deactivate(Origin::signed(mock::RepayOrigin::get())),
+			SafeMode::force_deactivate(Origin::signed(mock::ForceReservationOrigin::get())),
 			DispatchError::BadOrigin
 		);
 	});

@@ -360,24 +360,26 @@ impl<O: Into<Result<RawOrigin<AccountId>, O>> + From<RawOrigin<AccountId>>> Ensu
 }
 
 parameter_types! {
-	pub const SignedActivationDuration: u32 = 3;
-	pub const SignedExtendDuration: u32 = 30;
-	pub const ActivateReservationAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
-	pub const ExtendReservationAmount: Balance = 10 * DOLLARS; //TODO This needs to be something sensible for the implications of enablement!
+	pub const SignedActivationDuration: u32 = 10;
+	pub const ExtendDuration: u32 = 20;
+	pub const ActivateReservationAmount: Balance = 10 * DOLLARS;
+	pub const ExtendReservationAmount: Balance = 15 * DOLLARS;
+	pub const ReleaseDelay: u32 = 15;
 }
 
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type UnfilterableCalls = UnfilterableCalls;
-	type SignedActivationDuration = ConstU32<{ 2 * DAYS }>;
+	type ActivationDuration = ConstU32<{ 2 * DAYS }>;
 	type ActivateReservationAmount = ActivateReservationAmount;
-	type SignedExtendDuration = ConstU32<{ 1 * DAYS }>;
+	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
 	type ExtendReservationAmount = ExtendReservationAmount;
 	type ForceActivateOrigin = ForceActivateOrigin;
 	type ForceExtendOrigin = ForceExtendOrigin;
 	type ForceDeactivateOrigin = EnsureRoot<Self::AccountId>;
-	type RepayOrigin = EnsureRoot<Self::AccountId>;
+	type ForceReservationOrigin = EnsureRoot<Self::AccountId>;
+	type ReleaseDelay = ReleaseDelay;
 	type WeightInfo = pallet_safe_mode::weights::SubstrateWeight<Runtime>;
 }
 

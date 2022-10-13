@@ -62,21 +62,21 @@ pub mod pallet {
 		>;
 
 		/// Contains all runtime calls in any pallet that can be dispatched even while the safe-mode
-		/// is activated.
+		/// is active.
 		///
 		/// The safe-mode pallet cannot disable it's own calls, and does not need to be explicitly
 		/// added here.
 		type UnfilterableCalls: Contains<Self::RuntimeCall>;
 
-		/// How long the safe-mode will stay active when activated with [`Pallet::activate`].
+		/// How long the safe-mode will stay active with [`Pallet::activate`].
 		#[pallet::constant]
-		type SignedActivationDuration: Get<Self::BlockNumber>;
+		type ActivationDuration: Get<Self::BlockNumber>;
 
 		/// For how many blocks the safe-mode can be extended by each [`Pallet::extend`] call.
 		///
 		/// This does not impose a hard limit as the safe-mode can be extended multiple times.
 		#[pallet::constant]
-		type SignedExtendDuration: Get<Self::BlockNumber>;
+		type ExtendDuration: Get<Self::BlockNumber>;
 
 		/// The amount that will be reserved upon calling [`Pallet::activate`].
 		///
@@ -103,9 +103,20 @@ pub mod pallet {
 		/// The origin that may call [`Pallet::force_activate`].
 		type ForceDeactivateOrigin: EnsureOrigin<Self::Origin>;
 
-		/// The origin that may call [`Pallet::release_reservation`] and
+		/// The origin that may call [`Pallet::force_release_reservation`] and
 		/// [`Pallet::slash_reservation`].
-		type RepayOrigin: EnsureOrigin<Self::Origin>;
+		type ForceReservationOrigin: EnsureOrigin<Self::Origin>;
+
+		/// The minimal duration a deposit will remain reserved after safe-mode is activated or
+		/// extended, unless [`Pallet::force_release_reservation`] is successfully dispatched
+		/// sooner.
+		///
+		/// Every reservation is tied to a specific activation or extension, thus each reservation
+		/// can be release independently after the delay for it has passed.
+		///
+		/// `None` disallows permissionlessly releasing the safe-mode reservations.
+		#[pallet::constant]
+		type ReleaseDelay: Get<Option<Self::BlockNumber>>;
 
 		// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -124,6 +135,9 @@ pub mod pallet {
 
 		/// There is no balance reserved.
 		NoReservation,
+
+		/// This reservation cannot be released yet.
+		CannotReleaseYet,
 	}
 
 	#[pallet::event]
@@ -138,12 +152,13 @@ pub mod pallet {
 		/// Exited safe-mode for a specific \[reason\].
 		Exited { reason: ExitReason },
 
-		/// An account had reserve repaid previously reserved at a block. \[block, account,
-		/// amount\]
-		ReservationRepaid { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
+		/// An account had a reserve released that was reserved at a specific block. \[account,
+		/// block, amount\]
+		ReservationReleased { account: T::AccountId, block: T::BlockNumber, amount: BalanceOf<T> },
 
-		/// An account had reserve slashed previously reserved at a block. \[account, amount\]
-		ReservationSlashed { block: T::BlockNumber, account: T::AccountId, amount: BalanceOf<T> },
+		/// An account had reserve slashed that was reserved at a specific block. \[account, block,
+		/// amount\]
+		ReservationSlashed { account: T::AccountId, block: T::BlockNumber, amount: BalanceOf<T> },
 	}
 
 	/// The reason why the safe-mode was exited.
@@ -205,7 +220,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Activate safe-mode permissionlessly for [`Config::SignedActivationDuration`] blocks.
+		/// Activate safe-mode permissionlessly for [`Config::ActivationDuration`] blocks.
 		///
 		/// Reserves [`Config::ActivateReservationAmount`] from the caller's account.
 		/// Emits an [`Event::Activated`] event on success.
@@ -221,7 +236,7 @@ pub mod pallet {
 		pub fn activate(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_activate(Some(who), T::SignedActivationDuration::get())
+			Self::do_activate(Some(who), T::ActivationDuration::get())
 		}
 
 		/// Activate safe-mode by force for a per-origin configured number of blocks.
@@ -239,7 +254,7 @@ pub mod pallet {
 			Self::do_activate(None, duration)
 		}
 
-		/// Extend the safe-mode permissionlessly for [`Config::SignedExtendDuration`] blocks.
+		/// Extend the safe-mode permissionlessly for [`Config::ExtendDuration`] blocks.
 		///
 		/// Reserves [`Config::ExtendReservationAmount`] from the caller's account.
 		/// Emits an [`Event::Extended`] event on success.
@@ -255,7 +270,7 @@ pub mod pallet {
 		pub fn extend(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			Self::do_extend(Some(who), T::SignedExtendDuration::get())
+			Self::do_extend(Some(who), T::ExtendDuration::get())
 		}
 
 		/// Extend the safe-mode by force a per-origin configured number of blocks.
@@ -293,46 +308,72 @@ pub mod pallet {
 			Self::do_deactivate(ExitReason::Force)
 		}
 
-		/// Release a currency reservation for an account that activated safe-mode at a specific
-		/// block earlier. This cannot be called while safe-mode is active.
-		///
-		/// Emits a [`Event::ReservationRepaid`] event on success.
-		/// Errors with [`Error::IsActive`] if the safe-mode presently activated.
-		/// Errors with [`Error::NoReservation`] if the payee has no named reserved currency at the
-		/// block specified.
-		///
-		/// ### Safety
-		///
-		/// Can only be called by the [`Config::RepayOrigin`] origin.
-		#[pallet::weight(T::WeightInfo::release_reservation())]
-		pub fn release_reservation(
-			origin: OriginFor<T>,
-			account: T::AccountId,
-			block: T::BlockNumber,
-		) -> DispatchResult {
-			T::RepayOrigin::ensure_origin(origin)?;
-
-			Self::do_release_reservation(account, block)
-		}
-
 		/// Slash a reservation for an account that activated or extended safe-mode at a specific
 		/// block earlier. This cannot be called while safe-mode is active.
 		///
 		/// Emits a [`Event::ReservationSlashed`] event on success.
-		/// Errors with [`Error::IsActive`] if the safe-mode presently activated.
+		/// Errors with [`Error::IsActive`] if the safe-mode is active.
 		///
 		/// ### Safety
 		///
-		/// Can only be called by the [`Config::RepayOrigin`] origin.
+		/// Can only be called by the [`Config::ForceReservationOrigin`] origin.
 		#[pallet::weight(T::WeightInfo::slash_reservation())]
 		pub fn slash_reservation(
 			origin: OriginFor<T>,
 			account: T::AccountId,
 			block: T::BlockNumber,
 		) -> DispatchResult {
-			T::RepayOrigin::ensure_origin(origin)?;
+			T::ForceReservationOrigin::ensure_origin(origin)?;
 
-			Self::do_slash_reservation(account, block)
+			Self::do_slash(account, block)
+		}
+
+		/// Release a currency reservation for an account that activated safe-mode at a specific
+		/// block earlier. This cannot be called while safe-mode is active and not until the
+		/// [`Config::ReleaseDelay`] block height is passed.
+		///
+		/// Emits a [`Event::ReservationReleased`] event on success.
+		/// Errors with [`Error::IsActive`] if the safe-mode is active.
+		/// Errors with [`Error::CannotReleaseYet`] if the [`Config::ReleaseDelay`] .
+		/// Errors with [`Error::NoReservation`] if the payee has no reserved currency at the
+		/// block specified.
+		///
+		/// ### Safety
+		///
+		/// This may be called by any signed origin.
+		/// This call can be disabled for all origins by configuring
+		/// [`Config::ReleaseDelay`] to `None`.
+		#[pallet::weight(T::WeightInfo::release_reservation())]
+		pub fn release_reservation(
+			origin: OriginFor<T>,
+			account: T::AccountId,
+			block: T::BlockNumber,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			Self::do_release(Some(who), account, block)
+		}
+
+		/// Release a currency reservation for an account that activated safe-mode at a specific
+		/// block earlier. This cannot be called while safe-mode is active.
+		///
+		/// Emits a [`Event::ReservationReleased`] event on success.
+		/// Errors with [`Error::IsActive`] if the safe-mode is active.
+		/// Errors with [`Error::NoReservation`] if the payee has no reserved currency at the
+		/// block specified.
+		///
+		/// ### Safety
+		///
+		/// Can only be called by the [`Config::ForceReservationOrigin`] origin.
+		#[pallet::weight(T::WeightInfo::force_release_reservation())]
+		pub fn force_release_reservation(
+			origin: OriginFor<T>,
+			account: T::AccountId,
+			block: T::BlockNumber,
+		) -> DispatchResult {
+			T::ForceReservationOrigin::ensure_origin(origin)?;
+
+			Self::do_release(None, account, block)
 		}
 	}
 
@@ -393,25 +434,39 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Logic for the [`crate::Pallet::release_reservation`] call.
+	/// Logic for the [`crate::Pallet::release_reservation`] and
+	/// [`crate::Pallet::force_release_reservation`] calls.
 	///
-	/// Errors if the safe-mode is active.
-	/// Does not check the origin.
-	fn do_release_reservation(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
-		ensure!(!Self::is_activated(), Error::<T>::IsActive);
-		let reserve = Reservations::<T>::take(&account, block).ok_or(Error::<T>::NoReservation)?;
+	/// Errors if the safe-mode is active with [`Error::IsActive`].
+	/// Errors if release is called too soon by anyone but [`Config::ForceReservationOrigin`] with
+	/// [`Error::CannotReleaseYet`]. Does not check the origin.
+	fn do_release(
+		who: Option<T::AccountId>,
+		account: T::AccountId,
+		block: T::BlockNumber,
+	) -> DispatchResult {
+		ensure!(!Self::is_active(), Error::<T>::IsActive);
 
+		let reserve = Reservations::<T>::get(&account, &block).ok_or(Error::<T>::NoReservation)?;
+
+		if who.is_some() {
+			let delay = T::ReleaseDelay::get().ok_or(Error::<T>::NotConfigured)?;
+			let now = <frame_system::Pallet<T>>::block_number();
+			ensure!(now > (block + delay), Error::<T>::CannotReleaseYet);
+		}
+
+		Reservations::<T>::remove(&account, &block);
 		T::Currency::unreserve_named(&block, &account, reserve);
-		Self::deposit_event(Event::<T>::ReservationRepaid { block, account, amount: reserve });
+		Self::deposit_event(Event::<T>::ReservationReleased { block, account, amount: reserve });
 		Ok(())
 	}
 
 	/// Logic for the [`crate::Pallet::slash_reservation`] call.
 	///
-	/// Errors if the safe-mode is activated.
+	/// Errors if the safe-mode is active with [`Error::IsActive`].
 	/// Does not check the origin.
-	fn do_slash_reservation(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
-		ensure!(!Self::is_activated(), Error::<T>::IsActive);
+	fn do_slash(account: T::AccountId, block: T::BlockNumber) -> DispatchResult {
+		ensure!(!Self::is_active(), Error::<T>::IsActive);
 		let reserve = Reservations::<T>::take(&account, block).ok_or(Error::<T>::NoReservation)?;
 
 		T::Currency::slash_reserved_named(&block, &account, reserve);
@@ -432,8 +487,8 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	/// Return whether the `safe-mode` is currently activated.
-	pub fn is_activated() -> bool {
+	/// Return whether the `safe-mode` is active.
+	pub fn is_active() -> bool {
 		ActiveUntil::<T>::exists()
 	}
 
@@ -448,7 +503,7 @@ impl<T: Config> Pallet<T> {
 			return true
 		}
 
-		if Self::is_activated() {
+		if Self::is_active() {
 			T::UnfilterableCalls::contains(call)
 		} else {
 			true
