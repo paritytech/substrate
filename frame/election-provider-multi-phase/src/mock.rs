@@ -155,7 +155,7 @@ pub fn trim_helpers() -> TrimHelpers {
 		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// sort by decreasing order of stake
-	assignments.sort_unstable_by_key(|assignment| {
+	assignments.sort_by_key(|assignment| {
 		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
 	});
 
@@ -239,7 +239,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
 		::with_sensible_defaults(
-			Weight::from_components(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			Weight::from_parts(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
 			NORMAL_DISPATCH_RATIO,
 		);
 }

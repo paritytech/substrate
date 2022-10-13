@@ -637,19 +637,21 @@ async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
 		..config::NetworkConfiguration::new_local()
 	});
 
-	loop {
-		match events_stream1.next().await.unwrap() {
-			Event::NotificationStreamOpened { .. } => break,
-			_ => {},
-		};
+	async fn wait_for_events(stream: &mut (impl Stream<Item = Event> + std::marker::Unpin)) {
+		let mut notif_received = false;
+		let mut sync_received = false;
+
+		while !notif_received || !sync_received {
+			match stream.next().await.unwrap() {
+				Event::NotificationStreamOpened { .. } => notif_received = true,
+				Event::SyncConnected { .. } => sync_received = true,
+				_ => {},
+			};
+		}
 	}
 
-	loop {
-		match events_stream2.next().await.unwrap() {
-			Event::NotificationStreamOpened { .. } => break,
-			_ => {},
-		};
-	}
+	wait_for_events(&mut events_stream1).await;
+	wait_for_events(&mut events_stream2).await;
 
 	// disconnect peer using `PROTOCOL_NAME`, verify `NotificationStreamClosed` event is emitted
 	node2.disconnect_peer(node1.local_peer_id(), PROTOCOL_NAME.into());
@@ -659,7 +661,7 @@ async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
 	));
 	let _ = events_stream2.next().await; // ignore the reopen event
 
-	// now disconnect using the block announcement protocol, verify that `SyncDisconnected` is
+	// now disconnect using `BLOCK_ANNOUNCE_PROTO_NAME`, verify that `SyncDisconnected` is
 	// emitted
 	node2.disconnect_peer(node1.local_peer_id(), BLOCK_ANNOUNCE_PROTO_NAME.into());
 	assert!(std::matches!(events_stream2.next().await, Some(Event::SyncDisconnected { .. })));
