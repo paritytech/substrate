@@ -2007,8 +2007,7 @@ mod tests {
 							System::block_seed().as_bytes().to_vec(),
 						)
 						.unwrap(),
-					}
-					.unwrap(),
+					},
 					extrinsics: vec![enqueue_txs_inherent.clone()],
 				},
 				pub_key_bytes.clone(),

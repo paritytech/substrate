@@ -38,7 +38,7 @@ sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
-sp-ver = { path = "../../primitives/ver" }
+sp-ver = { path = "../../primitives/ver" , features=["helpers"]}
 
 [features]
 default = ["std"]
