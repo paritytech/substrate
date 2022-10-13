@@ -526,14 +526,7 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		mock::{
-			balances, multi_phase_events, raw_solution, roll_to, roll_to_signed, Balances,
-			ExtBuilder, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxRefunds,
-			SignedMaxSubmissions, SignedMaxWeight,
-		},
-		Error, Event, Perbill, Phase,
-	};
+	use crate::{mock::*, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
@@ -550,6 +543,34 @@ mod tests {
 				MultiPhase::submit(RuntimeOrigin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
 			);
+		})
+	}
+
+	#[test]
+	#[should_panic(expected = "Snapshot limit has not been respected.")]
+	fn data_provider_should_respect_target_limits() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given a reduced expectation of maximum electable targets
+			MaxElectableTargets::set(2);
+			// and a data provider that does not respect limits
+			DataProviderAllowBadData::set(true);
+
+			// should panic here
+			let _ = MultiPhase::create_snapshot();
+		})
+	}
+
+	#[test]
+	#[should_panic(expected = "Snapshot limit has not been respected.")]
+	fn data_provider_should_respect_voter_limits() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given a reduced expectation of maximum electing voters
+			MaxElectingVoters::set(2);
+			// and a data provider that does not respect limits
+			DataProviderAllowBadData::set(true);
+
+			// should panic here
+			let _ = MultiPhase::create_snapshot();
 		})
 	}
 

@@ -419,10 +419,14 @@ pub type Extrinsic = sp_runtime::testing::TestXt<RuntimeCall, ()>;
 
 parameter_types! {
 	pub MaxNominations: u32 = <TestNposSolution as NposSolution>::LIMIT as u32;
+	// only used in testing to manipulate mock behaviour
+	pub static DataProviderAllowBadData: bool = false;
 }
 
 #[derive(Default)]
 pub struct ExtBuilder {}
+
+
 
 pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
@@ -433,7 +437,9 @@ impl ElectionDataProvider for StakingMock {
 	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<AccountId>> {
 		let targets = Targets::get();
 
-		if maybe_max_len.map_or(false, |max_len| targets.len() > max_len) {
+		if !DataProviderAllowBadData::get() &&
+			maybe_max_len.map_or(false, |max_len| targets.len() > max_len)
+		{
 			return Err("Targets too big")
 		}
 
@@ -444,8 +450,10 @@ impl ElectionDataProvider for StakingMock {
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<VoterOf<Runtime>>> {
 		let mut voters = Voters::get();
-		if let Some(max_len) = maybe_max_len {
-			voters.truncate(max_len)
+		if !DataProviderAllowBadData::get() {
+			if let Some(max_len) = maybe_max_len {
+				voters.truncate(max_len)
+			}
 		}
 
 		Ok(voters)

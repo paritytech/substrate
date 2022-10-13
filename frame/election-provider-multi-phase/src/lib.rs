@@ -1391,7 +1391,6 @@ impl<T: Config> Pallet<T> {
 		let voters = T::DataProvider::electing_voters(Some(voter_limit))
 			.map_err(ElectionError::DataProvider)?;
 
-		// TODO: make sure a test for this exist/is written.
 		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
 			debug_assert!(false, "Snapshot limit has not been respected.");
