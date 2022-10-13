@@ -29,8 +29,7 @@ pub use crate::{
 		result,
 	},
 	traits::{
-		CallMetadata, DispatchableWithStorageLayer, GetCallMetadata, GetCallName,
-		GetStorageVersion, UnfilteredDispatchable,
+		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
 	},
 	weights::{
 		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
@@ -307,7 +306,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// The following are reserved function signatures:
 ///
-/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/v3/runtime/events-and-errors).
+/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/main-docs/build/events-errors/).
 /// The default behavior is to call `deposit_event` from the [System
 /// module](../frame_system/index.html). However, you can write your own implementation for events
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your
@@ -1473,11 +1472,7 @@ macro_rules! decl_module {
 		$ignore:ident
 		$mod_type:ident<$trait_instance:ident $(, $instance:ident)?> $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
-			// We execute all dispatchable in at least one storage layer, allowing them
-			// to return an error at any point, and undoing any storage changes.
-			$crate::storage::in_storage_layer(|| {
-				<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
-			})
+			<$mod_type<$trait_instance $(, $instance)?>>::$fn_name( $origin $(, $param_name )* ).map(Into::into).map_err(Into::into)
 	};
 
 	// no `deposit_event` function wanted

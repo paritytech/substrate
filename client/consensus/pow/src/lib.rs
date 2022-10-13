@@ -518,7 +518,7 @@ pub fn start_mining_worker<Block, C, S, Algorithm, E, SO, L, CIDP, CAW>(
 	select_chain: S,
 	algorithm: Algorithm,
 	mut env: E,
-	mut sync_oracle: SO,
+	sync_oracle: SO,
 	justification_sync_link: L,
 	pre_runtime: Option<Vec<u8>>,
 	create_inherent_data_providers: CIDP,

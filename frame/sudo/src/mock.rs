@@ -44,7 +44,6 @@ pub mod logger {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::call]
@@ -57,7 +56,7 @@ pub mod logger {
 		) -> DispatchResultWithPostInfo {
 			// Ensure that the `origin` is `Root`.
 			ensure_root(origin)?;
-			<I32Log<T>>::append(i);
+			<I32Log<T>>::try_append(i).map_err(|_| "could not append")?;
 			Self::deposit_event(Event::AppendI32 { value: i, weight });
 			Ok(().into())
 		}
@@ -70,8 +69,8 @@ pub mod logger {
 		) -> DispatchResultWithPostInfo {
 			// Ensure that the `origin` is some signed account.
 			let sender = ensure_signed(origin)?;
-			<I32Log<T>>::append(i);
-			<AccountLog<T>>::append(sender.clone());
+			<I32Log<T>>::try_append(i).map_err(|_| "could not append")?;
+			<AccountLog<T>>::try_append(sender.clone()).map_err(|_| "could not append")?;
 			Self::deposit_event(Event::AppendI32AndAccount { sender, value: i, weight });
 			Ok(().into())
 		}
@@ -86,11 +85,12 @@ pub mod logger {
 
 	#[pallet::storage]
 	#[pallet::getter(fn account_log)]
-	pub(super) type AccountLog<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
+	pub(super) type AccountLog<T: Config> =
+		StorageValue<_, BoundedVec<T::AccountId, ConstU32<1_000>>, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn i32_log)]
-	pub(super) type I32Log<T> = StorageValue<_, Vec<i32>, ValueQuery>;
+	pub(super) type I32Log<T> = StorageValue<_, BoundedVec<i32, ConstU32<1_000>>, ValueQuery>;
 }
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

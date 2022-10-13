@@ -48,7 +48,7 @@ use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
 	traits::{
 		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
-		GetRuntimeBlockType, Header as HeaderT, IdentityLookup, Verify,
+		GetRuntimeBlockType, IdentityLookup, Verify,
 	},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -237,7 +237,7 @@ impl sp_runtime::traits::Dispatchable for Extrinsic {
 	type Info = ();
 	type PostInfo = ();
 	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
-		panic!("This implemention should not be used for actual dispatch.");
+		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
 

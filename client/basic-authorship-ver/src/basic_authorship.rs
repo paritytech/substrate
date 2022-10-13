@@ -35,7 +35,7 @@ use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{
-	evaluation, DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
+	DisableProofRecording, EnableProofRecording, ProofRecording, Proposal,
 };
 use sp_core::traits::SpawnNamed;
 use sp_inherents::InherentData;
@@ -207,7 +207,6 @@ where
 		let proposer = Proposer::<_, _, _, _, PR> {
 			spawn_handle: self.spawn_handle.clone(),
 			client: self.client.clone(),
-			parent_hash,
 			parent_id: id,
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
@@ -253,7 +252,6 @@ where
 pub struct Proposer<B, Block: BlockT, C, A: TransactionPool, PR> {
 	spawn_handle: Box<dyn SpawnNamed>,
 	client: Arc<C>,
-	parent_hash: <Block as BlockT>::Hash,
 	parent_id: BlockId<Block>,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<A>,
@@ -579,12 +577,6 @@ where
 
 		if Decode::decode(&mut block.encode().as_slice()).as_ref() != Ok(&block) {
 			error!("Failed to verify block encoding/decoding");
-		}
-
-		if let Err(err) =
-			evaluation::evaluate_initial(&block, &self.parent_hash, self.parent_number)
-		{
-			error!("Failed to evaluate authored block: {:?}", err);
 		}
 
 		let proof =
