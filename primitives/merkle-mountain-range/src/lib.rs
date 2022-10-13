@@ -421,6 +421,12 @@ pub enum Error {
 	InvalidLeafIndex,
 	/// The provided leaves count is larger than the actual leaves count.
 	InvalidLeavesCount,
+	/// Could not commit changes to runtime storage.
+	RuntimeCommit,
+	/// Could not find store shared with runtime.
+	RuntimeSharedStoreMissing,
+	/// Could not borrow shared runtime storage.
+	RuntimeSharedStoreBorrow,
 }
 
 impl Error {

@@ -71,7 +71,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-type MmrLeaf = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
+pub(crate) type MmrLeaf = Compact<Keccak256, (ParentNumberAndHash<Test>, LeafData)>;
 const MAX_LEAF_SIZE: usize = 2 * sp_std::mem::size_of::<MmrLeaf>();
 
 impl Config for Test {

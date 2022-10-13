@@ -22,9 +22,9 @@ use crate::{
 		Hasher, Node, NodeOf,
 	},
 	primitives::{self, Error, NodeIndex},
-	Config, HashingOf,
+	Config, HashingOf, LeafOf,
 };
-use sp_std::prelude::*;
+use sp_std::{cell::RefCell, prelude::*, rc::Rc};
 
 /// Stateless verification of the proof for a batch of leaves.
 /// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
@@ -73,6 +73,7 @@ where
 {
 	mmr: mmr_lib::MMR<NodeOf<T, I, L>, Hasher<HashingOf<T, I>, L>, Storage<StorageType, T, I, L>>,
 	leaves: NodeIndex,
+	shared_store: Option<Rc<RefCell<StorageType>>>,
 }
 
 impl<StorageType, T, I, L> Mmr<StorageType, T, I, L>
@@ -83,12 +84,6 @@ where
 	StorageType: Default,
 	Storage<StorageType, T, I, L>: mmr_lib::MMRStore<NodeOf<T, I, L>>,
 {
-	/// Create a pointer to an existing MMR with given number of leaves.
-	pub fn new(leaves: NodeIndex) -> Self {
-		let size = NodesUtils::new(leaves).size();
-		Self { mmr: mmr_lib::MMR::new(size, Default::default()), leaves }
-	}
-
 	/// Verify proof for a set of leaves.
 	/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have
 	/// the same position in both the `leaves` vector and the `leaf_indices` vector contained in the
@@ -126,16 +121,23 @@ where
 }
 
 /// Runtime specific MMR functions.
-impl<T, I, L> Mmr<RuntimeStorage<T, I, L>, T, I, L>
+impl<T, I> Mmr<RuntimeStorage<T, I, LeafOf<T, I>>, T, I, LeafOf<T, I>>
 where
 	T: Config<I>,
 	I: 'static,
-	L: primitives::FullLeaf,
 {
+	/// Create a pointer to an existing MMR with given number of leaves.
+	pub fn new_with_runtime_storage(leaves: NodeIndex) -> Self {
+		let size = NodesUtils::new(leaves).size();
+		let store = Rc::new(RefCell::new(RuntimeStorage::<T, I, LeafOf<T, I>>::default()));
+		let storage = Storage::new_shared(store.clone());
+		Self { mmr: mmr_lib::MMR::new(size, storage), leaves, shared_store: Some(store) }
+	}
+
 	/// Push another item to the MMR.
 	///
 	/// Returns element position (index) in the MMR.
-	pub fn push(&mut self, leaf: L) -> Option<NodeIndex> {
+	pub fn push(&mut self, leaf: LeafOf<T, I>) -> Option<NodeIndex> {
 		let position =
 			self.mmr.push(Node::Data(leaf)).map_err(|e| Error::Push.log_error(e)).ok()?;
 
@@ -149,6 +151,14 @@ where
 	pub fn finalize(self) -> Result<(NodeIndex, <T as Config<I>>::Hash), Error> {
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		self.mmr.commit().map_err(|e| Error::Commit.log_error(e))?;
+
+		let binding = self.shared_store.ok_or(Error::RuntimeSharedStoreMissing)?;
+		let mut store = binding
+			// Borrow will never fail since it's only shared with `self.mmr`.
+			.try_borrow_mut()
+			.map_err(|_| Error::RuntimeSharedStoreBorrow)?;
+		store.commit().map_err(|_| Error::RuntimeCommit)?;
+
 		Ok((self.leaves, root.hash()))
 	}
 }
@@ -160,6 +170,13 @@ where
 	I: 'static,
 	L: primitives::FullLeaf + codec::Decode,
 {
+	/// Create a pointer to an existing MMR with given number of leaves.
+	pub fn new_with_offchain_storage(leaves: NodeIndex) -> Self {
+		let size = NodesUtils::new(leaves).size();
+		let storage = Storage::new(OffchainStorage::default());
+		Self { mmr: mmr_lib::MMR::new(size, storage), leaves, shared_store: None }
+	}
+
 	/// Generate a proof for given leaf indices.
 	///
 	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
@@ -172,7 +189,7 @@ where
 			.iter()
 			.map(|index| mmr_lib::leaf_index_to_pos(*index))
 			.collect::<Vec<_>>();
-		let store = <Storage<OffchainStorage, T, I, L>>::default();
+		let store = Storage::<_, T, I, L>::new(OffchainStorage::default());
 		let leaves = positions
 			.iter()
 			.map(|pos| match mmr_lib::MMRStore::get_elem(&store, *pos) {

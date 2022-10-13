@@ -232,17 +232,20 @@ pub mod pallet {
 				_n, leaves, peaks_before,
 			);
 
-			let (leaves, root) = {
-				// append new leaf to MMR
-				let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage<T, I, LeafOf<T, I>>, T, I> =
-					mmr::Mmr::new(leaves);
-				mmr.push(data).expect("MMR push never fails.");
+			// Append new leaf to MMR.
+			let mut mmr: ModuleMmr<_, T, I> = mmr::Mmr::new_with_runtime_storage(leaves);
+			// MMR push never fails.
+			let _ = mmr.push(data);
 
-				// update the size
-				mmr.finalize().expect("MMR finalize never fails.")
-
-				// When `mmr.inner` is dropped, `NewNodes` and `LatestLeaf` will just overwritten
-				// in runtime storage with in-mem batched values (built during `mmr.finalize()`).
+			// Update the size and commit newly added branch to runtime storage.
+			let (leaves, root) = match mmr.finalize() {
+				Ok((leaves, root)) => (leaves, root),
+				Err(e) => {
+					frame_support::log::error!(
+						target: "runtime::mmr", "Could not finalize MMR for new block: {:?}", e,
+					);
+					return T::WeightInfo::on_initialize(peaks_before)
+				},
 			};
 
 			<T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
@@ -257,7 +260,6 @@ pub mod pallet {
 				_n, leaves, peaks_after,
 			);
 
-			// TODO: add weight: 2*DbReadWrite*(nodes_before - nodes_now)
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
 
@@ -434,7 +436,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Err(Error::InvalidLeavesCount)
 		}
 
-		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(leaves_count);
+		let mmr: ModuleMmr<_, T, I> = mmr::Mmr::new_with_offchain_storage(leaves_count);
 		mmr.generate_batch_proof(leaf_indices)
 	}
 
@@ -461,7 +463,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.log_debug("The proof has incorrect number of leaves or proof items."))
 		}
 
-		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(proof.leaf_count);
+		let mmr: ModuleMmr<_, T, I> = mmr::Mmr::new_with_offchain_storage(proof.leaf_count);
 		let is_valid = mmr.verify_leaves_proof(leaves, proof)?;
 		if is_valid {
 			Ok(())

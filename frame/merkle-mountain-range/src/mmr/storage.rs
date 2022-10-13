@@ -22,9 +22,9 @@ use frame_support::log::{debug, error, trace};
 use mmr_lib::helper;
 use sp_core::{bounded::BoundedVec, offchain::StorageKind};
 use sp_io::offchain;
-use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
+use sp_std::{cell::RefCell, iter::Peekable, rc::Rc};
 
 use crate::{
 	mmr::{utils::NodesUtils, Node, NodeOf},
@@ -179,13 +179,17 @@ where
 /// There are two different implementations depending on the use case.
 /// See docs for [RuntimeStorage] and [OffchainStorage].
 pub struct Storage<StorageType, T, I, L> {
-	inner: StorageType,
+	inner: Rc<RefCell<StorageType>>,
 	_ph: sp_std::marker::PhantomData<(T, I, L)>,
 }
 
-impl<StorageType: Default, T, I, L> Default for Storage<StorageType, T, I, L> {
-	fn default() -> Self {
-		Self { inner: Default::default(), _ph: Default::default() }
+impl<StorageType, T, I, L> Storage<StorageType, T, I, L> {
+	pub fn new(inner: StorageType) -> Self {
+		Self { inner: Rc::new(RefCell::new(inner)), _ph: Default::default() }
+	}
+
+	pub fn new_shared(inner: Rc<RefCell<StorageType>>) -> Self {
+		Self { inner, _ph: Default::default() }
 	}
 }
 
@@ -426,9 +430,17 @@ where
 				<Peaks<T, I>>::insert(node_index, elem.hash());
 			}
 
+			// This borrow should always work, it's only shared with `Mmr::finalize()`
+			// which happens after this function runs.
+			let branch_builder = &mut self
+				.inner
+				.try_borrow_mut()
+				.map_err(|_| {
+					mmr_lib::Error::StoreError("could not borrow shared runtime store".into())
+				})?
+				.mmr_branch_builder;
 			// Store all newly added nodes and leaves to temporary storage, offchain worker will
 			// copy them over to offchain db once block is finished. Increase the indices.
-			let branch_builder = &mut self.inner.mmr_branch_builder;
 			match elem {
 				Node::Data(leaf_data) => {
 					debug!(

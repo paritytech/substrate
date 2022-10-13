@@ -31,10 +31,13 @@ impl crate::WeightInfo for () {
 		let hash_weight = 2u64 * WEIGHT_PER_NANOS;
 		// No-op hook.
 		let hook_weight = Weight::zero();
+		// Writing the new branch.
+		let new_branch_weight = DbWeight::get().writes(1);
 
 		leaf_weight
 			.saturating_add(hash_weight)
 			.saturating_add(hook_weight)
+			.saturating_add(new_branch_weight)
 			.saturating_add(DbWeight::get().reads_writes(2 + peaks, 2 + peaks))
 	}
 }

@@ -81,6 +81,7 @@ impl NodesUtils {
 mod tests {
 	use super::*;
 	use mmr_lib::helper::leaf_index_to_pos;
+	use sp_mmr_primitives::Compact;
 
 	#[test]
 	fn should_calculate_node_index_from_leaf_index() {
@@ -159,14 +160,10 @@ mod tests {
 		let mut actual_sizes = vec![];
 		for s in &leaves[1..] {
 			crate::tests::new_test_ext().execute_with(|| {
-				let mut mmr = crate::mmr::Mmr::<
-					crate::mmr::storage::RuntimeStorage<crate::mock::Test, _, _>,
-					crate::mock::Test,
-					_,
-					_,
-				>::new(0);
-				for i in 0..*s {
-					mmr.push(i);
+				let mut mmr =
+					crate::mmr::Mmr::<_, crate::mock::Test, _, _>::new_with_runtime_storage(0);
+				for _i in 0..*s {
+					mmr.push(Compact::new((Default::default(), Default::default())));
 				}
 				actual_sizes.push(mmr.size());
 			})
