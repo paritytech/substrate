@@ -22,7 +22,7 @@ use futures::{future, prelude::*};
 use futures_timer::Delay;
 use log::{info, warn};
 use sc_chain_spec::ChainSpec;
-use sc_client_api::UsageProvider;
+use sc_client_api::HeaderBackend;
 use sc_consensus::import_queue::{
 	BlockImportError, BlockImportStatus, ImportQueue, IncomingBlock, Link,
 };
@@ -296,7 +296,7 @@ pub fn import_blocks<B, IQ, C>(
 	binary: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
 where
-	C: UsageProvider<B> + Send + Sync + 'static,
+	C: HeaderBackend<B> + Send + Sync + 'static,
 	B: BlockT + for<'de> serde::Deserialize<'de>,
 	IQ: ImportQueue<B> + 'static,
 {
@@ -438,7 +438,7 @@ where
 					info!(
 						"🎉 Imported {} blocks. Best: #{}",
 						read_block_count,
-						client.usage_info().chain.best_number
+						client.info().best_number
 					);
 					return Poll::Ready(Ok(()))
 				} else {
@@ -469,7 +469,7 @@ where
 
 		queue.poll_actions(cx, &mut link);
 
-		let best_number = client.usage_info().chain.best_number;
+		let best_number = client.info().best_number;
 		speedometer.notify_user(best_number);
 
 		if link.has_error {

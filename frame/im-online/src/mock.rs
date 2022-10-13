@@ -27,7 +27,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Perbill, Permill,
+	Permill,
 };
 use sp_staking::{
 	offence::{OffenceError, ReportOffence},
@@ -146,10 +146,6 @@ parameter_types! {
 	pub const Offset: u64 = 0;
 }
 
-parameter_types! {
-	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(33);
-}
-
 impl pallet_session::Config for Runtime {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionManager =
@@ -159,7 +155,6 @@ impl pallet_session::Config for Runtime {
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
 	type Event = Event;
-	type DisabledValidatorsThreshold = DisabledValidatorsThreshold;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }

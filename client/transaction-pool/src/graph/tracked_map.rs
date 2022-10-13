@@ -57,11 +57,6 @@ impl<K, V> TrackedMap<K, V> {
 		std::cmp::max(self.bytes.load(AtomicOrdering::Relaxed), 0) as usize
 	}
 
-	/// Read-only clone of the interior.
-	pub fn clone(&self) -> ReadOnlyTrackedMap<K, V> {
-		ReadOnlyTrackedMap(self.index.clone())
-	}
-
 	/// Lock map for read.
 	pub fn read(&self) -> TrackedMapReadAccess<K, V> {
 		TrackedMapReadAccess { inner_guard: self.index.read() }
@@ -77,18 +72,10 @@ impl<K, V> TrackedMap<K, V> {
 	}
 }
 
-/// Read-only access to map.
-///
-/// The only thing can be done is .read().
-pub struct ReadOnlyTrackedMap<K, V>(Arc<RwLock<HashMap<K, V>>>);
-
-impl<K, V> ReadOnlyTrackedMap<K, V>
-where
-	K: Eq + std::hash::Hash,
-{
-	/// Lock map for read.
-	pub fn read(&self) -> TrackedMapReadAccess<K, V> {
-		TrackedMapReadAccess { inner_guard: self.0.read() }
+impl<K: Clone, V: Clone> TrackedMap<K, V> {
+	/// Clone the inner map.
+	pub fn clone_map(&self) -> HashMap<K, V> {
+		self.index.read().clone()
 	}
 }
 

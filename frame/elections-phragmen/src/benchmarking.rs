@@ -21,9 +21,7 @@
 
 use super::*;
 
-use frame_benchmarking::{
-	account, benchmarks, impl_benchmark_test_suite, whitelist, BenchmarkError, BenchmarkResult,
-};
+use frame_benchmarking::{account, benchmarks, whitelist, BenchmarkError, BenchmarkResult};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, UnfilteredDispatchable},
 	traits::OnInitialize,
@@ -549,11 +547,11 @@ benchmarks! {
 			MEMBERS.with(|m| *m.borrow_mut() = vec![]);
 		}
 	}
-}
 
-impl_benchmark_test_suite!(
-	Elections,
-	crate::tests::ExtBuilder::default().desired_members(13).desired_runners_up(7),
-	crate::tests::Test,
-	exec_name = build_and_execute,
-);
+	impl_benchmark_test_suite!(
+		Elections,
+		crate::tests::ExtBuilder::default().desired_members(13).desired_runners_up(7),
+		crate::tests::Test,
+		exec_name = build_and_execute,
+	);
+}

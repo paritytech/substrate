@@ -446,6 +446,11 @@ fn instantiate_and_call_and_deposit_event() {
 			vec![
 				EventRecord {
 					phase: Phase::Initialization,
+					event: Event::Balances(pallet_balances::Event::Deposit(ALICE, 1_000_000)),
+					topics: vec![],
+				},
+				EventRecord {
+					phase: Phase::Initialization,
 					event: Event::System(frame_system::Event::NewAccount(ALICE.clone())),
 					topics: vec![],
 				},

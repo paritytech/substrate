@@ -143,7 +143,7 @@ where
 
 		let builder = if command.overwrite_wasm_code {
 			let (code_key, code) = extract_code(&config.chain_spec)?;
-			builder.inject_key_value(&[(code_key, code)])
+			builder.inject_hashed_key_value(&[(code_key, code)])
 		} else {
 			builder.inject_hashed_key(well_known_keys::CODE)
 		};

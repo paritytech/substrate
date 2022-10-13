@@ -58,8 +58,9 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 
 		match self {
 			Self::File(path) => {
-				let file =
-					File::open(path).map_err(|e| format!("Error opening spec file: {}", e))?;
+				let file = File::open(path).map_err(|e| {
+					format!("Error opening spec file at `{}`: {}", path.display(), e)
+				})?;
 				let genesis: GenesisContainer<G> = json::from_reader(file)
 					.map_err(|e| format!("Error parsing spec file: {}", e))?;
 				Ok(genesis.genesis)
@@ -284,7 +285,8 @@ impl<G, E: serde::de::DeserializeOwned> ChainSpec<G, E> {
 
 	/// Parse json file into a `ChainSpec`
 	pub fn from_json_file(path: PathBuf) -> Result<Self, String> {
-		let file = File::open(&path).map_err(|e| format!("Error opening spec file: {}", e))?;
+		let file = File::open(&path)
+			.map_err(|e| format!("Error opening spec file `{}`: {}", path.display(), e))?;
 		let client_spec =
 			json::from_reader(file).map_err(|e| format!("Error parsing spec file: {}", e))?;
 		Ok(ChainSpec { client_spec, genesis: GenesisSource::File(path) })

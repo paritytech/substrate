@@ -45,6 +45,8 @@ variables:                         &default-vars
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
+  SIMNET_FEATURES_PATH:            "simnet_tests/tests"
+  PIPELINE_SCRIPTS_TAG:            "v0.1"
 
 default:
   cache:                           {}
@@ -54,6 +56,14 @@ default:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
     when:                          on_success
     expire_in:                     7 days
+    paths:
+      - artifacts/
+
+.collect-artifacts-short:          &collect-artifacts-short
+  artifacts:
+    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when:                          on_success
+    expire_in:                     3 hours
     paths:
       - artifacts/
 
@@ -188,13 +198,13 @@ default:
       file:                        false
     AWX_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/AWX_TOKEN@kv
-      file:                        false    
+      file:                        false
     CRATES_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/CRATES_TOKEN@kv
       file:                        false
     DOCKER_CHAOS_TOKEN:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_TOKEN@kv
-      file:                        false   
+      file:                        false
     DOCKER_CHAOS_USER:
       vault:                       cicd/gitlab/$CI_PROJECT_PATH/DOCKER_CHAOS_USER@kv
       file:                        false
@@ -311,7 +321,7 @@ cargo-deny:
     when:                          always
     paths:
       - deny.log
-  # FIXME: Temorarily allow to fail.
+  # FIXME: Temporarily allow to fail.
   allow_failure:                   true
 
 cargo-fmt:
@@ -320,6 +330,13 @@ cargo-fmt:
   <<:                              *test-refs
   script:
     - cargo +nightly fmt --all -- --check
+
+cargo-clippy:
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *test-refs
+  script:
+    - SKIP_WASM_BUILD=1 env -u RUSTFLAGS cargo +nightly clippy
 
 cargo-check-benches:
   stage:                           test
@@ -522,29 +539,37 @@ cargo-check-macos:
 
 #### stage:                        build
 
-check-polkadot-companion-status:
-  stage:                           build
-  image:                           paritytech/tools:latest
-  <<:                              *kubernetes-env
-  <<:                              *vault-secrets
-  rules:
-    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
-  script:
-    - ./.maintain/gitlab/check_polkadot_companion_status.sh
-
-check-polkadot-companion-build:
+.check-dependent-project:          &check-dependent-project
   stage:                           build
   <<:                              *docker-env
   <<:                              *test-refs-no-trigger
   <<:                              *vault-secrets
-  needs:
-    - job:                         test-linux-stable-int
-      artifacts:                   false
   script:
-    - ./.maintain/gitlab/check_polkadot_companion_build.sh
-  after_script:
-    - cd polkadot && git rev-parse --abbrev-ref HEAD
-  allow_failure:                   true
+    - git clone
+        --depth=1
+        "--branch=$PIPELINE_SCRIPTS_TAG"
+        https://github.com/paritytech/pipeline-scripts
+    - ./pipeline-scripts/check_dependent_project.sh
+        paritytech
+        substrate
+        --substrate
+        "$DEPENDENT_REPO"
+        "$GITHUB_PR_TOKEN"
+    - cd "$DEPENDENT_REPO" && git rev-parse --abbrev-ref HEAD
+
+# Individual jobs are set up for each dependent project so that they can be ran in parallel.
+# Arguably we could generate a job for each companion in the PR's description using Gitlab's
+# parent-child pipelines but that's more complicated.
+
+check-dependent-polkadot:
+  <<: *check-dependent-project
+  variables:
+    DEPENDENT_REPO: polkadot
+
+check-dependent-cumulus:
+  <<: *check-dependent-project
+  variables:
+    DEPENDENT_REPO: cumulus
 
 build-linux-substrate:             &build-binary
   stage:                           build
@@ -572,6 +597,12 @@ build-linux-substrate:             &build-binary
     - ./.maintain/node-template-release.sh ./artifacts/substrate/substrate-node-template.tar.gz
     - cp -r .maintain/docker/substrate.Dockerfile ./artifacts/substrate/
     - sccache -s
+
+#Build binary for simnet quick tests.
+build-linux-substrate-simnet:
+  <<:                              *build-binary
+  <<:                              *collect-artifacts-short
+  <<:                              *test-refs-no-trigger-prs-only
 
 build-linux-subkey:                &build-subkey
   stage:                           build
@@ -680,6 +711,25 @@ publish-docker-substrate:
     reports:
       # this artifact is used in trigger-simnet job
       # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
+      dotenv: ./artifacts/substrate/build.env
+
+#publish artifact for quick simnet tests
+publish-docker-substrate-simnet:
+  stage:                           publish
+  <<:                              *build-push-docker-image
+  <<:                              *test-refs-no-trigger-prs-only
+  needs:
+    - job:                         build-linux-substrate-simnet
+      artifacts:                   true
+  variables:
+    <<:                            *default-vars
+    GIT_STRATEGY:                  none
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    PRODUCT:                       substrate
+    IMAGE_NAME:                    docker.io/paritypr/$PRODUCT
+  artifacts:
+    reports:
+      # this artifact is used in simnet-tests-quick job
       dotenv: ./artifacts/substrate/build.env
 
 publish-docker-subkey:
@@ -843,7 +893,7 @@ deploy-prometheus-alerting-rules:
 # Runs "quick" and "long" tests on nightly schedule and on commit / merge to master
 # A "quick" test is a smoke test where basic check-expect tests run by
 # checking values from metrics exposed by the app.
-# A "long" test is the load testing where we send 50K transactions into the 
+# A "long" test is the load testing where we send 50K transactions into the
 # network and check if all completed successfully
 simnet-tests:
   stage:                           deploy
@@ -864,7 +914,7 @@ simnet-tests:
   before_script:
     - echo "Simnet Tests Config
       docker.io/paritytech/simnet:${SIMNET_REF}
-      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IAMGE_TAG}"
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
   script:
     - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
         --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
@@ -872,4 +922,31 @@ simnet-tests:
         --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
   retry: 2
   tags:
-    - parity-simnet
+    - substrate-simnet
+
+#run quick simnet-tests for each PR
+simnet-tests-quick:
+  stage:                           deploy
+  image:                           docker.io/paritytech/simnet:${SIMNET_REF}
+  <<:                              *kubernetes-env
+  <<:                              *vault-secrets
+  <<:                              *test-refs-no-trigger-prs-only
+  variables:
+    SIMNET_FEATURES:               "${SIMNET_FEATURES_PATH}/quick"
+  needs:
+    - job:                         publish-docker-substrate-simnet
+  before_script:
+    - echo "Simnet Tests Config
+      docker.io/paritytech/simnet:${SIMNET_REF}
+      ${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
+  script:
+    - echo "Image=${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+    - echo "Features=${SIMNET_FEATURES}"
+    - /home/nonroot/simnet/gurke/scripts/run-test-environment-manager.sh
+        --github-remote-dir="https://github.com/paritytech/substrate/tree/master/simnet_tests"
+        --config="simnet_tests/configs/default_local_testnet.toml"
+        --image="${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}"
+        --features="${SIMNET_FEATURES}"
+  tags:
+    - substrate-simnet
+

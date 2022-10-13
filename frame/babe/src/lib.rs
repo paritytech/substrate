@@ -926,8 +926,8 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
 	}
 
-	fn on_disabled(i: usize) {
-		Self::deposit_consensus(ConsensusLog::OnDisabled(i as u32))
+	fn on_disabled(i: u32) {
+		Self::deposit_consensus(ConsensusLog::OnDisabled(i))
 	}
 }
 

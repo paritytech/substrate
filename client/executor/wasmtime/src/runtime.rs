@@ -77,7 +77,7 @@ struct InstanceCreator {
 	store: Store,
 	module: Arc<wasmtime::Module>,
 	imports: Arc<Imports>,
-	heap_pages: u32,
+	heap_pages: u64,
 }
 
 impl InstanceCreator {
@@ -130,15 +130,15 @@ pub struct WasmtimeRuntime {
 impl WasmtimeRuntime {
 	/// Creates the store respecting the set limits.
 	fn new_store(&self) -> Store {
-		let limits = if let Some(max_memory_pages) = self.config.max_memory_pages {
-			wasmtime::StoreLimitsBuilder::new().memory_pages(max_memory_pages).build()
+		let limits = if let Some(max_memory_size) = self.config.max_memory_size {
+			wasmtime::StoreLimitsBuilder::new().memory_size(max_memory_size).build()
 		} else {
 			Default::default()
 		};
 
 		let mut store = Store::new(&self.engine, StoreData { limits, host_state: None });
 
-		if self.config.max_memory_pages.is_some() {
+		if self.config.max_memory_size.is_some() {
 			store.limiter(|s| &mut s.limits);
 		}
 
@@ -350,6 +350,8 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {}", e)))?;
 	}
 
+	config.parallel_compilation(semantics.parallel_compilation);
+
 	// Be clear and specific about the extensions we support. If an update brings new features
 	// they should be introduced here as well.
 	config.wasm_reference_types(false);
@@ -381,7 +383,7 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 /// usage in bytes.
 ///
 /// The actual number of bytes consumed by a function is not trivial to compute  without going
-/// through full compilation. Therefore, it's expected that `native_stack_max` is grealy
+/// through full compilation. Therefore, it's expected that `native_stack_max` is greatly
 /// overestimated and thus never reached in practice. The stack overflow check introduced by the
 /// instrumentation and that relies on the logical item count should be reached first.
 ///
@@ -399,7 +401,7 @@ pub struct DeterministicStackLimit {
 	/// It's not specified how much bytes will be consumed by a stack frame for a given wasm
 	/// function after translation into machine code. It is also not quite trivial.
 	///
-	/// Therefore, this number should be choosen conservatively. It must be so large so that it can
+	/// Therefore, this number should be chosen conservatively. It must be so large so that it can
 	/// fit the [`logical_max`](Self::logical_max) logical values on the stack, according to the
 	/// current instrumentation algorithm.
 	///
@@ -409,7 +411,7 @@ pub struct DeterministicStackLimit {
 
 pub struct Semantics {
 	/// Enabling this will lead to some optimization shenanigans that make calling [`WasmInstance`]
-	/// extermely fast.
+	/// extremely fast.
 	///
 	/// Primarily this is achieved by not recreating the instance for each call and performing a
 	/// bare minimum clean up: reapplying the data segments and restoring the values for global
@@ -449,28 +451,32 @@ pub struct Semantics {
 	/// developers. For PVFs, we want to ensure that execution is deterministic though. Therefore,
 	/// for PVF execution this flag is meant to be turned on.
 	pub canonicalize_nans: bool,
+
+	/// Configures wasmtime to use multiple threads for compiling.
+	pub parallel_compilation: bool,
 }
 
 pub struct Config {
 	/// The number of wasm pages to be mounted after instantiation.
-	pub heap_pages: u32,
+	pub heap_pages: u64,
 
-	/// The total number of wasm pages an instance can request.
+	/// The total amount of memory in bytes an instance can request.
 	///
-	/// If specified, the runtime will be able to allocate only that much of wasm memory pages.
+	/// If specified, the runtime will be able to allocate only that much of wasm memory.
 	/// This is the total number and therefore the [`heap_pages`] is accounted for.
 	///
 	/// That means that the initial number of pages of a linear memory plus the [`heap_pages`]
-	/// should be less or equal to `max_memory_pages`, otherwise the instance won't be created.
+	/// multiplied by the wasm page size (64KiB) should be less than or equal to `max_memory_size`,
+	/// otherwise the instance won't be created.
 	///
-	/// Moreover, `memory.grow` will fail (return -1) if the sum of the number of currently mounted
-	/// pages and the number of additional pages exceeds `max_memory_pages`.
+	/// Moreover, `memory.grow` will fail (return -1) if the sum of sizes of currently mounted
+	/// and additional pages exceeds `max_memory_size`.
 	///
 	/// The default is `None`.
-	pub max_memory_pages: Option<u32>,
+	pub max_memory_size: Option<usize>,
 
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
-	/// othewise, the instantiation fails. If this option is set to `true`, then this behavior is
+	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is
 	/// overriden and imports that are requested by the module and not provided by the host
 	/// functions will be resolved using stubs. These stubs will trap upon a call.
 	pub allow_missing_func_imports: bool,

@@ -280,7 +280,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// The following are reserved function signatures:
 ///
-/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.dev/docs/event-enum).
+/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/v3/runtime/events-and-errors).
 /// The default behavior is to call `deposit_event` from the [System
 /// module](../frame_system/index.html). However, you can write your own implementation for events
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your

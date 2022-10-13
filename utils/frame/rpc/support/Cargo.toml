@@ -7,7 +7,7 @@ authors = [
 ]
 edition = "2018"
 license = "Apache-2.0"
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "Substrate RPC for FRAME's support"
 

@@ -4,3 +4,4 @@ doc
 Dockerfile
 .dockerignore
 .local
+.env*

@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2018"
 license = "Apache-2.0"
 publish = false
-homepage = "https://substrate.dev"
+homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 
 [package.metadata.docs.rs]
@@ -20,5 +20,5 @@ sp-runtime-interface-test-wasm-deprecated = { version = "2.0.0", path = "../test
 sp-state-machine = { version = "0.10.0-dev", path = "../../state-machine" }
 sp-runtime = { version = "4.0.0-dev", path = "../../runtime" }
 sp-io = { version = "4.0.0-dev", path = "../../io" }
-tracing = "0.1.25"
+tracing = "0.1.29"
 tracing-core = "0.1.17"

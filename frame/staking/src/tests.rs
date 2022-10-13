@@ -2318,10 +2318,11 @@ fn slash_in_old_span_does_not_deselect() {
 			1,
 		);
 
-		// not forcing for zero-slash and previous span.
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::contains_key(11));
-		assert!(Session::validators().contains(&11));
+		// the validator doesn't get chilled again
+		assert!(<Staking as Store>::Validators::iter().find(|(stash, _)| *stash == 11).is_some());
+
+		// but we are still forcing a new era
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 
 		on_offence_in_era(
 			&[OffenceDetails {
@@ -2333,10 +2334,13 @@ fn slash_in_old_span_does_not_deselect() {
 			1,
 		);
 
-		// or non-zero.
-		assert_eq!(Staking::force_era(), Forcing::NotForcing);
-		assert!(<Validators<Test>>::contains_key(11));
-		assert!(Session::validators().contains(&11));
+		// the validator doesn't get chilled again
+		assert!(<Staking as Store>::Validators::iter().find(|(stash, _)| *stash == 11).is_some());
+
+		// but it's disabled
+		assert!(is_disabled(10));
+		// and we are still forcing a new era
+		assert_eq!(Staking::force_era(), Forcing::ForceNew);
 	});
 }
 
@@ -2965,6 +2969,132 @@ fn slash_kicks_validators_not_nominators_and_disables_nominator_for_kicked_valid
 		// 20 is re-elected, with the (almost) entire support of 100
 		assert_eq!(exposure_21.total, 1000 + 500 - nominator_slash_amount_11);
 	});
+}
+
+#[test]
+fn non_slashable_offence_doesnt_disable_validator() {
+	ExtBuilder::default().build_and_execute(|| {
+		mock::start_active_era(1);
+		assert_eq_uvec!(Session::validators(), vec![11, 21]);
+
+		let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+		let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+
+		// offence with no slash associated
+		on_offence_now(
+			&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+			&[Perbill::zero()],
+		);
+
+		// offence that slashes 25% of the bond
+		on_offence_now(
+			&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+			&[Perbill::from_percent(25)],
+		);
+
+		// the offence for validator 10 wasn't slashable so it wasn't disabled
+		assert!(!is_disabled(10));
+		// whereas validator 20 gets disabled
+		assert!(is_disabled(20));
+	});
+}
+
+#[test]
+fn offence_threshold_triggers_new_era() {
+	ExtBuilder::default()
+		.validator_count(4)
+		.set_status(41, StakerStatus::Validator)
+		.build_and_execute(|| {
+			mock::start_active_era(1);
+			assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
+
+			assert_eq!(
+				<Test as Config>::OffendingValidatorsThreshold::get(),
+				Perbill::from_percent(75),
+			);
+
+			// we have 4 validators and an offending validator threshold of 75%,
+			// once the third validator commits an offence a new era should be forced
+
+			let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+			let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+			let exposure_31 = Staking::eras_stakers(Staking::active_era().unwrap().index, &31);
+
+			on_offence_now(
+				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+				&[Perbill::zero()],
+			);
+
+			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
+
+			on_offence_now(
+				&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+				&[Perbill::zero()],
+			);
+
+			assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
+
+			on_offence_now(
+				&[OffenceDetails { offender: (31, exposure_31.clone()), reporters: vec![] }],
+				&[Perbill::zero()],
+			);
+
+			assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+		});
+}
+
+#[test]
+fn disabled_validators_are_kept_disabled_for_whole_era() {
+	ExtBuilder::default()
+		.validator_count(4)
+		.set_status(41, StakerStatus::Validator)
+		.build_and_execute(|| {
+			mock::start_active_era(1);
+			assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
+			assert_eq!(<Test as Config>::SessionsPerEra::get(), 3);
+
+			let exposure_11 = Staking::eras_stakers(Staking::active_era().unwrap().index, &11);
+			let exposure_21 = Staking::eras_stakers(Staking::active_era().unwrap().index, &21);
+
+			on_offence_now(
+				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+				&[Perbill::zero()],
+			);
+
+			on_offence_now(
+				&[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+				&[Perbill::from_percent(25)],
+			);
+
+			// validator 10 should not be disabled since the offence wasn't slashable
+			assert!(!is_disabled(10));
+			// validator 20 gets disabled since it got slashed
+			assert!(is_disabled(20));
+
+			advance_session();
+
+			// disabled validators should carry-on through all sessions in the era
+			assert!(!is_disabled(10));
+			assert!(is_disabled(20));
+
+			// validator 10 should now get disabled
+			on_offence_now(
+				&[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+				&[Perbill::from_percent(25)],
+			);
+
+			advance_session();
+
+			// and both are disabled in the last session of the era
+			assert!(is_disabled(10));
+			assert!(is_disabled(20));
+
+			mock::start_active_era(2);
+
+			// when a new era starts disabled validators get cleared
+			assert!(!is_disabled(10));
+			assert!(!is_disabled(20));
+		});
 }
 
 #[test]

@@ -34,7 +34,7 @@ reverted at the current call's contract level. For example, if contract A calls 
 then all of B's calls are reverted. Assuming correct error handling by contract A, A's other calls and state
 changes still persist.
 
-One gas is equivalent to one [weight](https://substrate.dev/docs/en/knowledgebase/learn-substrate/weight)
+One gas is equivalent to one [weight](https://docs.substrate.io/v3/runtime/weights-and-fees)
 which is defined as one picosecond of execution time on the runtime's reference machine.
 
 ### Notable Scenarios

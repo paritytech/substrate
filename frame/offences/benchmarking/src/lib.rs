@@ -23,7 +23,7 @@ mod mock;
 
 use sp_std::{prelude::*, vec};
 
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite};
+use frame_benchmarking::{account, benchmarks};
 use frame_support::traits::{Currency, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
@@ -224,27 +224,49 @@ fn check_events<T: Config, I: Iterator<Item = <T as SystemConfig>::Event>>(expec
 		.map(|frame_system::EventRecord { event, .. }| event)
 		.collect::<Vec<_>>();
 	let expected = expected.collect::<Vec<_>>();
-	let lengths = (events.len(), expected.len());
-	let length_mismatch = if lengths.0 != lengths.1 {
-		fn pretty<D: std::fmt::Debug>(header: &str, ev: &[D]) {
-			println!("{}", header);
-			for (idx, ev) in ev.iter().enumerate() {
-				println!("\t[{:04}] {:?}", idx, ev);
-			}
+
+	fn pretty<D: std::fmt::Debug>(header: &str, ev: &[D], offset: usize) {
+		println!("{}", header);
+		for (idx, ev) in ev.iter().enumerate() {
+			println!("\t[{:04}] {:?}", idx + offset, ev);
 		}
-		pretty("--Got:", &events);
-		pretty("--Expected:", &expected);
-		format!("Mismatching length. Got: {}, expected: {}", lengths.0, lengths.1)
-	} else {
-		Default::default()
-	};
+	}
+	fn print_events<D: std::fmt::Debug>(idx: usize, events: &[D], expected: &[D]) {
+		let window = 10;
+		let start = idx.saturating_sub(window / 2);
+		let end_got = (idx + window / 2).min(events.len());
+		pretty("Got(window):", &events[start..end_got], start);
+		let end_expected = (idx + window / 2).min(expected.len());
+		pretty("Expected(window):", &expected[start..end_expected], start);
+		println!("---------------");
+		let start_got = events.len().saturating_sub(window);
+		pretty("Got(end):", &events[start_got..], start_got);
+		let start_expected = expected.len().saturating_sub(window);
+		pretty("Expected(end):", &expected[start_expected..], start_expected);
+	}
+	let events_copy = events.clone();
+	let expected_copy = expected.clone();
 
 	for (idx, (a, b)) in events.into_iter().zip(expected).enumerate() {
-		assert_eq!(a, b, "Mismatch at: {}. {}", idx, length_mismatch);
+		if a != b {
+			print_events(idx, &events_copy, &expected_copy);
+			println!("Mismatch at: {}", idx);
+			println!("     Got: {:?}", b);
+			println!("Expected: {:?}", a);
+			if events_copy.len() != expected_copy.len() {
+				println!(
+					"Mismatching lengths. Got: {}, Expected: {}",
+					events_copy.len(),
+					expected_copy.len()
+				)
+			}
+			panic!("Mismatching events.");
+		}
 	}
 
-	if !length_mismatch.is_empty() {
-		panic!("{}", length_mismatch);
+	if events_copy.len() != expected_copy.len() {
+		print_events(0, &events_copy, &expected_copy);
+		panic!("Mismatching lengths. Got: {}, Expected: {}", events_copy.len(), expected_copy.len())
 	}
 }
 
@@ -288,46 +310,74 @@ benchmarks! {
 		let bond_amount: u32 = UniqueSaturatedInto::<u32>::unique_saturated_into(bond_amount::<T>());
 		let slash_amount = slash_fraction * bond_amount;
 		let reward_amount = slash_amount * (1 + n) / 2;
+		let reward = reward_amount / r;
 		let slash = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
+		);
+		let balance_slash = |id| core::iter::once(
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Slashed(id, slash_amount.into()))
 		);
 		let chill = |id| core::iter::once(
 			<T as StakingConfig>::Event::from(StakingEvent::<T>::Chilled(id))
 		);
-		let mut slash_events = raw_offenders.into_iter()
+		let balance_deposit = |id, amount: u32|
+			<T as BalancesConfig>::Event::from(pallet_balances::Event::<T>::Deposit(id, amount.into()));
+		let mut first = true;
+		let slash_events = raw_offenders.into_iter()
 			.flat_map(|offender| {
-				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| slash(nom));
-				chill(offender.stash.clone())
-				.chain(slash(offender.stash))
-				.chain(nom_slashes)
+				let nom_slashes = offender.nominator_stashes.into_iter().flat_map(|nom| {
+					balance_slash(nom.clone()).map(Into::into)
+					.chain(slash(nom.clone()).map(Into::into))
+				}).collect::<Vec<_>>();
+
+				let mut events = chill(offender.stash.clone()).map(Into::into)
+					.chain(balance_slash(offender.stash.clone()).map(Into::into))
+					.chain(slash(offender.stash.clone()).map(Into::into))
+					.chain(nom_slashes.into_iter())
+					.collect::<Vec<_>>();
+
+				// the first deposit creates endowed events, see `endowed_reward_events`
+				if first {
+					first = false;
+					let mut reward_events = reporters.clone().into_iter()
+						.flat_map(|reporter| vec![
+							balance_deposit(reporter.clone(), reward.into()).into(),
+							frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
+							<T as BalancesConfig>::Event::from(
+								pallet_balances::Event::<T>::Endowed(reporter.clone(), reward.into())
+							).into(),
+						])
+						.collect::<Vec<_>>();
+					events.append(&mut reward_events);
+					events.into_iter()
+				} else {
+					let mut reward_events = reporters.clone().into_iter()
+						.map(|reporter| balance_deposit(reporter, reward.into()).into())
+						.collect::<Vec<_>>();
+					events.append(&mut reward_events);
+					events.into_iter()
+				}
 			})
 			.collect::<Vec<_>>();
-		let reward_events = reporters.into_iter()
-			.flat_map(|reporter| vec![
-				frame_system::Event::<T>::NewAccount(reporter.clone()).into(),
-				<T as BalancesConfig>::Event::from(
-					pallet_balances::Event::<T>::Endowed(reporter, (reward_amount / r).into())
-				).into()
-			]);
 
-		// Rewards are applied after first offender and it's nominators.
-		// We split after: offender slash + offender chill + nominator slashes.
-		let slash_rest = slash_events.split_off(2 + n as usize);
 
-		// make sure that all slashes have been applied
+
 		#[cfg(test)]
-		check_events::<T, _>(
-			std::iter::empty()
-				.chain(slash_events.into_iter().map(Into::into))
-				.chain(reward_events)
-				.chain(slash_rest.into_iter().map(Into::into))
-				.chain(std::iter::once(<T as OffencesConfig>::Event::from(
-					pallet_offences::Event::Offence(
-						UnresponsivenessOffence::<T>::ID,
-						0_u32.to_le_bytes().to_vec(),
-					)
-				).into()))
-		);
+		{
+			// In case of error it's useful to see the inputs
+			println!("Inputs: r: {}, o: {}, n: {}", r, o, n);
+			// make sure that all slashes have been applied
+			check_events::<T, _>(
+				std::iter::empty()
+					.chain(slash_events.into_iter().map(Into::into))
+					.chain(std::iter::once(<T as OffencesConfig>::Event::from(
+						pallet_offences::Event::Offence(
+							UnresponsivenessOffence::<T>::ID,
+							0_u32.to_le_bytes().to_vec(),
+						)
+					).into()))
+			);
+		}
 	}
 
 	report_offence_grandpa {
@@ -358,10 +408,10 @@ benchmarks! {
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence
-			+ 2 // reporter (reward + endowment)
-			+ 1 // offenders slashed
+			+ 3 // reporter (reward + endowment)
+			+ 2 // offenders slashed
 			+ 1 // offenders chilled
-			+ n // nominators slashed
+			+ 2 * n // nominators slashed
 		);
 	}
 
@@ -393,12 +443,12 @@ benchmarks! {
 		assert_eq!(
 			System::<T>::event_count(), 0
 			+ 1 // offence
-			+ 2 // reporter (reward + endowment)
-			+ 1 // offenders slashed
+			+ 3 // reporter (reward + endowment)
+			+ 2 // offenders slashed
 			+ 1 // offenders chilled
-			+ n // nominators slashed
+			+ 2 * n // nominators slashed
 		);
 	}
-}
 
-impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
+}

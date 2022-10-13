@@ -23,9 +23,10 @@ use futures::{
 	stream::StreamExt,
 };
 use log::debug;
-use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::Block as BlockT;
 use std::{sync::Arc, time::Duration};
+
+pub use sp_finality_grandpa::{AuthorityList, SetId};
 
 /// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
@@ -55,7 +56,7 @@ pub trait WarpSyncProvider<B: BlockT>: Send + Sync {
 		&self,
 		start: B::Hash,
 	) -> Result<EncodedProof, Box<dyn std::error::Error + Send + Sync>>;
-	/// Verify warp proof agains current set of authorities.
+	/// Verify warp proof against current set of authorities.
 	fn verify(
 		&self,
 		proof: &EncodedProof,

@@ -22,7 +22,7 @@
 use super::*;
 
 use crate::Pallet as Identity;
-use frame_benchmarking::{account, benchmarks, impl_benchmark_test_suite, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{ensure, traits::Get};
 use frame_system::RawOrigin;
 use sp_runtime::traits::Bounded;
@@ -411,6 +411,5 @@ benchmarks! {
 		ensure!(!SuperOf::<T>::contains_key(&caller), "Sub not removed");
 	}
 
+	impl_benchmark_test_suite!(Identity, crate::tests::new_test_ext(), crate::tests::Test);
 }
-
-impl_benchmark_test_suite!(Identity, crate::tests::new_test_ext(), crate::tests::Test);

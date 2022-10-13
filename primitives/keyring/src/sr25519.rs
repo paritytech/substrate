@@ -89,8 +89,19 @@ impl Keyring {
 	pub fn public(self) -> Public {
 		self.pair().public()
 	}
+
 	pub fn to_seed(self) -> String {
 		format!("//{}", self)
+	}
+
+	/// Create a crypto `Pair` from a numeric value.
+	pub fn numeric(idx: usize) -> Pair {
+		Pair::from_string(&format!("//{}", idx), None).expect("numeric values are known good; qed")
+	}
+
+	/// Get account id of a `numeric` account.
+	pub fn numeric_id(idx: usize) -> AccountId32 {
+		(*Self::numeric(idx).public().as_array_ref()).into()
 	}
 }
 

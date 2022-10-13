@@ -78,7 +78,7 @@ pub trait GetCallMetadata {
 }
 
 /// The version of a crate.
-#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Ord, Clone, Copy, Default)]
+#[derive(RuntimeDebug, Eq, PartialEq, Encode, Decode, Clone, Copy, Default)]
 pub struct CrateVersion {
 	/// The major version of the crate.
 	pub major: u16,
@@ -94,14 +94,17 @@ impl CrateVersion {
 	}
 }
 
+impl sp_std::cmp::Ord for CrateVersion {
+	fn cmp(&self, other: &Self) -> sp_std::cmp::Ordering {
+		self.major
+			.cmp(&other.major)
+			.then_with(|| self.minor.cmp(&other.minor).then_with(|| self.patch.cmp(&other.patch)))
+	}
+}
+
 impl sp_std::cmp::PartialOrd for CrateVersion {
 	fn partial_cmp(&self, other: &Self) -> Option<sp_std::cmp::Ordering> {
-		let res = self
-			.major
-			.cmp(&other.major)
-			.then_with(|| self.minor.cmp(&other.minor).then_with(|| self.patch.cmp(&other.patch)));
-
-		Some(res)
+		Some(<Self as Ord>::cmp(&self, other))
 	}
 }
 
