@@ -1440,7 +1440,7 @@ where
 		for (id, request) in self
 			.chain_sync
 			.block_requests()
-			.map(|(peer_id, request)| (*peer_id, request))
+			.map(|(peer_id, request)| (peer_id, request))
 			.collect::<Vec<_>>()
 		{
 			let event =
