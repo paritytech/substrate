@@ -1155,7 +1155,8 @@ where
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
 		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.state_at(&hash).and_then(|state| prove_read(state, keys).map_err(Into::into))
+		self.state_at(&hash)
+			.and_then(|state| prove_read(state, keys).map_err(Into::into))
 	}
 
 	fn read_child_proof(
@@ -1404,7 +1405,6 @@ where
 		id: &BlockId<Block>,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
-
 		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		let keys = self.state_at(&hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
