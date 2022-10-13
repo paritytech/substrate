@@ -227,7 +227,8 @@ where
 		// Get leaf and nodes from runtime storage.
 		NewBranch::<T, _>::get().map(|new_branch| {
 			// Copy leaf to offchain.
-			store_to_offchain(block_hash, leaf_node_index, &new_branch.leaf_data.encode());
+			let node = NodeOf::<T, I, LeafOf<T, I>>::Data(new_branch.leaf_data);
+			store_to_offchain(block_hash, leaf_node_index, &node.encode());
 			// Copy all parent nodes to offchain.
 			new_branch.parent_nodes.into_iter().for_each(|(node_index, node_hash)| {
 				let node = NodeOf::<T, I, L>::Hash(node_hash);
