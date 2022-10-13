@@ -108,7 +108,6 @@ fn elect_with_input_bounds<T: Config>(
 	let desired_targets = T::DataProvider::desired_targets().map_err(Error::DataProvider)?;
 
 	if desired_targets > T::MaxWinners::get() {
-		// TODO: make sure a test for this exists in this crate.
 		// early exit
 		return Err(Error::TooManyWinners)
 	}

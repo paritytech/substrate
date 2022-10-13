@@ -470,7 +470,8 @@ impl<T: Config> Pallet<T> {
 				.ok()?
 				.into_inner()
 				.try_into()
-				.expect("both bounds checked in integrity test to be equal; qed")
+				// both bounds checked in integrity test to be equal
+				.defensive_unwrap_or_default()
 		} else {
 			let result = <T::ElectionProvider>::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
