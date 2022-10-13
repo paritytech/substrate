@@ -151,12 +151,8 @@ where
 				self.on_remote_call_request(&peer, r)?,
 			Some(schema::v1::light::request::Request::RemoteReadRequest(r)) =>
 				self.on_remote_read_request(&peer, r)?,
-			Some(schema::v1::light::request::Request::RemoteHeaderRequest(_r)) =>
-				return Err(HandleRequestError::BadRequest("Not supported.")),
 			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) =>
 				self.on_remote_read_child_request(&peer, r)?,
-			Some(schema::v1::light::request::Request::RemoteChangesRequest(_r)) =>
-				return Err(HandleRequestError::BadRequest("Not supported.")),
 			None =>
 				return Err(HandleRequestError::BadRequest("Remote request without request data.")),
 		};

@@ -27,14 +27,14 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("add one with same runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		b.iter(|| runtime_api.benchmark_add_one(&block_id, &1))
 	});
 
 	c.bench_function("add one with recreating runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		b.iter(|| client.runtime_api().benchmark_add_one(&block_id, &1))
 	});
@@ -42,7 +42,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 	c.bench_function("vector add one with same runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 		let data = vec![0; 1000];
 
 		b.iter_with_large_drop(|| runtime_api.benchmark_vector_add_one(&block_id, &data))
@@ -50,7 +50,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 
 	c.bench_function("vector add one with recreating runtime api", |b| {
 		let client = substrate_test_runtime_client::new();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 		let data = vec![0; 1000];
 
 		b.iter_with_large_drop(|| client.runtime_api().benchmark_vector_add_one(&block_id, &data))
@@ -60,7 +60,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 		let client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.build();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 		b.iter(|| client.runtime_api().benchmark_indirect_call(&block_id).unwrap())
 	});
 
@@ -68,7 +68,7 @@ fn sp_api_benchmark(c: &mut Criterion) {
 		let client = TestClientBuilder::new()
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.build();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 		b.iter(|| client.runtime_api().benchmark_direct_call(&block_id).unwrap())
 	});
 }

@@ -181,7 +181,7 @@ impl Analysis {
 			})
 			.collect();
 
-		values.sort_unstable();
+		values.sort();
 		let mid = values.len() / 2;
 
 		Some(Self {
@@ -311,7 +311,7 @@ impl Analysis {
 		}
 
 		for (_, rs) in results.iter_mut() {
-			rs.sort_unstable();
+			rs.sort();
 			let ql = rs.len() / 4;
 			*rs = rs[ql..rs.len() - ql].to_vec();
 		}
