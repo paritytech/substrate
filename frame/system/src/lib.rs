@@ -73,7 +73,8 @@ use sp_runtime::{
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
-		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
+		MaybeSerializeDeserialize, Member, One, SaturatedConversion, Saturating, SimpleBitOps,
+		StaticLookup, Zero,
 	},
 	DispatchError, Perbill, RuntimeDebug,
 };
@@ -85,7 +86,8 @@ use sp_version::RuntimeVersion;
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
 	dispatch::{DispatchResult, DispatchResultWithPostInfo},
-	storage,
+	ensure, storage,
+	storage::bounded_vec::BoundedVec,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
@@ -103,6 +105,7 @@ use sp_core::storage::well_known_keys;
 use frame_support::traits::GenesisBuild;
 #[cfg(any(feature = "std", test))]
 use sp_io::TestExternalities;
+use sp_ver::EncodedTx;
 
 pub mod limits;
 #[cfg(test)]
@@ -131,6 +134,8 @@ pub use extensions::{
 pub use extensions::check_mortality::CheckMortality as CheckEra;
 pub use frame_support::dispatch::RawOrigin;
 pub use weights::WeightInfo;
+
+pub type StorageQueueLimit = frame_support::traits::ConstU32<2>;
 
 /// Compute the trie root of a list of extrinsics.
 ///
@@ -392,6 +397,33 @@ pub mod pallet {
 		/// # <weight>
 		/// - `O(1)`
 		/// # </weight>
+		#[pallet::weight((
+			0,
+			DispatchClass::Mandatory
+		))]
+		pub fn enqueue_txs(
+			origin: OriginFor<T>,
+			txs: Vec<(Option<T::AccountId>, EncodedTx)>,
+		) -> DispatchResultWithPostInfo {
+			ensure_none(origin)?;
+			assert!(
+				!DidStoreTxs::<T>::get(),
+				"enqueue_txs inherent can only be called once per block"
+			);
+			DidStoreTxs::<T>::put(true);
+			ensure!(txs.is_empty() || Self::can_enqueue_txs(), Error::<T>::StorageQueueFull);
+			let hashes =
+				txs.iter().map(|(_, data)| T::Hashing::hash(&data[..])).collect::<Vec<_>>();
+			Self::deposit_log(generic::DigestItem::Other(hashes.encode()));
+			Self::store_txs(txs);
+			Ok(().into())
+		}
+
+		/// Make some on-chain remark.
+		///
+		/// # <weight>
+		/// - `O(1)`
+		/// # </weight>
 		#[pallet::weight(T::SystemWeightInfo::remark(_remark.len() as u32))]
 		pub fn remark(origin: OriginFor<T>, _remark: Vec<u8>) -> DispatchResultWithPostInfo {
 			ensure_signed_or_root(origin)?;
@@ -542,6 +574,8 @@ pub mod pallet {
 		NonZeroRefCount,
 		/// The origin filter prevent the call to be dispatched.
 		CallFiltered,
+		/// the storage queue is empty and cannot accept any new txs
+		StorageQueueFull,
 	}
 
 	/// Exposed trait-generic origin type.
@@ -578,10 +612,29 @@ pub mod pallet {
 	pub type BlockHash<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, T::Hash, ValueQuery>;
 
-	/// Map of block numbers to block hashes.
+	/// Map of block numbers to block shuffling seeds
 	#[pallet::storage]
 	#[pallet::getter(fn block_seed)]
 	pub type BlockSeed<T: Config> = StorageValue<_, sp_core::H256, ValueQuery>;
+
+	/// Map of block numbers to block shuffling seeds
+	#[pallet::storage]
+	pub type StorageQueue<T: Config> = StorageValue<
+		_,
+		BoundedVec<
+			(T::BlockNumber, Option<u32>, Vec<(Option<T::AccountId>, EncodedTx)>),
+			StorageQueueLimit,
+		>,
+		ValueQuery,
+	>;
+
+	/// Map of block numbers to block shuffling seeds
+	#[pallet::storage]
+	pub type DidStoreTxs<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+	/// Map of block numbers to block shuffling seeds
+	#[pallet::storage]
+	pub type TxPrevalidation<T: Config> = StorageValue<_, bool, ValueQuery>;
 
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
@@ -1294,8 +1347,104 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
+	/// store seed and shuffle extrinsics from precedesing block
 	pub fn set_block_seed(seed: &sp_core::H256) {
+		// TODO check in on_finalize if seed has been set for every block
+		sp_runtime::runtime_logger::RuntimeLogger::init();
 		<BlockSeed<T>>::put(seed);
+		let mut queue = <StorageQueue<T>>::get();
+		let current_block = Self::block_number().saturated_into::<u32>();
+		log::debug!( target: "runtime::ver", "storing seed {} for block {}", seed, current_block);
+		if let Some((nr, index, txs)) = queue.last_mut() {
+			if Self::block_number() == *nr + One::one() {
+				// index is only set when txs has been shuffled already
+				assert!(index.is_none());
+				let shuffled = extrinsic_shuffler::shuffle_using_seed(txs.clone(), seed);
+				let _ = sp_std::mem::replace(txs, shuffled);
+				let _ = sp_std::mem::replace(index, Some(0));
+			}
+		}
+		<StorageQueue<T>>::put(queue);
+	}
+
+	// part of block creation mechanims, used to ignore nonces when prevalidating txs
+	pub fn set_prevalidation() {
+		TxPrevalidation::<T>::put(true);
+	}
+
+	pub fn store_txs(txs: Vec<(Option<T::AccountId>, EncodedTx)>) {
+		let block_number = Self::block_number().saturated_into::<u32>();
+		sp_runtime::runtime_logger::RuntimeLogger::init();
+		if !txs.is_empty() {
+			log::debug!( target: "runtime::ver", "storing {} txs at block {}", block_number, txs.len() );
+			let mut queue = <StorageQueue<T>>::take();
+			queue.try_push((Self::block_number(), None, txs)).unwrap();
+			<StorageQueue<T>>::put(queue);
+		} else {
+			log::debug!( target: "runtime::ver", "no txs to store at block {}", block_number);
+		}
+	}
+
+	pub fn can_enqueue_txs() -> bool {
+		let queue = <StorageQueue<T>>::get();
+		<StorageQueueLimit as Get<u32>>::get() > queue.len() as u32
+	}
+
+	pub fn enqueued_blocks_count() -> u64 {
+		<StorageQueue<T>>::get().len() as u64
+	}
+
+	pub fn enqueued_txs_count(acc: &T::AccountId) -> usize {
+		let queue = <StorageQueue<T>>::get();
+		queue
+			.iter()
+			.map(|(_, _, txs)| txs)
+			.flatten()
+			.filter(|(who, _)| who.clone() == Some(acc.clone()))
+			.count()
+	}
+
+	pub fn pop_txs(mut len: usize) -> Vec<EncodedTx> {
+		sp_runtime::runtime_logger::RuntimeLogger::init();
+		let mut result: Vec<_> = Vec::new();
+		let mut fully_executed_blocks = 0;
+		let mut queue = <StorageQueue<T>>::take();
+		if queue.is_empty() {
+			log::debug!( target: "runtime::ver", "popping {} txs from storage queue - queue is empty!" , len);
+		} else {
+			log::debug!( target: "runtime::ver", "popping {} txs from storage queue" , len);
+		}
+
+		for (nr, index, txs) in queue.iter_mut() {
+			if len == 0 {
+				break
+			}
+
+			if let Some(id) = index {
+				log::debug!( target: "runtime::ver", "block #{}, found {}/{}", nr.clone().saturated_into::<u32>(), txs.len() - (*id as usize), len);
+				let count = sp_std::cmp::min(txs.len() - (*id) as usize, len) as usize;
+				let last_index = *id as usize + count;
+				if last_index == txs.len() {
+					fully_executed_blocks += 1;
+					log::debug!( target: "runtime::ver", "block {} has been fully executed", nr.clone().saturated_into::<u32>());
+				}
+				result.extend_from_slice(&txs[*id as usize..last_index]);
+				*id += count as u32;
+				len -= count;
+				log::debug!( target: "runtime::ver", "fetched {} tx from block {}", count, nr.clone().saturated_into::<u32>());
+			} else {
+				log::debug!( target: "runtime::ver", "unshuffled block found {}", nr.clone().saturated_into::<u32>());
+				break
+			}
+		}
+
+		if fully_executed_blocks > 0 {
+			let size_before = queue.len();
+			queue.drain(0..fully_executed_blocks);
+			log::debug!( target: "runtime::ver", "{} blocks to be removed from queue, len {} -> {}", fully_executed_blocks, size_before, queue.len());
+		}
+		<StorageQueue<T>>::put(queue);
+		result.iter().map(|(_, data)| data.clone()).collect()
 	}
 
 	/// Start the execution of a particular block.
@@ -1351,6 +1500,7 @@ impl<T: Config> Pallet<T> {
 		);
 		ExecutionPhase::<T>::kill();
 		AllExtrinsicsLen::<T>::kill();
+		DidStoreTxs::<T>::kill();
 
 		// The following fields
 		//

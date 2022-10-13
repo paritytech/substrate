@@ -27,6 +27,7 @@ pub mod error;
 mod graph;
 mod metrics;
 mod revalidation;
+use codec::Decode;
 #[cfg(test)]
 mod tests;
 
@@ -540,7 +541,6 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 		.unwrap_or_default();
 
 	let hashes = extrinsics.iter().map(|tx| pool.hash_of(tx)).collect::<Vec<_>>();
-
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
 	let header = match api.block_header(&block_id) {
@@ -554,6 +554,25 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 			return hashes
 		},
 	};
+
+	if let Some(digest) = header
+		.digest()
+		.logs()
+		.iter()
+		.find(|item| matches!(item, sp_runtime::DigestItem::Other(_)))
+	{
+		if let sp_runtime::DigestItem::Other(bytes) = digest {
+			let enqueued_hashes = Vec::<Block::Hash>::decode(&mut bytes.as_ref()).unwrap();
+
+			enqueued_hashes.iter().for_each(
+				|hash| log::debug!(target: "txpool", "found enqueued tx in the log {}", hash),
+			);
+
+			if let Err(e) = pool.prune_known(&block_id, &enqueued_hashes) {
+				log::error!("Cannot prune known in the pool: {}", e);
+			}
+		}
+	}
 
 	if let Err(e) = pool.prune(&block_id, &BlockId::hash(*header.parent_hash()), &extrinsics).await
 	{

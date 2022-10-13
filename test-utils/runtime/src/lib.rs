@@ -48,7 +48,7 @@ use sp_runtime::{
 	create_runtime_str, impl_opaque_keys,
 	traits::{
 		BlakeTwo256, BlindCheckable, Block as BlockT, Extrinsic as ExtrinsicT, GetNodeBlockType,
-		GetRuntimeBlockType, Header as HeaderT, IdentityLookup, Verify,
+		GetRuntimeBlockType, IdentityLookup, Verify,
 	},
 	transaction_validity::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -722,6 +722,17 @@ cfg_if! {
 
 				fn store_seed(_seed: sp_core::H256){
 				}
+
+				fn can_enqueue_txs() -> bool {
+					true
+				}
+
+
+			  fn create_enqueue_txs_inherent(_: Vec<<Block as BlockT>::Extrinsic>) -> <Block as BlockT>::Extrinsic{
+				  todo!()
+			  }
+				fn pop_tx() -> std::option::Option<sp_application_crypto::Vec<u8>> { todo!() }
+				fn 	start_prevalidation() {}
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {
