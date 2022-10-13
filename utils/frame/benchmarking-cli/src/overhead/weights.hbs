@@ -106,7 +106,7 @@ mod test_weights {
 			"The proof size of a non-empty block should be smaller than 2 MiB"
 		);
 		assert!(
-			EmptyBlockProofSize::get() >= NonEmptyBlockProofSize::get(),
+			NonEmptyBlockProofSize::get() >= EmptyBlockProofSize::get(),
 			"The proof size of a non-empty block should be at least that of an empty block"
 		);
 		assert!(
