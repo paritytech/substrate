@@ -230,7 +230,9 @@ mod encoding {
 		}
 	}
 
-	impl<H: traits::Hash, L: FullLeaf + codec::MaxEncodedLen> codec::MaxEncodedLen for DataOrHash<H, L> {
+	impl<H: traits::Hash, L: FullLeaf + codec::MaxEncodedLen> codec::MaxEncodedLen
+		for DataOrHash<H, L>
+	{
 		fn max_encoded_len() -> usize {
 			Either::<H::Output, L>::max_encoded_len()
 		}
