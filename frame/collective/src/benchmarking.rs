@@ -34,7 +34,7 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-fn id_to_remark_data<T: Config<I>, I: 'static>(id: u32, length: usize) -> Vec<u8> {
+fn id_to_remark_data(id: u32, length: usize) -> Vec<u8> {
 	id.to_le_bytes().into_iter().cycle().take(length).collect()
 }
 
