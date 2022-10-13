@@ -99,7 +99,7 @@ impl Config for Test {
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
-	type RemoveKeysLimit = ConstU32<5>;
+	type RemoveItemsLimit = ConstU32<5>;
 }
 
 use std::collections::HashMap;

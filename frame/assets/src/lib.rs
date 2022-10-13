@@ -176,8 +176,12 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -199,7 +203,7 @@ pub mod pallet {
 
 		/// Max number of storage keys to destroy per extrinsic call.
 		#[pallet::constant]
-		type RemoveKeysLimit: Get<u32>;
+		type RemoveItemsLimit: Get<u32>;
 
 		/// Identifier for the class of asset.
 		type AssetId: Member
@@ -625,14 +629,14 @@ pub mod pallet {
 		/// asset is in a `Destroying` state
 		///
 		/// Due to weight restrictions, this function may need to be called multiple
-		/// times to fully destroy all accounts. It will destroy `RemoveKeysLimit` accounts at a
+		/// times to fully destroy all accounts. It will destroy `RemoveItemsLimit` accounts at a
 		/// time.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
 		/// Each call Emits the `Event::DestroyedAccounts` event.
-		#[pallet::weight(T::WeightInfo::destroy_accounts(T::RemoveKeysLimit::get()))]
+		#[pallet::weight(T::WeightInfo::destroy_accounts(T::RemoveItemsLimit::get()))]
 		pub fn destroy_accounts(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
@@ -642,19 +646,19 @@ pub mod pallet {
 			Ok(Some(T::WeightInfo::destroy_accounts(removed_accounts)).into())
 		}
 
-		/// Destroy all approvals associated with a given asset up to the max (T::RemoveKeysLimit),
+		/// Destroy all approvals associated with a given asset up to the max (T::RemoveItemsLimit),
 		/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
 		/// asset is in a `Destroying` state
 		///
 		/// Due to weight restrictions, this function may need to be called multiple
-		/// times to fully destroy all approvals. It will destroy `RemoveKeysLimit` approvals at a
+		/// times to fully destroy all approvals. It will destroy `RemoveItemsLimit` approvals at a
 		/// time.
 		///
 		/// - `id`: The identifier of the asset to be destroyed. This must identify an existing
 		///   asset.
 		///
 		/// Each call Emits the `Event::DestroyedApprovals` event.
-		#[pallet::weight(T::WeightInfo::destroy_approvals(T::RemoveKeysLimit::get()))]
+		#[pallet::weight(T::WeightInfo::destroy_approvals(T::RemoveItemsLimit::get()))]
 		pub fn destroy_approvals(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,

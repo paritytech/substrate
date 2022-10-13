@@ -178,7 +178,7 @@ benchmarks_instance_pallet! {
 	}
 
 	destroy_accounts {
-		let c in 0 .. T::RemoveKeysLimit::get();
+		let c in 0 .. T::RemoveItemsLimit::get();
 		let (caller, _) = create_default_asset::<T, I>(true);
 		add_sufficients::<T, I>(caller.clone(), c);
 		Assets::<T, I>::freeze_asset(
@@ -196,7 +196,7 @@ benchmarks_instance_pallet! {
 	}
 
 	destroy_approvals {
-		let a in 0 .. T::RemoveKeysLimit::get();
+		let a in 0 .. T::RemoveItemsLimit::get();
 		let (caller, _) = create_default_minted_asset::<T, I>(true, 100u32.into());
 		add_approvals::<T, I>(caller.clone(), a);
 		Assets::<T, I>::freeze_asset(

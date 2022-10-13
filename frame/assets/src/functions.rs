@@ -689,7 +689,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Destroy accounts associated with a given asset up to the max (T::RemoveKeysLimit).
+	/// Destroy accounts associated with a given asset up to the max (T::RemoveItemsLimit).
 	///
 	/// Each call emits the `Event::DestroyedAccounts` event.
 	pub(super) fn do_destroy_accounts(id: T::AssetId) -> Result<u32, DispatchError> {
@@ -707,7 +707,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
 					dead_accounts.push(who);
 					removed_accounts = removed_accounts.saturating_add(1);
-					if removed_accounts >= T::RemoveKeysLimit::get() {
+					if removed_accounts >= T::RemoveItemsLimit::get() {
 						break
 					}
 				}
@@ -727,7 +727,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(removed_accounts)
 	}
 
-	/// Destroy approvals associated with a given asset up to the max (T::RemoveKeysLimit).
+	/// Destroy approvals associated with a given asset up to the max (T::RemoveItemsLimit).
 	///
 	/// Each call emits the `Event::DestroyedApprovals` event
 	pub(super) fn do_destroy_approvals(id: T::AssetId) -> Result<u32, DispatchError> {
@@ -744,7 +744,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					T::Currency::unreserve(&owner, approval.deposit);
 					removed_approvals = removed_approvals.saturating_add(1);
 					details.approvals = details.approvals.saturating_sub(1);
-					if removed_approvals >= T::RemoveKeysLimit::get() {
+					if removed_approvals >= T::RemoveItemsLimit::get() {
 						break
 					}
 				}

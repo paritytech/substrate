@@ -167,7 +167,7 @@ impl pallet_assets::Config for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = ();
-	type RemoveKeysLimit = ConstU32<1000>;
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 pub struct HardcodedAuthor;
