@@ -55,9 +55,9 @@ frame_support::construct_runtime!(
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
-impl Contains<Call> for BaseFilter {
-	fn contains(call: &Call) -> bool {
-		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
+impl Contains<RuntimeCall> for BaseFilter {
+	fn contains(call: &RuntimeCall) -> bool {
+		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
@@ -71,16 +71,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -93,7 +93,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet_preimage::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<u64>;
@@ -102,10 +102,10 @@ impl pallet_preimage::Config for Test {
 	type ByteDeposit = ();
 }
 impl pallet_scheduler::Config for Test {
-	type Event = Event;
-	type Origin = Origin;
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeOrigin = RuntimeOrigin;
 	type PalletsOrigin = OriginCaller;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type MaximumWeight = MaxWeight;
 	type ScheduleOrigin = EnsureRoot<u64>;
 	type MaxScheduledPerBlock = ConstU32<100>;
@@ -119,7 +119,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -148,7 +148,7 @@ impl SortedMembers<u64> for OneToFive {
 pub struct TestTracksInfo;
 impl TracksInfo<u64, u64> for TestTracksInfo {
 	type Id = u8;
-	type Origin = <Origin as OriginTrait>::PalletsOrigin;
+	type RuntimeOrigin = <RuntimeOrigin as OriginTrait>::PalletsOrigin;
 	fn tracks() -> &'static [(Self::Id, TrackInfo<u64, u64>)] {
 		static DATA: [(u8, TrackInfo<u64, u64>); 2] = [
 			(
@@ -198,7 +198,7 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 		];
 		&DATA[..]
 	}
-	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {
+	fn track_for(id: &Self::RuntimeOrigin) -> Result<Self::Id, ()> {
 		if let Ok(system_origin) = frame_system::RawOrigin::try_from(id.clone()) {
 			match system_origin {
 				frame_system::RawOrigin::Root => Ok(0),
@@ -210,11 +210,12 @@ impl TracksInfo<u64, u64> for TestTracksInfo {
 		}
 	}
 }
+impl_tracksinfo_get!(TestTracksInfo, u64, u64);
 
 impl Config for Test {
 	type WeightInfo = ();
-	type Call = Call;
-	type Event = Event;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
 	type Scheduler = Scheduler;
 	type Currency = pallet_balances::Pallet<Self>;
 	type SubmitOrigin = frame_system::EnsureSigned<u64>;
@@ -297,12 +298,16 @@ impl<Class> VoteTally<u32, Class> for Tally {
 }
 
 pub fn set_balance_proposal(value: u64) -> Vec<u8> {
-	Call::Balances(pallet_balances::Call::set_balance { who: 42, new_free: value, new_reserved: 0 })
-		.encode()
+	RuntimeCall::Balances(pallet_balances::Call::set_balance {
+		who: 42,
+		new_free: value,
+		new_reserved: 0,
+	})
+	.encode()
 }
 
 pub fn set_balance_proposal_hash(value: u64) -> H256 {
-	let c = Call::Balances(pallet_balances::Call::set_balance {
+	let c = RuntimeCall::Balances(pallet_balances::Call::set_balance {
 		who: 42,
 		new_free: value,
 		new_reserved: 0,
@@ -314,7 +319,7 @@ pub fn set_balance_proposal_hash(value: u64) -> H256 {
 #[allow(dead_code)]
 pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
-		Origin::signed(who),
+		RuntimeOrigin::signed(who),
 		Box::new(frame_system::RawOrigin::Root.into()),
 		set_balance_proposal_hash(value),
 		DispatchTime::After(delay),
@@ -442,12 +447,12 @@ pub enum RefState {
 impl RefState {
 	pub fn create(self) -> ReferendumIndex {
 		assert_ok!(Referenda::submit(
-			Origin::signed(1),
+			RuntimeOrigin::signed(1),
 			Box::new(frame_support::dispatch::RawOrigin::Root.into()),
 			set_balance_proposal_hash(1),
 			DispatchTime::At(10),
 		));
-		assert_ok!(Referenda::place_decision_deposit(Origin::signed(2), 0));
+		assert_ok!(Referenda::place_decision_deposit(RuntimeOrigin::signed(2), 0));
 		if matches!(self, RefState::Confirming { immediate: true }) {
 			set_tally(0, 100, 0);
 		}

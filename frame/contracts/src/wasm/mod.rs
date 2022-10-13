@@ -35,11 +35,7 @@ use crate::{
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	ensure,
-	traits::Get,
-};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
@@ -134,12 +130,6 @@ where
 			schedule,
 			owner,
 		)?;
-		// When instrumenting a new code we apply a stricter limit than enforced by the
-		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
-		ensure!(
-			module.code.len() as u32 <= T::MaxCodeLen::get(),
-			(<Error<T>>::CodeTooLarge.into(), ""),
-		);
 		Ok(module)
 	}
 
@@ -280,12 +270,11 @@ mod tests {
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
-		tests::{Call, Test, ALICE, BOB},
+		tests::{RuntimeCall, Test, ALICE, BOB},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
 	use frame_support::{assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight};
-	use hex_literal::hex;
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
 	use sp_core::{Bytes, H256};
@@ -339,7 +328,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
-		runtime_calls: RefCell<Vec<Call>>,
+		runtime_calls: RefCell<Vec<RuntimeCall>>,
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
@@ -532,7 +521,10 @@ mod tests {
 			self.debug_buffer.extend(msg.as_bytes());
 			true
 		}
-		fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+		fn call_runtime(
+			&self,
+			call: <Self::T as Config>::RuntimeCall,
+		) -> DispatchResultWithPostInfo {
 			self.runtime_calls.borrow_mut().push(call);
 			Ok(Default::default())
 		}
@@ -1555,8 +1547,8 @@ mod tests {
 
 		let gas_left = Weight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left < gas_limit, "gas_left must be less than initial");
-		assert!(gas_left > actual_left, "gas_left must be greater than final");
+		assert!(gas_left.all_lt(gas_limit), "gas_left must be less than initial");
+		assert!(gas_left.all_gt(actual_left), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1835,10 +1827,9 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(
-					hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")
-						.to_vec()
-				),
+				data: array_bytes::hex_into_unchecked(
+					"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+				)
 			},
 		);
 	}
@@ -1908,7 +1899,9 @@ mod tests {
 				flags: ReturnFlags::empty(),
 				data: Bytes(
 					(
-						hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"),
+						array_bytes::hex2array_unchecked::<32>(
+							"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+						),
 						42u64,
 					)
 						.encode()
@@ -1953,7 +1946,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left() > Weight::zero());
+		assert!(mock_ext.gas_meter.gas_left().all_gt(Weight::zero()));
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
@@ -2117,7 +2110,7 @@ mod tests {
 	fn seal_return_with_success_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
-			hex!("00000000445566778899").to_vec(),
+			array_bytes::hex2bytes_unchecked("00000000445566778899"),
 			MockExt::default(),
 		)
 		.unwrap();
@@ -2126,7 +2119,7 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(hex!("445566778899").to_vec()),
+				data: Bytes(array_bytes::hex2bytes_unchecked("445566778899")),
 			}
 		);
 		assert!(!output.did_revert());
@@ -2134,15 +2127,18 @@ mod tests {
 
 	#[test]
 	fn return_with_revert_status() {
-		let output =
-			execute(CODE_RETURN_WITH_DATA, hex!("010000005566778899").to_vec(), MockExt::default())
-				.unwrap();
+		let output = execute(
+			CODE_RETURN_WITH_DATA,
+			array_bytes::hex2bytes_unchecked("010000005566778899"),
+			MockExt::default(),
+		)
+		.unwrap();
 
 		assert_eq!(
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::REVERT,
-				data: Bytes(hex!("5566778899").to_vec()),
+				data: Bytes(array_bytes::hex2bytes_unchecked("5566778899")),
 			}
 		);
 		assert!(output.did_revert());
@@ -2299,7 +2295,8 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
+		let call =
+			RuntimeCall::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
 		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);

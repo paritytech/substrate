@@ -178,7 +178,7 @@ mod tests {
 	#[test]
 	fn test_generation_with_single_char() {
 		let seed = generate_key::<sr25519::Pair>("ab", default_ss58_version()).unwrap();
-		assert!(sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
+		assert!(sr25519::Pair::from_seed_slice(&array_bytes::hex2bytes_unchecked(&seed))
 			.unwrap()
 			.public()
 			.to_ss58check()
@@ -190,7 +190,7 @@ mod tests {
 		let seed =
 			generate_key::<sr25519::Pair>("ab", Ss58AddressFormatRegistry::PolkadotAccount.into())
 				.unwrap();
-		assert!(sr25519::Pair::from_seed_slice(&hex::decode(&seed[2..]).unwrap())
+		assert!(sr25519::Pair::from_seed_slice(&array_bytes::hex2bytes_unchecked(&seed))
 			.unwrap()
 			.public()
 			.to_ss58check_with_version(Ss58AddressFormatRegistry::PolkadotAccount.into())

@@ -240,25 +240,26 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// The outer call dispatch type.
+		/// The runtime call dispatch type.
 		type Proposal: Parameter
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ From<frame_system::Call<Self>>
 			+ From<Call<Self, I>>
 			+ GetDispatchInfo
 			+ IsSubType<Call<Self, I>>
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Origin for admin-level operations, like setting the Alliance's rules.
-		type AdminOrigin: EnsureOrigin<Self::Origin>;
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin that manages entry and forcible discharge from the Alliance.
-		type MembershipManager: EnsureOrigin<Self::Origin>;
+		type MembershipManager: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Origin for making announcements and adding/removing unscrupulous items.
-		type AnnouncementOrigin: EnsureOrigin<Self::Origin>;
+		type AnnouncementOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The currency used for deposits.
 		type Currency: ReservableCurrency<Self::AccountId>;

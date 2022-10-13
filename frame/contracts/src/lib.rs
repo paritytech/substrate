@@ -87,12 +87,12 @@
 mod gas;
 mod benchmarking;
 mod exec;
+mod migration;
 mod schedule;
 mod storage;
 mod wasm;
 
 pub mod chain_extension;
-pub mod migration;
 pub mod weights;
 
 #[cfg(test)]
@@ -107,11 +107,14 @@ use crate::{
 };
 use codec::{Encode, HasCompact};
 use frame_support::{
-	dispatch::Dispatchable,
+	dispatch::{DispatchClass, Dispatchable, GetDispatchInfo, Pays, PostDispatchInfo},
 	ensure,
-	traits::{ConstU32, Contains, Currency, Get, Randomness, ReservableCurrency, Time},
-	weights::{DispatchClass, GetDispatchInfo, Pays, PostDispatchInfo, Weight},
-	BoundedVec,
+	traits::{
+		tokens::fungible::Inspect, ConstU32, Contains, Currency, Get, Randomness,
+		ReservableCurrency, Time,
+	},
+	weights::Weight,
+	BoundedVec, WeakBoundedVec,
 };
 use frame_system::{limits::BlockWeights, Pallet as System};
 use pallet_contracts_primitives::{
@@ -126,6 +129,7 @@ use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 
 pub use crate::{
 	exec::{Frame, VarSizedKey as StorageKey},
+	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
 };
@@ -135,7 +139,7 @@ type TrieId = BoundedVec<u8, ConstU32<128>>;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type CodeVec<T> = BoundedVec<u8, <T as Config>::MaxCodeLen>;
-type RelaxedCodeVec<T> = BoundedVec<u8, <T as Config>::RelaxedMaxCodeLen>;
+type RelaxedCodeVec<T> = WeakBoundedVec<u8, <T as Config>::MaxCodeLen>;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// Used as a sentinel value when reading and writing contract memory.
@@ -225,7 +229,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(7);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(8);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -236,20 +240,21 @@ pub mod pallet {
 		/// The time implementation used to supply timestamps to contracts through `seal_now`.
 		type Time: Time;
 
-		/// The generator used to supply randomness to contracts through `seal_random`.
+		/// The generator used to supply randomness to contracts through `seal_random`
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
 
 		/// The currency in which fees are paid and contract balances are held.
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: ReservableCurrency<Self::AccountId>
+			+ Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+		type RuntimeCall: Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ codec::Decode
-			+ IsType<<Self as frame_system::Config>::Call>;
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Filter that is applied to calls dispatched by contracts.
 		///
@@ -260,7 +265,7 @@ pub mod pallet {
 		/// # Stability
 		///
 		/// The runtime **must** make sure that all dispatchables that are callable by
-		/// contracts remain stable. In addition [`Self::Call`] itself must remain stable.
+		/// contracts remain stable. In addition [`Self::RuntimeCall`] itself must remain stable.
 		/// This means that no existing variants are allowed to switch their positions.
 		///
 		/// # Note
@@ -270,7 +275,7 @@ pub mod pallet {
 		/// Therefore please make sure to be restrictive about which dispatchables are allowed
 		/// in order to not introduce a new DoS vector like memory allocation patterns that can
 		/// be exploited to drive the runtime into a panic.
-		type CallFilter: Contains<<Self as frame_system::Config>::Call>;
+		type CallFilter: Contains<<Self as frame_system::Config>::RuntimeCall>;
 
 		/// Used to answer contracts' queries regarding the current weight price. This is **not**
 		/// used to calculate the actual fee and is only for informational purposes.
@@ -365,15 +370,6 @@ pub mod pallet {
 		/// version of the code. Therefore `instantiate_with_code` can fail even when supplying
 		/// a wasm binary below this maximum size.
 		type MaxCodeLen: Get<u32>;
-
-		/// The maximum length of a contract code after reinstrumentation.
-		///
-		/// When uploading a new contract the size defined by [`Self::MaxCodeLen`] is used for both
-		/// the pristine **and** the instrumented version. When a existing contract needs to be
-		/// reinstrumented after a runtime upgrade we apply this bound. The reason is that if the
-		/// new instrumentation increases the size beyond the limit it would make that contract
-		/// inaccessible until rectified by another runtime upgrade.
-		type RelaxedMaxCodeLen: Get<u32>;
 
 		/// The maximum allowable length in bytes for storage keys.
 		type MaxStorageKeyLen: Get<u32>;
@@ -1045,7 +1041,7 @@ where
 		};
 		let schedule = T::Schedule::get();
 		let result = ExecStack::<T, PrefabWasmModule<T>>::run_call(
-			origin,
+			origin.clone(),
 			dest,
 			&mut gas_meter,
 			&mut storage_meter,
@@ -1054,7 +1050,11 @@ where
 			data,
 			debug_message,
 		);
-		InternalCallOutput { result, gas_meter, storage_deposit: storage_meter.into_deposit() }
+		InternalCallOutput {
+			result,
+			gas_meter,
+			storage_deposit: storage_meter.into_deposit(&origin),
+		}
 	}
 
 	/// Internal function that does the actual instantiation.
@@ -1098,7 +1098,7 @@ where
 				value.saturating_add(extra_deposit),
 			)?;
 			let result = ExecStack::<T, PrefabWasmModule<T>>::run_instantiate(
-				origin,
+				origin.clone(),
 				executable,
 				&mut gas_meter,
 				&mut storage_meter,
@@ -1109,17 +1109,23 @@ where
 				debug_message,
 			);
 			storage_deposit = storage_meter
-				.into_deposit()
+				.into_deposit(&origin)
 				.saturating_add(&StorageDeposit::Charge(extra_deposit));
 			result
 		};
 		InternalInstantiateOutput { result: try_exec(), gas_meter, storage_deposit }
 	}
 
+	/// Deposit a pallet contracts event. Handles the conversion to the overarching event type.
 	fn deposit_event(topics: Vec<T::Hash>, event: Event<T>) {
 		<frame_system::Pallet<T>>::deposit_event_indexed(
 			&topics,
-			<T as Config>::Event::from(event).into(),
+			<T as Config>::RuntimeEvent::from(event).into(),
 		)
+	}
+
+	/// Return the existential deposit of [`Config::Currency`].
+	fn min_balance() -> BalanceOf<T> {
+		<T::Currency as Inspect<AccountIdOf<T>>>::minimum_balance()
 	}
 }

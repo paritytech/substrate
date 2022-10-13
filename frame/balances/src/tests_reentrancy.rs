@@ -60,16 +60,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -92,7 +92,7 @@ impl OnUnbalanced<NegativeImbalance<Test>> for OnDustRemoval {
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = OnDustRemoval;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
 		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
@@ -159,16 +159,19 @@ fn transfer_dust_removal_tst1_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 12);
 
-		System::assert_has_event(Event::Balances(crate::Event::Transfer {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
 			to: 3,
 			amount: 450,
 		}));
-		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::DustLost {
 			account: 2,
 			amount: 50,
 		}));
-		System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit {
+			who: 1,
+			amount: 50,
+		}));
 	});
 }
 
@@ -194,16 +197,19 @@ fn transfer_dust_removal_tst2_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 10);
 
-		System::assert_has_event(Event::Balances(crate::Event::Transfer {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Transfer {
 			from: 2,
 			to: 1,
 			amount: 450,
 		}));
-		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::DustLost {
 			account: 2,
 			amount: 50,
 		}));
-		System::assert_has_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::Deposit {
+			who: 1,
+			amount: 50,
+		}));
 	});
 }
 
@@ -238,18 +244,21 @@ fn repatriating_reserved_balance_dust_removal_should_work() {
 		// Verify the events
 		assert_eq!(System::events().len(), 11);
 
-		System::assert_has_event(Event::Balances(crate::Event::ReserveRepatriated {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::ReserveRepatriated {
 			from: 2,
 			to: 1,
 			amount: 450,
 			destination_status: Status::Free,
 		}));
 
-		System::assert_has_event(Event::Balances(crate::Event::DustLost {
+		System::assert_has_event(RuntimeEvent::Balances(crate::Event::DustLost {
 			account: 2,
 			amount: 50,
 		}));
 
-		System::assert_last_event(Event::Balances(crate::Event::Deposit { who: 1, amount: 50 }));
+		System::assert_last_event(RuntimeEvent::Balances(crate::Event::Deposit {
+			who: 1,
+			amount: 50,
+		}));
 	});
 }

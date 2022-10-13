@@ -223,7 +223,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
 			None => None,
 		};
-		
 		let result = if let Some(local_cache) = self.trie_node_cache.as_ref() {
 			let mut cache = local_cache.as_local_trie_cache().as_trie_db_mut_cache();
 

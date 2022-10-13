@@ -234,9 +234,10 @@ use frame_election_provider_support::{
 	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
 };
 use frame_support::{
+	dispatch::DispatchClass,
 	ensure,
 	traits::{Currency, Get, OnUnbalanced, ReservableCurrency},
-	weights::{DispatchClass, Weight},
+	weights::Weight,
 };
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
@@ -316,6 +317,10 @@ impl<T: Config> ElectionProvider for NoFallback<T> {
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
+
+	fn ongoing() -> bool {
+		false
+	}
 
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
@@ -570,8 +575,8 @@ pub mod pallet {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config + SendTransactionTypes<Call<Self>> {
-		type Event: From<Event<Self>>
-			+ IsType<<Self as frame_system::Config>::Event>
+		type RuntimeEvent: From<Event<Self>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
 			+ TryInto<Event<Self>>;
 
 		/// Currency type.
@@ -699,13 +704,32 @@ pub mod pallet {
 
 		/// Origin that can control this pallet. Note that any action taken by this origin (such)
 		/// as providing an emergency solution is not checked. Thus, it must be a trusted origin.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The configuration of benchmarking.
 		type BenchmarkingConfig: BenchmarkingConfig;
 
 		/// The weight of the pallet.
 		type WeightInfo: WeightInfo;
+	}
+
+	// Expose miner configs over the metadata such that they can be re-implemented.
+	#[pallet::extra_constants]
+	impl<T: Config> Pallet<T> {
+		#[pallet::constant_name(MinerMaxLength)]
+		fn max_length() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxLength::get()
+		}
+
+		#[pallet::constant_name(MinerMaxWeight)]
+		fn max_weight() -> Weight {
+			<T::MinerConfig as MinerConfig>::MaxWeight::get()
+		}
+
+		#[pallet::constant_name(MinerMaxVotesPerVoter)]
+		fn max_votes_per_voter() -> u32 {
+			<T::MinerConfig as MinerConfig>::MaxVotesPerVoter::get()
+		}
 	}
 
 	#[pallet::hooks]
@@ -984,8 +1008,10 @@ pub mod pallet {
 			// unlikely to ever return an error: if phase is signed, snapshot will exist.
 			let size = Self::snapshot_metadata().ok_or(Error::<T>::MissingSnapshotMetadata)?;
 
+			// TODO: account for proof size weight
 			ensure!(
-				Self::solution_weight_of(&raw_solution, size) < T::SignedMaxWeight::get(),
+				Self::solution_weight_of(&raw_solution, size).ref_time() <
+					T::SignedMaxWeight::get().ref_time(),
 				Error::<T>::SignedTooMuchWeight,
 			);
 
@@ -1578,6 +1604,13 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 
+	fn ongoing() -> bool {
+		match Self::current_phase() {
+			Phase::Off => false,
+			_ => true,
+		}
+	}
+
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
@@ -1808,7 +1841,7 @@ mod tests {
 	use crate::{
 		mock::{
 			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
-			MockedWeightInfo, MultiPhase, Origin, Runtime, SignedMaxSubmissions, System,
+			MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxSubmissions, System,
 			TargetIndex, Targets,
 		},
 		Phase,
@@ -2010,7 +2043,10 @@ mod tests {
 					score: ElectionScore { minimal_stake: (5 + s).into(), ..Default::default() },
 					..Default::default()
 				};
-				assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+				assert_ok!(MultiPhase::submit(
+					crate::mock::RuntimeOrigin::signed(99),
+					Box::new(solution)
+				));
 			}
 
 			// an unexpected call to elect.
@@ -2037,7 +2073,10 @@ mod tests {
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
-			assert_ok!(MultiPhase::submit(crate::mock::Origin::signed(99), Box::new(solution)));
+			assert_ok!(MultiPhase::submit(
+				crate::mock::RuntimeOrigin::signed(99),
+				Box::new(solution)
+			));
 
 			roll_to(30);
 			assert_ok!(MultiPhase::elect());
@@ -2078,7 +2117,7 @@ mod tests {
 			// ensure this solution is valid.
 			assert!(MultiPhase::queued_solution().is_none());
 			assert_ok!(MultiPhase::submit_unsigned(
-				crate::mock::Origin::none(),
+				crate::mock::RuntimeOrigin::none(),
 				Box::new(solution),
 				witness
 			));
@@ -2156,12 +2195,12 @@ mod tests {
 
 			// no single account can trigger this
 			assert_noop!(
-				MultiPhase::governance_fallback(Origin::signed(99), None, None),
+				MultiPhase::governance_fallback(RuntimeOrigin::signed(99), None, None),
 				DispatchError::BadOrigin
 			);
 
 			// only root can
-			assert_ok!(MultiPhase::governance_fallback(Origin::root(), None, None));
+			assert_ok!(MultiPhase::governance_fallback(RuntimeOrigin::root(), None, None));
 			// something is queued now
 			assert!(MultiPhase::queued_solution().is_some());
 			// next election call with fix everything.;
@@ -2299,8 +2338,9 @@ mod tests {
 		};
 
 		let mut active = 1;
-		while weight_with(active) <=
-			<Runtime as frame_system::Config>::BlockWeights::get().max_block ||
+		// TODO: account for proof size weight
+		while weight_with(active).ref_time() <=
+			<Runtime as frame_system::Config>::BlockWeights::get().max_block.ref_time() ||
 			active == all_voters
 		{
 			active += 1;

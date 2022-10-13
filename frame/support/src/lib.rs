@@ -93,7 +93,7 @@ pub mod unsigned {
 	};
 }
 
-#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+#[cfg(any(feature = "std", feature = "runtime-benchmarks", feature = "try-runtime", test))]
 pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
 	dispatch::{Callable, Parameter},
@@ -361,9 +361,9 @@ macro_rules! parameter_types {
 		}
 	};
 	(IMPL_STORAGE $name:ident, $type:ty, $value:expr $(, $ty_params:ident)*) => {
+		#[allow(unused)]
 		impl< $($ty_params),* > $name< $($ty_params),* > {
 			/// Returns the key for this parameter type.
-			#[allow(unused)]
 			pub fn key() -> [u8; 16] {
 				$crate::sp_core_hashing_proc_macro::twox_128!(b":", $name, b":")
 			}
@@ -372,7 +372,6 @@ macro_rules! parameter_types {
 			///
 			/// This needs to be executed in an externalities provided
 			/// environment.
-			#[allow(unused)]
 			pub fn set(value: &$type) {
 				$crate::storage::unhashed::put(&Self::key(), value);
 			}
@@ -445,6 +444,23 @@ macro_rules! parameter_types_impl_thread_local {
 					/// Set the internal value.
 					pub fn set(t: $type) {
 						[<$name:snake:upper>].with(|v| *v.borrow_mut() = t);
+					}
+
+					/// Mutate the internal value in place.
+					#[allow(unused)]
+					pub fn mutate<R, F: FnOnce(&mut $type) -> R>(mutate: F) -> R{
+						let mut current = Self::get();
+						let result = mutate(&mut current);
+						Self::set(current);
+						result
+					}
+
+					/// Get current value and replace with initial value of the parameter type.
+					#[allow(unused)]
+					pub fn take() -> $type {
+						let current = Self::get();
+						Self::set($value);
+						current
 					}
 				}
 			)*
@@ -830,7 +846,7 @@ pub mod tests {
 
 	pub trait Config: 'static {
 		type BlockNumber: Codec + EncodeLike + Default + TypeInfo;
-		type Origin;
+		type RuntimeOrigin;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
@@ -841,7 +857,7 @@ pub mod tests {
 		use super::Config;
 
 		decl_module! {
-			pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self  {}
+			pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self  {}
 		}
 	}
 
@@ -873,7 +889,7 @@ pub mod tests {
 
 	impl Config for Test {
 		type BlockNumber = u32;
-		type Origin = u32;
+		type RuntimeOrigin = u32;
 		type PalletInfo = PanicPalletInfo;
 		type DbWeight = ();
 	}
@@ -1361,7 +1377,10 @@ pub mod pallet_prelude {
 	#[cfg(feature = "std")]
 	pub use crate::traits::GenesisBuild;
 	pub use crate::{
-		dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter},
+		dispatch::{
+			DispatchClass, DispatchError, DispatchResult, DispatchResultWithPostInfo, Parameter,
+			Pays,
+		},
 		ensure,
 		inherent::{InherentData, InherentIdentifier, ProvideInherent},
 		storage,
@@ -1376,7 +1395,6 @@ pub mod pallet_prelude {
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
-		weights::{DispatchClass, Pays, Weight},
 		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
 		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
@@ -1392,6 +1410,7 @@ pub mod pallet_prelude {
 		MAX_MODULE_ERROR_ENCODED_SIZE,
 	};
 	pub use sp_std::marker::PhantomData;
+	pub use sp_weights::Weight;
 }
 
 /// `pallet` attribute macro allows to define a pallet to be used in `construct_runtime!`.
@@ -1437,9 +1456,9 @@ pub mod pallet_prelude {
 /// I.e. a regular trait definition named `Config`, with supertrait `frame_system::Config`,
 /// optionally other supertrait and where clause.
 ///
-/// The associated type `Event` is reserved, if defined it must bounds `From<Event>` and
-/// `IsType<<Self as frame_system::Config>::Event>`, see `#[pallet::event]` for more
-/// information.
+/// The associated type `RuntimeEvent` is reserved, if defined it must bounds
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`, see
+/// `#[pallet::event]` for more information.
 ///
 /// To put `Get` associated type into metadatas, use the attribute `#[pallet::constant]`, e.g.:
 /// ```ignore
@@ -1840,6 +1859,21 @@ pub mod pallet_prelude {
 /// pub(super) type MyStorage<T> = StorageValue<Value = u32>;
 /// ```
 ///
+/// The optional attribute `#[pallet::whitelist_storage]` will declare the
+/// storage as whitelisted from benchmarking. Doing so will exclude reads of
+/// that value's storage key from counting towards weight calculations during
+/// benchmarking.
+///
+/// This attribute should only be attached to storages that are known to be
+/// read/used in every block. This will result in a more accurate benchmarking weight.
+///
+/// ### Example
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::whitelist_storage]
+/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// ```
+///
 /// All the `cfg` attributes are automatically copied to the items generated for the storage,
 /// i.e. the getter, storage prefix, and the metadata element etc.
 ///
@@ -2063,7 +2097,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant] // put the constant in metadata
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+/// 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	// Define some additional constant to put into the constant metadata.
@@ -2252,7 +2286,7 @@ pub mod pallet_prelude {
 /// 		#[pallet::constant]
 /// 		type MyGetParam: Get<u32>;
 /// 		type Balance: Parameter + MaxEncodedLen + From<u8>;
-/// 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+/// 		type RuntimeEvent: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 /// 	}
 ///
 /// 	#[pallet::extra_constants]
@@ -2408,7 +2442,7 @@ pub mod pallet_prelude {
 /// 	```
 /// 5. **migrate Config**: move trait into the module with
 /// 	* all const in decl_module to `#[pallet::constant]`
-/// 	* add bound `IsType<<Self as frame_system::Config>::Event>` to `type Event`
+/// 	* add bound `IsType<<Self as frame_system::Config>::RuntimeEvent>` to `type RuntimeEvent`
 /// 7. **migrate decl_module**: write:
 /// 	```ignore
 /// 	#[pallet::hooks]
