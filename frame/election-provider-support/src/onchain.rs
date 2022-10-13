@@ -24,7 +24,7 @@ use crate::{
 	InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
-use sp_npos_elections::*;
+use sp_npos_elections::{BoundedSupports, VoteWeight, ElectionResult, assignment_ratio_to_staked_normalized, to_supports};
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// Errors of the on-chain election.
@@ -183,6 +183,7 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 
 #[cfg(test)]
 mod tests {
+	use frame_support::{assert_noop, parameter_types};
 	use super::*;
 	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
 	use frame_support::traits::ConstU32;
@@ -235,8 +236,9 @@ mod tests {
 	struct PhragmenParams;
 	struct PhragMMSParams;
 
-	frame_support::parameter_types! {
+	parameter_types! {
 		pub static MaxWinners: u32 = 10;
+		pub static DesiredTargets: u32 = 2;
 	}
 
 	impl Config for PhragmenParams {
@@ -283,7 +285,7 @@ mod tests {
 			}
 
 			fn desired_targets() -> data_provider::Result<u32> {
-				Ok(2)
+				Ok(DesiredTargets::get())
 			}
 
 			fn next_election_prediction(_: BlockNumber) -> BlockNumber {
@@ -301,6 +303,20 @@ mod tests {
 					(10, Support { total: 25, voters: vec![(1, 10), (3, 15)] }),
 					(30, Support { total: 35, voters: vec![(2, 20), (3, 15)] })
 				]
+			);
+		})
+	}
+
+	#[test]
+	fn too_many_winners_when_desired_targets_exceed_max_winners() {
+		sp_io::TestExternalities::new_empty().execute_with(|| {
+			// given desired targets larger than max winners
+			DesiredTargets::set(10);
+			MaxWinners::set(9);
+
+			assert_noop!(
+				<OnChainExecution::<PhragmenParams> as ElectionProvider>::elect(),
+				Error::TooManyWinners,
 			);
 		})
 	}
