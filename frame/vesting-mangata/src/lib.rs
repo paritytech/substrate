@@ -70,7 +70,7 @@ use sp_runtime::{
 	},
 	RuntimeDebug,
 };
-use sp_std::{convert::{TryInto}, fmt::Debug, prelude::*};
+use sp_std::{convert::TryInto, fmt::Debug, prelude::*};
 pub use vesting_info::*;
 pub use weights::WeightInfo;
 
@@ -272,7 +272,7 @@ pub mod pallet {
 		/// Sudo is not allowed to unlock tokens
 		SudoUnlockIsDisallowed,
 		/// The provided vesting index exceeds the current number of vesting schedules
-		InvalidVestingIndex, 
+		InvalidVestingIndex,
 		/// An overflow or underflow has occured
 		MathError,
 	}
@@ -393,7 +393,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			if schedule1_index == schedule2_index {
-				return Ok(());
+				return Ok(())
 			};
 			let schedule1_index = schedule1_index as usize;
 			let schedule2_index = schedule2_index as usize;
@@ -429,14 +429,22 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-
-	pub fn get_vesting_locked_at(who: &T::AccountId, token_id: TokenIdOf<T>, at_block_number: Option<T::BlockNumber>) -> Result<Vec<(VestingInfo<BalanceOf<T>, T::BlockNumber>, BalanceOf<T>)>, DispatchError>
-	{
+	pub fn get_vesting_locked_at(
+		who: &T::AccountId,
+		token_id: TokenIdOf<T>,
+		at_block_number: Option<T::BlockNumber>,
+	) -> Result<Vec<(VestingInfo<BalanceOf<T>, T::BlockNumber>, BalanceOf<T>)>, DispatchError> {
 		let at_block_number = at_block_number.unwrap_or(<frame_system::Pallet<T>>::block_number());
-		Ok(Self::vesting(&who, token_id).ok_or(Error::<T>::NotVesting)?
+		Ok(Self::vesting(&who, token_id)
+			.ok_or(Error::<T>::NotVesting)?
 			.to_vec()
 			.into_iter()
-			.map(|x| (x.into(), BalanceOf::<T>::from(x.locked_at::<T::BlockNumberToBalance>(at_block_number))))
+			.map(|x| {
+				(
+					x.into(),
+					BalanceOf::<T>::from(x.locked_at::<T::BlockNumberToBalance>(at_block_number)),
+				)
+			})
 			.collect::<Vec<(VestingInfo<BalanceOf<T>, T::BlockNumber>, BalanceOf<T>)>>())
 	}
 
@@ -499,7 +507,7 @@ impl<T: Config> Pallet<T> {
 		// Validate user inputs.
 		ensure!(schedule.locked() >= T::MinVestedTransfer::get(), Error::<T>::AmountLow);
 		if !schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into());
+			return Err(Error::<T>::InvalidScheduleParams.into())
 		};
 		let target = T::Lookup::lookup(target)?;
 		let source = T::Lookup::lookup(source)?;
@@ -513,7 +521,13 @@ impl<T: Config> Pallet<T> {
 			token_id,
 		)?;
 
-		T::Tokens::ensure_can_withdraw(token_id, &source, schedule.locked(), WithdrawReasons::all(), Default::default())?;
+		T::Tokens::ensure_can_withdraw(
+			token_id,
+			&source,
+			schedule.locked(),
+			WithdrawReasons::all(),
+			Default::default(),
+		)?;
 
 		T::Tokens::transfer(
 			token_id,
@@ -663,8 +677,8 @@ impl<T: Config> Pallet<T> {
 		};
 
 		debug_assert!(
-			locked_now > Zero::zero() && schedules.len() > 0
-				|| locked_now == Zero::zero() && schedules.len() == 0
+			locked_now > Zero::zero() && schedules.len() > 0 ||
+				locked_now == Zero::zero() && schedules.len() == 0
 		);
 
 		Ok((schedules, locked_now))
@@ -686,7 +700,10 @@ pub trait MultiTokenVestingLocks<AccountId, BlockNumber> {
 		who: &AccountId,
 		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
 		unlock_amount: <Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
-	) -> Result<(BlockNumber, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance), DispatchError>;
+	) -> Result<
+		(BlockNumber, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance),
+		DispatchError,
+	>;
 
 	/// Finds the vesting schedule with the provided index
 	/// Removes that old vesting schedule, adds a new one with new_locked and new_per_block
@@ -696,8 +713,17 @@ pub trait MultiTokenVestingLocks<AccountId, BlockNumber> {
 		who: &AccountId,
 		token_id: <Self::Currency as MultiTokenCurrency<AccountId>>::CurrencyId,
 		vesting_index: u32,
-		unlock_some_amount_or_all: Option<<Self::Currency as MultiTokenCurrency<AccountId>>::Balance>,
-	) -> Result<(<Self::Currency as MultiTokenCurrency<AccountId>>::Balance, BlockNumber, <Self::Currency as MultiTokenCurrency<AccountId>>::Balance), DispatchError>;
+		unlock_some_amount_or_all: Option<
+			<Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		>,
+	) -> Result<
+		(
+			<Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+			BlockNumber,
+			<Self::Currency as MultiTokenCurrency<AccountId>>::Balance,
+		),
+		DispatchError,
+	>;
 
 	/// Constructs a vesting schedule based on the given data starting from now
 	/// And places it into the appropriate (who, token_id) storage
@@ -742,21 +768,20 @@ where
 		for (i, schedule) in schedules.clone().into_iter().enumerate() {
 			let schedule_locked_at = schedule.locked_at::<T::BlockNumberToBalance>(now);
 			match (schedule_locked_at >= unlock_amount, selected_schedule) {
-				(true, None) => {
+				(true, None) =>
 					selected_schedule = Some((
 						i,
 						schedule,
 						schedule_locked_at,
 						schedule.ending_block_as_balance::<T::BlockNumberToBalance>(),
-					))
-				},
+					)),
 				(true, Some(currently_selected_schedule)) => {
 					let schedule_ending_block_as_balance =
 						schedule.ending_block_as_balance::<T::BlockNumberToBalance>();
 					if currently_selected_schedule
 						.1
-						.ending_block_as_balance::<T::BlockNumberToBalance>()
-						> schedule_ending_block_as_balance
+						.ending_block_as_balance::<T::BlockNumberToBalance>() >
+						schedule_ending_block_as_balance
 					{
 						selected_schedule = Some((
 							i,
@@ -829,7 +854,7 @@ where
 		token_id: TokenIdOf<T>,
 		vesting_index: u32,
 		unlock_some_amount_or_all: Option<BalanceOf<T>>,
-	) -> Result<(BalanceOf<T>, T::BlockNumber, BalanceOf<T>), DispatchError>{
+	) -> Result<(BalanceOf<T>, T::BlockNumber, BalanceOf<T>), DispatchError> {
 		let now = <frame_system::Pallet<T>>::block_number();
 
 		// First we get the schedules of who
@@ -850,21 +875,21 @@ where
 
 		for (i, schedule) in schedules.clone().into_iter().enumerate() {
 			let schedule_locked_at = schedule.locked_at::<T::BlockNumberToBalance>(now);
-			let schedule_locked_at_satisfied: bool = if let Some(unlock_amount) = unlock_some_amount_or_all{
-				schedule_locked_at >= unlock_amount
-			} else {
-				true
-			};
+			let schedule_locked_at_satisfied: bool =
+				if let Some(unlock_amount) = unlock_some_amount_or_all {
+					schedule_locked_at >= unlock_amount
+				} else {
+					true
+				};
 
 			match (i == vesting_index as usize && schedule_locked_at_satisfied, selected_schedule) {
-				(true, None) => {
+				(true, None) =>
 					selected_schedule = Some((
 						i,
 						schedule,
 						schedule_locked_at,
 						schedule.ending_block_as_balance::<T::BlockNumberToBalance>(),
-					))
-				},
+					)),
 				_ => (),
 			}
 		}
@@ -888,7 +913,6 @@ where
 			)
 			.collect::<Vec<_>>();
 
-		
 		let start_block = now.max(selected_schedule.1.starting_block());
 
 		let new_locked = if let Some(unlock_amount) = unlock_some_amount_or_all {
@@ -935,9 +959,16 @@ where
 		starting_block: Option<T::BlockNumber>,
 		ending_block_as_balance: BalanceOf<T>,
 	) -> DispatchResult {
-		let starting_block: T::BlockNumber = starting_block.unwrap_or(<frame_system::Pallet<T>>::block_number());
+		let starting_block: T::BlockNumber =
+			starting_block.unwrap_or(<frame_system::Pallet<T>>::block_number());
 
-		T::Tokens::ensure_can_withdraw(token_id, who, lock_amount, WithdrawReasons::all(), Default::default())?;
+		T::Tokens::ensure_can_withdraw(
+			token_id,
+			who,
+			lock_amount,
+			WithdrawReasons::all(),
+			Default::default(),
+		)?;
 
 		let length_as_balance = ending_block_as_balance
 			.saturating_sub(T::BlockNumberToBalance::convert(starting_block))
@@ -1052,13 +1083,13 @@ where
 		token_id: TokenIdOf<T>,
 	) -> DispatchResult {
 		if locked.is_zero() {
-			return Ok(());
+			return Ok(())
 		}
 
 		let vesting_schedule = VestingInfo::new(locked, per_block, starting_block);
 		// Check for `per_block` or `locked` of 0.
 		if !vesting_schedule.is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into());
+			return Err(Error::<T>::InvalidScheduleParams.into())
 		};
 
 		let mut schedules = Self::vesting(who, token_id).unwrap_or_default();
@@ -1087,12 +1118,12 @@ where
 	) -> DispatchResult {
 		// Check for `per_block` or `locked` of 0.
 		if !VestingInfo::new(locked, per_block, starting_block).is_valid() {
-			return Err(Error::<T>::InvalidScheduleParams.into());
+			return Err(Error::<T>::InvalidScheduleParams.into())
 		}
 
 		ensure!(
-			(Vesting::<T>::decode_len(who, token_id).unwrap_or_default() as u32)
-				< T::MAX_VESTING_SCHEDULES,
+			(Vesting::<T>::decode_len(who, token_id).unwrap_or_default() as u32) <
+				T::MAX_VESTING_SCHEDULES,
 			Error::<T>::AtMaxVestingSchedules
 		);
 

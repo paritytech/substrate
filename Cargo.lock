@@ -2032,6 +2032,7 @@ version = "4.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
+ "futures",
  "hex-literal",
  "linregress",
  "log",
@@ -2060,6 +2061,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "futures",
  "gethostname",
  "handlebars",
  "hash-db",
@@ -2074,9 +2076,11 @@ dependencies = [
  "rand 0.8.5",
  "rand_pcg 0.3.1",
  "sc-block-builder",
+ "sc-block-builder-ver",
  "sc-cli",
  "sc-client-api",
  "sc-client-db",
+ "sc-consensus",
  "sc-executor",
  "sc-service",
  "sc-sysinfo",
@@ -2085,6 +2089,8 @@ dependencies = [
  "serde_nanos",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
+ "sp-consensus-aura",
  "sp-core",
  "sp-database",
  "sp-externalities",
@@ -2094,9 +2100,11 @@ dependencies = [
  "sp-state-machine",
  "sp-storage",
  "sp-trie",
+ "sp-ver",
  "tempfile",
  "thiserror",
  "thousands",
+ "ver-api",
 ]
 
 [[package]]
@@ -2158,6 +2166,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "log",
  "merlin",
  "pallet-balances",
  "pallet-transaction-payment",
@@ -2171,6 +2180,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "sp-tracing",
+ "sp-ver",
  "sp-version",
 ]
 
@@ -2301,6 +2311,7 @@ name = "frame-system"
 version = "4.0.0-dev"
 dependencies = [
  "criterion",
+ "extrinsic-shuffler",
  "frame-support",
  "log",
  "parity-scale-codec",
@@ -2311,6 +2322,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-ver",
  "sp-version",
  "substrate-test-runtime-client",
 ]
@@ -4154,8 +4166,10 @@ dependencies = [
 [[package]]
 name = "mangata-primitives"
 version = "0.1.0"
-source = "git+https://github.com/mangata-finance/mangata-node?branch=develop-v0.9.24#9f8b5549f859bfa465922df8723495f034d40ca0"
+source = "git+https://github.com/mangata-finance/mangata-node?branch=develop-v0.9.26#c38e65913bbd01e5a8ab641106ad9c694b2bd79d"
 dependencies = [
+ "parity-scale-codec",
+ "scale-info",
  "sp-core",
  "sp-runtime",
 ]
@@ -4693,7 +4707,7 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 [[package]]
 name = "orml-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -4710,7 +4724,7 @@ dependencies = [
 [[package]]
 name = "orml-traits"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 dependencies = [
  "frame-support",
  "impl-trait-for-tuples",
@@ -4728,7 +4742,7 @@ dependencies = [
 [[package]]
 name = "orml-utilities"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
@@ -9822,9 +9836,12 @@ dependencies = [
  "async-trait",
  "log",
  "parity-scale-codec",
+ "scale-info",
+ "schnorrkel",
  "serde",
  "sp-core",
  "sp-inherents",
+ "sp-keystore",
  "sp-runtime",
  "sp-std",
 ]
@@ -10910,6 +10927,8 @@ dependencies = [
  "sp-blockchain",
  "sp-core",
  "sp-runtime",
+ "sp-std",
+ "sp-ver",
 ]
 
 [[package]]
@@ -11900,22 +11919,22 @@ version = "0.10.0-dev"
 [[patch.unused]]
 name = "orml-unknown-tokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 
 [[patch.unused]]
 name = "orml-xcm"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 
 [[patch.unused]]
 name = "orml-xcm-support"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 
 [[patch.unused]]
 name = "orml-xtokens"
 version = "0.4.1-dev"
-source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev-v0.9.26#c68271f88cea0a2c6b58a9a66da9876000b2879a"
+source = "git+https://github.com/mangata-finance//open-runtime-module-library?branch=mangata-dev#bf69c2b67b98a2b1ae3516a5771dabf0a5a10ae2"
 
 [[patch.unused]]
 name = "sc-finality-grandpa-rpc"
