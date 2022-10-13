@@ -81,15 +81,15 @@ mod test_weights {
 	// you can delete it.
 	#[test]
 	fn sane() {
-		let w = super::{{long_name}}Weight::get();
+		use super::*;
 
 		{{#if (eq short_name "block")}}
 		assert!(
-			w.ref_time() >= 100u64 * WEIGHT_PER_MICROS.ref_time(),
+			BlockExecutionRefTime::get() >= 100u64 * WEIGHT_PER_MICROS.ref_time(),
 			"Ref time of executing an empty block should be at least 100 µs."
 		);
 		assert!(
-			w.ref_time() <= 50u64 * WEIGHT_PER_MILLIS.ref_time(),
+			BlockExecutionRefTime::get() <= 50u64 * WEIGHT_PER_MILLIS.ref_time(),
 			"Ref time of executing an empty block should be at most 50 ms."
 		);
 		assert!(EmptyBlockProofSize::get() > 0, "The proof size of an empty block cannot be zero");
@@ -116,11 +116,11 @@ mod test_weights {
 		);
 		{{else}}
 		assert!(
-			w.ref_time() >= 10u64 * WEIGHT_PER_MICROS.ref_time(),
+			ExtrinsicBaseRefTime::get() >= 10u64 * WEIGHT_PER_MICROS.ref_time(),
 			"Ref time of executing a NO-OP extrinsic should be at least 10 µs."
 		);
 		assert!(
-			w.ref_time() <= WEIGHT_PER_MILLIS.ref_time(),
+			ExtrinsicBaseRefTime::get() <= WEIGHT_PER_MILLIS.ref_time(),
 			"Ref time of executing a NO-OP extrinsic should be at least 1 ms."
 		);
 		{{/if}}
