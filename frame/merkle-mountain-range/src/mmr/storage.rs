@@ -152,7 +152,7 @@ where
 	pub fn append(block_number: T::BlockNumber, hash: <T as frame_system::Config>::Hash) {
 		let map_key = Self::pruning_map_offchain_key(block_number);
 		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key)
-			.and_then(|v| codec::Decode::decode(&mut &*v).ok())
+			.and_then(|v| Decode::decode(&mut &*v).ok())
 			.or_else(|| Some(Vec::<<T as frame_system::Config>::Hash>::new()))
 			.map(|mut hashes| {
 				hashes.push(hash);
@@ -169,7 +169,7 @@ where
 		let map_key = Self::pruning_map_offchain_key(block_number);
 		offchain::local_storage_get(StorageKind::PERSISTENT, &map_key).and_then(|v| {
 			offchain::local_storage_clear(StorageKind::PERSISTENT, &map_key);
-			codec::Decode::decode(&mut &*v).ok()
+			Decode::decode(&mut &*v).ok()
 		})
 	}
 }
@@ -211,11 +211,7 @@ where
 				target: "runtime::mmr::offchain", "offchain db set: pos {} block_hash {:?} key {:?}",
 				node_index, block_hash, key
 			);
-			sp_io::offchain::local_storage_set(
-				sp_core::offchain::StorageKind::PERSISTENT,
-				&key,
-				value,
-			);
+			sp_io::offchain::local_storage_set(StorageKind::PERSISTENT, &key, value);
 		};
 
 		// Copy newly added leaf and nodes to offchain db keyed under this block's hash.
@@ -353,10 +349,8 @@ where
 			// Just for safety, to easily handle runtime upgrades where any of the window params
 			// change and maybe we mess up storage migration,
 			// return _if and only if_ node is found (in normal conditions it's always found),
-			if let Some(elem) =
-				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
-			{
-				return Ok(codec::Decode::decode(&mut &*elem).ok())
+			if let Some(elem) = sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
+				return Ok(Decode::decode(&mut &*elem).ok())
 			}
 			// BUT if we DID MESS UP, fall through to searching node using fork-specific key.
 		}
@@ -370,16 +364,16 @@ where
 			pos, ancestor_leaf_idx, ancestor_hash, key
 		);
 		// Retrieve the element from Off-chain DB.
-		Ok(sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+		Ok(sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &key)
 			.or_else(|| {
 				// Again, this is just us being extra paranoid.
 				// We get here only if we mess up a storage migration for a runtime upgrades where
 				// say the window is increased, and for a little while following the upgrade there's
 				// leaves inside new 'window' that had been already canonicalized before upgrade.
 				let key = Pallet::<T, I>::node_canon_offchain_key(pos);
-				sp_io::offchain::local_storage_get(sp_core::offchain::StorageKind::PERSISTENT, &key)
+				sp_io::offchain::local_storage_get(StorageKind::PERSISTENT, &key)
 			})
-			.and_then(|v| codec::Decode::decode(&mut &*v).ok()))
+			.and_then(|v| Decode::decode(&mut &*v).ok()))
 	}
 
 	fn append(&mut self, _: NodeIndex, _: Vec<NodeOf<T, I, L>>) -> mmr_lib::Result<()> {
@@ -444,17 +438,10 @@ where
 			// copy them over to offchain db once block is finished. Increase the indices.
 			match elem {
 				Node::Data(leaf_data) => {
-					debug!(
-						target: "runtime::mmr::offchain", "runtime append leaf {} (node {})",
-						leaf_index, node_index,
-					);
 					leaf_index += 1;
 					branch_builder.add_leaf(leaf_data)?;
 				},
 				Node::Hash(hash) => {
-					debug!(
-						target: "runtime::mmr::offchain", "runtime append node {}", node_index,
-					);
 					branch_builder.add_node(node_index, hash)?;
 				},
 			};

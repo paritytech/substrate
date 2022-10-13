@@ -512,12 +512,6 @@ fn should_verify_batch_proofs() {
 		leaf_indices: &Vec<u64>,
 		blocks_to_add: usize,
 	) {
-		frame_support::log::debug!(
-			target: "runtime::mmr::tests",
-			"generate_and_verify_batch_proof leaves {:?} blocks-to-add {}",
-			leaf_indices, blocks_to_add,
-		);
-
 		let (leaves, proof) = ext.execute_with(|| {
 			crate::Pallet::<Test>::generate_batch_proof(leaf_indices.to_vec()).unwrap()
 		});
@@ -807,14 +801,9 @@ fn should_canonicalize_offchain() {
 			let pos = helper::leaf_index_to_pos(leaf_index);
 			// not canon,
 			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
-			let key = MMR::node_offchain_key(block_hash, pos);
-			frame_support::log::debug!(
-				target: "runtime::mmr::test", "verify leaf {} pos {} hash {:?} key {:?}",
-				leaf_index, pos, block_hash, key,
-			);
 			// but available in fork-proof storage.
 			assert_eq!(
-				offchain_db.get(&key).map(decode_node),
+				offchain_db.get(&MMR::node_offchain_key(block_hash, pos)).map(decode_node),
 				Some(mmr::Node::Data((
 					(leaf_index, H256::repeat_byte(u8::try_from(leaf_index).unwrap())),
 					LeafData::new(block_num.into()),
@@ -829,14 +818,10 @@ fn should_canonicalize_offchain() {
 		let verify = |pos: NodeIndex, leaf_index: LeafIndex, expected: H256| {
 			let block_num: BlockNumber = (leaf_index + 1).try_into().unwrap();
 			let block_hash = <frame_system::Pallet<Test>>::block_hash(block_num);
-			let key = MMR::node_offchain_key(block_hash, pos);
-			frame_support::log::debug!(
-				target: "runtime::mmr::test", "verify leaf {} pos {} hash {:?} key {:?}",
-				leaf_index, pos, block_hash, key,
-			);
 			// not canon,
 			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
 			// but available in fork-proof storage.
+			let key = MMR::node_offchain_key(block_hash, pos);
 			assert_eq!(offchain_db.get(&key).map(decode_node), Some(mmr::Node::Hash(expected)));
 		};
 		verify(2, 1, hex("843450e593a9103c9fe8c0a0276756a90077108b9aa32d6a15c1b77f264b097e"));
