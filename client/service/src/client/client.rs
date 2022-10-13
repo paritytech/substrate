@@ -641,7 +641,7 @@ where
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
-							warn!("Error imporing state: State root mismatch.");
+							warn!("Error importing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot)
 						}
 						None
