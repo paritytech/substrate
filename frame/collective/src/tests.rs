@@ -89,7 +89,7 @@ pub type MaxMembers = ConstU32<100>;
 
 parameter_types! {
 	pub const MotionDuration: u64 = 3;
-	pub const MaxProposals: u32 = 257;
+	pub static MaxProposals: u32 = 257;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
@@ -329,6 +329,14 @@ fn proposal_weight_limit_ignored_on_disapprove() {
 			proposal_len
 		));
 	})
+}
+
+#[test]
+#[should_panic]
+fn fails_when_max_proposals_too_large() {
+	new_test_ext().execute_with(|| {
+		MaxProposals::set(2u32.pow(32));
+	});
 }
 
 #[test]
