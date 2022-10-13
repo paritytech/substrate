@@ -1101,8 +1101,7 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
-		let validators: Option<BoundedVec<_, _>> = Self::new_session(new_index, false);
-		validators.map(|v| v.into_inner())
+		Self::new_session(new_index, false).map(|v| v.into_inner());
 	}
 	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		log!(trace, "planning new session {} at genesis", new_index);
