@@ -559,8 +559,10 @@ pub use pallet::*;
 pub mod pallet {
 	use super::*;
 	use frame_election_provider_support::{InstantElectionProvider, NposSolver};
-	use frame_support::{pallet_prelude::*, traits::EstimateCallFee};
-	use frame_support::traits::DefensiveResult;
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{DefensiveResult, EstimateCallFee},
+	};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]

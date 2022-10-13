@@ -5667,15 +5667,24 @@ fn scale_validator_count_is_capped() {
 		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 20));
 
 		// scaled by full value
-		assert_ok!(Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(200)));
+		assert_ok!(Staking::scale_validator_count(
+			RuntimeOrigin::root(),
+			Percent::from_percent(200)
+		));
 		assert_eq!(ValidatorCount::<Test>::get(), 40);
 
 		// capped to max winners
-		assert_ok!(Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(200)));
+		assert_ok!(Staking::scale_validator_count(
+			RuntimeOrigin::root(),
+			Percent::from_percent(200)
+		));
 		assert_eq!(ValidatorCount::<Test>::get(), 50);
 
 		// further scale does not do anything
-		assert_ok!(Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(200)));
+		assert_ok!(Staking::scale_validator_count(
+			RuntimeOrigin::root(),
+			Percent::from_percent(200)
+		));
 		assert_eq!(ValidatorCount::<Test>::get(), 50);
 	})
 }

@@ -426,8 +426,6 @@ parameter_types! {
 #[derive(Default)]
 pub struct ExtBuilder {}
 
-
-
 pub struct StakingMock;
 impl ElectionDataProvider for StakingMock {
 	type AccountId = AccountId;

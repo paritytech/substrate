@@ -24,7 +24,9 @@ use crate::{
 	InstantElectionProvider, NposSolver, WeightInfo,
 };
 use frame_support::{dispatch::DispatchClass, traits::Get};
-use sp_npos_elections::{BoundedSupports, VoteWeight, ElectionResult, assignment_ratio_to_staked_normalized, to_supports};
+use sp_npos_elections::{
+	assignment_ratio_to_staked_normalized, to_supports, BoundedSupports, ElectionResult, VoteWeight,
+};
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
 /// Errors of the on-chain election.
@@ -182,10 +184,9 @@ impl<T: Config> ElectionProvider for OnChainExecution<T> {
 
 #[cfg(test)]
 mod tests {
-	use frame_support::{assert_noop, parameter_types};
 	use super::*;
 	use crate::{ElectionProvider, PhragMMS, SequentialPhragmen};
-	use frame_support::traits::ConstU32;
+	use frame_support::{assert_noop, parameter_types, traits::ConstU32};
 	use sp_npos_elections::Support;
 	use sp_runtime::Perbill;
 	type AccountId = u64;
