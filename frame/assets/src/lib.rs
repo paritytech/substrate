@@ -201,7 +201,8 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo;
 
-		/// Max number of storage keys to destroy per extrinsic call.
+		/// Max number of items to destroy per extrinsic call.
+		/// This number should be less than the value that can fit in a block for the various extrinsics
 		#[pallet::constant]
 		type RemoveItemsLimit: Get<u32>;
 
