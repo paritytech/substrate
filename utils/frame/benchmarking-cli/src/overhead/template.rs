@@ -130,7 +130,7 @@ impl TemplateData {
 		match &self.params.header {
 			Some(header) => {
 				let header = fs::read_to_string(header)
-					.map_error(|e| format!("Reading header file: {:?}", e))?;
+					.map_err(|e| format!("Reading header file: {:?}", e))?;
 				Ok(format!("{}\n{}", header, rendered))
 			},
 			None => Ok(rendered),
@@ -141,7 +141,7 @@ impl TemplateData {
 	pub fn write(&self, path: &Option<PathBuf>) -> Result<()> {
 		let out_path = self.build_path(path)?;
 		let mut fd = fs::File::create(&out_path)
-			.map_error(|e| format!("Creating file: {:?}: {:?}", out_path, e))?;
+			.map_err(|e| format!("Creating file: {:?}: {:?}", out_path, e))?;
 		info!("Writing weights to {:?}", fs::canonicalize(&out_path)?);
 
 		let rendered = self.render()?;
