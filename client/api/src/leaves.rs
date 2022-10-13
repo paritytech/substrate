@@ -45,6 +45,7 @@ pub struct RemoveOutcome<H, N> {
 }
 
 /// Removed leaves after a finalization action.
+#[derive(Debug)]
 pub struct FinalizationOutcome<H, N> {
 	removed: BTreeMap<Reverse<N>, Vec<H>>,
 }

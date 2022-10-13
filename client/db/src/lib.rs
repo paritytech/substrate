@@ -1135,8 +1135,7 @@ impl<Block: BlockT> Backend<Block> {
 		let state_pruning = match blocks_pruning {
 			BlocksPruning::KeepAll => PruningMode::ArchiveAll,
 			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical,
-			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n),
-			BlocksPruning::Delayed(n) => PruningMode::blocks_pruning(n),
+			BlocksPruning::Some(n) | BlocksPruning::Delayed(n) => PruningMode::blocks_pruning(n),
 		};
 		let db_setting = DatabaseSettings {
 			trie_cache_maximum_size: Some(16 * 1024 * 1024),
@@ -1741,6 +1740,8 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<()> {
 		let mut f_num = *f_header.number();
 
+		println!("NOTE FINALIZED f_num {:?}!", f_num);
+
 		let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash)?;
 		if with_state {
 			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key.clone());
@@ -1749,10 +1750,17 @@ impl<Block: BlockT> Backend<Block> {
 
 		// Update the "finalized" number and hash for pruning of N - delay.
 		if let BlocksPruning::Delayed(delayed) = self.blocks_pruning {
+			if f_num < delayed.into() {
+				println!("Skipping for now block f_num {:?}!", f_num);
+				return Ok(())
+			}
+
+			println!("Before delay: f_num: {:?}", f_num);
 			f_num = f_num.saturating_sub(delayed.into());
 			f_hash = self.blockchain.hash(f_num)?.ok_or_else(|| {
 				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", f_num))
 			})?;
+			println!("After delay: f_num: {:?}\n", f_num);
 		}
 
 		if sc_client_api::Backend::have_state_at(self, &f_hash, f_num) &&
@@ -1772,6 +1780,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		// TODO: this should point backwards by -n64
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
+		println!("Dispalced: {:?}", new_displaced);
 		self.prune_blocks(transaction, f_num, &new_displaced)?;
 		match displaced {
 			x @ &mut None => *x = Some(new_displaced),
@@ -1802,10 +1811,11 @@ impl<Block: BlockT> Backend<Block> {
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
 			BlocksPruning::Delayed(delayed) => {
-				// Pruning must happen for block number = (finalized - delayed).
-				let number = finalized.saturating_sub(delayed.into());
-				self.prune_block(transaction, BlockId::<Block>::number(number))?;
-				// Handle the displaced branches of an older block.
+				// Function has been called with proper offset and valid displaced set.
+				let h = self.blockchain.body(BlockId::<Block>::number(finalized.clone()))?;
+				println!("Delayed -- pruning block {:?} body {:?} ", finalized, h);
+				self.prune_block(transaction, BlockId::<Block>::number(finalized))?;
+				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
 		}
 		Ok(())
@@ -1924,12 +1934,12 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut Transaction<DbHash>,
 		id: BlockId<Block>,
 	) -> ClientResult<()> {
-		if self.should_delay_pruning(id).unwrap_or(false) {
-			// Trace for easily identifying `db-pin` paths only.
-			trace!(target: "db-pin", "Not pruning pinned block #{}", id);
-			debug!(target: "db", "Not pruning pinned block #{}", id);
-			return Ok(())
-		}
+		// if self.should_delay_pruning(id).unwrap_or(false) {
+		// 	// Trace for easily identifying `db-pin` paths only.
+		// 	trace!(target: "db-pin", "Not pruning pinned block #{}", id);
+		// 	debug!(target: "db", "Not pruning pinned block #{}", id);
+		// 	return Ok(())
+		// }
 
 		debug!(target: "db", "Removing block #{}", id);
 		utils::remove_from_db(
@@ -4070,6 +4080,157 @@ pub(crate) mod tests {
 		let block2 = insert_header(&backend, 2, block1, None, Default::default());
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
 		assert_eq!(backend.blockchain().info().best_hash, block2);
+	}
+
+	#[test]
+	fn delayed_prune_blocks_on_finalize() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Delayed(2), 0);
+		let ext = Default::default();
+		let hash_0 =
+			insert_block(&backend, 0, Default::default(), None, ext, vec![0.into()], None).unwrap();
+		let hash_1 = insert_block(&backend, 1, hash_0, None, ext, vec![1.into()], None).unwrap();
+
+		// Block tree:
+		//   0 -> 1
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(hash_1)).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_0), None).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_1), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		let bc = backend.blockchain();
+		// Delayed pruning must keep both blocks around.
+		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(hash_0)).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(hash_1)).unwrap());
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3
+		let hash_2 =
+		insert_block(&backend, 2, hash_1, None, ext, vec![2.into()], None).unwrap();
+		let hash_3 =
+		insert_block(&backend, 3, hash_2, None, ext, vec![3.into()], None).unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(hash_3)).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_2), None).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_3), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		// Blocks 0 and 1 are pruned.
+		assert!(bc.body(BlockId::hash(hash_0)).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(hash_1)).unwrap().is_none());
+
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(hash_2)).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(hash_3)).unwrap());
+	}
+
+	#[test]
+	fn delayed_prune_blocks_on_fxxinalize_with_fork() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Delayed(2), 10);
+		let mut blocks = Vec::new();
+		let mut prev_hash = Default::default();
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		for i in 0..6 {
+			let hash = insert_block(
+				&backend,
+				i,
+				prev_hash,
+				None,
+				Default::default(),
+				vec![i.into()],
+				None,
+			)
+			.unwrap();
+			blocks.push(hash);
+			prev_hash = hash;
+		}
+
+		// Insert a fork at the third block.
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		//             2 -> 3
+		let fork_hash_root =
+			insert_block(&backend, 3, blocks[2], None, H256::random(), vec![31.into()], None)
+				.unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
+		op.mark_head(BlockId::hash(blocks[4])).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		println!("\nmark 0 1 2 as fin\n");
+		// Mark blocks 0, 1, 2 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[2])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[0]), None).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[1]), None).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[2]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		println!("\nmark 0 1 2 DONE\n");
+
+
+		let bc = backend.blockchain();
+		// Block 0 is pruned.
+		assert!(bc.body(BlockId::hash(blocks[0])).unwrap().is_none());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+
+		
+		println!("\nmark 3 as fin");
+		// Mark block 3 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[3])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[3]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+		println!("\nmark 3 as DONE\n");
+
+		// Block 1 is pruned.
+		assert!(bc.body(BlockId::hash(blocks[1])).unwrap().is_none());
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+
+		println!("\nmark 4 fin");
+
+		// Mark block 4 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[4]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+		println!("\nmark 4 as DONE\n");
+
+		// Block 2 is pruned along with its fork.
+		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
+			assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+
+		println!("\nmark 5 fin");
+
+		// Mark block 5 as finalized.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[5])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[5]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		println!("\nmark 5 DONE");
+
+		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
+		assert_eq!(None, bc.body(BlockId::hash(blocks[3])).unwrap());
+		assert_eq!(None, bc.body(BlockId::hash(fork_hash_root)).unwrap());
+
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 	}
 
 	#[test]
