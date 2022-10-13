@@ -1526,6 +1526,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e25ea47919b1560c4e3b7fe0aaab9becf5b84a10325ddf7db0f0ba5e1026499"
 
 [[package]]
+name = "difference"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
+
+[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2064,8 +2070,8 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "parity-util-mem",
- "paste 1.0.4",
- "pretty_assertions",
+ "paste",
+ "pretty_assertions 1.0.0",
  "scale-info",
  "serde",
  "smallvec 1.7.0",
@@ -2119,7 +2125,7 @@ dependencies = [
  "frame-support-test-pallet",
  "frame-system",
  "parity-scale-codec",
- "pretty_assertions",
+ "pretty_assertions 1.0.0",
  "rustversion",
  "scale-info",
  "serde",
@@ -4524,7 +4530,6 @@ dependencies = [
  "serde",
  "serde_json 1.0.68",
  "soketto 0.4.2",
- "sp-api",
  "sp-authority-discovery",
  "sp-authorship",
  "sp-consensus",
@@ -5260,7 +5265,7 @@ dependencies = [
  "pallet-timestamp",
  "pallet-utility",
  "parity-scale-codec",
- "pretty_assertions",
+ "pretty_assertions 1.0.0",
  "pwasm-utils",
  "rand 0.7.3",
  "rand_pcg 0.2.1",
@@ -6593,6 +6598,18 @@ checksum = "15f553275e5721409451eb85e15fd9a860a6e5ab4496eb215987502b5f5391f2"
 dependencies = [
  "predicates-core",
  "treeline",
+]
+
+[[package]]
+name = "pretty_assertions"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f81e1644e1b54f5a68959a29aa86cde704219254669da328ecfdf6a1f09d427"
+dependencies = [
+ "ansi_term 0.11.0",
+ "ctor",
+ "difference",
+ "output_vt100",
 ]
 
 [[package]]
@@ -9248,7 +9265,7 @@ dependencies = [
  "schnorrkel",
  "secrecy",
  "serde",
- "serde_json",
+ "serde_json 1.0.68",
  "sha2 0.9.8",
  "sp-debug-derive",
  "sp-externalities",
@@ -9605,7 +9622,7 @@ dependencies = [
  "num-traits",
  "parity-scale-codec",
  "parking_lot 0.11.1",
- "pretty_assertions",
+ "pretty_assertions 1.0.0",
  "rand 0.7.3",
  "smallvec 1.7.0",
  "sp-core",
@@ -9781,7 +9798,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde",
- "serde_json",
+ "serde_json 1.0.68",
  "unicode-xid",
 ]
 
@@ -11402,7 +11419,7 @@ dependencies = [
  "libc",
  "log 0.4.14",
  "object 0.26.0",
- "paste 1.0.4",
+ "paste",
  "psm",
  "rayon",
  "region",
