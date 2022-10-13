@@ -59,7 +59,7 @@
 use codec::Encode;
 use frame_support::{traits::Get, weights::Weight};
 use sp_runtime::{
-	traits::{self, One, Saturating, UniqueSaturatedInto},
+	traits::{self, CheckedSub, One, Saturating, UniqueSaturatedInto},
 	SaturatedConversion,
 };
 use sp_std::prelude::*;
@@ -365,8 +365,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Convert a `block_num` into a leaf index.
-	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error> {
-		use sp_runtime::traits::CheckedSub;
+	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error>
+	where
+		T: frame_system::Config,
+	{
 		// leaf_idx = (leaves_count - 1) - (current_block_num - block_num);
 		let best_block_num = <frame_system::Pallet<T>>::block_number();
 		let blocks_diff = best_block_num.checked_sub(&block_num).ok_or_else(|| {
@@ -388,37 +390,47 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(leaf_idx)
 	}
 
-	/// Generate a MMR proof for the given `leaf_indices`.
+	/// Generate a MMR proof for the given `block_numbers`.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_batch_proof(
-		leaf_indices: Vec<LeafIndex>,
+		block_numbers: Vec<T::BlockNumber>,
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
-		Self::generate_historical_batch_proof(leaf_indices, Self::mmr_leaves())
+		Self::generate_historical_batch_proof(
+			block_numbers,
+			<frame_system::Pallet<T>>::block_number(),
+		)
 	}
 
-	/// Generate a MMR proof for the given `leaf_indices` for the MMR of `leaves_count` size.
+	/// Generate a MMR proof for the given `block_numbers` given the `best_known_block_number`.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_historical_batch_proof(
-		leaf_indices: Vec<LeafIndex>,
-		leaves_count: LeafIndex,
+		block_numbers: Vec<T::BlockNumber>,
+		best_known_block_number: T::BlockNumber,
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
-		if leaves_count > Self::mmr_leaves() {
-			return Err(Error::InvalidLeavesCount)
-		}
+		let leaves_count =
+			Self::block_num_to_leaf_index(best_known_block_number)?.saturating_add(1);
+
+		// we need to translate the block_numbers into leaf indices.
+		let leaf_indices = block_numbers
+			.iter()
+			.map(|block_num| -> Result<LeafIndex, primitives::Error> {
+				Self::block_num_to_leaf_index(*block_num)
+			})
+			.collect::<Result<Vec<LeafIndex>, _>>()?;
 
 		let mmr: ModuleMmr<_, T, I> = mmr::Mmr::new_with_offchain_storage(leaves_count);
 		mmr.generate_batch_proof(leaf_indices)
