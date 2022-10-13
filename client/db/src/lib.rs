@@ -1136,6 +1136,7 @@ impl<Block: BlockT> Backend<Block> {
 			BlocksPruning::KeepAll => PruningMode::ArchiveAll,
 			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical,
 			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n),
+			BlocksPruning::Delayed(n) => PruningMode::blocks_pruning(n),
 		};
 		let db_setting = DatabaseSettings {
 			trie_cache_maximum_size: Some(16 * 1024 * 1024),
@@ -1761,6 +1762,7 @@ impl<Block: BlockT> Backend<Block> {
 			apply_state_commit(transaction, commit);
 		}
 
+		// TODO: this should point backwards by -n64
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
 		self.prune_blocks(transaction, f_num, &new_displaced)?;
 		match displaced {
@@ -1791,10 +1793,84 @@ impl<Block: BlockT> Backend<Block> {
 			BlocksPruning::KeepFinalized => {
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
-			BlocksPruning::Delayed(_delayed) => {
-				// TODO: Handle pruning of block (N - delayed)
+			BlocksPruning::Delayed(delayed) => {
+				// Pruning must happen for block number = (finalized - delayed).
+				let number = finalized.saturating_sub(delayed.into());
+				self.prune_block(transaction, BlockId::<Block>::number(number))?;
+				// Handle the displaced branches of an older block.
+			},
+		}
+		Ok(())
+	}
+
+	// The fork starting from the leaf is rooted at the given block?
+	fn leaf_path_rooted_at(
+		&self,
+		mut leaf: Block::Hash,
+		target: NumberFor<Block>,
+	) -> ClientResult<Option<Vec<(Block::Hash, NumberFor<Block>)>>> {
+		let mut path = Vec::new();
+
+		let leaf_id = BlockId::<Block>::hash(leaf.clone());
+		let leaf_header = match self.blockchain.header(leaf_id)? {
+			Some(header) => header,
+			None => return Ok(None),
+		};
+		// The `leaf_number` is used to walk the canonical chain.
+		// While the `leaf` is used to walk the fork.
+		let mut leaf_number = leaf_header.number().clone();
+
+		// Leaf walk towards to the canonical chain.
+		while self.blockchain.hash(leaf_number.clone())? != Some(leaf) {
+			let leaf_id = BlockId::<Block>::hash(leaf.clone());
+			let leaf_header = match self.blockchain.header(leaf_id)? {
+				Some(header) => header,
+				// Remove this path if it is not pointing to the canonical chain.
+				None => return Ok(Some(path)),
+			};
+
+			// This may be subject to pruning, keep a record of it.
+			path.push((leaf.clone(), leaf_number.clone()));
+
+			leaf_number = leaf_number.saturating_sub(One::one());
+			leaf = leaf_header.parent_hash().clone();
+		}
+
+		// Prune any blocks leading from the leaf to the target.
+		// Also include any paths that lead to a block smaller than the target for
+		// proper DB cleanup.
+		if leaf_number <= target {
+			Ok(Some(path))
+		} else {
+			// Leading to newer block than the target.
+			Ok(None)
+		}
+	}
+
+	fn prune_delayed_displaced_branches(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+		to_prune: NumberFor<Block>,
+	) -> ClientResult<()> {
+		// Prune all forks rooted at the `to_prune` block.
+		let mut leaves = self.blockchain.leaves.write();
+
+		for leaf in leaves.hashes() {
+			// This cannot provide a path to the canonical chain because there
+			// are `delayed` blocks finalized after the `to_prune` target.
+			// The function will return paths that lead to the `to_prune` or younger.
+			match self.leaf_path_rooted_at(leaf, to_prune)? {
+				Some(path) =>
+					for (hash, number) in path {
+						let id = BlockId::<Block>::hash(hash);
+						self.prune_block(transaction, id)?;
+
+						leaves.remove(hash, number, None);
+					},
+				None => continue,
 			}
 		}
+
 		Ok(())
 	}
 
