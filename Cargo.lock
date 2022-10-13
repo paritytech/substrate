@@ -4586,6 +4586,7 @@ dependencies = [
  "serde",
  "serde_json 1.0.68",
  "soketto 0.4.2",
+ "sp-api",
  "sp-authority-discovery",
  "sp-authorship",
  "sp-blockchain",
