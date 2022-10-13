@@ -1735,17 +1735,25 @@ impl<Block: BlockT> Backend<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		f_header: &Block::Header,
-		f_hash: Block::Hash,
+		mut f_hash: Block::Hash,
 		displaced: &mut Option<FinalizationOutcome<Block::Hash, NumberFor<Block>>>,
 		with_state: bool,
 	) -> ClientResult<()> {
-		let f_num = *f_header.number();
+		let mut f_num = *f_header.number();
 
 		let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash)?;
 		if with_state {
 			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key.clone());
 		}
 		transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
+
+		// Update the "finalized" number and hash for pruning of N - delay.
+		if let BlocksPruning::Delayed(delayed) = self.blocks_pruning {
+			f_num = f_num.saturating_sub(delayed.into());
+			f_hash = self.blockchain.hash(f_num)?.ok_or_else(|| {
+				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", f_num))
+			})?;
+		}
 
 		if sc_client_api::Backend::have_state_at(self, &f_hash, f_num) &&
 			self.storage
