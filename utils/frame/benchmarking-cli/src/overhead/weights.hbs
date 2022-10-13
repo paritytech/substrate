@@ -110,7 +110,7 @@ mod test_weights {
 			"The proof size of a non-empty block should be at least that of an empty block"
 		);
 		assert!(
-			BlockExecutionWeight::get().proof_size ==
+			BlockExecutionWeight::get().proof_size() ==
 				EmptyBlockProofSize::get().max(NonEmptyBlockProofSize::get()),
 			"Block weight is has wrong proof size"
 		);
