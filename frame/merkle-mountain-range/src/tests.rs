@@ -185,8 +185,6 @@ fn should_append_to_mmr_after_on_initialize() {
 
 		(hash1, hash2)
 	});
-	// make sure the leaves end up in the offchain DB
-	ext.persist_offchain_overlay();
 
 	let offchain_db = ext.offchain_db();
 	assert_eq!(
@@ -249,7 +247,6 @@ fn should_generate_proofs_correctly() {
 	// given
 	let num_blocks: u64 = 7;
 	ext.execute_with(|| add_blocks_with_offchain(num_blocks as usize));
-	ext.persist_offchain_overlay();
 
 	// Try to generate proofs now.
 	ext.execute_with(|| {
@@ -421,7 +418,6 @@ fn should_generate_batch_proof_correctly() {
 	let mut ext = new_test_ext();
 	// given
 	ext.execute_with(|| add_blocks_with_offchain(7));
-	ext.persist_offchain_overlay();
 
 	// Try to generate proofs now.
 	ext.execute_with(|| {
@@ -473,7 +469,6 @@ fn should_verify() {
 	// (MMR Leafs)
 	let mut ext = new_test_ext();
 	ext.execute_with(|| add_blocks_with_offchain(7));
-	ext.persist_offchain_overlay();
 
 	// Try to generate proof now.
 	let (leaves, proof5) = ext.execute_with(|| {
@@ -566,14 +561,12 @@ fn should_verify_batch_proofs() {
 	// verify that up to n=10, valid proofs are generated for all possible leaf combinations
 	for n in 0..10 {
 		ext.execute_with(|| push_block_with_offchain());
-		ext.persist_offchain_overlay();
 
 		// generate powerset (skipping empty set) of all possible leaf combinations for mmr size n
 		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().powerset().skip(1).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
-			ext.persist_offchain_overlay();
 		});
 	}
 
@@ -581,20 +574,17 @@ fn should_verify_batch_proofs() {
 	for n in 10..15 {
 		// (MMR Leafs)
 		ext.execute_with(|| push_block_with_offchain());
-		ext.persist_offchain_overlay();
 
 		// generate all possible 2-leaf combinations for mmr size n
 		let leaves_set: Vec<Vec<u64>> = (0..=n).into_iter().combinations(2).collect();
 
 		leaves_set.iter().for_each(|leaves_subset| {
 			generate_and_verify_batch_proof(&mut ext, leaves_subset, 0);
-			ext.persist_offchain_overlay();
 		});
 	}
 
 	generate_and_verify_batch_proof(&mut ext, &vec![7, 11], 20);
 	ext.execute_with(|| add_blocks_with_offchain(1000));
-	ext.persist_offchain_overlay();
 	generate_and_verify_batch_proof(&mut ext, &vec![7, 11, 100, 800], 100);
 }
 
@@ -612,7 +602,6 @@ fn verification_should_be_stateless() {
 		let root_7 = crate::Pallet::<Test>::mmr_root_hash();
 		(root_6, root_7)
 	});
-	ext.persist_offchain_overlay();
 
 	// Try to generate proof now.
 	let (leaves, proof5) = ext.execute_with(|| {
@@ -658,7 +647,6 @@ fn should_verify_batch_proof_statelessly() {
 		let root_7 = crate::Pallet::<Test>::mmr_root_hash();
 		(root_6, root_7)
 	});
-	ext.persist_offchain_overlay();
 
 	// Try to generate proof now.
 	let (leaves, proof) = ext.execute_with(|| {
@@ -701,8 +689,6 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 	let mut ext = new_test_ext();
 	// given
 	ext.execute_with(|| add_blocks_with_offchain(7));
-
-	ext.persist_offchain_overlay();
 
 	ext.execute_with(|| {
 		// when
@@ -811,7 +797,6 @@ fn should_canonicalize_offchain() {
 			let (number, _, _) = push_block_with_offchain();
 			assert_eq!(blocknum, number);
 		});
-		ext.persist_offchain_overlay();
 	}
 	let offchain_db = ext.offchain_db();
 	ext.execute_with(|| {
@@ -868,7 +853,6 @@ fn should_canonicalize_offchain() {
 			let (number, _, _) = push_block_with_offchain();
 			assert_eq!(blocknum, number);
 		});
-		ext.persist_offchain_overlay();
 	}
 	ext.execute_with(|| {
 		// verify leaves added by blocks 1..=13, should be in offchain under canon key.
@@ -924,7 +908,6 @@ fn should_verify_canonicalized() {
 		ext.execute_with(|| {
 			push_block_with_offchain();
 		});
-		ext.persist_offchain_overlay();
 	}
 
 	// Generate proofs for some blocks.
@@ -953,7 +936,6 @@ fn does_not_panic_when_generating_historical_proofs() {
 
 	// given 7 blocks (7 MMR leaves)
 	ext.execute_with(|| add_blocks_with_offchain(7));
-	ext.persist_offchain_overlay();
 
 	// Try to generate historical proof with invalid arguments.
 	ext.execute_with(|| {
