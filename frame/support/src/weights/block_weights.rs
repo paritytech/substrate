@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-10-11 (Y/M/D)
+//! DATE: 2022-10-13 (Y/M/D)
 //! HOSTNAME: `bm2`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `block`, LONG-NAME: `BlockExecution`, RUNTIME: `Development`
@@ -25,7 +25,7 @@
 //! WEIGHT-METRIC: `Average`, WEIGHT-MUL: `1.0`, WEIGHT-ADD: `0`
 
 // Executed Command:
-//   ./target/production/substrate
+//   target/production/substrate
 //   benchmark
 //   overhead
 //   --chain=dev
@@ -44,16 +44,16 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Statistics in nanoseconds:
-	///   Min, Max: 337_266, 439_477
-	///   Average:  342_097
-	///   Median:   339_137
-	///   Std-Dev:  11478.95
+	///   Min, Max: 340_246, 414_409
+	///   Average:  344_274
+	///   Median:   342_372
+	///   Std-Dev:  8380.49
 	///
 	/// Percentiles in nanoseconds:
-	///   99th: 367_555
-	///   95th: 355_170
-	///   75th: 340_276
-	pub const BlockExecutionRefTime: u64 = WEIGHT_PER_NANOS.ref_time().saturating_mul(342_097);
+	///   99th: 374_890
+	///   95th: 351_526
+	///   75th: 343_288
+	pub const BlockExecutionRefTime: u64 = WEIGHT_PER_NANOS.ref_time().saturating_mul(344_274);
 
 	/// Storage proof size to prove the execution of an empty block.
 	///
@@ -90,14 +90,14 @@ mod test_weights {
 	// you can delete it.
 	#[test]
 	fn sane() {
-		let w = super::BlockExecutionWeight::get();
+		use super::*;
 
 		assert!(
-			w.ref_time() >= 100u64 * WEIGHT_PER_MICROS.ref_time(),
+			BlockExecutionRefTime::get() >= 100u64 * WEIGHT_PER_MICROS.ref_time(),
 			"Ref time of executing an empty block should be at least 100 µs."
 		);
 		assert!(
-			w.ref_time() <= 50u64 * WEIGHT_PER_MILLIS.ref_time(),
+			BlockExecutionRefTime::get() <= 50u64 * WEIGHT_PER_MILLIS.ref_time(),
 			"Ref time of executing an empty block should be at most 50 ms."
 		);
 		assert!(EmptyBlockProofSize::get() > 0, "The proof size of an empty block cannot be zero");
@@ -114,11 +114,11 @@ mod test_weights {
 			"The proof size of a non-empty block should be smaller than 2 MiB"
 		);
 		assert!(
-			EmptyBlockProofSize::get() >= NonEmptyBlockProofSize::get(),
+			NonEmptyBlockProofSize::get() >= EmptyBlockProofSize::get(),
 			"The proof size of a non-empty block should be at least that of an empty block"
 		);
 		assert!(
-			BlockExecutionWeight::get().proof_size ==
+			BlockExecutionWeight::get().proof_size() ==
 				EmptyBlockProofSize::get().max(NonEmptyBlockProofSize::get()),
 			"Block weight is has wrong proof size"
 		);

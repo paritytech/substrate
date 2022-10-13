@@ -16,7 +16,7 @@
 // limitations under the License.
 
 //! THIS FILE WAS AUTO-GENERATED USING THE SUBSTRATE BENCHMARK CLI VERSION 4.0.0-dev
-//! DATE: 2022-10-11 (Y/M/D)
+//! DATE: 2022-10-13 (Y/M/D)
 //! HOSTNAME: `bm2`, CPU: `Intel(R) Core(TM) i7-7700K CPU @ 4.20GHz`
 //!
 //! SHORT-NAME: `extrinsic`, LONG-NAME: `ExtrinsicBase`, RUNTIME: `Development`
@@ -25,7 +25,7 @@
 //! WEIGHT-METRIC: `Average`, WEIGHT-MUL: `1.0`, WEIGHT-ADD: `0`
 
 // Executed Command:
-//   ./target/production/substrate
+//   target/production/substrate
 //   benchmark
 //   overhead
 //   --chain=dev
@@ -44,16 +44,16 @@ parameter_types! {
 	/// Calculated by multiplying the *Average* with `1.0` and adding `0`.
 	///
 	/// Statistics in nanoseconds:
-	///   Min, Max: 97_377, 98_418
-	///   Average:  97_610
-	///   Median:   97_584
-	///   Std-Dev:  166.63
+	///   Min, Max: 98_040, 99_044
+	///   Average:  98_302
+	///   Median:   98_283
+	///   Std-Dev:  155.86
 	///
 	/// Percentiles in nanoseconds:
-	///   99th: 98_312
-	///   95th: 97_841
-	///   75th: 97_677
-	pub const ExtrinsicBaseRefTime: u64 = WEIGHT_PER_NANOS.ref_time().saturating_mul(97_610);
+	///   99th: 98_692
+	///   95th: 98_553
+	///   75th: 98_387
+	pub const ExtrinsicBaseRefTime: u64 = WEIGHT_PER_NANOS.ref_time().saturating_mul(98_302);
 
 	/// Weight to execute a NO-OP extrinsic. For example `System::remark`.
 	pub const ExtrinsicBaseWeight: Weight = Weight::from_components(
@@ -72,14 +72,14 @@ mod test_weights {
 	// you can delete it.
 	#[test]
 	fn sane() {
-		let w = super::ExtrinsicBaseWeight::get();
+		use super::*;
 
 		assert!(
-			w.ref_time() >= 10u64 * WEIGHT_PER_MICROS.ref_time(),
+			ExtrinsicBaseRefTime::get() >= 10u64 * WEIGHT_PER_MICROS.ref_time(),
 			"Ref time of executing a NO-OP extrinsic should be at least 10 µs."
 		);
 		assert!(
-			w.ref_time() <= WEIGHT_PER_MILLIS.ref_time(),
+			ExtrinsicBaseRefTime::get() <= WEIGHT_PER_MILLIS.ref_time(),
 			"Ref time of executing a NO-OP extrinsic should be at least 1 ms."
 		);
 	}
