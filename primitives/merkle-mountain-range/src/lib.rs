@@ -387,6 +387,8 @@ impl<Hash> Proof<Hash> {
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
+	/// Error during translation of a block number into a leaf index.
+	BlockNumToLeafIndex,
 	/// Error while pushing new node.
 	Push,
 	/// Error getting the new root.
@@ -403,8 +405,8 @@ pub enum Error {
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
 	InvalidLeafIndex,
-	/// The provided leaves count is larger than the actual leaves count.
-	InvalidLeavesCount,
+	/// The provided best know block number is invalid.
+	InvalidBestKnownBlock,
 }
 
 impl Error {
@@ -434,9 +436,9 @@ impl Error {
 
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
-	pub trait MmrApi<Hash: codec::Codec> {
-		/// Generate MMR proof for a leaf under given index.
-		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
+	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
+		/// Generate MMR proof for a block with a specified `block_number`.
+		fn generate_proof(block_number: BlockNumber) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
 		///
@@ -457,14 +459,13 @@ sp_api::decl_runtime_apis! {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 
-		/// Generate MMR proof for a series of leaves under given indices.
-		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>)
-			-> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+		/// Generate MMR proof for a series of blocks with the specified block numbers.
+		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
-		/// Generate MMR proof for a series of leaves under given indices, using MMR at given `leaves_count` size.
+		/// Generate MMR proof for a series of `block_numbers`, given the `best_known_block_number`.
 		fn generate_historical_batch_proof(
-			leaf_indices: Vec<LeafIndex>,
-			leaves_count: LeafIndex
+			block_numbers: Vec<BlockNumber>,
+			best_known_block_number: BlockNumber
 		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
