@@ -641,6 +641,7 @@ pub mod pallet {
 		pub fn destroy_accounts(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
+			max_items: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
 			let removed_accounts = Self::do_destroy_accounts(id)?;
