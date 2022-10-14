@@ -3819,4 +3819,44 @@ pub(crate) mod tests {
 		assert_eq!(backend.blockchain().leaves().unwrap(), vec![block2]);
 		assert_eq!(backend.blockchain().info().best_hash, block2);
 	}
+
+	#[test]
+	fn delayed_prune_blocks_on_finalize() {
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Delayed(2), 0);
+		let ext = Default::default();
+		let hash_0 =
+			insert_block(&backend, 0, Default::default(), None, ext, vec![0.into()], None).unwrap();
+		let hash_1 = insert_block(&backend, 1, hash_0, None, ext, vec![1.into()], None).unwrap();
+
+		// Block tree:
+		//   0 -> 1
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(hash_1)).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_0), None).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_1), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		let bc = backend.blockchain();
+		// Delayed pruning must keep both blocks around.
+		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(hash_0)).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(hash_1)).unwrap());
+
+		// Block tree:
+		//   0 -> 1 -> 2 -> 3
+		let hash_2 = insert_block(&backend, 2, hash_1, None, ext, vec![2.into()], None).unwrap();
+		let hash_3 = insert_block(&backend, 3, hash_2, None, ext, vec![3.into()], None).unwrap();
+
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(hash_3)).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_2), None).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_3), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		// Blocks 0 and 1 are pruned.
+		assert!(bc.body(BlockId::hash(hash_0)).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(hash_1)).unwrap().is_none());
+
+		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(hash_2)).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(hash_3)).unwrap());
+	}
 }
