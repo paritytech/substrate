@@ -182,14 +182,14 @@ pub struct PriceWithDirection<Amount> {
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum CollectionSetting {
-	/// Disallow to transfer items in this collection.
-	NonTransferableItems,
-	/// Disallow to modify metadata of this collection.
-	LockedMetadata,
-	/// Disallow to modify attributes of this collection.
-	LockedAttributes,
-	/// When is set then no deposit needed to hold items of this collection.
-	FreeHolding,
+	/// Items in this collection are transferable.
+	TransferableItems,
+	/// The metadata of this collection can be modified.
+	UnlockedMetadata,
+	/// Attributes of this collection can be modified.
+	UnlockedAttributes,
+	/// When this isn't set then the deposit is required to hold the items of this collection.
+	RequiredDeposit,
 }
 pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 
@@ -198,11 +198,26 @@ pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 pub struct CollectionConfig(pub CollectionSettings);
 
 impl CollectionConfig {
-	pub fn empty() -> Self {
+	pub fn all_settings_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> CollectionSettings {
+	pub fn get_disabled_settings(&self) -> CollectionSettings {
 		self.0
+	}
+	pub fn is_setting_enabled(&self, setting: CollectionSetting) -> bool {
+		!self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_setting(&self, setting: CollectionSetting) -> bool {
+		self.get_disabled_settings().contains(setting)
+	}
+	pub fn disable_settings(settings: CollectionSettings) -> Self {
+		Self(settings)
+	}
+	pub fn enable_setting(&mut self, setting: CollectionSetting) {
+		self.0.remove(setting);
+	}
+	pub fn disable_setting(&mut self, setting: CollectionSetting) {
+		self.0.insert(setting);
 	}
 }
 impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
@@ -212,12 +227,12 @@ impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum ItemSetting {
-	/// Disallow transferring this item.
-	NonTransferable,
-	/// Disallow to modify metadata of this item.
-	LockedMetadata,
-	/// Disallow to modify attributes of this item.
-	LockedAttributes,
+	/// This item is transferable.
+	Transferable,
+	/// The metadata of this item can be modified.
+	UnlockedMetadata,
+	/// Attributes of this item can be modified.
+	UnlockedAttributes,
 }
 pub(super) type ItemSettings = BitFlags<ItemSetting>;
 
@@ -226,11 +241,29 @@ pub(super) type ItemSettings = BitFlags<ItemSetting>;
 pub struct ItemConfig(pub ItemSettings);
 
 impl ItemConfig {
-	pub fn empty() -> Self {
+	pub fn all_settings_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> ItemSettings {
+	pub fn get_disabled_settings(&self) -> ItemSettings {
 		self.0
+	}
+	pub fn is_setting_enabled(&self, setting: ItemSetting) -> bool {
+		!self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_setting(&self, setting: ItemSetting) -> bool {
+		self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_settings(&self) -> bool {
+		!self.get_disabled_settings().is_empty()
+	}
+	pub fn disable_settings(settings: ItemSettings) -> Self {
+		Self(settings)
+	}
+	pub fn enable_setting(&mut self, setting: ItemSetting) {
+		self.0.remove(setting);
+	}
+	pub fn disable_setting(&mut self, setting: ItemSetting) {
+		self.0.insert(setting);
 	}
 }
 impl_codec_bitflags!(ItemConfig, u64, ItemSetting);

@@ -587,12 +587,11 @@ pub mod pallet {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			let mut settings = config.values();
-			// FreeHolding could be set by calling the force_create() only
-			if settings.contains(CollectionSetting::FreeHolding) {
-				settings.remove(CollectionSetting::FreeHolding);
+			let mut config = config.clone();
+			// RequiredDeposit could be skipped by calling the force_create() only
+			if !config.is_setting_enabled(CollectionSetting::RequiredDeposit) {
+				config.enable_setting(CollectionSetting::RequiredDeposit);
 			}
-			let config = CollectionConfig(settings);
 
 			Self::do_create_collection(
 				collection,
@@ -810,10 +809,10 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 
-			let settings = Self::get_collection_settings(&collection)?;
-			let deposit = match settings.contains(CollectionSetting::FreeHolding) {
-				true => Zero::zero(),
-				false => T::ItemDeposit::get(),
+			let config = Self::get_collection_config(&collection)?;
+			let deposit = match config.is_setting_enabled(CollectionSetting::RequiredDeposit) {
+				true => T::ItemDeposit::get(),
+				false => Zero::zero(),
 			};
 
 			let mut successful = Vec::with_capacity(items.len());
@@ -1032,11 +1031,11 @@ pub mod pallet {
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let (action_allowed, _) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::NonTransferableItems,
-			)?;
-			ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
+			let collection_config = Self::get_collection_config(&collection)?;
+			ensure!(
+				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+				Error::<T, I>::ItemsNotTransferable
+			);
 
 			if let Some(check) = maybe_check {
 				let permitted = check == collection_details.admin || check == details.owner;
@@ -1288,17 +1287,17 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let collection_settings = Self::get_collection_settings(&collection)?;
+			let collection_config = Self::get_collection_config(&collection)?;
 			match maybe_item {
 				None => {
 					ensure!(
-						!collection_settings.contains(CollectionSetting::LockedAttributes),
+						collection_config.is_setting_enabled(CollectionSetting::UnlockedAttributes),
 						Error::<T, I>::LockedCollectionAttributes
 					)
 				},
 				Some(item) => {
-					let maybe_is_locked = Self::get_item_settings(&collection, &item)
-						.map(|v| v.contains(ItemSetting::LockedAttributes))?;
+					let maybe_is_locked = Self::get_item_config(&collection, &item)
+						.map(|c| c.has_disabled_setting(ItemSetting::UnlockedAttributes))?;
 					ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
 				},
 			};
@@ -1310,7 +1309,7 @@ pub mod pallet {
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if !collection_settings.contains(CollectionSetting::FreeHolding) &&
+			if collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit) &&
 				maybe_check_owner.is_some()
 			{
 				deposit = T::DepositPerByte::get()
@@ -1364,17 +1363,20 @@ pub mod pallet {
 			if maybe_check_owner.is_some() {
 				match maybe_item {
 					None => {
-						let collection_settings = Self::get_collection_settings(&collection)?;
+						let collection_config = Self::get_collection_config(&collection)?;
 						ensure!(
-							!collection_settings.contains(CollectionSetting::LockedAttributes),
+							collection_config
+								.is_setting_enabled(CollectionSetting::UnlockedAttributes),
 							Error::<T, I>::LockedCollectionAttributes
 						)
 					},
 					Some(item) => {
 						// NOTE: if the item was previously burned, the ItemSettings record might
 						// not exists. In that case, we allow to clear the attribute.
-						let maybe_is_locked = Self::get_item_settings(&collection, &item)
-							.map_or(false, |v| v.contains(ItemSetting::LockedAttributes));
+						let maybe_is_locked = Self::get_item_config(&collection, &item)
+							.map_or(false, |c| {
+								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
+							});
 						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
 					},
 				};
@@ -1420,18 +1422,18 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let (action_allowed, _) =
-				Self::is_item_setting_disabled(&collection, &item, ItemSetting::LockedMetadata)?;
+			let item_config = Self::get_item_config(&collection, &item)?;
 			ensure!(
-				maybe_check_owner.is_none() || action_allowed,
+				maybe_check_owner.is_none() ||
+					item_config.is_setting_enabled(ItemSetting::UnlockedMetadata),
 				Error::<T, I>::LockedItemMetadata
 			);
-
-			let collection_settings = Self::get_collection_settings(&collection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
+
+			let collection_config = Self::get_collection_config(&collection)?;
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				if metadata.is_none() {
@@ -1440,7 +1442,7 @@ pub mod pallet {
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				collection_details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if !collection_settings.contains(CollectionSetting::FreeHolding) &&
+				if collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit) &&
 					maybe_check_owner.is_some()
 				{
 					deposit = T::DepositPerByte::get()
@@ -1492,8 +1494,8 @@ pub mod pallet {
 			}
 
 			// NOTE: if the item was previously burned, the ItemSettings record might not exists
-			let is_locked = Self::get_item_settings(&collection, &item)
-				.map_or(false, |v| v.contains(ItemSetting::LockedMetadata));
+			let is_locked = Self::get_item_config(&collection, &item)
+				.map_or(false, |c| c.has_disabled_setting(ItemSetting::UnlockedMetadata));
 
 			ensure!(maybe_check_owner.is_none() || !is_locked, Error::<T, I>::LockedItemMetadata);
 
@@ -1536,12 +1538,10 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let (action_allowed, settings) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::LockedMetadata,
-			)?;
+			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
-				maybe_check_owner.is_none() || action_allowed,
+				maybe_check_owner.is_none() ||
+					collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
 				Error::<T, I>::LockedCollectionMetadata
 			);
 
@@ -1555,7 +1555,8 @@ pub mod pallet {
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if maybe_check_owner.is_some() && !settings.contains(CollectionSetting::FreeHolding)
+				if maybe_check_owner.is_some() &&
+					collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit)
 				{
 					deposit = T::DepositPerByte::get()
 						.saturating_mul(((data.len()) as u32).into())
@@ -1604,12 +1605,10 @@ pub mod pallet {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let (action_allowed, _) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::LockedMetadata,
-			)?;
+			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
-				maybe_check_owner.is_none() || action_allowed,
+				maybe_check_owner.is_none() ||
+					collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
 				Error::<T, I>::LockedCollectionMetadata
 			);
 
