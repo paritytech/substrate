@@ -624,11 +624,11 @@ impl<T: Config> sp_std::ops::DerefMut for BondedPool<T> {
 
 impl<T: Config> BondedPool<T> {
 	/// Create a new bonded pool with the given roles and identifier.
-	fn new(id: PoolId, commission: Commission<T>, roles: PoolRoles<T::AccountId>) -> Self {
+	fn new(id: PoolId, roles: PoolRoles<T::AccountId>) -> Self {
 		Self {
 			id,
 			inner: BondedPoolInner {
-				commission,
+				commission: Commission::default(),
 				member_counter: Zero::zero(),
 				points: Zero::zero(),
 				roles,
@@ -1924,7 +1924,6 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
-			commission: Commission<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
@@ -1941,10 +1940,6 @@ pub mod pallet {
 				Error::<T>::MaxPools
 			);
 			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
-			ensure!(
-				commission.max.unwrap_or(Perbill::zero()) >= commission.current,
-				Error::<T>::CommissionMisconfigured
-			);
 
 			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
 				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
@@ -1952,7 +1947,6 @@ pub mod pallet {
 			})?;
 			let mut bonded_pool = BondedPool::<T>::new(
 				pool_id,
-				commission,
 				PoolRoles {
 					root: Some(root),
 					nominator: Some(nominator),

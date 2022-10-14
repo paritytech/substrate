@@ -639,7 +639,6 @@ mod join {
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(104),
 				100,
-				Commission::default(),
 				104,
 				104,
 				104
@@ -1616,7 +1615,6 @@ mod claim_payout {
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(20),
 				10,
-				Commission::default(),
 				20,
 				20,
 				20
@@ -1639,7 +1637,6 @@ mod claim_payout {
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(30),
 				10,
-				Commission::default(),
 				30,
 				30,
 				30
@@ -4116,7 +4113,6 @@ mod create {
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
 				StakingMock::minimum_bond(),
-				Commission::default(),
 				123,
 				456,
 				789
@@ -4174,7 +4170,7 @@ mod create {
 	fn create_errors_correctly() {
 		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(10), 420, Commission::default(), 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(10), 420, 123, 456, 789),
 				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 
@@ -4184,7 +4180,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(11), 9, Commission::default(), 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 9, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -4193,7 +4189,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(11), 19, Commission::default(), 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 19, 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -4214,7 +4210,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(11), 20, Commission::default(), 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 20, 123, 456, 789),
 				Error::<Runtime>::MaxPools
 			);
 
@@ -4227,7 +4223,6 @@ mod create {
 			// Then
 			let create = RuntimeCall::Pools(crate::Call::<Runtime>::create {
 				amount: 20,
-				commission: Commission::default(),
 				root: 11,
 				nominator: 11,
 				state_toggler: 11,

@@ -293,7 +293,6 @@ impl ExtBuilder {
 			assert_ok!(Pools::create(
 				RawOrigin::Signed(10).into(),
 				amount_to_bond,
-				Commission::default(),
 				900,
 				901,
 				902
