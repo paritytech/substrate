@@ -302,7 +302,7 @@ impl<T: Config> SignedSubmissions<T> {
 		debug_assert!(!self.indices.iter().map(|(_, _, x)| x).any(|&idx| idx == self.next_idx));
 		let block_number = frame_system::Pallet::<T>::block_number();
 
-		let weakest = match self.indices.try_push((
+		let maybe_weakest = match self.indices.try_push((
 			submission.raw_solution.score,
 			block_number,
 			self.next_idx,
@@ -342,7 +342,7 @@ impl<T: Config> SignedSubmissions<T> {
 		self.insertion_overlay.insert(self.next_idx, submission);
 		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
 		self.next_idx += 1;
-		match weakest {
+		match maybe_weakest {
 			Some(weakest) => InsertResult::InsertedEjecting(weakest),
 			None => InsertResult::Inserted,
 		}

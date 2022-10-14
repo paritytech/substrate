@@ -1266,8 +1266,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
-	/// `SignedSubmissions`.
+	/// A sorted, bounded vector of `(score, block_number, index)`, where each `index` points to a
+	/// value in `SignedSubmissions`.
 	///
 	/// We never need to process more than a single signed submission at a time. Signed submissions
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access

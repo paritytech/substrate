@@ -50,9 +50,18 @@ pub mod v1 {
 						.into_iter()
 						.map(|(score, index)| (score, now, index))
 						.collect::<Vec<_>>();
-					// defensive-only
+
+					log!(
+						debug,
+						"{:?} SignedSubmissionIndices read from storage (max: {:?})",
+						vector.len(),
+						T::SignedMaxSubmissions::get()
+					);
+
+					// defensive-only, assuming a constant `SignedMaxSubmissions`.
 					let bounded = BoundedVec::<_, _>::truncate_from(vector);
 					SignedSubmissionIndices::<T>::put(bounded);
+
 					log!(info, "SignedSubmissionIndices existed and got migrated");
 				} else {
 					log!(info, "SignedSubmissionIndices did NOT exist.");
