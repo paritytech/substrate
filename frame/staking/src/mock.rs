@@ -547,8 +547,8 @@ impl ExtBuilder {
 		let mut ext = self.build();
 		ext.execute_with(test);
 		ext.execute_with(|| {
-			let try_state = Staking::do_try_state(System::block_number());
-			assert!(try_state.is_ok(), "{}", try_state.unwrap_err());
+			Staking::do_try_state(System::block_number()).unwrap();
+			
 		});
 	}
 }
