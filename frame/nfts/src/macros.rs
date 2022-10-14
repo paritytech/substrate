@@ -20,7 +20,9 @@ macro_rules! impl_incrementable {
 		$(
 			impl Incrementable for $type {
 				fn increment(&self) -> Self {
-					self.saturating_add(1)
+					let mut val = self.clone();
+					val.saturating_inc();
+					val
 				}
 
 				fn initial_value() -> Self {
