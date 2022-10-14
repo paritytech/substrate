@@ -544,7 +544,7 @@ pub struct PoolRoles<AccountId> {
 /// update thereafter. The `max` commission value can only be set once, as to prevent the commission
 /// from repeatedly increasing.
 ///
-/// The commission config is also optional, allowing the pool to set strict limits to how much
+/// A commission throttle is also optional, allowing the pool to set strict limits to how much
 /// commission can change in each update, and how often updates can take place.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
@@ -557,13 +557,13 @@ pub struct Commission<T: Config> {
 	max: Option<Perbill>,
 	/// Configiration around how often the commission can be updated, and metadata around the
 	/// previous round of updates.
-	config: Option<CommissionConfig<T>>,
+	throttle: Option<CommissionThrottle<T>>,
 }
 
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
-pub struct CommissionConfig<T: Config> {
+pub struct CommissionThrottle<T: Config> {
 	/// The pool root is able to set the maximum amount the commission can be updated by, and how
 	/// often an update can take place.
 	pub change_rate: (Perbill, T::BlockNumber),
@@ -575,7 +575,7 @@ pub struct CommissionConfig<T: Config> {
 
 impl<T: Config> Default for Commission<T> {
 	fn default() -> Self {
-		Self { current: Perbill::zero(), max: Some(Perbill::zero()), config: None }
+		Self { current: Perbill::zero(), max: Some(Perbill::zero()), throttle: None }
 	}
 }
 
@@ -2110,7 +2110,7 @@ pub mod pallet {
 			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 
-				// TODO: check if CommissionConfig.previous exists, and ensure that enough
+				// TODO: check if CommissionThrottle.previous exists, and ensure that enough
 				// blocks have passed since the previous update if it does.
 
 				ensure!(
@@ -2119,8 +2119,8 @@ pub mod pallet {
 				);
 				pool.commission.current = commission.clone();
 
-				// TODO: update CommissionConfig.previous and CommissionConfig.previous_set_at
-				// if a CommissionConfig is set.
+				// TODO: update CommissionThrottle.previous and CommissionThrottle.previous_set_at
+				// if a CommissionThrottle is set.
 
 				Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
 				Ok(())
