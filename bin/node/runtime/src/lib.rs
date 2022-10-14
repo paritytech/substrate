@@ -1499,7 +1499,7 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
-	pub Features: PalletFeatures = PalletFeatures::empty();
+	pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
 impl pallet_nfts::Config for Runtime {

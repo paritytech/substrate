@@ -235,16 +235,16 @@ impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum PalletFeature {
-	/// Disallow trading operations.
-	NoTrading,
-	/// Disallow setting attributes.
-	NoAttributes,
-	/// Disallow transfer approvals.
-	NoApprovals,
-	/// Disallow atomic items swap.
-	NoSwaps,
-	/// Disallow public mints.
-	NoPublicMints,
+	/// Enable/disable trading operations.
+	Trading,
+	/// Allow/disallow setting attributes.
+	Attributes,
+	/// Allow/disallow transfer approvals.
+	Approvals,
+	/// Allow/disallow atomic items swap.
+	Swaps,
+	/// Allow/disallow public mints.
+	PublicMints,
 }
 
 /// Wrapper type for `BitFlags<PalletFeature>` that implements `Codec`.
@@ -252,8 +252,11 @@ pub enum PalletFeature {
 pub struct PalletFeatures(pub BitFlags<PalletFeature>);
 
 impl PalletFeatures {
-	pub fn empty() -> Self {
+	pub fn all_enabled() -> Self {
 		Self(BitFlags::EMPTY)
+	}
+	pub fn disable(features: BitFlags<PalletFeature>) -> Self {
+		Self(features)
 	}
 }
 impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);

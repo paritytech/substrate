@@ -1023,7 +1023,7 @@ pub mod pallet {
 			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			ensure!(
-				Self::is_pallet_feature_disabled(PalletFeature::NoApprovals),
+				Self::is_pallet_feature_enabled(PalletFeature::Approvals),
 				Error::<T, I>::MethodDisabled
 			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -1273,7 +1273,7 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			ensure!(
-				Self::is_pallet_feature_disabled(PalletFeature::NoAttributes),
+				Self::is_pallet_feature_enabled(PalletFeature::Attributes),
 				Error::<T, I>::MethodDisabled
 			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)

@@ -32,7 +32,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		duration: <T as SystemConfig>::BlockNumber,
 	) -> DispatchResult {
 		ensure!(
-			Self::is_pallet_feature_disabled(PalletFeature::NoSwaps),
+			Self::is_pallet_feature_enabled(PalletFeature::Swaps),
 			Error::<T, I>::MethodDisabled
 		);
 		ensure!(duration <= T::MaxDeadlineDuration::get(), Error::<T, I>::WrongDuration);
@@ -116,7 +116,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		witness_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 	) -> DispatchResult {
 		ensure!(
-			Self::is_pallet_feature_disabled(PalletFeature::NoSwaps),
+			Self::is_pallet_feature_enabled(PalletFeature::Swaps),
 			Error::<T, I>::MethodDisabled
 		);
 

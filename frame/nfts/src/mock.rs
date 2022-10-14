@@ -85,7 +85,7 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
-	pub storage Features: PalletFeatures = PalletFeatures::empty();
+	pub storage Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
 impl Config for Test {
