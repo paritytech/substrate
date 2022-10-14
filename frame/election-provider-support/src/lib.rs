@@ -417,28 +417,39 @@ pub trait InstantElectionProvider: ElectionProviderBase {
 /// An election provider that does nothing whatsoever.
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
-impl<AccountId, BlockNumber, DataProvider> ElectionProviderBase
-	for NoElection<(AccountId, BlockNumber, DataProvider)>
+impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProviderBase
+	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
 where
-	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>, MaxWinners: Get<u32>,
 {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
-	type MaxWinners = frame_support::traits::ConstU32<0>;
+	type MaxWinners = MaxWinners;
 	type DataProvider = DataProvider;
 }
 
-impl<AccountId, BlockNumber, DataProvider> ElectionProvider
-	for NoElection<(AccountId, BlockNumber, DataProvider)>
+impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
 where
-	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>, MaxWinners: Get<u32>,
 {
 	fn ongoing() -> bool {
 		false
 	}
 
 	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		Err("`NoElection` cannot do anything.")
+	}
+}
+
+
+impl<AccountId, BlockNumber, DataProvider, MaxWinners> InstantElectionProvider
+for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
+	where
+		DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>, MaxWinners: Get<u32>,
+{
+	fn instant_elect(_: Option<u32>, _: Option<u32>) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("`NoElection` cannot do anything.")
 	}
 }
