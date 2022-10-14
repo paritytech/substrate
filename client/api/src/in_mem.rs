@@ -686,7 +686,7 @@ where
 	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {
-		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
+		let old_state = self.state_at(&Default::default())?;
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
@@ -702,7 +702,8 @@ where
 		operation: &mut Self::BlockImportOperation,
 		block: BlockId<Block>,
 	) -> sp_blockchain::Result<()> {
-		operation.old_state = self.state_at(block)?;
+		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
+		operation.old_state = self.state_at(&hash)?;
 		Ok(())
 	}
 
@@ -768,16 +769,16 @@ where
 		None
 	}
 
-	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
-		match block {
-			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),
-			_ => {},
+	fn state_at(&self, hash: &Block::Hash) -> sp_blockchain::Result<Self::State> {
+		if *hash == Default::default() {
+			return Ok(Self::State::default())
 		}
 
-		self.blockchain
-			.id(block)
-			.and_then(|id| self.states.read().get(&id).cloned())
-			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", block)))
+		self.states
+			.read()
+			.get(hash)
+			.cloned()
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))
 	}
 
 	fn revert(
