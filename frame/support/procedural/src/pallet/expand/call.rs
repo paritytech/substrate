@@ -16,6 +16,7 @@
 // limitations under the License.
 
 use crate::{pallet::Def, COUNTER};
+use quote::ToTokens;
 use syn::spanned::Spanned;
 
 ///
@@ -31,7 +32,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 
 			(span, where_clause, methods, docs)
 		},
-		None => (def.item.span(), None, Vec::new(), Vec::new()),
+		None => (def.item.span(), def.config.where_clause.clone(), Vec::new(), Vec::new()),
 	};
 	let frame_support = &def.frame_support;
 	let frame_system = &def.frame_system;
@@ -157,6 +158,24 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 			}
 		});
 	}
+
+	// Extracts #[allow] attributes, necessary so that we don't run into compiler warnings
+	let maybe_allow_attrs = methods
+		.iter()
+		.map(|method| {
+			method
+				.attrs
+				.iter()
+				.find(|attr| {
+					if let Ok(syn::Meta::List(syn::MetaList { path, .. })) = attr.parse_meta() {
+						path.segments.last().map(|seg| seg.ident == "allow").unwrap_or(false)
+					} else {
+						false
+					}
+				})
+				.map_or(proc_macro2::TokenStream::new(), |attr| attr.to_token_stream())
+		})
+		.collect::<Vec<_>>();
 
 	quote::quote_spanned!(span =>
 		#[doc(hidden)]
@@ -289,6 +308,7 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 							#frame_support::sp_tracing::enter_span!(
 								#frame_support::sp_tracing::trace_span!(stringify!(#fn_name))
 							);
+							#maybe_allow_attrs
 							<#pallet_ident<#type_use_gen>>::#fn_name(origin, #( #args_name, )* )
 								.map(Into::into).map_err(Into::into)
 						},
