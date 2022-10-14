@@ -489,10 +489,11 @@ pub struct BlockchainDb<Block: BlockT> {
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	header_metadata_cache: Arc<HeaderMetadataCache<Block>>,
 	header_cache: Mutex<LinkedHashMap<Block::Hash, Option<Block::Header>>>,
+	delayed_pruning: Option<u32>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
-	fn new(db: Arc<dyn Database<DbHash>>) -> ClientResult<Self> {
+	fn new(db: Arc<dyn Database<DbHash>>, delayed_pruning: Option<u32>) -> ClientResult<Self> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
@@ -501,6 +502,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 			meta: Arc::new(RwLock::new(meta)),
 			header_metadata_cache: Arc::new(HeaderMetadataCache::default()),
 			header_cache: Default::default(),
+			delayed_pruning,
 		})
 	}
 
@@ -667,8 +669,17 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 
 	fn displaced_leaves_after_finalizing(
 		&self,
-		block_number: NumberFor<Block>,
+		mut block_number: NumberFor<Block>,
 	) -> ClientResult<Vec<Block::Hash>> {
+		if let Some(delayed) = self.delayed_pruning {
+			// No displaced leaves
+			if block_number < delayed.into() {
+				return Ok(Default::default())
+			}
+
+			block_number = block_number.saturating_sub(delayed.into());
+		}
+
 		Ok(self
 			.leaves
 			.read()
@@ -1138,7 +1149,13 @@ impl<Block: BlockT> Backend<Block> {
 
 		let state_pruning_used = state_db.pruning_mode();
 		let is_archive_pruning = state_pruning_used.is_archive();
-		let blockchain = BlockchainDb::new(db.clone())?;
+		let delayed_pruning = if let BlocksPruning::Delayed(delayed_pruning) = config.blocks_pruning
+		{
+			Some(delayed_pruning)
+		} else {
+			None
+		};
+		let blockchain = BlockchainDb::new(db.clone(), delayed_pruning)?;
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
