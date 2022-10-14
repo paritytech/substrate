@@ -172,17 +172,21 @@ where
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
 					})?;
 
-				// TODO-SASS-P2: test me
 				if viable_epoch.as_ref().end_slot() <= slot {
-					// Some epochs were skipped, reuse the configuration of the first skipped epoch.
-					// The headers in the epoch changes tree is left untouched even if the slots
-					// are not updated.
+					// Some epochs were skipped, reuse part of the configuration from the first
+					// skipped epoch.
 					let epoch_data = viable_epoch.as_mut();
-					epoch_data.start_slot = slot;
-					epoch_data.epoch_index = u64::from(slot) / self.genesis_config.epoch_duration;
+					let slot_idx = u64::from(slot) - u64::from(epoch_data.start_slot);
+					let skipped_epochs = slot_idx / self.genesis_config.epoch_duration;
+					epoch_data.epoch_index += skipped_epochs;
+					epoch_data.start_slot = Slot::from(
+						u64::from(epoch_data.start_slot) +
+							skipped_epochs * self.genesis_config.epoch_duration,
+					);
 					log::warn!(
 						target: "sassafras",
-						"🌳 Detected skipped epochs, starting recovery epoch"
+						"🌳 Detected {} skipped epochs, starting recovery epoch {}",
+						skipped_epochs, epoch_data.epoch_index
 					);
 				}
 

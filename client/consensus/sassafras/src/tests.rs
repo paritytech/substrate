@@ -353,11 +353,10 @@ fn allows_to_skip_epochs() {
 	//
 	// Block# :  [ 1 2 3 4 5 6 ][ 7 - -  -  -  - ][  -  -  -  -  -  - ][  8  ... ]
 	// Slot#  :  [ 1 2 3 4 5 6 ][ 7 8 9 10 11 12 ][ 13 14 15 16 17 18 ][ 19  ... ]
-	// Epoch# :  [      0      ][       1        ][      skipped      ][    2    ]
+	// Epoch# :  [      0      ][       1        ][      skipped      ][    3    ]
 	//
-	// As a recovery strategy, a fallback epoch 2 is created by reusing the configuration
-	// meant to be used by the "real" epoch 2 but with start slot set to the slot
-	// of the first block after the skipped epoch.
+	// As a recovery strategy, a fallback epoch 3 is created by reusing part of the
+	// configuration created for epoch 2.
 
 	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
 
@@ -375,8 +374,7 @@ fn allows_to_skip_epochs() {
 	assert_eq!(*epochs[2].0, block);
 	assert_eq!(*epochs[2].1, 8);
 
-	println!("{:#?}", epochs);
-
+	// Fist block in E0 (B1)) announces E0 (this is special)
 	let data = epoch_changes
 		.epoch(&EpochIdentifier {
 			position: EpochIdentifierPosition::Genesis0,
@@ -387,6 +385,7 @@ fn allows_to_skip_epochs() {
 	assert_eq!(data.epoch_index, 0);
 	assert_eq!(data.start_slot, Slot::from(1));
 
+	// First block in E0 (B1) also announces E1
 	let data = epoch_changes
 		.epoch(&EpochIdentifier {
 			position: EpochIdentifierPosition::Genesis1,
@@ -397,6 +396,7 @@ fn allows_to_skip_epochs() {
 	assert_eq!(data.epoch_index, 1);
 	assert_eq!(data.start_slot, Slot::from(7));
 
+	// First block in E1 (B7) announces E2 (config then stolen by E3)
 	let data = epoch_changes
 		.epoch(&EpochIdentifier {
 			position: EpochIdentifierPosition::Regular,
@@ -407,11 +407,12 @@ fn allows_to_skip_epochs() {
 	assert_eq!(data.epoch_index, 3);
 	assert_eq!(data.start_slot, Slot::from(19));
 
+	// First block in E3 (B8) announced E4.
 	let data = epoch_changes
 		.epoch(&EpochIdentifier {
 			position: EpochIdentifierPosition::Regular,
 			hash: block,
-			number: 19,
+			number: 8,
 		})
 		.unwrap();
 	assert_eq!(data.epoch_index, 4);

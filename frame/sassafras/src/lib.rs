@@ -507,11 +507,9 @@ impl<T: Config> Pallet<T> {
 
 		let slot_idx = CurrentSlot::<T>::get().saturating_sub(Self::epoch_start(epoch_idx));
 		if slot_idx >= T::EpochDuration::get() {
-			// Detected one or more skipped epochs, kill tickets and recompute the `epoch_index`.
+			// Detected one or more skipped epochs, kill tickets and recompute epoch index.
 			TicketsMeta::<T>::kill();
-			// TODO-SASS-P2: adjust epoch index accordingly (TEST ME)
-			let idx: u64 = slot_idx.into();
-			epoch_idx += idx / T::EpochDuration::get();
+			epoch_idx += u64::from(slot_idx) / T::EpochDuration::get();
 		}
 		EpochIndex::<T>::put(epoch_idx);
 
