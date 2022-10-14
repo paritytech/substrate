@@ -15,12 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::*;
-use frame_support::pallet_prelude::*;
-
 //! Freeze functions allow to make particular items non-transferable.
 //! It's also possible to revert the setting back.
 //! An origin must have a `Freezer` role in order to call those methods.
+
+use crate::*;
+use frame_support::pallet_prelude::*;
+
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_freeze_item(
 		origin: T::AccountId,
