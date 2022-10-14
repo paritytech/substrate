@@ -560,6 +560,12 @@ pub struct Commission<T: Config> {
 	throttle: Option<CommissionThrottle<T>>,
 }
 
+impl<T: Config> Default for Commission<T> {
+	fn default() -> Self {
+		Self { current: Perbill::zero(), max: Some(Perbill::zero()), throttle: None }
+	}
+}
+
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -569,12 +575,6 @@ pub struct CommissionThrottle<T: Config> {
 	pub change_rate: (Perbill, T::BlockNumber),
 	/// The block the previous commission update took place.
 	previous_set_at: T::BlockNumber,
-}
-
-impl<T: Config> Default for Commission<T> {
-	fn default() -> Self {
-		Self { current: Perbill::zero(), max: Some(Perbill::zero()), throttle: None }
-	}
 }
 
 impl<T: Config> CommissionThrottle<T> {
