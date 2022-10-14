@@ -202,7 +202,8 @@ pub mod pallet {
 			+ TypeInfo;
 
 		/// Max number of items to destroy per extrinsic call.
-		/// This number should be less than the value that can fit in a block for the various extrinsics
+		/// This number should be less than the value that can fit in a block for the various
+		/// extrinsics
 		#[pallet::constant]
 		type RemoveItemsLimit: Get<u32>;
 
