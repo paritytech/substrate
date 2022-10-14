@@ -420,7 +420,8 @@ pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProviderBase
 	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
 where
-	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>, MaxWinners: Get<u32>,
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxWinners: Get<u32>,
 {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
@@ -432,7 +433,8 @@ where
 impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProvider
 	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
 where
-	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>, MaxWinners: Get<u32>,
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxWinners: Get<u32>,
 {
 	fn ongoing() -> bool {
 		false
@@ -443,13 +445,16 @@ where
 	}
 }
 
-
 impl<AccountId, BlockNumber, DataProvider, MaxWinners> InstantElectionProvider
-for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
-	where
-		DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>, MaxWinners: Get<u32>,
+	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxWinners: Get<u32>,
 {
-	fn instant_elect(_: Option<u32>, _: Option<u32>) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+	fn instant_elect(
+		_: Option<u32>,
+		_: Option<u32>,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
 		Err("`NoElection` cannot do anything.")
 	}
 }
