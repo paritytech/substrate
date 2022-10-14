@@ -15,4 +15,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod check_sudo_key;
+pub mod check_only_sudo;

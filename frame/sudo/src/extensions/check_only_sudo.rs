@@ -31,15 +31,15 @@ use sp_std::{fmt, marker::PhantomData};
 /// Ensure that signed transactions are only valid if they are signed by root.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct CheckSudoKey<T: Config + Send + Sync>(PhantomData<T>);
+pub struct CheckOnlySudo<T: Config + Send + Sync>(PhantomData<T>);
 
-impl<T: Config + Send + Sync> Default for CheckSudoKey<T> {
+impl<T: Config + Send + Sync> Default for CheckOnlySudo<T> {
 	fn default() -> Self {
 		Self(Default::default())
 	}
 }
 
-impl<T: Config + Send + Sync> fmt::Debug for CheckSudoKey<T> {
+impl<T: Config + Send + Sync> fmt::Debug for CheckOnlySudo<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "CheckSudoKey")
@@ -51,14 +51,14 @@ impl<T: Config + Send + Sync> fmt::Debug for CheckSudoKey<T> {
 	}
 }
 
-impl<T: Config + Send + Sync> CheckSudoKey<T> {
+impl<T: Config + Send + Sync> CheckOnlySudo<T> {
 	/// Creates new `SignedExtension` to check sudo key.
 	pub fn new() -> Self {
 		Self::default()
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for CheckSudoKey<T>
+impl<T: Config + Send + Sync> SignedExtension for CheckOnlySudo<T>
 where
 	<T as Config>::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 {

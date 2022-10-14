@@ -83,7 +83,7 @@
 //!
 //! The Sudo pallet defines the following extensions:
 //!
-//!   - [`CheckSudoKey`]: Checks the signer of the transaction and ensure that the signed
+//!   - [`CheckOnlySudo`]: Checks the signer of the transaction and ensure that the signed
 //!     transactions are only valid if they are signed by root
 //!
 //! ## Genesis Config
@@ -110,7 +110,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub use extensions::check_sudo_key::CheckSudoKey;
+pub use extensions::check_only_sudo::CheckOnlySudo;
 pub use pallet::*;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
