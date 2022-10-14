@@ -75,7 +75,7 @@ parameter_types! {
 	///
 	/// We do not distinguish between the weight of empty or non-empty blocks and
 	/// therefore use the assumed larger one, being non-empty.
-	pub const BlockExecutionWeight: Weight = Weight::from_components(
+	pub const BlockExecutionWeight: Weight = Weight::from_parts(
 			BlockExecutionRefTime::get(),
 			NonEmptyBlockProofSize::get(),
 		);

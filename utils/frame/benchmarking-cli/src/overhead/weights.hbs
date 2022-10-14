@@ -58,13 +58,13 @@ parameter_types! {
 	///
 	/// We do not distinguish between the weight of empty or non-empty blocks and
 	/// therefore use the assumed larger one, being non-empty.
-	pub const {{long_name}}Weight: Weight = Weight::from_components(
+	pub const {{long_name}}Weight: Weight = Weight::from_parts(
 			{{long_name}}RefTime::get(),
 			NonEmptyBlockProofSize::get(),
 		);
 	{{else}}
 	/// Weight to execute a NO-OP extrinsic. For example `System::remark`.
-	pub const {{long_name}}Weight: Weight = Weight::from_components(
+	pub const {{long_name}}Weight: Weight = Weight::from_parts(
 			{{long_name}}RefTime::get(),
 			// There is no proof size consumed by a NO-OP extrinsic.
 			0,

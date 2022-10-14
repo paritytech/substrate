@@ -63,7 +63,7 @@ fn template_render_block_works() {
 	assert_contains(&render, want);
 	let want = "pub const NonEmptyBlockProofSize: u64 = 8_192";
 	assert_contains(&render, want);
-	let want = "pub const BlockExecutionWeight: Weight = Weight::from_components(BlockExecutionRefTime::get(),NonEmptyBlockProofSize::get(),);";
+	let want = "pub const BlockExecutionWeight: Weight = Weight::from_parts(BlockExecutionRefTime::get(),NonEmptyBlockProofSize::get(),);";
 	assert_contains(&render, want);
 }
 

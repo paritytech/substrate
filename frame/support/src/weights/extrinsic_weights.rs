@@ -56,7 +56,7 @@ parameter_types! {
 	pub const ExtrinsicBaseRefTime: u64 = WEIGHT_PER_NANOS.ref_time().saturating_mul(98_302);
 
 	/// Weight to execute a NO-OP extrinsic. For example `System::remark`.
-	pub const ExtrinsicBaseWeight: Weight = Weight::from_components(
+	pub const ExtrinsicBaseWeight: Weight = Weight::from_parts(
 			ExtrinsicBaseRefTime::get(),
 			// There is no proof size consumed by a NO-OP extrinsic.
 			0,
