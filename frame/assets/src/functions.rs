@@ -731,6 +731,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Destroy approvals associated with a given asset up to the max (T::RemoveItemsLimit).
 	///
 	/// Each call emits the `Event::DestroyedApprovals` event
+	/// Returns the number of destroyed approvals.
 	pub(super) fn do_destroy_approvals(id: T::AssetId) -> Result<u32, DispatchError> {
 		let mut removed_approvals = 0;
 		let _ =
