@@ -174,7 +174,7 @@ benchmarks_instance_pallet! {
 		)?;
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
-		assert_last_event::<T, I>(Event::Destroying { asset_id: Default::default() }.into());
+		assert_last_event::<T, I>(Event::DestructionStarted { asset_id: Default::default() }.into());
 	}
 
 	destroy_accounts {
