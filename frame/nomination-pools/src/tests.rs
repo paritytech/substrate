@@ -636,13 +636,7 @@ mod join {
 			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
 
 			Balances::make_free_balance_be(&104, 100 + Balances::minimum_balance());
-			assert_ok!(Pools::create(
-				RuntimeOrigin::signed(104),
-				100,
-				104,
-				104,
-				104
-			));
+			assert_ok!(Pools::create(RuntimeOrigin::signed(104), 100, 104, 104, 104));
 
 			let pool_account = BondedPools::<Runtime>::iter()
 				.find(|(_, bonded_pool)| bonded_pool.roles.depositor == 104)
@@ -1612,13 +1606,7 @@ mod claim_payout {
 
 			// create pool 2
 			Balances::make_free_balance_be(&20, 100);
-			assert_ok!(Pools::create(
-				RuntimeOrigin::signed(20),
-				10,
-				20,
-				20,
-				20
-			));
+			assert_ok!(Pools::create(RuntimeOrigin::signed(20), 10, 20, 20, 20));
 
 			// has no impact -- initial
 			let (member_20, _, reward_pool_20) = Pools::get_member_with_pools(&20).unwrap();
@@ -1634,13 +1622,7 @@ mod claim_payout {
 
 			// create pool 3
 			Balances::make_free_balance_be(&30, 100);
-			assert_ok!(Pools::create(
-				RuntimeOrigin::signed(30),
-				10,
-				30,
-				30,
-				30
-			));
+			assert_ok!(Pools::create(RuntimeOrigin::signed(30), 10, 30, 30, 30));
 
 			// reward counter is still the same.
 			let (member_30, _, reward_pool_30) = Pools::get_member_with_pools(&30).unwrap();

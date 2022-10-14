@@ -1444,8 +1444,10 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
-		/// A pool's commission settings have been changed.
-		PoolCommissionUpdated { pool_id: PoolId, commission: Commission<T> },
+		/// A pool's commission setting has been changed.
+		PoolCommissionUpdated { pool_id: PoolId, commission: Perbill },
+		/// A pool's maximum commission setting has been changed.
+		PoolMaxCommissionUpdated { pool_id: PoolId, commission: Perbill, max_commission: Perbill },
 	}
 
 	#[pallet::error]
@@ -1503,8 +1505,10 @@ pub mod pallet {
 		PartialUnbondNotAllowedPermissionlessly,
 		/// The pool commission has been misconfigured.
 		CommissionMisconfigured,
-		/// The pool's max commission has already been set.
-		MaxCommissionAlreadySet,
+		/// The pool's max commission cannot be set higher than the existing value.
+		MaxCommissionRestricted,
+		/// The supplied commission exceeds the max allowed commission.
+		CommissionExceedsMaximum,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -2083,18 +2087,17 @@ pub mod pallet {
 		/// Set the commission of a pool.
 		///
 		/// The dispatch origin of this call must be signed by the root role of the pool.
-		/// The supplied commission is firstly checked for validity. If the pool already has
-		/// max commission set, and a commission.max is provided, then this call fails.
+		/// If the pool has a max commission set, the commission supplied must be less or
+		/// equal to the max.
 		///
-		/// If a max commission has been provided and has _not_ yet been set, then it is set
-		/// alongside the current commission. Otherwise, the pool's max commission is
-		/// maintained and the current commission is set only.
+		/// If the max commission has _not_ yet been set, then the commission is not
+		/// restricted.
 		#[pallet::weight(0)]
 		#[transactional]
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			commission: Commission<T>,
+			commission: Perbill,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
@@ -2103,26 +2106,68 @@ pub mod pallet {
 					.can_set_commission(&who),
 				Error::<T>::DoesNotHavePermission
 			);
+
+			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
+				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
+
+				// TODO: check if CommissionConfig.previous exists, and ensure that enough
+				// blocks have passed since the previous update if it does.
+
+				ensure!(
+					commission <= pool.commission.max.unwrap_or(Perbill::max_value()),
+					Error::<T>::CommissionExceedsMaximum
+				);
+				pool.commission.current = commission.clone();
+
+				// TODO: update CommissionConfig.previous and CommissionConfig.previous_set_at
+				// if a CommissionConfig is set.
+
+				Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
+				Ok(())
+			})
+		}
+
+		/// Set the maximum commission of a pool.
+		///
+		/// The dispatch origin of this call must be signed by the root role of the pool.
+		/// If a maximum commission already exists prior to this call, then the updated
+		/// max commission must be lower, otherwise this call will fail.
+		///
+		/// This call also updates the pool's current commission to the new maximum if the
+		/// current commission is higher than the supplied maximum.
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn set_max_commission(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			max_commission: Perbill,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
 			ensure!(
-				commission.max.unwrap_or(Perbill::zero()) >= commission.current,
-				Error::<T>::CommissionMisconfigured
+				BondedPool::<T>::get(pool_id)
+					.ok_or(Error::<T>::PoolNotFound)?
+					.can_set_commission(&who),
+				Error::<T>::DoesNotHavePermission
 			);
 
 			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 				ensure!(
-					!(pool.commission.max.is_some() && commission.max.is_some()),
-					Error::<T>::MaxCommissionAlreadySet
+					pool.commission.max.unwrap_or(Perbill::max_value()) > max_commission,
+					Error::<T>::MaxCommissionRestricted
 				);
-				let new_commission = Commission {
-					current: commission.current,
-					max: if let Some(m) = commission.max { Some(m) } else { pool.commission.max },
-					config: None,
-				};
-				pool.commission = new_commission.clone();
-				Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+
+				pool.commission.max = Some(max_commission.clone());
+
+				// if the pool's current commission is higher than the updated maximum commission,
+				// decrease it to the new maximum commission.
+				if pool.commission.current > max_commission {
+					pool.commission.current = max_commission.clone();
+				}
+				Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated {
 					pool_id,
-					commission: new_commission,
+					commission: pool.commission.current.clone(),
+					max_commission,
 				});
 				Ok(())
 			})
