@@ -211,25 +211,25 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Redeposited { collection, successful_items: items }.into());
 	}
 
-	freeze {
+	lock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::item(0))
 	verify {
-		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
+		assert_last_event::<T, I>(Event::ItemTransferLocked { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
 	}
 
-	thaw {
+	unlock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-		Nfts::<T, I>::freeze(
+		Nfts::<T, I>::lock_item_transfer(
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
 			item,
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed { collection, item }.into());
+		assert_last_event::<T, I>(Event::ItemTransferUnlocked { collection, item }.into());
 	}
 
 	lock_collection {
@@ -287,14 +287,14 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
 	}
 
-	lock_item {
+	lock_item_properties {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 		let lock_metadata = true;
 		let lock_attributes = true;
 	}: _(SystemOrigin::Signed(caller), collection, item, lock_metadata, lock_attributes)
 	verify {
-		assert_last_event::<T, I>(Event::ItemLocked { collection, item, lock_metadata, lock_attributes }.into());
+		assert_last_event::<T, I>(Event::ItemPropertiesLocked { collection, item, lock_metadata, lock_attributes }.into());
 	}
 
 	set_attribute {

@@ -15,10 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Lock functions allow to lock collection/items metadata and attributes.
-//! Additionally, it's possible to make all collection items non-transferable.
-//! Those settings are irreversible.
-
 use crate::*;
 use frame_support::pallet_prelude::*;
 
@@ -54,7 +50,45 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	pub(crate) fn do_lock_item(
+	pub(crate) fn do_lock_item_transfer(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		item: T::ItemId,
+	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+
+		let mut settings = Self::get_item_settings(&collection, &item)?;
+		if !settings.contains(ItemSetting::NonTransferable) {
+			settings.insert(ItemSetting::NonTransferable);
+		}
+		ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
+
+		Self::deposit_event(Event::<T, I>::ItemTransferLocked { collection, item });
+		Ok(())
+	}
+
+	pub(crate) fn do_unlock_item_transfer(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		item: T::ItemId,
+	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+
+		let mut settings = Self::get_item_settings(&collection, &item)?;
+		if settings.contains(ItemSetting::NonTransferable) {
+			settings.remove(ItemSetting::NonTransferable);
+		}
+		ItemConfigOf::<T, I>::insert(&collection, &item, ItemConfig(settings));
+
+		Self::deposit_event(Event::<T, I>::ItemTransferUnlocked { collection, item });
+		Ok(())
+	}
+
+	pub(crate) fn do_lock_item_properties(
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -81,7 +115,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			config.0 = settings;
 
-			Self::deposit_event(Event::<T, I>::ItemLocked {
+			Self::deposit_event(Event::<T, I>::ItemPropertiesLocked {
 				collection,
 				item,
 				lock_metadata,

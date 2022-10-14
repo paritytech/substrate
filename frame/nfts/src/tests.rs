@@ -225,14 +225,14 @@ fn transfer_should_work() {
 }
 
 #[test]
-fn freezing_should_work() {
+fn locking_transfer_should_work() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), 1, default_collection_config()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, default_item_config()));
-		assert_ok!(Nfts::freeze(RuntimeOrigin::signed(1), 0, 42));
+		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(1), 0, 42));
 		assert_noop!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2), Error::<Test>::ItemLocked);
 
-		assert_ok!(Nfts::thaw(RuntimeOrigin::signed(1), 0, 42));
+		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(1), 0, 42));
 		assert_ok!(Nfts::lock_collection(
 			RuntimeOrigin::signed(1),
 			0,
@@ -272,8 +272,14 @@ fn origin_guards_should_work() {
 			Nfts::set_team(RuntimeOrigin::signed(2), 0, 2, 2, 2),
 			Error::<Test>::NoPermission
 		);
-		assert_noop!(Nfts::freeze(RuntimeOrigin::signed(2), 0, 42), Error::<Test>::NoPermission);
-		assert_noop!(Nfts::thaw(RuntimeOrigin::signed(2), 0, 42), Error::<Test>::NoPermission);
+		assert_noop!(
+			Nfts::lock_item_transfer(RuntimeOrigin::signed(2), 0, 42),
+			Error::<Test>::NoPermission
+		);
+		assert_noop!(
+			Nfts::unlock_item_transfer(RuntimeOrigin::signed(2), 0, 42),
+			Error::<Test>::NoPermission
+		);
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(2), 0, 69, 2, default_item_config()),
 			Error::<Test>::NoPermission
@@ -342,8 +348,8 @@ fn set_team_should_work() {
 		assert_ok!(Nfts::set_team(RuntimeOrigin::signed(1), 0, 2, 3, 4));
 
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(2), 0, 42, 2, default_item_config()));
-		assert_ok!(Nfts::freeze(RuntimeOrigin::signed(4), 0, 42));
-		assert_ok!(Nfts::thaw(RuntimeOrigin::signed(4), 0, 42));
+		assert_ok!(Nfts::lock_item_transfer(RuntimeOrigin::signed(4), 0, 42));
+		assert_ok!(Nfts::unlock_item_transfer(RuntimeOrigin::signed(4), 0, 42));
 		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(3), 0, 42, 3));
 		assert_ok!(Nfts::burn(RuntimeOrigin::signed(3), 0, 42, None));
 	});
@@ -456,7 +462,7 @@ fn set_item_metadata_should_work() {
 
 		// Can't set or clear metadata once frozen
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 42, bvec![0u8; 15]));
-		assert_ok!(Nfts::lock_item(RuntimeOrigin::signed(1), 0, 42, true, false));
+		assert_ok!(Nfts::lock_item_properties(RuntimeOrigin::signed(1), 0, 42, true, false));
 		assert_noop!(
 			Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 42, bvec![0u8; 15]),
 			Error::<Test, _>::LockedItemMetadata,
@@ -560,7 +566,7 @@ fn set_attribute_should_respect_lock() {
 		assert_noop!(Nfts::set_attribute(RuntimeOrigin::signed(1), 0, None, bvec![0], bvec![0]), e);
 		assert_ok!(Nfts::set_attribute(RuntimeOrigin::signed(1), 0, Some(0), bvec![0], bvec![1]));
 
-		assert_ok!(Nfts::lock_item(RuntimeOrigin::signed(1), 0, 0, false, true));
+		assert_ok!(Nfts::lock_item_properties(RuntimeOrigin::signed(1), 0, 0, false, true));
 		let e = Error::<Test>::LockedItemAttributes;
 		assert_noop!(
 			Nfts::set_attribute(RuntimeOrigin::signed(1), 0, Some(0), bvec![0], bvec![1]),
@@ -584,7 +590,7 @@ fn preserve_config_for_frozen_items() {
 		assert!(!ItemConfigOf::<Test>::contains_key(0, 1));
 
 		// lock the item and ensure the config stays unchanged
-		assert_ok!(Nfts::lock_item(RuntimeOrigin::signed(1), 0, 0, true, true));
+		assert_ok!(Nfts::lock_item_properties(RuntimeOrigin::signed(1), 0, 0, true, true));
 
 		let expect_config = ItemConfig(ItemSetting::LockedAttributes | ItemSetting::LockedMetadata);
 		let config = ItemConfigOf::<Test>::get(0, 0).unwrap();
@@ -1232,7 +1238,7 @@ fn buy_item_should_work() {
 				Error::<Test>::ItemsNotTransferable
 			);
 
-			// un-freeze the collection
+			// unlock the collection
 			assert_ok!(Nfts::force_collection_status(
 				RuntimeOrigin::root(),
 				collection_id,
@@ -1243,8 +1249,12 @@ fn buy_item_should_work() {
 				CollectionConfig::empty(),
 			));
 
-			// freeze the item
-			assert_ok!(Nfts::freeze(RuntimeOrigin::signed(user_1), collection_id, item_3));
+			// lock the transfer
+			assert_ok!(Nfts::lock_item_transfer(
+				RuntimeOrigin::signed(user_1),
+				collection_id,
+				item_3
+			));
 
 			let buy_item_call = mock::RuntimeCall::Nfts(crate::Call::<Test>::buy_item {
 				collection: collection_id,

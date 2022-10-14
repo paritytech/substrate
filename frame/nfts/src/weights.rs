@@ -53,13 +53,13 @@ pub trait WeightInfo {
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
 	fn redeposit(i: u32, ) -> Weight;
-	fn freeze() -> Weight;
-	fn thaw() -> Weight;
+	fn lock_item_transfer() -> Weight;
+	fn unlock_item_transfer() -> Weight;
 	fn lock_collection() -> Weight;
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
 	fn force_collection_status() -> Weight;
-	fn lock_item() -> Weight;
+	fn lock_item_properties() -> Weight;
 	fn set_attribute() -> Weight;
 	fn clear_attribute() -> Weight;
 	fn set_metadata() -> Weight;
@@ -175,14 +175,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:1)
-	fn freeze() -> Weight {
+	fn lock_item_transfer() -> Weight {
 		Weight::from_ref_time(28_194_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:1)
-	fn thaw() -> Weight {
+	fn unlock_item_transfer() -> Weight {
 		Weight::from_ref_time(28_821_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
@@ -218,7 +218,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	}
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:1)
-	fn lock_item() -> Weight {
+	fn lock_item_properties() -> Weight {
 		Weight::from_ref_time(27_377_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
@@ -457,14 +457,14 @@ impl WeightInfo for () {
 	}
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:1)
-	fn freeze() -> Weight {
+	fn lock_item_transfer() -> Weight {
 		Weight::from_ref_time(28_194_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:1)
-	fn thaw() -> Weight {
+	fn unlock_item_transfer() -> Weight {
 		Weight::from_ref_time(28_821_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
@@ -500,7 +500,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Nfts Class (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:1)
-	fn lock_item() -> Weight {
+	fn lock_item_properties() -> Weight {
 		Weight::from_ref_time(27_377_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))

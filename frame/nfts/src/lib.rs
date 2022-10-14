@@ -346,12 +346,12 @@ pub mod pallet {
 		},
 		/// An `item` was destroyed.
 		Burned { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
-		/// Some `item` was frozen.
-		Frozen { collection: T::CollectionId, item: T::ItemId },
-		/// Some `item` was thawed.
-		Thawed { collection: T::CollectionId, item: T::ItemId },
-		/// Some `item` was locked.
-		ItemLocked {
+		/// An `item` became non-transferable.
+		ItemTransferLocked { collection: T::CollectionId, item: T::ItemId },
+		/// An `item` became transferable.
+		ItemTransferUnlocked { collection: T::CollectionId, item: T::ItemId },
+		/// `item` metadata or attributes were locked.
+		ItemPropertiesLocked {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			lock_metadata: bool,
@@ -508,7 +508,7 @@ pub mod pallet {
 		Unapproved,
 		/// The named owner has not signed ownership of the collection is acceptable.
 		Unaccepted,
-		/// The item is locked.
+		/// The item is locked (non-transferable).
 		ItemLocked,
 		/// Item's attributes are locked.
 		LockedItemAttributes,
@@ -854,40 +854,40 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
-		/// - `collection`: The collection of the item to be frozen.
-		/// - `item`: The item of the item to be frozen.
+		/// - `collection`: The collection of the item to be changed.
+		/// - `item`: The item to become non-transferable.
 		///
-		/// Emits `Frozen`.
+		/// Emits `ItemTransferLocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::freeze())]
-		pub fn freeze(
+		#[pallet::weight(T::WeightInfo::lock_item_transfer())]
+		pub fn lock_item_transfer(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_freeze_item(origin, collection, item)
+			Self::do_lock_item_transfer(origin, collection, item)
 		}
 
 		/// Re-allow unprivileged transfer of an item.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
-		/// - `collection`: The collection of the item to be thawed.
-		/// - `item`: The item of the item to be thawed.
+		/// - `collection`: The collection of the item to be changed.
+		/// - `item`: The item to become transferable.
 		///
-		/// Emits `Thawed`.
+		/// Emits `ItemTransferUnlocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::thaw())]
-		pub fn thaw(
+		#[pallet::weight(T::WeightInfo::unlock_item_transfer())]
+		pub fn unlock_item_transfer(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_thaw_item(origin, collection, item)
+			Self::do_unlock_item_transfer(origin, collection, item)
 		}
 
 		/// Disallows specified settings for the whole collection.
@@ -1224,11 +1224,11 @@ pub mod pallet {
 		/// - `lock_config`: The config with the settings to be locked.
 		///
 		/// Note: when the metadata or attributes are locked, it won't be possible the unlock them.
-		/// Emits `ItemLocked`.
+		/// Emits `ItemPropertiesLocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::lock_item())]
-		pub fn lock_item(
+		#[pallet::weight(T::WeightInfo::lock_item_properties())]
+		pub fn lock_item_properties(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
@@ -1239,7 +1239,13 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			Self::do_lock_item(maybe_check_owner, collection, item, lock_metadata, lock_attributes)
+			Self::do_lock_item_properties(
+				maybe_check_owner,
+				collection,
+				item,
+				lock_metadata,
+				lock_attributes,
+			)
 		}
 
 		/// Set an attribute for a collection or item.
