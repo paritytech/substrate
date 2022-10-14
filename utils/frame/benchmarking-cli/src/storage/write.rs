@@ -57,7 +57,7 @@ impl StorageCmd {
 		// Store the time that it took to write each value.
 		let mut record = BenchRecord::default();
 
-		let block = BlockId::Number(client.usage_info().chain.best_number);
+		let block = BlockId::Hash(client.usage_info().chain.best_hash);
 		let header = client.header(block)?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
 		let trie = DbStateBuilder::<Block>::new(storage.clone(), original_root).build();

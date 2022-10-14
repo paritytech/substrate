@@ -109,7 +109,7 @@ where
 	pub fn nested(&mut self, amount: Weight) -> Result<Self, DispatchError> {
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
-		let amount = Weight::from_components(
+		let amount = Weight::from_parts(
 			if amount.ref_time().is_zero() {
 				self.gas_left().ref_time()
 			} else {

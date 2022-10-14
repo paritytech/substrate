@@ -498,7 +498,7 @@ pub mod pallet {
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
 		#[pallet::weight(
-			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
+			<T as pallet::Config>::WeightInfo::accumulate_dummy()
 		)]
 		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
