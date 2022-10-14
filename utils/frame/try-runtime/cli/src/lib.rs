@@ -125,7 +125,7 @@
 //! #### Adding pre/post hooks
 //!
 //! One of the gems that come only in the `try-runtime` feature flag is the `pre_upgrade` and
-//! `post_upgrade` hooks for [`OnRuntimeUpgrade`]. This trait is implemented either inside the
+//! `post_upgrade` hooks for `OnRuntimeUpgrade`. This trait is implemented either inside the
 //! pallet, or manually in a runtime, to define a migration. In both cases, these functions can be
 //! added, given the right flag:
 //!
@@ -141,7 +141,7 @@
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
 //! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, [`OnRuntimeUpgradeHelpersExt`] can help with that.
+//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that.
 //!
 //! #### Logging
 //!
@@ -151,7 +151,7 @@
 //!
 //! #### Guarding migrations
 //!
-//! Always make sure that any migration code is guarded either by [`StorageVersion`], or by some
+//! Always make sure that any migration code is guarded either by `StorageVersion`, or by some
 //! custom storage item, so that it is NEVER executed twice, even if the code lives in two
 //! consecutive runtimes.
 //!
@@ -160,7 +160,7 @@
 //! Run the migrations of the local runtime on the state of polkadot, from the polkadot repo where
 //! we have `--chain polkadot-dev`, on the latest finalized block's state
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -174,7 +174,7 @@
 //! Same as previous one, but let's say we want to run this command from the substrate repo, where
 //! we don't have a matching spec name/version.
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -188,7 +188,7 @@
 //! Same as the previous one, but run it at specific block number's state. This means that this
 //! block hash's state shall not yet have been pruned in `rpc.polkadot.io`.
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Native \
@@ -206,7 +206,7 @@
 //! First, let's assume you are in a branch that has the same spec name/version as the live polkadot
 //! network.
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -222,14 +222,14 @@
 //! change `--execution Wasm` to `--execution Native` to achieve this. Your logs of `executor=trace`
 //! should show something among the lines of:
 //!
-//! ```ignore
+//! ```text
 //! Request for native execution succeeded (native: polkadot-9900 (parity-polkadot-0.tx7.au0), chain: polkadot-9900 (parity-polkadot-0.tx7.au0))
 //! ```
 //!
 //! If you don't have matching spec versions, then are doomed to execute wasm. In this case, you can
 //! manually overwrite the wasm code with your local runtime:
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -242,12 +242,12 @@
 //! ```
 //!
 //! For all of these blocks, the block with hash `<block-hash>` is being used, and the initial state
-//! is the state of the parent hash. This is because by omitting [`ExecuteBlockCmd::block_at`], the
+//! is the state of the parent hash. This is because by omitting `ExecuteBlockCmd::block_at`, the
 //! `--at` is used for both. This should be good enough for 99% of the cases. The only case where
 //! you need to specify `block-at` and `block-ws-uri` is with snapshots. Let's say you have a file
 //! `snap` and you know it corresponds to the state of the parent block of `X`. Then you'd do:
 //!
-//! ```ignore
+//! ```sh
 //! RUST_LOG=runtime=trace,try-runtime::cli=trace,executor=trace \
 //!     cargo run try-runtime \
 //!     --execution Wasm \
@@ -306,7 +306,7 @@ pub enum Command {
 
 	/// Executes the given block against some state.
 	///
-	/// Unlike [`Command:::OnRuntimeUpgrade`], this command needs two inputs: the state, and the
+	/// Unlike [`Command::OnRuntimeUpgrade`], this command needs two inputs: the state, and the
 	/// block data. Since the state could be cached (see [`State::Snap`]), different flags are
 	/// provided for both. `--block-at` and `--block-uri`, if provided, are only used for fetching
 	/// the block. For convenience, these flags can be both emitted, if the [`State::Live`] is
@@ -314,7 +314,7 @@ pub enum Command {
 	///
 	/// Note that by default, this command does not overwrite the code, so in wasm execution, the
 	/// live chain's code is used. This can be disabled if desired, see
-	/// [`ExecuteBlockCmd::overwrite_wasm_code`].
+	/// `ExecuteBlockCmd::overwrite_wasm_code`.
 	///
 	/// Note that if you do overwrite the wasm code, or generally use the local runtime for this,
 	/// you might
@@ -326,7 +326,7 @@ pub enum Command {
 	///     different state transition function.
 	///
 	/// To make testing slightly more dynamic, you can disable the state root  check by enabling
-	/// [`ExecuteBlockCmd::no_check`]. If you get signature verification errors, you should
+	/// `ExecuteBlockCmd::no_check`. If you get signature verification errors, you should
 	/// manually tweak your local runtime's spec version to fix this.
 	///
 	/// A subtle detail of execute block is that if you want to execute block 100 of a live chain
@@ -335,19 +335,19 @@ pub enum Command {
 	/// If [`State::Snap`] is being used, then this needs to be manually taken into consideration.
 	///
 	/// This executes the same runtime api as normal block import, namely `Core_execute_block`. If
-	/// [`ExecuteBlockCmd::no_check`] is set, it uses a custom, try-runtime-only runtime
+	/// `ExecuteBlockCmd::no_check` is set, it uses a custom, try-runtime-only runtime
 	/// api called `TryRuntime_execute_block_no_check`.
 	ExecuteBlock(commands::execute_block::ExecuteBlockCmd),
 
 	/// Executes *the offchain worker hooks* of a given block against some state.
 	///
-	/// Similar to [`Command:::ExecuteBlock`], this command needs two inputs: the state, and the
+	/// Similar to [`Command::ExecuteBlock`], this command needs two inputs: the state, and the
 	/// header data. Likewise, `--header-at` and `--header-uri` can be filled, or omitted if
 	/// [`State::Live`] is used.
 	///
-	/// Similar to [`Command:::ExecuteBlock`], this command does not overwrite the code, so in wasm
+	/// Similar to [`Command::ExecuteBlock`], this command does not overwrite the code, so in wasm
 	/// execution, the live chain's code is used. This can be disabled if desired, see
-	/// [`OffchainWorkerCmd::overwrite_wasm_code`].
+	/// `OffchainWorkerCmd::overwrite_wasm_code`.
 	///
 	/// This executes the same runtime api as normal block import, namely
 	/// `OffchainWorkerApi_offchain_worker`.

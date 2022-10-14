@@ -551,35 +551,34 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 21);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 61);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
 
-		// The order is indeed reversed due to https://github.com/paritytech/substrate/issues/6280
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			Event::Instance1Example(pallet::Event::Something(11)),
-		);
-		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[1].event,
 			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[2].event,
-			Event::Instance1Example(pallet::Event::Something(21)),
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
-			frame_system::Pallet::<Runtime>::events()[3].event,
+			frame_system::Pallet::<Runtime>::events()[2].event,
 			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Instance1Example(pallet::Event::Something(21)),
+		);
+		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			Event::Instance1Example(pallet::Event::Something(31)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			Event::Example(pallet::Event::Something(30)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }

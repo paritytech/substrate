@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Helper for handling (i.e. answering) state requests from a remote peer via the
-//! [`crate::request_responses::RequestResponsesBehaviour`].
+//! `crate::request_responses::RequestResponsesBehaviour`.
 
 use crate::{
 	chain::Client,

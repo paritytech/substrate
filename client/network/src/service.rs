@@ -710,8 +710,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// >			preventing the message from being delivered.
 	///
 	/// The protocol must have been registered with
-	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::
-	/// notifications_protocols).
+	/// `crate::config::NetworkConfiguration::notifications_protocols`.
 	pub fn write_notification(
 		&self,
 		target: PeerId,
@@ -775,8 +774,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	/// in which case enqueued notifications will be lost.
 	///
 	/// The protocol must have been registered with
-	/// [`NetworkConfiguration::notifications_protocols`](crate::config::NetworkConfiguration::
-	/// notifications_protocols).
+	/// `crate::config::NetworkConfiguration::notifications_protocols`.
 	///
 	/// # Usage
 	///
@@ -817,8 +815,7 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	///             if buffer is full
 	///
 	///
-	/// See also the [`gossip`](crate::gossip) module for a higher-level way to send
-	/// notifications.
+	/// See also the `sc-network-gossip` crate for a higher-level way to send notifications.
 	pub fn notification_sender(
 		&self,
 		target: PeerId,

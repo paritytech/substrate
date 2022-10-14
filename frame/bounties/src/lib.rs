@@ -195,6 +195,8 @@ pub mod pallet {
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum acceptable reason length.
+		///
+		/// Benchmarks depend on this value, be sure to update weights file when changing this value
 		#[pallet::constant]
 		type MaximumReasonLength: Get<u32>;
 
