@@ -45,8 +45,8 @@ parameter_types! {
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type Origin = Origin;
-	type Call = Call;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type PalletInfo = PalletInfo;
 	type Index = u64;
 	type BlockNumber = u64;
@@ -55,7 +55,7 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = frame_support::traits::ConstU64<250>;
 	type DbWeight = ();
 	type BlockWeights = ();
@@ -70,16 +70,14 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-impl Config for Test {
-	type Call = Call;
-}
+impl Config for Test {}
 
 fn test_pub(n: u8) -> sp_core::sr25519::Public {
 	sp_core::sr25519::Public::from_raw([n; 32])
 }
 
-fn test_origin(n: u8) -> Origin {
-	Origin::signed(test_pub(n))
+fn test_origin(n: u8) -> RuntimeOrigin {
+	RuntimeOrigin::signed(test_pub(n))
 }
 
 #[test]
@@ -105,7 +103,7 @@ fn it_can_enlist() {
 			},
 		];
 
-		Example::enlist_participants(Origin::signed(test_pub(1)), participants)
+		Example::enlist_participants(RuntimeOrigin::signed(test_pub(1)), participants)
 			.expect("Failed to enlist");
 
 		assert_eq!(Example::participants().len(), 2);

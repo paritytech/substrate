@@ -98,7 +98,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// Overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Currency type that this works on.
 		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
@@ -116,7 +116,7 @@ pub mod pallet {
 			+ MaxEncodedLen;
 
 		/// Origin required for setting the target proportion to be under gilt.
-		type AdminOrigin: EnsureOrigin<Self::Origin>;
+		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Unbalanced handler to account for funds created (in case of a higher total issuance over
 		/// freezing period).

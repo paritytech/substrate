@@ -22,6 +22,9 @@ use impl_trait_for_tuples::impl_for_tuples;
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 
+#[cfg(all(feature = "try-runtime", test))]
+use codec::{Decode, Encode};
+
 /// The block initialization trait.
 ///
 /// Implementing this lets you express what should happen for your pallet when the block is
@@ -135,17 +138,25 @@ pub trait OnRuntimeUpgrade {
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 }
@@ -154,6 +165,7 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
+	#[cfg(not(feature = "try-runtime"))]
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
@@ -161,17 +173,43 @@ impl OnRuntimeUpgrade for Tuple {
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::pre_upgrade()); )* );
-		result
+	/// We are executing pre- and post-checks sequentially in order to be able to test several
+	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
+	/// hooks for tuples are a noop.
+	fn on_runtime_upgrade() -> Weight {
+		use scale_info::prelude::format;
+
+		let mut weight = Weight::zero();
+		// migration index in the tuple, start with 1 for better readability
+		let mut i = 1;
+		for_tuples!( #(
+			let _guard = frame_support::StorageNoopGuard::default();
+			// we want to panic if any checks fail right here right now.
+			let state = Tuple::pre_upgrade().expect(&format!("PreUpgrade failed for migration #{}", i));
+			drop(_guard);
+
+			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
+
+			let _guard = frame_support::StorageNoopGuard::default();
+			// we want to panic if any checks fail right here right now.
+			Tuple::post_upgrade(state).expect(&format!("PostUpgrade failed for migration #{}", i));
+			drop(_guard);
+
+			i += 1;
+		)* );
+		weight
 	}
 
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
-		let mut result = Ok(());
-		for_tuples!( #( result = result.and(Tuple::post_upgrade()); )* );
-		result
+	/// noop
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
+	}
+
+	#[cfg(feature = "try-runtime")]
+	/// noop
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+		Ok(())
 	}
 }
 
@@ -243,17 +281,25 @@ pub trait Hooks<BlockNumber> {
 
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
+	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
+	/// which will be passed to `post_upgrade` after upgrading for post-check. An empty vector
+	/// should be returned if there is no such need.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn pre_upgrade() -> Result<(), &'static str> {
-		Ok(())
+	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+		Ok(Vec::new())
 	}
 
 	/// Execute some post-checks after a runtime upgrade.
 	///
+	/// The `state` parameter is the `Vec<u8>` returned by `pre_upgrade` before upgrading, which
+	/// can be used for post-check. NOTE: if `pre_upgrade` is not implemented an empty vector will
+	/// be passed in, in such case `post_upgrade` should ignore it.
+	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
 	#[cfg(feature = "try-runtime")]
-	fn post_upgrade() -> Result<(), &'static str> {
+	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -319,7 +365,9 @@ mod tests {
 
 	#[test]
 	fn on_initialize_and_on_runtime_upgrade_weight_merge_works() {
+		use sp_io::TestExternalities;
 		struct Test;
+
 		impl OnInitialize<u8> for Test {
 			fn on_initialize(_n: u8) -> Weight {
 				Weight::from_ref_time(10)
@@ -331,8 +379,10 @@ mod tests {
 			}
 		}
 
-		assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
-		assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
+		TestExternalities::default().execute_with(|| {
+			assert_eq!(<(Test, Test)>::on_initialize(0), Weight::from_ref_time(20));
+			assert_eq!(<(Test, Test)>::on_runtime_upgrade(), Weight::from_ref_time(40));
+		});
 	}
 
 	#[test]
@@ -389,5 +439,111 @@ mod tests {
 			assert_eq!(ON_IDLE_INVOCATION_ORDER, ["Test2", "Test3", "Test1"].to_vec());
 			ON_IDLE_INVOCATION_ORDER.clear();
 		}
+	}
+
+	#[cfg(feature = "try-runtime")]
+	#[test]
+	#[allow(dead_code)]
+	fn on_runtime_upgrade_tuple() {
+		use frame_support::parameter_types;
+		use sp_io::TestExternalities;
+
+		struct Test1;
+		struct Test2;
+		struct Test3;
+
+		parameter_types! {
+			static Test1Assertions: u8 = 0;
+			static Test2Assertions: u8 = 0;
+			static Test3Assertions: u8 = 0;
+			static EnableSequentialTest: bool = false;
+			static SequentialAssertions: u8 = 0;
+		}
+
+		impl OnRuntimeUpgrade for Test1 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok("Test1".encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: String = Decode::decode(&mut state.as_slice()).unwrap();
+				Test1Assertions::mutate(|val| *val += 1);
+				if EnableSequentialTest::get() {
+					SequentialAssertions::mutate(|val| *val += 1);
+				}
+				assert_eq!(s, "Test1");
+				Ok(())
+			}
+		}
+
+		impl OnRuntimeUpgrade for Test2 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok(100u32.encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: u32 = Decode::decode(&mut state.as_slice()).unwrap();
+				Test2Assertions::mutate(|val| *val += 1);
+				if EnableSequentialTest::get() {
+					assert_eq!(SequentialAssertions::get(), 1);
+					SequentialAssertions::mutate(|val| *val += 1);
+				}
+				assert_eq!(s, 100);
+				Ok(())
+			}
+		}
+
+		impl OnRuntimeUpgrade for Test3 {
+			fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+				Ok(true.encode())
+			}
+			fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
+				let s: bool = Decode::decode(&mut state.as_slice()).unwrap();
+				Test3Assertions::mutate(|val| *val += 1);
+				if EnableSequentialTest::get() {
+					assert_eq!(SequentialAssertions::get(), 2);
+					SequentialAssertions::mutate(|val| *val += 1);
+				}
+				assert_eq!(s, true);
+				Ok(())
+			}
+		}
+
+		TestExternalities::default().execute_with(|| {
+			type TestEmpty = ();
+			let origin_state = <TestEmpty as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+			assert!(origin_state.is_empty());
+			<TestEmpty as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+
+			type Test1Tuple = (Test1,);
+			let origin_state = <Test1Tuple as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+			assert!(origin_state.is_empty());
+			<Test1Tuple as OnRuntimeUpgrade>::post_upgrade(origin_state).unwrap();
+			assert_eq!(Test1Assertions::get(), 0);
+			<Test1Tuple as OnRuntimeUpgrade>::on_runtime_upgrade();
+			assert_eq!(Test1Assertions::take(), 1);
+
+			type Test321 = (Test3, Test2, Test1);
+			<Test321 as OnRuntimeUpgrade>::on_runtime_upgrade();
+			assert_eq!(Test1Assertions::take(), 1);
+			assert_eq!(Test2Assertions::take(), 1);
+			assert_eq!(Test3Assertions::take(), 1);
+
+			// enable sequential tests
+			EnableSequentialTest::mutate(|val| *val = true);
+
+			type Test123 = (Test1, Test2, Test3);
+			<Test123 as OnRuntimeUpgrade>::on_runtime_upgrade();
+			assert_eq!(Test1Assertions::take(), 1);
+			assert_eq!(Test2Assertions::take(), 1);
+			assert_eq!(Test3Assertions::take(), 1);
+
+			// reset assertions
+			SequentialAssertions::take();
+
+			type TestNested123 = (Test1, (Test2, Test3));
+			<TestNested123 as OnRuntimeUpgrade>::on_runtime_upgrade();
+			assert_eq!(Test1Assertions::take(), 1);
+			assert_eq!(Test2Assertions::take(), 1);
+			assert_eq!(Test3Assertions::take(), 1);
+		});
 	}
 }

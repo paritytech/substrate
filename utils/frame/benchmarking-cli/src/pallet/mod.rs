@@ -35,15 +35,15 @@ fn parse_pallet_name(pallet: &str) -> String {
 #[derive(Debug, clap::Parser)]
 pub struct PalletCmd {
 	/// Select a FRAME Pallet to benchmark, or `*` for all (in which case `extrinsic` must be `*`).
-	#[clap(short, long, parse(from_str = parse_pallet_name), required_unless_present = "list")]
+	#[clap(short, long, parse(from_str = parse_pallet_name), required_unless_present_any = ["list", "json-input"])]
 	pub pallet: Option<String>,
 
 	/// Select an extrinsic inside the pallet to benchmark, or `*` for all.
-	#[clap(short, long, required_unless_present = "list")]
+	#[clap(short, long, required_unless_present_any = ["list", "json-input"])]
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[clap(short, long, default_value = "1")]
+	#[clap(short, long, default_value = "2")]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
@@ -163,10 +163,18 @@ pub struct PalletCmd {
 	#[clap(long)]
 	pub no_storage_info: bool,
 
+	/// The assumed default maximum size of any `StorageMap`.
+	///
 	/// When the maximum size of a map is not defined by the runtime developer,
 	/// this value is used as a worst case scenario. It will affect the calculated worst case
 	/// PoV size for accessing a value in a map, since the PoV will need to include the trie
 	/// nodes down to the underlying value.
 	#[clap(long = "map-size", default_value = "1000000")]
 	pub worst_case_map_values: u32,
+
+	/// A path to a `.json` file with existing benchmark results generated with `--json` or
+	/// `--json-file`. When specified the benchmarks are not actually executed, and the data for
+	/// the analysis is read from this file.
+	#[clap(long)]
+	pub json_input: Option<PathBuf>,
 }

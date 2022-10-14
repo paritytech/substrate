@@ -230,7 +230,8 @@ pub mod pallet {
 		type DataDepositPerByte: Get<BalanceOf<Self, I>>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Maximum acceptable reason length.
 		///
@@ -818,7 +819,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		value: BalanceOf<T, I>,
 	) -> DispatchResult {
 		let bounded_description: BoundedVec<_, _> =
-			description.try_into().map_err(|()| Error::<T, I>::ReasonTooBig)?;
+			description.try_into().map_err(|_| Error::<T, I>::ReasonTooBig)?;
 		ensure!(value >= T::BountyValueMinimum::get(), Error::<T, I>::InvalidValue);
 
 		let index = Self::bounty_count();

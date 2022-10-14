@@ -30,13 +30,16 @@ pub struct PruningParams {
 	/// or for all of the canonical blocks (i.e 'archive-canonical').
 	#[clap(alias = "pruning", long, value_name = "PRUNING_MODE")]
 	pub state_pruning: Option<String>,
-	/// Specify the number of finalized blocks to keep in the database.
+	/// Specify the blocks pruning mode, a number of blocks to keep or 'archive'.
 	///
-	/// Default is to keep all blocks.
+	/// Default is to keep all finalized blocks.
+	/// otherwise, all blocks can be kept (i.e 'archive'),
+	/// or for all canonical blocks (i.e 'archive-canonical'),
+	/// or for the last N blocks (i.e a number).
 	///
 	/// NOTE: only finalized blocks are subject for removal!
 	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
-	pub blocks_pruning: Option<u32>,
+	pub blocks_pruning: Option<String>,
 }
 
 impl PruningParams {
@@ -46,9 +49,12 @@ impl PruningParams {
 			.as_ref()
 			.map(|s| match s.as_str() {
 				"archive" => Ok(PruningMode::ArchiveAll),
+				"archive-canonical" => Ok(PruningMode::ArchiveCanonical),
 				bc => bc
 					.parse()
-					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))
+					.map_err(|_| {
+						error::Error::Input("Invalid state pruning mode specified".to_string())
+					})
 					.map(PruningMode::blocks_pruning),
 			})
 			.transpose()
@@ -56,9 +62,18 @@ impl PruningParams {
 
 	/// Get the block pruning value from the parameters
 	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
-		Ok(match self.blocks_pruning {
-			Some(n) => BlocksPruning::Some(n),
-			None => BlocksPruning::All,
-		})
+		match self.blocks_pruning.as_ref() {
+			Some(bp) => match bp.as_str() {
+				"archive" => Ok(BlocksPruning::KeepAll),
+				"archive-canonical" => Ok(BlocksPruning::KeepFinalized),
+				bc => bc
+					.parse()
+					.map_err(|_| {
+						error::Error::Input("Invalid blocks pruning mode specified".to_string())
+					})
+					.map(BlocksPruning::Some),
+			},
+			None => Ok(BlocksPruning::KeepFinalized),
+		}
 	}
 }

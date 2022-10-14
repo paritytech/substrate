@@ -273,9 +273,9 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::{ClassifyDispatch, DispatchClass, DispatchResult, Pays, PaysFee, WeighData},
 	traits::IsSubType,
-	weights::{ClassifyDispatch, DispatchClass, Pays, PaysFee, WeighData, Weight},
+	weights::Weight,
 };
 use frame_system::ensure_signed;
 use log::info;
@@ -370,7 +370,7 @@ pub mod pallet {
 		type MagicNumber: Get<Self::Balance>;
 
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Type representing the weight of this pallet
 		type WeightInfo: WeightInfo;
@@ -498,7 +498,7 @@ pub mod pallet {
 		// The weight for this extrinsic we rely on the auto-generated `WeightInfo` from the
 		// benchmark toolchain.
 		#[pallet::weight(
-			<T as pallet::Config>::WeightInfo::accumulate_dummy((*increase_by).saturated_into())
+			<T as pallet::Config>::WeightInfo::accumulate_dummy()
 		)]
 		pub fn accumulate_dummy(origin: OriginFor<T>, increase_by: T::Balance) -> DispatchResult {
 			// This is a public call, so we ensure that the origin is some signed account.
@@ -655,7 +655,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	// Add public immutables and private mutables.
 	#[allow(dead_code)]
-	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> DispatchResult {
+	fn accumulate_foo(origin: T::RuntimeOrigin, increase_by: T::Balance) -> DispatchResult {
 		let _sender = ensure_signed(origin)?;
 
 		let prev = <Foo<T>>::get();
@@ -719,11 +719,11 @@ impl<T: Config + Send + Sync> sp_std::fmt::Debug for WatchDummy<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for WatchDummy<T>
 where
-	<T as frame_system::Config>::Call: IsSubType<Call<T>>,
+	<T as frame_system::Config>::RuntimeCall: IsSubType<Call<T>>,
 {
 	const IDENTIFIER: &'static str = "WatchDummy";
 	type AccountId = T::AccountId;
-	type Call = <T as frame_system::Config>::Call;
+	type Call = <T as frame_system::Config>::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = ();
 

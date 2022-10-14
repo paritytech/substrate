@@ -67,6 +67,12 @@ pub struct BlockCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub params: BenchmarkParams,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[clap(long)]
+	pub enable_trie_cache: bool,
 }
 
 impl BlockCmd {
@@ -97,5 +103,13 @@ impl CliConfiguration for BlockCmd {
 
 	fn import_params(&self) -> Option<&ImportParams> {
 		Some(&self.import_params)
+	}
+
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.enable_trie_cache {
+			Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
+		} else {
+			Ok(None)
+		}
 	}
 }

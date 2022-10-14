@@ -86,7 +86,7 @@ mod module {
 	pub trait Config: system::Config + TypeInfo {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=system {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=system {}
 	}
 
 	#[derive(Encode, Decode, Copy, Clone, Serialize, Deserialize)]
@@ -155,17 +155,17 @@ pub type BlockNumber = u64;
 pub type Index = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 

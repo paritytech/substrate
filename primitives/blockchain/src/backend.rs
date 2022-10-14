@@ -78,8 +78,8 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is
 	/// not found.
 	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
-		self.block_hash_from_id(id).and_then(|n| {
-			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
+		self.block_hash_from_id(id).and_then(|h| {
+			h.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
 		})
 	}
 }

@@ -505,11 +505,11 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(BlockId::Hash(*hash)).is_ok()
+		self.state_at(hash).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
+	fn state_at(&self, hash: &Block::Hash) -> sp_blockchain::Result<Self::State>;
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
