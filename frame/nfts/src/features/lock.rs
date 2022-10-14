@@ -23,7 +23,7 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_lock_collection(
+	pub(crate) fn do_lock_collection(
 		origin: T::AccountId,
 		collection: T::CollectionId,
 		lock_config: CollectionConfig,
@@ -54,7 +54,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	pub fn do_lock_item(
+	pub(crate) fn do_lock_item(
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
 		item: T::ItemId,

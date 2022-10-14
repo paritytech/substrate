@@ -22,7 +22,7 @@ use frame_support::{
 };
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_create_swap(
+	pub(crate) fn do_create_swap(
 		caller: T::AccountId,
 		offered_collection_id: T::CollectionId,
 		offered_item_id: T::ItemId,
@@ -78,7 +78,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_cancel_swap(
+	pub(crate) fn do_cancel_swap(
 		caller: T::AccountId,
 		offered_collection_id: T::CollectionId,
 		offered_item_id: T::ItemId,
@@ -107,7 +107,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_claim_swap(
+	pub(crate) fn do_claim_swap(
 		caller: T::AccountId,
 		send_collection_id: T::CollectionId,
 		send_item_id: T::ItemId,

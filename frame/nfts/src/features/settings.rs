@@ -23,7 +23,7 @@ use frame_support::pallet_prelude::*;
 /// For example, those settings allow to disable NFTs trading on a pallet level, or for a particular
 /// collection, or for a specific item.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn get_collection_settings(
+	pub(crate) fn get_collection_settings(
 		collection_id: &T::CollectionId,
 	) -> Result<CollectionSettings, DispatchError> {
 		let config = CollectionConfigOf::<T, I>::get(&collection_id)
@@ -31,7 +31,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(config.values())
 	}
 
-	pub fn get_item_settings(
+	pub(crate) fn get_item_settings(
 		collection_id: &T::CollectionId,
 		item_id: &T::ItemId,
 	) -> Result<ItemSettings, DispatchError> {
@@ -40,7 +40,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(config.values())
 	}
 
-	pub fn is_collection_setting_disabled(
+	pub(crate) fn is_collection_setting_disabled(
 		collection_id: &T::CollectionId,
 		setting: CollectionSetting,
 	) -> Result<(bool, CollectionSettings), DispatchError> {
@@ -48,7 +48,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((!settings.contains(setting), settings))
 	}
 
-	pub fn is_item_setting_disabled(
+	pub(crate) fn is_item_setting_disabled(
 		collection_id: &T::CollectionId,
 		item_id: &T::ItemId,
 		setting: ItemSetting,
@@ -57,7 +57,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((!settings.contains(setting), settings))
 	}
 
-	pub fn is_pallet_feature_enabled(feature: PalletFeature) -> bool {
+	pub(crate) fn is_pallet_feature_enabled(feature: PalletFeature) -> bool {
 		let features = T::Features::get();
 		return !features.0.contains(feature)
 	}

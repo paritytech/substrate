@@ -23,7 +23,7 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_freeze_item(
+	pub(crate) fn do_freeze_item(
 		origin: T::AccountId,
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -42,7 +42,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_thaw_item(
+	pub(crate) fn do_thaw_item(
 		origin: T::AccountId,
 		collection: T::CollectionId,
 		item: T::ItemId,

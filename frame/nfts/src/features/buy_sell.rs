@@ -22,7 +22,7 @@ use frame_support::{
 };
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_pay_tips(
+	pub(crate) fn do_pay_tips(
 		sender: T::AccountId,
 		tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
 	) -> DispatchResult {
