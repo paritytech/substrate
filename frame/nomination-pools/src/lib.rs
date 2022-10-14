@@ -574,7 +574,7 @@ pub struct CommissionThrottle<T: Config> {
 	/// often an update can take place.
 	pub change_rate: (Perbill, T::BlockNumber),
 	/// The block the previous commission update took place.
-	previous_set_at: T::BlockNumber,
+	previous_set_at: Option<T::BlockNumber>,
 }
 
 impl<T: Config> CommissionThrottle<T> {
@@ -582,10 +582,10 @@ impl<T: Config> CommissionThrottle<T> {
 	// 1. enough blocks have passed since the previous update took place, and
 	// 2. the new commission is within the maximum allowed change.
 	fn can_update(&self, from: &Perbill, to: &Perbill, current_block: &T::BlockNumber) -> bool {
-		let (max_change, min_wait) = self.change_rate;
+		let (max_increase, min_delay) = self.change_rate;
 
-		(current_block.saturating_sub(self.previous_set_at)) >= min_wait &&
-			(from.saturating_sub(*to)) <= max_change
+		current_block.saturating_sub(self.previous_set_at.unwrap_or(T::BlockNumber::zero())) >=
+			min_delay && (from.saturating_sub(*to)) <= max_increase
 	}
 }
 
@@ -1521,6 +1521,8 @@ pub mod pallet {
 		CommissionExceedsMaximum,
 		/// Not enough blocks have surpassed since the last commission update.
 		CommissionChangeThrottled,
+		/// The submitted changes to commission throttle are not allowed.
+		CommissionThrottleNotAllowed,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -2138,8 +2140,10 @@ pub mod pallet {
 
 				// if throttle is configured, update throttle.previous_set_at property.
 				if let Some(throttle) = &pool.commission.throttle {
-					pool.commission.throttle =
-						Some(CommissionThrottle { previous_set_at: block_number, ..*throttle });
+					pool.commission.throttle = Some(CommissionThrottle {
+						previous_set_at: Some(block_number),
+						..*throttle
+					});
 				}
 				Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
 				Ok(())
@@ -2188,6 +2192,50 @@ pub mod pallet {
 					commission: pool.commission.current.clone(),
 					max_commission,
 				});
+				Ok(())
+			})
+		}
+
+		/// Set the commission throttle for a pool.
+		///
+		/// The dispatch origin of this call must be signed by the root role of the pool.
+		/// If a throttle is already present, this call will only succeed if a more restrictive
+		/// throttle configuration is given.
+		///
+		/// If a throttle configuration does not yet exist, the values are set.
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn set_commission_throttle(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			max_increase: Perbill,
+			min_delay: T::BlockNumber,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(
+				BondedPool::<T>::get(pool_id)
+					.ok_or(Error::<T>::PoolNotFound)?
+					.can_set_commission(&who),
+				Error::<T>::DoesNotHavePermission
+			);
+			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
+				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
+				if let Some(throttle) = &pool.commission.throttle {
+					let (current_max_increase, current_min_delay) = throttle.change_rate;
+					ensure!(
+						max_increase <= current_max_increase && min_delay >= current_min_delay,
+						Error::<T>::CommissionThrottleNotAllowed
+					);
+					pool.commission.throttle = Some(CommissionThrottle {
+						change_rate: (max_increase, min_delay),
+						..*throttle
+					});
+				} else {
+					pool.commission.throttle = Some(CommissionThrottle {
+						change_rate: (max_increase, min_delay),
+						previous_set_at: None,
+					});
+				}
 				Ok(())
 			})
 		}
