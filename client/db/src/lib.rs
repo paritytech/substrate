@@ -3973,6 +3973,11 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 
+		// Ensure the forked leaf 3 is properly stated here.
+		let displaced = backend.blockchain().displaced_leaves_after_finalizing(6).unwrap();
+		assert_eq!(1, displaced.len());
+		assert_eq!(fork_hash_root, displaced[0]);
+
 		// Mark block 6 as finalized.
 		// Because we delay prune by 2, when we finalize block 6 we are actually
 		// pruning at block 4. The displaced leaves for block 4 are computed
@@ -3987,5 +3992,9 @@ pub(crate) mod tests {
 		assert!(bc.body(BlockId::hash(fork_hash_root)).unwrap().is_none());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
+
+		// No leaves to report for theoretical node 7.
+		let displaced = backend.blockchain().displaced_leaves_after_finalizing(7).unwrap();
+		assert!(displaced.is_empty());
 	}
 }
