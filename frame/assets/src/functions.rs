@@ -691,7 +691,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Each call emits the `Event::DestroyedAccounts` event.
 	/// Returns the number of destroyed accounts.
-	pub(super) fn do_destroy_accounts(id: T::AssetId) -> Result<u32, DispatchError> {
+	pub(super) fn do_destroy_accounts(
+		id: T::AssetId,
+		max_items: u32,
+	) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
 		let mut removed_accounts = 0;
 		let mut remaining_accounts = 0;
@@ -706,7 +709,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
 					dead_accounts.push(who);
 					removed_accounts = removed_accounts.saturating_add(1);
-					if removed_accounts >= T::RemoveItemsLimit::get() {
+					if removed_accounts >= max_items {
 						break
 					}
 				}
@@ -730,7 +733,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Each call emits the `Event::DestroyedApprovals` event
 	/// Returns the number of destroyed approvals.
-	pub(super) fn do_destroy_approvals(id: T::AssetId) -> Result<u32, DispatchError> {
+	pub(super) fn do_destroy_approvals(
+		id: T::AssetId,
+		max_items: u32,
+	) -> Result<u32, DispatchError> {
 		let mut removed_approvals = 0;
 		let _ =
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
@@ -744,7 +750,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					T::Currency::unreserve(&owner, approval.deposit);
 					removed_approvals = removed_approvals.saturating_add(1);
 					details.approvals = details.approvals.saturating_sub(1);
-					if removed_approvals >= T::RemoveItemsLimit::get() {
+					if removed_approvals >= max_items {
 						break
 					}
 				}

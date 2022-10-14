@@ -641,10 +641,9 @@ pub mod pallet {
 		pub fn destroy_accounts(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			max_items: u32,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			let removed_accounts = Self::do_destroy_accounts(id)?;
+			let removed_accounts = Self::do_destroy_accounts(id, T::RemoveItemsLimit::get())?;
 			Ok(Some(T::WeightInfo::destroy_accounts(removed_accounts)).into())
 		}
 
@@ -666,7 +665,7 @@ pub mod pallet {
 			#[pallet::compact] id: T::AssetId,
 		) -> DispatchResultWithPostInfo {
 			let _ = ensure_signed(origin)?;
-			let removed_approvals = Self::do_destroy_approvals(id)?;
+			let removed_approvals = Self::do_destroy_approvals(id, T::RemoveItemsLimit::get())?;
 			Ok(Some(T::WeightInfo::destroy_approvals(removed_approvals)).into())
 		}
 
