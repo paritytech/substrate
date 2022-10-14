@@ -19,12 +19,13 @@
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::traits::Keccak256;
 
 use log::warn;
 
 use beefy_primitives::{
 	crypto::{Public, Signature},
-	KEY_TYPE,
+	BeefyVerify, KEY_TYPE,
 };
 
 use crate::error;
@@ -98,11 +99,7 @@ impl BeefyKeystore {
 	///
 	/// Return `true` if the signature is authentic, `false` otherwise.
 	pub fn verify(public: &Public, sig: &Signature, message: &[u8]) -> bool {
-		let msg = keccak_256(message);
-		let sig = sig.as_ref();
-		let public = public.as_ref();
-
-		sp_core::ecdsa::Pair::verify_prehashed(sig, &msg, public)
+		BeefyVerify::<Keccak256>::verify(sig, message, public)
 	}
 }
 
