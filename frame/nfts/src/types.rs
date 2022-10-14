@@ -31,6 +31,11 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
+	<T as SystemConfig>::AccountId,
+	Option<<T as SystemConfig>::BlockNumber>,
+	<T as Config<I>>::ApprovalsLimit,
+>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
@@ -172,7 +177,7 @@ pub struct PriceWithDirection<Amount> {
 	pub(super) direction: PriceDirection,
 }
 
-// Support for up to 64 user-enabled features on a collection.
+/// Support for up to 64 user-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -202,7 +207,7 @@ impl CollectionConfig {
 }
 impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
 
-// Support for up to 64 user-enabled features on an item.
+/// Support for up to 64 user-enabled features on an item.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
@@ -230,7 +235,7 @@ impl ItemConfig {
 }
 impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
 
-// Support for up to 64 system-enabled features on a collection.
+/// Support for up to 64 system-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
