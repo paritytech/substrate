@@ -48,7 +48,7 @@ impl BeefyDataProvider<Vec<u8>> for () {
 }
 
 /// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
-#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(Debug, PartialEq, Eq, Clone, Default, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot, ExtraData> {
 	/// Version of the leaf format.
 	///
@@ -77,7 +77,7 @@ pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot, ExtraData> {
 /// Given that adding new struct elements in SCALE is backward compatible (i.e. old format can be
 /// still decoded, the new fields will simply be ignored). We expect the major version to be bumped
 /// very rarely (hopefuly never).
-#[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct MmrLeafVersion(u8);
 impl MmrLeafVersion {
 	/// Create new version object from `major` and `minor` components.

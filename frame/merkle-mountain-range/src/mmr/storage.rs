@@ -20,6 +20,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::log::{debug, error, trace};
 use mmr_lib::helper;
+use scale_info::prelude::format;
 use sp_core::{bounded::BoundedVec, offchain::StorageKind};
 use sp_io::offchain;
 #[cfg(not(feature = "std"))]
@@ -52,7 +53,7 @@ struct MmrBranchBuilder<Hash, LeafData> {
 	// Leaf full data.
 	leaf_data: Option<LeafData>,
 	// Parent nodes - only hashes.
-	parent_nodes: BoundedVec<(NodeIndex, Hash), sp_core::ConstU32<32>>,
+	parent_nodes: BoundedVec<(NodeIndex, Hash), sp_core::ConstU32<MAX_MMR_HEIGHT>>,
 }
 
 impl<Hash, LeafData> Default for MmrBranchBuilder<Hash, LeafData> {

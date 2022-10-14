@@ -27,7 +27,7 @@ use sp_core::H256;
 use sp_io::TestExternalities;
 use sp_runtime::{traits::Keccak256, DigestItem};
 
-use frame_support::traits::OnInitialize;
+use frame_support::traits::{OffchainWorker, OnInitialize};
 
 use crate::mock::*;
 
@@ -37,6 +37,8 @@ fn init_block(block: u64) {
 	Mmr::on_initialize(block);
 	Beefy::on_initialize(block);
 	BeefyMmr::on_initialize(block);
+
+	Mmr::offchain_worker(block);
 }
 
 pub fn beefy_log(log: ConsensusLog<BeefyId>) -> DigestItem {
@@ -105,12 +107,13 @@ fn should_contain_valid_leaf_data() {
 	}
 
 	let mut ext = new_test_ext(vec![1, 2, 3, 4]);
-	let parent_hash = ext.execute_with(|| {
-		init_block(1);
-		<frame_system::Pallet<Test>>::parent_hash()
+	let block_hash = ext.execute_with(|| {
+		let number = 1;
+		init_block(number);
+		<frame_system::Pallet<Test>>::block_hash(number)
 	});
 
-	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(parent_hash, 0));
+	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(block_hash, 0));
 	assert_eq!(
 		mmr_leaf,
 		MmrLeaf {
@@ -126,16 +129,19 @@ fn should_contain_valid_leaf_data() {
 			leaf_extra: array_bytes::hex2bytes_unchecked(
 				"55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648"
 			)
+			.try_into()
+			.unwrap()
 		}
 	);
 
 	// build second block on top
-	let parent_hash = ext.execute_with(|| {
-		init_block(2);
-		<frame_system::Pallet<Test>>::parent_hash()
+	let block_hash = ext.execute_with(|| {
+		let number = 2;
+		init_block(number);
+		<frame_system::Pallet<Test>>::block_hash(number)
 	});
 
-	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(parent_hash, 1));
+	let mmr_leaf = read_mmr_leaf(&mut ext, node_offchain_key(block_hash, 1));
 	assert_eq!(
 		mmr_leaf,
 		MmrLeaf {
@@ -151,6 +157,8 @@ fn should_contain_valid_leaf_data() {
 			leaf_extra: array_bytes::hex2bytes_unchecked(
 				"55b8e9e1cc9f0db7776fac0ca66318ef8acfb8ec26db11e373120583e07ee648"
 			)
+			.try_into()
+			.unwrap()
 		}
 	);
 }

@@ -117,7 +117,7 @@ pub mod pallet {
 		type BeefyAuthorityToMerkleLeaf: Convert<<Self as pallet_beefy::Config>::BeefyId, Vec<u8>>;
 
 		/// The type expected for the leaf extra data
-		type LeafExtra: Member + codec::FullCodec;
+		type LeafExtra: Member + Default + codec::FullCodec + TypeInfo + MaxEncodedLen;
 
 		/// Retrieve arbitrary data that should be added to the mmr leaf
 		type BeefyDataProvider: BeefyDataProvider<Self::LeafExtra>;

@@ -25,7 +25,11 @@ use frame_support::{
 	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
 	BasicExternalities,
 };
-use sp_core::{Hasher, H256};
+use sp_core::{
+	bounded::BoundedVec,
+	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
+	Hasher, H256,
+};
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
@@ -101,11 +105,13 @@ impl pallet_session::Config for Test {
 	type WeightInfo = ();
 }
 
+type LeafExtra = BoundedVec<u8, ConstU32<1024>>;
+
 pub type MmrLeaf = beefy_primitives::mmr::MmrLeaf<
 	<Test as frame_system::Config>::BlockNumber,
 	<Test as frame_system::Config>::Hash,
 	<Test as pallet_mmr::Config>::Hash,
-	Vec<u8>,
+	LeafExtra,
 >;
 
 impl pallet_mmr::Config for Test {
@@ -137,14 +143,14 @@ impl pallet_beefy_mmr::Config for Test {
 
 	type BeefyAuthorityToMerkleLeaf = pallet_beefy_mmr::BeefyEcdsaToEthereum;
 
-	type LeafExtra = Vec<u8>;
+	type LeafExtra = LeafExtra;
 
 	type BeefyDataProvider = DummyDataProvider;
 }
 
 pub struct DummyDataProvider;
-impl BeefyDataProvider<Vec<u8>> for DummyDataProvider {
-	fn extra_data() -> Vec<u8> {
+impl BeefyDataProvider<BoundedVec<u8, ConstU32<1024>>> for DummyDataProvider {
+	fn extra_data() -> BoundedVec<u8, ConstU32<1024>> {
 		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
 		col.sort();
 		beefy_merkle_tree::merkle_root::<<Test as pallet_mmr::Config>::Hashing, _>(
@@ -152,6 +158,8 @@ impl BeefyDataProvider<Vec<u8>> for DummyDataProvider {
 		)
 		.as_ref()
 		.to_vec()
+		.try_into()
+		.unwrap()
 	}
 }
 
@@ -209,5 +217,9 @@ pub fn new_test_ext_raw_authorities(authorities: Vec<(u64, BeefyId)>) -> TestExt
 		.assimilate_storage(&mut t)
 		.unwrap();
 
-	t.into()
+	let mut ext: TestExternalities = t.into();
+	let (offchain, _offchain_state) = TestOffchainExt::with_offchain_db(ext.offchain_db());
+	ext.register_extension(OffchainDbExt::new(offchain.clone()));
+	ext.register_extension(OffchainWorkerExt::new(offchain));
+	ext
 }
