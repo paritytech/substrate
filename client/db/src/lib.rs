@@ -328,6 +328,14 @@ pub enum BlocksPruning {
 	KeepFinalized,
 	/// Keep N recent finalized blocks.
 	Some(u32),
+	/// Delay the pruning of blocks by a given number of finalizations.
+	///
+	/// The blocks that were supposed to get pruned at the finalization N
+	/// will get pruned at N + delay.
+	///
+	/// The feature is introduced to satisfy the block pinning required
+	/// by the RPC spec V2.
+	Delayed(u32),
 }
 
 /// Where to find the database..
@@ -1077,7 +1085,7 @@ impl<Block: BlockT> Backend<Block> {
 		let state_pruning = match blocks_pruning {
 			BlocksPruning::KeepAll => PruningMode::ArchiveAll,
 			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical,
-			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n),
+			BlocksPruning::Some(n) | BlocksPruning::Delayed(n) => PruningMode::blocks_pruning(n),
 		};
 		let db_setting = DatabaseSettings {
 			trie_cache_maximum_size: Some(16 * 1024 * 1024),
@@ -1674,17 +1682,32 @@ impl<Block: BlockT> Backend<Block> {
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		f_header: &Block::Header,
-		f_hash: Block::Hash,
+		mut f_hash: Block::Hash,
 		displaced: &mut Option<FinalizationOutcome<Block::Hash, NumberFor<Block>>>,
 		with_state: bool,
 	) -> ClientResult<()> {
-		let f_num = *f_header.number();
-
+		let mut f_num = *f_header.number();
 		let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash)?;
 		if with_state {
 			transaction.set_from_vec(columns::META, meta_keys::FINALIZED_STATE, lookup_key.clone());
 		}
 		transaction.set_from_vec(columns::META, meta_keys::FINALIZED_BLOCK, lookup_key);
+
+		// Update the "finalized" number and hash for pruning of N - delay.
+		// This implies handling both cases:
+		//   - pruning in the state-db via `canonicalize_block`
+		//   - pruning in db via displaced leaves and `prune_blocks`
+		if let BlocksPruning::Delayed(delayed) = self.blocks_pruning {
+			// No blocks to prune in this window.
+			if f_num < delayed.into() {
+				return Ok(())
+			}
+
+			f_num = f_num.saturating_sub(delayed.into());
+			f_hash = self.blockchain.hash(f_num)?.ok_or_else(|| {
+				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", f_num))
+			})?;
+		}
 
 		if sc_client_api::Backend::have_state_at(self, &f_hash, f_num) &&
 			self.storage
@@ -1729,6 +1752,11 @@ impl<Block: BlockT> Backend<Block> {
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
 			BlocksPruning::KeepFinalized => {
+				self.prune_displaced_branches(transaction, finalized, displaced)?;
+			},
+			BlocksPruning::Delayed(_) => {
+				// Proper offset and valid displaced set of leaves provided by `note_finalized`.
+				self.prune_block(transaction, BlockId::<Block>::number(finalized))?;
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
 		}
