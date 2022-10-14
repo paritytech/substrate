@@ -201,9 +201,9 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo;
 
-		/// Max number of items to destroy per extrinsic call.
-		/// This number should be less than the value that can fit in a block for the various
-		/// extrinsics
+		/// Max number of items to destroy per `destroy_accounts` and `destroy_approvals` call.
+		///
+		/// Must be configured to result in a weight that makes each call fit in a block.
 		#[pallet::constant]
 		type RemoveItemsLimit: Get<u32>;
 
