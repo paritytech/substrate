@@ -18,7 +18,7 @@
 //! Various basic types for use in the Nfts pallet.
 
 use super::*;
-use crate::features::macros::*;
+use crate::macros::*;
 use codec::EncodeLike;
 use enumflags2::{bitflags, BitFlags};
 use frame_support::{

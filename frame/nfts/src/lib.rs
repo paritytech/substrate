@@ -40,6 +40,7 @@ mod functions;
 mod impl_nonfungibles;
 mod types;
 
+pub mod macros;
 pub mod weights;
 
 use codec::{Decode, Encode};
