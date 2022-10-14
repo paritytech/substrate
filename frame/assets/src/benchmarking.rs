@@ -78,25 +78,6 @@ fn swap_is_sufficient<T: Config<I>, I: 'static>(s: &mut bool) {
 	});
 }
 
-fn add_consumers<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
-	let origin = SystemOrigin::Signed(minter);
-	let mut s = false;
-	swap_is_sufficient::<T, I>(&mut s);
-	for i in 0..n {
-		let target = account("consumer", i, SEED);
-		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
-		let target_lookup = T::Lookup::unlookup(target);
-		assert!(Assets::<T, I>::mint(
-			origin.clone().into(),
-			Default::default(),
-			target_lookup,
-			100u32.into()
-		)
-		.is_ok());
-	}
-	swap_is_sufficient::<T, I>(&mut s);
-}
-
 fn add_sufficients<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	let origin = SystemOrigin::Signed(minter);
 	let mut s = true;
@@ -185,7 +166,7 @@ benchmarks_instance_pallet! {
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
 		)?;
-		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default());
+		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default())?;
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
 		assert_last_event::<T, I>(Event::DestroyedAccounts {
@@ -203,7 +184,7 @@ benchmarks_instance_pallet! {
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
 		)?;
-		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default());
+		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default())?;
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
 		assert_last_event::<T, I>(Event::DestroyedApprovals {
@@ -219,7 +200,7 @@ benchmarks_instance_pallet! {
 			SystemOrigin::Signed(caller.clone()).into(),
 			Default::default(),
 		)?;
-		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default());
+		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default())?;
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
 		assert_last_event::<T, I>(Event::Destroyed {
