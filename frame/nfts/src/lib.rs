@@ -587,7 +587,7 @@ pub mod pallet {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			let mut config = config.clone();
+			let mut config = config;
 			// RequiredDeposit could be skipped by calling the force_create() only
 			if !config.is_setting_enabled(CollectionSetting::RequiredDeposit) {
 				config.enable_setting(CollectionSetting::RequiredDeposit);
