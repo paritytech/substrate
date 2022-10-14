@@ -434,7 +434,6 @@ pub mod pallet {
 		DestructionStarted { asset_id: T::AssetId },
 		/// An asset class was destroyed.
 		Destroyed { asset_id: T::AssetId },
-
 		/// Some asset class was force-created.
 		ForceCreated { asset_id: T::AssetId, owner: T::AccountId },
 		/// New metadata has been set for an asset.
