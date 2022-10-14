@@ -57,9 +57,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_support::weights::Weight;
+use frame_support::{traits::Get, weights::Weight};
 use sp_runtime::{
-	traits::{self, CheckedSub, One, Saturating},
+	traits::{self, CheckedSub, One, Saturating, UniqueSaturatedInto},
 	SaturatedConversion,
 };
 
@@ -102,6 +102,15 @@ impl<T: frame_system::Config> LeafDataProvider for ParentNumberAndHash<T> {
 pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
 }
+
+/// A MMR specific to the pallet.
+type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
+
+/// Leaf data.
+type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
+
+/// Hashing used for the pallet.
+pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -214,10 +223,19 @@ pub mod pallet {
 			let data = T::LeafData::leaf_data();
 			// append new leaf to MMR
 			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
-			mmr.push(data).expect("MMR push never fails.");
+			// MMR push never fails.
+			let _ = mmr.push(data);
 
-			// update the size
-			let (leaves, root) = mmr.finalize().expect("MMR finalize never fails.");
+			// Update the size.
+			let (leaves, root) = match mmr.finalize() {
+				Ok((leaves, root)) => (leaves, root),
+				Err(e) => {
+					frame_support::log::error!(
+						target: "runtime::mmr", "Could not finalize MMR for new block: {:?}", e,
+					);
+					return T::WeightInfo::on_initialize(peaks_before)
+				},
+			};
 			<T::OnNewRoot as primitives::OnNewRoot<_>>::on_new_root(&root);
 
 			<NumberOfLeaves<T, I>>::put(leaves);
@@ -230,36 +248,41 @@ pub mod pallet {
 
 		fn offchain_worker(n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
-			// MMR pallet uses offchain storage to hold full MMR and leaves.
-			// The leaves are saved under fork-unique keys `(parent_hash, pos)`.
-			// MMR Runtime depends on `frame_system::block_hash(block_num)` mappings to find
-			// parent hashes for particular nodes or leaves.
-			// This MMR offchain worker function moves a rolling window of the same size
-			// as `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
+			// The MMR nodes can be found in offchain db under either:
+			//   - fork-unique keys `(prefix, parent_hash, pos)`, or,
+			//   - "canonical" keys `(prefix, pos)`,
+			//   depending on how many blocks in the past the node at position `pos` was
+			//   added to the MMR.
+			//
+			// For the fork-unique keys, the MMR pallet depends on
+			// `frame_system::block_hash(parent_num)` mappings to find the relevant parent block
+			// hashes, so it is limited by `frame_system::BlockHashCount` in terms of how many
+			// historical forks it can track. Nodes added to MMR by block `N` can be found in
+			// offchain db at:
+			//   - fork-unique keys `(prefix, parent_hash, pos)` when (`N` >= `latest_block` -
+			//     `frame_system::BlockHashCount`);
+			//   - "canonical" keys `(prefix, pos)` when (`N` < `latest_block` -
+			//     `frame_system::BlockHashCount`);
+			//
+			// The offchain worker is responsible for maintaining the nodes' positions in
+			// offchain db as the chain progresses by moving a rolling window of the same size as
+			// `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
 			// about to exit the window are "canonicalized" so that their offchain key no longer
-			// depends on `parent_hash` therefore on access to `frame_system::block_hash`.
+			// depends on `parent_hash`.
 			//
 			// This approach works to eliminate fork-induced leaf collisions in offchain db,
 			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
-			// blocks (2400 blocks on Polkadot, Kusama, Rococo, etc):
-			//   entries pertaining to block `N` where `N < current-2400` are moved to a key based
-			//   solely on block number. The only way to have collisions is if two competing forks
-			//   are deeper than 2400 blocks and they both "canonicalize" their view of block `N`.
+			// blocks:
+			//   entries pertaining to block `N` where `N < current-BlockHashCount` are moved to a
+			//   key based solely on block number. The only way to have collisions is if two
+			//   competing forks are deeper than `frame_system::BlockHashCount` blocks and they
+			//   both "canonicalize" their view of block `N`
 			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
 			// other forks are pruned from offchain db.
 			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
 		}
 	}
 }
-
-/// A MMR specific to the pallet.
-type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
-
-/// Leaf data.
-type LeafOf<T, I> = <<T as Config<I>>::LeafData as primitives::LeafDataProvider>::LeafData;
-
-/// Hashing used for the pallet.
-pub(crate) type HashingOf<T, I> = <T as Config<I>>::Hashing;
 
 /// Stateless MMR proof verification for batch of leaves.
 ///
@@ -301,6 +324,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Used for nodes added by now finalized blocks.
 	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
+	}
+
+	/// Return size of rolling window of leaves saved in offchain under fork-unique keys.
+	///
+	/// Leaves outside this window are canonicalized.
+	/// Window size is `frame_system::BlockHashCount - 1` to make sure fork-unique keys
+	/// can be built using `frame_system::block_hash` map.
+	fn offchain_canonicalization_window() -> LeafIndex {
+		let window_size: LeafIndex =
+			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
+		window_size.saturating_sub(1)
 	}
 
 	/// Provide the parent number for the block that added `leaf_index` to the MMR.
