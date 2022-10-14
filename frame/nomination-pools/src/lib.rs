@@ -578,14 +578,14 @@ pub struct CommissionThrottle<T: Config> {
 }
 
 impl<T: Config> CommissionThrottle<T> {
-	// for an existing throttle to update, ensure that:
-	// 1. enough blocks have passed since the previous update took place, and
-	// 2. the new commission is within the maximum allowed change.
-	fn can_update(&self, from: &Perbill, to: &Perbill, current_block: &T::BlockNumber) -> bool {
+	// A commission change will be throttled (disallowed) if:
+	// 1. not enough blocks have passed since the previous commission update took place, and
+	// 2. the new commission is larger than the maximum allowed increase.
+	fn throttling(&self, from: &Perbill, to: &Perbill, current_block: &T::BlockNumber) -> bool {
 		let (max_increase, min_delay) = self.change_rate;
 
-		current_block.saturating_sub(self.previous_set_at.unwrap_or(T::BlockNumber::zero())) >=
-			min_delay && (from.saturating_sub(*to)) <= max_increase
+		current_block.saturating_sub(self.previous_set_at.unwrap_or(T::BlockNumber::zero())) <
+			min_delay || (from.saturating_sub(*to)) > max_increase
 	}
 }
 
@@ -2127,7 +2127,7 @@ pub mod pallet {
 
 				if let Some(throttle) = &pool.commission.throttle {
 					ensure!(
-						throttle.can_update(&pool.commission.current, &commission, &block_number),
+						!throttle.throttling(&pool.commission.current, &commission, &block_number),
 						Error::<T>::CommissionChangeThrottled
 					);
 				}
