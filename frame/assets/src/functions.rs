@@ -759,7 +759,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(removed_approvals)
 	}
 
-	/// Complete destrouing asset and unreserve the currency.
+	/// Complete destroying an asset and unreserve the deposit.
 	///
 	/// On success, the `Event::Destroyed` event is emitted.
 	pub(super) fn do_finish_destroy(id: T::AssetId) -> DispatchResult {
