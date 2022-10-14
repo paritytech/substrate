@@ -567,8 +567,6 @@ pub struct CommissionThrottle<T: Config> {
 	/// The pool root is able to set the maximum amount the commission can be updated by, and how
 	/// often an update can take place.
 	pub change_rate: (Perbill, T::BlockNumber),
-	/// The previous commission, prior to the latest change.
-	previous: Perbill,
 	/// The block the previous commission update took place.
 	previous_set_at: T::BlockNumber,
 }
@@ -1509,6 +1507,8 @@ pub mod pallet {
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.
 		CommissionExceedsMaximum,
+		/// Not enough blocks have surpassed since the last commission update.
+		CommissionChangeThrottled,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -2109,19 +2109,31 @@ pub mod pallet {
 
 			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
+				let block_number = <frame_system::Pallet<T>>::block_number();
 
-				// TODO: check if CommissionThrottle.previous exists, and ensure that enough
-				// blocks have passed since the previous update if it does.
-
+				// if a commission throttle exists, ensure that:
+				// 1. enough blocks have passed since the previous update took place, and
+				// 2. the new commission is within the maximum allowed change.
+				if let Some(throttle) = &pool.commission.throttle {
+					let (max_change, min_wait) = throttle.change_rate;
+					ensure!(
+						(block_number.saturating_sub(throttle.previous_set_at)) >= min_wait &&
+							(pool.commission.current.saturating_sub(commission)) <= max_change,
+						Error::<T>::CommissionChangeThrottled
+					);
+				}
 				ensure!(
 					commission <= pool.commission.max.unwrap_or(Perbill::max_value()),
 					Error::<T>::CommissionExceedsMaximum
 				);
+
 				pool.commission.current = commission.clone();
 
-				// TODO: update CommissionThrottle.previous and CommissionThrottle.previous_set_at
-				// if a CommissionThrottle is set.
-
+				// if throttle is configured, update throttle.previous_set_at property.
+				if let Some(throttle) = &pool.commission.throttle {
+					pool.commission.throttle =
+						Some(CommissionThrottle { previous_set_at: block_number, ..*throttle });
+				}
 				Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
 				Ok(())
 			})
