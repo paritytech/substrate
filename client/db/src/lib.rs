@@ -1740,7 +1740,15 @@ impl<Block: BlockT> Backend<Block> {
 	) -> ClientResult<()> {
 		let mut f_num = *f_header.number();
 
-		println!("NOTE FINALIZED f_num {:?}!", f_num);
+		println!("NOTE FINALIZED f_num {:?} hash {:?}!", f_num, f_hash);
+		{
+			let leaves = self.blockchain.leaves.read().hashes();
+			let leaves: Vec<_> = leaves
+				.iter()
+				.map(|hash| (hash, self.blockchain.number(hash.clone()).unwrap()))
+				.collect();
+			println!("Leaves are: {:?}", leaves);
+		}
 
 		let lookup_key = utils::number_and_hash_to_lookup_key(f_num, f_hash)?;
 		if with_state {
@@ -1750,6 +1758,9 @@ impl<Block: BlockT> Backend<Block> {
 
 		// Update the "finalized" number and hash for pruning of N - delay.
 		if let BlocksPruning::Delayed(delayed) = self.blocks_pruning {
+			let disp = self.blockchain.displaced_leaves_after_finalizing(f_num)?;
+			println!("If i were to displace: {:?}", disp);
+
 			if f_num < delayed.into() {
 				println!("Skipping for now block f_num {:?}!", f_num);
 				return Ok(())
@@ -1778,7 +1789,6 @@ impl<Block: BlockT> Backend<Block> {
 			apply_state_commit(transaction, commit);
 		}
 
-		// TODO: this should point backwards by -n64
 		let new_displaced = self.blockchain.leaves.write().finalize_height(f_num);
 		println!("Dispalced: {:?}", new_displaced);
 		self.prune_blocks(transaction, f_num, &new_displaced)?;
@@ -3548,7 +3558,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn prune_blocks_on_finalize_with_fork_in_keep_all() {
+	fn prune_blocks_on_finalize_with_fxork_in_keep_all() {
 		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 10);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
@@ -3648,7 +3658,7 @@ pub(crate) mod tests {
 			None,
 		)
 		.unwrap();
-		insert_block(
+		let fork2 = insert_block(
 			&backend,
 			3,
 			fork_hash_root,
@@ -3676,6 +3686,9 @@ pub(crate) mod tests {
 		assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+
+		assert_eq!(None, bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(None, bc.body(BlockId::hash(fork2)).unwrap());
 	}
 
 	#[test]
@@ -4105,10 +4118,8 @@ pub(crate) mod tests {
 
 		// Block tree:
 		//   0 -> 1 -> 2 -> 3
-		let hash_2 =
-		insert_block(&backend, 2, hash_1, None, ext, vec![2.into()], None).unwrap();
-		let hash_3 =
-		insert_block(&backend, 3, hash_2, None, ext, vec![3.into()], None).unwrap();
+		let hash_2 = insert_block(&backend, 2, hash_1, None, ext, vec![2.into()], None).unwrap();
+		let hash_3 = insert_block(&backend, 3, hash_2, None, ext, vec![3.into()], None).unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, BlockId::Hash(hash_3)).unwrap();
@@ -4131,8 +4142,8 @@ pub(crate) mod tests {
 		let mut prev_hash = Default::default();
 
 		// Block tree:
-		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
-		for i in 0..6 {
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6
+		for i in 0..7 {
 			let hash = insert_block(
 				&backend,
 				i,
@@ -4149,7 +4160,7 @@ pub(crate) mod tests {
 
 		// Insert a fork at the third block.
 		// Block tree:
-		//   0 -> 1 -> 2 -> 3 -> 4 -> 5
+		//   0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6
 		//             2 -> 3
 		let fork_hash_root =
 			insert_block(&backend, 3, blocks[2], None, H256::random(), vec![31.into()], None)
@@ -4171,7 +4182,6 @@ pub(crate) mod tests {
 
 		println!("\nmark 0 1 2 DONE\n");
 
-
 		let bc = backend.blockchain();
 		// Block 0 is pruned.
 		assert!(bc.body(BlockId::hash(blocks[0])).unwrap().is_none());
@@ -4180,9 +4190,9 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
 
-		
 		println!("\nmark 3 as fin");
 		// Mark block 3 as finalized.
 		let mut op = backend.begin_operation().unwrap();
@@ -4197,6 +4207,7 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
 
 		println!("\nmark 4 fin");
@@ -4210,10 +4221,11 @@ pub(crate) mod tests {
 
 		// Block 2 is pruned along with its fork.
 		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
-			assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 
 		println!("\nmark 5 fin");
 
@@ -4227,10 +4239,25 @@ pub(crate) mod tests {
 
 		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
 		assert_eq!(None, bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(None, bc.body(BlockId::hash(fork_hash_root)).unwrap());
-
+		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
+
+		// Mark block 6 as finalized.
+		// Because we delay prune by 2, when we finalize block 6 we are actually
+		// pruning at block 4. The displaced leaves for block 4 are computed
+		// at hight (block number - 1) = 3. This is the time when the fork
+		// is picked up for pruning.
+		let mut op = backend.begin_operation().unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[6])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[6]), None).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		assert!(bc.body(BlockId::hash(blocks[4])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(fork_hash_root)).unwrap().is_none());
+		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 	}
 
 	#[test]
