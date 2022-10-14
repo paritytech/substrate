@@ -55,10 +55,11 @@ fn test_setup_works() {
 			BondedPool::<Runtime> {
 				id: last_pool,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 10,
+					commission: Commission::default(),
 					member_counter: 1,
-					roles: DEFAULT_ROLES
+					points: 10,
+					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			}
 		);
@@ -98,10 +99,11 @@ mod bonded_pool {
 			let mut bonded_pool = BondedPool::<Runtime> {
 				id: 123123,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 100,
+					commission: Commission::default(),
 					member_counter: 1,
+					points: 100,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			};
 
@@ -153,10 +155,11 @@ mod bonded_pool {
 			let mut bonded_pool = BondedPool::<Runtime> {
 				id: 123123,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 100,
+					commission: Commission::default(),
 					member_counter: 1,
+					points: 100,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			};
 
@@ -201,10 +204,11 @@ mod bonded_pool {
 			let pool = BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 100,
+					commission: Commission::default(),
 					member_counter: 1,
+					points: 100,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			};
 
@@ -431,10 +435,11 @@ mod join {
 		let bonded = |points, member_counter| BondedPool::<Runtime> {
 			id: 1,
 			inner: BondedPoolInner {
-				state: PoolState::Open,
-				points,
+				commission: Commission::default(),
 				member_counter,
+				points,
 				roles: DEFAULT_ROLES,
+				state: PoolState::Open,
 			},
 		};
 		ExtBuilder::default().build_and_execute(|| {
@@ -514,10 +519,11 @@ mod join {
 			BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
+					commission: Commission::default(),
 					member_counter: 1,
-					state: PoolState::Open,
 					points: 100,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			}
 			.put();
@@ -583,10 +589,11 @@ mod join {
 			BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 100,
+					commission: Commission::default(),
 					member_counter: 1,
+					points: 100,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			}
 			.put();
@@ -629,7 +636,14 @@ mod join {
 			assert_eq!(MaxPoolMembers::<Runtime>::get(), Some(4));
 
 			Balances::make_free_balance_be(&104, 100 + Balances::minimum_balance());
-			assert_ok!(Pools::create(RuntimeOrigin::signed(104), 100, 104, 104, 104));
+			assert_ok!(Pools::create(
+				RuntimeOrigin::signed(104),
+				100,
+				Commission::default(),
+				104,
+				104,
+				104
+			));
 
 			let pool_account = BondedPools::<Runtime>::iter()
 				.find(|(_, bonded_pool)| bonded_pool.roles.depositor == 104)
@@ -1599,7 +1613,14 @@ mod claim_payout {
 
 			// create pool 2
 			Balances::make_free_balance_be(&20, 100);
-			assert_ok!(Pools::create(RuntimeOrigin::signed(20), 10, 20, 20, 20));
+			assert_ok!(Pools::create(
+				RuntimeOrigin::signed(20),
+				10,
+				Commission::default(),
+				20,
+				20,
+				20
+			));
 
 			// has no impact -- initial
 			let (member_20, _, reward_pool_20) = Pools::get_member_with_pools(&20).unwrap();
@@ -1615,7 +1636,14 @@ mod claim_payout {
 
 			// create pool 3
 			Balances::make_free_balance_be(&30, 100);
-			assert_ok!(Pools::create(RuntimeOrigin::signed(30), 10, 30, 30, 30));
+			assert_ok!(Pools::create(
+				RuntimeOrigin::signed(30),
+				10,
+				Commission::default(),
+				30,
+				30,
+				30
+			));
 
 			// reward counter is still the same.
 			let (member_30, _, reward_pool_30) = Pools::get_member_with_pools(&30).unwrap();
@@ -2360,10 +2388,11 @@ mod unbond {
 				BondedPool {
 					id: 1,
 					inner: BondedPoolInner {
-						state: PoolState::Destroying,
-						points: 0,
+						commission: Commission::default(),
 						member_counter: 1,
+						points: 0,
 						roles: DEFAULT_ROLES,
+						state: PoolState::Destroying,
 					}
 				}
 			);
@@ -2396,10 +2425,11 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							state: PoolState::Open,
-							points: 560,
+							commission: Commission::default(),
 							member_counter: 3,
+							points: 560,
 							roles: DEFAULT_ROLES,
+							state: PoolState::Open,
 						}
 					}
 				);
@@ -2436,10 +2466,11 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							state: PoolState::Destroying,
-							points: 10,
+							commission: Commission::default(),
 							member_counter: 3,
-							roles: DEFAULT_ROLES
+							points: 10,
+							roles: DEFAULT_ROLES,
+							state: PoolState::Destroying,
 						}
 					}
 				);
@@ -2479,10 +2510,11 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							state: PoolState::Destroying,
-							points: 0,
+							commission: Commission::default(),
 							member_counter: 1,
-							roles: DEFAULT_ROLES
+							points: 0,
+							roles: DEFAULT_ROLES,
+							state: PoolState::Destroying,
 						}
 					}
 				);
@@ -2607,10 +2639,11 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
+							commission: Commission::default(),
+							member_counter: 3,
+							points: 10, // Only 10 points because 200 + 100 was unbonded
 							roles: DEFAULT_ROLES,
 							state: PoolState::Blocked,
-							points: 10, // Only 10 points because 200 + 100 was unbonded
-							member_counter: 3,
 						}
 					}
 				);
@@ -2757,10 +2790,11 @@ mod unbond {
 			BondedPool::<Runtime> {
 				id: 1,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 10,
+					commission: Commission::default(),
 					member_counter: 1,
+					points: 10,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			}
 			.put();
@@ -3469,10 +3503,11 @@ mod withdraw_unbonded {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							points: 10,
-							state: PoolState::Open,
+							commission: Commission::default(),
 							member_counter: 3,
-							roles: DEFAULT_ROLES
+							points: 10,
+							roles: DEFAULT_ROLES,
+							state: PoolState::Open,
 						}
 					}
 				);
@@ -3549,10 +3584,11 @@ mod withdraw_unbonded {
 				BondedPool {
 					id: 1,
 					inner: BondedPoolInner {
-						points: 10,
-						state: PoolState::Open,
+						commission: Commission::default(),
 						member_counter: 2,
+						points: 10,
 						roles: DEFAULT_ROLES,
+						state: PoolState::Open,
 					}
 				}
 			);
@@ -4080,6 +4116,7 @@ mod create {
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
 				StakingMock::minimum_bond(),
+				Commission::default(),
 				123,
 				456,
 				789
@@ -4099,15 +4136,16 @@ mod create {
 				BondedPool {
 					id: 2,
 					inner: BondedPoolInner {
-						points: StakingMock::minimum_bond(),
+						commission: Commission::default(),
 						member_counter: 1,
-						state: PoolState::Open,
+						points: StakingMock::minimum_bond(),
 						roles: PoolRoles {
 							depositor: 11,
 							root: Some(123),
 							nominator: Some(456),
 							state_toggler: Some(789)
-						}
+						},
+						state: PoolState::Open,
 					}
 				}
 			);
@@ -4136,7 +4174,7 @@ mod create {
 	fn create_errors_correctly() {
 		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(10), 420, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(10), 420, Commission::default(), 123, 456, 789),
 				Error::<Runtime>::AccountBelongsToOtherPool
 			);
 
@@ -4146,7 +4184,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(11), 9, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 9, Commission::default(), 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -4155,7 +4193,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(11), 19, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 19, Commission::default(), 123, 456, 789),
 				Error::<Runtime>::MinimumBondNotMet
 			);
 
@@ -4163,10 +4201,11 @@ mod create {
 			BondedPool::<Runtime> {
 				id: 2,
 				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 10,
+					commission: Commission::default(),
 					member_counter: 1,
+					points: 10,
 					roles: DEFAULT_ROLES,
+					state: PoolState::Open,
 				},
 			}
 			.put();
@@ -4175,7 +4214,7 @@ mod create {
 
 			// Then
 			assert_noop!(
-				Pools::create(RuntimeOrigin::signed(11), 20, 123, 456, 789),
+				Pools::create(RuntimeOrigin::signed(11), 20, Commission::default(), 123, 456, 789),
 				Error::<Runtime>::MaxPools
 			);
 
@@ -4188,6 +4227,7 @@ mod create {
 			// Then
 			let create = RuntimeCall::Pools(crate::Call::<Runtime>::create {
 				amount: 20,
+				commission: Commission::default(),
 				root: 11,
 				nominator: 11,
 				state_toggler: 11,

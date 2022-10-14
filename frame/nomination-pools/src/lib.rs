@@ -286,7 +286,7 @@ use sp_runtime::{
 		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
 		Zero,
 	},
-	FixedPointNumber, FixedPointOperand,
+	FixedPointNumber, FixedPointOperand, Perbill,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -538,19 +538,41 @@ pub struct PoolRoles<AccountId> {
 	pub state_toggler: Option<AccountId>,
 }
 
+/// Pool commission.
+///
+/// The pool depositor can set a commission upon a pool creation, from which the pool owner can
+/// update thereafter. The `max` commission value can only be set once, as to prevent the commission
+/// from repeatedly increasing.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
+pub struct Commission {
+	/// The active commission rate of the pool.
+	current: Perbill,
+	/// An optional maximum commission that can be set by the pool. Once set, this value cannot be
+	/// updated.
+	max: Option<Perbill>,
+}
+
+impl Default for Commission {
+	fn default() -> Self {
+		Self { current: Perbill::zero(), max: Some(Perbill::zero()) }
+	}
+}
+
 /// Pool permissions and state
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
-	/// Total points of all the members in the pool who are actively bonded.
-	pub points: BalanceOf<T>,
-	/// The current state of the pool.
-	pub state: PoolState,
+	/// The commission rate, if any, of the pool.
+	pub commission: Commission,
 	/// Count of members that belong to the pool.
 	pub member_counter: u32,
+	/// Total points of all the members in the pool who are actively bonded.
+	pub points: BalanceOf<T>,
 	/// See [`PoolRoles`].
 	pub roles: PoolRoles<T::AccountId>,
+	/// The current state of the pool.
+	pub state: PoolState,
 }
 
 /// A wrapper for bonded pools, with utility functions.
@@ -581,14 +603,15 @@ impl<T: Config> sp_std::ops::DerefMut for BondedPool<T> {
 
 impl<T: Config> BondedPool<T> {
 	/// Create a new bonded pool with the given roles and identifier.
-	fn new(id: PoolId, roles: PoolRoles<T::AccountId>) -> Self {
+	fn new(id: PoolId, commission: Commission, roles: PoolRoles<T::AccountId>) -> Self {
 		Self {
 			id,
 			inner: BondedPoolInner {
+				commission,
+				member_counter: Zero::zero(),
+				points: Zero::zero(),
 				roles,
 				state: PoolState::Open,
-				points: Zero::zero(),
-				member_counter: Zero::zero(),
 			},
 		}
 	}
@@ -1138,7 +1161,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::CheckedAdd;
+	use sp_runtime::{traits::CheckedAdd, Perbill};
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
@@ -1451,6 +1474,8 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// The pool commission has been misconfigured.
+		CommissionMisconfigured,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1870,6 +1895,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
+			commission: Commission,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
@@ -1886,6 +1912,10 @@ pub mod pallet {
 				Error::<T>::MaxPools
 			);
 			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+			ensure!(
+				commission.max.unwrap_or(Perbill::zero()) >= commission.current,
+				Error::<T>::CommissionMisconfigured
+			);
 
 			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
 				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
@@ -1893,6 +1923,7 @@ pub mod pallet {
 			})?;
 			let mut bonded_pool = BondedPool::<T>::new(
 				pool_id,
+				commission,
 				PoolRoles {
 					root: Some(root),
 					nominator: Some(nominator),

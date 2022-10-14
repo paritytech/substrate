@@ -53,6 +53,7 @@ pub mod v1 {
 	impl<T: Config> OldBondedPoolInner<T> {
 		fn migrate_to_v1(self) -> BondedPoolInner<T> {
 			BondedPoolInner {
+				commission: Commission::default(),
 				member_counter: self.member_counter,
 				points: self.points,
 				state: self.state,
