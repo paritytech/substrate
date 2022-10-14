@@ -674,25 +674,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: T::AssetId,
 		maybe_check_owner: Option<T::AccountId>,
 	) -> DispatchResult {
-		let _ =
-			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
-				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				if let Some(check_owner) = maybe_check_owner {
-					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-				}
-				ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-				details.status = AssetStatus::Destroying;
+		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
+			let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
+			if let Some(check_owner) = maybe_check_owner {
+				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+			}
+			ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
+			details.status = AssetStatus::Destroying;
 
-				Self::deposit_event(Event::DestructionStarted { asset_id: id });
-				Ok(())
-			})?;
-		Ok(())
+			Self::deposit_event(Event::DestructionStarted { asset_id: id });
+			Ok(())
+		})
 	}
 
 	/// Destroy accounts associated with a given asset up to the max (T::RemoveItemsLimit).
 	///
 	/// Each call emits the `Event::DestroyedAccounts` event.
-	/// Returns the number of destroyed accounts.	
+	/// Returns the number of destroyed accounts.
 	pub(super) fn do_destroy_accounts(id: T::AssetId) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
 		let mut removed_accounts = 0;
@@ -764,23 +762,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// On success, the `Event::Destroyed` event is emitted.
 	pub(super) fn do_finish_destroy(id: T::AssetId) -> DispatchResult {
-		let _ =
-			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
-				let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
-				ensure!(details.accounts == 0, Error::<T, I>::InUse);
-				ensure!(details.approvals == 0, Error::<T, I>::InUse);
+		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
+			let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
+			ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
+			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
+			ensure!(details.accounts == 0, Error::<T, I>::InUse);
+			ensure!(details.approvals == 0, Error::<T, I>::InUse);
 
-				let metadata = Metadata::<T, I>::take(&id);
-				T::Currency::unreserve(
-					&details.owner,
-					details.deposit.saturating_add(metadata.deposit),
-				);
-				Self::deposit_event(Event::Destroyed { asset_id: id });
+			let metadata = Metadata::<T, I>::take(&id);
+			T::Currency::unreserve(
+				&details.owner,
+				details.deposit.saturating_add(metadata.deposit),
+			);
+			Self::deposit_event(Event::Destroyed { asset_id: id });
 
-				Ok(())
-			})
+			Ok(())
+		})
 	}
 
 	/// Creates an approval from `owner` to spend `amount` of asset `id` tokens by 'delegate'
