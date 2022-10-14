@@ -577,6 +577,18 @@ impl<T: Config> Default for Commission<T> {
 	}
 }
 
+impl<T: Config> CommissionThrottle<T> {
+	// for an existing throttle to update, ensure that:
+	// 1. enough blocks have passed since the previous update took place, and
+	// 2. the new commission is within the maximum allowed change.
+	fn can_update(&self, from: &Perbill, to: &Perbill, current_block: &T::BlockNumber) -> bool {
+		let (max_change, min_wait) = self.change_rate;
+
+		(current_block.saturating_sub(self.previous_set_at)) >= min_wait &&
+			(from.saturating_sub(*to)) <= max_change
+	}
+}
+
 /// Pool permissions and state
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
 #[codec(mel_bound(T: Config))]
@@ -2111,14 +2123,9 @@ pub mod pallet {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 				let block_number = <frame_system::Pallet<T>>::block_number();
 
-				// if a commission throttle exists, ensure that:
-				// 1. enough blocks have passed since the previous update took place, and
-				// 2. the new commission is within the maximum allowed change.
 				if let Some(throttle) = &pool.commission.throttle {
-					let (max_change, min_wait) = throttle.change_rate;
 					ensure!(
-						(block_number.saturating_sub(throttle.previous_set_at)) >= min_wait &&
-							(pool.commission.current.saturating_sub(commission)) <= max_change,
+						throttle.can_update(&pool.commission.current, &commission, &block_number),
 						Error::<T>::CommissionChangeThrottled
 					);
 				}
