@@ -779,8 +779,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::deposit_event(Event::Destroyed { asset_id: id });
 
 				Ok(())
-			})?;
-		Ok(())
+			})
 	}
 
 	/// Creates an approval from `owner` to spend `amount` of asset `id` tokens by 'delegate'
