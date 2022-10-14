@@ -543,18 +543,39 @@ pub struct PoolRoles<AccountId> {
 /// The pool depositor can set a commission upon a pool creation, from which the pool owner can
 /// update thereafter. The `max` commission value can only be set once, as to prevent the commission
 /// from repeatedly increasing.
+///
+/// The commission config is also optional, allowing the pool to set strict limits to how much
+/// commission can change in each update, and how often updates can take place.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
-pub struct Commission {
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct Commission<T: Config> {
 	/// The active commission rate of the pool.
 	current: Perbill,
-	/// An optional maximum commission that can be set by the pool. Once set, this value cannot be
-	/// updated.
+	/// An optional maximum commission that can be set by the pool root. Once set, this value
+	/// cannot be updated.
 	max: Option<Perbill>,
+	/// Configiration around how often the commission can be updated, and metadata around the
+	/// previous round of updates.
+	config: Option<CommissionConfig<T>>,
 }
 
-impl Default for Commission {
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct CommissionConfig<T: Config> {
+	/// The pool root is able to set the maximum amount the commission can be updated by, and how
+	/// often an update can take place.
+	pub change_rate: (Perbill, T::BlockNumber),
+	/// The previous commission, prior to the latest change.
+	previous: Perbill,
+	/// The block the previous commission update took place.
+	previous_set_at: T::BlockNumber,
+}
+
+impl<T: Config> Default for Commission<T> {
 	fn default() -> Self {
-		Self { current: Perbill::zero(), max: Some(Perbill::zero()) }
+		Self { current: Perbill::zero(), max: Some(Perbill::zero()), config: None }
 	}
 }
 
@@ -564,7 +585,7 @@ impl Default for Commission {
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
 	/// The commission rate, if any, of the pool.
-	pub commission: Commission,
+	pub commission: Commission<T>,
 	/// Count of members that belong to the pool.
 	pub member_counter: u32,
 	/// Total points of all the members in the pool who are actively bonded.
@@ -603,7 +624,7 @@ impl<T: Config> sp_std::ops::DerefMut for BondedPool<T> {
 
 impl<T: Config> BondedPool<T> {
 	/// Create a new bonded pool with the given roles and identifier.
-	fn new(id: PoolId, commission: Commission, roles: PoolRoles<T::AccountId>) -> Self {
+	fn new(id: PoolId, commission: Commission<T>, roles: PoolRoles<T::AccountId>) -> Self {
 		Self {
 			id,
 			inner: BondedPoolInner {
@@ -1424,7 +1445,7 @@ pub mod pallet {
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
 		/// A pool's commission settings have been changed.
-		PoolCommissionUpdated { pool_id: PoolId, commission: Commission },
+		PoolCommissionUpdated { pool_id: PoolId, commission: Commission<T> },
 	}
 
 	#[pallet::error]
@@ -1903,7 +1924,7 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
-			commission: Commission,
+			commission: Commission<T>,
 			root: AccountIdLookupOf<T>,
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
@@ -2079,7 +2100,7 @@ pub mod pallet {
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			commission: Commission,
+			commission: Commission<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(
@@ -2092,7 +2113,7 @@ pub mod pallet {
 				commission.max.unwrap_or(Perbill::zero()) >= commission.current,
 				Error::<T>::CommissionMisconfigured
 			);
-			
+
 			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 				ensure!(
@@ -2102,6 +2123,7 @@ pub mod pallet {
 				let new_commission = Commission {
 					current: commission.current,
 					max: if let Some(m) = commission.max { Some(m) } else { pool.commission.max },
+					config: None,
 				};
 				pool.commission = new_commission.clone();
 				Self::deposit_event(Event::<T>::PoolCommissionUpdated {
