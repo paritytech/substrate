@@ -741,6 +741,10 @@ impl<T: Config> BondedPool<T> {
 		self.is_root(who) || self.is_state_toggler(who)
 	}
 
+	fn can_set_commission(&self, who: &T::AccountId) -> bool {
+		self.is_root(who)
+	}
+
 	fn is_destroying(&self) -> bool {
 		matches!(self.state, PoolState::Destroying)
 	}
@@ -1419,6 +1423,8 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
+		/// A pool's commission settings have been changed.
+		PoolCommissionUpdated { pool_id: PoolId, commission: Commission },
 	}
 
 	#[pallet::error]
@@ -1476,6 +1482,8 @@ pub mod pallet {
 		PartialUnbondNotAllowedPermissionlessly,
 		/// The pool commission has been misconfigured.
 		CommissionMisconfigured,
+		/// The pool's max commission has already been set.
+		MaxCommissionAlreadySet,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -2055,6 +2063,53 @@ pub mod pallet {
 			Metadata::<T>::mutate(pool_id, |pool_meta| *pool_meta = metadata);
 
 			Ok(())
+		}
+
+		/// Set the commission of a pool.
+		///
+		/// The dispatch origin of this call must be signed by the root role of the pool.
+		/// The supplied commission is firstly checked for validity. If the pool already has
+		/// max commission set, and a commission.max is provided, then this call fails.
+		///
+		/// If a max commission has been provided and has _not_ yet been set, then it is set
+		/// alongside the current commission. Otherwise, the pool's max commission is
+		/// maintained and the current commission is set only.
+		#[pallet::weight(0)]
+		#[transactional]
+		pub fn set_commission(
+			origin: OriginFor<T>,
+			pool_id: PoolId,
+			commission: Commission,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			ensure!(
+				BondedPool::<T>::get(pool_id)
+					.ok_or(Error::<T>::PoolNotFound)?
+					.can_set_commission(&who),
+				Error::<T>::DoesNotHavePermission
+			);
+			ensure!(
+				commission.max.unwrap_or(Perbill::zero()) >= commission.current,
+				Error::<T>::CommissionMisconfigured
+			);
+			
+			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
+				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
+				ensure!(
+					!(pool.commission.max.is_some() && commission.max.is_some()),
+					Error::<T>::MaxCommissionAlreadySet
+				);
+				let new_commission = Commission {
+					current: commission.current,
+					max: if let Some(m) = commission.max { Some(m) } else { pool.commission.max },
+				};
+				pool.commission = new_commission.clone();
+				Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+					pool_id,
+					commission: new_commission,
+				});
+				Ok(())
+			})
 		}
 
 		/// Update configurations for the nomination pools. The origin for this call must be
