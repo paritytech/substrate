@@ -1745,13 +1745,7 @@ where
 			}
 		}
 
-		match self.block_announce_validation.poll_next_unpin(cx) {
-			Poll::Ready(Some(res)) => {
-				self.peer_block_announce_validation_finished(&res);
-				Poll::Ready(self.finish_block_announce_validation(res))
-			},
-			_ => Poll::Pending,
-		}
+		self.poll_block_announce_validation(cx)
 	}
 }
 
@@ -1774,7 +1768,7 @@ where
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
-	) -> Result<(Self, Arc<ChainSyncInterfaceHandle<B>>), ClientError> {
+	) -> Result<(Self, Box<ChainSyncInterfaceHandle<B>>), ClientError> {
 		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
 
 		let mut sync = Self {
@@ -1801,7 +1795,7 @@ where
 			service_rx,
 		};
 		sync.reset_sync_start_point()?;
-		Ok((sync, Arc::new(ChainSyncInterfaceHandle::new(tx))))
+		Ok((sync, Box::new(ChainSyncInterfaceHandle::new(tx))))
 	}
 
 	/// Returns the best seen block number if we don't have that block yet, `None` otherwise.

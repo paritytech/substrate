@@ -93,7 +93,7 @@ where
 	pub chain_sync: Box<dyn ChainSync<B>>,
 
 	/// Interface that can be used to delegate syncing-related function calls to `ChainSync`
-	pub chain_sync_service: Arc<dyn ChainSyncInterface<B>>,
+	pub chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,

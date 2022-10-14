@@ -122,7 +122,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
 	/// Interface that can be used to delegate calls to `ChainSync`
-	chain_sync_service: Arc<dyn ChainSyncInterface<B>>,
+	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,

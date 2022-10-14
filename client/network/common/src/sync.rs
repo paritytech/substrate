@@ -398,7 +398,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Advance the state of `ChainSync`
 	///
-	/// Internally calls [`ChainSync::poll_block_announce_validation()`]
+	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
+	/// this function should be polled until it returns [`Poll::Pending`] to
+	/// consume all pending events.
 	fn poll(
 		&mut self,
 		cx: &mut std::task::Context,
