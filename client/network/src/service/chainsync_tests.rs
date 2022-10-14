@@ -56,7 +56,7 @@ const PROTOCOL_NAME: &str = "/foo";
 
 fn make_network(
 	chain_sync: Box<dyn ChainSyncT<substrate_test_runtime_client::runtime::Block>>,
-	chain_sync_service: Arc<dyn ChainSyncInterface<substrate_test_runtime_client::runtime::Block>>,
+	chain_sync_service: Box<dyn ChainSyncInterface<substrate_test_runtime_client::runtime::Block>>,
 	client: Arc<substrate_test_runtime_client::TestClient>,
 ) -> (TestNetworkWorker, Arc<substrate_test_runtime_client::TestClient>) {
 	let network_config = config::NetworkConfiguration {
@@ -218,7 +218,7 @@ async fn normal_network_poll_no_peers() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
 	let chain_sync_service =
-		Arc::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
 	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
 
@@ -237,7 +237,7 @@ async fn request_justification() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
 	let chain_sync_service =
-		Arc::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
 	// build `ChainSync` and verify that call to `request_justification()` is made
 	let mut chain_sync =
@@ -272,7 +272,7 @@ async fn clear_justification_requests(&mut self) {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
 	let chain_sync_service =
-		Arc::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
 	// build `ChainSync` and verify that call to `clear_justification_requests()` is made
 	let mut chain_sync =
@@ -320,7 +320,7 @@ async fn set_sync_fork_request() {
 		.once()
 		.returning(|_, _, _| ());
 
-	let (mut network, _) = make_network(chain_sync, Arc::new(chain_sync_service), client);
+	let (mut network, _) = make_network(chain_sync, Box::new(chain_sync_service), client);
 
 	// send "set sync fork request" message and poll the network
 	network.service().set_sync_fork_request(copy_peers, hash, number);
@@ -338,7 +338,7 @@ async fn on_block_finalized() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
 	let chain_sync_service =
-		Arc::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
 	// build `ChainSync` and verify that call to `on_block_finalized()` is made
 	let mut chain_sync =
