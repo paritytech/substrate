@@ -296,5 +296,8 @@ impl PalletFeatures {
 	pub fn disable(features: BitFlags<PalletFeature>) -> Self {
 		Self(features)
 	}
+	pub fn is_enabled(&self, feature: PalletFeature) -> bool {
+		!self.0.contains(feature)
+	}
 }
 impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);
