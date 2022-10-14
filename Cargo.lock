@@ -4714,7 +4714,6 @@ dependencies = [
  "hex-literal",
  "log 0.4.14",
  "node-primitives",
- "pallet-assets",
  "pallet-authority-discovery",
  "pallet-authorship",
  "pallet-babe",

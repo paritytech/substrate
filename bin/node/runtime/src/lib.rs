@@ -1239,11 +1239,11 @@ construct_runtime!(
 		Bounties: pallet_bounties,
 		Tips: pallet_tips,
 		BagsList: pallet_bags_list,
-		CereDDCModule: pallet_cere_ddc,
-		ChainBridge: pallet_chainbridge,
-		Erc721: pallet_erc721,
-		Erc20: pallet_erc20,
-		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker,
+		CereDDCModule: pallet_cere_ddc::{Pallet, Call, Storage, Event<T>},
+		ChainBridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
+		Erc721: pallet_erc721::{Pallet, Call, Storage, Event<T>},
+		Erc20: pallet_erc20::{Pallet, Call, Storage, Event<T>},
+		DdcMetricsOffchainWorker: pallet_ddc_metrics_offchain_worker::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
