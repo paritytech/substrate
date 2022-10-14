@@ -278,8 +278,7 @@ where
 		}
 
 		trace!(
-			target: "runtime::mmr",
-			"elems: {:?}",
+			target: "runtime::mmr", "elems: {:?}",
 			elems.iter().map(|elem| elem.hash()).collect::<Vec<_>>()
 		);
 
@@ -304,25 +303,12 @@ where
 		// in offchain DB to avoid DB collisions and overwrites in case of forks.
 		let parent_hash = <frame_system::Pallet<T>>::parent_hash();
 		for elem in elems {
-			// For now we store this leaf offchain keyed by `(parent_hash, node_index)`
-			// to make it fork-resistant.
-			// Offchain worker task will "canonicalize" it `frame_system::BlockHashCount` blocks
-			// later when we are not worried about forks anymore (highly unlikely to have a fork
-			// in the chain that deep).
-			// "Canonicalization" in this case means moving this leaf under a new key based
-			// only on the leaf's `node_index`.
-			let key = Pallet::<T, I>::node_offchain_key(parent_hash, node_index);
-			debug!(
-				target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
-				node_index, parent_hash, key
-			);
-			// Indexing API is used to store the full node content (both leaf and inner).
-			elem.using_encoded(|elem| offchain_index::set(&key, elem));
-
 			// On-chain we are going to only store new peaks.
 			if peaks_to_store.next_if_eq(&node_index).is_some() {
 				<Nodes<T, I>>::insert(node_index, elem.hash());
 			}
+			// We are storing full node off-chain (using indexing API).
+			Self::store_to_offchain(node_index, parent_hash, &elem);
 
 			// Increase the indices.
 			if let Node::Data(..) = elem {
@@ -340,6 +326,38 @@ where
 		}
 
 		Ok(())
+	}
+}
+
+impl<T, I, L> Storage<RuntimeStorage, T, I, L>
+where
+	T: Config<I>,
+	I: 'static,
+	L: primitives::FullLeaf,
+{
+	fn store_to_offchain(
+		pos: NodeIndex,
+		parent_hash: <T as frame_system::Config>::Hash,
+		elem: &NodeOf<T, I, L>,
+	) {
+		let encoded_node = elem.encode();
+		// We store this leaf offchain keyed by `(parent_hash, node_index)` to make it
+		// fork-resistant. Offchain worker task will "canonicalize" it
+		// `frame_system::BlockHashCount` blocks later, when we are not worried about forks anymore
+		// (multi-era-deep forks should not happen).
+		let key = Pallet::<T, I>::node_offchain_key(parent_hash, pos);
+		debug!(
+			target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
+			pos, parent_hash, key
+		);
+		// Indexing API is used to store the full node content.
+		offchain_index::set(&key, &encoded_node);
+		// We also directly save the full node under the "canonical" key.
+		// This is superfluous for the normal case - this entry will possibly be overwritten
+		// by forks, and will also be overwritten by "offchain_worker canonicalization".
+		// But it is required for blocks imported during initial sync where none of the above apply
+		// (`offchain_worker` doesn't run for initial sync blocks).
+		offchain_index::set(&Pallet::<T, I>::node_canon_offchain_key(pos), &encoded_node);
 	}
 }
 
