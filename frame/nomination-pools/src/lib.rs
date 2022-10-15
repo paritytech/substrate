@@ -740,6 +740,46 @@ impl<T: Config> BondedPool<T> {
 			.saturating_sub(T::StakingInterface::active_stake(&account).unwrap_or_default())
 	}
 
+	/// Set the pool's commission.
+	fn set_commission(mut self, commission: &Perbill) -> Self {
+		self.commission.current = *commission;
+
+		// if throttle is configured, record the current block as the previously
+		// updated commission.
+		if let Some(throttle) = &self.commission.throttle {
+			self.commission.throttle = Some(CommissionThrottle {
+				previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
+				..*throttle
+			});
+		}
+		self
+	}
+
+	/// Set the pool's maximum commission.
+	fn set_max_commission(&mut self, max_commission: Perbill) -> (Perbill, Perbill) {
+		self.commission.max = Some(max_commission.clone());
+		// if the pool's current commission is higher than the updated maximum commission,
+		// decrease it to the new maximum commission.
+		if self.commission.current > max_commission {
+			self.commission.current = max_commission;
+		}
+		(self.commission.current, max_commission)
+	}
+
+	/// Set the pool's commission throttle settings.
+	fn set_commission_throttle(mut self, max_increase: Perbill, min_delay: T::BlockNumber) -> Self {
+		if let Some(throttle) = &self.commission.throttle {
+			self.commission.throttle =
+				Some(CommissionThrottle { change_rate: (max_increase, min_delay), ..*throttle });
+		} else {
+			self.commission.throttle = Some(CommissionThrottle {
+				change_rate: (max_increase, min_delay),
+				previous_set_at: None,
+			});
+		}
+		self
+	}
+
 	fn is_root(&self, who: &T::AccountId) -> bool {
 		self.roles.root.as_ref().map_or(false, |root| root == who)
 	}
@@ -2112,40 +2152,26 @@ pub mod pallet {
 			commission: Perbill,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+			if let Some(throttle) = &bonded_pool.commission.throttle {
+				ensure!(
+					!throttle.throttling(
+						&bonded_pool.commission.current,
+						&commission,
+						&<frame_system::Pallet<T>>::block_number()
+					),
+					Error::<T>::CommissionChangeThrottled
+				);
+			}
 			ensure!(
-				BondedPool::<T>::get(pool_id)
-					.ok_or(Error::<T>::PoolNotFound)?
-					.can_set_commission(&who),
-				Error::<T>::DoesNotHavePermission
+				commission <= bonded_pool.commission.max.unwrap_or(Perbill::max_value()),
+				Error::<T>::CommissionExceedsMaximum
 			);
 
-			BondedPools::<T>::try_mutate(pool_id, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
-				let block_number = <frame_system::Pallet<T>>::block_number();
-
-				if let Some(throttle) = &pool.commission.throttle {
-					ensure!(
-						!throttle.throttling(&pool.commission.current, &commission, &block_number),
-						Error::<T>::CommissionChangeThrottled
-					);
-				}
-				ensure!(
-					commission <= pool.commission.max.unwrap_or(Perbill::max_value()),
-					Error::<T>::CommissionExceedsMaximum
-				);
-
-				pool.commission.current = commission.clone();
-
-				// if throttle is configured, update throttle.previous_set_at property.
-				if let Some(throttle) = &pool.commission.throttle {
-					pool.commission.throttle = Some(CommissionThrottle {
-						previous_set_at: Some(block_number),
-						..*throttle
-					});
-				}
-				Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
-				Ok(())
-			})
+			bonded_pool.set_commission(&commission).put();
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
+			Ok(())
 		}
 
 		/// Set the maximum commission of a pool.
@@ -2164,34 +2190,22 @@ pub mod pallet {
 			max_commission: Perbill,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 			ensure!(
-				BondedPool::<T>::get(pool_id)
-					.ok_or(Error::<T>::PoolNotFound)?
-					.can_set_commission(&who),
-				Error::<T>::DoesNotHavePermission
+				bonded_pool.commission.max.unwrap_or(Perbill::max_value()) > max_commission,
+				Error::<T>::MaxCommissionRestricted
 			);
 
-			BondedPools::<T>::try_mutate(pool_id, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
-				ensure!(
-					pool.commission.max.unwrap_or(Perbill::max_value()) > max_commission,
-					Error::<T>::MaxCommissionRestricted
-				);
+			let (current, max) = bonded_pool.set_max_commission(max_commission);
+			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated {
+				pool_id,
+				commission: current,
+				max_commission: max,
+			});
 
-				pool.commission.max = Some(max_commission.clone());
-
-				// if the pool's current commission is higher than the updated maximum commission,
-				// decrease it to the new maximum commission.
-				if pool.commission.current > max_commission {
-					pool.commission.current = max_commission.clone();
-				}
-				Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated {
-					pool_id,
-					commission: pool.commission.current.clone(),
-					max_commission,
-				});
-				Ok(())
-			})
+			bonded_pool.put();
+			Ok(())
 		}
 
 		/// Set the commission throttle for a pool.
@@ -2210,32 +2224,18 @@ pub mod pallet {
 			min_delay: T::BlockNumber,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			ensure!(
-				BondedPool::<T>::get(pool_id)
-					.ok_or(Error::<T>::PoolNotFound)?
-					.can_set_commission(&who),
-				Error::<T>::DoesNotHavePermission
-			);
-			BondedPools::<T>::try_mutate(pool_id, |maybe_pool| {
-				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
-				if let Some(throttle) = &pool.commission.throttle {
-					let (current_max_increase, current_min_delay) = throttle.change_rate;
-					ensure!(
-						max_increase <= current_max_increase && min_delay >= current_min_delay,
-						Error::<T>::CommissionThrottleNotAllowed
-					);
-					pool.commission.throttle = Some(CommissionThrottle {
-						change_rate: (max_increase, min_delay),
-						..*throttle
-					});
-				} else {
-					pool.commission.throttle = Some(CommissionThrottle {
-						change_rate: (max_increase, min_delay),
-						previous_set_at: None,
-					});
-				}
-				Ok(())
-			})
+			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
+
+			if let Some(throttle) = &bonded_pool.commission.throttle {
+				let (current_max_increase, current_min_delay) = throttle.change_rate;
+				ensure!(
+					max_increase <= current_max_increase && min_delay >= current_min_delay,
+					Error::<T>::CommissionThrottleNotAllowed
+				);
+			}
+			bonded_pool.set_commission_throttle(max_increase, min_delay).put();
+			Ok(())
 		}
 
 		/// Update configurations for the nomination pools. The origin for this call must be
@@ -2560,7 +2560,7 @@ impl<T: Config> Pallet<T> {
 		reward_pool.register_claimed_reward(pending_rewards);
 
 		// If a non-zero commission has been applied to the pool, deduct the share from
-		// `pending_rewards` and send that amount to the pool `depositor`. 
+		// `pending_rewards` and send that amount to the pool `depositor`.
 		if bonded_pool.commission.current > Perbill::zero() {
 			let pool_commission = bonded_pool.commission.current * pending_rewards;
 			pending_rewards -= pool_commission;
