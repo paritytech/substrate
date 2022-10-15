@@ -55,21 +55,21 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_tx_pause.
 pub trait WeightInfo {
-	fn pause_call() -> Weight;
-	fn unpause_call() -> Weight;
+	fn pause() -> Weight;
+	fn unpause() -> Weight;
 }
 
 /// Weights for pallet_tx_pause using the Substrate node and recommended hardware.
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: TxPause PausedCalls (r:1 w:1)
-	fn pause_call() -> Weight {
+	fn pause() -> Weight {
 		Weight::from_ref_time(38_905_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: TxPause PausedCalls (r:1 w:1)
-	fn unpause_call() -> Weight {
+	fn unpause() -> Weight {
 		Weight::from_ref_time(32_892_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
@@ -79,13 +79,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: TxPause PausedCalls (r:1 w:1)
-	fn pause_call() -> Weight {
+	fn pause() -> Weight {
 		Weight::from_ref_time(38_905_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: TxPause PausedCalls (r:1 w:1)
-	fn unpause_call() -> Weight {
+	fn unpause() -> Weight {
 		Weight::from_ref_time(32_892_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))

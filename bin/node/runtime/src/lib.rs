@@ -203,8 +203,8 @@ const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO
 /// Filter to block balance pallet calls
 /// Used for both SafeMode and TxPause pallets
 /// Therefor we include both so they cannot affect each other
-pub struct UnfilterableCalls;
-impl Contains<RuntimeCall> for UnfilterableCalls {
+pub struct WhitelistCalls;
+impl Contains<RuntimeCall> for WhitelistCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::System(_) | RuntimeCall::SafeMode(_) | RuntimeCall::TxPause(_) => true,
@@ -215,9 +215,9 @@ impl Contains<RuntimeCall> for UnfilterableCalls {
 }
 
 use pallet_tx_pause::FullNameOf;
-pub struct UnfilterableCallNames;
-/// Make Balances::transfer_keep_alive unfilterable, accept all others.
-impl Contains<FullNameOf<Runtime>> for UnfilterableCallNames {
+pub struct WhitelistCallNames;
+/// Whitelist `Balances::transfer_keep_alive`, all others are pauseable.
+impl Contains<FullNameOf<Runtime>> for WhitelistCallNames {
 	fn contains(full_name: &FullNameOf<Runtime>) -> bool {
 		let unpausables: Vec<FullNameOf<Runtime>> = vec![(
 			b"Balances".to_vec().try_into().unwrap(),
@@ -243,7 +243,7 @@ impl pallet_tx_pause::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureRoot<AccountId>;
 	type UnpauseOrigin = EnsureRoot<AccountId>;
-	type UnfilterableCallNames = UnfilterableCallNames;
+	type WhitelistCallNames = WhitelistCallNames;
 	type MaxNameLen = ConstU32<256>;
 	type PauseTooLongNames = ConstBool<true>;
 	type WeightInfo = pallet_tx_pause::weights::SubstrateWeight<Runtime>;
@@ -370,7 +370,7 @@ parameter_types! {
 impl pallet_safe_mode::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type UnfilterableCalls = UnfilterableCalls;
+	type WhitelistCalls = WhitelistCalls;
 	type ActivationDuration = ConstU32<{ 2 * DAYS }>;
 	type ActivateReservationAmount = ActivateReservationAmount;
 	type ExtendDuration = ConstU32<{ 1 * DAYS }>;
@@ -384,7 +384,7 @@ impl pallet_safe_mode::Config for Runtime {
 }
 
 impl frame_system::Config for Runtime {
-	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for UnfilterableCalls -> see TheseExcept )
+	type BaseCallFilter = InsideBoth<SafeMode, TxPause>; // TODO consider Exclude or NotInside for WhitelistCalls -> see TheseExcept )
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
 	type DbWeight = RocksDbWeight;

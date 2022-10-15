@@ -29,10 +29,10 @@ fn can_pause_specific_call() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(call_transfer(1, 1).dispatch(Origin::signed(0)));
 
-		assert_ok!(TxPause::pause_call(
+		assert_ok!(TxPause::pause(
 			Origin::signed(mock::PauseOrigin::get()),
 			name(b"Balances"),
-			name(b"transfer"),
+			Some(name(b"transfer")),
 		));
 
 		assert_err!(
@@ -44,22 +44,44 @@ fn can_pause_specific_call() {
 }
 
 #[test]
+fn can_pause_all_calls_in_pallet_except_on_whitelist() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(call_transfer(1, 1).dispatch(Origin::signed(0)));
+
+		let batch_call =
+			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+
+		assert_ok!(TxPause::pause(
+			Origin::signed(mock::PauseOrigin::get()),
+			name(b"Utility"),
+			None,
+		));
+
+		assert_err!(
+			batch_call.clone().dispatch(Origin::signed(0)),
+			frame_system::Error::<Test>::CallFiltered
+		);
+	});
+}
+
+#[test]
 fn can_unpause_specific_call() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TxPause::pause_call(
+		assert_ok!(TxPause::pause(
 			Origin::signed(mock::PauseOrigin::get()),
 			name(b"Balances"),
-			name(b"transfer"),
+			Some(name(b"transfer")),
 		));
 		assert_err!(
 			call_transfer(2, 1).dispatch(Origin::signed(2)),
 			frame_system::Error::<Test>::CallFiltered
 		);
 
-		assert_ok!(TxPause::unpause_call(
+		assert_ok!(TxPause::unpause(
 			Origin::signed(mock::UnpauseOrigin::get()),
 			name(b"Balances"),
-			name(b"transfer"),
+			Some(name(b"transfer")),
 		));
 		assert_ok!(call_transfer(4, 1).dispatch(Origin::signed(0)));
 	});
@@ -71,10 +93,10 @@ fn can_filter_balance_in_batch_when_paused() {
 		let batch_call =
 			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
 
-		assert_ok!(TxPause::pause_call(
+		assert_ok!(TxPause::pause(
 			Origin::signed(mock::PauseOrigin::get()),
 			name(b"Balances"),
-			name(b"transfer"),
+			Some(name(b"transfer")),
 		));
 
 		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
@@ -91,10 +113,10 @@ fn can_filter_balance_in_batch_when_paused() {
 #[test]
 fn can_filter_balance_in_proxy_when_paused() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TxPause::pause_call(
+		assert_ok!(TxPause::pause(
 			Origin::signed(mock::PauseOrigin::get()),
 			name(b"Balances"),
-			name(b"transfer"),
+			Some(name(b"transfer")),
 		));
 
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
@@ -115,10 +137,10 @@ fn can_filter_balance_in_proxy_when_paused() {
 fn fails_to_pause_self() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::pause_call(
+			TxPause::pause(
 				Origin::signed(mock::PauseOrigin::get()),
 				name(b"TxPause"),
-				name(b"pause_call")
+				Some(name(b"pause")),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -129,12 +151,35 @@ fn fails_to_pause_self() {
 fn fails_to_pause_unpausable_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::pause_call(
+			TxPause::pause(
 				Origin::signed(mock::PauseOrigin::get()),
 				name(b"DummyPallet"),
-				name(b"any-call")
+				Some(name(b"any-call")),
 			),
 			Error::<Test>::IsUnpausable
+		);
+	});
+}
+
+#[test]
+fn fails_to_pause_unpausable_call_when_pallet_is_paused() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(call_transfer(1, 1).dispatch(Origin::signed(0)));
+
+		let batch_call =
+			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
+		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
+
+		assert_ok!(TxPause::pause(
+			Origin::signed(mock::PauseOrigin::get()),
+			name(b"Balances"),
+			None,
+		));
+
+		assert_ok!(call_transfer_keep_alive(3, 1).dispatch(Origin::signed(3)));
+		assert_err!(
+			call_transfer(2, 1).dispatch(Origin::signed(0)),
+			frame_system::Error::<Test>::CallFiltered
 		);
 	});
 }
@@ -143,10 +188,10 @@ fn fails_to_pause_unpausable_pallet() {
 fn fails_to_pause_unpausable_call() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::pause_call(
+			TxPause::pause(
 				Origin::signed(mock::PauseOrigin::get()),
 				name(b"Balances"),
-				name(b"transfer_keep_alive"),
+				Some(name(b"transfer_keep_alive")),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -156,17 +201,17 @@ fn fails_to_pause_unpausable_call() {
 #[test]
 fn fails_to_pause_already_paused_pallet() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TxPause::pause_call(
+		assert_ok!(TxPause::pause(
 			Origin::signed(mock::PauseOrigin::get()),
 			name(b"Balances"),
-			name(b"transfer"),
+			Some(name(b"transfer")),
 		));
 
 		assert_noop!(
-			TxPause::pause_call(
+			TxPause::pause(
 				Origin::signed(mock::PauseOrigin::get()),
 				name(b"Balances"),
-				name(b"transfer"),
+				Some(name(b"transfer")),
 			),
 			Error::<Test>::IsPaused
 		);
@@ -177,10 +222,10 @@ fn fails_to_pause_already_paused_pallet() {
 fn fails_to_unpause_not_paused_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::unpause_call(
+			TxPause::unpause(
 				Origin::signed(mock::UnpauseOrigin::get()),
 				name(b"Balances"),
-				name(b"transfer"),
+				Some(name(b"transfer")),
 			),
 			Error::<Test>::IsUnpaused
 		);

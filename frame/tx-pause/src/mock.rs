@@ -144,10 +144,11 @@ parameter_types! {
 }
 
 #[derive(Copy, Clone, Encode, Decode, RuntimeDebug, MaxEncodedLen, scale_info::TypeInfo)]
-pub struct UnfilterableCallNames;
+pub struct WhitelistCallNames;
 
-/// Make Balances::transfer_keep_alive and all DummyPallet calls unfilterable, accept all others.
-impl Contains<FullNameOf<Test>> for UnfilterableCallNames {
+/// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`
+/// and all DummyPallet calls. All others may be paused.
+impl Contains<FullNameOf<Test>> for WhitelistCallNames {
 	fn contains(full_name: &FullNameOf<Test>) -> bool {
 		let unpausables: Vec<FullNameOf<Test>> = vec![
 			(
@@ -159,11 +160,12 @@ impl Contains<FullNameOf<Test>> for UnfilterableCallNames {
 
 		for unpausable_call in unpausables {
 			let (pallet_name, maybe_call_name) = full_name;
-			if pallet_name == &unpausable_call.0 {
-				if unpausable_call.1.is_none() {
-					return true
+			if unpausable_call.1.is_none() {
+				return &unpausable_call.0 == pallet_name
+			} else {
+				if &unpausable_call.0 == pallet_name {
+					return &unpausable_call.1 == maybe_call_name
 				}
-				return maybe_call_name == &unpausable_call.1
 			}
 		}
 
@@ -192,7 +194,7 @@ impl Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type PauseOrigin = EnsureSignedBy<PauseOrigin, Self::AccountId>;
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
-	type UnfilterableCallNames = UnfilterableCallNames;
+	type WhitelistCallNames = WhitelistCallNames;
 	type MaxNameLen = MaxNameLen;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();

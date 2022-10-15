@@ -137,8 +137,8 @@ impl pallet_proxy::Config for Test {
 }
 
 /// Filter to allow all everything except balance calls
-pub struct UnfilterableCalls;
-impl Contains<RuntimeCall> for UnfilterableCalls {
+pub struct WhitelistCalls;
+impl Contains<RuntimeCall> for WhitelistCalls {
 	fn contains(call: &RuntimeCall) -> bool {
 		match call {
 			RuntimeCall::Balances(_) => false,
@@ -286,7 +286,7 @@ impl SortedMembers<u64> for ForceReservationOrigin {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type UnfilterableCalls = UnfilterableCalls;
+	type WhitelistCalls = WhitelistCalls;
 	type ActivationDuration = ActivationDuration;
 	type ActivateReservationAmount = ActivateReservationAmount;
 	type ExtendDuration = ExtendDuration;
