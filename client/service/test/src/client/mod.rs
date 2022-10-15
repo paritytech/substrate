@@ -20,7 +20,7 @@ use futures::executor::block_on;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
-	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, StorageProvider,
+	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, HeaderBackend, StorageProvider,
 };
 use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sc_consensus::{
@@ -338,11 +338,15 @@ fn block_builder_works_with_transactions() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+	let hash0 = client
+		.expect_block_hash_from_id(&BlockId::Number(0))
+		.expect("block 0 was just imported. qed");
+	let hash1 = client
+		.expect_block_hash_from_id(&BlockId::Number(1))
+		.expect("block 1 was just imported. qed");
+
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
-	);
+	assert_ne!(client.state_at(&hash1).unwrap().pairs(), client.state_at(&hash0).unwrap().pairs());
 	assert_eq!(
 		client
 			.runtime_api()
@@ -392,11 +396,15 @@ fn block_builder_does_not_include_invalid() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+	let hash0 = client
+		.expect_block_hash_from_id(&BlockId::Number(0))
+		.expect("block 0 was just imported. qed");
+	let hash1 = client
+		.expect_block_hash_from_id(&BlockId::Number(1))
+		.expect("block 1 was just imported. qed");
+
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
-	);
+	assert_ne!(client.state_at(&hash1).unwrap().pairs(), client.state_at(&hash0).unwrap().pairs());
 	assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 }
 

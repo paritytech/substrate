@@ -23,6 +23,7 @@
 
 pub use sc_network_common::{
 	config::ProtocolId,
+	protocol::role::Role,
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
@@ -93,6 +94,9 @@ where
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,
 
+	/// Block announce protocol configuration
+	pub block_announce_config: NonDefaultSetConfig,
+
 	/// Request response configuration for the block request protocol.
 	///
 	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
@@ -128,31 +132,6 @@ where
 
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
-}
-
-/// Role of the local node.
-#[derive(Debug, Clone)]
-pub enum Role {
-	/// Regular full node.
-	Full,
-	/// Actual authority.
-	Authority,
-}
-
-impl Role {
-	/// True for [`Role::Authority`].
-	pub fn is_authority(&self) -> bool {
-		matches!(self, Self::Authority { .. })
-	}
-}
-
-impl fmt::Display for Role {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::Full => write!(f, "FULL"),
-			Self::Authority { .. } => write!(f, "AUTHORITY"),
-		}
-	}
 }
 
 /// Sync operation mode.

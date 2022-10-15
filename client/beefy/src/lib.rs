@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use beefy_primitives::{BeefyApi, MmrRootHash};
+use beefy_primitives::{BeefyApi, MmrRootHash, PayloadProvider};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, Finalizer};
@@ -24,7 +24,7 @@ use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
 use sc_network_common::service::NetworkRequest;
 use sc_network_gossip::Network as GossipNetwork;
-use sp_api::ProvideRuntimeApi;
+use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
@@ -153,11 +153,7 @@ where
 }
 
 /// BEEFY gadget network parameters.
-pub struct BeefyNetworkParams<B, N>
-where
-	B: Block,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
-{
+pub struct BeefyNetworkParams<B: Block, N> {
 	/// Network implementing gossip, requests and sync-oracle.
 	pub network: Arc<N>,
 	/// Chain specific BEEFY gossip protocol name. See
@@ -171,19 +167,13 @@ where
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B, BE, C, N, R>
-where
-	B: Block,
-	BE: Backend<B>,
-	C: Client<B, BE>,
-	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
-{
+pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
 	pub backend: Arc<BE>,
+	/// BEEFY Payload provider
+	pub payload_provider: P,
 	/// Runtime Api Provider
 	pub runtime: Arc<R>,
 	/// Local key store
@@ -203,18 +193,20 @@ where
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, R>(beefy_params: BeefyParams<B, BE, C, N, R>)
+pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
 where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE> + BlockBackend<B>,
+	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
 {
 	let BeefyParams {
 		client,
 		backend,
+		payload_provider,
 		runtime,
 		key_store,
 		network_params,
@@ -261,6 +253,7 @@ where
 	let worker_params = worker::WorkerParams {
 		client,
 		backend,
+		payload_provider,
 		runtime,
 		network,
 		key_store: key_store.into(),
@@ -273,7 +266,7 @@ where
 		min_block_delta,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
 
 	futures::future::join(worker.run(), on_demand_justifications_handler.run()).await;
 }
