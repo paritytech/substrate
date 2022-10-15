@@ -238,7 +238,7 @@ impl DiscoveryConfig {
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
 						MdnsWrapper::Disabled
-					}
+					},
 				}
 			} else {
 				MdnsWrapper::Disabled

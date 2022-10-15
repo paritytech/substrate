@@ -38,6 +38,7 @@ use crate::{
 	transport, ReputationChange,
 };
 
+use codec::Encode;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -53,7 +54,6 @@ use libp2p::{
 };
 use log::{debug, error, info, trace, warn};
 use metrics::{Histogram, HistogramVec, MetricSources, Metrics};
-use codec::Encode;
 use parking_lot::Mutex;
 use sc_consensus::{BlockImportError, BlockImportStatus, ImportQueue, Link};
 use sc_network_common::{
