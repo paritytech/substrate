@@ -44,7 +44,7 @@ fn add_registrars<T: Config>(r: u32) -> Result<(), &'static str> {
 		let _ = T::Currency::make_free_balance_be(&registrar, BalanceOf::<T>::max_value());
 		let registrar_origin = T::RegistrarOrigin::successful_origin();
 		Identity::<T>::add_registrar(registrar_origin, registrar_lookup)?;
-		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i, 10u32.into())?;
+		Identity::<T>::set_fee(RawOrigin::Signed(registrar.clone()).into(), i, 0u32.into())?;
 		let fields =
 			IdentityFields(
 				IdentityField::Display |
@@ -148,7 +148,7 @@ benchmarks! {
 				let registrar_lookup = T::Lookup::unlookup(registrar.clone());
 				let _ = T::Currency::make_free_balance_be(&registrar, 10u32.into());
 
-				Identity::<T>::request_judgement(caller_origin.clone(), i, 10u32.into())?;
+				Identity::<T>::request_judgement(caller_origin.clone(), i, 0u32.into())?;
 				Identity::<T>::provide_judgement(
 					RawOrigin::Signed(registrar).into(),
 					i,
@@ -221,7 +221,7 @@ benchmarks! {
 			let registrar_lookup = T::Lookup::unlookup(registrar.clone());
 			let _ = T::Currency::make_free_balance_be(&registrar, 10u32.into());
 
-			Identity::<T>::request_judgement(caller_origin.clone(), i, 10u32.into())?;
+			Identity::<T>::request_judgement(caller_origin.clone(), i, 0u32.into())?;
 			Identity::<T>::provide_judgement(
 				RawOrigin::Signed(registrar).into(),
 				i,
@@ -248,7 +248,7 @@ benchmarks! {
 			let caller_origin = <T as frame_system::Config>::RuntimeOrigin::from(RawOrigin::Signed(caller));
 			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
-	}: _(RawOrigin::Signed(caller.clone()), r - 1, 10u32.into())
+	}: _(RawOrigin::Signed(caller.clone()), r - 1, 0u32.into())
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementRequested { who: caller, registrar_index: r-1 }.into());
 	}
@@ -267,7 +267,7 @@ benchmarks! {
 			Identity::<T>::set_identity(caller_origin, Box::new(info))?;
 		};
 
-		Identity::<T>::request_judgement(caller_origin, r - 1, 10u32.into())?;
+		Identity::<T>::request_judgement(caller_origin, r - 1, 0u32.into())?;
 	}: _(RawOrigin::Signed(caller.clone()), r - 1)
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementUnrequested { who: caller, registrar_index: r-1 }.into());
@@ -348,7 +348,7 @@ benchmarks! {
 
 		let registrar_origin = T::RegistrarOrigin::successful_origin();
 		Identity::<T>::add_registrar(registrar_origin, caller_lookup)?;
-		Identity::<T>::request_judgement(user_origin, r, 10u32.into())?;
+		Identity::<T>::request_judgement(user_origin, r, 0u32.into())?;
 	}: _(RawOrigin::Signed(caller), r, user_lookup, Judgement::Reasonable, info_hash)
 	verify {
 		assert_last_event::<T>(Event::<T>::JudgementGiven { target: user, registrar_index: r }.into())
@@ -374,7 +374,7 @@ benchmarks! {
 			let registrar_lookup = T::Lookup::unlookup(registrar.clone());
 			let _ = T::Currency::make_free_balance_be(&registrar, 10u32.into());
 
-			Identity::<T>::request_judgement(target_origin.clone(), i, 10u32.into())?;
+			Identity::<T>::request_judgement(target_origin.clone(), i, 0u32.into())?;
 			Identity::<T>::provide_judgement(
 				RawOrigin::Signed(registrar).into(),
 				i,
