@@ -267,21 +267,20 @@ impl<T: Config> Pallet<T> {
 	/// Return whether this pallet or call is paused
 	pub fn is_paused(full_name: &FullNameOf<T>) -> bool {
 		let (pallet_name, maybe_call_name) = full_name;
-		if <PausedCalls<T>>::contains_key(<FullNameOf<T>>::from((pallet_name.clone(), None))) {
-			// SAFETY: Everything that is whitelisted cannot be paused,
-			// including calls within paused pallets.
-			if T::WhitelistCallNames::contains(&<FullNameOf<T>>::from((
-				pallet_name.clone(),
-				maybe_call_name.clone(),
-			))) {
-				return false
-			};
-			return true
-		};
-		<PausedCalls<T>>::contains_key(<FullNameOf<T>>::from((
+		// SAFETY: Everything that is whitelisted cannot be paused,
+		// including calls within paused pallets.
+		if T::WhitelistCallNames::contains(&<FullNameOf<T>>::from((
 			pallet_name.clone(),
 			maybe_call_name.clone(),
-		)))
+		))) {
+			return false
+		};
+		// Check is pallet is paused.
+		if <PausedCalls<T>>::contains_key(<FullNameOf<T>>::from((pallet_name.clone(), None))) {
+			return true
+		};
+		// Check if call in a pallet is paused
+		<PausedCalls<T>>::contains_key(full_name)
 	}
 
 	/// Ensure that this pallet or call can be paused.
