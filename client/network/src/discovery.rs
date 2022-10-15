@@ -233,7 +233,13 @@ impl DiscoveryConfig {
 			allow_private_ipv4,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
-				MdnsWrapper::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
+				match Mdns::new(MdnsConfig::default()) {
+					Ok(mdns) => MdnsWrapper::Ready(mdns),
+					Err(err) => {
+						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+						MdnsWrapper::Disabled
+					}
+				}
 			} else {
 				MdnsWrapper::Disabled
 			},
@@ -969,10 +975,9 @@ fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	v
 }
 
-/// [`Mdns::new`] returns a future. Instead of forcing [`DiscoveryConfig::finish`] and all its
-/// callers to be async, lazily instantiate [`Mdns`].
+/// Enable or disable mDNS.
+/// TODO: replace with an `Option`.
 enum MdnsWrapper {
-	Instantiating(futures::future::BoxFuture<'static, std::io::Result<Mdns>>),
 	Ready(Mdns),
 	Disabled,
 }
@@ -980,7 +985,6 @@ enum MdnsWrapper {
 impl MdnsWrapper {
 	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
 		match self {
-			Self::Instantiating(_) => Vec::new(),
 			Self::Ready(mdns) => mdns.addresses_of_peer(peer_id),
 			Self::Disabled => Vec::new(),
 		}
@@ -993,14 +997,6 @@ impl MdnsWrapper {
 	) -> Poll<NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ConnectionHandler>> {
 		loop {
 			match self {
-				Self::Instantiating(fut) =>
-					*self = match futures::ready!(fut.as_mut().poll(cx)) {
-						Ok(mdns) => Self::Ready(mdns),
-						Err(err) => {
-							warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-							Self::Disabled
-						},
-					},
 				Self::Ready(mdns) => return mdns.poll(cx, params),
 				Self::Disabled => return Poll::Pending,
 			}
