@@ -1655,7 +1655,7 @@ pub mod pallet {
 		}
 
 		/// A bonded member can use this to claim their payout based on the rewards that the pool
-		/// has accumulated since their last claimed payout (OR since joining if this is there first
+		/// has accumulated since their last claimed payout (OR since joining if this is their first
 		/// time claiming rewards). The payout will be transferred to the member's account.
 		///
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
@@ -2549,7 +2549,7 @@ impl<T: Config> Pallet<T> {
 
 		let current_reward_counter =
 			reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
-		let pending_rewards = member.pending_rewards(current_reward_counter)?;
+		let mut pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 		if pending_rewards.is_zero() {
 			return Ok(pending_rewards)
@@ -2559,7 +2559,26 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// Transfer payout to the member.
+		// If a non-zero commission has been applied to the pool, deduct the share from
+		// `pending_rewards` and send that amount to the pool `depositor`. 
+		if bonded_pool.commission.current > Perbill::zero() {
+			let pool_commission = bonded_pool.commission.current * pending_rewards;
+			pending_rewards -= pool_commission;
+
+			// TODO: discuss a better solution than sending commission to the depositor.
+			// Currently, all other roles are optional and may not be set when commission
+			// needs to be received.
+			// For now:
+			// Transfer commission to the depositor.
+			T::Currency::transfer(
+				&bonded_pool.reward_account(),
+				&bonded_pool.roles.depositor,
+				pool_commission,
+				ExistenceRequirement::KeepAlive,
+			)?;
+		}
+
+		// Transfer remaining payout to the member.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&member_account,
