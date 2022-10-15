@@ -451,10 +451,8 @@ mod tests {
 	}
 
 	fn secret_bytes(kp: &Keypair) -> Vec<u8> {
-		match kp {
-			Keypair::Ed25519(p) => p.secret().as_ref().iter().cloned().collect(),
-			_ => panic!("Unexpected keypair."),
-		}
+		let Keypair::Ed25519(p) = kp;
+		p.secret().as_ref().iter().cloned().collect()
 	}
 
 	#[test]

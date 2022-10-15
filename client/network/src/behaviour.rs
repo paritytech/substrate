@@ -27,7 +27,7 @@ use bytes::Bytes;
 use futures::channel::oneshot;
 use libp2p::{
 	core::{Multiaddr, PeerId, PublicKey},
-	identify::IdentifyInfo,
+	identify::Info as IdentifyInfo,
 	kad::record,
 	NetworkBehaviour,
 };
