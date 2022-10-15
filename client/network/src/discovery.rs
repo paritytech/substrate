@@ -234,14 +234,14 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
 				match Mdns::new(MdnsConfig::default()) {
-					Ok(mdns) => MdnsWrapper::Ready(mdns),
+					Ok(mdns) => Some(mdns),
 					Err(err) => {
 						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-						MdnsWrapper::Disabled
+						None
 					},
 				}
 			} else {
-				MdnsWrapper::Disabled
+				None
 			},
 			allow_non_globals_in_dht,
 			known_external_addresses: LruHashSet::new(
@@ -263,7 +263,7 @@ pub struct DiscoveryBehaviour {
 	/// Kademlia requests and answers.
 	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
-	mdns: MdnsWrapper,
+	mdns: Option<Mdns>,
 	/// Stream that fires when we need to perform the next random Kademlia query. `None` if
 	/// random walking is disabled.
 	next_kad_random_query: Option<Delay>,
@@ -548,7 +548,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				list_to_filter.extend(k.addresses_of_peer(peer_id))
 			}
 
-			list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
+			if let Some(ref mut mdns) = self.mdns {
+				list_to_filter.extend(mdns.addresses_of_peer(peer_id));
+			}
 
 			if !self.allow_private_ipv4 {
 				list_to_filter.retain(|addr| match addr.iter().next() {
@@ -929,36 +931,38 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 
 		// Poll mDNS.
-		while let Poll::Ready(ev) = self.mdns.poll(cx, params) {
-			match ev {
-				NetworkBehaviourAction::GenerateEvent(event) => match event {
-					MdnsEvent::Discovered(list) => {
-						if self.num_connections >= self.discovery_only_if_under_num {
-							continue
-						}
+		if let Some(ref mut mdns) = self.mdns {
+			while let Poll::Ready(ev) = mdns.poll(cx, params) {
+				match ev {
+					NetworkBehaviourAction::GenerateEvent(event) => match event {
+						MdnsEvent::Discovered(list) => {
+							if self.num_connections >= self.discovery_only_if_under_num {
+								continue
+							}
 
-						self.pending_events
-							.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
-						if let Some(ev) = self.pending_events.pop_front() {
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
-						}
+							self.pending_events
+								.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
+							if let Some(ev) = self.pending_events.pop_front() {
+								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							}
+						},
+						MdnsEvent::Expired(_) => {},
 					},
-					MdnsEvent::Expired(_) => {},
-				},
-				NetworkBehaviourAction::Dial { .. } => {
-					unreachable!("mDNS never dials!");
-				},
-				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
-				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-						address,
-						score,
-					}),
-				NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
-					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-						peer_id,
-						connection,
-					}),
+					NetworkBehaviourAction::Dial { .. } => {
+						unreachable!("mDNS never dials!");
+					},
+					NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
+					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+							address,
+							score,
+						}),
+					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+							peer_id,
+							connection,
+						}),
+				}
 			}
 		}
 
@@ -973,35 +977,6 @@ fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	v.extend_from_slice(id.as_ref().as_bytes());
 	v.extend_from_slice(b"/kad");
 	v
-}
-
-/// Enable or disable mDNS.
-/// TODO: replace with an `Option`.
-enum MdnsWrapper {
-	Ready(Mdns),
-	Disabled,
-}
-
-impl MdnsWrapper {
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		match self {
-			Self::Ready(mdns) => mdns.addresses_of_peer(peer_id),
-			Self::Disabled => Vec::new(),
-		}
-	}
-
-	fn poll(
-		&mut self,
-		cx: &mut Context<'_>,
-		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ConnectionHandler>> {
-		loop {
-			match self {
-				Self::Ready(mdns) => return mdns.poll(cx, params),
-				Self::Disabled => return Poll::Pending,
-			}
-		}
-	}
 }
 
 #[cfg(test)]
