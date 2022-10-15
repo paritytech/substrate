@@ -2119,7 +2119,7 @@ pub mod pallet {
 				Error::<T>::DoesNotHavePermission
 			);
 
-			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
+			BondedPools::<T>::try_mutate(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 				let block_number = <frame_system::Pallet<T>>::block_number();
 
@@ -2171,7 +2171,7 @@ pub mod pallet {
 				Error::<T>::DoesNotHavePermission
 			);
 
-			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
+			BondedPools::<T>::try_mutate(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 				ensure!(
 					pool.commission.max.unwrap_or(Perbill::max_value()) > max_commission,
@@ -2216,7 +2216,7 @@ pub mod pallet {
 					.can_set_commission(&who),
 				Error::<T>::DoesNotHavePermission
 			);
-			BondedPools::<T>::try_mutate_exists(pool_id, |maybe_pool| {
+			BondedPools::<T>::try_mutate(pool_id, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 				if let Some(throttle) = &pool.commission.throttle {
 					let (current_max_increase, current_min_delay) = throttle.change_rate;
