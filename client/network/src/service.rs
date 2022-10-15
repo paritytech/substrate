@@ -1282,13 +1282,13 @@ where
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
 	/// Protocol name used to send out block requests via
-	/// [`request_responses::RequestResponsesBehaviour`].
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
 	block_request_protocol_name: ProtocolName,
 	/// Protocol name used to send out state requests via
-	/// [`request_responses::RequestResponsesBehaviour`].
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
 	state_request_protocol_name: ProtocolName,
 	/// Protocol name used to send out warp sync requests via
-	/// [`request_responses::RequestResponsesBehaviour`].
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
 	warp_sync_protocol_name: Option<ProtocolName>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
