@@ -115,6 +115,7 @@ impl fmt::Display for Throughput {
 	}
 }
 
+/// Serializes `Throughput` and uses MiBs as the unit.
 pub fn serialize_throughput_as_mibs<S>(
 	throughput: &Throughput,
 	serializer: S,
@@ -125,6 +126,7 @@ where
 	serializer.serialize_u64(throughput.as_mibs() as u64)
 }
 
+/// Serializes `Option<Throughput>` and uses MiBs as the unit.
 pub fn serialize_throughput_option_as_mibs<S>(
 	maybe_throughput: &Option<Throughput>,
 	serializer: S,
@@ -164,7 +166,7 @@ pub(crate) fn benchmark<E>(
 		}
 	}
 
-	let score = Throughput((size * count) as f64 / elapsed.as_secs_f64());
+	let score = Throughput::from_mibs((size * count) as f64 / elapsed.as_secs_f64());
 	log::trace!(
 		"Calculated {} of {} in {} iterations in {}ms",
 		name,
