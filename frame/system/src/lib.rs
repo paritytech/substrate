@@ -93,8 +93,8 @@ use frame_support::{
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
 	weights::{
-		extract_actual_weight, DispatchClass, DispatchInfo, PerDispatchClass, RuntimeDbWeight,
-		Weight,
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		PerDispatchClass, RuntimeDbWeight, Weight,
 	},
 	Parameter,
 };
@@ -241,7 +241,8 @@ pub mod pallet {
 			+ Default
 			+ MaybeDisplay
 			+ AtLeast32Bit
-			+ Copy;
+			+ Copy
+			+ MaxEncodedLen;
 
 		/// The block number type used by the runtime.
 		type BlockNumber: Parameter
@@ -328,7 +329,7 @@ pub mod pallet {
 
 		/// Data to be associated with an account (other than nonce/transaction counter, which this
 		/// pallet does regardless).
-		type AccountData: Member + FullCodec + Clone + Default + TypeInfo;
+		type AccountData: Member + FullCodec + Clone + Default + TypeInfo + MaxEncodedLen;
 
 		/// Handler for when a new account has just been created.
 		type OnNewAccount: OnNewAccount<Self::AccountId>;
@@ -362,8 +363,8 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
-	#[pallet::generate_store(pub (super) trait Store)]
 	#[pallet::without_storage_info]
+	#[pallet::generate_store(pub (super) trait Store)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
@@ -639,6 +640,7 @@ pub mod pallet {
 	/// Extrinsics data for the current block (maps an extrinsic's index to its data).
 	#[pallet::storage]
 	#[pallet::getter(fn extrinsic_data)]
+	#[pallet::unbounded]
 	pub(super) type ExtrinsicData<T: Config> =
 		StorageMap<_, Twox64Concat, u32, Vec<u8>, ValueQuery>;
 
@@ -654,6 +656,7 @@ pub mod pallet {
 
 	/// Digest of the current block, also part of the block header.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn digest)]
 	pub(super) type Digest<T: Config> = StorageValue<_, generic::Digest, ValueQuery>;
 
@@ -665,6 +668,7 @@ pub mod pallet {
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
 	/// just in case someone still reads them from within the runtime.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
 		StorageValue<_, Vec<Box<EventRecord<T::Event, T::Hash>>>, ValueQuery>;
 
@@ -684,12 +688,14 @@ pub mod pallet {
 	/// the `EventIndex` then in case if the topic has the same contents on the next block
 	/// no notification will be triggered thus the event might be lost.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	#[pallet::getter(fn event_topics)]
 	pub(super) type EventTopics<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::Hash, Vec<(T::BlockNumber, EventIndex)>, ValueQuery>;
 
 	/// Stores the `spec_version` and `spec_name` of when the last runtime upgrade happened.
 	#[pallet::storage]
+	#[pallet::unbounded]
 	pub type LastRuntimeUpgrade<T: Config> = StorageValue<_, LastRuntimeUpgradeInfo>;
 
 	/// True if we have upgraded so that `type RefCount` is `u32`. False (default) if not.
@@ -752,7 +758,7 @@ pub type Key = Vec<u8>;
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 /// A phase of a block's execution.
-#[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone))]
 pub enum Phase {
 	/// Applying an extrinsic.
@@ -800,7 +806,7 @@ type EventIndex = u32;
 pub type RefCount = u32;
 
 /// Information of an account.
-#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct AccountInfo<Index, AccountData> {
 	/// The number of transactions this account has sent.
 	pub nonce: Index,
@@ -1663,6 +1669,7 @@ impl<T: Config> Pallet<T> {
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
 		info.weight = extract_actual_weight(r, &info);
+		info.pays_fee = extract_actual_pays_fee(r, &info);
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {

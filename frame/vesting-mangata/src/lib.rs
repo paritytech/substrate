@@ -60,7 +60,7 @@ use frame_support::{
 	traits::{ExistenceRequirement, Get, LockIdentifier, WithdrawReasons},
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use orml_tokens::{MultiTokenCurrency, MultiTokenLockableCurrency};
+use frame_support::traits::tokens::currency::{MultiTokenCurrency, MultiTokenLockableCurrency};
 pub use pallet::*;
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -913,6 +913,7 @@ where
 			)
 			.collect::<Vec<_>>();
 
+		
 		let start_block = now.max(selected_schedule.1.starting_block());
 
 		let new_locked = if let Some(unlock_amount) = unlock_some_amount_or_all {

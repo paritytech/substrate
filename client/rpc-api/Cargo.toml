@@ -28,4 +28,4 @@ sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
-jsonrpsee = { version = "0.14.0", features = ["server", "macros"] }
+jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }

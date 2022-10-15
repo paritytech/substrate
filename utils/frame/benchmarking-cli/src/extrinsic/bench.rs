@@ -17,6 +17,7 @@
 
 //! Contains the core benchmarking logic.
 
+use log::{debug, error, info};
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_block_builder_ver::{
 	validate_transaction, BlockBuilderApi as BlockBuilderApiVer,
@@ -34,26 +35,21 @@ use sp_blockchain::{
 	Error::{ApplyExtrinsicFailed, RuntimeApiError},
 	HeaderBackend,
 };
-use sp_consensus::BlockOrigin;
 use sp_consensus_aura::{digests::CompatibleDigestItem, sr25519::AuthoritySignature};
-use sp_core::{sr25519, testing::SR25519, Pair};
-
 use sp_runtime::{
-	generic::Digest,
 	traits::{Block as BlockT, Header as HeaderT, One, Zero},
 	transaction_validity::{InvalidTransaction, TransactionValidityError},
-	DigestItem, OpaqueExtrinsic,
+	Digest, DigestItem, OpaqueExtrinsic,
 };
-
-use clap::Args;
-use log::{debug, error, info};
-use serde::Serialize;
-
-use std::{marker::PhantomData, sync::Arc, time::Instant};
 use ver_api::VerApi;
 
-use super::cmd::ExtrinsicBuilder;
-use crate::shared::Stats;
+use clap::Args;
+use serde::Serialize;
+use sp_consensus::BlockOrigin;
+use std::{marker::PhantomData, sync::Arc, time::Instant};
+
+use super::ExtrinsicBuilder;
+use crate::shared::{StatSelect, Stats};
 
 /// Parameters to configure an *overhead* benchmark.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
@@ -76,30 +72,18 @@ pub struct BenchmarkParams {
 /// The results of multiple runs in nano seconds.
 pub(crate) type BenchRecord = Vec<u64>;
 
-/// Type of a benchmark.
-#[derive(Serialize, Clone, PartialEq, Copy)]
-pub(crate) enum BenchmarkType {
-	/// Measure the per-extrinsic execution overhead.
-	Extrinsic,
-	/// Measure the per-block execution overhead.
-	Block,
-}
-
 /// Holds all objects needed to run the *overhead* benchmarks.
 pub(crate) struct Benchmark<Block, BA, C> {
 	client: Arc<C>,
 	params: BenchmarkParams,
 	inherent_data: sp_inherents::InherentData,
-	ext_builder: Arc<dyn ExtrinsicBuilder>,
 	_p: PhantomData<(Block, BA)>,
 }
 
-/// Holds all objects needed to run the *overhead* benchmarks.
 pub(crate) struct BenchmarkVer<Block, BA, C> {
 	client: Arc<C>,
 	params: BenchmarkParams,
 	inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
-	ext_builder: Arc<dyn ExtrinsicBuilder>,
 	_p: PhantomData<(Block, BA)>,
 }
 
@@ -115,23 +99,51 @@ where
 		client: Arc<C>,
 		params: BenchmarkParams,
 		inherent_data: sp_inherents::InherentData,
-		ext_builder: Arc<dyn ExtrinsicBuilder>,
 	) -> Self {
-		Self { client, params, inherent_data, ext_builder, _p: PhantomData }
+		Self { client, params, inherent_data, _p: PhantomData }
 	}
 
-	/// Run the specified benchmark.
-	pub fn bench(&mut self, bench_type: BenchmarkType) -> Result<Stats> {
-		let (block, num_ext) = self.build_block(bench_type)?;
-		let record = self.measure_block(&block, num_ext, bench_type)?;
+	/// Benchmark a block with only inherents.
+	pub fn bench_block(&self) -> Result<Stats> {
+		let (block, _) = self.build_block(None)?;
+		let record = self.measure_block(&block)?;
 		Stats::new(&record)
 	}
 
-	/// Builds a block for the given benchmark type.
+	/// Benchmark the time of an extrinsic in a full block.
+	///
+	/// First benchmarks an empty block, analogous to `bench_block` and use it as baseline.
+	/// Then benchmarks a full block built with the given `ext_builder` and subtracts the baseline
+	/// from the result.
+	/// This is necessary to account for the time the inherents use.
+	pub fn bench_extrinsic(&self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
+		let (block, _) = self.build_block(None)?;
+		let base = self.measure_block(&block)?;
+		let base_time = Stats::new(&base)?.select(StatSelect::Average);
+
+		let (block, num_ext) = self.build_block(Some(ext_builder))?;
+		let num_ext = num_ext.ok_or_else(|| Error::Input("Block was empty".into()))?;
+		let mut records = self.measure_block(&block)?;
+
+		for r in &mut records {
+			// Subtract the base time.
+			*r = r.saturating_sub(base_time);
+			// Divide by the number of extrinsics in the block.
+			*r = ((*r as f64) / (num_ext as f64)).ceil() as u64;
+		}
+
+		Stats::new(&records)
+	}
+
+	/// Builds a block with some optional extrinsics.
 	///
 	/// Returns the block and the number of extrinsics in the block
 	/// that are not inherents.
-	fn build_block(&mut self, bench_type: BenchmarkType) -> Result<(Block, u64)> {
+	/// Returns a block with only inherents if `ext_builder` is `None`.
+	fn build_block(
+		&self,
+		ext_builder: Option<&dyn ExtrinsicBuilder>,
+	) -> Result<(Block, Option<u64>)> {
 		let mut builder = self.client.new_block(Default::default())?;
 		// Create and insert the inherents.
 		let inherents = builder.create_inherents(self.inherent_data.clone())?;
@@ -139,16 +151,18 @@ where
 			builder.push(inherent)?;
 		}
 
-		// Return early if we just want a block with inherents and no additional extrinsics.
-		if bench_type == BenchmarkType::Block {
-			return Ok((builder.build()?.block, 0))
-		}
+		// Return early if `ext_builder` is `None`.
+		let ext_builder = if let Some(ext_builder) = ext_builder {
+			ext_builder
+		} else {
+			return Ok((builder.build()?.block, None))
+		};
 
 		// Put as many extrinsics into the block as possible and count them.
 		info!("Building block, this takes some time...");
 		let mut num_ext = 0;
 		for nonce in 0..self.max_ext_per_block() {
-			let ext = self.ext_builder.remark(nonce)?;
+			let ext = ext_builder.build(nonce)?;
 			match builder.push(ext.clone()) {
 				Ok(()) => {},
 				Err(ApplyExtrinsicFailed(Validity(TransactionValidityError::Invalid(
@@ -164,20 +178,12 @@ where
 		info!("Extrinsics per block: {}", num_ext);
 		let block = builder.build()?.block;
 
-		Ok((block, num_ext))
+		Ok((block, Some(num_ext)))
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	fn measure_block(
-		&self,
-		block: &Block,
-		num_ext: u64,
-		bench_type: BenchmarkType,
-	) -> Result<BenchRecord> {
+	fn measure_block(&self, block: &Block) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
-		if bench_type == BenchmarkType::Extrinsic && num_ext == 0 {
-			return Err("Cannot measure the extrinsic time of an empty block".into())
-		}
 		let genesis = BlockId::Number(Zero::zero());
 
 		info!("Running {} warmups...", self.params.warmup);
@@ -201,12 +207,7 @@ where
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
-			if bench_type == BenchmarkType::Extrinsic {
-				// Checked for non-zero div above.
-				record.push((elapsed as f64 / num_ext as f64).ceil() as u64);
-			} else {
-				record.push(elapsed as u64);
-			}
+			record.push(elapsed as u64);
 		}
 
 		Ok(record)
@@ -239,36 +240,37 @@ where
 		client: Arc<C>,
 		params: BenchmarkParams,
 		inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
-		ext_builder: Arc<dyn ExtrinsicBuilder>,
 	) -> Self {
-		Self { client, params, inherent_data, ext_builder, _p: PhantomData }
+		Self { client, params, inherent_data, _p: PhantomData }
 	}
 
-	/// Run the specified benchmark.
-	pub fn bench(&mut self, bench_type: BenchmarkType) -> Result<Stats> {
-		let block = self.build_first_block()?;
-		let num_ext = block.block.extrinsics().len();
+	/// Benchmark a block with only inherents.
+	pub fn bench_block(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
+		let block = self.build_first_block(ext_builder)?;
+		let record = self.measure_block(&block.block, BlockId::Number(Zero::zero()))?;
+		Stats::new(&record)
+	}
 
-		if let BenchmarkType::Block = bench_type {
-			let record = self.measure_block(
-				BlockId::Number(Zero::zero()),
-				&block.block.clone(),
-				num_ext,
-				bench_type,
-			)?;
-			Stats::new(&record)
-		} else {
-			self.import_block(block);
-			let block = self.build_second_block(num_ext)?;
-			let num_ext = block.block.extrinsics().len();
-			let record = self.measure_block(
-				BlockId::Number(One::one()),
-				&block.block.clone(),
-				num_ext,
-				bench_type,
-			)?;
-			Stats::new(&record)
+	/// Benchmark the time of an extrinsic in a full block.
+	///
+	/// First benchmarks an empty block, analogous to `bench_block` and use it as baseline.
+	/// Then benchmarks a full block built with the given `ext_builder` and subtracts the baseline
+	/// from the result.
+	/// This is necessary to account for the time the inherents use.
+	pub fn bench_extrinsic(&mut self, ext_builder: &dyn ExtrinsicBuilder) -> Result<Stats> {
+		let block = self.build_first_block(ext_builder)?;
+		let num_ext = block.block.extrinsics().len();
+		self.import_block(block);
+		let block = self.build_second_block(ext_builder, num_ext)?;
+		let num_ext = block.block.extrinsics().len();
+		let mut records = self.measure_block(&block.block.clone(), BlockId::Number(One::one()))?;
+
+		for r in &mut records {
+			// Divide by the number of extrinsics in the block.
+			*r = ((*r as f64) / (num_ext as f64)).ceil() as u64;
 		}
+
+		Stats::new(&records)
 	}
 
 	fn create_digest(&self, aura_slot: u64) -> Digest {
@@ -297,7 +299,10 @@ where
 	}
 
 	/// Builds a block that enqueues maximum possible amount of extrinsics
-	fn build_first_block(&mut self) -> Result<sc_block_builder_ver::BuiltBlock<Block, BA::State>> {
+	fn build_first_block(
+		&mut self,
+		ext_builder: &dyn ExtrinsicBuilder,
+	) -> Result<sc_block_builder_ver::BuiltBlock<Block, BA::State>> {
 		let digest = self.create_digest(1_u64);
 		let mut builder = self.client.new_block(digest)?;
 		// Create and insert the inherents.
@@ -321,8 +326,7 @@ where
 			let mut valid_txs: Vec<(Option<sp_runtime::AccountId32>, Block::Extrinsic)> =
 				Default::default();
 			for nonce in 0..self.max_ext_per_block() {
-				let remark =
-					self.ext_builder.remark(nonce).expect("remark txs creation should not fail");
+				let remark = ext_builder.build(nonce).expect("remark txs creation should not fail");
 				match validate_transaction::<Block, C>(at, &api, remark.clone()) {
 					Ok(()) => {
 						valid_txs.push((None, remark));
@@ -347,6 +351,7 @@ where
 
 	fn build_second_block(
 		&mut self,
+		ext_builder: &dyn ExtrinsicBuilder,
 		txs_count: usize,
 	) -> Result<sc_block_builder_ver::BuiltBlock<Block, BA::State>> {
 		// Return early if we just want a block with inherents and no additional extrinsics.
@@ -364,9 +369,8 @@ where
 		let block = builder.build_with_seed(seed, |_, _| {
 			(txs_count..(txs_count * 2))
 				.map(|nonce| {
-					let remark = self
-						.ext_builder
-						.remark(nonce as u32)
+					let remark = ext_builder
+						.build(nonce as u32)
 						.expect("remark txs creation should not fail");
 					(None, remark)
 				})
@@ -378,17 +382,8 @@ where
 	}
 
 	/// Measures the time that it take to execute a block or an extrinsic.
-	fn measure_block(
-		&self,
-		block_id: BlockId<Block>,
-		block: &Block,
-		num_ext: usize,
-		bench_type: BenchmarkType,
-	) -> Result<BenchRecord> {
+	fn measure_block(&self, block: &Block, block_id: BlockId<Block>) -> Result<BenchRecord> {
 		let mut record = BenchRecord::new();
-		if bench_type == BenchmarkType::Extrinsic && num_ext == 0 {
-			return Err("Cannot measure the extrinsic time of an empty block".into())
-		}
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
@@ -411,12 +406,7 @@ where
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 
 			let elapsed = start.elapsed().as_nanos();
-			if bench_type == BenchmarkType::Extrinsic {
-				// Checked for non-zero div above.
-				record.push((elapsed as f64 / num_ext as f64).ceil() as u64);
-			} else {
-				record.push(elapsed as u64);
-			}
+			record.push(elapsed as u64);
 		}
 
 		Ok(record)
@@ -424,23 +414,5 @@ where
 
 	fn max_ext_per_block(&self) -> u32 {
 		self.params.max_ext_per_block.unwrap_or(u32::MAX)
-	}
-}
-
-impl BenchmarkType {
-	/// Short name of the benchmark type.
-	pub(crate) fn short_name(&self) -> &'static str {
-		match self {
-			Self::Extrinsic => "extrinsic",
-			Self::Block => "block",
-		}
-	}
-
-	/// Long name of the benchmark type.
-	pub(crate) fn long_name(&self) -> &'static str {
-		match self {
-			Self::Extrinsic => "ExtrinsicBase",
-			Self::Block => "BlockExecution",
-		}
 	}
 }

@@ -18,6 +18,7 @@
 //! Contains the [`OverheadCmd`] as entry point for the CLI to execute
 //! the *overhead* benchmarks.
 
+use crate::extrinsic::bench::BenchmarkVer;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_block_builder_ver::{
 	BlockBuilderApi as BlockBuilderApiVer, BlockBuilderProvider as BlockBuilderProviderVer,
@@ -40,10 +41,11 @@ use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 
 use crate::{
-	overhead::{
-		bench::{Benchmark, BenchmarkParams, BenchmarkType, BenchmarkVer},
-		template::TemplateData,
+	extrinsic::{
+		bench::{Benchmark, BenchmarkParams as ExtrinsicBenchmarkParams},
+		ExtrinsicBuilder,
 	},
+	overhead::template::TemplateData,
 	shared::{HostInfoParams, WeightParams},
 };
 
@@ -72,20 +74,20 @@ pub struct OverheadParams {
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub bench: BenchmarkParams,
+	pub bench: ExtrinsicBenchmarkParams,
 
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub hostinfo: HostInfoParams,
 }
 
-/// Used by the benchmark to build signed extrinsics.
-///
-/// The built extrinsics only need to be valid in the first block
-/// who's parent block is the genesis block.
-pub trait ExtrinsicBuilder {
-	/// Build a `System::remark` extrinsic.
-	fn remark(&self, nonce: u32) -> std::result::Result<OpaqueExtrinsic, &'static str>;
+/// Type of a benchmark.
+#[derive(Serialize, Clone, PartialEq, Copy)]
+pub(crate) enum BenchmarkType {
+	/// Measure the per-extrinsic execution overhead.
+	Extrinsic,
+	/// Measure the per-block execution overhead.
+	Block,
 }
 
 impl OverheadCmd {
@@ -98,7 +100,7 @@ impl OverheadCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
-		ext_builder: Arc<dyn ExtrinsicBuilder>,
+		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
@@ -106,19 +108,21 @@ impl OverheadCmd {
 		C: BlockBuilderProvider<BA, Block, C> + ProvideRuntimeApi<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
-		let mut bench =
-			Benchmark::new(client, self.params.bench.clone(), inherent_data, ext_builder);
+		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
+			return Err(format!("The extrinsic builder is required to build `System::Remark` extrinsics but builds `{}` extrinsics instead", ext_builder.name()).into());
+		}
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
 
 		// per-block execution overhead
 		{
-			let stats = bench.bench(BenchmarkType::Block)?;
+			let stats = bench.bench_block()?;
 			info!("Per-block execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 		// per-extrinsic execution overhead
 		{
-			let stats = bench.bench(BenchmarkType::Extrinsic)?;
+			let stats = bench.bench_extrinsic(ext_builder)?;
 			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
@@ -126,13 +130,12 @@ impl OverheadCmd {
 
 		Ok(())
 	}
-
 	pub fn run_ver<Block, BA, C>(
 		&self,
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: (sp_inherents::InherentData, sp_inherents::InherentData),
-		ext_builder: Arc<dyn ExtrinsicBuilder>,
+		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
 	where
 		Block: BlockT<Extrinsic = OpaqueExtrinsic>,
@@ -150,25 +153,42 @@ impl OverheadCmd {
 		C::Api: BlockBuilderApiVer<Block>,
 		C::Api: VerApi<Block>,
 	{
-		let mut bench =
-			BenchmarkVer::new(client, self.params.bench.clone(), inherent_data, ext_builder);
+		let mut bench = BenchmarkVer::new(client, self.params.bench.clone(), inherent_data);
 
 		// per-block execution overhead
 		{
-			let stats = bench.bench(BenchmarkType::Block)?;
+			let stats = bench.bench_block(ext_builder)?;
 			info!("Per-block execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Block, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 		// per-extrinsic execution overhead
 		{
-			let stats = bench.bench(BenchmarkType::Extrinsic)?;
+			let stats = bench.bench_extrinsic(ext_builder)?;
 			info!("Per-extrinsic execution overhead [ns]:\n{:?}", stats);
 			let template = TemplateData::new(BenchmarkType::Extrinsic, &cfg, &self.params, &stats)?;
 			template.write(&self.params.weight.weight_path)?;
 		}
 
 		Ok(())
+	}
+}
+
+impl BenchmarkType {
+	/// Short name of the benchmark type.
+	pub(crate) fn short_name(&self) -> &'static str {
+		match self {
+			Self::Extrinsic => "extrinsic",
+			Self::Block => "block",
+		}
+	}
+
+	/// Long name of the benchmark type.
+	pub(crate) fn long_name(&self) -> &'static str {
+		match self {
+			Self::Extrinsic => "ExtrinsicBase",
+			Self::Block => "BlockExecution",
+		}
 	}
 }
 

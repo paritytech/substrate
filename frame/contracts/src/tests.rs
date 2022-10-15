@@ -17,8 +17,8 @@
 
 use crate::{
 	chain_extension::{
-		ChainExtension, Environment, Ext, InitState, Result as ExtensionResult, RetVal,
-		ReturnFlags, SysConfig, UncheckedFrom,
+		ChainExtension, Environment, Ext, InitState, RegisteredChainExtension,
+		Result as ExtensionResult, RetVal, ReturnFlags, SysConfig, UncheckedFrom,
 	},
 	exec::{FixSizedKey, Frame},
 	storage::Storage,
@@ -118,6 +118,17 @@ pub struct TestExtension {
 	last_seen_inputs: (u32, u32, u32, u32),
 }
 
+#[derive(Default)]
+pub struct RevertingExtension;
+
+#[derive(Default)]
+pub struct DisabledExtension;
+
+#[derive(Default)]
+pub struct TempStorageExtension {
+	storage: u32,
+}
+
 impl TestExtension {
 	fn disable() {
 		TEST_EXTENSION.with(|e| e.borrow_mut().enabled = false)
@@ -139,36 +150,38 @@ impl Default for TestExtension {
 }
 
 impl ChainExtension<Test> for TestExtension {
-	fn call<E>(func_id: u32, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	fn call<E>(&mut self, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
 	where
 		E: Ext<T = Test>,
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
+		let func_id = env.func_id();
+		let id = env.ext_id() as u32 | func_id as u32;
 		match func_id {
-			0 => {
+			0x8000 => {
 				let mut env = env.buf_in_buf_out();
-				let input = env.read(2)?;
+				let input = env.read(8)?;
 				env.write(&input, false, None)?;
 				TEST_EXTENSION.with(|e| e.borrow_mut().last_seen_buffer = input);
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
-			1 => {
+			0x8001 => {
 				let env = env.only_in();
 				TEST_EXTENSION.with(|e| {
 					e.borrow_mut().last_seen_inputs =
 						(env.val0(), env.val1(), env.val2(), env.val3())
 				});
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
-			2 => {
+			0x8002 => {
 				let mut env = env.buf_in_buf_out();
-				let weight = env.read(2)?[1].into();
+				let weight = env.read(5)?[4].into();
 				env.charge_weight(weight)?;
-				Ok(RetVal::Converging(func_id))
+				Ok(RetVal::Converging(id))
 			},
-			3 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
+			0x8003 => Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![42, 99] }),
 			_ => {
-				panic!("Passed unknown func_id to test chain extension: {}", func_id);
+				panic!("Passed unknown id to test chain extension: {}", func_id);
 			},
 		}
 	}
@@ -176,6 +189,77 @@ impl ChainExtension<Test> for TestExtension {
 	fn enabled() -> bool {
 		TEST_EXTENSION.with(|e| e.borrow().enabled)
 	}
+}
+
+impl RegisteredChainExtension<Test> for TestExtension {
+	const ID: u16 = 0;
+}
+
+impl ChainExtension<Test> for RevertingExtension {
+	fn call<E>(&mut self, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![0x4B, 0x1D] })
+	}
+
+	fn enabled() -> bool {
+		TEST_EXTENSION.with(|e| e.borrow().enabled)
+	}
+}
+
+impl RegisteredChainExtension<Test> for RevertingExtension {
+	const ID: u16 = 1;
+}
+
+impl ChainExtension<Test> for DisabledExtension {
+	fn call<E>(&mut self, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		panic!("Disabled chain extensions are never called")
+	}
+
+	fn enabled() -> bool {
+		false
+	}
+}
+
+impl RegisteredChainExtension<Test> for DisabledExtension {
+	const ID: u16 = 2;
+}
+
+impl ChainExtension<Test> for TempStorageExtension {
+	fn call<E>(&mut self, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
+	where
+		E: Ext<T = Test>,
+		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+	{
+		let func_id = env.func_id();
+		match func_id {
+			0 => self.storage = 42,
+			1 => assert_eq!(self.storage, 42, "Storage is preserved inside the same call."),
+			2 => {
+				assert_eq!(self.storage, 0, "Storage is different for different calls.");
+				self.storage = 99;
+			},
+			3 => assert_eq!(self.storage, 99, "Storage is preserved inside the same call."),
+			_ => {
+				panic!("Passed unknown id to test chain extension: {}", func_id);
+			},
+		}
+		Ok(RetVal::Converging(0))
+	}
+
+	fn enabled() -> bool {
+		TEST_EXTENSION.with(|e| e.borrow().enabled)
+	}
+}
+
+impl RegisteredChainExtension<Test> for TempStorageExtension {
+	const ID: u16 = 3;
 }
 
 parameter_types! {
@@ -281,7 +365,8 @@ impl Config for Test {
 	type CallStack = [Frame<Self>; 31];
 	type WeightPrice = Self;
 	type WeightInfo = ();
-	type ChainExtension = TestExtension;
+	type ChainExtension =
+		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
 	type DeletionQueueDepth = ConstU32<1024>;
 	type DeletionWeightLimit = ConstU64<500_000_000_000>;
 	type Schedule = MySchedule;
@@ -350,6 +435,29 @@ where
 fn initialize_block(number: u64) {
 	System::reset_events();
 	System::initialize(&number, &[0u8; 32].into(), &Default::default());
+}
+
+struct ExtensionInput<'a> {
+	extension_id: u16,
+	func_id: u16,
+	extra: &'a [u8],
+}
+
+impl<'a> ExtensionInput<'a> {
+	fn to_vec(&self) -> Vec<u8> {
+		((self.extension_id as u32) << 16 | (self.func_id as u32))
+			.to_le_bytes()
+			.iter()
+			.chain(self.extra)
+			.cloned()
+			.collect()
+	}
+}
+
+impl<'a> From<ExtensionInput<'a>> for Vec<u8> {
+	fn from(input: ExtensionInput) -> Vec<u8> {
+		input.to_vec()
+	}
 }
 
 // Perform a call to a plain account.
@@ -1538,37 +1646,143 @@ fn chain_extension_works() {
 		),);
 		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
 
-		// The contract takes a up to 2 byte buffer where the first byte passed is used as
-		// as func_id to the chain extension which behaves differently based on the
-		// func_id.
-
-		// 0 = read input buffer and pass it through as output
+		// 0x8000 = read input buffer and pass it through as output
+		let input: Vec<u8> =
+			ExtensionInput { extension_id: 0, func_id: 0x8000, extra: &[99] }.into();
 		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![0, 99], false);
-		let gas_consumed = result.gas_consumed;
-		assert_eq!(TestExtension::last_seen_buffer(), vec![0, 99]);
-		assert_eq!(result.result.unwrap().data, Bytes(vec![0, 99]));
+			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false);
+		assert_eq!(TestExtension::last_seen_buffer(), input);
+		assert_eq!(result.result.unwrap().data, Bytes(input));
 
-		// 1 = treat inputs as integer primitives and store the supplied integers
-		Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![1], false)
-			.result
-			.unwrap();
+		// 0x8001 = treat inputs as integer primitives and store the supplied integers
+		Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 0x8001, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		// those values passed in the fixture
-		assert_eq!(TestExtension::last_seen_inputs(), (4, 1, 16, 12));
+		assert_eq!(TestExtension::last_seen_inputs(), (4, 4, 16, 12));
 
-		// 2 = charge some extra weight (amount supplied in second byte)
-		let result =
-			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![2, 42], false);
+		// 0x8002 = charge some extra weight (amount supplied in the fifth byte)
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 0x8002, extra: &[0] }.into(),
+			false,
+		);
+		assert_ok!(result.result);
+		let gas_consumed = result.gas_consumed;
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 0x8002, extra: &[42] }.into(),
+			false,
+		);
 		assert_ok!(result.result);
 		assert_eq!(result.gas_consumed, gas_consumed + 42);
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 0x8002, extra: &[95] }.into(),
+			false,
+		);
+		assert_ok!(result.result);
+		assert_eq!(result.gas_consumed, gas_consumed + 95);
 
-		// 3 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
-		let result = Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, vec![3], false)
-			.result
-			.unwrap();
+		// 0x8003 = diverging chain extension call that sets flags to 0x1 and returns a fixed buffer
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 0, func_id: 0x8003, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, Bytes(vec![42, 99]));
+
+		// diverging to second chain extension that sets flags to 0x1 and returns a fixed buffer
+		// We set the MSB part to 1 (instead of 0) which routes the request into the second
+		// extension
+		let result = Contracts::bare_call(
+			ALICE,
+			addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			ExtensionInput { extension_id: 1, func_id: 0, extra: &[] }.into(),
+			false,
+		)
+		.result
+		.unwrap();
+		assert_eq!(result.flags, ReturnFlags::REVERT);
+		assert_eq!(result.data, Bytes(vec![0x4B, 0x1D]));
+
+		// Diverging to third chain extension that is disabled
+		// We set the MSB part to 2 (instead of 0) which routes the request into the third extension
+		assert_err_ignore_postinfo!(
+			Contracts::call(
+				Origin::signed(ALICE),
+				addr.clone(),
+				0,
+				GAS_LIMIT,
+				None,
+				ExtensionInput { extension_id: 2, func_id: 0, extra: &[] }.into(),
+			),
+			Error::<Test>::NoChainExtension,
+		);
 	});
+}
+
+#[test]
+fn chain_extension_temp_storage_works() {
+	let (code, hash) = compile_module::<Test>("chain_extension_temp_storage").unwrap();
+	ExtBuilder::default().existential_deposit(50).build().execute_with(|| {
+		let min_balance = <Test as Config>::Currency::minimum_balance();
+		let _ = Balances::deposit_creating(&ALICE, 1000 * min_balance);
+		assert_ok!(Contracts::instantiate_with_code(
+			Origin::signed(ALICE),
+			min_balance * 100,
+			GAS_LIMIT,
+			None,
+			code,
+			vec![],
+			vec![],
+		),);
+		let addr = Contracts::contract_address(&ALICE, &hash, &[]);
+
+		// Call func 0 and func 1 back to back.
+		let stop_recursion = 0u8;
+		let mut input: Vec<u8> = ExtensionInput { extension_id: 3, func_id: 0, extra: &[] }.into();
+		input.extend_from_slice(
+			ExtensionInput { extension_id: 3, func_id: 1, extra: &[stop_recursion] }
+				.to_vec()
+				.as_ref(),
+		);
+
+		assert_ok!(
+			Contracts::bare_call(ALICE, addr.clone(), 0, GAS_LIMIT, None, input.clone(), false)
+				.result
+		);
+	})
 }
 
 #[test]
