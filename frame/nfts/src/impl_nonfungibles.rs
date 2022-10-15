@@ -101,11 +101,16 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		admin: &T::AccountId,
 		disabled_settings: &CollectionSettings,
 	) -> DispatchResult {
+		let mut disabled_settings = *disabled_settings;
+		// RequiredDeposit can be disabled by calling the force_create() only
+		if disabled_settings.contains(CollectionSetting::RequiredDeposit) {
+			disabled_settings.remove(CollectionSetting::RequiredDeposit);
+		}
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
 			admin.clone(),
-			CollectionConfig::disable_settings(*disabled_settings),
+			CollectionConfig::disable_settings(disabled_settings),
 			T::CollectionDeposit::get(),
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)

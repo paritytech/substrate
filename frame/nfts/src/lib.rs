@@ -588,8 +588,8 @@ pub mod pallet {
 			let admin = T::Lookup::lookup(admin)?;
 
 			let mut config = config;
-			// RequiredDeposit could be skipped by calling the force_create() only
-			if !config.is_setting_enabled(CollectionSetting::RequiredDeposit) {
+			// RequiredDeposit could be disabled by calling the force_create() only
+			if config.has_disabled_setting(CollectionSetting::RequiredDeposit) {
 				config.enable_setting(CollectionSetting::RequiredDeposit);
 			}
 
