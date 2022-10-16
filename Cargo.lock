@@ -11416,6 +11416,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
+ "sp-weights",
  "tokio",
  "zstd",
 ]
