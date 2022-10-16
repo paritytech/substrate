@@ -11449,7 +11449,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "digest 0.10.3",
  "rand 0.8.5",
  "static_assertions",
@@ -11735,9 +11735,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-opt"
-version = "0.110.0"
+version = "0.110.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02484958a1edbd8e71485c5c10e89cbcf58b3a234aafc2fe78dee79cbfbbaae5"
+checksum = "92186976135b1af91a88c255c15d273b393d73f8032c8ca373a1e69ea1b56ec5"
 dependencies = [
  "anyhow",
  "libc",
@@ -11751,9 +11751,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-opt-cxx-sys"
-version = "0.110.0"
+version = "0.110.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c150ac22758b63137b0ccbcddcc45cfaa2bb1b4d7ebc7d50f6bb76d4d52a5bf1"
+checksum = "6dc16d755d1a6bc0555e43adc5cfd7ae66f3ad590b3394a949ba616248dd84ff"
 dependencies = [
  "anyhow",
  "cxx",
@@ -11763,12 +11763,14 @@ dependencies = [
 
 [[package]]
 name = "wasm-opt-sys"
-version = "0.110.0"
+version = "0.110.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc8110e347152693834f357f67b1505ab85ec9546b9546d41a6299bab06d4f9a"
+checksum = "8d7d039c9786215a640602f861c6e9e7eb6ba855fb105b36e62a79a45ef173b2"
 dependencies = [
  "anyhow",
  "cc",
+ "cxx",
+ "cxx-build",
  "regex",
 ]
 
