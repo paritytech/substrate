@@ -238,8 +238,8 @@ pub mod pallet {
 		NotOwned,
 		/// The provided judgement was for a different identity.
 		JudgementForDifferentIdentity,
-		/// Error thrown when repatriate_reserved returns an error.
-		RepatriateReservedError,
+		/// Error that occurs when there is an issue paying for judgement.
+		JudgementPaymentFailed,
 	}
 
 	#[pallet::event]
@@ -796,7 +796,7 @@ pub mod pallet {
 							fee,
 							BalanceStatus::Free,
 						)
-						.map_err(|_| Error::<T>::RepatriateReservedError)?;
+						.map_err(|_| Error::<T>::JudgementPaymentFailed)?;
 					}
 					id.judgements[position] = item
 				},

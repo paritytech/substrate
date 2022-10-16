@@ -560,7 +560,7 @@ fn provide_judgement_should_return_repatriate_reserved_error() {
 				Judgement::Erroneous,
 				BlakeTwo256::hash_of(&ten())
 			),
-			Error::<Test>::RepatriateReservedError
+			Error::<Test>::JudgementPaymentFailed
 		);
 	});
 }
