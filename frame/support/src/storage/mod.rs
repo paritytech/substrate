@@ -35,7 +35,9 @@ pub use self::{
 	},
 	types::StorageEntryMetadataBuilder,
 };
+use crate::pallet_prelude::storage::private::Sealed;
 pub use sp_runtime::TransactionOutcome;
+use sp_std::collections::btree_set::BTreeSet;
 pub use types::Key;
 
 pub mod bounded_btree_map;
@@ -1334,6 +1336,10 @@ mod private {
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
+
+impl<T: Encode> Sealed for BTreeSet<T> {}
+impl<T: Encode> StorageAppend<T> for BTreeSet<T> {}
+impl<T: Encode> StorageDecodeLength for BTreeSet<T> {}
 
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
