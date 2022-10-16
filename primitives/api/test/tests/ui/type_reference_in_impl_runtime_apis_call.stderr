@@ -18,9 +18,21 @@ note: type in trait
 error[E0308]: mismatched types
   --> tests/ui/type_reference_in_impl_runtime_apis_call.rs:19:11
    |
-19 |         fn test(data: &u64) {
-   |                 ^^^^^^^ expected `u64`, found `&u64`
+17 | / sp_api::impl_runtime_apis! {
+18 | |     impl self::Api<Block> for Runtime {
+19 | |         fn test(data: &u64) {
+   | |                 ^^^^^^^ expected `u64`, found `&u64`
+20 | |             unimplemented!()
+...  |
+34 | |     }
+35 | | }
+   | |_- arguments to this function are incorrect
    |
+note: associated function defined here
+  --> tests/ui/type_reference_in_impl_runtime_apis_call.rs:13:6
+   |
+13 |         fn test(data: u64);
+   |            ^^^^
 help: consider removing the borrow
    |
 19 -         fn test(data: &u64) {

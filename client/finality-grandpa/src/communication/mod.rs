@@ -37,6 +37,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
+	time::Duration,
 };
 
 use finality_grandpa::{
@@ -67,6 +68,9 @@ mod periodic;
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+// How often to rebroadcast neighbor packets, in cases where no new packets are created.
+pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 * 60);
 
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
@@ -103,6 +107,8 @@ mod cost {
 	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Unknown voter");
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
+	pub(super) const DUPLICATE_NEIGHBOR_MESSAGE: Rep =
+		Rep::new(-500, "Grandpa: Duplicate neighbor message without grace period");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
@@ -279,7 +285,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		}
 
 		let (neighbor_packet_worker, neighbor_packet_sender) =
-			periodic::NeighborPacketWorker::new();
+			periodic::NeighborPacketWorker::new(NEIGHBOR_REBROADCAST_PERIOD);
 
 		NetworkBridge {
 			service,
