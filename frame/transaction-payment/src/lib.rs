@@ -58,8 +58,9 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	FixedPointNumber, FixedPointOperand, FixedU128, Perquintill, RuntimeDebug,
+	 RuntimeDebug,
 };
+use sp_arithmetic::{FixedPointNumber, FixedPointOperand, FixedU128, Perquintill};
 use sp_std::prelude::*;
 
 use frame_support::{

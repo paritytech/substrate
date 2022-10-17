@@ -69,8 +69,9 @@ use sp_runtime::{
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill,
+	ApplyExtrinsicResult,
 };
+use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill};
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;

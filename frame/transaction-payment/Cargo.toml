@@ -24,7 +24,7 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 [dev-dependencies]
 serde_json = "1.0.85"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -41,5 +41,6 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-arithmetic/std"
 ]
 try-runtime = ["frame-support/try-runtime"]

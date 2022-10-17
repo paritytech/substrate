@@ -78,7 +78,7 @@ fn derive_debug(
 	let tokens = quote! {
 		impl #impl_generics core::fmt::Debug for #name #ty_generics #where_clause {
 			fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-				use ::sp_runtime::{FixedPointNumber, FixedU128 as Fixed};
+				use ::sp_arithmetic::{FixedPointNumber, FixedU128 as Fixed};
 				let mut formatter = formatter.debug_struct(stringify!(#name));
 				#fields
 				formatter.finish()

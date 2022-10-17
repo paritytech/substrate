@@ -80,8 +80,9 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
-	DispatchError, Perbill,
+	DispatchError,
 };
+use sp_arithmetic::{Perbill};
 use sp_std::{fmt::Debug, prelude::*};
 
 mod branch;

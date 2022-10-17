@@ -32,6 +32,7 @@ node-primitives = { version = "2.0.0", default-features = false, path = "../prim
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
@@ -128,6 +129,7 @@ std = [
 	"pallet-authority-discovery/std",
 	"pallet-authorship/std",
 	"sp-consensus-babe/std",
+	"sp-arithmetic/std",
 	"pallet-babe/std",
 	"pallet-bags-list/std",
 	"pallet-balances/std",

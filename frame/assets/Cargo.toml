@@ -16,6 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 # Needed for various traits. In our case, `OnFinalize`.
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 # Needed for type-safe access to storage DB.
@@ -35,6 +36,7 @@ default = ["std"]
 std = [
 	"codec/std",
 	"scale-info/std",
+	"sp-arithmetic/std",
 	"sp-std/std",
 	"sp-runtime/std",
 	"frame-support/std",
