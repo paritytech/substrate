@@ -35,7 +35,6 @@ pub use self::{
 	},
 	types::StorageEntryMetadataBuilder,
 };
-use crate::pallet_prelude::storage::private::Sealed;
 pub use sp_runtime::TransactionOutcome;
 pub use types::Key;
 
@@ -1835,6 +1834,24 @@ mod test {
 				FooDoubleMap::get(2, 1).unwrap(),
 				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
+		});
+	}
+
+	#[crate::storage_alias]
+	type FooSet = StorageValue<Prefix, BTreeSet<u32>>;
+
+	#[test]
+	fn btree_set_append_and_decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let btree = BTreeSet::from([1, 2, 3]);
+			FooSet::put(btree);
+
+			assert_eq!(FooSet::append(4), ());
+			assert_eq!(FooSet::append(5), ());
+			assert_eq!(FooSet::append(6), ());
+			assert_eq!(FooSet::append(7), ());
+
+			assert_eq!(FooSet::decode_len().unwrap(), 7);
 		});
 	}
 }
