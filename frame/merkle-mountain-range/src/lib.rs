@@ -60,10 +60,9 @@ use codec::Encode;
 use frame_support::{log, traits::Get, weights::Weight};
 use sp_runtime::{
 
-	traits::{self, CheckedSub, One, Saturating},
 
 	traits::{self, CheckedSub, One, Saturating, UniqueSaturatedInto},
-	
+
 };
 use sp_arithmetic::traits::SaturatedConversion;
 
