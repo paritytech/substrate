@@ -34,7 +34,7 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 };
 use jsonrpsee::{core::async_trait, types::SubscriptionResult, SubscriptionSink};
-use sc_client_api::{BlockBackend, BlockchainEvents};
+use sc_client_api::{BlockBackend, BlockchainEvents, StorageKey};
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -83,7 +83,11 @@ where
 		+ CallApiAt<Block>
 		+ 'static,
 {
-	fn follow(&self, mut sink: SubscriptionSink, runtime_updates: bool) -> SubscriptionResult {
+	fn chain_head_unstable_follow(
+		&self,
+		mut sink: SubscriptionSink,
+		runtime_updates: bool,
+	) -> SubscriptionResult {
 		// TODO: get this from jsonrpsee
 		let sub_id = "A0".to_string();
 
@@ -145,7 +149,8 @@ where
 
 		let stream_finalized =
 			self.client.finality_notification_stream().map(move |notification| {
-				// We might not receive all new blocks reports, therefore we make sure to include it here.
+				// We might not receive all new blocks reports, therefore we make sure to include it
+				// here.
 				if let Err(_) = subscriptions.pin_block(&sub_id_import, notification.hash.clone()) {
 					// TODO: signal drop error.
 				}
@@ -184,6 +189,51 @@ where
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
+
+	// mut sink: SubscriptionSink, runtime_updates: bool) -> SubscriptionResult {
+	fn chainHead_unstable_body(
+		&self,
+		mut sink: SubscriptionSink,
+		follow_subscription: String,
+		hash: Block::Hash,
+		network_config: Option<()>,
+	) -> SubscriptionResult {
+		// TODO: get this from jsonrpsee
+		let sub_id = "A0".to_string();
+
+		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
+			BodyEvent::<SignedBlock<Block>>::Disjoint
+		} else {
+			match self.client.block(&BlockId::hash(hash)) {
+				Ok(Some(block)) => BodyEvent::Done(block),
+				_ => BodyEvent::<SignedBlock<Block>>::Inaccessible,
+			}
+		};
+
+		let stream = stream::once(async move { res });
+		let fut = async move {
+			sink.pipe_from_stream(stream.boxed()).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
+	}
+
+	fn chainHead_unstable_storage(
+		&self,
+		mut sink: SubscriptionSink,
+		follow_subscription: String,
+		hash: Block::Hash,
+		key: StorageKey,
+		network_config: Option<()>,
+	) -> SubscriptionResult {
+		// TODO: get this from jsonrpsee
+		let sub_id = "A0".to_string();
+
+		Ok(())
+	}
+
+	// self.backend.storage(block, key).map_err(Into::into)
 }
 
 /// The transaction could not be processed due to an error.
@@ -251,4 +301,13 @@ pub enum FollowEvent<Hash> {
 	BestBlockChanged(BestBlockChanged<Hash>),
 	Finalized(Finalized<Hash>),
 	Stop,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "event", content = "value")]
+pub enum BodyEvent<Body> {
+	Done(Body),
+	Inaccessible,
+	Disjoint,
 }

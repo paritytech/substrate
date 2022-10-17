@@ -18,8 +18,9 @@
 
 //! API trait for transactions.
 
-use crate::chain_head::chain_head::FollowEvent;
+use crate::chain_head::chain_head::{BodyEvent, FollowEvent};
 use jsonrpsee::proc_macros::rpc;
+use sc_client_api::StorageKey;
 
 #[rpc(client, server)]
 pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
@@ -32,5 +33,34 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Header>,
 	)]
-	fn follow(&self, runtime_updates: bool);
+	fn chain_head_unstable_follow(&self, runtime_updates: bool);
+
+	// /// Unfollow `chain_head_unstable_follow`.
+	// #[method(name = "chainHead_unstable_unfollow")]
+	// fn chain_head_unstable_follow(&self, follow_subscription: String);
+
+	#[subscription(
+		name = "chainHead_unstable_body" => "chainHead_unstable_getBody",
+		unsubscribe = "chainHead_unstable_stopBody",
+		item = BodyEvent<Header>,
+	)]
+	fn chainHead_unstable_body(
+		&self,
+		follow_subscription: String,
+		hash: Hash,
+		network_config: Option<()>,
+	);
+
+	#[subscription(
+		name = "chainHead_unstable_storage" => "chainHead_unstable_queryStorage",
+		unsubscribe = "chainHead_unstable_stopStorage",
+		item = FollowEvent<Header>,
+	)]
+	fn chainHead_unstable_storage(
+		&self,
+		follow_subscription: String,
+		hash: Hash,
+		key: StorageKey,
+		network_config: Option<()>,
+	);
 }
