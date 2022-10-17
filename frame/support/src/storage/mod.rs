@@ -1846,10 +1846,10 @@ mod test {
 			let btree = BTreeSet::from([1, 2, 3]);
 			FooSet::put(btree);
 
-			assert_eq!(FooSet::append(4), ());
-			assert_eq!(FooSet::append(5), ());
-			assert_eq!(FooSet::append(6), ());
-			assert_eq!(FooSet::append(7), ());
+			FooSet::append(4);
+			FooSet::append(5);
+			FooSet::append(6);
+			FooSet::append(7);
 
 			assert_eq!(FooSet::decode_len().unwrap(), 7);
 		});
