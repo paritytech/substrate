@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -244,10 +244,15 @@ pub trait Hooks<BlockNumber> {
 	/// # Warning
 	///
 	/// This function will be called before we initialized any runtime state, aka `on_initialize`
-	/// wasn't called yet. So, information like the block number and any other
-	/// block local data are not accessible.
+	/// wasn't called yet. So, information like the block number and any other block local data are
+	/// not accessible.
 	///
 	/// Return the non-negotiable weight consumed for runtime upgrade.
+	///
+	/// While this function can be freely implemented, using `on_runtime_upgrade` from inside the
+	/// pallet is discouraged and might get deprecated in the future. Alternatively, export the same
+	/// logic as a free-function from your pallet, and pass it to `type Executive` from the
+	/// top-level runtime.
 	fn on_runtime_upgrade() -> crate::weights::Weight {
 		0
 	}

@@ -1,5 +1,5 @@
 error: expected `where`
- --> $DIR/missing_where_block.rs:4:19
+ --> tests/construct_runtime_ui/missing_where_block.rs:4:19
   |
 4 |     pub enum Runtime {}
-  |                      ^^
+  |                      ^

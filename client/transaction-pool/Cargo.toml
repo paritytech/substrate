@@ -16,21 +16,21 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0" }
 thiserror = "1.0.30"
 futures = "0.3.16"
-intervalier = "0.4.0"
+futures-timer = "3.0.2"
 log = "0.4.8"
 parity-util-mem = { version = "0.10.2", default-features = false, features = ["primitive-types"] }
-parking_lot = "0.11.1"
+parking_lot = "0.11.2"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", path = "../../utils/prometheus", version = "0.10.0-dev"}
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
 sp-transaction-pool = { version = "4.0.0-dev", path = "../../primitives/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "./api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
-serde = { version = "1.0.126", features = ["derive"] }
+serde = { version = "1.0.132", features = ["derive"] }
 linked-hash-map = "0.5.4"
 retain_mut = "0.1.4"
 
@@ -48,6 +48,3 @@ criterion = "0.3"
 [[bench]]
 name = "basics"
 harness = false
-
-[features]
-test-helpers = []

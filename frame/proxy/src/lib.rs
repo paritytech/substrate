@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,7 +45,7 @@ use frame_system::{self as system};
 use scale_info::TypeInfo;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
-	traits::{Dispatchable, Hash, Saturating, Zero},
+	traits::{Dispatchable, Hash, Saturating, TrailingZeroInput, Zero},
 	DispatchResult,
 };
 use sp_std::{convert::TryInto, prelude::*};
@@ -102,7 +102,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::generate_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// Configuration trait.
@@ -653,7 +652,8 @@ impl<T: Config> Pallet<T> {
 		});
 		let entropy = (b"modlpy/proxy____", who, height, ext_index, proxy_type, index)
 			.using_encoded(blake2_256);
-		T::AccountId::decode(&mut &entropy[..]).unwrap_or_default()
+		Decode::decode(&mut TrailingZeroInput::new(entropy.as_ref()))
+			.expect("infinite length input; no invalid inputs for type; qed")
 	}
 
 	/// Register a proxy account for the delegator that is able to make calls on its behalf.

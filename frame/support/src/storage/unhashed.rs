@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,11 @@ pub fn get<T: Decode + Sized>(key: &[u8]) -> Option<T> {
 	sp_io::storage::get(key).and_then(|val| {
 		Decode::decode(&mut &val[..]).map(Some).unwrap_or_else(|_| {
 			// TODO #3700: error should be handleable.
-			crate::runtime_print!("ERROR: Corrupted state at {:?}", key);
+			log::error!(
+				target: "runtime::storage",
+				"Corrupted state at {:?}",
+				key,
+			);
 			None
 		})
 	})

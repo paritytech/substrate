@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -158,7 +158,7 @@ fn conviction_should_be_honored_in_delegation() {
 	// If transactor voted, delegated vote is overwritten.
 	new_test_ext().execute_with(|| {
 		let r = begin_referendum();
-		// Delegate, undelegate and vote.
+		// Delegate and vote.
 		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::Locked6x, 20));
 		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
 		// Delegated vote is huge.
@@ -175,5 +175,44 @@ fn split_vote_delegation_should_be_ignored() {
 		assert_ok!(Democracy::vote(Origin::signed(1), r, AccountVote::Split { aye: 10, nay: 0 }));
 		// Delegated vote is huge.
 		assert_eq!(tally(r), Tally { ayes: 1, nays: 0, turnout: 10 });
+	});
+}
+
+#[test]
+fn redelegation_keeps_lock() {
+	// If transactor voted, delegated vote is overwritten.
+	new_test_ext().execute_with(|| {
+		let r = begin_referendum();
+		// Delegate and vote.
+		assert_ok!(Democracy::delegate(Origin::signed(2), 1, Conviction::Locked6x, 20));
+		assert_ok!(Democracy::vote(Origin::signed(1), r, aye(1)));
+		// Delegated vote is huge.
+		assert_eq!(tally(r), Tally { ayes: 121, nays: 0, turnout: 30 });
+
+		let mut prior_lock = vote::PriorLock::default();
+
+		// Locked balance of delegator exists
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+
+		// Delegate someone else at a lower conviction and amount
+		assert_ok!(Democracy::delegate(Origin::signed(2), 3, Conviction::None, 10));
+
+		// 6x prior should appear w/ locked balance.
+		prior_lock.accumulate(98, 20);
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
+		// Unlock shouldn't work
+		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 20);
+
+		fast_forward_to(100);
+
+		// Now unlock can remove the prior lock and reduce the locked amount.
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &prior_lock);
+		assert_ok!(Democracy::unlock(Origin::signed(2), 2));
+		assert_eq!(VotingOf::<Test>::get(2).prior(), &vote::PriorLock::default());
+		assert_eq!(VotingOf::<Test>::get(2).locked_balance(), 10);
 	});
 }

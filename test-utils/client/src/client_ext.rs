@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -69,7 +69,7 @@ pub trait ClientBlockImportExt<Block: BlockT>: Sized {
 impl<B, E, RA, Block> ClientExt<Block> for Client<B, E, Block, RA>
 where
 	B: sc_client_api::backend::Backend<Block>,
-	E: sc_client_api::CallExecutor<Block> + 'static,
+	E: sc_client_api::CallExecutor<Block> + sc_executor::RuntimeVersionOf + 'static,
 	Self: BlockImport<Block, Error = ConsensusError>,
 	Block: BlockT,
 {

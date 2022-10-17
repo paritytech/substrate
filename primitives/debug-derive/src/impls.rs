@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -101,7 +101,7 @@ mod implementation {
 		}
 	}
 
-	fn derive_fields<'a>(name_str: &str, fields: Fields) -> TokenStream {
+	fn derive_fields(name_str: &str, fields: Fields) -> TokenStream {
 		match fields {
 			Fields::Named { names, this } => {
 				let names_str: Vec<_> = names.iter().map(|x| x.to_string()).collect();

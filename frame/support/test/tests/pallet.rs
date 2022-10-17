@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,8 +19,8 @@ use frame_support::{
 	dispatch::{Parameter, UnfilteredDispatchable},
 	storage::unhashed,
 	traits::{
-		GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade,
-		PalletInfoAccess, StorageVersion,
+		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
+		OnRuntimeUpgrade, PalletInfoAccess, StorageVersion,
 	},
 	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
@@ -156,7 +156,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
-	#[pallet::generate_storage_info]
 	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
@@ -450,12 +449,25 @@ pub mod pallet2 {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	#[pallet::hooks]
-	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> where
-		T::AccountId: From<SomeType1> + SomeAssociation1
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T>
+	where
+		T::AccountId: From<SomeType1> + SomeAssociation1,
 	{
+		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
+			Self::deposit_event(Event::Something(11));
+			0
+		}
+		fn on_finalize(_: BlockNumberFor<T>) {
+			Self::deposit_event(Event::Something(21));
+		}
+		fn on_runtime_upgrade() -> Weight {
+			Self::deposit_event(Event::Something(31));
+			0
+		}
 	}
 
 	#[pallet::call]
@@ -469,6 +481,7 @@ pub mod pallet2 {
 		CountedStorageMap<Hasher = Twox64Concat, Key = u8, Value = u32>;
 
 	#[pallet::event]
+	#[pallet::generate_deposit(fn deposit_event)]
 	pub enum Event {
 		/// Something
 		Something(u32),
@@ -523,10 +536,7 @@ pub mod pallet4 {
 }
 
 frame_support::parameter_types!(
-	pub const MyGetParam: u32 = 10;
-	pub const MyGetParam2: u32 = 11;
 	pub const MyGetParam3: u32 = 12;
-	pub const BlockHashCount: u32 = 250;
 );
 
 impl frame_system::Config for Runtime {
@@ -541,7 +551,7 @@ impl frame_system::Config for Runtime {
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
@@ -553,11 +563,12 @@ impl frame_system::Config for Runtime {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
 	type Event = Event;
-	type MyGetParam = MyGetParam;
-	type MyGetParam2 = MyGetParam2;
+	type MyGetParam = ConstU32<10>;
+	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
 	type Balance = u64;
 }
@@ -870,7 +881,7 @@ fn pallet_expand_deposit_event() {
 
 #[test]
 fn pallet_new_call_variant() {
-	Call::Example(pallet::Call::new_call_variant_foo(3, 4));
+	pallet::Call::<Runtime>::new_call_variant_foo(3, 4);
 }
 
 #[test]
@@ -963,10 +974,10 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPallets::on_initialize(1), 10);
-		AllPallets::on_finalize(1);
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
+		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPallets::on_runtime_upgrade(), 30);
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
@@ -974,10 +985,62 @@ fn pallet_hooks_expand() {
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			Event::Example(pallet::Event::Something(20)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example(pallet::Event::Something(30)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+	})
+}
+
+#[test]
+fn all_pallets_type_reversed_order_is_correct() {
+	TestExternalities::default().execute_with(|| {
+		frame_system::Pallet::<Runtime>::set_block_number(1);
+
+		#[allow(deprecated)]
+		{
+			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
+			AllPalletsWithoutSystemReversed::on_finalize(1);
+
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
+		}
+
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[0].event,
+			Event::Example2(pallet2::Event::Something(11)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[1].event,
+			Event::Example(pallet::Event::Something(10)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[2].event,
+			Event::Example2(pallet2::Event::Something(21)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[3].event,
+			Event::Example(pallet::Event::Something(20)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[4].event,
+			Event::Example2(pallet2::Event::Something(31)),
+		);
+		assert_eq!(
+			frame_system::Pallet::<Runtime>::events()[5].event,
 			Event::Example(pallet::Event::Something(30)),
 		);
 	})
@@ -1036,6 +1099,14 @@ fn migrate_from_pallet_version_to_storage_version() {
 #[test]
 fn metadata() {
 	use frame_support::metadata::*;
+
+	fn maybe_docs(doc: Vec<&'static str>) -> Vec<&'static str> {
+		if cfg!(feature = "no-metadata-docs") {
+			vec![]
+		} else {
+			doc
+		}
+	}
 
 	let pallets = vec![
 		PalletMetadata {
@@ -1206,7 +1277,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 					StorageEntryMetadata {
 						name: "Unbounded",
@@ -1224,13 +1295,13 @@ fn metadata() {
 					name: "MyGetParam",
 					ty: meta_type::<u32>(),
 					value: vec![10, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam2",
 					ty: meta_type::<u32>(),
 					value: vec![11, 0, 0, 0],
-					docs: vec![" Some comment", " Some comment"],
+					docs: maybe_docs(vec![" Some comment", " Some comment"]),
 				},
 				PalletConstantMetadata {
 					name: "MyGetParam3",
@@ -1242,19 +1313,19 @@ fn metadata() {
 					name: "some_extra",
 					ty: meta_type::<u64>(),
 					value: vec![100, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc", " Some doc"],
+					docs: maybe_docs(vec![" Some doc", " Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "some_extra_extra",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 				PalletConstantMetadata {
 					name: "SomeExtraRename",
 					ty: meta_type::<u64>(),
 					value: vec![0, 0, 0, 0, 0, 0, 0, 0],
-					docs: vec![" Some doc"],
+					docs: maybe_docs(vec![" Some doc"]),
 				},
 			],
 			error: Some(PalletErrorMetadata { ty: meta_type::<pallet::Error<Runtime>>() }),
@@ -1288,7 +1359,7 @@ fn metadata() {
 						modifier: StorageEntryModifier::Default,
 						ty: StorageEntryType::Plain(meta_type::<u32>()),
 						default: vec![0, 0, 0, 0],
-						docs: vec!["Counter for the related counted storage map"],
+						docs: maybe_docs(vec!["Counter for the related counted storage map"]),
 					},
 				],
 			}),
@@ -1298,6 +1369,16 @@ fn metadata() {
 			error: None,
 		},
 	];
+
+	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].error.as_ref().unwrap().ty.type_info().docs().is_empty() &&
+		pallets[0].calls.as_ref().unwrap().ty.type_info().docs().is_empty();
+
+	if cfg!(feature = "no-metadata-docs") {
+		assert!(empty_doc)
+	} else {
+		assert!(!empty_doc)
+	}
 
 	let extrinsic = ExtrinsicMetadata {
 		ty: meta_type::<UncheckedExtrinsic>(),
@@ -1498,4 +1579,49 @@ fn test_storage_info() {
 			},
 		],
 	);
+}
+
+#[test]
+fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
+	fn _b(t: (System, (Example4, (Example2, (Example,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystem) {}
+	fn _b(t: (System, (Example, (Example2, (Example4,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystem) {}
+	fn _b(t: (Example, (Example2, (Example4,)))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_with_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example, (System,))))) {
+		_a(t)
+	}
+}
+
+#[test]
+fn assert_type_all_pallets_without_system_reversed_is_correct() {
+	// Just ensure the 2 types are same.
+	fn _a(_t: AllPalletsWithoutSystemReversed) {}
+	fn _b(t: (Example4, (Example2, (Example,)))) {
+		_a(t)
+	}
 }

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -209,7 +209,11 @@ frame_benchmarking::benchmarks! {
 		let receiver = account("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
-		let ready: ReadySolution<T::AccountId> = Default::default();
+		let ready = ReadySolution {
+			supports: vec![],
+			score: Default::default(),
+			compute: Default::default()
+		};
 		let deposit: BalanceOf<T> = 10u32.into();
 		let reward: BalanceOf<T> = 20u32.into();
 
@@ -285,7 +289,7 @@ frame_benchmarking::benchmarks! {
 		assert!(<Snapshot<T>>::get().is_some());
 		assert!(<SnapshotMetadata<T>>::get().is_some());
 	}: {
-		assert_ok!(<MultiPhase<T> as ElectionProvider<T::AccountId, T::BlockNumber>>::elect());
+		assert_ok!(<MultiPhase<T> as ElectionProvider>::elect());
 	} verify {
 		assert!(<MultiPhase<T>>::queued_solution().is_none());
 		assert!(<DesiredTargets<T>>::get().is_none());
@@ -314,7 +318,12 @@ frame_benchmarking::benchmarks! {
 				score: [(10_000_000 + i).into(), 0, 0],
 				..Default::default()
 			};
-			let signed_submission = SignedSubmission { raw_solution, ..Default::default() };
+			let signed_submission = SignedSubmission {
+				raw_solution,
+				who: account("submitters", i, SEED),
+				deposit: Default::default(),
+				reward: Default::default(),
+			};
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();

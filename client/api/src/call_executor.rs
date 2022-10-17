@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@
 //! A method call executor interface.
 
 use codec::{Decode, Encode};
-use sc_executor::RuntimeVersion;
+use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -42,7 +42,7 @@ pub trait ExecutorProvider<Block: BlockT> {
 }
 
 /// Method call executor.
-pub trait CallExecutor<B: BlockT> {
+pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// Externalities error type.
 	type Error: sp_state_machine::Error;
 

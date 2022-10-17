@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use frame_support::{ensure, traits::Get};
 use sp_runtime::{DispatchError, DispatchResult};
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub(crate) fn do_transfer(
+	pub fn do_transfer(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		dest: T::AccountId,
@@ -53,7 +53,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub(super) fn do_create_class(
+	pub fn do_create_class(
 		class: T::ClassId,
 		owner: T::AccountId,
 		admin: T::AccountId,
@@ -81,11 +81,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
+		ClassAccount::<T, I>::insert(&owner, &class, ());
 		Self::deposit_event(event);
 		Ok(())
 	}
 
-	pub(super) fn do_destroy_class(
+	pub fn do_destroy_class(
 		class: T::ClassId,
 		witness: DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
@@ -108,6 +109,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			InstanceMetadataOf::<T, I>::remove_prefix(&class, None);
 			ClassMetadataOf::<T, I>::remove(&class);
 			Attribute::<T, I>::remove_prefix((&class,), None);
+			ClassAccount::<T, I>::remove(&class_details.owner, &class);
 			T::Currency::unreserve(&class_details.owner, class_details.total_deposit);
 
 			Self::deposit_event(Event::Destroyed { class });
@@ -120,7 +122,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	pub(super) fn do_mint(
+	pub fn do_mint(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		owner: T::AccountId,
@@ -155,7 +157,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub(super) fn do_burn(
+	pub fn do_burn(
 		class: T::ClassId,
 		instance: T::InstanceId,
 		with_details: impl FnOnce(&ClassDetailsFor<T, I>, &InstanceDetailsFor<T, I>) -> DispatchResult,

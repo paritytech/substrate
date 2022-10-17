@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,8 +24,11 @@ use crate as pallet_bounties;
 use std::cell::RefCell;
 
 use frame_support::{
-	assert_noop, assert_ok, pallet_prelude::GenesisBuild, parameter_types, traits::OnInitialize,
-	weights::Weight, PalletId,
+	assert_noop, assert_ok,
+	pallet_prelude::GenesisBuild,
+	parameter_types,
+	traits::{ConstU32, ConstU64, OnInitialize},
+	PalletId,
 };
 
 use sp_core::H256;
@@ -54,9 +57,6 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
 	pub const AvailableBlockRatio: Perbill = Perbill::one();
 }
 
@@ -75,7 +75,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -84,10 +84,9 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
-parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
-}
+
 impl pallet_balances::Config for Test {
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -95,7 +94,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -104,13 +103,10 @@ thread_local! {
 }
 parameter_types! {
 	pub const ProposalBond: Permill = Permill::from_percent(5);
-	pub const ProposalBondMinimum: u64 = 1;
-	pub const SpendPeriod: u64 = 2;
 	pub const Burn: Permill = Permill::from_percent(50);
-	pub const DataDepositPerByte: u64 = 1;
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
-	pub const MaxApprovals: u32 = 100;
 }
+
 // impl pallet_treasury::Config for Test {
 impl pallet_treasury::Config for Test {
 	type PalletId = TreasuryPalletId;
@@ -120,32 +116,29 @@ impl pallet_treasury::Config for Test {
 	type Event = Event;
 	type OnSlash = ();
 	type ProposalBond = ProposalBond;
-	type ProposalBondMinimum = ProposalBondMinimum;
-	type SpendPeriod = SpendPeriod;
+	type ProposalBondMinimum = ConstU64<1>;
+	type ProposalBondMaximum = ();
+	type SpendPeriod = ConstU64<2>;
 	type Burn = Burn;
 	type BurnDestination = (); // Just gets burned.
 	type WeightInfo = ();
 	type SpendFunds = Bounties;
-	type MaxApprovals = MaxApprovals;
+	type MaxApprovals = ConstU32<100>;
 }
 parameter_types! {
-	pub const BountyDepositBase: u64 = 80;
-	pub const BountyDepositPayoutDelay: u64 = 3;
-	pub const BountyUpdatePeriod: u32 = 20;
 	pub const BountyCuratorDeposit: Permill = Permill::from_percent(50);
-	pub const BountyValueMinimum: u64 = 1;
-	pub const MaximumReasonLength: u32 = 16384;
 }
 impl Config for Test {
 	type Event = Event;
-	type BountyDepositBase = BountyDepositBase;
-	type BountyDepositPayoutDelay = BountyDepositPayoutDelay;
-	type BountyUpdatePeriod = BountyUpdatePeriod;
+	type BountyDepositBase = ConstU64<80>;
+	type BountyDepositPayoutDelay = ConstU64<3>;
+	type BountyUpdatePeriod = ConstU64<20>;
 	type BountyCuratorDeposit = BountyCuratorDeposit;
-	type BountyValueMinimum = BountyValueMinimum;
-	type DataDepositPerByte = DataDepositPerByte;
-	type MaximumReasonLength = MaximumReasonLength;
+	type BountyValueMinimum = ConstU64<1>;
+	type DataDepositPerByte = ConstU64<1>;
+	type MaximumReasonLength = ConstU32<16384>;
 	type WeightInfo = ();
+	type ChildBountyManager = ();
 }
 
 type TreasuryError = pallet_treasury::Error<Test>;
@@ -1000,5 +993,44 @@ fn genesis_funding_works() {
 	t.execute_with(|| {
 		assert_eq!(Balances::free_balance(Treasury::account_id()), initial_funding);
 		assert_eq!(Treasury::pot(), initial_funding - Balances::minimum_balance());
+	});
+}
+
+#[test]
+fn unassign_curator_self() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+		Balances::make_free_balance_be(&Treasury::account_id(), 101);
+		assert_ok!(Bounties::propose_bounty(Origin::signed(0), 50, b"12345".to_vec()));
+		assert_ok!(Bounties::approve_bounty(Origin::root(), 0));
+
+		System::set_block_number(2);
+		<Treasury as OnInitialize<u64>>::on_initialize(2);
+
+		assert_ok!(Bounties::propose_curator(Origin::root(), 0, 1, 10));
+		assert_ok!(Bounties::accept_curator(Origin::signed(1), 0));
+
+		assert_eq!(Balances::free_balance(1), 93);
+		assert_eq!(Balances::reserved_balance(1), 5);
+
+		System::set_block_number(8);
+		<Treasury as OnInitialize<u64>>::on_initialize(8);
+
+		assert_ok!(Bounties::unassign_curator(Origin::signed(1), 0));
+
+		assert_eq!(
+			Bounties::bounties(0).unwrap(),
+			Bounty {
+				proposer: 0,
+				fee: 10,
+				curator_deposit: 0,
+				value: 50,
+				bond: 85,
+				status: BountyStatus::Funded,
+			}
+		);
+
+		assert_eq!(Balances::free_balance(1), 98);
+		assert_eq!(Balances::reserved_balance(1), 0); // not slashed
 	});
 }

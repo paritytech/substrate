@@ -10,5 +10,24 @@ rustflags = [
   "-Aclippy::all",
   "-Dclippy::correctness",
   "-Aclippy::if-same-then-else",
-  "-Aclippy::clone-double-ref"
+  "-Aclippy::clone-double-ref",
+  "-Dclippy::complexity",
+  "-Aclippy::clone_on_copy",             # Too common
+  "-Aclippy::needless_lifetimes",        # Backward compat?
+  "-Aclippy::zero-prefixed-literal",     # 00_1000_000
+  "-Aclippy::type_complexity",           # raison d'etre
+  "-Aclippy::nonminimal-bool",           # maybe
+  "-Aclippy::borrowed-box",              # Reasonable to fix this one
+  "-Aclippy::too-many-arguments",        # (Turning this on would lead to)
+  "-Aclippy::unnecessary_cast",          # Types may change
+  "-Aclippy::identity-op",               # One case where we do 0 + 
+  "-Aclippy::useless_conversion",        # Types may change
+  "-Aclippy::unit_arg",                  # styalistic.
+  "-Aclippy::option-map-unit-fn",        # styalistic
+  "-Aclippy::bind_instead_of_map",       # styalistic 
+  "-Aclippy::erasing_op",                # E.g. 0 * DOLLARS
+  "-Aclippy::eq_op",                     # In tests we test equality.
+  "-Aclippy::while_immutable_condition", # false positives
+  "-Aclippy::needless_option_as_deref",  # false positives
+  "-Aclippy::derivable_impls",           # false positives
 ]

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -96,6 +96,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		tracing_targets: None,
 		tracing_receiver: Default::default(),
 		max_runtime_instances: 8,
+		runtime_cache_size: 2,
 		announce_block: true,
 		base_path: Some(base_path),
 		informant_output_format: Default::default(),

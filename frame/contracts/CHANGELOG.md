@@ -23,12 +23,8 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 - Allow contracts to dispatch calls into the runtime (**unstable**)
 [#9276](https://github.com/paritytech/substrate/pull/9276)
 
-- New **unstable** version of `seal_call` that offers more features.
+- New version of `seal_call` that offers more features.
 [#8909](https://github.com/paritytech/substrate/pull/8909)
-
-- New **unstable** `seal_rent_params` and `seal_rent_status` contract callable function.
-[#8231](https://github.com/paritytech/substrate/pull/8231)
-[#8780](https://github.com/paritytech/substrate/pull/8780)
 
 - New `instantiate` RPC that allows clients to dry-run contract instantiation.
 [#8451](https://github.com/paritytech/substrate/pull/8451)
@@ -37,6 +33,10 @@ In other words: Upgrading this pallet will not break pre-existing contracts.
 [#8329](https://github.com/paritytech/substrate/pull/8329)
 
 ### Changed
+
+- Replaced storage rent with automatic storage deposits
+[#9669](https://github.com/paritytech/substrate/pull/9669)
+[#10082](https://github.com/paritytech/substrate/pull/10082)
 
 - Replaced `seal_println` with the `seal_debug_message` API which allows outputting debug
 messages to the console and RPC clients.

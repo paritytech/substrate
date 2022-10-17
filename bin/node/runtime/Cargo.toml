@@ -30,17 +30,17 @@ sp-block-builder = { path = "../../../primitives/block-builder", default-feature
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/core" }
-sp-std = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/std" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/core" }
+sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
-sp-keyring = { version = "4.0.0-dev", optional = true, path = "../../../primitives/keyring" }
+sp-keyring = { version = "4.1.0-dev", optional = true, path = "../../../primitives/keyring" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/io" }
+sp-io = { version = "4.0.0", default-features = false, path = "../../../primitives/io" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
 # frame dependencies
@@ -58,6 +58,7 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../.
 pallet-bags-list = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bags-list" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../../../frame/balances" }
 pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/bounties" }
+pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
 pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/common/" }
@@ -73,6 +74,7 @@ pallet-membership = { version = "4.0.0-dev", default-features = false, path = ".
 pallet-multisig = { version = "4.0.0-dev", default-features = false, path = "../../../frame/multisig" }
 pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../../frame/offences" }
 pallet-offences-benchmarking = { version = "4.0.0-dev", path = "../../../frame/offences/benchmarking", default-features = false, optional = true }
+pallet-preimage = { version = "4.0.0-dev", default-features = false, path = "../../../frame/preimage" }
 pallet-proxy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/proxy" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", default-features = false, path = "../../../frame/randomness-collective-flip" }
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
@@ -140,6 +142,7 @@ std = [
 	"node-primitives/std",
 	"sp-offchain/std",
 	"pallet-offences/std",
+	"pallet-preimage/std",
 	"pallet-proxy/std",
 	"sp-core/std",
 	"pallet-randomness-collective-flip/std",
@@ -173,6 +176,7 @@ std = [
 	"sp-npos-elections/std",
   	"sp-io/std",
 	"pallet-ddc-metrics-offchain-worker/std",
+	"pallet-child-bounties/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -184,6 +188,7 @@ runtime-benchmarks = [
 	"pallet-bags-list/runtime-benchmarks",
 	"pallet-balances/runtime-benchmarks",
 	"pallet-bounties/runtime-benchmarks",
+	"pallet-child-bounties/runtime-benchmarks",
 	"pallet-collective/runtime-benchmarks",
 	"pallet-contracts/runtime-benchmarks",
 	"pallet-democracy/runtime-benchmarks",
@@ -194,6 +199,7 @@ runtime-benchmarks = [
 	"pallet-indices/runtime-benchmarks",
 	"pallet-membership/runtime-benchmarks",
 	"pallet-multisig/runtime-benchmarks",
+	"pallet-preimage/runtime-benchmarks",
 	"pallet-proxy/runtime-benchmarks",
 	"pallet-scheduler/runtime-benchmarks",
 	"pallet-society/runtime-benchmarks",
@@ -218,6 +224,7 @@ try-runtime = [
 	"pallet-babe/try-runtime",
 	"pallet-balances/try-runtime",
 	"pallet-bounties/try-runtime",
+	"pallet-child-bounties/try-runtime",
 	"pallet-collective/try-runtime",
 	"pallet-contracts/try-runtime",
 	"pallet-democracy/try-runtime",
@@ -230,6 +237,7 @@ try-runtime = [
 	"pallet-identity/try-runtime",
 	"pallet-scheduler/try-runtime",
 	"pallet-offences/try-runtime",
+	"pallet-preimage/try-runtime",
 	"pallet-proxy/try-runtime",
 	"pallet-randomness-collective-flip/try-runtime",
 	"pallet-session/try-runtime",

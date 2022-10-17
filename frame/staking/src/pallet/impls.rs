@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,13 +37,13 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	SessionIndex,
+	EraIndex, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
-	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraIndex, EraPayout, Exposure,
-	ExposureOf, Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
+	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -224,7 +224,7 @@ impl<T: Config> Pallet<T> {
 		let dest = Self::payee(stash);
 		match dest {
 			RewardDestination::Controller => Self::bonded(stash)
-				.and_then(|controller| Some(T::Currency::deposit_creating(&controller, amount))),
+				.map(|controller| T::Currency::deposit_creating(&controller, amount)),
 			RewardDestination::Stash => T::Currency::deposit_into_existing(stash, amount).ok(),
 			RewardDestination::Staked => Self::bonded(stash)
 				.and_then(|c| Self::ledger(&c).map(|l| (c, l)))
@@ -665,8 +665,8 @@ impl<T: Config> Pallet<T> {
 		maybe_max_len: Option<usize>,
 	) -> Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)> {
 		let max_allowed_len = {
-			let nominator_count = CounterForNominators::<T>::get() as usize;
-			let validator_count = CounterForValidators::<T>::get() as usize;
+			let nominator_count = Nominators::<T>::count() as usize;
+			let validator_count = Validators::<T>::count() as usize;
 			let all_voter_count = validator_count.saturating_add(nominator_count);
 			maybe_max_len.unwrap_or(all_voter_count).min(all_voter_count)
 		};
@@ -765,18 +765,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will add a nominator to the `Nominators` storage map,
-	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
+	/// and [`SortedListProvider`].
 	///
 	/// If the nominator already exists, their nominations will be updated.
 	///
 	/// NOTE: you must ALWAYS use this function to add nominator or update their targets. Any access
-	/// to `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T::AccountId>) {
 		if !Nominators::<T>::contains_key(who) {
-			// maybe update the counter.
-			CounterForNominators::<T>::mutate(|x| x.saturating_inc());
-
 			// maybe update sorted list. Error checking is defensive-only - this should never fail.
 			if T::SortedListProvider::on_insert(who.clone(), Self::weight_of(who)).is_err() {
 				log!(warn, "attempt to insert duplicate nominator ({:#?})", who);
@@ -790,53 +787,46 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// This function will remove a nominator from the `Nominators` storage map,
-	/// [`SortedListProvider`] and keep track of the `CounterForNominators`.
+	/// and [`SortedListProvider`].
 	///
 	/// Returns true if `who` was removed from `Nominators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a nominator from the system. Any access to
-	/// `Nominators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
 		if Nominators::<T>::contains_key(who) {
 			Nominators::<T>::remove(who);
-			CounterForNominators::<T>::mutate(|x| x.saturating_dec());
 			T::SortedListProvider::on_remove(who);
 			debug_assert_eq!(T::SortedListProvider::sanity_check(), Ok(()));
-			debug_assert_eq!(CounterForNominators::<T>::get(), T::SortedListProvider::count());
+			debug_assert_eq!(Nominators::<T>::count(), T::SortedListProvider::count());
 			true
 		} else {
 			false
 		}
 	}
 
-	/// This function will add a validator to the `Validators` storage map, and keep track of the
-	/// `CounterForValidators`.
+	/// This function will add a validator to the `Validators` storage map.
 	///
 	/// If the validator already exists, their preferences will be updated.
 	///
 	/// NOTE: you must ALWAYS use this function to add a validator to the system. Any access to
-	/// `Validators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_validator(who: &T::AccountId, prefs: ValidatorPrefs) {
-		if !Validators::<T>::contains_key(who) {
-			CounterForValidators::<T>::mutate(|x| x.saturating_inc())
-		}
 		Validators::<T>::insert(who, prefs);
 	}
 
-	/// This function will remove a validator from the `Validators` storage map,
-	/// and keep track of the `CounterForValidators`.
+	/// This function will remove a validator from the `Validators` storage map.
 	///
 	/// Returns true if `who` was removed from `Validators`, otherwise false.
 	///
 	/// NOTE: you must ALWAYS use this function to remove a validator from the system. Any access to
-	/// `Validators`, its counter, or `VoterList` outside of this function is almost certainly
+	/// `Validators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_validator(who: &T::AccountId) -> bool {
 		if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
-			CounterForValidators::<T>::mutate(|x| x.saturating_dec());
 			true
 		} else {
 			false
@@ -854,7 +844,9 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet<T> {
+impl<T: Config> ElectionDataProvider for Pallet<T> {
+	type AccountId = T::AccountId;
+	type BlockNumber = BlockNumberFor<T>;
 	const MAXIMUM_VOTES_PER_VOTER: u32 = T::MAX_NOMINATIONS;
 
 	fn desired_targets() -> data_provider::Result<u32> {
@@ -865,14 +857,6 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn voters(
 		maybe_max_len: Option<usize>,
 	) -> data_provider::Result<Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>> {
-		debug_assert!(<Nominators<T>>::iter().count() as u32 == CounterForNominators::<T>::get());
-		debug_assert!(<Validators<T>>::iter().count() as u32 == CounterForValidators::<T>::get());
-		debug_assert_eq!(
-			CounterForNominators::<T>::get(),
-			T::SortedListProvider::count(),
-			"voter_count must be accurate",
-		);
-
 		// This can never fail -- if `maybe_max_len` is `Some(_)` we handle it.
 		let voters = Self::get_npos_voters(maybe_max_len);
 		debug_assert!(maybe_max_len.map_or(true, |max| voters.len() <= max));
@@ -881,7 +865,7 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	}
 
 	fn targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = CounterForValidators::<T>::get();
+		let target_count = Validators::<T>::count();
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
@@ -967,11 +951,10 @@ impl<T: Config> ElectionDataProvider<T::AccountId, BlockNumberFor<T>> for Pallet
 	fn clear() {
 		<Bonded<T>>::remove_all(None);
 		<Ledger<T>>::remove_all(None);
-		<Validators<T>>::remove_all(None);
-		<Nominators<T>>::remove_all(None);
-		<CounterForNominators<T>>::kill();
-		<CounterForValidators<T>>::kill();
-		let _ = T::SortedListProvider::clear(None);
+		<Validators<T>>::remove_all();
+		<Nominators<T>>::remove_all();
+
+		T::SortedListProvider::unsafe_clear();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -1108,8 +1091,13 @@ where
 	fn note_author(author: T::AccountId) {
 		Self::reward_by_ids(vec![(author, 20)])
 	}
-	fn note_uncle(author: T::AccountId, _age: T::BlockNumber) {
-		Self::reward_by_ids(vec![(<pallet_authorship::Pallet<T>>::author(), 2), (author, 1)])
+	fn note_uncle(uncle_author: T::AccountId, _age: T::BlockNumber) {
+		// defensive-only: block author must exist.
+		if let Some(block_author) = <pallet_authorship::Pallet<T>>::author() {
+			Self::reward_by_ids(vec![(block_author, 2), (uncle_author, 1)])
+		} else {
+			crate::log!(warn, "block author not set, this should never happen");
+		}
 	}
 }
 
@@ -1172,7 +1160,7 @@ where
 			add_db_reads_writes(1, 0);
 
 			// Reverse because it's more likely to find reports from recent eras.
-			match eras.iter().rev().filter(|&&(_, ref sesh)| sesh <= &slash_session).next() {
+			match eras.iter().rev().find(|&&(_, ref sesh)| sesh <= &slash_session) {
 				Some(&(ref slash_era, _)) => *slash_era,
 				// Before bonding period. defensive - should be filtered out.
 				None => return consumed_weight,
@@ -1257,8 +1245,12 @@ impl<T: Config> VoteWeightProvider<T::AccountId> for Pallet<T> {
 		// this will clearly results in an inconsistent state, but it should not matter for a
 		// benchmark.
 		let active: BalanceOf<T> = weight.try_into().map_err(|_| ()).unwrap();
-		let mut ledger = Self::ledger(who).unwrap_or_default();
+		let mut ledger = match Self::ledger(who) {
+			None => StakingLedger::default_from(who.clone()),
+			Some(l) => l,
+		};
 		ledger.active = active;
+
 		<Ledger<T>>::insert(who, ledger);
 		<Bonded<T>>::insert(who, who);
 
@@ -1284,7 +1276,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 		Box::new(Nominators::<T>::iter().map(|(n, _)| n))
 	}
 	fn count() -> u32 {
-		CounterForNominators::<T>::get()
+		Nominators::<T>::count()
 	}
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id)
@@ -1299,7 +1291,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn on_remove(_: &T::AccountId) {
 		// nothing to do on remove.
 	}
-	fn regenerate(
+	fn unsafe_regenerate(
 		_: impl IntoIterator<Item = T::AccountId>,
 		_: Box<dyn Fn(&T::AccountId) -> VoteWeight>,
 	) -> u32 {
@@ -1309,13 +1301,10 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsMap<T> {
 	fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
-	fn clear(maybe_count: Option<u32>) -> u32 {
-		Nominators::<T>::remove_all(maybe_count);
-		if let Some(count) = maybe_count {
-			CounterForNominators::<T>::mutate(|noms| *noms - count);
-			count
-		} else {
-			CounterForNominators::<T>::take()
-		}
+
+	fn unsafe_clear() {
+		// NOTE: Caller must ensure this doesn't lead to too many storage accesses. This is a
+		// condition of SortedListProvider::unsafe_clear.
+		Nominators::<T>::remove_all();
 	}
 }

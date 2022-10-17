@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,10 @@
 use super::*;
 use crate as pallet_scored_pool;
 
-use frame_support::{ord_parameter_types, parameter_types, traits::GenesisBuild};
+use frame_support::{
+	ord_parameter_types, parameter_types,
+	traits::{ConstU32, ConstU64, GenesisBuild},
+};
 use frame_system::EnsureSignedBy;
 use sp_core::H256;
 use sp_runtime::{
@@ -46,9 +49,6 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
-	pub const Period: u64 = 4;
-	pub const BlockHashCount: u64 = 250;
-	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -72,7 +72,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u64>;
@@ -81,6 +81,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
@@ -90,7 +91,7 @@ impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type Event = Event;
 	type DustRemoval = ();
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
@@ -129,7 +130,7 @@ impl Config for Test {
 	type MembershipChanged = TestChangeMembers;
 	type Currency = Balances;
 	type CandidateDeposit = CandidateDeposit;
-	type Period = Period;
+	type Period = ConstU64<4>;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
 }
@@ -152,7 +153,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_scored_pool::GenesisConfig::<Test> {
 		pool: vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
 		member_count: 2,
-		..Default::default()
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();

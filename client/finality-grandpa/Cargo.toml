@@ -21,21 +21,22 @@ fork-tree = { version = "3.0.0", path = "../../utils/fork-tree" }
 futures = "0.3.9"
 futures-timer = "3.0.1"
 log = "0.4.8"
-parking_lot = "0.11.1"
+parking_lot = "0.11.2"
 rand = "0.8.4"
 parity-scale-codec = { version = "2.3.1", features = ["derive"] }
-sp-application-crypto = { version = "4.0.0-dev", path = "../../primitives/application-crypto" }
-sp-arithmetic = { version = "4.0.0-dev", path = "../../primitives/arithmetic" }
-sp-runtime = { version = "4.0.0-dev", path = "../../primitives/runtime" }
+sp-application-crypto = { version = "4.0.0", path = "../../primitives/application-crypto" }
+sp-arithmetic = { version = "4.0.0", path = "../../primitives/arithmetic" }
+sp-runtime = { version = "4.1.0-dev", path = "../../primitives/runtime" }
+sc-chain-spec = { version = "4.0.0-dev", path = "../../client/chain-spec" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 sc-consensus = { version = "0.10.0-dev", path = "../consensus/common" }
-sp-core = { version = "4.0.0-dev", path = "../../primitives/core" }
-sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore" }
+sp-core = { version = "4.1.0-dev", path = "../../primitives/core" }
+sp-keystore = { version = "0.10.0", path = "../../primitives/keystore" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
-serde_json = "1.0.71"
+serde_json = "1.0.74"
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
@@ -54,8 +55,8 @@ finality-grandpa = { version = "0.14.1", features = [
 ] }
 sc-network = { version = "0.10.0-dev", path = "../network" }
 sc-network-test = { version = "0.8.0", path = "../network/test" }
-sp-keyring = { version = "4.0.0-dev", path = "../../primitives/keyring" }
+sp-keyring = { version = "4.1.0-dev", path = "../../primitives/keyring" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-sp-tracing = { version = "4.0.0-dev", path = "../../primitives/tracing" }
-tokio = "1.13"
+sp-tracing = { version = "4.0.0", path = "../../primitives/tracing" }
+tokio = "1.15"
 tempfile = "3.1.0"

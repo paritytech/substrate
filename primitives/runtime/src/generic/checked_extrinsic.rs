@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2017-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -70,20 +70,26 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		len: usize,
 	) -> crate::ApplyExtrinsicResultWithInfo<PostDispatchInfoOf<Self::Call>> {
-		let (maybe_who, pre) = if let Some((id, extra)) = self.signed {
+		let (maybe_who, maybe_pre) = if let Some((id, extra)) = self.signed {
 			let pre = Extra::pre_dispatch(extra, &id, &self.function, info, len)?;
-			(Some(id), pre)
+			(Some(id), Some(pre))
 		} else {
-			let pre = Extra::pre_dispatch_unsigned(&self.function, info, len)?;
+			Extra::pre_dispatch_unsigned(&self.function, info, len)?;
 			U::pre_dispatch(&self.function)?;
-			(None, pre)
+			(None, None)
 		};
 		let res = self.function.dispatch(Origin::from(maybe_who));
 		let post_info = match res {
 			Ok(info) => info,
 			Err(err) => err.post_info,
 		};
-		Extra::post_dispatch(pre, info, &post_info, len, &res.map(|_| ()).map_err(|e| e.error))?;
+		Extra::post_dispatch(
+			maybe_pre,
+			info,
+			&post_info,
+			len,
+			&res.map(|_| ()).map_err(|e| e.error),
+		)?;
 		Ok(res)
 	}
 }

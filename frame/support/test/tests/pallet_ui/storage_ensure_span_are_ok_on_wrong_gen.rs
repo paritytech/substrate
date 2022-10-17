@@ -7,6 +7,7 @@ mod pallet {
 	pub trait Config: frame_system::Config {}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(core::marker::PhantomData<T>);
 
 	#[pallet::hooks]

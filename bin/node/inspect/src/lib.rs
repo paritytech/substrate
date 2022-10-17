@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 //
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 //
 // This program is free software: you can redistribute it and/or modify
@@ -261,7 +261,7 @@ impl<Hash: FromStr + Debug, Number: FromStr + Debug> FromStr for ExtrinsicAddres
 
 		let index = it
 			.next()
-			.ok_or_else(|| format!("Extrinsic index missing: example \"5:0\""))?
+			.ok_or("Extrinsic index missing: example \"5:0\"")?
 			.parse()
 			.map_err(|e| format!("Invalid index format: {}", e))?;
 

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,10 +25,11 @@ use codec::Encode;
 use frame_election_provider_support::onchain;
 use frame_support::{
 	parameter_types,
-	traits::{GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize},
+	traits::{
+		ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnFinalize, OnInitialize,
+	},
 };
 use pallet_session::historical as pallet_session_historical;
-use pallet_staking::EraIndex;
 use sp_core::{crypto::KeyTypeId, H256};
 use sp_finality_grandpa::{RoundNumber, SetId, GRANDPA_ENGINE_ID};
 use sp_keyring::Ed25519Keyring;
@@ -39,7 +40,7 @@ use sp_runtime::{
 	traits::{IdentityLookup, OpaqueKeys},
 	DigestItem, Perbill,
 };
-use sp_staking::SessionIndex;
+use sp_staking::{EraIndex, SessionIndex};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -69,7 +70,6 @@ impl_opaque_keys! {
 }
 
 parameter_types! {
-	pub const BlockHashCount: u64 = 250;
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(1024);
 }
@@ -89,7 +89,7 @@ impl frame_system::Config for Test {
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type Event = Event;
-	type BlockHashCount = BlockHashCount;
+	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = pallet_balances::AccountData<u128>;
@@ -98,6 +98,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
@@ -118,8 +119,8 @@ impl pallet_session::Config for Test {
 	type Event = Event;
 	type ValidatorId = u64;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
-	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
+	type NextSessionRotation = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
 	type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, Staking>;
 	type SessionHandler = <TestSessionKeys as OpaqueKeys>::KeyTypeIdProviders;
 	type Keys = TestSessionKeys;
@@ -131,19 +132,11 @@ impl pallet_session::historical::Config for Test {
 	type FullIdentificationOf = pallet_staking::ExposureOf<Self>;
 }
 
-parameter_types! {
-	pub const UncleGenerations: u64 = 0;
-}
-
 impl pallet_authorship::Config for Test {
 	type FindAuthor = ();
-	type UncleGenerations = UncleGenerations;
+	type UncleGenerations = ConstU64<0>;
 	type FilterUncle = ();
 	type EventHandler = ();
-}
-
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 1;
 }
 
 impl pallet_balances::Config for Test {
@@ -153,19 +146,15 @@ impl pallet_balances::Config for Test {
 	type Balance = u128;
 	type DustRemoval = ();
 	type Event = Event;
-	type ExistentialDeposit = ExistentialDeposit;
+	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
-}
-
-parameter_types! {
-	pub const MinimumPeriod: u64 = 3;
 }
 
 impl pallet_timestamp::Config for Test {
 	type Moment = u64;
 	type OnTimestampSet = ();
-	type MinimumPeriod = MinimumPeriod;
+	type MinimumPeriod = ConstU64<3>;
 	type WeightInfo = ();
 }
 
@@ -186,7 +175,6 @@ parameter_types! {
 	pub const SlashDeferDuration: EraIndex = 0;
 	pub const AttestationPeriod: u64 = 100;
 	pub const RewardCurve: &'static PiecewiseLinear<'static> = &REWARD_CURVE;
-	pub const MaxNominatorRewardedPerValidator: u32 = 64;
 	pub const ElectionLookahead: u64 = 0;
 	pub const StakingUnsignedPriority: u64 = u64::MAX / 2;
 	pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
@@ -212,7 +200,7 @@ impl pallet_staking::Config for Test {
 	type SessionInterface = Self;
 	type UnixTime = pallet_timestamp::Pallet<Test>;
 	type EraPayout = pallet_staking::ConvertCurve<RewardCurve>;
-	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
@@ -231,7 +219,6 @@ impl pallet_offences::Config for Test {
 parameter_types! {
 	pub const ReportLongevity: u64 =
 		BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * Period::get();
-	pub const MaxAuthorities: u32 = 100;
 }
 
 impl Config for Test {
@@ -252,7 +239,7 @@ impl Config for Test {
 		super::EquivocationHandler<Self::KeyOwnerIdentification, Offences, ReportLongevity>;
 
 	type WeightInfo = ();
-	type MaxAuthorities = MaxAuthorities;
+	type MaxAuthorities = ConstU32<100>;
 }
 
 pub fn grandpa_log(log: ConsensusLog<u64>) -> DigestItem {
@@ -338,7 +325,8 @@ pub fn start_session(session_index: SessionIndex) {
 			System::parent_hash()
 		};
 
-		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default(), Default::default());
+		System::reset_events();
+		System::initialize(&(i as u64 + 1), &parent_hash, &Default::default());
 		System::set_block_number((i + 1).into());
 		Timestamp::set_timestamp(System::block_number() * 6000);
 
@@ -357,7 +345,8 @@ pub fn start_era(era_index: EraIndex) {
 }
 
 pub fn initialize_block(number: u64, parent_hash: H256) {
-	System::initialize(&number, &parent_hash, &Default::default(), Default::default());
+	System::reset_events();
+	System::initialize(&number, &parent_hash, &Default::default());
 }
 
 pub fn generate_equivocation_proof(

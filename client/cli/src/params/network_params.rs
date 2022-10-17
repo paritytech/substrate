@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -86,9 +86,12 @@ pub struct NetworkParams {
 	#[structopt(long = "out-peers", value_name = "COUNT", default_value = "25")]
 	pub out_peers: u32,
 
-	/// Specify the maximum number of incoming connections we're accepting.
+	/// Maximum number of inbound full nodes peers.
 	#[structopt(long = "in-peers", value_name = "COUNT", default_value = "25")]
 	pub in_peers: u32,
+	/// Maximum number of inbound light nodes peers.
+	#[structopt(long = "in-peers-light", value_name = "COUNT", default_value = "100")]
+	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
 	///
@@ -203,7 +206,7 @@ impl NetworkParams {
 			boot_nodes,
 			net_config_path,
 			default_peers_set: SetConfig {
-				in_peers: self.in_peers,
+				in_peers: self.in_peers + self.in_peers_light,
 				out_peers: self.out_peers,
 				reserved_nodes: self.reserved_nodes.clone(),
 				non_reserved_mode: if self.reserved_only {
@@ -212,6 +215,7 @@ impl NetworkParams {
 					NonReservedPeerMode::Accept
 				},
 			},
+			default_peers_set_num_full: self.in_peers + self.out_peers,
 			listen_addresses,
 			public_addresses,
 			extra_sets: Vec::new(),

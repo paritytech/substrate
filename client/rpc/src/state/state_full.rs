@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -441,10 +441,7 @@ where
 		keys: Option<Vec<StorageKey>>,
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);
-		let stream = match self
-			.client
-			.storage_changes_notification_stream(keys.as_ref().map(|x| &**x), None)
-		{
+		let stream = match self.client.storage_changes_notification_stream(keys.as_deref(), None) {
 			Ok(stream) => stream,
 			Err(err) => {
 				let _ = subscriber.reject(client_err(err).into());

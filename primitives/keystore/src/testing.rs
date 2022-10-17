@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,7 @@
 //! Types that should only be used for testing!
 
 use sp_core::{
-	crypto::{CryptoTypePublicPair, KeyTypeId, Pair, Public},
+	crypto::{ByteArray, CryptoTypePublicPair, KeyTypeId, Pair},
 	ecdsa, ed25519, sr25519,
 };
 
@@ -340,20 +340,20 @@ impl SyncCryptoStore for KeyStore {
 
 		match key.0 {
 			ed25519::CRYPTO_ID => {
-				let key_pair =
-					self.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()));
+				let key_pair = self
+					.ed25519_key_pair(id, &ed25519::Public::from_slice(key.1.as_slice()).unwrap());
 
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			sr25519::CRYPTO_ID => {
-				let key_pair =
-					self.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()));
+				let key_pair = self
+					.sr25519_key_pair(id, &sr25519::Public::from_slice(key.1.as_slice()).unwrap());
 
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
 			ecdsa::CRYPTO_ID => {
 				let key_pair =
-					self.ecdsa_key_pair(id, &ecdsa::Public::from_slice(key.1.as_slice()));
+					self.ecdsa_key_pair(id, &ecdsa::Public::from_slice(key.1.as_slice()).unwrap());
 
 				key_pair.map(|k| k.sign(msg).encode()).map(Ok).transpose()
 			},
@@ -482,9 +482,7 @@ mod tests {
 		assert!(res.is_none());
 
 		// insert key, sign again
-		let res =
-			SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
-		assert_eq!((), res);
+		SyncCryptoStore::insert_unknown(&store, ECDSA, suri, pair.public().as_ref()).unwrap();
 
 		let res =
 			SyncCryptoStore::ecdsa_sign_prehashed(&store, ECDSA, &pair.public(), &msg).unwrap();

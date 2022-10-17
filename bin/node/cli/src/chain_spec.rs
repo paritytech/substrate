@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -196,6 +196,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 		),
 		None,
 		None,
+		None,
 		Default::default(),
 	)
 }
@@ -338,7 +339,7 @@ pub fn testnet_genesis(
 				.collect(),
 			phantom: Default::default(),
 		},
-		sudo: SudoConfig { key: root_key },
+		sudo: SudoConfig { key: Some(root_key) },
 		babe: BabeConfig {
 			authorities: vec![],
 			epoch_config: Some(node_runtime::BABE_GENESIS_EPOCH_CONFIG),
@@ -358,7 +359,6 @@ pub fn testnet_genesis(
 			max_members: 999,
 		},
 		vesting: Default::default(),
-		scheduler: Default::default(),
 		transaction_payment: Default::default(),
 	}
 }
@@ -383,6 +383,7 @@ pub fn development_config() -> ChainSpec {
 		None,
 		None,
 		None,
+		None,
 		Default::default(),
 	)
 }
@@ -404,6 +405,7 @@ pub fn local_testnet_config() -> ChainSpec {
 		ChainType::Local,
 		local_testnet_genesis,
 		vec![],
+		None,
 		None,
 		None,
 		None,
@@ -438,6 +440,7 @@ pub(crate) mod tests {
 			None,
 			None,
 			None,
+			None,
 			Default::default(),
 		)
 	}
@@ -450,6 +453,7 @@ pub(crate) mod tests {
 			ChainType::Development,
 			local_testnet_genesis,
 			vec![],
+			None,
 			None,
 			None,
 			None,

@@ -19,8 +19,8 @@
 use sp_runtime::codec::{self, Decode, Encode};
 
 use crate::{
-	best_justification, find_scheduled_change, AuthoritySetChanges, BlockNumberOps,
-	GrandpaJustification, SharedAuthoritySet,
+	best_justification, find_scheduled_change, AuthoritySetChanges, AuthoritySetHardFork,
+	BlockNumberOps, GrandpaJustification, SharedAuthoritySet,
 };
 use sc_client_api::Backend as ClientBackend;
 use sc_network::warp_request_handler::{EncodedProof, VerificationResult, WarpSyncProvider};
@@ -255,12 +255,15 @@ where
 	pub fn new(
 		backend: Arc<Backend>,
 		authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
-		hard_forks: Vec<(SetId, (Block::Hash, NumberFor<Block>), AuthorityList)>,
+		hard_forks: Vec<AuthoritySetHardFork<Block>>,
 	) -> Self {
 		NetworkProvider {
 			backend,
 			authority_set,
-			hard_forks: hard_forks.into_iter().map(|(s, hn, list)| (hn, (s, list))).collect(),
+			hard_forks: hard_forks
+				.into_iter()
+				.map(|fork| (fork.block, (fork.set_id, fork.authorities)))
+				.collect(),
 		}
 	}
 }

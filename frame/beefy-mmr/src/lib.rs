@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -72,7 +72,7 @@ where
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
 	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		use sp_core::crypto::Public;
+		use sp_core::crypto::ByteArray;
 		let compressed_key = a.as_slice();
 
 		libsecp256k1::PublicKey::parse_slice(
@@ -119,6 +119,7 @@ pub mod pallet {
 	/// BEEFY-MMR pallet.
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 	/// The module's configuration trait.

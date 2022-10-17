@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -138,6 +138,7 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 			let state_root =
 				<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 					child_content.data.clone().into_iter().collect(),
+					sp_runtime::StateVersion::V1,
 				);
 			let prefixed_storage_key = child_content.child_info.prefixed_storage_key();
 			(prefixed_storage_key.into_inner(), state_root.encode())
@@ -145,6 +146,7 @@ impl substrate_test_client::GenesisInit for GenesisParameters {
 		let state_root =
 			<<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(
 				storage.top.clone().into_iter().chain(child_roots).collect(),
+				sp_runtime::StateVersion::V1,
 			);
 		let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 		storage.top.extend(additional_storage_with_genesis(&block));
@@ -287,5 +289,10 @@ pub fn new() -> Client<Backend> {
 
 /// Create a new native executor.
 pub fn new_native_executor() -> sc_executor::NativeElseWasmExecutor<LocalExecutorDispatch> {
-	sc_executor::NativeElseWasmExecutor::new(sc_executor::WasmExecutionMethod::Interpreted, None, 8)
+	sc_executor::NativeElseWasmExecutor::new(
+		sc_executor::WasmExecutionMethod::Interpreted,
+		None,
+		8,
+		2,
+	)
 }

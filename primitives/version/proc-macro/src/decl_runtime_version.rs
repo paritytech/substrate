@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -63,6 +63,7 @@ struct RuntimeVersion {
 	impl_version: u32,
 	apis: u8,
 	transaction_version: u32,
+	state_version: u8,
 }
 
 #[derive(Default, Debug)]
@@ -73,6 +74,7 @@ struct ParseRuntimeVersion {
 	spec_version: Option<u32>,
 	impl_version: Option<u32>,
 	transaction_version: Option<u32>,
+	state_version: Option<u8>,
 }
 
 impl ParseRuntimeVersion {
@@ -122,6 +124,8 @@ impl ParseRuntimeVersion {
 			parse_once(&mut self.impl_version, field_value, Self::parse_num_literal)?;
 		} else if field_name == "transaction_version" {
 			parse_once(&mut self.transaction_version, field_value, Self::parse_num_literal)?;
+		} else if field_name == "state_version" {
+			parse_once(&mut self.state_version, field_value, Self::parse_num_literal_u8)?;
 		} else if field_name == "apis" {
 			// Intentionally ignored
 			//
@@ -145,6 +149,18 @@ impl ParseRuntimeVersion {
 				)),
 		};
 		lit.base10_parse::<u32>()
+	}
+
+	fn parse_num_literal_u8(expr: &Expr) -> Result<u8> {
+		let lit = match *expr {
+			Expr::Lit(ExprLit { lit: Lit::Int(ref lit), .. }) => lit,
+			_ =>
+				return Err(Error::new(
+					expr.span(),
+					"only numeric literals (e.g. `10`) are supported here",
+				)),
+		};
+		lit.base10_parse::<u8>()
 	}
 
 	fn parse_str_literal(expr: &Expr) -> Result<String> {
@@ -182,6 +198,7 @@ impl ParseRuntimeVersion {
 			spec_version,
 			impl_version,
 			transaction_version,
+			state_version,
 		} = self;
 
 		Ok(RuntimeVersion {
@@ -191,6 +208,7 @@ impl ParseRuntimeVersion {
 			spec_version: required!(spec_version),
 			impl_version: required!(impl_version),
 			transaction_version: required!(transaction_version),
+			state_version: required!(state_version),
 			apis: 0,
 		})
 	}
@@ -210,7 +228,6 @@ fn generate_emit_link_section_decl(contents: &[u8], section_name: &str) -> Token
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::DecodeAll;
 	use std::borrow::Cow;
 
 	#[test]
@@ -223,11 +240,13 @@ mod tests {
 			impl_version: 1,
 			apis: 0,
 			transaction_version: 2,
+			state_version: 1,
 		}
 		.encode();
 
 		assert_eq!(
-			sp_version::RuntimeVersion::decode_all(&mut &version_bytes[..]).unwrap(),
+			sp_version::RuntimeVersion::decode_with_version_hint(&mut &version_bytes[..], Some(4))
+				.unwrap(),
 			sp_version::RuntimeVersion {
 				spec_name: "hello".into(),
 				impl_name: "world".into(),
@@ -236,6 +255,7 @@ mod tests {
 				impl_version: 1,
 				apis: Cow::Owned(vec![]),
 				transaction_version: 2,
+				state_version: 1,
 			},
 		);
 	}

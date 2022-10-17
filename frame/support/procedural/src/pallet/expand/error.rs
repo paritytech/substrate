@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,12 +58,15 @@ pub fn expand_error(def: &mut Def) -> proc_macro2::TokenStream {
 	};
 
 	error_item.variants.insert(0, phantom_variant);
+
+	let capture_docs = if cfg!(feature = "no-metadata-docs") { "never" } else { "always" };
+
 	// derive TypeInfo for error metadata
 	error_item
 		.attrs
 		.push(syn::parse_quote!( #[derive(#frame_support::scale_info::TypeInfo)] ));
 	error_item.attrs.push(syn::parse_quote!(
-		#[scale_info(skip_type_params(#type_use_gen), capture_docs = "always")]
+		#[scale_info(skip_type_params(#type_use_gen), capture_docs = #capture_docs)]
 	));
 
 	if get_doc_literals(&error_item.attrs).is_empty() {

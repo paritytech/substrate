@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -581,7 +581,7 @@ mod tests {
 			amount: Default::default(),
 			nonce,
 			from: AccountKeyring::Alice.into(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		}
 		.into_signed_tx()
 	}
@@ -593,7 +593,7 @@ mod tests {
 			amount: 1,
 			nonce: 0,
 			from: pair.public(),
-			to: Default::default(),
+			to: AccountKeyring::Bob.into(),
 		};
 		let signature = pair.sign(&transfer.encode()).into();
 		Extrinsic::Transfer { transfer, signature, exhaust_resources_when_not_first: true }
@@ -779,14 +779,14 @@ mod tests {
 					amount: Default::default(),
 					nonce: 2,
 					from: AccountKeyring::Alice.into(),
-					to: Default::default(),
+					to: AccountKeyring::Bob.into(),
 				}.into_resources_exhausting_tx(),
 				extrinsic(3),
 				Transfer {
 					amount: Default::default(),
 					nonce: 4,
 					from: AccountKeyring::Alice.into(),
-					to: Default::default(),
+					to: AccountKeyring::Bob.into(),
 				}.into_resources_exhausting_tx(),
 				extrinsic(5),
 				extrinsic(6),

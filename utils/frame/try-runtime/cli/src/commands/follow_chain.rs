@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
-	state_machine_call, SharedParams, LOG_TARGET,
+	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
 use jsonrpsee::{
 	types::{traits::SubscriptionClient, Subscription},
@@ -123,7 +123,7 @@ where
 				new_ext.as_backend().root()
 			);
 
-			let (expected_spec_name, expected_spec_version) =
+			let (expected_spec_name, expected_spec_version, spec_state_version) =
 				local_spec::<Block, ExecDispatch>(&new_ext, &executor);
 			ensure_matching_spec::<Block>(
 				command.uri.clone(),
@@ -133,13 +133,13 @@ where
 			)
 			.await;
 
-			maybe_state_ext = Some(new_ext);
+			maybe_state_ext = Some((new_ext, spec_state_version));
 		}
 
-		let state_ext =
+		let (state_ext, spec_state_version) =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let (mut changes, encoded_result) = state_machine_call::<Block, ExecDispatch>(
+		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
 			&state_ext,
 			&executor,
 			execution,
@@ -152,7 +152,16 @@ where
 			.map_err(|e| format!("failed to decode output: {:?}", e))?;
 
 		let storage_changes = changes
-			.drain_storage_changes(&state_ext.backend, Default::default(), &mut Default::default())
+			.drain_storage_changes(
+				&state_ext.backend,
+				Default::default(),
+				&mut Default::default(),
+				// Note that in case a block contains a runtime upgrade,
+				// state version could potentially be incorrect here,
+				// this is very niche and would only result in unaligned
+				// roots, so this use case is ignored for now.
+				*spec_state_version,
+			)
 			.unwrap();
 		state_ext.backend.apply_transaction(
 			storage_changes.transaction_storage_root,

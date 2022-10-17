@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -378,11 +378,13 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
-					weight: timestamp_weight,
-					class: DispatchClass::Mandatory,
-					..Default::default()
-				})),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: timestamp_weight,
+						class: DispatchClass::Mandatory,
+						..Default::default()
+					},
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -412,15 +414,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 5 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 5 / 10 }),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
-					weight: transfer_weight,
-					..Default::default()
-				})),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+				}),
 				topics: vec![],
 			},
 		];
@@ -448,11 +449,13 @@ fn full_native_block_import_works() {
 		let events = vec![
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
-					weight: timestamp_weight,
-					class: DispatchClass::Mandatory,
-					..Default::default()
-				})),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo {
+						weight: timestamp_weight,
+						class: DispatchClass::Mandatory,
+						..Default::default()
+					},
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -482,15 +485,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 5 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 5 / 10 }),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(1),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
-					weight: transfer_weight,
-					..Default::default()
-				})),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+				}),
 				topics: vec![],
 			},
 			EventRecord {
@@ -520,15 +522,14 @@ fn full_native_block_import_works() {
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::Treasury(pallet_treasury::Event::Deposit(fees * 5 / 10)),
+				event: Event::Treasury(pallet_treasury::Event::Deposit { value: fees * 5 / 10 }),
 				topics: vec![],
 			},
 			EventRecord {
 				phase: Phase::ApplyExtrinsic(2),
-				event: Event::System(frame_system::Event::ExtrinsicSuccess(DispatchInfo {
-					weight: transfer_weight,
-					..Default::default()
-				})),
+				event: Event::System(frame_system::Event::ExtrinsicSuccess {
+					dispatch_info: DispatchInfo { weight: transfer_weight, ..Default::default() },
+				}),
 				topics: vec![],
 			},
 		];
@@ -684,8 +685,6 @@ fn deploying_wasm_contract_should_work() {
 
 	let addr = pallet_contracts::Pallet::<Runtime>::contract_address(&charlie(), &transfer_ch, &[]);
 
-	let subsistence = pallet_contracts::Pallet::<Runtime>::subsistence_threshold();
-
 	let time = 42 * 1000;
 	let b = construct_block(
 		&mut new_test_ext(compact_code_unwrap()),
@@ -700,8 +699,9 @@ fn deploying_wasm_contract_should_work() {
 				signed: Some((charlie(), signed_extra(0, 0))),
 				function: Call::Contracts(
 					pallet_contracts::Call::instantiate_with_code::<Runtime> {
-						endowment: 1000 * DOLLARS + subsistence,
+						value: 0,
 						gas_limit: 500_000_000,
+						storage_deposit_limit: None,
 						code: transfer_code,
 						data: Vec::new(),
 						salt: Vec::new(),
@@ -714,6 +714,7 @@ fn deploying_wasm_contract_should_work() {
 					dest: sp_runtime::MultiAddress::Id(addr.clone()),
 					value: 10,
 					gas_limit: 500_000_000,
+					storage_deposit_limit: None,
 					data: vec![0x00, 0x01, 0x02, 0x03],
 				}),
 			},

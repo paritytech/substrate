@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -41,6 +41,7 @@ impl InspectCmd {
 			config.wasm_method,
 			config.default_heap_pages,
 			config.max_runtime_instances,
+			config.runtime_cache_size,
 		);
 
 		let client = new_full_client::<B, RA, _>(&config, None, executor)?;

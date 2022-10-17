@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -110,7 +110,7 @@ use sp_consensus::{
 };
 use sp_consensus_babe::inherents::BabeInherentData;
 use sp_consensus_slots::Slot;
-use sp_core::{crypto::Public, ExecutionContext};
+use sp_core::{crypto::ByteArray, ExecutionContext};
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
@@ -329,7 +329,9 @@ pub struct BabeIntermediate<B: BlockT> {
 /// Intermediate key for Babe engine.
 pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 
-/// A slot duration. Create with `get_or_compute`.
+/// A slot duration.
+///
+/// Create with [`Self::get`].
 // FIXME: Once Rust has higher-kinded types, the duplication between this
 // and `super::babe::Config` can be eliminated.
 // https://github.com/paritytech/substrate/issues/2434
@@ -337,39 +339,37 @@ pub static INTERMEDIATE_KEY: &[u8] = b"babe1";
 pub struct Config(sc_consensus_slots::SlotDuration<BabeGenesisConfiguration>);
 
 impl Config {
-	/// Either fetch the slot duration from disk or compute it from the genesis
-	/// state.
-	pub fn get_or_compute<B: BlockT, C>(client: &C) -> ClientResult<Self>
+	/// Fetch the config from the runtime.
+	pub fn get<B: BlockT, C>(client: &C) -> ClientResult<Self>
 	where
 		C: AuxStore + ProvideRuntimeApi<B> + UsageProvider<B>,
 		C::Api: BabeApi<B>,
 	{
 		trace!(target: "babe", "Getting slot duration");
-		match sc_consensus_slots::SlotDuration::get_or_compute(client, |a, b| {
-			let has_api_v1 = a.has_api_with::<dyn BabeApi<B>, _>(&b, |v| v == 1)?;
-			let has_api_v2 = a.has_api_with::<dyn BabeApi<B>, _>(&b, |v| v == 2)?;
 
-			if has_api_v1 {
-				#[allow(deprecated)]
-				{
-					Ok(a.configuration_before_version_2(b)?.into())
-				}
-			} else if has_api_v2 {
-				a.configuration(b).map_err(Into::into)
-			} else {
-				Err(sp_blockchain::Error::VersionInvalid(
-					"Unsupported or invalid BabeApi version".to_string(),
-				))
-			}
-		})
-		.map(Self)
-		{
-			Ok(s) => Ok(s),
-			Err(s) => {
-				warn!(target: "babe", "Failed to get slot duration");
-				Err(s)
-			},
+		let mut best_block_id = BlockId::Hash(client.usage_info().chain.best_hash);
+		if client.usage_info().chain.finalized_state.is_none() {
+			debug!(target: "babe", "No finalized state is available. Reading config from genesis");
+			best_block_id = BlockId::Hash(client.usage_info().chain.genesis_hash);
 		}
+		let runtime_api = client.runtime_api();
+
+		let version = runtime_api.api_version::<dyn BabeApi<B>>(&best_block_id)?;
+
+		let slot_duration = if version == Some(1) {
+			#[allow(deprecated)]
+			{
+				runtime_api.configuration_before_version_2(&best_block_id)?.into()
+			}
+		} else if version == Some(2) {
+			runtime_api.configuration(&best_block_id)?
+		} else {
+			return Err(sp_blockchain::Error::VersionInvalid(
+				"Unsupported or invalid BabeApi version".to_string(),
+			))
+		};
+
+		Ok(Self(sc_consensus_slots::SlotDuration::new(slot_duration)))
 	}
 
 	/// Get the inner slot duration
@@ -772,60 +772,52 @@ where
 		vec![<DigestItem as CompatibleDigestItem>::babe_pre_digest(claim.0.clone())]
 	}
 
-	fn block_import_params(
+	async fn block_import_params(
 		&self,
-	) -> Box<
-		dyn Fn(
-				B::Header,
-				&B::Hash,
-				Vec<B::Extrinsic>,
-				StorageChanges<I::Transaction, B>,
-				Self::Claim,
-				Self::EpochData,
-			) -> Result<sc_consensus::BlockImportParams<B, I::Transaction>, sp_consensus::Error>
-			+ Send
-			+ 'static,
+		header: B::Header,
+		header_hash: &B::Hash,
+		body: Vec<B::Extrinsic>,
+		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
+		(_, public): Self::Claim,
+		epoch_descriptor: Self::EpochData,
+	) -> Result<
+		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
+		sp_consensus::Error,
 	> {
-		let keystore = self.keystore.clone();
-		Box::new(
-			move |header, header_hash, body, storage_changes, (_, public), epoch_descriptor| {
-				// sign the pre-sealed hash of the block and then
-				// add it to a digest item.
-				let public_type_pair = public.clone().into();
-				let public = public.to_raw_vec();
-				let signature = SyncCryptoStore::sign_with(
-					&*keystore,
-					<AuthorityId as AppKey>::ID,
-					&public_type_pair,
-					header_hash.as_ref(),
-				)
-				.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
-				.ok_or_else(|| {
-					sp_consensus::Error::CannotSign(
-						public.clone(),
-						"Could not find key in keystore.".into(),
-					)
-				})?;
-				let signature: AuthoritySignature = signature
-					.clone()
-					.try_into()
-					.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
-				let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
-
-				let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
-				import_block.post_digests.push(digest_item);
-				import_block.body = Some(body);
-				import_block.state_action = StateAction::ApplyChanges(
-					sc_consensus::StorageChanges::Changes(storage_changes),
-				);
-				import_block.intermediates.insert(
-					Cow::from(INTERMEDIATE_KEY),
-					Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
-				);
-
-				Ok(import_block)
-			},
+		// sign the pre-sealed hash of the block and then
+		// add it to a digest item.
+		let public_type_pair = public.clone().into();
+		let public = public.to_raw_vec();
+		let signature = SyncCryptoStore::sign_with(
+			&*self.keystore,
+			<AuthorityId as AppKey>::ID,
+			&public_type_pair,
+			header_hash.as_ref(),
 		)
+		.map_err(|e| sp_consensus::Error::CannotSign(public.clone(), e.to_string()))?
+		.ok_or_else(|| {
+			sp_consensus::Error::CannotSign(
+				public.clone(),
+				"Could not find key in keystore.".into(),
+			)
+		})?;
+		let signature: AuthoritySignature = signature
+			.clone()
+			.try_into()
+			.map_err(|_| sp_consensus::Error::InvalidSignature(signature, public))?;
+		let digest_item = <DigestItem as CompatibleDigestItem>::babe_seal(signature.into());
+
+		let mut import_block = BlockImportParams::new(BlockOrigin::Own, header);
+		import_block.post_digests.push(digest_item);
+		import_block.body = Some(body);
+		import_block.state_action =
+			StateAction::ApplyChanges(sc_consensus::StorageChanges::Changes(storage_changes));
+		import_block.intermediates.insert(
+			Cow::from(INTERMEDIATE_KEY),
+			Box::new(BabeIntermediate::<B> { epoch_descriptor }) as Box<_>,
+		);
+
+		Ok(import_block)
 	}
 
 	fn force_authoring(&self) -> bool {

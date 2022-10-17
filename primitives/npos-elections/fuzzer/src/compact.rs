@@ -11,7 +11,7 @@ fn main() {
 	loop {
 		fuzz!(|fuzzer_data: &[u8]| {
 			let result_decoded: Result<InnerTestSolutionCompact, Error> =
-				<InnerTestSolutionCompact as codec::Decode>::decode(&mut &fuzzer_data[..]);
+				<InnerTestSolutionCompact as codec::Decode>::decode(&mut &*fuzzer_data);
 			// Ignore errors as not every random sequence of bytes can be decoded as
 			// InnerTestSolutionCompact
 			if let Ok(decoded) = result_decoded {

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2020-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2020-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -173,7 +173,7 @@ pub async fn run_manual_seal<B, BI, CB, E, C, TP, SC, CS, CIDP>(
 					env: &mut env,
 					select_chain: &select_chain,
 					block_import: &mut block_import,
-					consensus_data_provider: consensus_data_provider.as_ref().map(|p| &**p),
+					consensus_data_provider: consensus_data_provider.as_deref(),
 					pool: pool.clone(),
 					client: client.clone(),
 					create_inherent_data_providers: &create_inherent_data_providers,
@@ -253,7 +253,8 @@ mod tests {
 	use sc_consensus::ImportedAux;
 	use sc_transaction_pool::{BasicPool, Options, RevalidationType};
 	use sc_transaction_pool_api::{MaintainedTransactionPool, TransactionPool, TransactionSource};
-	use sp_runtime::generic::BlockId;
+	use sp_inherents::InherentData;
+	use sp_runtime::generic::{BlockId, Digest, DigestItem};
 	use substrate_test_runtime_client::{
 		AccountKeyring::*, DefaultTestClientBuilderExt, TestClientBuilder, TestClientBuilderExt,
 	};
@@ -264,6 +265,35 @@ mod tests {
 	}
 
 	const SOURCE: TransactionSource = TransactionSource::External;
+
+	struct TestDigestProvider<C> {
+		_client: Arc<C>,
+	}
+	impl<B, C> ConsensusDataProvider<B> for TestDigestProvider<C>
+	where
+		B: BlockT,
+		C: ProvideRuntimeApi<B> + Send + Sync,
+	{
+		type Transaction = TransactionFor<C, B>;
+
+		fn create_digest(
+			&self,
+			_parent: &B::Header,
+			_inherents: &InherentData,
+		) -> Result<Digest, Error> {
+			Ok(Digest { logs: vec![] })
+		}
+
+		fn append_block_import(
+			&self,
+			_parent: &B::Header,
+			params: &mut BlockImportParams<B, Self::Transaction>,
+			_inherents: &InherentData,
+		) -> Result<(), Error> {
+			params.post_digests.push(DigestItem::Other(vec![1]));
+			Ok(())
+		}
+	}
 
 	#[tokio::test]
 	async fn instant_seal() {
@@ -408,8 +438,8 @@ mod tests {
 		})
 		.await
 		.unwrap();
-		// assert that the background task returns ok
-		assert_eq!(rx.await.unwrap().unwrap(), ());
+		// check that the background task returns ok:
+		rx.await.unwrap().unwrap();
 	}
 
 	#[tokio::test]
@@ -518,5 +548,54 @@ mod tests {
 		let imported = rx2.await.unwrap().unwrap();
 		// assert that fork block is in the db
 		assert!(client.header(&BlockId::Hash(imported.hash)).unwrap().is_some())
+	}
+
+	#[tokio::test]
+	async fn manual_seal_post_hash() {
+		let builder = TestClientBuilder::new();
+		let (client, select_chain) = builder.build_with_longest_chain();
+		let client = Arc::new(client);
+		let spawner = sp_core::testing::TaskExecutor::new();
+		let pool = Arc::new(BasicPool::with_revalidation_type(
+			Options::default(),
+			true.into(),
+			api(),
+			None,
+			RevalidationType::Full,
+			spawner.clone(),
+			0,
+		));
+		let env = ProposerFactory::new(spawner.clone(), client.clone(), pool.clone(), None, None);
+
+		let (mut sink, commands_stream) = futures::channel::mpsc::channel(1024);
+		let future = run_manual_seal(ManualSealParams {
+			block_import: client.clone(),
+			env,
+			client: client.clone(),
+			pool: pool.clone(),
+			commands_stream,
+			select_chain,
+			// use a provider that pushes some post digest data
+			consensus_data_provider: Some(Box::new(TestDigestProvider { _client: client.clone() })),
+			create_inherent_data_providers: |_, _| async { Ok(()) },
+		});
+		std::thread::spawn(|| {
+			let rt = tokio::runtime::Runtime::new().unwrap();
+			rt.block_on(future);
+		});
+		let (tx, rx) = futures::channel::oneshot::channel();
+		sink.send(EngineCommand::SealNewBlock {
+			parent_hash: None,
+			sender: Some(tx),
+			create_empty: true,
+			finalize: false,
+		})
+		.await
+		.unwrap();
+		let created_block = rx.await.unwrap().unwrap();
+
+		// assert that the background task returned the actual header hash
+		let header = client.header(&BlockId::Number(1)).unwrap().unwrap();
+		assert_eq!(header.hash(), created_block.hash);
 	}
 }

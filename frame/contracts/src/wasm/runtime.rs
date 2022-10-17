@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2018-2021 Parity Technologies (UK) Ltd.
+// Copyright (C) 2018-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ use crate::{
 	exec::{ExecError, ExecResult, Ext, StorageKey, TopicOf},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
+	storage::WriteOutcome,
 	wasm::env_def::ConvertibleToWasm,
 	BalanceOf, CodeHash, Config, Error,
 };
@@ -28,12 +29,12 @@ use bitflags::bitflags;
 use codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
-use pwasm_utils::parity_wasm::elements::ValueType;
 use sp_core::{crypto::UncheckedFrom, Bytes};
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
-use sp_runtime::traits::Bounded;
+use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
 use sp_std::prelude::*;
+use wasm_instrument::parity_wasm::elements::ValueType;
 
 /// Every error that can be returned to a contract when it calls any of the host functions.
 ///
@@ -55,15 +56,12 @@ pub enum ReturnCode {
 	CalleeReverted = 2,
 	/// The passed key does not exist in storage.
 	KeyNotFound = 3,
-	/// Transfer failed because it would have brought the sender's total balance below the
-	/// subsistence threshold.
-	BelowSubsistenceThreshold = 4,
-	/// Transfer failed for other reasons. Most probably reserved or locked balance of the
-	/// sender prevents the transfer.
+	/// Deprecated and no longer returned: There is only the minimum balance.
+	_BelowSubsistenceThreshold = 4,
+	/// See [`Error::TransferFailed`].
 	TransferFailed = 5,
-	/// The newly created contract is below the subsistence threshold after executing
-	/// its constructor.
-	NewContractNotFunded = 6,
+	/// Deprecated and no longer returned: Endowment is no longer required.
+	_EndowmentTooLow = 6,
 	/// No code could be found at the supplied code hash.
 	CodeNotFound = 7,
 	/// The contract that was called is no contract (a plain account).
@@ -151,8 +149,6 @@ pub enum RuntimeCosts {
 	ValueTransferred,
 	/// Weight of calling `seal_minimum_balance`.
 	MinimumBalance,
-	/// Weight of calling `seal_contract_deposit`.
-	ContractDeposit,
 	/// Weight of calling `seal_block_number`.
 	BlockNumber,
 	/// Weight of calling `seal_now`.
@@ -177,10 +173,19 @@ pub enum RuntimeCosts {
 	SetStorage(u32),
 	/// Weight of calling `seal_clear_storage`.
 	ClearStorage,
+	/// Weight of calling `seal_contains_storage`.
+	#[cfg(feature = "unstable-interface")]
+	ContainsStorage,
 	/// Weight of calling `seal_get_storage` without output weight.
 	GetStorageBase,
 	/// Weight of an item received via `seal_get_storage` for the given size.
 	GetStorageCopyOut(u32),
+	/// Weight of calling `seal_take_storage` without output weight.
+	#[cfg(feature = "unstable-interface")]
+	TakeStorageBase,
+	/// Weight of an item received via `seal_take_storage` for the given size.
+	#[cfg(feature = "unstable-interface")]
+	TakeStorageCopyOut(u32),
 	/// Weight of calling `seal_transfer`.
 	Transfer,
 	/// Weight of calling `seal_call` for the given input size.
@@ -231,7 +236,6 @@ impl RuntimeCosts {
 			Balance => s.balance,
 			ValueTransferred => s.value_transferred,
 			MinimumBalance => s.minimum_balance,
-			ContractDeposit => s.contract_deposit,
 			BlockNumber => s.block_number,
 			Now => s.now,
 			WeightToFee => s.weight_to_fee,
@@ -248,8 +252,14 @@ impl RuntimeCosts {
 			SetStorage(len) =>
 				s.set_storage.saturating_add(s.set_storage_per_byte.saturating_mul(len.into())),
 			ClearStorage => s.clear_storage,
+			#[cfg(feature = "unstable-interface")]
+			ContainsStorage => s.contains_storage,
 			GetStorageBase => s.get_storage,
 			GetStorageCopyOut(len) => s.get_storage_per_byte.saturating_mul(len.into()),
+			#[cfg(feature = "unstable-interface")]
+			TakeStorageBase => s.take_storage,
+			#[cfg(feature = "unstable-interface")]
+			TakeStorageCopyOut(len) => s.take_storage_per_byte.saturating_mul(len.into()),
 			Transfer => s.transfer,
 			CallBase(len) =>
 				s.call.saturating_add(s.call_per_input_byte.saturating_mul(len.into())),
@@ -611,16 +621,12 @@ where
 	fn err_into_return_code(from: DispatchError) -> Result<ReturnCode, DispatchError> {
 		use ReturnCode::*;
 
-		let below_sub = Error::<E::T>::BelowSubsistenceThreshold.into();
 		let transfer_failed = Error::<E::T>::TransferFailed.into();
-		let not_funded = Error::<E::T>::NewContractNotFunded.into();
 		let no_code = Error::<E::T>::CodeNotFound.into();
 		let not_found = Error::<E::T>::ContractNotFound.into();
 
 		match from {
-			x if x == below_sub => Ok(BelowSubsistenceThreshold),
 			x if x == transfer_failed => Ok(TransferFailed),
-			x if x == not_funded => Ok(NewContractNotFunded),
 			x if x == no_code => Ok(CodeNotFound),
 			x if x == not_found => Ok(NotCallable),
 			err => Err(err),
@@ -640,6 +646,50 @@ where
 			(_, Callee) => Ok(ReturnCode::CalleeTrapped),
 			(err, _) => Self::err_into_return_code(err),
 		}
+	}
+
+	/// Extracts the size of the overwritten value or `u32::MAX` if there
+	/// was no value in storage.
+	///
+	/// # Note
+	///
+	/// We cannot use `0` as sentinel value because there could be a zero sized
+	/// storage entry which is different from a non existing one.
+	fn overwritten_len(outcome: WriteOutcome) -> u32 {
+		match outcome {
+			WriteOutcome::New => u32::MAX,
+			WriteOutcome::Overwritten(len) => len,
+			WriteOutcome::Taken(value) => value.len() as u32,
+		}
+	}
+
+	fn set_storage(
+		&mut self,
+		key_ptr: u32,
+		value_ptr: u32,
+		value_len: u32,
+	) -> Result<u32, TrapReason> {
+		self.charge_gas(RuntimeCosts::SetStorage(value_len))?;
+		if value_len > self.ext.max_value_size() {
+			Err(Error::<E::T>::ValueTooLarge)?;
+		}
+		let mut key: StorageKey = [0; 32];
+		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
+		self.ext
+			.set_storage(key, value, false)
+			.map(Self::overwritten_len)
+			.map_err(Into::into)
+	}
+
+	fn clear_storage(&mut self, key_ptr: u32) -> Result<u32, TrapReason> {
+		self.charge_gas(RuntimeCosts::ClearStorage)?;
+		let mut key: StorageKey = [0; 32];
+		self.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		self.ext
+			.set_storage(key, None, false)
+			.map(Self::overwritten_len)
+			.map_err(Into::into)
 	}
 
 	fn call(
@@ -736,12 +786,7 @@ where
 	}
 }
 
-// ***********************************************************
-// * AFTER MAKING A CHANGE MAKE SURE TO UPDATE COMPLEXITY.MD *
-// ***********************************************************
-
-// Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
-// a function set which can be imported by an executed contract.
+// This is the API exposed to contracts.
 //
 // # Note
 //
@@ -762,8 +807,16 @@ define_env!(Env, <E: Ext>,
 
 	// Set the value at the given key in the contract storage.
 	//
+	// Equivalent to the newer version of `seal_set_storage` with the exception of the return
+	// type. Still a valid thing to call when not interested in the return value.
+	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
+		ctx.set_storage(key_ptr, value_ptr, value_len).map(|_| ())
+	},
+
+	// Set the value at the given key in the contract storage.
+	//
 	// The value length must not exceed the maximum defined by the contracts module parameters.
-	// Storing an empty value is disallowed.
+	// Specifying a `value_len` of zero will store an empty value.
 	//
 	// # Parameters
 	//
@@ -771,19 +824,20 @@ define_env!(Env, <E: Ext>,
 	// - `value_ptr`: pointer into the linear memory where the value to set is placed.
 	// - `value_len`: the length of the value in bytes.
 	//
-	// # Traps
+	// # Return Value
 	//
-	// - If value length exceeds the configured maximum value length of a storage entry.
-	// - Upon trying to set an empty storage entry (value length is 0).
-	[seal0] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) => {
-		ctx.charge_gas(RuntimeCosts::SetStorage(value_len))?;
-		if value_len > ctx.ext.max_value_size() {
-			Err(Error::<E::T>::ValueTooLarge)?;
-		}
-		let mut key: StorageKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		let value = Some(ctx.read_sandbox_memory(value_ptr, value_len)?);
-		ctx.ext.set_storage(key, value).map_err(Into::into)
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `u32::MAX` is returned as a sentinel value.
+	[__unstable__] seal_set_storage(ctx, key_ptr: u32, value_ptr: u32, value_len: u32) -> u32 => {
+		ctx.set_storage(key_ptr, value_ptr, value_len)
+	},
+
+	// Clear the value at the given key in the contract storage.
+	//
+	// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
+	// type. Still a valid thing to call when not interested in the return value.
+	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
+		ctx.clear_storage(key_ptr).map(|_| ()).map_err(Into::into)
 	},
 
 	// Clear the value at the given key in the contract storage.
@@ -791,11 +845,13 @@ define_env!(Env, <E: Ext>,
 	// # Parameters
 	//
 	// - `key_ptr`: pointer into the linear memory where the location to clear the value is placed.
-	[seal0] seal_clear_storage(ctx, key_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::ClearStorage)?;
-		let mut key: StorageKey = [0; 32];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
-		ctx.ext.set_storage(key, None).map_err(Into::into)
+	//
+	// # Return Value
+	//
+	// Returns the size of the pre-existing value at the specified key if any. Otherwise
+	// `u32::MAX` is returned as a sentinel value.
+	[__unstable__] seal_clear_storage(ctx, key_ptr: u32) -> u32 => {
+		ctx.clear_storage(key_ptr).map_err(Into::into)
 	},
 
 	// Retrieve the value under the given key from storage.
@@ -824,6 +880,55 @@ define_env!(Env, <E: Ext>,
 		}
 	},
 
+	// Checks whether there is a value stored under the given key.
+	//
+	// Returns `ReturnCode::Success` if there is a key in storage. Otherwise an error
+	// is returned.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[__unstable__] seal_contains_storage(ctx, key_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::ContainsStorage)?;
+		let mut key: StorageKey = [0; 32];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		if ctx.ext.contains_storage(&key) {
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::KeyNotFound)
+		}
+	},
+
+	// Retrieve and remove the value under the given key from storage.
+	//
+	// # Parameters
+	//
+	// - `key_ptr`: pointer into the linear memory where the key of the requested value is placed.
+	// - `out_ptr`: pointer to the linear memory where the value is written to.
+	// - `out_len_ptr`: in-out pointer into linear memory where the buffer length
+	//   is read from and the value length is written to.
+	//
+	// # Errors
+	//
+	// `ReturnCode::KeyNotFound`
+	[__unstable__] seal_take_storage(ctx, key_ptr: u32, out_ptr: u32, out_len_ptr: u32) -> ReturnCode => {
+		ctx.charge_gas(RuntimeCosts::TakeStorageBase)?;
+		let mut key: StorageKey = [0; 32];
+		ctx.read_sandbox_memory_into_buf(key_ptr, &mut key)?;
+		if let WriteOutcome::Taken(value) = ctx.ext.set_storage(key, None, true)? {
+			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, |len| {
+				Some(RuntimeCosts::TakeStorageCopyOut(len))
+			})?;
+			Ok(ReturnCode::Success)
+		} else {
+			Ok(ReturnCode::KeyNotFound)
+		}
+	},
+
 	// Transfer some value to another account.
 	//
 	// # Parameters
@@ -837,7 +942,6 @@ define_env!(Env, <E: Ext>,
 	//
 	// # Errors
 	//
-	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	[seal0] seal_transfer(
 		ctx,
@@ -925,7 +1029,6 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
-	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
 	// `ReturnCode::NotCallable`
 	[seal1] seal_call(
@@ -1002,9 +1105,8 @@ define_env!(Env, <E: Ext>,
 	// length to `output_len_ptr`. The copy of the output buffer and address can be skipped by
 	// supplying the sentinel value of `u32::MAX` to `output_ptr` or `address_ptr`.
 	//
-	// After running the constructor it is verified that the contract account holds at
-	// least the subsistence threshold. If that is not the case the instantiation fails and
-	// the contract is not created.
+	// `value` must be at least the minimum balance. Otherwise the instantiation fails and the
+	// contract is not created.
 	//
 	// # Parameters
 	//
@@ -1033,9 +1135,7 @@ define_env!(Env, <E: Ext>,
 	//
 	// `ReturnCode::CalleeReverted`: Output buffer is returned.
 	// `ReturnCode::CalleeTrapped`
-	// `ReturnCode::BelowSubsistenceThreshold`
 	// `ReturnCode::TransferFailed`
-	// `ReturnCode::NewContractNotFunded`
 	// `ReturnCode::CodeNotFound`
 	[seal1] seal_instantiate(
 		ctx,
@@ -1082,7 +1182,7 @@ define_env!(Env, <E: Ext>,
 		ctx.terminate(beneficiary_ptr)
 	},
 
-	// Remove the calling account and transfer remaining balance.
+	// Remove the calling account and transfer remaining **free** balance.
 	//
 	// This function never returns. Either the termination was successful and the
 	// execution of the destroyed contract is halted. Or it failed during the termination
@@ -1215,7 +1315,7 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the balance of the current account into the supplied buffer.
+	// Stores the **free* balance of the current account into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
@@ -1230,7 +1330,7 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the value transferred along with this call or as endowment into the supplied buffer.
+	// Stores the value transferred along with this call/instantiate into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
@@ -1323,38 +1423,20 @@ define_env!(Env, <E: Ext>,
 		)?)
 	},
 
-	// Stores the contract deposit into the supplied buffer.
-	//
-	// # Deprecation
-	//
-	// This is equivalent to calling `seal_contract_deposit` and only exists for backwards
-	// compatibility. See that function for documentation.
-	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::ContractDeposit)?;
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.contract_deposit().encode(), false, already_charged
-		)?)
-	},
-
-	// Stores the contract deposit into the supplied buffer.
+	// Stores the tombstone deposit into the supplied buffer.
 	//
 	// The value is stored to linear memory at the address pointed to by `out_ptr`.
 	// `out_len_ptr` must point to a u32 value that describes the available space at
 	// `out_ptr`. This call overwrites it with the size of the value. If the available
 	// space at `out_ptr` is less than the size of the value a trap is triggered.
 	//
-	// The data is encoded as T::Balance.
+	// # Deprecation
 	//
-	// # Note
-	//
-	// The contract deposit is on top of the existential deposit. The sum
-	// is commonly referred as subsistence threshold in code. No contract initiated
-	// balance transfer can go below this threshold.
-	[seal0] seal_contract_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
-		ctx.charge_gas(RuntimeCosts::ContractDeposit)?;
-		Ok(ctx.write_sandbox_output(
-			out_ptr, out_len_ptr, &ctx.ext.contract_deposit().encode(), false, already_charged
-		)?)
+	// There is no longer a tombstone deposit. This function always returns 0.
+	[seal0] seal_tombstone_deposit(ctx, out_ptr: u32, out_len_ptr: u32) => {
+		ctx.charge_gas(RuntimeCosts::Balance)?;
+		let deposit = <BalanceOf<E::T>>::zero().encode();
+		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, &deposit, false, already_charged)?)
 	},
 
 	// Was used to restore the given destination contract sacrificing the caller.
@@ -1630,7 +1712,7 @@ define_env!(Env, <E: Ext>,
 		output_len_ptr: u32
 	) -> u32 => {
 		use crate::chain_extension::{ChainExtension, Environment, RetVal};
-		if <E::T as Config>::ChainExtension::enabled() == false {
+		if !<E::T as Config>::ChainExtension::enabled() {
 			Err(Error::<E::T>::NoChainExtension)?;
 		}
 		let env = Environment::new(ctx, input_ptr, input_len, output_ptr, output_len_ptr);
