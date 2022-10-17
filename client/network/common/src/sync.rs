@@ -395,4 +395,14 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Decode implementation-specific state response.
 	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
+
+	/// Advance the state of `ChainSync`
+	///
+	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
+	/// this function should be polled until it returns [`Poll::Pending`] to
+	/// consume all pending events.
+	fn poll(
+		&mut self,
+		cx: &mut std::task::Context,
+	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 }
