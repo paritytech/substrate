@@ -844,7 +844,7 @@ where
 		protocol_config
 	};
 
-	let chain_sync = ChainSync::new(
+	let (chain_sync, chain_sync_service) = ChainSync::new(
 		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -889,6 +889,7 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
+		chain_sync_service,
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
 		block_request_protocol_config,

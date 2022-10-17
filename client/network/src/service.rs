@@ -35,7 +35,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
-	transport, ReputationChange,
+	transport, ChainSyncInterface, ReputationChange,
 };
 
 use futures::{channel::oneshot, prelude::*};
@@ -121,6 +121,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
+	/// Interface that can be used to delegate calls to `ChainSync`
+	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -433,6 +435,7 @@ where
 			local_peer_id,
 			local_identity,
 			to_worker,
+			chain_sync_service: params.chain_sync_service,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
 				.as_ref()
@@ -814,7 +817,7 @@ where
 	/// a stale fork missing.
 	/// Passing empty `peers` set effectively removes the sync request.
 	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
+		self.chain_sync_service.set_sync_fork_request(peers, hash, number);
 	}
 }
 
@@ -1219,7 +1222,6 @@ enum ServiceToWorkerMsg<B: BlockT> {
 	RemoveSetReserved(ProtocolName, PeerId),
 	AddToPeersSet(ProtocolName, PeerId),
 	RemoveFromPeersSet(ProtocolName, PeerId),
-	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
@@ -1380,11 +1382,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.remove_from_peers_set(protocol, peer_id),
-				ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) => this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request {
 					target,
