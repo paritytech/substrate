@@ -381,7 +381,7 @@ where
 			let execution_status =
 				self.api
 				.execute_in_transaction(|api| match api.pop_tx(&block_id).unwrap() {
-					Some(tx_bytes) if (tx_bytes.len() + current_block_size) <= max_block_size => {
+					Some(tx_bytes) if (tx_bytes.len() + current_block_size + sp_core::H256::len_bytes()) <= max_block_size => {
 						if let Ok(xt) = <Block as BlockT>::Extrinsic::decode(&mut tx_bytes.as_slice()) {
 							log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
 							if !api.execute_in_transaction(|api| {
@@ -396,7 +396,6 @@ where
 										TransactionOutcome::Commit(false)
 									},
 									Ok(Err(validity_err)) if validity_err.exhausted_resources() => {
-										// TODO distinguish between exhaust resources and other failures
 										log::debug!(target: "block_builder", "exhaust resources no room for other txs from queue");
 										TransactionOutcome::Rollback(false)
 									},
@@ -470,7 +469,12 @@ where
 	/// If `include_proof` is `true`, the estimated size of the storage proof will be added
 	/// to the estimation.
 	pub fn estimate_block_size_without_extrinsics(&self, include_proof: bool) -> usize {
-		let size = self.estimated_header_size + self.inherents.encoded_size();
+		let size = self.estimated_header_size +
+			self.inherents.encoded_size() +
+			self.api
+				.create_enqueue_txs_inherent(&self.block_id, Default::default())
+				.unwrap()
+				.encoded_size();
 
 		if include_proof {
 			size + self.api.proof_recorder().map(|pr| pr.estimate_encoded_size()).unwrap_or(0)
