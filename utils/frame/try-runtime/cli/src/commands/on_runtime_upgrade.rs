@@ -21,6 +21,7 @@ use parity_scale_codec::Decode;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_weights::Weight;
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call_with_proof,
@@ -78,14 +79,15 @@ where
 		Default::default(), // we don't really need any extensions here.
 	)?;
 
-	let (weight, total_weight) = <(u64, u64) as Decode>::decode(&mut &*encoded_result)
-		.map_err(|e| format!("failed to decode output: {:?}", e))?;
+	let (weight, total_weight) = <(Weight, Weight) as Decode>::decode(&mut &*encoded_result)
+		.map_err(|e| format!("failed to decode weight: {:?}", e))?;
 	log::info!(
 		target: LOG_TARGET,
-		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = {}, total weight = {} ({})",
-		weight,
-		total_weight,
-		weight as f64 / total_weight.max(1) as f64
+		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = ({} ps, {} byte), total weight = ({} ps, {} byte) ({:.2} %, {:.2} %).",
+		weight.ref_time(), weight.proof_size(),
+		total_weight.ref_time(), total_weight.proof_size(),
+		(weight.ref_time() as f64 / total_weight.ref_time().max(1) as f64) * 100.0,
+		(weight.proof_size() as f64 / total_weight.proof_size().max(1) as f64) * 100.0,
 	);
 
 	Ok(())

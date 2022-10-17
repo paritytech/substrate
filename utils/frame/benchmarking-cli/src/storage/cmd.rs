@@ -191,7 +191,7 @@ impl StorageCmd {
 		B: BlockT + Debug,
 		BA: ClientBackend<B>,
 	{
-		let block = BlockId::Number(client.usage_info().chain.best_number);
+		let block = BlockId::Hash(client.usage_info().chain.best_hash);
 		let empty_prefix = StorageKey(Vec::new());
 		let mut keys = client.storage_keys(&block, &empty_prefix)?;
 		let (mut rng, _) = new_rng(None);
