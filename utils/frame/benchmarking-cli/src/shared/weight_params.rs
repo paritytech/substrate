@@ -41,13 +41,13 @@ pub struct WeightParams {
 	/// Multiply the resulting weight with the given factor. Must be positive.
 	///
 	/// Is applied before `weight_add`.
-	#[arg(long = "mul", default_value = "1")]
+	#[arg(long = "mul", default_value_t = 1.0)]
 	pub weight_mul: f64,
 
 	/// Add the given offset to the resulting weight.
 	///
 	/// Is applied after `weight_mul`.
-	#[arg(long = "add", default_value = "0")]
+	#[arg(long = "add", default_value_t = 0)]
 	pub weight_add: u64,
 }
 

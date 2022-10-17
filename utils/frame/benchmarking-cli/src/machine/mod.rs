@@ -60,23 +60,23 @@ pub struct MachineCmd {
 	///
 	/// 10% means that the test would pass even when only 90% score was archived.
 	/// Can be used to mitigate outliers of the benchmarks.
-	#[arg(long, default_value = "10.0", value_name = "PERCENT")]
+	#[arg(long, default_value_t = 10.0, value_name = "PERCENT")]
 	pub tolerance: f64,
 
 	/// Time limit for the verification benchmark.
-	#[arg(long, default_value = "5.0", value_name = "SECONDS")]
+	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
 	pub verify_duration: f32,
 
 	/// Time limit for the hash function benchmark.
-	#[arg(long, default_value = "5.0", value_name = "SECONDS")]
+	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
 	pub hash_duration: f32,
 
 	/// Time limit for the memory benchmark.
-	#[arg(long, default_value = "5.0", value_name = "SECONDS")]
+	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
 	pub memory_duration: f32,
 
 	/// Time limit for each disk benchmark.
-	#[arg(long, default_value = "5.0", value_name = "SECONDS")]
+	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
 	pub disk_duration: f32,
 }
 

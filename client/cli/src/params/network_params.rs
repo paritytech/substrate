@@ -82,14 +82,14 @@ pub struct NetworkParams {
 	pub allow_private_ipv4: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[arg(long, value_name = "COUNT", default_value = "25")]
+	#[arg(long, value_name = "COUNT", default_value_t = 25)]
 	pub out_peers: u32,
 
 	/// Maximum number of inbound full nodes peers.
-	#[arg(long, value_name = "COUNT", default_value = "25")]
+	#[arg(long, value_name = "COUNT", default_value_t = 25)]
 	pub in_peers: u32,
 	/// Maximum number of inbound light nodes peers.
-	#[arg(long, value_name = "COUNT", default_value = "100")]
+	#[arg(long, value_name = "COUNT", default_value_t = 100)]
 	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
@@ -103,7 +103,7 @@ pub struct NetworkParams {
 	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[arg(long, value_name = "COUNT", default_value = "5")]
+	#[arg(long, value_name = "COUNT", default_value_t = 5)]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
@@ -139,7 +139,7 @@ pub struct NetworkParams {
 		long,
 		value_enum,
 		value_name = "SYNC_MODE",
-		default_value = "full",
+		default_value_t = SyncMode::Full,
 		ignore_case = true,
 		verbatim_doc_comment
 	)]

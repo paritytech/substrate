@@ -76,7 +76,7 @@ pub struct SharedParams {
 	pub tracing_targets: Option<String>,
 
 	/// Receiver to process tracing messages.
-	#[arg(long, value_name = "RECEIVER", value_enum, ignore_case = true, default_value = "log")]
+	#[arg(long, value_name = "RECEIVER", value_enum, ignore_case = true, default_value_t = TracingReceiver::Log)]
 	pub tracing_receiver: TracingReceiver,
 }
 

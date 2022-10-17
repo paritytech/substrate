@@ -393,7 +393,7 @@ pub struct SharedParams {
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value = "wasm")]
+	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value_t = ExecutionStrategy::Wasm)]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
@@ -402,7 +402,7 @@ pub struct SharedParams {
 		value_name = "METHOD",
 		value_enum,
 		ignore_case = true,
-		default_value = DEFAULT_WASM_EXECUTION_METHOD,
+		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -427,7 +427,7 @@ pub struct SharedParams {
 	pub no_spec_check_panic: bool,
 
 	/// State version that is used by the chain.
-	#[arg(long, default_value = "1", value_parser = parse::state_version)]
+	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
 	pub state_version: StateVersion,
 }
 

@@ -40,7 +40,7 @@ pub struct OffchainWorkerParams {
 		value_name = "ENABLED",
 		value_enum,
 		ignore_case = true,
-		default_value = "when-validating"
+		default_value_t = OffchainWorkerEnabled::WhenValidating
 	)]
 	pub enabled: OffchainWorkerEnabled,
 

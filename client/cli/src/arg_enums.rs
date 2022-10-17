@@ -145,11 +145,11 @@ pub fn execution_method_from_cli(
 
 /// The default [`WasmExecutionMethod`].
 #[cfg(feature = "wasmtime")]
-pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "compiled";
+pub const DEFAULT_WASM_EXECUTION_METHOD: WasmExecutionMethod = WasmExecutionMethod::Compiled;
 
 /// The default [`WasmExecutionMethod`].
 #[cfg(not(feature = "wasmtime"))]
-pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
+pub const DEFAULT_WASM_EXECUTION_METHOD: WasmExecutionMethod = WasmExecutionMethod::Interpreted;
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]

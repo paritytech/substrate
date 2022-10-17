@@ -43,7 +43,7 @@ pub struct PalletCmd {
 	pub extrinsic: Option<String>,
 
 	/// Select how many samples we should take across the variable components.
-	#[arg(short, long, default_value = "2")]
+	#[arg(short, long, default_value_t = 2)]
 	pub steps: u32,
 
 	/// Indicates lowest values for each of the component ranges.
@@ -55,13 +55,13 @@ pub struct PalletCmd {
 	pub highest_range_values: Vec<u32>,
 
 	/// Select how many repetitions of this benchmark should run from within the wasm.
-	#[arg(short, long, default_value = "1")]
+	#[arg(short, long, default_value_t = 1)]
 	pub repeat: u32,
 
 	/// Select how many repetitions of this benchmark should run from the client.
 	///
 	/// NOTE: Using this alone may give slower results, but will afford you maximum Wasm memory.
-	#[arg(long, default_value = "1")]
+	#[arg(long, default_value_t = 1)]
 	pub external_repeat: u32,
 
 	/// Print the raw results in JSON format.
@@ -135,7 +135,7 @@ pub struct PalletCmd {
 		value_name = "METHOD",
 		value_enum,
 		ignore_case = true,
-		default_value = DEFAULT_WASM_EXECUTION_METHOD,
+		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -151,7 +151,7 @@ pub struct PalletCmd {
 	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// Limit the memory the database cache can use.
-	#[arg(long = "db-cache", value_name = "MiB", default_value = "1024")]
+	#[arg(long = "db-cache", value_name = "MiB", default_value_t = 1024)]
 	pub database_cache_size: u32,
 
 	/// List the benchmarks that match your query rather than running them.

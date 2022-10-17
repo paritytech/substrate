@@ -66,7 +66,7 @@ pub struct NodeKeyParams {
 	///
 	/// The node's secret key determines the corresponding public key and hence the
 	/// node's peer ID in the context of libp2p.
-	#[arg(long, value_name = "TYPE", value_enum, ignore_case = true, default_value = "ed25519")]
+	#[arg(long, value_name = "TYPE", value_enum, ignore_case = true, default_value_t = NodeKeyType::Ed25519)]
 	pub node_key_type: NodeKeyType,
 
 	/// The file from which to read the node's secret key to use for libp2p networking.

@@ -25,7 +25,7 @@ use std::path::PathBuf;
 // #[clap(author, version, about)]
 struct Opt {
 	/// How many bags to generate.
-	#[arg(long, default_value = "200")]
+	#[arg(long, default_value_t = 200)]
 	n_bags: usize,
 
 	/// Where to write the output.

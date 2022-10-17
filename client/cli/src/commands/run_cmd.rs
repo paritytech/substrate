@@ -76,7 +76,7 @@ pub struct RunCmd {
 		value_name = "METHOD SET",
 		value_enum,
 		ignore_case = true,
-		default_value = "auto",
+		default_value_t = RpcMethods::Auto,
 		verbatim_doc_comment
 	)]
 	pub rpc_methods: RpcMethods,
@@ -250,7 +250,7 @@ pub struct RunCmd {
 	pub max_runtime_instances: Option<usize>,
 
 	/// Maximum number of different runtimes that can be cached.
-	#[arg(long, default_value = "2")]
+	#[arg(long, default_value_t = 2)]
 	pub runtime_cache_size: u8,
 
 	/// Run a temporary node.

@@ -68,10 +68,10 @@ enum ChainSpecBuilder {
 		/// The number of nominators backing the aforementioned authorities.
 		///
 		/// Will nominate a random subset of `authorities`.
-		#[arg(long, short, default_value = "0")]
+		#[arg(long, short, default_value_t = 0)]
 		nominators: usize,
 		/// The number of endowed accounts.
-		#[arg(long, short, default_value = "0")]
+		#[arg(long, short, default_value_t = 0)]
 		endowed: usize,
 		/// The path where the chain spec should be saved.
 		#[arg(long, short, default_value = "./chain_spec.json")]

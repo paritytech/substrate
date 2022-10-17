@@ -47,7 +47,7 @@ pub struct ImportParams {
 		value_name = "METHOD",
 		value_enum,
 		ignore_case = true,
-		default_value = DEFAULT_WASM_EXECUTION_METHOD,
+		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
@@ -85,7 +85,7 @@ pub struct ImportParams {
 	/// Specify the state cache size.
 	///
 	/// Providing `0` will disable the cache.
-	#[arg(long, value_name = "Bytes", default_value = "67108864")]
+	#[arg(long, value_name = "Bytes", default_value_t = 67108864)]
 	pub trie_cache_size: usize,
 
 	/// DEPRECATED

@@ -51,7 +51,7 @@ pub struct BenchmarkParams {
 	pub to: u32,
 
 	/// Number of times that the benchmark should be repeated for each block.
-	#[arg(long, default_value = "10")]
+	#[arg(long, default_value_t = 10)]
 	pub repeat: u32,
 }
 

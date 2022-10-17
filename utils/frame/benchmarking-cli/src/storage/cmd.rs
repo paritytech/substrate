@@ -94,7 +94,7 @@ pub struct StorageParams {
 	pub json_write_path: Option<PathBuf>,
 
 	/// Rounds of warmups before measuring.
-	#[arg(long, default_value = "1")]
+	#[arg(long, default_value_t = 1)]
 	pub warmups: u32,
 
 	/// The `StateVersion` to use. Substrate `--dev` should use `V1` and Polkadot `V0`.
@@ -105,7 +105,7 @@ pub struct StorageParams {
 	/// Trie cache size in bytes.
 	///
 	/// Providing `0` will disable the cache.
-	#[arg(long, value_name = "Bytes", default_value = "67108864")]
+	#[arg(long, value_name = "Bytes", default_value_t = 67108864)]
 	pub trie_cache_size: usize,
 
 	/// Enable the Trie cache.
