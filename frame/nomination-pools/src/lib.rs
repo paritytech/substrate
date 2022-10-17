@@ -562,7 +562,7 @@ pub struct Commission<T: Config> {
 
 impl<T: Config> Default for Commission<T> {
 	fn default() -> Self {
-		Self { current: Perbill::zero(), max: Some(Perbill::zero()), throttle: None }
+		Self { current: Perbill::from_percent(0), max: None, throttle: None }
 	}
 }
 
@@ -2164,10 +2164,9 @@ pub mod pallet {
 					Error::<T>::CommissionChangeThrottled
 				);
 			}
-			ensure!(
-				commission <= bonded_pool.commission.max.unwrap_or(Perbill::max_value()),
-				Error::<T>::CommissionExceedsMaximum
-			);
+			if let Some(max) = bonded_pool.commission.max {
+				ensure!(commission <= max, Error::<T>::CommissionExceedsMaximum);
+			}
 
 			bonded_pool.set_commission(&commission).put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission });
@@ -2192,10 +2191,10 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-			ensure!(
-				bonded_pool.commission.max.unwrap_or(Perbill::max_value()) > max_commission,
-				Error::<T>::MaxCommissionRestricted
-			);
+
+			if let Some(existing_max) = bonded_pool.commission.max {
+				ensure!(existing_max > max_commission, Error::<T>::MaxCommissionRestricted);
+			}
 
 			let (current, max) = bonded_pool.set_max_commission(max_commission);
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated {
@@ -2561,7 +2560,7 @@ impl<T: Config> Pallet<T> {
 
 		// If a non-zero commission has been applied to the pool, deduct the share from
 		// `pending_rewards` and send that amount to the pool `depositor`.
-		if bonded_pool.commission.current > Perbill::zero() {
+		if bonded_pool.commission.current > Perbill::from_percent(0) {
 			let pool_commission = bonded_pool.commission.current * pending_rewards;
 			pending_rewards -= pool_commission;
 

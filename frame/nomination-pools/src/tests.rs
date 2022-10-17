@@ -244,6 +244,58 @@ mod bonded_pool {
 			assert_ok!(pool.ok_to_join(0));
 		});
 	}
+
+	#[test]
+	fn set_commission_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Set a commission pool 1
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(50)
+			));
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission.current,
+				Perbill::from_percent(50)
+			);
+		});
+	}
+
+	#[test]
+	fn set_max_commission_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Set a max commission commission pool 1
+			assert_ok!(Pools::set_max_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(100)
+			));
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission.max,
+				Some(Perbill::from_percent(100))
+			);
+		});
+	}
+
+	#[test]
+	fn set_commission_throttle_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Set a commission throttle for pool 1
+			assert_ok!(Pools::set_commission_throttle(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(5),
+				1000_u64
+			));
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
+				Some(CommissionThrottle {
+					change_rate: (Perbill::from_percent(5), 1000_u64),
+					previous_set_at: None
+				})
+			);
+		});
+	}
 }
 
 mod reward_pool {
