@@ -175,7 +175,7 @@ pub mod pallet {
 		/// Note that the leaf at each block MUST be unique. You may want to include a block hash or
 		/// block number as an easiest way to ensure that.
 		/// Also note that the leaf added by each block is expected to only reference data coming
-		/// from ancestor blocks (leaves are saved offchain using `(parent_hash, pos)` key to be
+		/// from ancestor blocks (leaves are saved offchain using `(pos, parent_hash)` key to be
 		/// fork-resistant, as such conflicts could only happen on 1-block deep forks, which means
 		/// two forks with identical line of ancestors compete to write the same offchain key, but
 		/// that's fine as long as leaves only contain data coming from ancestors - conflicting
@@ -250,7 +250,7 @@ pub mod pallet {
 		fn offchain_worker(n: T::BlockNumber) {
 			use mmr::storage::{OffchainStorage, Storage};
 			// The MMR nodes can be found in offchain db under either:
-			//   - fork-unique keys `(prefix, parent_hash, pos)`, or,
+			//   - fork-unique keys `(prefix, pos, parent_hash)`, or,
 			//   - "canonical" keys `(prefix, pos)`,
 			//   depending on how many blocks in the past the node at position `pos` was
 			//   added to the MMR.
@@ -260,7 +260,7 @@ pub mod pallet {
 			// hashes, so it is limited by `frame_system::BlockHashCount` in terms of how many
 			// historical forks it can track. Nodes added to MMR by block `N` can be found in
 			// offchain db at:
-			//   - fork-unique keys `(prefix, parent_hash, pos)` when (`N` >= `latest_block` -
+			//   - fork-unique keys `(prefix, pos, parent_hash)` when (`N` >= `latest_block` -
 			//     `frame_system::BlockHashCount`);
 			//   - "canonical" keys `(prefix, pos)` when (`N` < `latest_block` -
 			//     `frame_system::BlockHashCount`);
@@ -314,10 +314,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// This combination makes the offchain (key,value) entry resilient to chain forks.
 	fn node_offchain_key(
-		parent_hash: <T as frame_system::Config>::Hash,
 		pos: NodeIndex,
+		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, parent_hash, pos).encode()
+		(T::INDEXING_PREFIX, pos, parent_hash).encode()
 	}
 
 	/// Build canonical offchain key for node `pos` in MMR.

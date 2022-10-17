@@ -169,7 +169,7 @@ where
 	fn prune_nodes_for_forks(nodes: &[NodeIndex], forks: Vec<<T as frame_system::Config>::Hash>) {
 		for hash in forks {
 			for pos in nodes {
-				let key = Pallet::<T, I>::node_offchain_key(hash, *pos);
+				let key = Pallet::<T, I>::node_offchain_key(*pos, hash);
 				debug!(
 					target: "runtime::mmr::offchain",
 					"Clear elem at pos {} with key {:?}",
@@ -185,7 +185,7 @@ where
 		to_canon_hash: <T as frame_system::Config>::Hash,
 	) {
 		for pos in to_canon_nodes {
-			let key = Pallet::<T, I>::node_offchain_key(to_canon_hash, *pos);
+			let key = Pallet::<T, I>::node_offchain_key(*pos, to_canon_hash);
 			// Retrieve the element from Off-chain DB under fork-aware key.
 			if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
 				let canon_key = Pallet::<T, I>::node_canon_offchain_key(*pos);
@@ -239,7 +239,7 @@ where
 		let ancestor_parent_block_num =
 			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves);
 		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
-		let key = Pallet::<T, I>::node_offchain_key(ancestor_parent_hash, pos);
+		let key = Pallet::<T, I>::node_offchain_key(pos, ancestor_parent_hash);
 		debug!(
 			target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, hash {:?}, key {:?}",
 			pos, ancestor_leaf_idx, ancestor_parent_hash, key
@@ -345,7 +345,7 @@ where
 		// fork-resistant. Offchain worker task will "canonicalize" it
 		// `frame_system::BlockHashCount` blocks later, when we are not worried about forks anymore
 		// (multi-era-deep forks should not happen).
-		let key = Pallet::<T, I>::node_offchain_key(parent_hash, pos);
+		let key = Pallet::<T, I>::node_offchain_key(pos, parent_hash);
 		debug!(
 			target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
 			pos, parent_hash, key

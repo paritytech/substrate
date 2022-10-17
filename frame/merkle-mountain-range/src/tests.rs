@@ -171,20 +171,20 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 	let offchain_db = ext.offchain_db();
 
 	let expected = Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1))));
-	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b1, 0)).map(decode_node), expected);
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(0, parent_b1)).map(decode_node), expected);
 	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(0)).map(decode_node), expected);
 
 	let expected = Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2))));
-	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b2, 1)).map(decode_node), expected);
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(1, parent_b2)).map(decode_node), expected);
 	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(1)).map(decode_node), expected);
 
 	let expected = Some(mmr::Node::Hash(hex(
 		"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854",
 	)));
-	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b2, 2)).map(decode_node), expected);
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(2, parent_b2)).map(decode_node), expected);
 	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(2)).map(decode_node), expected);
 
-	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b2, 3)), None);
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(3, parent_b2)), None);
 	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(3)), None);
 }
 
@@ -824,7 +824,7 @@ fn should_canonicalize_offchain() {
 				expected
 			);
 			assert_eq!(
-				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
+				offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)).map(decode_node),
 				expected
 			);
 		}
@@ -844,7 +844,7 @@ fn should_canonicalize_offchain() {
 				expected
 			);
 			assert_eq!(
-				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
+				offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)).map(decode_node),
 				expected
 			);
 		};
@@ -872,7 +872,7 @@ fn should_canonicalize_offchain() {
 			let parent_num: BlockNumber = (block_num - 1).into();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
 			// no longer available in fork-proof storage (was pruned),
-			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)), None);
 			// but available using canon key.
 			assert_eq!(
 				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
@@ -891,7 +891,7 @@ fn should_canonicalize_offchain() {
 			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
 			// no longer available in fork-proof storage (was pruned),
-			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)), None);
 			// but available using canon key.
 			assert_eq!(
 				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
