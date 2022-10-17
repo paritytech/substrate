@@ -2,7 +2,7 @@
 name = "pallet-chainbridge"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2022"
+edition = "2021"
 license = "Unlicense"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
@@ -16,9 +16,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-core = { version = "4.0.0-dev", default-features = false, path = "../../primitives/core" }
+sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.0.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primitives/std" }
 lite-json = { version = "0.2.0", default-features = false }
 sp-keystore = { version = "0.10.0-dev", path = "../../primitives/keystore", optional = true }
