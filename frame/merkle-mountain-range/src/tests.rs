@@ -243,11 +243,11 @@ fn should_generate_proofs_correctly() {
 			.into_iter()
 			.map(|block_num| {
 				let mut proofs = vec![];
-				for leaves_count in block_num..=num_blocks {
+				for historical_best_block in block_num..=num_blocks {
 					proofs.push(
 						crate::Pallet::<Test>::generate_historical_batch_proof(
 							vec![block_num],
-							leaves_count,
+							Some(historical_best_block),
 						)
 						.unwrap(),
 					)
@@ -425,7 +425,7 @@ fn should_generate_batch_proof_correctly() {
 
 		// when generate historical proofs for a batch of leaves
 		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 5, 6], 6).unwrap();
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 5, 6], Some(6)).unwrap();
 		// then
 		assert_eq!(
 			historical_proof,
@@ -441,7 +441,7 @@ fn should_generate_batch_proof_correctly() {
 
 		// when generate historical proofs for a batch of leaves
 		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 5, 6], 7).unwrap();
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 5, 6], None).unwrap();
 		// then
 		assert_eq!(historical_proof, proof);
 	});
@@ -466,11 +466,11 @@ fn should_verify() {
 	});
 	let (simple_historical_leaves, simple_historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 6).unwrap()
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], Some(6)).unwrap()
 	});
 	let (advanced_historical_leaves, advanced_historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 7).unwrap()
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], Some(7)).unwrap()
 	});
 
 	ext.execute_with(|| {
@@ -505,17 +505,16 @@ fn should_verify_batch_proofs() {
 			crate::Pallet::<Test>::generate_batch_proof(block_numbers.to_vec()).unwrap()
 		});
 
-		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
-		let min_mmr_size = block_numbers.iter().max().unwrap() + 1;
+		let max_block_number = ext.execute_with(|| frame_system::Pallet::<Test>::block_number());
+		let min_block_number = block_numbers.iter().max().unwrap() + 1;
 
-		// generate historical proofs for all possible mmr sizes,
-		// lower bound being index of highest leaf to be proven
-		let historical_proofs = (min_mmr_size..=mmr_size)
-			.map(|mmr_size| {
+		// generate all possible historical proofs for the given blocks
+		let historical_proofs = (min_block_number..=max_block_number)
+			.map(|best_block| {
 				ext.execute_with(|| {
 					crate::Pallet::<Test>::generate_historical_batch_proof(
 						block_numbers.to_vec(),
-						mmr_size,
+						Some(best_block),
 					)
 					.unwrap()
 				})
@@ -606,7 +605,7 @@ fn verification_should_be_stateless() {
 	});
 	let (_, historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 6).unwrap()
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], Some(6)).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
@@ -654,7 +653,7 @@ fn should_verify_batch_proof_statelessly() {
 	});
 	let (historical_leaves, historical_proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 4, 5], 6).unwrap()
+		crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 4, 5], Some(6)).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
@@ -960,19 +959,19 @@ fn does_not_panic_when_generating_historical_proofs() {
 	ext.execute_with(|| {
 		// when leaf index is invalid
 		assert_eq!(
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 7),
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], None),
 			Err(Error::BlockNumToLeafIndex),
 		);
 
 		// when leaves count is invalid
 		assert_eq!(
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![3], 100),
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![3], Some(100)),
 			Err(Error::BlockNumToLeafIndex),
 		);
 
 		// when both leaf index and leaves count are invalid
 		assert_eq!(
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 100),
+			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], Some(100)),
 			Err(Error::BlockNumToLeafIndex),
 		);
 	});

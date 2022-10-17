@@ -462,16 +462,16 @@ sp_api::decl_runtime_apis! {
 		/// Generate MMR proof for a series of blocks with the specified block numbers.
 		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
-		/// Generate MMR proof for a series of `block_numbers`, given the `best_known_block_number`.
+		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
+		/// use historical MMR state at given block height `n`. Else, use current MMR state.
 		fn generate_historical_batch_proof(
 			block_numbers: Vec<BlockNumber>,
-			best_known_block_number: BlockNumber
+			best_known_block_number: Option<BlockNumber>
 		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///
-		/// Note this function will use on-chain MMR root hash and check if the proof
-		/// matches the hash.
+		/// Note this function will use on-chain MMR root hash and check if the proof matches the hash.
 		/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
 		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
 		fn verify_batch_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>) -> Result<(), Error>;

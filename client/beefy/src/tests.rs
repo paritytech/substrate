@@ -274,7 +274,7 @@ macro_rules! create_test_api {
 
 					fn generate_historical_batch_proof(
 						_block_numbers: Vec<u64>,
-						_best_known_block_number: u64
+						_best_known_block_number: Option<u64>
 					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}

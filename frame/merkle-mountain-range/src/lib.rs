@@ -393,13 +393,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
-		Self::generate_historical_batch_proof(
-			block_numbers,
-			<frame_system::Pallet<T>>::block_number(),
-		)
+		Self::generate_historical_batch_proof(block_numbers, None)
 	}
 
-	/// Generate a MMR proof for the given `block_numbers` given the `best_known_block_number`.
+	/// Generate a MMR proof for the given `block_numbers`.
+	/// If `best_known_block_number = Some(n)`, this generates a historical proof for
+	/// the head of the chain was at height `n`.
+	/// Else it generates a proof for the MMR at the current block height.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
@@ -407,11 +407,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// It may return an error or panic if used incorrectly.
 	pub fn generate_historical_batch_proof(
 		block_numbers: Vec<T::BlockNumber>,
-		best_known_block_number: T::BlockNumber,
+		best_known_block_number: Option<T::BlockNumber>,
 	) -> Result<
 		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
 		primitives::Error,
 	> {
+		// check whether best_known_block_number provided, else use current best block
+		let best_known_block_number =
+			best_known_block_number.unwrap_or_else(|| <frame_system::Pallet<T>>::block_number());
+
 		let leaves_count =
 			Self::block_num_to_leaf_index(best_known_block_number)?.saturating_add(1);
 

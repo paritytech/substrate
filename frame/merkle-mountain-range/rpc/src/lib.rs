@@ -129,17 +129,19 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 
-	/// Generate a MMR proof for the given `block_numbers` given the `best_known_block_number`.
+	/// Generate a MMR proof for the given `block_numbers`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
 	/// a MMR proof for the set of blocks that have the given `block_numbers` with MMR given the
 	/// `best_known_block_number`. `best_known_block_number` must be larger than all the
 	/// `block_numbers` for the function to succeed.
 	///
-	/// Optionally, a block hash at which the runtime should be queried can be specified.
-	/// Note that specifying the block hash isn't super-useful here, unless you're generating
-	/// proof using non-finalized blocks where there are several competing forks. That's because
-	/// MMR state will be fixed to the state with `best_known_block_number`, which already points to
+	/// Optionally via `at`, a block hash at which the runtime should be queried can be specified.
+	/// Optionally via `best_known_block_number`, the proof can be generated using the MMR's state
+	/// at a specific best block. Note that if `best_known_block_number` is provided, then also
+	/// specifying the block hash via `at` isn't super-useful here, unless you're generating proof
+	/// using non-finalized blocks where there are several competing forks. That's because MMR state
+	/// will be fixed to the state with `best_known_block_number`, which already points to
 	/// some historical block.
 	///
 	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
@@ -150,7 +152,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	fn generate_historical_batch_proof(
 		&self,
 		block_numbers: Vec<BlockNumber>,
-		best_known_block_number: BlockNumber,
+		best_known_block_number: Option<BlockNumber>,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafBatchProof<BlockHash>>;
 }
@@ -222,7 +224,7 @@ where
 	fn generate_historical_batch_proof(
 		&self,
 		block_numbers: Vec<NumberFor<Block>>,
-		best_known_block_number: NumberFor<Block>,
+		best_known_block_number: Option<NumberFor<Block>>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
 		let api = self.client.runtime_api();
