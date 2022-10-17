@@ -481,14 +481,14 @@ pub struct SassafrasParams<B: BlockT, C, SC, EN, I, SO, L, CIDP> {
 	pub justification_sync_link: L,
 	/// Something that can create the inherent data providers.
 	pub create_inherent_data_providers: CIDP,
-	/// Force authoring of blocks even if we are offline
+	/// Force authoring of blocks even if we are offline.
 	pub force_authoring: bool,
-	/// The source of timestamps for relative slots
+	/// State shared between import queue and authoring worker.
 	pub sassafras_link: SassafrasLink<B>,
 }
 
 /// Start the Sassafras worker.
-pub fn start_sassafras<B, C, SC, EN, I, SO, CIDP, L, ER>(
+pub fn authoring_worker<B, C, SC, EN, I, SO, CIDP, L, ER>(
 	SassafrasParams {
 		client,
 		keystore,

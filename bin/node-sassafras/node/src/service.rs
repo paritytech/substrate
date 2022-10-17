@@ -286,7 +286,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 			},
 		};
 
-		let sassafras = sc_consensus_sassafras::start_sassafras(sassafras_params)?;
+		let sassafras = sc_consensus_sassafras::authoring_worker(sassafras_params)?;
 
 		// the Sassafras authoring task is considered essential, i.e. if it
 		// fails we take down the service with it.
@@ -303,7 +303,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		if role.is_authority() { Some(keystore_container.sync_keystore()) } else { None };
 
 	let grandpa_config = sc_finality_grandpa::Config {
-		// FIXME #1578 make this available through chainspec
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
 		name: Some(name),

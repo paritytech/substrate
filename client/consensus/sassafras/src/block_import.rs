@@ -351,7 +351,7 @@ where
 /// an import-queue.
 ///
 /// Also returns a link object used to correctly instantiate the import queue
-/// and background worker.
+/// and authoring worker.
 pub fn block_import<C, B: BlockT, I>(
 	genesis_config: SassafrasConfiguration,
 	inner_block_import: I,
