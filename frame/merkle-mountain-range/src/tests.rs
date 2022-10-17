@@ -506,10 +506,10 @@ fn should_verify_batch_proofs() {
 		});
 
 		let max_block_number = ext.execute_with(|| frame_system::Pallet::<Test>::block_number());
-		let min_block_number = block_numbers.iter().max().unwrap() + 1;
+		let min_block_number = block_numbers.iter().max().unwrap();
 
 		// generate all possible historical proofs for the given blocks
-		let historical_proofs = (min_block_number..=max_block_number)
+		let historical_proofs = (*min_block_number..=max_block_number)
 			.map(|best_block| {
 				ext.execute_with(|| {
 					crate::Pallet::<Test>::generate_historical_batch_proof(
