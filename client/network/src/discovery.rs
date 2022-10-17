@@ -198,7 +198,7 @@ impl DiscoveryConfig {
 				let proto_name = protocol_name_from_protocol_id(&protocol_id);
 
 				let mut config = KademliaConfig::default();
-				config.set_protocol_name(proto_name);
+				config.set_protocol_names(std::iter::once(proto_name.into()).collect());
 				// By default Kademlia attempts to insert all peers into its routing table once a
 				// dialing attempt succeeds. In order to control which peer is added, disable the
 				// auto-insertion and instead add peers manually.
@@ -232,9 +232,15 @@ impl DiscoveryConfig {
 			allow_private_ipv4,
 			discovery_only_if_under_num,
 			mdns: if enable_mdns {
-				MdnsWrapper::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
+				match Mdns::new(MdnsConfig::default()) {
+					Ok(mdns) => Some(mdns),
+					Err(err) => {
+						warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
+						None
+					},
+				}
 			} else {
-				MdnsWrapper::Disabled
+				None
 			},
 			allow_non_globals_in_dht,
 			known_external_addresses: LruHashSet::new(
@@ -256,7 +262,7 @@ pub struct DiscoveryBehaviour {
 	/// Kademlia requests and answers.
 	kademlias: HashMap<ProtocolId, Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
-	mdns: MdnsWrapper,
+	mdns: Option<Mdns>,
 	/// Stream that fires when we need to perform the next random Kademlia query. `None` if
 	/// random walking is disabled.
 	next_kad_random_query: Option<Delay>,
@@ -320,7 +326,7 @@ impl DiscoveryBehaviour {
 	pub fn add_self_reported_address(
 		&mut self,
 		peer_id: &PeerId,
-		supported_protocols: impl Iterator<Item = impl AsRef<[u8]>>,
+		supported_protocols: &[impl AsRef<[u8]>],
 		addr: Multiaddr,
 	) {
 		if !self.allow_non_globals_in_dht && !self.can_add_to_dht(&addr) {
@@ -329,17 +335,18 @@ impl DiscoveryBehaviour {
 		}
 
 		let mut added = false;
-		for protocol in supported_protocols {
-			for kademlia in self.kademlias.values_mut() {
-				if protocol.as_ref() == kademlia.protocol_name() {
-					trace!(
-						target: "sub-libp2p",
-						"Adding self-reported address {} from {} to Kademlia DHT {}.",
-						addr, peer_id, String::from_utf8_lossy(kademlia.protocol_name()),
-					);
-					kademlia.add_address(peer_id, addr.clone());
-					added = true;
-				}
+		for kademlia in self.kademlias.values_mut() {
+			if let Some(matching_protocol) = supported_protocols
+				.iter()
+				.find(|p| kademlia.protocol_names().iter().any(|k| k.as_ref() == p.as_ref()))
+			{
+				trace!(
+					target: "sub-libp2p",
+					"Adding self-reported address {} from {} to Kademlia DHT {}.",
+					addr, peer_id, String::from_utf8_lossy(matching_protocol.as_ref()),
+				);
+				kademlia.add_address(peer_id, addr.clone());
+				added = true;
 			}
 		}
 
@@ -532,7 +539,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 				list_to_filter.extend(k.addresses_of_peer(peer_id))
 			}
 
-			list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
+			if let Some(ref mut mdns) = self.mdns {
+				list_to_filter.extend(mdns.addresses_of_peer(peer_id));
+			}
 
 			if !self.allow_private_ipv4 {
 				list_to_filter.retain(|addr| match addr.iter().next() {
@@ -913,36 +922,38 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		}
 
 		// Poll mDNS.
-		while let Poll::Ready(ev) = self.mdns.poll(cx, params) {
-			match ev {
-				NetworkBehaviourAction::GenerateEvent(event) => match event {
-					MdnsEvent::Discovered(list) => {
-						if self.num_connections >= self.discovery_only_if_under_num {
-							continue
-						}
+		if let Some(ref mut mdns) = self.mdns {
+			while let Poll::Ready(ev) = mdns.poll(cx, params) {
+				match ev {
+					NetworkBehaviourAction::GenerateEvent(event) => match event {
+						MdnsEvent::Discovered(list) => {
+							if self.num_connections >= self.discovery_only_if_under_num {
+								continue
+							}
 
-						self.pending_events
-							.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
-						if let Some(ev) = self.pending_events.pop_front() {
-							return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
-						}
+							self.pending_events
+								.extend(list.map(|(peer_id, _)| DiscoveryOut::Discovered(peer_id)));
+							if let Some(ev) = self.pending_events.pop_front() {
+								return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
+							}
+						},
+						MdnsEvent::Expired(_) => {},
 					},
-					MdnsEvent::Expired(_) => {},
-				},
-				NetworkBehaviourAction::Dial { .. } => {
-					unreachable!("mDNS never dials!");
-				},
-				NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
-				NetworkBehaviourAction::ReportObservedAddr { address, score } =>
-					return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
-						address,
-						score,
-					}),
-				NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
-					return Poll::Ready(NetworkBehaviourAction::CloseConnection {
-						peer_id,
-						connection,
-					}),
+					NetworkBehaviourAction::Dial { .. } => {
+						unreachable!("mDNS never dials!");
+					},
+					NetworkBehaviourAction::NotifyHandler { event, .. } => match event {}, /* `event` is an enum with no variant */
+					NetworkBehaviourAction::ReportObservedAddr { address, score } =>
+						return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+							address,
+							score,
+						}),
+					NetworkBehaviourAction::CloseConnection { peer_id, connection } =>
+						return Poll::Ready(NetworkBehaviourAction::CloseConnection {
+							peer_id,
+							connection,
+						}),
+				}
 			}
 		}
 
@@ -957,45 +968,6 @@ fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
 	v.extend_from_slice(id.as_ref().as_bytes());
 	v.extend_from_slice(b"/kad");
 	v
-}
-
-/// [`Mdns::new`] returns a future. Instead of forcing [`DiscoveryConfig::finish`] and all its
-/// callers to be async, lazily instantiate [`Mdns`].
-enum MdnsWrapper {
-	Instantiating(futures::future::BoxFuture<'static, std::io::Result<Mdns>>),
-	Ready(Mdns),
-	Disabled,
-}
-
-impl MdnsWrapper {
-	fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
-		match self {
-			Self::Instantiating(_) => Vec::new(),
-			Self::Ready(mdns) => mdns.addresses_of_peer(peer_id),
-			Self::Disabled => Vec::new(),
-		}
-	}
-
-	fn poll(
-		&mut self,
-		cx: &mut Context<'_>,
-		params: &mut impl PollParameters,
-	) -> Poll<NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ConnectionHandler>> {
-		loop {
-			match self {
-				Self::Instantiating(fut) =>
-					*self = match futures::ready!(fut.as_mut().poll(cx)) {
-						Ok(mdns) => Self::Ready(mdns),
-						Err(err) => {
-							warn!(target: "sub-libp2p", "Failed to initialize mDNS: {:?}", err);
-							Self::Disabled
-						},
-					},
-				Self::Ready(mdns) => return mdns.poll(cx, params),
-				Self::Disabled => return Poll::Pending,
-			}
-		}
-	}
 }
 
 #[cfg(test)]
@@ -1100,8 +1072,7 @@ mod tests {
 												.behaviour_mut()
 												.add_self_reported_address(
 													&other,
-													[protocol_name_from_protocol_id(&protocol_id)]
-														.iter(),
+													&[protocol_name_from_protocol_id(&protocol_id)],
 													addr,
 												);
 
@@ -1156,7 +1127,7 @@ mod tests {
 		// Add remote peer with unsupported protocol.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			[protocol_name_from_protocol_id(&unsupported_protocol_id)].iter(),
+			&[protocol_name_from_protocol_id(&unsupported_protocol_id)],
 			remote_addr.clone(),
 		);
 
@@ -1173,7 +1144,7 @@ mod tests {
 		// Add remote peer with supported protocol.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			[protocol_name_from_protocol_id(&supported_protocol_id)].iter(),
+			&[protocol_name_from_protocol_id(&supported_protocol_id)],
 			remote_addr.clone(),
 		);
 
@@ -1212,7 +1183,7 @@ mod tests {
 		// Add remote peer with `protocol_a` only.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			[protocol_name_from_protocol_id(&protocol_a)].iter(),
+			&[protocol_name_from_protocol_id(&protocol_a)],
 			remote_addr.clone(),
 		);
 
