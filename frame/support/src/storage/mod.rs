@@ -27,7 +27,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 
 pub use self::{
 	transactional::{
@@ -37,7 +37,6 @@ pub use self::{
 };
 use crate::pallet_prelude::storage::private::Sealed;
 pub use sp_runtime::TransactionOutcome;
-use sp_std::collections::btree_set::BTreeSet;
 pub use types::Key;
 
 pub mod bounded_btree_map;
@@ -1305,6 +1304,7 @@ mod private {
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+	impl<T: Encode> Sealed for BTreeSet<T> {}
 
 	macro_rules! impl_sealed_for_tuple {
 		($($elem:ident),+) => {
@@ -1337,7 +1337,6 @@ mod private {
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
 
-impl<T: Encode> Sealed for BTreeSet<T> {}
 impl<T: Encode> StorageAppend<T> for BTreeSet<T> {}
 impl<T: Encode> StorageDecodeLength for BTreeSet<T> {}
 
