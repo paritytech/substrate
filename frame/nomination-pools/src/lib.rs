@@ -2599,17 +2599,17 @@ impl<T: Config> Pallet<T> {
 		reward_pool.register_claimed_reward(pending_rewards);
 
 		// If a non-zero commission has been applied to the pool, deduct the share from
-		// `pending_rewards` and send that amount to the pool `depositor`. 
+		// `pending_rewards` and send that amount to the pool `depositor`.
 		// Defensive: The commission receiver is also checked for existence.
 		if bonded_pool.commission.current > Perbill::from_percent(0) {
-			if let Some(receiver) = bonded_pool.commission.receiver {
+			if let Some(receiver) = &bonded_pool.commission.receiver {
 				let pool_commission = bonded_pool.commission.current * pending_rewards;
 				pending_rewards -= pool_commission;
 
 				// Transfer pool_commission to the `receiver` account.
 				T::Currency::transfer(
 					&bonded_pool.reward_account(),
-					&receiver,
+					receiver,
 					pool_commission,
 					ExistenceRequirement::KeepAlive,
 				)?;

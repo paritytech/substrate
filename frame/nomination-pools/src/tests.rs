@@ -320,7 +320,7 @@ mod bonded_pool {
 			// Receiver has to be set before commission can be sed
 			assert_noop!(
 				Pools::set_commission(RuntimeOrigin::signed(900), 1, Perbill::from_percent(5)),
-				Error::<Runtime>::NoCommisionReceiverSet
+				Error::<Runtime>::NoCommissionReceiverSet
 			);
 			// Set a commission receiver to continue tests.
 			assert_ok!(Pools::set_commission_receiver(RuntimeOrigin::signed(900), 1, 900,));
