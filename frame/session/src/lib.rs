@@ -128,8 +128,9 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
-	ConsensusEngineId, KeyTypeId, Permill, RuntimeAppPublic,
+	ConsensusEngineId, KeyTypeId, RuntimeAppPublic,
 };
+use sp_arithmetic::Permill;
 use sp_staking::SessionIndex;
 use sp_std::{
 	marker::PhantomData,

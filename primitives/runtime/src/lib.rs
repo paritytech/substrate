@@ -87,14 +87,6 @@ pub use sp_core::{bounded_btree_map, bounded_vec};
 /// Re-export `RuntimeDebug`, to avoid dependency clutter.
 pub use sp_core::RuntimeDebug;
 
-
-
-/// Re-export top-level arithmetic stuff.
-pub use sp_arithmetic::{
-	 //Perbill,
-	  Percent, Permill, Perquintill,
-};
-
 pub use either::Either;
 
 /// The number of bytes of the module-specific `error` field defined in [`ModuleError`].

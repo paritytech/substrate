@@ -68,8 +68,9 @@ use scale_info::TypeInfo;
 
 use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
-	Permill, RuntimeDebug,
+	RuntimeDebug,
 };
+use sp_arithmetic::Permill;
 use sp_std::prelude::*;
 
 use frame_support::{

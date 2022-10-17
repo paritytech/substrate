@@ -95,9 +95,9 @@ use frame_support::traits::{
 
 use sp_runtime::{
 	traits::{AccountIdConversion, BadOrigin, Saturating, StaticLookup, Zero},
-	DispatchResult, Permill, RuntimeDebug,
+	DispatchResult, RuntimeDebug,
 };
-
+use sp_arithmetic::Permill;
 use frame_support::{dispatch::DispatchResultWithPostInfo, traits::EnsureOrigin};
 
 use frame_support::pallet_prelude::*;

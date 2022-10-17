@@ -36,8 +36,9 @@ use sp_application_crypto::ByteArray;
 use sp_runtime::{
 	generic::DigestItem,
 	traits::{IsMember, One, SaturatedConversion, Saturating, Zero},
-	ConsensusEngineId, KeyTypeId, Permill,
+	ConsensusEngineId, KeyTypeId,
 };
+use sp_arithmetic::Permill;
 use sp_session::{GetSessionNumber, GetValidatorCount};
 use sp_std::prelude::*;
 

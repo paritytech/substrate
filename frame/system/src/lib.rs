@@ -1323,30 +1323,30 @@ impl<T: Config> Pallet<T> {
 			Self::block_number(),
 			Self::extrinsic_index().unwrap_or_default(),
 			Self::all_extrinsics_len(),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::all_extrinsics_len(),
 				*T::BlockLength::get().max.get(DispatchClass::Normal)
 			).deconstruct(),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::all_extrinsics_len(),
 				*T::BlockLength::get().max.get(DispatchClass::Operational)
 			).deconstruct(),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::all_extrinsics_len(),
 				*T::BlockLength::get().max.get(DispatchClass::Mandatory)
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Normal),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Normal).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Operational).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
-			sp_runtime::Percent::from_rational(
+			sp_arithmetic::Percent::from_rational(
 				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
 				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),

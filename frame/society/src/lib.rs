@@ -270,8 +270,9 @@ use sp_runtime::{
 		AccountIdConversion, CheckedSub, Hash, IntegerSquareRoot, Saturating, StaticLookup,
 		TrailingZeroInput, Zero,
 	},
-	Percent, RuntimeDebug,
+	 RuntimeDebug,
 };
+use sp_arithmetic::Percent;
 use sp_std::prelude::*;
 
 pub use pallet::*;
