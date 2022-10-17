@@ -27,14 +27,17 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, Dispatchable, Pays},
 	error::BadOrigin,
 	parameter_types, storage,
-	traits::{ConstU32, ConstU64, Contains},
+	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
 	weights::Weight,
 };
+use pallet_collective::Instance1;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
+	traits::{BlakeTwo256, Hash, IdentityLookup},
 };
+
+type BlockNumber = u64;
 
 // example module to test behaviors.
 #[frame_support::pallet]
@@ -94,6 +97,7 @@ frame_support::construct_runtime!(
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Timestamp: pallet_timestamp::{Call, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Council: pallet_collective::<Instance1>,
 		Utility: utility::{Pallet, Call, Event},
 		Example: example::{Pallet, Call},
 	}
@@ -148,10 +152,27 @@ impl pallet_timestamp::Config for Test {
 	type MinimumPeriod = ConstU64<3>;
 	type WeightInfo = ();
 }
+
+const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
 	pub const MaxSignatories: u16 = 3;
+	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
+	pub const MaxProposals: u32 = 100;
+	pub const MaxMembers: u32 = 100;
+}
+
+type CouncilCollective = pallet_collective::Instance1;
+impl pallet_collective::Config<CouncilCollective> for Test {
+	type RuntimeOrigin = RuntimeOrigin;
+	type Proposal = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+	type MotionDuration = MotionDuration;
+	type MaxProposals = MaxProposals;
+	type MaxMembers = MaxMembers;
+	type DefaultVote = pallet_collective::PrimeDefaultVote;
+	type WeightInfo = ();
 }
 
 impl example::Config for Test {}
@@ -192,6 +213,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
+
+	pallet_collective::GenesisConfig::<Test, Instance1> {
+		members: vec![1, 2, 3],
+		phantom: Default::default(),
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
+
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
 	ext
@@ -738,5 +767,42 @@ fn batch_all_doesnt_work_with_inherents() {
 				error: frame_system::Error::<Test>::CallFiltered.into(),
 			}
 		);
+	})
+}
+
+#[test]
+fn batch_works_with_council_origin() {
+	new_test_ext().execute_with(|| {
+		let proposal = RuntimeCall::Utility(UtilityCall::batch {
+			calls: vec![call_transfer(1, 5), call_transfer(1, 5)],
+		});
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash = BlakeTwo256::hash_of(&proposal);
+
+		assert_ok!(Council::propose(
+			RuntimeOrigin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		assert_ok!(Council::vote(RuntimeOrigin::signed(1), hash, 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(2), hash, 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(3), hash, 0, true));
+
+		System::set_block_number(4);
+		assert_ok!(Council::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
+
+		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
+			proposal_hash: hash,
+			result: Ok(()),
+		}));
 	})
 }
