@@ -400,7 +400,15 @@ pub fn decl_storage(input: TokenStream) -> TokenStream {
 ///   frame_system::Pallet<Runtime>`
 #[proc_macro]
 pub fn construct_runtime(input: TokenStream) -> TokenStream {
-	construct_runtime::construct_runtime(input)
+	construct_runtime::construct_runtime(input, false)
+}
+
+/// A develop-mode alternative to [`construct_runtime!`] with less stringent requirements
+/// allowing for easier development-mode construction of a runtime. This **should not** be used
+/// with a production runtime.
+#[proc_macro]
+pub fn construct_dev_runtime(input: TokenStream) -> TokenStream {
+	construct_runtime::construct_runtime(input, true)
 }
 
 /// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
