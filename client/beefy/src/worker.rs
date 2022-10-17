@@ -43,8 +43,9 @@ use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header, NumberFor},
-	SaturatedConversion,
+
 };
+use sp_arithmetic::traits::SaturatedConversion;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},

@@ -40,8 +40,9 @@ use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Digest, Percent, SaturatedConversion,
+	Digest, Percent,
 };
+use sp_arithmetic::traits::SaturatedConversion;
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;

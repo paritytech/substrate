@@ -60,8 +60,9 @@ use codec::Encode;
 use frame_support::weights::Weight;
 use sp_runtime::{
 	traits::{self, CheckedSub, One, Saturating},
-	SaturatedConversion,
+
 };
+use sp_arithmetic::traits::SaturatedConversion;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;

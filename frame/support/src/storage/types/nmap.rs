@@ -30,7 +30,7 @@ use crate::{
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
-use sp_runtime::SaturatedConversion;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
 /// A type that allow to store values for an arbitrary number of keys in the form of

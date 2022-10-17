@@ -35,9 +35,9 @@ use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandler
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
-use sp_runtime::{generic, traits::Block as BlockT, SaturatedConversion};
+use sp_runtime::{generic, traits::Block as BlockT};
 use std::sync::Arc;
-
+use sp_arithmetic::traits::SaturatedConversion;
 /// The full client type definition.
 pub type FullClient =
 	sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<ExecutorDispatch>>;

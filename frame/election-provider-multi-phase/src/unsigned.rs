@@ -32,8 +32,9 @@ use sp_npos_elections::{
 };
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
-	DispatchError, SaturatedConversion,
+	DispatchError,
 };
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
 /// Storage key used to store the last block number at which offchain worker ran.

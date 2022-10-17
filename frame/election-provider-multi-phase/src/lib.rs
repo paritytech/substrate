@@ -254,8 +254,9 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug, SaturatedConversion,
+	DispatchError, ModuleError, PerThing, Perbill, RuntimeDebug,
 };
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
 #[cfg(feature = "runtime-benchmarks")]
