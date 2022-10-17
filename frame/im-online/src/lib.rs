@@ -98,9 +98,13 @@ use sp_core::offchain::OpaqueNetworkState;
 use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, TrailingZeroInput},
-	PerThing, Perbill, Permill, RuntimeDebug,
+	RuntimeDebug,
 };
-use sp_arithmetic::traits::SaturatedConversion;
+
+use sp_arithmetic::{
+	traits::SaturatedConversion,
+	PerThing, Perbill, Permill
+};
 use sp_staking::{
 	offence::{Kind, Offence, ReportOffence},
 	SessionIndex,

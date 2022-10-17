@@ -6344,6 +6344,7 @@ dependencies = [
  "scale-info",
  "serde",
  "sp-application-crypto",
+ "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-npos-elections",

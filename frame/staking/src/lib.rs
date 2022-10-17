@@ -569,7 +569,7 @@ impl<T: Config> StakingLedger<T> {
 			return Zero::zero()
 		}
 
-		use sp_runtime::PerThing as _;
+		use sp_arithmetic::PerThing as _;
 		use sp_staking::OnStakerSlash as _;
 		let mut remaining_slash = slash_amount;
 		let pre_slash_total = self.total;

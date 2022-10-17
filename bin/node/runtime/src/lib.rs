@@ -620,7 +620,7 @@ frame_election_provider_support::generate_solution_type!(
 	pub struct NposSolution16::<
 		VoterIndex = u32,
 		TargetIndex = u16,
-		Accuracy = sp_runtime::PerU16,
+		Accuracy = sp_arithmetic::PerU16,
 		MaxVoters = MaxElectingVoters,
 	>(16)
 );
