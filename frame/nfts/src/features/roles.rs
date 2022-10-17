@@ -28,6 +28,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.map_or(false, |roles| roles.has_role(role))
 	}
 
+	/// Groups provided roles by account, give one account could have multiple roles.
+	///
+	/// - `input`: A vector of (Account, Role) tuples.
+	///
+	/// Returns a grouped vector.
 	pub fn group_roles_by_account(
 		mut input: Vec<(T::AccountId, CollectionRole)>,
 	) -> Vec<(T::AccountId, CollectionRoles)> {
