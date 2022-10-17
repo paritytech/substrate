@@ -102,9 +102,9 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		disabled_settings: &CollectionSettings,
 	) -> DispatchResult {
 		let mut disabled_settings = *disabled_settings;
-		// RequiredDeposit can be disabled by calling the force_create() only
-		if disabled_settings.contains(CollectionSetting::RequiredDeposit) {
-			disabled_settings.remove(CollectionSetting::RequiredDeposit);
+		// DepositRequired can be disabled by calling the force_create() only
+		if disabled_settings.contains(CollectionSetting::DepositRequired) {
+			disabled_settings.remove(CollectionSetting::DepositRequired);
 		}
 		Self::do_create_collection(
 			*collection,

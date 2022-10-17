@@ -93,7 +93,7 @@ fn events() -> Vec<Event<Test>> {
 }
 
 fn default_collection_config() -> CollectionConfig {
-	CollectionConfig::disable_settings(CollectionSetting::RequiredDeposit.into())
+	CollectionConfig::disable_settings(CollectionSetting::DepositRequired.into())
 }
 
 fn default_item_config() -> ItemConfig {
@@ -211,7 +211,7 @@ fn transfer_should_work() {
 			RuntimeOrigin::root(),
 			1,
 			CollectionConfig::disable_settings(
-				CollectionSetting::TransferableItems | CollectionSetting::RequiredDeposit
+				CollectionSetting::TransferableItems | CollectionSetting::DepositRequired
 			)
 		));
 
@@ -656,7 +656,7 @@ fn force_collection_status_should_work() {
 			1,
 			1,
 			1,
-			CollectionConfig::disable_settings(CollectionSetting::RequiredDeposit.into()),
+			CollectionConfig::disable_settings(CollectionSetting::DepositRequired.into()),
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, 1, default_item_config()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 169, 2, default_item_config()));
@@ -735,7 +735,7 @@ fn approval_lifecycle_works() {
 			RuntimeOrigin::root(),
 			1,
 			CollectionConfig::disable_settings(
-				CollectionSetting::TransferableItems | CollectionSetting::RequiredDeposit
+				CollectionSetting::TransferableItems | CollectionSetting::DepositRequired
 			)
 		));
 
@@ -852,7 +852,7 @@ fn approval_deadline_works() {
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
 			1,
-			CollectionConfig::disable_settings(CollectionSetting::RequiredDeposit.into())
+			CollectionConfig::disable_settings(CollectionSetting::DepositRequired.into())
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 2, default_item_config()));
 
@@ -1111,7 +1111,7 @@ fn set_price_should_work() {
 			RuntimeOrigin::root(),
 			user_id,
 			CollectionConfig::disable_settings(
-				CollectionSetting::TransferableItems | CollectionSetting::RequiredDeposit
+				CollectionSetting::TransferableItems | CollectionSetting::DepositRequired
 			)
 		));
 

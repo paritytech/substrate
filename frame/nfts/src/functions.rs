@@ -188,7 +188,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let collection_config = Self::get_collection_config(&collection)?;
 				let deposit = match collection_config
-					.is_setting_enabled(CollectionSetting::RequiredDeposit)
+					.is_setting_enabled(CollectionSetting::DepositRequired)
 				{
 					true => T::ItemDeposit::get(),
 					false => Zero::zero(),

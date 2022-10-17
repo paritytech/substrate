@@ -588,9 +588,9 @@ pub mod pallet {
 			let admin = T::Lookup::lookup(admin)?;
 
 			let mut config = config;
-			// RequiredDeposit could be disabled by calling the force_create() only
-			if config.has_disabled_setting(CollectionSetting::RequiredDeposit) {
-				config.enable_setting(CollectionSetting::RequiredDeposit);
+			// DepositRequired could be disabled by calling the force_create() only
+			if config.has_disabled_setting(CollectionSetting::DepositRequired) {
+				config.enable_setting(CollectionSetting::DepositRequired);
 			}
 
 			Self::do_create_collection(
@@ -810,7 +810,7 @@ pub mod pallet {
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 
 			let config = Self::get_collection_config(&collection)?;
-			let deposit = match config.is_setting_enabled(CollectionSetting::RequiredDeposit) {
+			let deposit = match config.is_setting_enabled(CollectionSetting::DepositRequired) {
 				true => T::ItemDeposit::get(),
 				false => Zero::zero(),
 			};
@@ -1309,7 +1309,7 @@ pub mod pallet {
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit) &&
+			if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
 				maybe_check_owner.is_some()
 			{
 				deposit = T::DepositPerByte::get()
@@ -1442,7 +1442,7 @@ pub mod pallet {
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				collection_details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit) &&
+				if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
 					maybe_check_owner.is_some()
 				{
 					deposit = T::DepositPerByte::get()
@@ -1556,7 +1556,7 @@ pub mod pallet {
 				details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
 				if maybe_check_owner.is_some() &&
-					collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit)
+					collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
 				{
 					deposit = T::DepositPerByte::get()
 						.saturating_mul(((data.len()) as u32).into())
