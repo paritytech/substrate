@@ -1854,3 +1854,31 @@ fn pallet_level_feature_flags_should_work() {
 		);
 	})
 }
+
+#[test]
+fn group_roles_by_account_should_work() {
+	new_test_ext().execute_with(|| {
+		let account_to_role = Nfts::group_roles_by_account(vec![
+			(3, CollectionRole::Freezer),
+			(1, CollectionRole::Issuer),
+			(2, CollectionRole::Admin),
+		]);
+		let expect = vec![
+			(1, CollectionRoles(CollectionRole::Issuer.into())),
+			(2, CollectionRoles(CollectionRole::Admin.into())),
+			(3, CollectionRoles(CollectionRole::Freezer.into())),
+		];
+		assert_eq!(account_to_role, expect);
+
+		let account_to_role = Nfts::group_roles_by_account(vec![
+			(3, CollectionRole::Freezer),
+			(2, CollectionRole::Issuer),
+			(2, CollectionRole::Admin),
+		]);
+		let expect = vec![
+			(2, CollectionRoles(CollectionRole::Issuer | CollectionRole::Admin)),
+			(3, CollectionRoles(CollectionRole::Freezer.into())),
+		];
+		assert_eq!(account_to_role, expect);
+	})
+}
