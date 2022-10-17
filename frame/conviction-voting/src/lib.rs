@@ -37,8 +37,9 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
-	ArithmeticError, Perbill,
+	ArithmeticError
 };
+use sp_arithmetic::{Perbill};
 use sp_std::prelude::*;
 
 mod conviction;

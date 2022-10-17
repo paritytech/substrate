@@ -91,9 +91,8 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	 //PerThing,
-	 //PerU16,
-	 Perbill, Percent, Permill, Perquintill,
+	 //Perbill,
+	  Percent, Permill, Perquintill,
 };
 
 pub use either::Either;

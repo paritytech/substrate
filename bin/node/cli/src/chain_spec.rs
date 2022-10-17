@@ -36,9 +36,9 @@ use sp_consensus_babe::AuthorityId as BabeId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	Perbill,
-};
 
+};
+use sp_arithmetic::Perbill;
 pub use kitchensink_runtime::GenesisConfig;
 pub use node_primitives::{AccountId, Balance, Signature};
 

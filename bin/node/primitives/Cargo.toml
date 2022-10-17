@@ -20,7 +20,7 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../../primitives/application-crypto" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
-
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 [features]
 default = ["std"]
 std = [
@@ -30,4 +30,5 @@ std = [
 	"sp-application-crypto/std",
 	"sp-core/std",
 	"sp-runtime/std",
+	"sp-arithmetic/std"
 ]

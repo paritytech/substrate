@@ -26,7 +26,7 @@ use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, seq_phragmen, to_supports, BalancingConfig,
 	ElectionResult, EvaluateSupport, VoteWeight,
 };
-use sp_runtime::Perbill;
+use sp_arithmetic::Perbill;
 
 fn main() {
 	loop {
@@ -67,7 +67,7 @@ fn main() {
 
 			if iterations > 0 {
 				let config = BalancingConfig { iterations, tolerance: 0 };
-				let balanced: ElectionResult<AccountId, sp_runtime::Perbill> =
+				let balanced: ElectionResult<AccountId, sp_arithmetic::Perbill> =
 					seq_phragmen(to_elect, candidates, voters, Some(config)).unwrap();
 
 				let balanced_score = {

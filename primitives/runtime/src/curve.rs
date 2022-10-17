@@ -19,8 +19,9 @@
 
 use crate::{
 	traits::{AtLeast32BitUnsigned, SaturatedConversion},
-	Perbill,
+
 };
+use sp_arithmetic::{Perbill};
 use core::ops::Sub;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].

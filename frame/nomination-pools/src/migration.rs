@@ -108,7 +108,7 @@ pub mod v1 {
 
 pub mod v2 {
 	use super::*;
-	use sp_runtime::Perbill;
+	use sp_arithmetic::Perbill;
 
 	#[test]
 	fn migration_assumption_is_correct() {

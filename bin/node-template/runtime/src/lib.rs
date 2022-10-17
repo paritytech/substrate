@@ -43,7 +43,7 @@ pub use pallet_timestamp::Call as TimestampCall;
 use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier};
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
-pub use sp_runtime::{Perbill, Permill};
+pub use sp_arithmetic::{Perbill, Permill};
 
 /// Import the template pallet.
 pub use pallet_template;

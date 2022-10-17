@@ -27,6 +27,7 @@ memory-db = { version = "0.30.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
@@ -103,6 +104,7 @@ std = [
 	"sp-trie/std",
 	"sp-transaction-pool/std",
 	"trie-db/std",
+	"sp-arithmetic/std"
 ]
 # Special feature to disable logging
 disable-logging = [ "sp-api/disable-logging" ]

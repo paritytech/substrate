@@ -21,7 +21,7 @@ rand = { version = "0.8", features = ["std", "small_rng"] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-npos-elections = { version = "4.0.0-dev", path = ".." }
 sp-runtime = { version = "6.0.0", path = "../../runtime" }
-
+sp-arithmetic = { version = "5.0.0", path = "../../arithmetic" }
 [[bin]]
 name = "reduce"
 path = "src/reduce.rs"

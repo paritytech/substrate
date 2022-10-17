@@ -21,7 +21,7 @@
 use sp_std::vec::Vec;
 
 use codec::{Decode, Encode};
-use sp_runtime::Perbill;
+use sp_arithmetic::Perbill;
 
 use crate::SessionIndex;
 

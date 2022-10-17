@@ -46,8 +46,9 @@ use sp_arithmetic::traits::Saturating;
 use sp_runtime::{
 	traits::{Convert, StaticLookup},
 	ArithmeticError::Overflow,
-	Perbill, RuntimeDebug,
+	RuntimeDebug,
 };
+use sp_arithmetic::Perbill;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{

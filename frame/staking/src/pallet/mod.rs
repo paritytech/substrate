@@ -32,8 +32,9 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-	Perbill, Percent,
+
 };
+use sp_arithmetic::{Perbill, Percent};
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::prelude::*;
 

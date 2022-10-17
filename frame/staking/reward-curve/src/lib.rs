@@ -59,6 +59,7 @@ use syn::parse::{Parse, ParseStream};
 /// # fn main() {}
 /// use sp_runtime::curve::PiecewiseLinear;
 ///
+///
 /// pallet_staking_reward_curve::build! {
 ///     const I_NPOS: PiecewiseLinear<'static> = curve!(
 ///         min_inflation: 0_025_000,
@@ -79,6 +80,17 @@ pub fn build(input: TokenStream) -> TokenStream {
 	let declaration = generate_piecewise_linear(points);
 	let test_module = generate_test_module(&input);
 
+	let import_arithmetic = match crate_name("sp-arithmetic") {
+		Ok(FoundCrate::Itself) => quote!(
+			extern crate sp_arithmetic as _sp_arithmetic;
+		),
+		Ok(FoundCrate::Name(sp_arithmetic)) => {
+			let ident = syn::Ident::new(&sp_arithmetic, Span::call_site());
+			quote!( extern crate #ident as _sp_arithmetic; )
+		},
+		Err(e) => syn::Error::new(Span::call_site(), e).to_compile_error(),
+	};
+
 	let imports = match crate_name("sp-runtime") {
 		Ok(FoundCrate::Itself) => quote!(
 			extern crate sp_runtime as _sp_runtime;
@@ -96,6 +108,7 @@ pub fn build(input: TokenStream) -> TokenStream {
 	quote!(
 		const #const_name: #const_type = {
 			#imports
+			#import_arithmetic
 			#declaration
 		};
 		#test_module
@@ -364,8 +377,8 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 
 		points_tokens.extend(quote!(
 			(
-				_sp_runtime::Perbill::from_parts(#x_perbill),
-				_sp_runtime::Perbill::from_parts(#y_perbill),
+				_sp_arithmetic::Perbill::from_parts(#x_perbill),
+				_sp_arithmetic::Perbill::from_parts(#y_perbill),
 			),
 		));
 	}
@@ -373,7 +386,7 @@ fn generate_piecewise_linear(points: Vec<(u32, u32)>) -> TokenStream2 {
 	quote!(
 		_sp_runtime::curve::PiecewiseLinear::<'static> {
 			points: & [ #points_tokens ],
-			maximum: _sp_runtime::Perbill::from_parts(#max),
+			maximum: _sp_arithmetic::Perbill::from_parts(#max),
 		}
 	)
 }

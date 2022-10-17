@@ -30,7 +30,7 @@ sp-runtime = { version = "6.0.0", default-features = false, path = "../../primit
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 [dev-dependencies]
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -59,6 +59,7 @@ std = [
 	"sp-session/std",
 	"sp-staking/std",
 	"sp-std/std",
+	"sp-arithmetic/std"
 ]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 try-runtime = ["frame-support/try-runtime"]

@@ -75,8 +75,9 @@ use sp_runtime::{
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, Perbill, RuntimeDebug,
+	DispatchError, RuntimeDebug,
 };
+use sp_arithmetic::{Perbill};
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};

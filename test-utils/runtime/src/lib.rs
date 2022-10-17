@@ -58,8 +58,9 @@ use sp_runtime::{
 		InvalidTransaction, TransactionSource, TransactionValidity, TransactionValidityError,
 		ValidTransaction,
 	},
-	ApplyExtrinsicResult, Perbill,
+	ApplyExtrinsicResult
 };
+use sp_arithmetic::Perbill;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;

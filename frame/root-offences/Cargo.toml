@@ -23,7 +23,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
@@ -48,4 +48,5 @@ std = [
 	"pallet-offences/std",
 	"scale-info/std",
 	"sp-runtime/std",
+	"sp-arithmetic/std"
 ]
