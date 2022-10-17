@@ -92,6 +92,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Utility: utility::{Pallet, Call, Event},
 		Example: example::{Pallet, Call},
@@ -140,6 +141,13 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
+
+impl pallet_timestamp::Config for Test {
+	type Moment = u64;
+	type OnTimestampSet = ();
+	type MinimumPeriod = ConstU64<3>;
+	type WeightInfo = ();
+}
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
@@ -175,6 +183,7 @@ type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
 use pallet_balances::{Call as BalancesCall, Error as BalancesError};
+use pallet_timestamp::Call as TimestampCall;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -677,5 +686,57 @@ fn none_origin_does_not_work() {
 		assert_noop!(Utility::force_batch(RuntimeOrigin::none(), vec![]), BadOrigin);
 		assert_noop!(Utility::batch(RuntimeOrigin::none(), vec![]), BadOrigin);
 		assert_noop!(Utility::batch_all(RuntimeOrigin::none(), vec![]), BadOrigin);
+	})
+}
+
+#[test]
+fn batch_doesnt_work_with_inherents() {
+	new_test_ext().execute_with(|| {
+		// fails because inherents expect the origin to be none.
+		assert_ok!(Utility::batch(
+			RuntimeOrigin::signed(1),
+			vec![RuntimeCall::Timestamp(TimestampCall::set { now: 42 }),]
+		));
+		System::assert_last_event(
+			utility::Event::BatchInterrupted {
+				index: 0,
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+			.into(),
+		);
+	})
+}
+
+#[test]
+fn force_batch_doesnt_work_with_inherents() {
+	new_test_ext().execute_with(|| {
+		// fails because inherents expect the origin to be none.
+		assert_ok!(Utility::force_batch(
+			RuntimeOrigin::root(),
+			vec![RuntimeCall::Timestamp(TimestampCall::set { now: 42 }),]
+		));
+		System::assert_last_event(utility::Event::BatchCompletedWithErrors.into());
+	})
+}
+
+#[test]
+fn batch_all_doesnt_work_with_inherents() {
+	new_test_ext().execute_with(|| {
+		let batch_all = RuntimeCall::Utility(UtilityCall::batch_all {
+			calls: vec![RuntimeCall::Timestamp(TimestampCall::set { now: 42 })],
+		});
+		let info = batch_all.get_dispatch_info();
+
+		// fails because inherents expect the origin to be none.
+		assert_noop!(
+			batch_all.dispatch(RuntimeOrigin::signed(1)),
+			DispatchErrorWithPostInfo {
+				post_info: PostDispatchInfo {
+					actual_weight: Some(info.weight),
+					pays_fee: Pays::Yes
+				},
+				error: frame_system::Error::<Test>::CallFiltered.into(),
+			}
+		);
 	})
 }
