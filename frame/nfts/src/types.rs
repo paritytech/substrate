@@ -313,11 +313,14 @@ pub enum CollectionRole {
 pub struct CollectionRoles(pub BitFlags<CollectionRole>);
 
 impl CollectionRoles {
-	pub fn empty() -> Self {
+	pub fn none() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> BitFlags<CollectionRole> {
-		self.0
+	pub fn has_role(&self, role: CollectionRole) -> bool {
+		self.0.contains(role)
+	}
+	pub fn add_role(&mut self, role: CollectionRole) {
+		self.0.insert(role);
 	}
 }
 impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);
