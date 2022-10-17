@@ -246,8 +246,38 @@ mod bonded_pool {
 	}
 
 	#[test]
+	fn set_commission_receiver_works_with_error_tests() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Provided pool does not exist
+			assert_noop!(
+				Pools::set_commission(RuntimeOrigin::signed(900), 9999, Perbill::from_percent(1)),
+				Error::<Runtime>::PoolNotFound
+			);
+			// Sender does not have permission to set commission
+			assert_noop!(
+				Pools::set_commission(RuntimeOrigin::signed(1), 1, Perbill::from_percent(5)),
+				Error::<Runtime>::DoesNotHavePermission
+			);
+			// Set a commission receiver for pool 1 to be the root account.
+			assert_ok!(Pools::set_commission_receiver(RuntimeOrigin::signed(900), 1, 900,));
+			assert_eq!(BondedPool::<Runtime>::get(1).unwrap().commission.receiver.unwrap(), 900);
+			// Commission change events triggered successfully
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionReceiverChanged { pool_id: 1, receiver: 900 },
+				]
+			);
+		});
+	}
+
+	#[test]
 	fn set_commission_works() {
 		ExtBuilder::default().build_and_execute(|| {
+			// Pre-requisite of setting commission is to have a receiver.
+			assert_ok!(Pools::set_commission_receiver(RuntimeOrigin::signed(900), 1, 900,));
 			// Set a commission pool 1
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
@@ -264,6 +294,7 @@ mod bonded_pool {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionReceiverChanged { pool_id: 1, receiver: 900 },
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
 						commission: Perbill::from_percent(50)
@@ -286,7 +317,13 @@ mod bonded_pool {
 				Pools::set_commission(RuntimeOrigin::signed(1), 1, Perbill::from_percent(5)),
 				Error::<Runtime>::DoesNotHavePermission
 			);
-
+			// Receiver has to be set before commission can be sed
+			assert_noop!(
+				Pools::set_commission(RuntimeOrigin::signed(900), 1, Perbill::from_percent(5)),
+				Error::<Runtime>::NoCommisionReceiverSet
+			);
+			// Set a commission receiver to continue tests.
+			assert_ok!(Pools::set_commission_receiver(RuntimeOrigin::signed(900), 1, 900,));
 			// Throttle test. We will throttle commission to be a +1% commission increase every 2
 			// blocks.
 			assert_ok!(Pools::set_commission_throttle(
@@ -300,6 +337,7 @@ mod bonded_pool {
 				Commission {
 					current: Perbill::from_percent(0),
 					max: None,
+					receiver: Some(900),
 					throttle: Some(CommissionThrottle {
 						change_rate: (Perbill::from_percent(1), 2_u64),
 						previous_set_at: None,
@@ -325,6 +363,7 @@ mod bonded_pool {
 				Commission {
 					current: Perbill::from_percent(1),
 					max: None,
+					receiver: Some(900),
 					throttle: Some(CommissionThrottle {
 						change_rate: (Perbill::from_percent(1), 2_u64),
 						previous_set_at: Some(1_u64),
@@ -384,6 +423,7 @@ mod bonded_pool {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionReceiverChanged { pool_id: 1, receiver: 900 },
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
 						commission: Perbill::from_percent(1)
@@ -396,7 +436,7 @@ mod bonded_pool {
 						pool_id: 1,
 						commission: Perbill::from_percent(2),
 						max_commission: Perbill::from_percent(2)
-					},
+					}
 				]
 			);
 		});
@@ -441,6 +481,9 @@ mod bonded_pool {
 				Error::<Runtime>::MaxCommissionRestricted
 			);
 
+			// Set a commission receiver to continue tests.
+			assert_ok!(Pools::set_commission_receiver(RuntimeOrigin::signed(900), 1, 900,));
+
 			// We will now set a commission to 75% and then amend the max commission to 50%.
 			// The max commission change should decrease the current commission to 50%.
 			assert_ok!(Pools::set_commission(
@@ -458,6 +501,7 @@ mod bonded_pool {
 				Commission {
 					current: Perbill::from_percent(50),
 					max: Some(Perbill::from_percent(50)),
+					receiver: Some(900),
 					throttle: None
 				}
 			);
@@ -473,6 +517,7 @@ mod bonded_pool {
 						commission: Perbill::from_percent(0),
 						max_commission: Perbill::from_percent(90)
 					},
+					Event::PoolCommissionReceiverChanged { pool_id: 1, receiver: 900 },
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
 						commission: Perbill::from_percent(75)
