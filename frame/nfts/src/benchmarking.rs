@@ -160,7 +160,7 @@ benchmarks_instance_pallet! {
 			add_item_metadata::<T, I>(T::Helper::item(i as u16));
 			add_item_attribute::<T, I>(T::Helper::item(i as u16));
 		}
-		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness(caller.clone(), caller.clone(), caller.clone());
+		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();
 	}: _(SystemOrigin::Signed(caller), collection, witness)
 	verify {
 		assert_last_event::<T, I>(Event::Destroyed { collection }.into());

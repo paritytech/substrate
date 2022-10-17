@@ -47,7 +47,6 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
-pub(super) type DestroyWitnessFor<T> = DestroyWitness<<T as SystemConfig>::AccountId>;
 
 pub trait Incrementable {
 	fn increment(&self) -> Self;
@@ -57,7 +56,7 @@ impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
-	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
+	/// Collection's owner.
 	pub(super) owner: AccountId,
 	/// The total balance deposited for the all storage associated with this collection.
 	/// Used by `destroy`.
@@ -72,7 +71,7 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 
 /// Witness data for the destroy transactions.
 #[derive(Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct DestroyWitness<AccountId> {
+pub struct DestroyWitness {
 	/// The total number of outstanding items of this collection.
 	#[codec(compact)]
 	pub items: u32,
@@ -82,28 +81,14 @@ pub struct DestroyWitness<AccountId> {
 	/// The total number of attributes for this collection.
 	#[codec(compact)]
 	pub attributes: u32,
-	/// Collection's issuer.
-	pub issuer: AccountId,
-	/// Collection's admin.
-	pub admin: AccountId,
-	/// Collection's freezer.
-	pub freezer: AccountId,
 }
 
 impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
-	pub fn destroy_witness(
-		&self,
-		issuer: AccountId,
-		admin: AccountId,
-		freezer: AccountId,
-	) -> DestroyWitness<AccountId> {
+	pub fn destroy_witness(&self) -> DestroyWitness {
 		DestroyWitness {
 			items: self.items,
 			item_metadatas: self.item_metadatas,
 			attributes: self.attributes,
-			issuer,
-			admin,
-			freezer,
 		}
 	}
 }

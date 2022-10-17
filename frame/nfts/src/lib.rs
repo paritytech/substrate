@@ -676,7 +676,7 @@ pub mod pallet {
 		pub fn destroy(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			witness: DestroyWitnessFor<T>,
+			witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
 				Ok(_) => None,
@@ -714,13 +714,11 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, item, owner, config, |_| {
-				ensure!(
-					Self::has_role(&collection, &origin, CollectionRole::Issuer),
-					Error::<T, I>::NoPermission
-				);
-				Ok(())
-			})
+			ensure!(
+				Self::has_role(&collection, &origin, CollectionRole::Issuer),
+				Error::<T, I>::NoPermission
+			);
+			Self::do_mint(collection, item, owner, config, |_| Ok(()))
 		}
 
 		/// Destroy a single item.
@@ -746,7 +744,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
 
-			Self::do_burn(collection, item, |_, details| {
+			Self::do_burn(collection, item, |details| {
 				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
 				let is_permitted = is_admin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
@@ -1004,8 +1002,7 @@ pub mod pallet {
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
 				// delete previous values
-				#[allow(deprecated)]
-				CollectionRoleOf::<T, I>::remove_prefix(&collection, None);
+				let _ = CollectionRoleOf::<T, I>::clear_prefix(&collection, 3, None);
 
 				let account_to_role = Self::group_roles_by_account(vec![
 					(issuer.clone(), CollectionRole::Issuer),
@@ -1234,8 +1231,7 @@ pub mod pallet {
 				let freezer = T::Lookup::lookup(freezer)?;
 
 				// delete previous values
-				#[allow(deprecated)]
-				CollectionRoleOf::<T, I>::remove_prefix(&collection, None);
+				let _ = CollectionRoleOf::<T, I>::clear_prefix(&collection, 3, None);
 
 				let account_to_role = Self::group_roles_by_account(vec![
 					(issuer, CollectionRole::Issuer),

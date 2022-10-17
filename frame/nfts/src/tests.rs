@@ -717,11 +717,6 @@ fn force_collection_status_should_work() {
 			CollectionRoleOf::<Test>::get(0, 3).unwrap(),
 			CollectionRoles(CollectionRole::Issuer | CollectionRole::Freezer)
 		);
-
-		let w = Nfts::get_destroy_witness(&0).unwrap();
-		assert_eq!(w.issuer, 3);
-		assert_eq!(w.admin, 2);
-		assert_eq!(w.freezer, 3);
 	});
 }
 

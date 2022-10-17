@@ -118,35 +118,10 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 }
 
 impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Pallet<T, I> {
-	type DestroyWitness = DestroyWitnessFor<T>;
+	type DestroyWitness = DestroyWitness;
 
-	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<DestroyWitnessFor<T>> {
-		let mut issuer = None;
-		let mut admin = None;
-		let mut freezer = None;
-
-		for (account, roles) in CollectionRoleOf::<T, I>::iter_prefix(collection) {
-			let roles = roles.values();
-			if roles.contains(CollectionRole::Admin) {
-				admin = Some(account.clone());
-			}
-			if roles.contains(CollectionRole::Freezer) {
-				freezer = Some(account.clone());
-			}
-			if roles.contains(CollectionRole::Issuer) {
-				issuer = Some(account);
-			}
-		}
-
-		if let Some(issuer) = issuer {
-			if let Some(admin) = admin {
-				if let Some(freezer) = freezer {
-					return Collection::<T, I>::get(collection)
-						.map(|a| a.destroy_witness(issuer, admin, freezer))
-				}
-			}
-		}
-		return None
+	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<DestroyWitness> {
+		return Collection::<T, I>::get(collection).map(|a| a.destroy_witness())
 	}
 
 	fn destroy(
@@ -175,7 +150,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettin
 		item: &Self::ItemId,
 		maybe_check_owner: Option<&T::AccountId>,
 	) -> DispatchResult {
-		Self::do_burn(*collection, *item, |_, d| {
+		Self::do_burn(*collection, *item, |d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
 					return Err(Error::<T, I>::NoPermission.into())

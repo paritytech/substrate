@@ -120,9 +120,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn do_destroy_collection(
 		collection: T::CollectionId,
-		witness: DestroyWitnessFor<T>,
+		witness: DestroyWitness,
 		maybe_check_owner: Option<T::AccountId>,
-	) -> Result<DestroyWitnessFor<T>, DispatchError> {
+	) -> Result<DestroyWitness, DispatchError> {
 		Collection::<T, I>::try_mutate_exists(collection, |maybe_details| {
 			let collection_details =
 				maybe_details.take().ok_or(Error::<T, I>::UnknownCollection)?;
@@ -136,18 +136,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			);
 			ensure!(collection_details.attributes == witness.attributes, Error::<T, I>::BadWitness);
 
-			for (account, roles) in CollectionRoleOf::<T, I>::drain_prefix(&collection) {
-				let roles = roles.values();
-				if roles.contains(CollectionRole::Admin) {
-					ensure!(account == witness.admin, Error::<T, I>::BadWitness);
-				}
-				if roles.contains(CollectionRole::Freezer) {
-					ensure!(account == witness.freezer, Error::<T, I>::BadWitness);
-				}
-				if roles.contains(CollectionRole::Issuer) {
-					ensure!(account == witness.issuer, Error::<T, I>::BadWitness);
-				}
-			}
 			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
 				Account::<T, I>::remove((&details.owner, &collection, &item));
 			}
@@ -158,6 +146,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			#[allow(deprecated)]
 			PendingSwapOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
+			let _ = CollectionRoleOf::<T, I>::clear_prefix(&collection, 3, None);
 			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
@@ -173,7 +162,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				items: collection_details.items,
 				item_metadatas: collection_details.item_metadatas,
 				attributes: collection_details.attributes,
-				..witness
 			})
 		})
 	}
@@ -236,7 +224,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
-		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &ItemDetailsFor<T, I>) -> DispatchResult,
+		with_details: impl FnOnce(&ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
@@ -245,7 +233,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				let details = Item::<T, I>::get(&collection, &item)
 					.ok_or(Error::<T, I>::UnknownCollection)?;
-				with_details(collection_details, &details)?;
+				with_details(&details)?;
 
 				// Return the deposit.
 				T::Currency::unreserve(&collection_details.owner, details.deposit);
