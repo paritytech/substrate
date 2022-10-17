@@ -420,7 +420,8 @@ where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
-		Ok(StorageProvider::storage(self, id, &StorageKey(well_known_keys::CODE.to_vec()))?
+		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+		Ok(StorageProvider::storage(self, &hash, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect(
 				"None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed",
@@ -1402,21 +1403,19 @@ where
 {
 	fn storage_keys(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		let keys = self.state_at(&hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
+		let keys = self.state_at(hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
 		Ok(keys)
 	}
 
 	fn storage_pairs(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		let state = self.state_at(&hash)?;
+		let state = self.state_at(hash)?;
 		let keys = state
 			.keys(&key_prefix.0)
 			.into_iter()
@@ -1430,37 +1429,34 @@ where
 
 	fn storage_keys_iter<'a>(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		let state = self.state_at(&hash)?;
+		let state = self.state_at(hash)?;
 		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
 		Ok(KeyIterator::new(state, prefix, start_key))
 	}
 
 	fn child_storage_keys_iter<'a>(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		let state = self.state_at(&hash)?;
+		let state = self.state_at(hash)?;
 		let start_key = start_key.or(prefix).map(|key| key.0.clone()).unwrap_or_else(Vec::new);
 		Ok(KeyIterator::new_child(state, child_info, prefix, start_key))
 	}
 
 	fn storage(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		Ok(self
-			.state_at(&hash)?
+			.state_at(hash)?
 			.storage(&key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData))
@@ -1468,24 +1464,22 @@ where
 
 	fn storage_hash(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.state_at(&hash)?
+		self.state_at(hash)?
 			.storage_hash(&key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}
 
 	fn child_storage_keys(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		let keys = self
-			.state_at(&hash)?
+			.state_at(hash)?
 			.child_keys(child_info, &key_prefix.0)
 			.into_iter()
 			.map(StorageKey)
@@ -1495,13 +1489,12 @@ where
 
 	fn child_storage(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		Ok(self
-			.state_at(&hash)?
+			.state_at(hash)?
 			.child_storage(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?
 			.map(StorageData))
@@ -1509,12 +1502,11 @@ where
 
 	fn child_storage_hash(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.state_at(&hash)?
+		self.state_at(hash)?
 			.child_storage_hash(child_info, &key.0)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))
 	}

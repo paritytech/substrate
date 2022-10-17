@@ -23,7 +23,7 @@ use crate::{
 };
 use clap::Parser;
 use log::info;
-use sc_client_api::{StorageProvider, UsageProvider};
+use sc_client_api::{HeaderBackend, StorageProvider, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io::Write, str::FromStr, sync::Arc};
 
@@ -57,7 +57,7 @@ impl ExportStateCmd {
 	) -> error::Result<()>
 	where
 		B: BlockT,
-		C: UsageProvider<B> + StorageProvider<B, BA>,
+		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
 		BA: sc_client_api::backend::Backend<B>,
 		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,

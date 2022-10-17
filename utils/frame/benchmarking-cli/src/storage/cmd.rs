@@ -191,9 +191,9 @@ impl StorageCmd {
 		B: BlockT + Debug,
 		BA: ClientBackend<B>,
 	{
-		let block = BlockId::Hash(client.usage_info().chain.best_hash);
+		let hash = client.usage_info().chain.best_hash;
 		let empty_prefix = StorageKey(Vec::new());
-		let mut keys = client.storage_keys(&block, &empty_prefix)?;
+		let mut keys = client.storage_keys(&hash, &empty_prefix)?;
 		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
@@ -201,7 +201,7 @@ impl StorageCmd {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
 			for key in keys.as_slice() {
 				let _ = client
-					.storage(&block, &key)
+					.storage(&hash, &key)
 					.expect("Checked above to exist")
 					.ok_or("Value unexpectedly empty");
 			}
