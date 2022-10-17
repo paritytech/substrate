@@ -684,7 +684,7 @@ fn force_collection_status_should_work() {
 			2,
 			3,
 			4,
-			CollectionConfig::empty(),
+			CollectionConfig::all_settings_enabled(),
 		));
 		assert_eq!(
 			CollectionRoleOf::<Test>::get(0, 2).unwrap(),
@@ -706,7 +706,7 @@ fn force_collection_status_should_work() {
 			3,
 			2,
 			3,
-			CollectionConfig::empty(),
+			CollectionConfig::all_settings_enabled(),
 		));
 
 		assert_eq!(
