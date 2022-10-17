@@ -17,8 +17,6 @@
 
 pub mod atomic_swap;
 pub mod buy_sell;
-pub mod freeze;
 pub mod lock;
-pub mod macros;
 pub mod roles;
 pub mod settings;

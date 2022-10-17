@@ -27,6 +27,7 @@ use std::{
 use libp2p::core::upgrade;
 
 pub mod event;
+pub mod role;
 
 /// The protocol name transmitted on the wire.
 #[derive(Debug, Clone)]

@@ -22,7 +22,7 @@ use frame_support::{
 };
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_create_swap(
+	pub(crate) fn do_create_swap(
 		caller: T::AccountId,
 		offered_collection_id: T::CollectionId,
 		offered_item_id: T::ItemId,
@@ -31,7 +31,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 		duration: <T as SystemConfig>::BlockNumber,
 	) -> DispatchResult {
-		ensure!(!Self::is_feature_flag_set(SystemFeature::NoSwaps), Error::<T, I>::MethodDisabled);
+		ensure!(
+			Self::is_pallet_feature_enabled(PalletFeature::Swaps),
+			Error::<T, I>::MethodDisabled
+		);
 		ensure!(duration <= T::MaxDeadlineDuration::get(), Error::<T, I>::WrongDuration);
 
 		let item = Item::<T, I>::get(&offered_collection_id, &offered_item_id)
@@ -75,7 +78,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_cancel_swap(
+	pub(crate) fn do_cancel_swap(
 		caller: T::AccountId,
 		offered_collection_id: T::CollectionId,
 		offered_item_id: T::ItemId,
@@ -104,7 +107,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	pub fn do_claim_swap(
+	pub(crate) fn do_claim_swap(
 		caller: T::AccountId,
 		send_collection_id: T::CollectionId,
 		send_item_id: T::ItemId,
@@ -112,7 +115,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		receive_item_id: T::ItemId,
 		witness_price: Option<PriceWithDirection<ItemPrice<T, I>>>,
 	) -> DispatchResult {
-		ensure!(!Self::is_feature_flag_set(SystemFeature::NoSwaps), Error::<T, I>::MethodDisabled);
+		ensure!(
+			Self::is_pallet_feature_enabled(PalletFeature::Swaps),
+			Error::<T, I>::MethodDisabled
+		);
 
 		let send_item = Item::<T, I>::get(&send_collection_id, &send_item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;

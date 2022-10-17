@@ -18,7 +18,7 @@
 //! Various basic types for use in the Nfts pallet.
 
 use super::*;
-use crate::features::macros::*;
+use crate::macros::*;
 use codec::EncodeLike;
 use enumflags2::{bitflags, BitFlags};
 use frame_support::{
@@ -31,6 +31,11 @@ pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
+	<T as SystemConfig>::AccountId,
+	Option<<T as SystemConfig>::BlockNumber>,
+	<T as Config<I>>::ApprovalsLimit,
+>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
@@ -181,19 +186,19 @@ pub struct PriceWithDirection<Amount> {
 	pub(super) direction: PriceDirection,
 }
 
-// Support for up to 64 user-enabled features on a collection.
+/// Support for up to 64 user-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum CollectionSetting {
-	/// Disallow to transfer items in this collection.
-	NonTransferableItems,
-	/// Disallow to modify metadata of this collection.
-	LockedMetadata,
-	/// Disallow to modify attributes of this collection.
-	LockedAttributes,
-	/// When is set then no deposit needed to hold items of this collection.
-	FreeHolding,
+	/// Items in this collection are transferable.
+	TransferableItems,
+	/// The metadata of this collection can be modified.
+	UnlockedMetadata,
+	/// Attributes of this collection can be modified.
+	UnlockedAttributes,
+	/// When this isn't set then the deposit is required to hold the items of this collection.
+	RequiredDeposit,
 }
 pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 
@@ -202,26 +207,41 @@ pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 pub struct CollectionConfig(pub CollectionSettings);
 
 impl CollectionConfig {
-	pub fn empty() -> Self {
+	pub fn all_settings_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> CollectionSettings {
+	pub fn get_disabled_settings(&self) -> CollectionSettings {
 		self.0
+	}
+	pub fn is_setting_enabled(&self, setting: CollectionSetting) -> bool {
+		!self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_setting(&self, setting: CollectionSetting) -> bool {
+		self.get_disabled_settings().contains(setting)
+	}
+	pub fn disable_settings(settings: CollectionSettings) -> Self {
+		Self(settings)
+	}
+	pub fn enable_setting(&mut self, setting: CollectionSetting) {
+		self.0.remove(setting);
+	}
+	pub fn disable_setting(&mut self, setting: CollectionSetting) {
+		self.0.insert(setting);
 	}
 }
 impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
 
-// Support for up to 64 user-enabled features on an item.
+/// Support for up to 64 user-enabled features on an item.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum ItemSetting {
-	/// Disallow transferring this item.
-	NonTransferable,
-	/// Disallow to modify metadata of this item.
-	LockedMetadata,
-	/// Disallow to modify attributes of this item.
-	LockedAttributes,
+	/// This item is transferable.
+	Transferable,
+	/// The metadata of this item can be modified.
+	UnlockedMetadata,
+	/// Attributes of this item can be modified.
+	UnlockedAttributes,
 }
 pub(super) type ItemSettings = BitFlags<ItemSetting>;
 
@@ -230,43 +250,66 @@ pub(super) type ItemSettings = BitFlags<ItemSetting>;
 pub struct ItemConfig(pub ItemSettings);
 
 impl ItemConfig {
-	pub fn empty() -> Self {
+	pub fn all_settings_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> ItemSettings {
+	pub fn get_disabled_settings(&self) -> ItemSettings {
 		self.0
+	}
+	pub fn is_setting_enabled(&self, setting: ItemSetting) -> bool {
+		!self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_setting(&self, setting: ItemSetting) -> bool {
+		self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_settings(&self) -> bool {
+		!self.get_disabled_settings().is_empty()
+	}
+	pub fn disable_settings(settings: ItemSettings) -> Self {
+		Self(settings)
+	}
+	pub fn enable_setting(&mut self, setting: ItemSetting) {
+		self.0.remove(setting);
+	}
+	pub fn disable_setting(&mut self, setting: ItemSetting) {
+		self.0.insert(setting);
 	}
 }
 impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
 
-// Support for up to 64 system-enabled features on a collection.
+/// Support for up to 64 system-enabled features on a collection.
 #[bitflags]
 #[repr(u64)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
-pub enum SystemFeature {
-	/// Disallow trading operations.
-	NoTrading,
-	/// Disallow setting attributes.
-	NoAttributes,
-	/// Disallow transfer approvals.
-	NoApprovals,
-	/// Disallow atomic items swap.
-	NoSwaps,
-	/// Disallow public mints.
-	NoPublicMints,
+pub enum PalletFeature {
+	/// Enable/disable trading operations.
+	Trading,
+	/// Allow/disallow setting attributes.
+	Attributes,
+	/// Allow/disallow transfer approvals.
+	Approvals,
+	/// Allow/disallow atomic items swap.
+	Swaps,
+	/// Allow/disallow public mints.
+	PublicMints,
 }
-pub type SystemFeatureFlags = BitFlags<SystemFeature>;
 
-/// Wrapper type for `SystemFeatureFlags` that implements `Codec`.
+/// Wrapper type for `BitFlags<PalletFeature>` that implements `Codec`.
 #[derive(Default, RuntimeDebug)]
-pub struct SystemFeatures(pub SystemFeatureFlags);
+pub struct PalletFeatures(pub BitFlags<PalletFeature>);
 
-impl SystemFeatures {
-	pub fn empty() -> Self {
+impl PalletFeatures {
+	pub fn all_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
+	pub fn disable(features: BitFlags<PalletFeature>) -> Self {
+		Self(features)
+	}
+	pub fn is_enabled(&self, feature: PalletFeature) -> bool {
+		!self.0.contains(feature)
+	}
 }
-impl_codec_bitflags!(SystemFeatures, u64, SystemFeature);
+impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);
 
 #[bitflags]
 #[repr(u8)]

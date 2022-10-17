@@ -340,7 +340,7 @@ where
 		let queue: Vec<DeletedContract> = (0..T::DeletionQueueDepth::get())
 			.map(|_| DeletedContract { trie_id: TrieId::default() })
 			.collect();
-		let bounded: BoundedVec<_, _> = queue.try_into().unwrap();
+		let bounded: BoundedVec<_, _> = queue.try_into().map_err(|_| ()).unwrap();
 		<DeletionQueue<T>>::put(bounded);
 	}
 }

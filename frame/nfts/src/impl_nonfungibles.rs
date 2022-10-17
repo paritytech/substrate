@@ -83,8 +83,8 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			ItemConfigOf::<T, I>::get(collection, item),
 		) {
 			(Some(cc), Some(ic))
-				if !cc.values().contains(CollectionSetting::NonTransferableItems) &&
-					!ic.values().contains(ItemSetting::NonTransferable) =>
+				if cc.is_setting_enabled(CollectionSetting::TransferableItems) &&
+					ic.is_setting_enabled(ItemSetting::Transferable) =>
 				true,
 			_ => false,
 		}
@@ -99,18 +99,18 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
-		settings: &CollectionSettings,
+		disabled_settings: &CollectionSettings,
 	) -> DispatchResult {
-		let mut settings = *settings;
-		// FreeHolding could be set by calling the force_create() only
-		if settings.contains(CollectionSetting::FreeHolding) {
-			settings.remove(CollectionSetting::FreeHolding);
+		let mut disabled_settings = *disabled_settings;
+		// RequiredDeposit can be disabled by calling the force_create() only
+		if disabled_settings.contains(CollectionSetting::RequiredDeposit) {
+			disabled_settings.remove(CollectionSetting::RequiredDeposit);
 		}
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
 			admin.clone(),
-			CollectionConfig(settings),
+			CollectionConfig::disable_settings(disabled_settings),
 			T::CollectionDeposit::get(),
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)

@@ -46,7 +46,7 @@ fn create_collection<T: Config<I>, I: 'static>(
 	assert_ok!(Nfts::<T, I>::force_create(
 		SystemOrigin::Root.into(),
 		caller_lookup.clone(),
-		CollectionConfig::empty()
+		CollectionConfig::all_settings_enabled()
 	));
 	(collection, caller, caller_lookup)
 }
@@ -79,7 +79,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 		T::Helper::collection(0),
 		item,
 		caller_lookup.clone(),
-		ItemConfig::empty(),
+		ItemConfig::all_settings_enabled(),
 	));
 	(item, caller, caller_lookup)
 }
@@ -136,7 +136,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { admin, config: CollectionConfig::empty() };
+		let call = Call::<T, I>::create { admin, config: CollectionConfig::all_settings_enabled() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -145,7 +145,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, caller_lookup, CollectionConfig::empty())
+	}: _(SystemOrigin::Root, caller_lookup, CollectionConfig::all_settings_enabled())
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
@@ -169,7 +169,7 @@ benchmarks_instance_pallet! {
 	mint {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let item = T::Helper::item(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, ItemConfig::empty())
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, ItemConfig::all_settings_enabled())
 	verify {
 		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
 	}
@@ -204,40 +204,40 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup,
-			CollectionConfig(CollectionSetting::FreeHolding.into()),
+			CollectionConfig(CollectionSetting::RequiredDeposit.into()),
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
 		assert_last_event::<T, I>(Event::Redeposited { collection, successful_items: items }.into());
 	}
 
-	freeze {
+	lock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::item(0))
 	verify {
-		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
+		assert_last_event::<T, I>(Event::ItemTransferLocked { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
 	}
 
-	thaw {
+	unlock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-		Nfts::<T, I>::freeze(
+		Nfts::<T, I>::lock_item_transfer(
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
 			item,
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed { collection, item }.into());
+		assert_last_event::<T, I>(Event::ItemTransferUnlocked { collection, item }.into());
 	}
 
 	lock_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let lock_config = CollectionConfig(
-			CollectionSetting::NonTransferableItems |
-				CollectionSetting::LockedMetadata |
-				CollectionSetting::LockedAttributes,
+			CollectionSetting::TransferableItems |
+				CollectionSetting::UnlockedMetadata |
+				CollectionSetting::UnlockedAttributes,
 		);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_config)
 	verify {
@@ -280,21 +280,21 @@ benchmarks_instance_pallet! {
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			config: CollectionConfig(CollectionSetting::FreeHolding.into()),
+			config: CollectionConfig(CollectionSetting::RequiredDeposit.into()),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
 	}
 
-	lock_item {
+	lock_item_properties {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 		let lock_metadata = true;
 		let lock_attributes = true;
 	}: _(SystemOrigin::Signed(caller), collection, item, lock_metadata, lock_attributes)
 	verify {
-		assert_last_event::<T, I>(Event::ItemLocked { collection, item, lock_metadata, lock_attributes }.into());
+		assert_last_event::<T, I>(Event::ItemPropertiesLocked { collection, item, lock_metadata, lock_attributes }.into());
 	}
 
 	set_attribute {
