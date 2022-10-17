@@ -1199,14 +1199,13 @@ where
 
 	fn storage_collection(
 		&self,
-		id: &BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
 		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
 			return Err(Error::Backend("Invalid start key.".to_string()))
 		}
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		let state = self.state_at(&hash)?;
 		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
 			let storage_key = PrefixedStorageKey::new_ref(storage_key);
