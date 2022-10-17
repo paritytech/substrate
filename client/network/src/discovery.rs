@@ -46,7 +46,6 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
-use bytes::Bytes;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -337,25 +336,17 @@ impl DiscoveryBehaviour {
 
 		let mut added = false;
 		for kademlia in self.kademlias.values_mut() {
-			let kad_protocols: Vec<_> = kademlia
-				.protocol_names()
+			if let Some(matching_protocol) = supported_protocols
 				.iter()
-				.map(AsRef::as_ref)
-				.map(Bytes::copy_from_slice)
-				.collect();
-			'outer: for kad_protocol in kad_protocols {
-				for supported_protocol in supported_protocols {
-					if supported_protocol.as_ref() == kad_protocol {
-						trace!(
-							target: "sub-libp2p",
-							"Adding self-reported address {} from {} to Kademlia DHT {}.",
-							addr, peer_id, String::from_utf8_lossy(&kad_protocol),
-						);
-						kademlia.add_address(peer_id, addr.clone());
-						added = true;
-						break 'outer
-					}
-				}
+				.find(|p| kademlia.protocol_names().iter().any(|k| k.as_ref() == p.as_ref()))
+			{
+				trace!(
+					target: "sub-libp2p",
+					"Adding self-reported address {} from {} to Kademlia DHT {}.",
+					addr, peer_id, String::from_utf8_lossy(matching_protocol.as_ref()),
+				);
+				kademlia.add_address(peer_id, addr.clone());
+				added = true;
 			}
 		}
 
