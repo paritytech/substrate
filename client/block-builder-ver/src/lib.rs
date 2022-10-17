@@ -510,11 +510,6 @@ where
 
 #[cfg(test)]
 mod tests {
-	
-	
-	
-	
-	
 
 	// #[test]
 	// fn block_building_storage_proof_does_not_include_runtime_by_default() {

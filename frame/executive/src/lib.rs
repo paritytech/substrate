@@ -718,7 +718,7 @@ mod tests {
 	use frame_system::{Call as SystemCall, ChainContext, LastRuntimeUpgradeInfo};
 	use pallet_balances::Call as BalancesCall;
 	use pallet_transaction_payment::CurrencyAdapter;
-	use sp_core::{sr25519, testing::SR25519, Pair, ShufflingSeed, H256};
+	use sp_core::{crypto::key_types::AURA, sr25519, Pair, ShufflingSeed, H256};
 	use sp_keystore::{
 		vrf::{VRFTranscriptData, VRFTranscriptValue},
 		SyncCryptoStore,
@@ -1733,7 +1733,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let transcript = VRFTranscriptData {
@@ -1742,7 +1742,7 @@ mod tests {
 			};
 
 			let signature = keystore
-				.sr25519_vrf_sign(SR25519, &key_pair.public(), transcript.clone())
+				.sr25519_vrf_sign(AURA, &key_pair.public(), transcript.clone())
 				.unwrap()
 				.unwrap();
 
@@ -1786,7 +1786,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
@@ -1874,7 +1874,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let txs = (0..100000)
@@ -1936,7 +1936,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let txs = (0..10)
@@ -2025,7 +2025,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
@@ -2078,7 +2078,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
@@ -2170,7 +2170,7 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
 
 			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
@@ -2263,10 +2263,8 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
-
-			let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
 
 			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
 				.iter()
@@ -2328,10 +2326,8 @@ mod tests {
 			let key_pair =
 				sr25519::Pair::from_string(secret_uri, None).expect("Generates key pair");
 			keystore
-				.insert_unknown(SR25519, secret_uri, key_pair.public().as_ref())
+				.insert_unknown(AURA, secret_uri, key_pair.public().as_ref())
 				.expect("Inserts unknown key");
-
-			let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
 
 			let pub_key_bytes = AsRef::<[u8; 32]>::as_ref(&key_pair.public())
 				.iter()

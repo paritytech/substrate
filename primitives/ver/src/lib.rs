@@ -2,10 +2,9 @@
 
 use codec::{Decode, Encode};
 
+use sp_core::crypto::key_types::AURA;
 #[cfg(feature = "helpers")]
 use sp_core::sr25519;
-#[cfg(feature = "helpers")]
-use sp_core::testing::SR25519;
 use sp_core::ShufflingSeed;
 use sp_inherents::{InherentData, InherentIdentifier};
 #[cfg(feature = "helpers")]
@@ -54,7 +53,7 @@ pub fn calculate_next_seed_from_bytes<T: sp_keystore::SyncCryptoStore + ?Sized>(
 		label: b"shuffling_seed",
 		items: vec![("prev_seed", VRFTranscriptValue::Bytes(prev_seed))],
 	};
-	SyncCryptoStore::sr25519_vrf_sign(keystore, SR25519, public_key, transcript.clone())
+	SyncCryptoStore::sr25519_vrf_sign(keystore, AURA, public_key, transcript.clone())
 		.ok()
 		.flatten()
 		.map(|sig| ShufflingSeed {
