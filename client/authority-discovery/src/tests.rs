@@ -91,10 +91,7 @@ fn cryptos_are_compatible() {
 	let libp2p_public = libp2p_secret.public();
 
 	let sp_core_secret = {
-		let libp2p_ed_secret = match libp2p_secret.clone() {
-			libp2p::identity::Keypair::Ed25519(x) => x,
-			_ => panic!("generate_ed25519 should have generated an Ed25519 key ¯\\_(ツ)_/¯"),
-		};
+		let libp2p::identity::Keypair::Ed25519(libp2p_ed_secret) = libp2p_secret.clone();
 		sp_core::ed25519::Pair::from_seed_slice(&libp2p_ed_secret.secret().as_ref()).unwrap()
 	};
 	let sp_core_public = sp_core_secret.public();
