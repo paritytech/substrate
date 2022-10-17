@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::Error;
-use sc_client_api::{StorageProvider, UsageProvider};
+use sc_client_api::{HeaderBackend, StorageProvider, UsageProvider};
 use sp_core::storage::{well_known_keys, ChildInfo, Storage, StorageChild, StorageKey, StorageMap};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
@@ -30,14 +30,15 @@ pub fn export_raw_state<B, BA, C>(
 	block: Option<BlockId<B>>,
 ) -> Result<Storage, Error>
 where
-	C: UsageProvider<B> + StorageProvider<B, BA>,
+	C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
 	B: BlockT,
 	BA: sc_client_api::backend::Backend<B>,
 {
 	let block = block.unwrap_or_else(|| BlockId::Hash(client.usage_info().chain.best_hash));
 
+	let hash = client.expect_block_hash_from_id(&block)?;
 	let empty_key = StorageKey(Vec::new());
-	let mut top_storage = client.storage_pairs(&block, &empty_key)?;
+	let mut top_storage = client.storage_pairs(&hash, &empty_key)?;
 	let mut children_default = HashMap::new();
 
 	// Remove all default child storage roots from the top storage and collect the child storage
@@ -52,10 +53,10 @@ where
 			StorageKey(key.0[well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.len()..].to_vec());
 		let child_info = ChildInfo::new_default(&key.0);
 
-		let keys = client.child_storage_keys(&block, &child_info, &empty_key)?;
+		let keys = client.child_storage_keys(&hash, &child_info, &empty_key)?;
 		let mut pairs = StorageMap::new();
 		keys.into_iter().try_for_each(|k| {
-			if let Some(value) = client.child_storage(&block, &child_info, &k)? {
+			if let Some(value) = client.child_storage(&hash, &child_info, &k)? {
 				pairs.insert(k.0, value.0);
 			}
 
