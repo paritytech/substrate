@@ -546,7 +546,7 @@ pub struct PoolRoles<AccountId> {
 ///
 /// A commission throttle is also optional, allowing the pool to set strict limits to how much
 /// commission can change in each update, and how often updates can take place.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Commission<T: Config> {
@@ -566,7 +566,7 @@ impl<T: Config> Default for Commission<T> {
 	}
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Clone)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct CommissionThrottle<T: Config> {
@@ -584,8 +584,14 @@ impl<T: Config> CommissionThrottle<T> {
 	fn throttling(&self, from: &Perbill, to: &Perbill, current_block: &T::BlockNumber) -> bool {
 		let (max_increase, min_delay) = self.change_rate;
 
-		current_block.saturating_sub(self.previous_set_at.unwrap_or(T::BlockNumber::zero())) <
-			min_delay || (from.saturating_sub(*to)) > max_increase
+		// check enough blocks have passed since the previous commission update took place
+		if let Some(previous_set_at) = self.previous_set_at {
+			if current_block.saturating_sub(previous_set_at) < min_delay {
+				return true
+			}
+		}
+		// check the commission change is larger than the maximum allowed increase
+		(*to).saturating_sub(*from) > max_increase
 	}
 }
 
@@ -2229,7 +2235,7 @@ pub mod pallet {
 			if let Some(throttle) = &bonded_pool.commission.throttle {
 				let (current_max_increase, current_min_delay) = throttle.change_rate;
 				ensure!(
-					max_increase <= current_max_increase && min_delay >= current_min_delay,
+					!(max_increase > current_max_increase || min_delay < current_min_delay),
 					Error::<T>::CommissionThrottleNotAllowed
 				);
 			}

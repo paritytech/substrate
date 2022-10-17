@@ -324,6 +324,23 @@ parameter_types! {
 	storage BalancesEvents: u32 = 0;
 }
 
+/// Helper to tun a specified amount of blocks.
+pub(crate) fn run_blocks(n: u64) {
+	let current_block = System::block_number();
+	run_to_block(n + current_block);
+}
+
+/// Helper to run to a specific block.
+pub(crate) fn run_to_block(n: u64) {
+	let current_block = System::block_number();
+	assert!(n > current_block);
+	while System::block_number() < n {
+		Pools::on_finalize(System::block_number());
+		System::set_block_number(System::block_number() + 1);
+		Pools::on_initialize(System::block_number());
+	}
+}
+
 /// All events of this pallet.
 pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let events = System::events()
