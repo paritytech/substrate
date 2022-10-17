@@ -549,7 +549,7 @@ mod bonded_pool {
 				),
 				Error::<Runtime>::CommissionThrottleNotAllowed
 			);
-			
+
 			// Successful more restrictive change of min_delay with the current max_increase
 			assert_ok!(Pools::set_commission_throttle(
 				RuntimeOrigin::signed(900),
