@@ -506,7 +506,7 @@ pub mod pallet {
 		WrongDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
-		/// The named owner has not signed ownership of the collection is acceptable.
+		/// The named owner has not signed ownership acceptance of the collection.
 		Unaccepted,
 		/// The item is locked (non-transferable).
 		ItemLocked,
