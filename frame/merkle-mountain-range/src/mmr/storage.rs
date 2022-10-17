@@ -338,9 +338,9 @@ where
 	fn store_to_offchain(
 		pos: NodeIndex,
 		parent_hash: <T as frame_system::Config>::Hash,
-		elem: &NodeOf<T, I, L>,
+		node: &NodeOf<T, I, L>,
 	) {
-		let encoded_node = elem.encode();
+		let encoded_node = node.encode();
 		// We store this leaf offchain keyed by `(parent_hash, node_index)` to make it
 		// fork-resistant. Offchain worker task will "canonicalize" it
 		// `frame_system::BlockHashCount` blocks later, when we are not worried about forks anymore

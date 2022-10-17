@@ -57,7 +57,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::Encode;
-use frame_support::{traits::Get, weights::Weight};
+use frame_support::{log, traits::Get, weights::Weight};
 use sp_runtime::{
 	traits::{self, CheckedSub, One, Saturating, UniqueSaturatedInto},
 	SaturatedConversion,
@@ -221,18 +221,19 @@ pub mod pallet {
 			let leaves = Self::mmr_leaves();
 			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
+
 			// append new leaf to MMR
 			let mut mmr: ModuleMmr<mmr::storage::RuntimeStorage, T, I> = mmr::Mmr::new(leaves);
-			// MMR push never fails.
-			let _ = mmr.push(data);
-
-			// Update the size.
+			// MMR push never fails, but better safe than sorry.
+			if mmr.push(data).is_none() {
+				log::error!(target: "runtime::mmr", "MMR push failed");
+				return T::WeightInfo::on_initialize(peaks_before)
+			}
+			// Update the size, `mmr.finalize()` should also never fail.
 			let (leaves, root) = match mmr.finalize() {
 				Ok((leaves, root)) => (leaves, root),
 				Err(e) => {
-					frame_support::log::error!(
-						target: "runtime::mmr", "Could not finalize MMR for new block: {:?}", e,
-					);
+					log::error!(target: "runtime::mmr", "MMR finalize failed: {:?}", e);
 					return T::WeightInfo::on_initialize(peaks_before)
 				},
 			};
@@ -322,6 +323,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Build canonical offchain key for node `pos` in MMR.
 	///
 	/// Used for nodes added by now finalized blocks.
+	/// Never read keys using `node_canon_offchain_key` unless you sure that
+	/// there's no `node_offchain_key` key in the storage.
 	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
 		(T::INDEXING_PREFIX, pos).encode()
 	}
