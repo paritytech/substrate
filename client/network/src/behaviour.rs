@@ -170,7 +170,7 @@ pub enum BehaviourOut<B: BlockT> {
 		target: PeerId,
 		/// Opaque implementation-specific block request.
 		request: OpaqueBlockRequest,
-		/// One-shot channel to recieve the response.
+		/// One-shot channel to receive the response.
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 
@@ -180,7 +180,7 @@ pub enum BehaviourOut<B: BlockT> {
 		target: PeerId,
 		/// Opaque implementation-specific state request.
 		request: OpaqueStateRequest,
-		/// One-shot channel to recieve the response.
+		/// One-shot channel to receive the response.
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 
@@ -190,7 +190,7 @@ pub enum BehaviourOut<B: BlockT> {
 		target: PeerId,
 		/// Warp sync request.
 		request: WarpProofRequest<B>,
-		/// One-shot channel to recieve the response.
+		/// One-shot channel to receive the response.
 		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 	},
 
