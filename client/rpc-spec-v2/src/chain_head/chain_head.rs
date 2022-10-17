@@ -50,9 +50,8 @@ pub struct ChainHead<Block: BlockT, Client> {
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
 
-	/// Manage subscriptions by mapping the
-	/// subscription ID to a set of
-	subscriptions: HashMap<String, HashSet<Block::Hash>>,
+	/// Keep track of the pinned blocks for each subscription.
+	subscriptions: Arc<SubscriptionManagement<Block>>,
 
 	// pinned_blocks: Arc<Mutex<Vec<T>>>,
 	/// Phantom member to pin the block type.
@@ -65,8 +64,7 @@ impl<Block: BlockT, Client> ChainHead<Block, Client> {
 		Self {
 			client,
 			executor,
-			subscriptions: Default::default(),
-			// pinned_blocks: Arc::new(Mutex::new(Vec::new())),
+			subscriptions: Arc::new(SubscriptionManagement::new()),
 			_phantom: PhantomData,
 		}
 	}
@@ -77,7 +75,6 @@ impl<Block, Client>
 	ChainHeadApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
 	for ChainHead<Block, Client>
 where
-	// BlockBackend<Block> + HeaderBackend<Block> + BlockchainEvents<Block> + 'static,
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
 	Client: BlockBackend<Block>
@@ -85,12 +82,15 @@ where
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
 		+ 'static,
-	// T: Send + 'static,
 {
 	fn follow(&self, mut sink: SubscriptionSink, runtime_updates: bool) -> SubscriptionResult {
-		let client = self.client.clone();
+		// TODO: get this from jsonrpsee
+		let sub_id = "A0".to_string();
 
-		// let pinned_blocks = self.pinned_blocks.clone();
+		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
+
+		let sub_id_import = sub_id.clone();
 
 		let stream_import = self
 			.client
@@ -117,6 +117,10 @@ where
 					None
 				};
 
+				if let Err(_) = subscriptions.pin_block(&sub_id_import, notification.hash.clone()) {
+					// TODO: signal drop error.
+				}
+
 				let new_block = FollowEvent::NewBlock(NewBlock {
 					block_hash: notification.hash,
 					parent_hash: *notification.header.parent_hash(),
@@ -136,27 +140,15 @@ where
 			.flatten();
 
 		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
+		let sub_id_import = sub_id.clone();
+
 		let stream_finalized =
 			self.client.finality_notification_stream().map(move |notification| {
-				// let pinned = client.pin_block(&BlockId::Hash(notification.hash));
-				// if let Ok(_) = pinned {
-				// 	println!("Calling client.pin_block on hash = {:?}", notification.hash);
-				// }
-
-				// let pinned = client.state_at(&BlockId::Hash(notification.hash));
-				// if let Ok(pinned) = pinned {
-				// 	println!(
-				// 		"Not Pinned finalized block hash = {:?} pinned = {:?}",
-				// 		notification.hash, pinned
-				// 	);
-
-				// 	// let boxed = Box::new(pinned);
-				// 	// let ptr = Box::leak(boxed);
-				// 	// println!("leaked at: {:?}", ptr);
-
-				// 	// let mut cache = pinned_blocks.lock().unwrap();
-				// 	// cache.push(pinned)
-				// }
+				// We might not receive all new blocks reports, therefore we make sure to include it here.
+				if let Err(_) = subscriptions.pin_block(&sub_id_import, notification.hash.clone()) {
+					// TODO: signal drop error.
+				}
 
 				FollowEvent::Finalized(Finalized { block_hash: notification.hash })
 			});
@@ -175,6 +167,10 @@ where
 		} else {
 			None
 		};
+
+		if let Err(_) = self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone()) {
+			// TODO: signal drop error.
+		}
 
 		let stream = stream::once(async move {
 			FollowEvent::Initialized(Initialized { finalized_block_hash, finalized_block_runtime })
