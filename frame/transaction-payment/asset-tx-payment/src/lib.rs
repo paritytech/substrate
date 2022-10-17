@@ -55,9 +55,9 @@ use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, PostDispatchInfoOf, SignedExtension, Zero},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
-	},
-	FixedPointOperand,
+	}
 };
+use sp_arithmetic::{FixedPointOperand};
 
 #[cfg(test)]
 mod tests;

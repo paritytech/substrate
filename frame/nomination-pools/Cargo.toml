@@ -25,7 +25,7 @@ sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 log = { version = "0.4.0", default-features = false }
-
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }

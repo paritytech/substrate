@@ -18,7 +18,7 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../../primit
 sp-io = { version = "6.0.0", default-features = false, path = "../../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
-
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = ".." }
@@ -51,5 +51,6 @@ std = [
 	"sp-io/std",
 	"sp-core/std",
 	"pallet-transaction-payment/std",
+	"sp-arithmetic/std"
 ]
 try-runtime = ["frame-support/try-runtime"]

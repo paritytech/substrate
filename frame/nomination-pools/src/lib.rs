@@ -285,9 +285,9 @@ use sp_runtime::{
 	traits::{
 		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
 		Zero,
-	},
-	FixedPointNumber, FixedPointOperand,
+	}
 };
+use sp_arithmetic::{FixedPointNumber, FixedPointOperand};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 
