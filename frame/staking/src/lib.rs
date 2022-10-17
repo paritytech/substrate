@@ -309,8 +309,9 @@ use scale_info::TypeInfo;
 use sp_runtime::{
 	curve::PiecewiseLinear,
 	traits::{AtLeast32BitUnsigned, Convert, Saturating, StaticLookup, Zero},
-	Perbill, Perquintill, Rounding, RuntimeDebug,
+	RuntimeDebug,
 };
+use sp_arithmetic::{Perbill, Perquintill, Rounding};
 use sp_staking::{
 	offence::{Offence, OffenceError, ReportOffence},
 	EraIndex, SessionIndex,

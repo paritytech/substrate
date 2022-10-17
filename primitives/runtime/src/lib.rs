@@ -91,9 +91,9 @@ pub use sp_core::RuntimeDebug;
 
 /// Re-export top-level arithmetic stuff.
 pub use sp_arithmetic::{
-	//FixedPointNumber, FixedPointOperand,
-	InnerOf, PerThing, PerU16, Perbill, Percent, Permill, Perquintill, Rational128,
-	Rounding, UpperOf,
+	 PerThing, PerU16, Perbill, Percent, Permill, Perquintill,
+	 //Rational128,
+	//Rounding,
 };
 
 pub use either::Either;
