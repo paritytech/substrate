@@ -51,6 +51,9 @@ use sp_std::ops::Deref;
 #[cfg(feature = "std")]
 use substrate_bip39::seed_from_entropy;
 
+#[cfg(feature = "std")]
+use hex;
+
 /// An identifier used to match public keys against bls377 keys
 pub const CRYPTO_ID: CryptoTypeId = CryptoTypeId(*b"bls7");
 
@@ -396,11 +399,12 @@ impl From<&Public> for CryptoTypePublicPair {
 /// Derive a single hard junction.
 #[cfg(feature = "full_crypto")]
 fn derive_hard_junction(secret_seed: &Seed, cc: &[u8; 32]) -> Seed {
-	("BLS12377HDKD", secret_seed, cc).using_encoded(|data| {
-		let mut res = [0u8; BLS377::SECRET_KEY_SIZE];
-		res.copy_from_slice(blake2_rfc::blake2b::blake2b(BLS377::SECRET_KEY_SIZE, &[], data).as_bytes());
-		res
-	})
+	("BLS12377HDKD", secret_seed, cc).using_encoded(sp_core_hashing::blake2_256)
+	// 	using_encoded(|data| {
+	// 	let mut res = [0u8; BLS377::SECRET_KEY_SIZE];
+	// 	res.copy_from_slice(blake2::Blake2b::blake2b(BLS377::SECRET_KEY_SIZE, &[], data).as_bytes());
+	// 	res
+	// })
 }
 
 /// An error when deriving a key.
@@ -619,7 +623,7 @@ mod test {
 			))
 		);
 		let message = b"";
-		let signature = hex!("cb12ab70f52b7c955a49ff30488fe7d612561e1a4d2903d0e0823b59201cd25e26bf6c145726f6519c2c989f2c2d5501ed973296de6c4e15bee5dc975ced74495fc38afac70e8cc60184f734ffd42b90718c393f82fa8c1b5403d686c33a9000");
+		let signature = hex!("0e5854002b249175764e463165aec0e38a46ddd44c2db29d6fec3022a3993b3390b001b53a04d155a4d216dd361df90087281be27c58ae22c7f1333820259ff5ae1b321126d1a001bf91ee088fb56ca9d4aa484d129ede7e701ced08df631581");
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));
@@ -640,7 +644,7 @@ mod test {
 			))
 		);
 		let message = b"";
-		let signature = hex!("300b1ef3d3c8d7afd275c035241331dee228a502c3d210657a12eb735d3f5c17827d61b5071a71cb23c24f351d6f7600e61b41c0789bbb839946c654b7dee43174dc1aed6179062cfb00c0fab461fbdb9e15dbb849b31c285b60bfc44f9d9901");
+		let signature = hex!("9f7d07e0fdd6aa342f6defaade946b59bfeba8af45c243f86b208cd339b2c713421844e3007e0acafd0a529542ee050047b739fe5bfd311d884451542204e173d784e648eb55f4bd32da747f006120fadf4801c2b1c88f9745c50c2141b1d380");
 		let signature = Signature::from_raw(signature);
 		assert!(pair.sign(&message[..]) == signature);
 		assert!(Pair::verify(&signature, &message[..], &public));

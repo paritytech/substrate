@@ -41,6 +41,9 @@ use serde::{Deserialize, Serialize};
 use sp_runtime_interface::pass_by::{PassByEnum, PassByInner};
 use sp_std::{ops::Deref, prelude::*};
 
+#[cfg(feature = "std")]
+use hex;
+
 pub use sp_debug_derive::RuntimeDebug;
 
 #[cfg(feature = "std")]

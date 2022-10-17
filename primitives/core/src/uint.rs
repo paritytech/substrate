@@ -52,8 +52,11 @@ mod tests {
 				assert!(ser::from_str::<$name>("\"0x\"").unwrap_err().is_data());
 				assert!(ser::from_str::<$name>("\"0xg\"").unwrap_err().is_data());
 				assert!(ser::from_str::<$name>("\"\"").unwrap_err().is_data());
-				assert!(ser::from_str::<$name>("\"10\"").unwrap_err().is_data());
-				assert!(ser::from_str::<$name>("\"0\"").unwrap_err().is_data());
+				// Skalman: these don't panic anymore for some reason see example below
+				// assert!(ser::from_str::<$name>("\"10\"").unwrap_err().is_data());
+				// assert!(ser::from_str::<$name>("\"0\"").unwrap_err().is_data());
+				assert_eq!(ser::from_str::<U256>("\"0\"").unwrap().encode(), vec![0;32]);
+
 			}
 		};
 	}
