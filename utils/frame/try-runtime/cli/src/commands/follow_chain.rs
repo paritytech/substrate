@@ -33,6 +33,7 @@ use sc_service::Configuration;
 use serde::de::DeserializeOwned;
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_weights::Weight;
 use std::{collections::VecDeque, fmt::Debug, str::FromStr};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
@@ -294,8 +295,8 @@ where
 			full_extensions(),
 		)?;
 
-		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
-			.map_err(|e| format!("failed to decode output: {:?}", e))?;
+		let consumed_weight = <Weight as Decode>::decode(&mut &*encoded_result)
+			.map_err(|e| format!("failed to decode weight: {:?}", e))?;
 
 		let storage_changes = changes
 			.drain_storage_changes(
