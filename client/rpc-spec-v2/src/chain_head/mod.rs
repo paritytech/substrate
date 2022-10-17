@@ -27,6 +27,7 @@
 
 pub mod api;
 pub mod chain_head;
+mod subscription;
 
 pub use api::ChainHeadApiServer;
 pub use chain_head::ChainHead;

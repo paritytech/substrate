@@ -18,10 +18,13 @@
 
 //! Blockchain API backend for full nodes.
 
-use crate::{chain_head::api::ChainHeadApiServer, SubscriptionTaskExecutor};
+use crate::{
+	chain_head::{api::ChainHeadApiServer, subscription::SubscriptionManagement},
+	SubscriptionTaskExecutor,
+};
 use serde::{Deserialize, Serialize};
 use std::{
-	collections::HashMap,
+	collections::{hash_map::Entry, HashMap, HashSet},
 	marker::PhantomData,
 	sync::{Arc, Mutex},
 };
@@ -47,6 +50,10 @@ pub struct ChainHead<Block: BlockT, Client> {
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
 
+	/// Manage subscriptions by mapping the
+	/// subscription ID to a set of
+	subscriptions: HashMap<String, HashSet<Block::Hash>>,
+
 	// pinned_blocks: Arc<Mutex<Vec<T>>>,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<Block>,
@@ -58,6 +65,7 @@ impl<Block: BlockT, Client> ChainHead<Block, Client> {
 		Self {
 			client,
 			executor,
+			subscriptions: Default::default(),
 			// pinned_blocks: Arc::new(Mutex::new(Vec::new())),
 			_phantom: PhantomData,
 		}
