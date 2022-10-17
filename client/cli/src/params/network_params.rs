@@ -33,11 +33,11 @@ use std::{borrow::Cow, path::PathBuf};
 #[derive(Debug, Clone, Args)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
-	#[arg(long, value_name = "ADDR", num_args = 0..)]
+	#[arg(long, value_name = "ADDR", num_args = 1..)]
 	pub bootnodes: Vec<MultiaddrWithPeerId>,
 
 	/// Specify a list of reserved node addresses.
-	#[arg(long, value_name = "ADDR", num_args = 0..)]
+	#[arg(long, value_name = "ADDR", num_args = 1..)]
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
@@ -53,7 +53,7 @@ pub struct NetworkParams {
 
 	/// The public address that other nodes will use to connect to it.
 	/// This can be used if there's a proxy in front of this node.
-	#[arg(long, value_name = "PUBLIC_ADDR", num_args = 0..)]
+	#[arg(long, value_name = "PUBLIC_ADDR", num_args = 1..)]
 	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
@@ -61,7 +61,7 @@ pub struct NetworkParams {
 	/// By default:
 	/// If `--validator` is passed: `/ip4/0.0.0.0/tcp/<port>` and `/ip6/[::]/tcp/<port>`.
 	/// Otherwise: `/ip4/0.0.0.0/tcp/<port>/ws` and `/ip6/[::]/tcp/<port>/ws`.
-	#[arg(long, value_name = "LISTEN_ADDR", num_args = 0..)]
+	#[arg(long, value_name = "LISTEN_ADDR", num_args = 1..)]
 	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.

@@ -481,7 +481,7 @@ pub enum State {
 
 		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
 		/// be scraped.
-		#[arg(short, long, num_args = 0..)]
+		#[arg(short, long, num_args = 1..)]
 		pallet: Vec<String>,
 
 		/// Fetch the child-keys as well.
