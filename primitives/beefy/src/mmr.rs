@@ -142,7 +142,7 @@ pub use mmr_root_provider::MmrRootProvider;
 mod mmr_root_provider {
 	use super::*;
 	use crate::{known_payloads, payload::PayloadProvider, Payload};
-	use sp_api::ProvideRuntimeApi;
+	use sp_api::{NumberFor, ProvideRuntimeApi};
 	use sp_mmr_primitives::MmrApi;
 	use sp_runtime::generic::BlockId;
 	use sp_std::{marker::PhantomData, sync::Arc};
@@ -159,7 +159,7 @@ mod mmr_root_provider {
 	where
 		B: Block,
 		R: ProvideRuntimeApi<B>,
-		R::Api: MmrApi<B, MmrRootHash>,
+		R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 	{
 		/// Create new BEEFY Payload provider with MMR Root as payload.
 		pub fn new(runtime: Arc<R>) -> Self {
@@ -182,7 +182,7 @@ mod mmr_root_provider {
 	where
 		B: Block,
 		R: ProvideRuntimeApi<B>,
-		R::Api: MmrApi<B, MmrRootHash>,
+		R::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 	{
 		fn payload(&self, header: &B::Header) -> Option<Payload> {
 			self.mmr_root_from_digest_or_runtime(header).map(|mmr_root| {
