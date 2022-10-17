@@ -40,11 +40,7 @@ use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::{
-	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor},
-	SaturatedConversion,
-};
+use sp_runtime::{generic::OpaqueDigestItemId, traits::{Block, Header, NumberFor}, SaturatedConversion, BoundedBTreeMap};
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
@@ -238,7 +234,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
+	pending_votes: BoundedBTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>, u32>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
@@ -298,7 +294,7 @@ where
 			metrics,
 			best_grandpa_block_header: last_finalized_header,
 			best_beefy_block: None,
-			pending_votes: BTreeMap::new(),
+			pending_votes: BoundedBTreeMap::new(),
 			pending_justifications: BTreeMap::new(),
 			voting_oracle: VoterOracle::new(min_block_delta),
 		}
