@@ -148,8 +148,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
 			CollectionConfigOf::<T, I>::remove(&collection);
-			#[allow(deprecated)]
-			ItemConfigOf::<T, I>::remove_prefix(&collection, None);
+			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.items, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
