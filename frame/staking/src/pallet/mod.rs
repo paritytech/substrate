@@ -648,6 +648,10 @@ pub mod pallet {
 					),
 					_ => Ok(()),
 				});
+				assert!(
+					ValidatorCount::<T>::get() <=
+						<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+				);
 			}
 
 			// all voters are reported to the `VoterList`.
@@ -791,12 +795,7 @@ pub mod pallet {
 				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get() ==
 					<T::GenesisElectionProvider as ElectionProviderBase>::MaxWinners::get()
 			);
-			// ensure desired targets requested is always lower than max winners
-			// supported by the election provider.
-			// assert!(
-			// 	ValidatorCount::<T>::get() <=
-			// 		<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
-			// );
+
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
 					assert!(

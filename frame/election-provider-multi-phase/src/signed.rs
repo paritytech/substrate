@@ -526,7 +526,7 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{mock::*, Error, Event, Perbill, Phase};
+	use crate::{mock::*, ElectionError, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
@@ -547,7 +547,6 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Snapshot limit has not been respected.")]
 	fn data_provider_should_respect_target_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electable targets
@@ -555,13 +554,14 @@ mod tests {
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
-			// should panic here
-			let _ = MultiPhase::create_snapshot();
+			assert_noop!(
+				MultiPhase::create_snapshot(),
+				ElectionError::DataProvider("Snapshot too big for submission."),
+			);
 		})
 	}
 
 	#[test]
-	#[should_panic(expected = "Snapshot limit has not been respected.")]
 	fn data_provider_should_respect_voter_limits() {
 		ExtBuilder::default().build_and_execute(|| {
 			// given a reduced expectation of maximum electing voters
@@ -569,8 +569,24 @@ mod tests {
 			// and a data provider that does not respect limits
 			DataProviderAllowBadData::set(true);
 
-			// should panic here
-			let _ = MultiPhase::create_snapshot();
+			assert_noop!(
+				MultiPhase::create_snapshot(),
+				ElectionError::DataProvider("Snapshot too big for submission."),
+			);
+		})
+	}
+
+	#[test]
+	fn desired_targets_greater_than_max_winners() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given desired_targets bigger than MaxWinners
+			DesiredTargets::set(4);
+			MaxWinners::set(3);
+
+			let (_, _, actual_desired_targets) = MultiPhase::create_snapshot_external().unwrap();
+
+			// snapshot is created with min of desired_targets and MaxWinners
+			assert_eq!(actual_desired_targets, 3);
 		})
 	}
 

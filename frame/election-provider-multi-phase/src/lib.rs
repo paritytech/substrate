@@ -662,7 +662,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxElectableTargets: Get<SolutionTargetIndexOf<Self::MinerConfig>>;
 
-		/// The maximum number of winners that can be elected from the electable targets.
+		/// The maximum number of winners that can be elected by this `ElectionProvider`
+		/// implementation.
+		///
+		/// Note: This must always be greater or equal to `T::DataProvider::desired_targets()`.
 		#[pallet::constant]
 		type MaxWinners: Get<u32>;
 
@@ -1393,9 +1396,7 @@ impl<T: Config> Pallet<T> {
 		let voters = T::DataProvider::electing_voters(Some(voter_limit))
 			.map_err(ElectionError::DataProvider)?;
 
-		// Defensive-only.
 		if targets.len() > target_limit || voters.len() > voter_limit {
-			debug_assert!(false, "Snapshot limit has not been respected.");
 			return Err(ElectionError::DataProvider("Snapshot too big for submission."))
 		}
 
@@ -1534,6 +1535,8 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
+		// Miner mines a solution with target size equal to `DataProvider::desired_targets()`,
+		// which can never be larger than `MaxWinners`.
 		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundNotMet)?;
 		Ok(ReadySolution { supports, compute, score })
 	}
@@ -1570,9 +1573,7 @@ impl<T: Config> Pallet<T> {
 					.map_err(|fe| ElectionError::Fallback(fe))
 					.and_then(|supports| {
 						Ok(ReadySolution {
-							supports: supports
-								.try_into()
-								.map_err(|_| FeasibilityError::BoundNotMet)?,
+							supports,
 							score: Default::default(),
 							compute: ElectionCompute::Fallback,
 						})

@@ -1591,6 +1591,11 @@ impl<T: Config> Pallet<T> {
 				Nominators::<T>::count() + Validators::<T>::count(),
 			"wrong external count"
 		);
+
+		ensure!(
+			ValidatorCount::<T>::get() <=
+				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+		);
 		Ok(())
 	}
 
