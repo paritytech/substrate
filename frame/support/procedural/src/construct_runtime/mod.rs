@@ -164,7 +164,7 @@ const SYSTEM_PALLET_NAME: &str = "System";
 
 /// Implementation of `construct_runtime` macro. Either expand to some code which will call
 /// `construct_runtime` again, or expand to the final runtime definition.
-pub fn construct_runtime(input: TokenStream, _dev_mode: bool) -> TokenStream {
+pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	let input_copy = input.clone();
 	let definition = syn::parse_macro_input!(input as RuntimeDeclaration);
 
