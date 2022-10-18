@@ -38,14 +38,26 @@ use sp_core::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
 		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
 	},
+	H256,
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_runtime::{
+	traits::{Block as BlockT, HashFor, NumberFor},
+	StateVersion,
+};
 use std::{
 	fs,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+
+// 1. `pallets` no longer has the interpretation of an empty list implying everything. If
+// `hashed_prefix` and pallets are both empty, then we scrape everything. Not the biggest fan
+// myself, but needed to keep things backwards compatible.
+//
+//
+//
+//
 
 pub mod rpc_api;
 
@@ -57,6 +69,13 @@ const LOG_TARGET: &str = "remote-ext";
 const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
 const PAGE: u32 = 1000;
+
+struct Snapshot<B: BlockT> {
+	block_number: NumberFor<B>,
+	hash: HashFor<B>,
+	top: TopKeyValues,
+	child: ChildKeyValues,
+}
 
 #[rpc(client)]
 pub trait RpcApi<Hash> {
@@ -162,6 +181,12 @@ impl From<String> for Transport {
 	}
 }
 
+impl From<&str> for Transport {
+	fn from(uri: &str) -> Self {
+		Transport::Uri(uri.to_string())
+	}
+}
+
 impl From<Arc<WsClient>> for Transport {
 	fn from(client: Arc<WsClient>) -> Self {
 		Transport::RemoteClient(client)
@@ -178,12 +203,17 @@ pub struct OnlineConfig<B: BlockT> {
 	pub at: Option<B::Hash>,
 	/// An optional state snapshot file to WRITE to, not for reading. Not written if set to `None`.
 	pub state_snapshot: Option<SnapshotConfig>,
-	/// The pallets to scrape. If empty, entire chain state will be scraped.
+	/// The pallets to scrape. These values are hashed and added to `hashed_prefix`.
 	pub pallets: Vec<String>,
 	/// Transport config.
 	pub transport: Transport,
 	/// Lookout for child-keys, and scrape them as well if set to true.
-	pub scrape_children: bool,
+	pub child_trie: bool,
+	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
+	/// be given.
+	pub hashed_prefixes: Vec<Vec<u8>>,
+	/// Storage entry keys to be injected into the externalities. The *hashed* key must be given.
+	pub hashed_keys: Vec<Vec<u8>>,
 }
 
 impl<B: BlockT> OnlineConfig<B> {
@@ -199,10 +229,12 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
 			transport: Transport::Uri(DEFAULT_TARGET.to_owned()),
+			child_trie: true,
 			at: None,
 			state_snapshot: None,
-			pallets: vec![],
-			scrape_children: true,
+			pallets: Default::default(),
+			hashed_keys: Default::default(),
+			hashed_prefixes: Default::default(),
 		}
 	}
 }
@@ -210,6 +242,12 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 impl<B: BlockT> From<String> for OnlineConfig<B> {
 	fn from(s: String) -> Self {
 		Self { transport: s.into(), ..Default::default() }
+	}
+}
+
+impl<B: BlockT> From<&str> for OnlineConfig<B> {
+	fn from(s: &str) -> Self {
+		Self { transport: s.to_string().into(), ..Default::default() }
 	}
 }
 
@@ -240,14 +278,9 @@ impl Default for SnapshotConfig {
 
 /// Builder for remote-externalities.
 pub struct Builder<B: BlockT> {
-	/// Custom key-pairs to be injected into the externalities. The *hashed* keys and values must
-	/// be given.
+	/// Custom key-pairs to be injected into the final externalities. The *hashed* keys and values
+	/// must be given.
 	hashed_key_values: Vec<KeyValue>,
-	/// Storage entry key prefixes to be injected into the externalities. The *hashed* prefix must
-	/// be given.
-	hashed_prefixes: Vec<Vec<u8>>,
-	/// Storage entry keys to be injected into the externalities. The *hashed* key must be given.
-	hashed_keys: Vec<Vec<u8>>,
 	/// The keys that will be excluded from the final externality. The *hashed* key must be given.
 	hashed_blacklist: Vec<Vec<u8>>,
 	/// connectivity mode, online or offline.
@@ -263,8 +296,6 @@ impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 		Self {
 			mode: Default::default(),
 			hashed_key_values: Default::default(),
-			hashed_prefixes: Default::default(),
-			hashed_keys: Default::default(),
 			hashed_blacklist: Default::default(),
 			state_version: StateVersion::V1,
 		}
@@ -589,6 +620,10 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k))
 			.collect::<Vec<_>>();
 
+		if child_roots.is_empty() {
+			return Ok(Default::default())
+		}
+
 		info!(
 			target: LOG_TARGET,
 			"👩‍👦 scraping child-tree data from {} top keys",
@@ -627,27 +662,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			.expect("online config must be initialized by this point; qed.");
 		log::info!(target: LOG_TARGET, "scraping key-pairs from remote @ {:?}", at);
 
-		let mut keys_and_values = if config.pallets.len() > 0 {
-			let mut filtered_kv = vec![];
-			for p in config.pallets.iter() {
-				let hashed_prefix = StorageKey(twox_128(p.as_bytes()).to_vec());
-				let pallet_kv = self.rpc_get_pairs_paged(hashed_prefix.clone(), at).await?;
-				log::info!(
-					target: LOG_TARGET,
-					"downloaded data for module {} (count: {} / prefix: {}).",
-					p,
-					pallet_kv.len(),
-					HexDisplay::from(&hashed_prefix),
-				);
-				filtered_kv.extend(pallet_kv);
-			}
-			filtered_kv
-		} else {
-			log::info!(target: LOG_TARGET, "downloading data for all pallets.");
-			self.rpc_get_pairs_paged(StorageKey(vec![]), at).await?
-		};
-
-		for prefix in &self.hashed_prefixes {
+		let mut keys_and_values = Vec::new();
+		for prefix in &config.hashed_prefixes {
 			log::info!(
 				target: LOG_TARGET,
 				"adding data for hashed prefix: {:?}",
@@ -658,7 +674,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			keys_and_values.extend(additional_key_values);
 		}
 
-		for key in &self.hashed_keys {
+		for key in &config.hashed_keys {
 			let key = StorageKey(key.to_vec());
 			log::info!(
 				target: LOG_TARGET,
@@ -680,6 +696,27 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		if self.as_online().at.is_none() {
 			let at = self.rpc_get_head().await?;
 			self.as_online_mut().at = Some(at);
+		}
+
+		// Then, a few transformation that we want to perform in the online config:
+		let online_config = self.as_online_mut();
+		online_config
+			.pallets
+			.iter()
+			.for_each(|p| online_config.hashed_prefixes.push(twox_128(p.as_bytes()).to_vec()));
+
+		if online_config.child_trie {
+			online_config.hashed_prefixes.push(DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec());
+		}
+
+		// Finally, if by now, we have put any limitations on prefixes that we are interested in, we
+		// download everything.
+		if online_config.hashed_prefixes.is_empty() {
+			log::info!(
+				target: LOG_TARGET,
+				"since no prefix is filtered, the data for all pallets will be downloaded"
+			);
+			online_config.hashed_prefixes.push(vec![]);
 		}
 
 		Ok(())
@@ -756,42 +793,10 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	/// Inject a manual list of key and values to the storage.
-	pub fn inject_hashed_key_value(mut self, injections: &[KeyValue]) -> Self {
+	pub fn inject_hashed_key_value(mut self, injections: Vec<KeyValue>) -> Self {
 		for i in injections {
 			self.hashed_key_values.push(i.clone());
 		}
-		self
-	}
-
-	/// Inject a hashed prefix. This is treated as-is, and should be pre-hashed.
-	///
-	/// This should be used to inject a "PREFIX", like a storage (double) map.
-	pub fn inject_hashed_prefix(mut self, hashed: &[u8]) -> Self {
-		self.hashed_prefixes.push(hashed.to_vec());
-		self
-	}
-
-	/// Just a utility wrapper of [`Self::inject_hashed_prefix`] that injects
-	/// [`DEFAULT_CHILD_STORAGE_KEY_PREFIX`] as a prefix.
-	///
-	/// If set, this will guarantee that the child-tree data of ALL pallets will be downloaded.
-	///
-	/// This is not needed if the entire state is being downloaded.
-	///
-	/// Otherwise, the only other way to make sure a child-tree is manually included is to inject
-	/// its root (`DEFAULT_CHILD_STORAGE_KEY_PREFIX`, plus some other postfix) into
-	/// [`Self::inject_hashed_key`]. Unfortunately, there's no federated way of managing child tree
-	/// roots as of now and each pallet does its own thing. Therefore, it is not possible for this
-	/// library to automatically include child trees of pallet X, when its top keys are included.
-	pub fn inject_default_child_tree_prefix(self) -> Self {
-		self.inject_hashed_prefix(DEFAULT_CHILD_STORAGE_KEY_PREFIX)
-	}
-
-	/// Inject a hashed key to scrape. This is treated as-is, and should be pre-hashed.
-	///
-	/// This should be used to inject a "KEY", like a storage value.
-	pub fn inject_hashed_key(mut self, hashed: &[u8]) -> Self {
-		self.hashed_keys.push(hashed.to_vec());
 		self
 	}
 
@@ -931,47 +936,42 @@ mod tests {
 	}
 }
 
-#[cfg(all(test, feature = "remote-test"))]
+#[cfg(test)]
 mod remote_tests {
 	use super::test_prelude::*;
-	const REMOTE_INACCESSIBLE: &'static str = "Can't reach the remote node. Is it running?";
 
 	#[tokio::test]
 	async fn offline_else_online_works() {
+		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
 		// this shows that in the second run, we use the remote and create a cache.
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig {
-					state_snapshot: SnapshotConfig::new("offline_else_online_works_data"),
-				},
+				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
 				OnlineConfig {
 					pallets: vec!["Proxy".to_owned()],
-					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
+					child_trie: false,
+					state_snapshot: Some(SnapshotConfig::new(CACHE)),
 					..Default::default()
 				},
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		// this shows that in the second run, we are not using the remote
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
-				OfflineConfig {
-					state_snapshot: SnapshotConfig::new("offline_else_online_works_data"),
-				},
+				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
 				OnlineConfig {
-					pallets: vec!["Proxy".to_owned()],
-					state_snapshot: Some(SnapshotConfig::new("offline_else_online_works_data")),
 					transport: "ws://non-existent:666".to_owned().into(),
 					..Default::default()
 				},
 			))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -979,11 +979,12 @@ mod remote_tests {
 			.into_iter()
 			.map(|d| d.unwrap())
 			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "offline_else_online_works_data" ||
-					p.path().extension().unwrap_or_default() == "top" ||
-					p.path().extension().unwrap_or_default() == "child"
+				p.path().file_name().unwrap_or_default() == CACHE &&
+					(p.path().extension().unwrap_or_default() == "top" ||
+						p.path().extension().unwrap_or_default() == "child")
 			})
 			.collect::<Vec<_>>();
+
 		assert!(to_delete.len() > 0);
 		for d in to_delete {
 			std::fs::remove_file(d.path()).unwrap();
@@ -991,43 +992,17 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	#[ignore = "too slow"]
-	async fn can_build_one_big_pallet() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				pallets: vec!["System".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
-	}
-
-	#[tokio::test]
 	async fn can_build_one_small_pallet() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://kusama-rpc.polkadot.io:443".to_owned().into(),
-				pallets: vec!["Council".to_owned()],
+				pallets: vec!["Proxy".to_owned()],
+				child_trie: false,
 				..Default::default()
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
-
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
-				pallets: vec!["Council".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1036,24 +1011,13 @@ mod remote_tests {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://kusama-rpc.polkadot.io:443".to_owned().into(),
 				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
+				child_trie: false,
 				..Default::default()
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
-
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
-				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 	}
 
@@ -1064,11 +1028,12 @@ mod remote_tests {
 			.mode(Mode::Online(OnlineConfig {
 				state_snapshot: Some(SnapshotConfig::new("can_create_top_snapshot_data")),
 				pallets: vec!["Proxy".to_owned()],
+				child_trie: false,
 				..Default::default()
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1104,12 +1069,12 @@ mod remote_tests {
 			.mode(Mode::Online(OnlineConfig {
 				state_snapshot: Some(SnapshotConfig::new("can_create_child_snapshot_data")),
 				pallets: vec!["Crowdloan".to_owned()],
+				child_trie: true,
 				..Default::default()
 			}))
-			.inject_default_child_tree_prefix()
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1138,16 +1103,18 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
+	// #[ignore = "only works if a local node is present."]
 	async fn can_fetch_all() {
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
+				transport: "ws://localhost:9944".into(),
 				state_snapshot: Some(SnapshotConfig::new("can_fetch_all_data")),
 				..Default::default()
 			}))
 			.build()
 			.await
-			.expect(REMOTE_INACCESSIBLE)
+			.unwrap()
 			.execute_with(|| {});
 
 		let to_delete = std::fs::read_dir(Path::new("."))
@@ -1173,20 +1140,5 @@ mod remote_tests {
 			}
 			std::fs::remove_file(d.path()).unwrap();
 		}
-	}
-
-	#[tokio::test]
-	async fn can_build_child_tree() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://rpc.polkadot.io:443".to_owned().into(),
-				pallets: vec!["Crowdloan".to_owned()],
-				..Default::default()
-			}))
-			.build()
-			.await
-			.expect(REMOTE_INACCESSIBLE)
-			.execute_with(|| {});
 	}
 }

@@ -226,7 +226,6 @@ where
 	let mut maybe_state_ext = None;
 	let (_client, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
 
-	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
@@ -251,6 +250,7 @@ where
 
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
+			let (code_key, code) = extract_code(&config.chain_spec)?;
 			let builder = Builder::<Block>::new()
 				.mode(Mode::Online(OnlineConfig {
 					transport: command.uri.clone().into(),
@@ -260,7 +260,7 @@ where
 				.state_version(shared.state_version);
 
 			let new_ext = builder
-				.inject_hashed_key_value(&[(code_key.clone(), code.clone())])
+				.inject_hashed_key_value(vec![(code_key.clone(), code.clone())])
 				.build()
 				.await?;
 			log::info!(

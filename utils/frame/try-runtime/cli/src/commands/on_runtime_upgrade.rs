@@ -52,11 +52,21 @@ where
 	let executor = build_executor(&shared, &config);
 	let execution = shared.execution;
 
-	let ext = {
-		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
-		let (code_key, code) = extract_code(&config.chain_spec)?;
-		builder.inject_hashed_key_value(&[(code_key, code)]).build().await?
-	};
+	let ext = command
+		.state
+		.ext_builder::<Block>()?
+		.state_version(shared.state_version)
+		.inject_hashed_key_value({
+			log::info!(
+				target: LOG_TARGET,
+				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
+				config.chain_spec.name(),
+			);
+			let (code_key, code) = extract_code(&config.chain_spec)?;
+			vec![(code_key, code)]
+		})
+		.build()
+		.await?;
 
 	if let Some(uri) = command.state.live_uri() {
 		let (expected_spec_name, expected_spec_version, _) =

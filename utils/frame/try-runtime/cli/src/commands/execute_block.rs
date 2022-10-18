@@ -157,28 +157,23 @@ where
 		parent_hash
 	);
 
-	let ext = {
-		let builder = command
-			.state
-			.builder::<Block>()?
-			// make sure the state is being build with the parent hash, if it is online.
-			.overwrite_online_at(parent_hash.to_owned())
-			.state_version(shared.state_version);
-
-		let builder = if command.overwrite_wasm_code {
+	let ext = command
+		.state
+		.ext_builder::<Block>()?
+		.state_version(shared.state_version)
+		.inject_hashed_key_value(if command.overwrite_wasm_code {
 			log::info!(
 				target: LOG_TARGET,
 				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
 				config.chain_spec.name(),
 			);
 			let (code_key, code) = extract_code(&config.chain_spec)?;
-			builder.inject_hashed_key_value(&[(code_key, code)])
+			vec![(code_key, code)]
 		} else {
-			builder.inject_hashed_key(well_known_keys::CODE)
-		};
-
-		builder.build().await?
-	};
+			Vec::new()
+		})
+		.build()
+		.await?;
 
 	// A digest item gets added when the runtime is processing the block, so we need to pop
 	// the last one to be consistent with what a gossiped block would contain.
