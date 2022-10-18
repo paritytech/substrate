@@ -27,6 +27,7 @@ use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
+use sc_consensus_epochs::{EpochIdentifier, EpochIdentifierPosition};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
@@ -1068,4 +1069,115 @@ fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork1_hashes[3..], true));
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
+}
+
+#[test]
+fn allows_skipping_epochs() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let epoch_changes = data.link.epoch_changes.clone();
+	let epoch_length = data.link.config.epoch_length;
+
+	// we create all of the blocks in epoch 0 as well as a block in epoch 1
+	let blocks = propose_and_import_blocks(
+		&client,
+		&mut proposer_factory,
+		&mut block_import,
+		BlockId::Number(0),
+		epoch_length as usize + 1,
+	);
+
+	// the first block in epoch 0 (#1) announces both epoch 0 and 1 (this is a
+	// special genesis epoch)
+	let epoch0 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis0,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch0.epoch_index, 0);
+	assert_eq!(epoch0.start_slot, Slot::from(1));
+
+	let epoch1 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Genesis1,
+			hash: blocks[0],
+			number: 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch1.epoch_index, 1);
+	assert_eq!(epoch1.start_slot, Slot::from(epoch_length + 1));
+
+	// the first block in epoch 1 (#7) announces epoch 2. we will be skipping
+	// this epoch and therefore re-using its data for epoch 3
+	let epoch2 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: blocks[epoch_length as usize],
+			number: epoch_length + 1,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch2.epoch_index, 2);
+	assert_eq!(epoch2.start_slot, Slot::from(epoch_length * 2 + 1));
+
+	// we now author a block that belongs to epoch 3, thereby skipping epoch 2
+	let last_block = client.expect_header(BlockId::Hash(*blocks.last().unwrap())).unwrap();
+	let block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 3 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	// we check the epoch data that was announced at block #7 (that we checked above)
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: blocks[epoch_length as usize],
+			number: epoch_length + 1,
+		})
+		.unwrap()
+		.clone();
+
+	// and it now is updated to start at epoch 3 with an updated slot
+	assert_eq!(epoch3.epoch_index, 3);
+	assert_eq!(epoch3.start_slot, Slot::from(epoch_length * 3 + 1));
+
+	// and the first block in epoch 3 (#8) announces epoch 4
+	let epoch = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: block,
+			number: epoch_length + 2,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch.epoch_index, 4);
+	assert_eq!(epoch.start_slot, Slot::from(epoch_length * 4 + 1));
 }
