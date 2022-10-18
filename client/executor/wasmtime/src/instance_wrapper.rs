@@ -20,7 +20,6 @@
 //! runtime module.
 
 use crate::runtime::{Store, StoreData};
-use sc_allocator::Memory as MemoryT;
 use sc_executor_common::{
 	error::{Backtrace, Error, MessageWithBacktrace, Result, WasmError},
 	wasm_runtime::InvokeMethod,
@@ -123,10 +122,10 @@ impl EntryPoint {
 	}
 }
 
-/// Wrapper around [`Memory`] that implements [`MemoryT`].
+/// Wrapper around [`Memory`] that implements [`sc_allocator::Memory`].
 pub(crate) struct MemoryWrapper<'a, C>(pub &'a wasmtime::Memory, pub &'a mut C);
 
-impl<C: AsContextMut> MemoryT for MemoryWrapper<'_, C> {
+impl<C: AsContextMut> sc_allocator::Memory for MemoryWrapper<'_, C> {
 	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R {
 		run(self.0.data(&self.1))
 	}

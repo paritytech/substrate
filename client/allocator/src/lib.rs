@@ -28,10 +28,18 @@ mod freeing_bump;
 pub use error::Error;
 pub use freeing_bump::{AllocationStats, FreeingBumpHeapAllocator};
 
+/// Grants access to the memory for the allocator.
 pub trait Memory {
+	/// Run the given closure `run` and grant it write access to the raw memory.
 	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R;
+	/// Run the given closure `run` and grant it read access to the raw memory.
 	fn with_access<R>(&self, run: impl FnOnce(&[u8]) -> R) -> R;
+	/// Grow the memory by `additional` pages.
 	fn grow(&mut self, additional: u32) -> Result<(), ()>;
+	/// Returns the current number of pages this memory has allocated.
 	fn pages(&self) -> u32;
+	/// Returns the maximum number of pages this memory is allowed to allocate.
+	///
+	/// If `None` is returned, there is no maximum (besides the maximum defined in the wasm spec).
 	fn max_pages(&self) -> Option<u32>;
 }

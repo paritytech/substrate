@@ -22,7 +22,7 @@ use std::{cell::RefCell, rc::Rc, str, sync::Arc};
 
 use codec::{Decode, Encode};
 use log::{error, trace};
-use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator, Memory as MemoryT};
+use sc_allocator::{AllocationStats, FreeingBumpHeapAllocator};
 use sc_executor_common::{
 	error::{Error, MessageWithBacktrace, WasmError},
 	runtime_blob::{DataSegmentsSnapshot, RuntimeBlob},
@@ -42,10 +42,10 @@ use wasmi::{
 	TableRef,
 };
 
-/// Wrapper around [`MemorRef`] that implements [`MemoryT`].
+/// Wrapper around [`MemorRef`] that implements [`sc_allocator::Memory`].
 struct MemoryWrapper<'a>(&'a MemoryRef);
 
-impl MemoryT for MemoryWrapper<'_> {
+impl sc_allocator::Memory for MemoryWrapper<'_> {
 	fn with_access_mut<R>(&mut self, run: impl FnOnce(&mut [u8]) -> R) -> R {
 		self.0.with_direct_access_mut(run)
 	}
