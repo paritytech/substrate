@@ -56,7 +56,6 @@ where
 	B: Block,
 	Client: BlockBackend<B>
 		+ ProofProvider<B>
-		+ BlockIdTo<B, Error = sp_blockchain::Error>
 		+ Send
 		+ Sync
 		+ 'static,
