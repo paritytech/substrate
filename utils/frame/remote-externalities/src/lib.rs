@@ -21,7 +21,6 @@
 //! based chain, or a local state snapshot file.
 
 use codec::{Decode, Encode};
-
 use jsonrpsee::{
 	core::{client::ClientT, Error as RpcError},
 	proc_macros::rpc,
@@ -38,13 +37,9 @@ use sp_core::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
 		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
 	},
-	H256,
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::{
-	traits::{Block as BlockT, HashFor, NumberFor},
-	StateVersion,
-};
+use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -54,8 +49,7 @@ use std::{
 // 1. `pallets` no longer has the interpretation of an empty list implying everything. If
 // `hashed_prefix` and pallets are both empty, then we scrape everything. Not the biggest fan
 // myself, but needed to keep things backwards compatible.
-//
-//
+// 2. snapshot format has changed and now is a single file, and contains block hash as well.
 //
 //
 
@@ -70,9 +64,9 @@ const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
 const BATCH_SIZE: usize = 1000;
 const PAGE: u32 = 1000;
 
+#[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
-	block_number: NumberFor<B>,
-	hash: HashFor<B>,
+	block_hash: B::Hash,
 	top: TopKeyValues,
 	child: ChildKeyValues,
 }
@@ -114,11 +108,11 @@ pub trait RpcApi<Hash> {
 /// The execution mode.
 #[derive(Clone)]
 pub enum Mode<B: BlockT> {
-	/// Online. Potentially writes to a cache file.
+	/// Online. Potentially writes to a snapshot file.
 	Online(OnlineConfig<B>),
 	/// Offline. Uses a state snapshot file and needs not any client config.
 	Offline(OfflineConfig),
-	/// Prefer using a cache file if it exists, else use a remote server.
+	/// Prefer using a snapshot file if it exists, else use a remote server.
 	OfflineOrElseOnline(OfflineConfig, OnlineConfig<B>),
 }
 
@@ -223,6 +217,10 @@ impl<B: BlockT> OnlineConfig<B> {
 			.as_client()
 			.expect("ws client must have been initialized by now; qed.")
 	}
+
+	fn at_expected(&self) -> B::Hash {
+		self.at.expect("block at must be initialized; qed")
+	}
 }
 
 impl<B: BlockT> Default for OnlineConfig<B> {
@@ -287,6 +285,9 @@ pub struct Builder<B: BlockT> {
 	mode: Mode<B>,
 	/// The state version being used.
 	state_version: StateVersion,
+	/// the final hash of the block who's state is set in the externalities. This is always
+	/// `Some(_)` after calling `build`.
+	final_state_block_hash: Option<B::Hash>,
 }
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
@@ -298,6 +299,7 @@ impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 			hashed_key_values: Default::default(),
 			hashed_blacklist: Default::default(),
 			state_version: StateVersion::V1,
+			final_state_block_hash: None,
 		}
 	}
 }
@@ -529,86 +531,6 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 // Internal methods
 impl<B: BlockT + DeserializeOwned> Builder<B> {
-	/// Save the given data to the top keys snapshot.
-	fn save_top_snapshot(&self, data: &[KeyValue], path: &PathBuf) -> Result<(), &'static str> {
-		let mut path = path.clone();
-		let encoded = data.encode();
-		path.set_extension("top");
-		debug!(
-			target: LOG_TARGET,
-			"writing {} bytes to state snapshot file {:?}",
-			encoded.len(),
-			path
-		);
-		fs::write(path, encoded).map_err(|_| "fs::write failed.")?;
-		Ok(())
-	}
-
-	/// Save the given data to the child keys snapshot.
-	fn save_child_snapshot(
-		&self,
-		data: &ChildKeyValues,
-		path: &PathBuf,
-	) -> Result<(), &'static str> {
-		let mut path = path.clone();
-		path.set_extension("child");
-		let encoded = data.encode();
-		debug!(
-			target: LOG_TARGET,
-			"writing {} bytes to state snapshot file {:?}",
-			encoded.len(),
-			path
-		);
-		fs::write(path, encoded).map_err(|_| "fs::write failed.")?;
-		Ok(())
-	}
-
-	fn load_top_snapshot(&self, path: &PathBuf) -> Result<TopKeyValues, &'static str> {
-		let mut path = path.clone();
-		path.set_extension("top");
-		info!(target: LOG_TARGET, "loading top key-pairs from snapshot {:?}", path);
-		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		Decode::decode(&mut &*bytes).map_err(|e| {
-			log::error!(target: LOG_TARGET, "{:?}", e);
-			"decode failed"
-		})
-	}
-
-	fn load_child_snapshot(&self, path: &PathBuf) -> Result<ChildKeyValues, &'static str> {
-		let mut path = path.clone();
-		path.set_extension("child");
-		info!(target: LOG_TARGET, "loading child key-pairs from snapshot {:?}", path);
-		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
-		Decode::decode(&mut &*bytes).map_err(|e| {
-			log::error!(target: LOG_TARGET, "{:?}", e);
-			"decode failed"
-		})
-	}
-
-	/// Load all the `top` keys from the remote config, and maybe write then to cache.
-	async fn load_top_remote_and_maybe_save(&self) -> Result<TopKeyValues, &'static str> {
-		let top_kv = self.load_top_remote().await?;
-		if let Some(c) = &self.as_online().state_snapshot {
-			self.save_top_snapshot(&top_kv, &c.path)?;
-		}
-		Ok(top_kv)
-	}
-
-	/// Load all of the child keys from the remote config, given the already scraped list of top key
-	/// pairs.
-	///
-	/// Stores all values to cache as well, if provided.
-	async fn load_child_remote_and_maybe_save(
-		&self,
-		top_kv: &[KeyValue],
-	) -> Result<ChildKeyValues, &'static str> {
-		let child_kv = self.load_child_remote(top_kv).await?;
-		if let Some(c) = &self.as_online().state_snapshot {
-			self.save_child_snapshot(&child_kv, &c.path)?;
-		}
-		Ok(child_kv)
-	}
-
 	/// Load all of the child keys from the remote config, given the already scraped list of top key
 	/// pairs.
 	///
@@ -632,7 +554,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		let mut child_kv = vec![];
 		for prefixed_top_key in child_roots {
-			let at = self.as_online().at.expect("at must be initialized in online mode.");
+			let at = self.as_online().at_expected();
 			let child_keys =
 				self.rpc_child_get_keys(prefixed_top_key, StorageKey(vec![]), at).await?;
 			let child_kv_inner =
@@ -722,21 +644,60 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		Ok(())
 	}
 
-	pub(crate) async fn pre_build(
-		mut self,
+	pub(crate) async fn load_remote_and_maybe_save(
+		&mut self,
 	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
-		let mut top_kv = match self.mode.clone() {
-			Mode::Offline(config) => self.load_top_snapshot(&config.state_snapshot.path)?,
-			Mode::Online(_) => {
-				self.init_remote_client().await?;
-				self.load_top_remote_and_maybe_save().await?
-			},
+		self.init_remote_client().await?;
+		let top_kv = self.load_top_remote().await?;
+		let child_kv = self.load_child_remote(&top_kv).await?;
+
+		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
+			let snapshot = Snapshot::<B> {
+				top: top_kv.clone(),
+				child: child_kv.clone(),
+				block_hash: self
+					.as_online()
+					.at
+					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
+			};
+			std::fs::write(path, snapshot.encode()).map_err(|_| "fs::write failed")?;
+		}
+
+		Ok((top_kv, child_kv))
+	}
+
+	pub(crate) fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
+		info!(target: LOG_TARGET, "loading data from snapshot {:?}", path);
+		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
+		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
+	}
+
+	async fn do_load_online(&mut self) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
+		self.init_remote_client().await?;
+		self.final_state_block_hash = Some(self.as_online().at_expected());
+		Ok(self.load_remote_and_maybe_save().await?)
+	}
+
+	fn do_load_offline(
+		&mut self,
+		config: OfflineConfig,
+	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
+		let Snapshot { block_hash, top, child } =
+			self.load_snapshot(config.state_snapshot.path.clone())?;
+		self.final_state_block_hash = Some(block_hash);
+		Ok((top, child))
+	}
+
+	pub(crate) async fn pre_build(
+		&mut self,
+	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
+		let (mut top_kv, child_kv) = match self.mode.clone() {
+			Mode::Offline(config) => self.do_load_offline(config)?,
+			Mode::Online(_) => self.do_load_online().await?,
 			Mode::OfflineOrElseOnline(offline_config, _) => {
-				if let Ok(kv) = self.load_top_snapshot(&offline_config.state_snapshot.path) {
-					kv
-				} else {
-					self.init_remote_client().await?;
-					self.load_top_remote_and_maybe_save().await?
+				match self.do_load_offline(offline_config) {
+					Ok(x) => x,
+					Err(_) => self.do_load_online().await?,
 				}
 			},
 		};
@@ -760,26 +721,6 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			);
 			top_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
 		}
-
-		let child_kv = match self.mode.clone() {
-			Mode::Online(_) => self.load_child_remote_and_maybe_save(&top_kv).await?,
-			Mode::OfflineOrElseOnline(offline_config, _) =>
-				if let Ok(kv) = self.load_child_snapshot(&offline_config.state_snapshot.path) {
-					kv
-				} else {
-					self.load_child_remote_and_maybe_save(&top_kv).await?
-				},
-			Mode::Offline(ref config) => self
-				.load_child_snapshot(&config.state_snapshot.path)
-				.map_err(|why| {
-					log::warn!(
-						target: LOG_TARGET,
-						"failed to load child-key file due to {:?}.",
-						why
-					)
-				})
-				.unwrap_or_default(),
-		};
 
 		Ok((top_kv, child_kv))
 	}
@@ -819,19 +760,18 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		self
 	}
 
-	/// overwrite the `at` value, if `mode` is set to [`Mode::Online`].
-	///
-	/// noop if `mode` is [`Mode::Offline`]
-	pub fn overwrite_online_at(mut self, at: B::Hash) -> Self {
-		if let Mode::Online(mut online) = self.mode.clone() {
-			online.at = Some(at);
-			self.mode = Mode::Online(online);
-		}
-		self
+	/// Build the test externalities, and also return the final block hash to which the current
+	/// state corresponds to.
+	pub async fn build_with_block_hash(self) -> Result<(TestExternalities, B::Hash), &'static str> {
+		self.do_build().await
+	}
+
+	pub async fn build(self) -> Result<TestExternalities, &'static str> {
+		self.do_build().await.map(|(e, _)| e)
 	}
 
 	/// Build the test externalities.
-	pub async fn build(self) -> Result<TestExternalities, &'static str> {
+	async fn do_build(mut self) -> Result<(TestExternalities, B::Hash), &'static str> {
 		let state_version = self.state_version;
 		let (top_kv, child_kv) = self.pre_build().await?;
 		let mut ext = TestExternalities::new_with_code_and_state(
@@ -868,7 +808,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			ext.as_backend().root()
 		);
 
-		Ok(ext)
+		Ok((ext, self.final_state_block_hash.unwrap()))
 	}
 }
 
@@ -896,20 +836,26 @@ mod tests {
 	async fn can_load_state_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
-			.mode(Mode::Offline(OfflineConfig {
-				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
-			}))
+			.mode(Mode::OfflineOrElseOnline(
+				OfflineConfig { state_snapshot: SnapshotConfig::new("test_data/proxy_test") },
+				OnlineConfig {
+					pallets: vec!["Proxy".to_owned()],
+					child_trie: false,
+					state_snapshot: Some(SnapshotConfig::new("test_data/proxy_test")),
+					..Default::default()
+				})
+			)
 			.build()
 			.await
-			.expect("Can't read state snapshot file")
+			.unwrap()
 			.execute_with(|| {});
 	}
 
 	#[tokio::test]
-	async fn can_exclude_from_cache() {
+	async fn can_exclude_from_snapshot() {
 		init_logger();
 
-		// get the first key from the cache file.
+		// get the first key from the snapshot file.
 		let some_key = Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig {
 				state_snapshot: SnapshotConfig::new("test_data/proxy_test"),
@@ -936,15 +882,43 @@ mod tests {
 	}
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
 	use super::test_prelude::*;
+	use std::os::unix::fs::MetadataExt;
+
+	#[tokio::test]
+	async fn snapshot_block_hash_works() {
+		const CACHE: &'static str = "snapshot_block_hash_works";
+		init_logger();
+
+		// first, build a snapshot.
+		let (_, block_hash) = Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				pallets: vec!["Proxy".to_owned()],
+				child_trie: false,
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+				..Default::default()
+			}))
+			.build_with_block_hash()
+			.await
+			.unwrap();
+
+		// now re-create the same snapshot.
+		let (_, cached_block_hash) = Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
+			.build_with_block_hash()
+			.await
+			.unwrap();
+
+		assert_eq!(block_hash, cached_block_hash);
+	}
 
 	#[tokio::test]
 	async fn offline_else_online_works() {
 		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
-		// this shows that in the second run, we use the remote and create a cache.
+		// this shows that in the second run, we use the remote and create a snapshot.
 		Builder::<Block>::new()
 			.mode(Mode::OfflineOrElseOnline(
 				OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) },
@@ -978,17 +952,11 @@ mod remote_tests {
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
-			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == CACHE &&
-					(p.path().extension().unwrap_or_default() == "top" ||
-						p.path().extension().unwrap_or_default() == "child")
-			})
+			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		assert!(to_delete.len() > 0);
-		for d in to_delete {
-			std::fs::remove_file(d.path()).unwrap();
-		}
+		assert!(to_delete.len() == 1);
+		std::fs::remove_file(to_delete[0].path()).unwrap();
 	}
 
 	#[tokio::test]
@@ -1022,11 +990,13 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	async fn can_create_top_snapshot() {
+	async fn can_create_snapshot() {
+		const CACHE: &'static str = "can_create_snapshot";
 		init_logger();
+
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new("can_create_top_snapshot_data")),
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
 				pallets: vec!["Proxy".to_owned()],
 				child_trie: false,
 				..Default::default()
@@ -1040,34 +1010,25 @@ mod remote_tests {
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
-			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "can_create_top_snapshot_data" ||
-					p.path().extension().unwrap_or_default() == "top" ||
-					p.path().extension().unwrap_or_default() == "child"
-			})
+			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		assert!(to_delete.len() > 0);
+		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+		assert!(matches!(snap, Snapshot { top, child, .. } if top.len() > 0 && child.len() == 0));
 
-		for d in to_delete {
-			use std::os::unix::fs::MetadataExt;
-			if d.path().extension().unwrap_or_default() == "top" {
-				// if this is the top snapshot it must not be empty.
-				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
-			} else {
-				// the child is empty for this pallet.
-				assert!(std::fs::metadata(d.path()).unwrap().size() == 1);
-			}
-			std::fs::remove_file(d.path()).unwrap();
-		}
+		assert!(to_delete.len() == 1);
+		let to_delete = to_delete.first().unwrap();
+		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
+		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
 	#[tokio::test]
 	async fn can_create_child_snapshot() {
+		const CACHE: &'static str = "can_create_child_snapshot";
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				state_snapshot: Some(SnapshotConfig::new("can_create_child_snapshot_data")),
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
 				pallets: vec!["Crowdloan".to_owned()],
 				child_trie: true,
 				..Default::default()
@@ -1081,35 +1042,27 @@ mod remote_tests {
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
-			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "can_create_child_snapshot_data" ||
-					p.path().extension().unwrap_or_default() == "top" ||
-					p.path().extension().unwrap_or_default() == "child"
-			})
+			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		assert!(to_delete.len() > 0);
+		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+		assert!(matches!(snap, Snapshot { top, child, .. } if top.len() > 0 && child.len() > 0));
 
-		for d in to_delete {
-			use std::os::unix::fs::MetadataExt;
-			// if this is the top snapshot it must not be empty
-			if d.path().extension().unwrap_or_default() == "child" {
-				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
-			} else {
-				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
-			}
-			std::fs::remove_file(d.path()).unwrap();
-		}
+		assert!(to_delete.len() == 1);
+		let to_delete = to_delete.first().unwrap();
+		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
+		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
 	#[tokio::test]
-	// #[ignore = "only works if a local node is present."]
+	#[ignore = "only works if a local node is present."]
 	async fn can_fetch_all() {
+		const CACHE: &'static str = "can_fetch_all_data";
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				transport: "ws://localhost:9944".into(),
-				state_snapshot: Some(SnapshotConfig::new("can_fetch_all_data")),
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
 				..Default::default()
 			}))
 			.build()
@@ -1121,24 +1074,15 @@ mod remote_tests {
 			.unwrap()
 			.into_iter()
 			.map(|d| d.unwrap())
-			.filter(|p| {
-				p.path().file_name().unwrap_or_default() == "can_fetch_all_data" ||
-					p.path().extension().unwrap_or_default() == "top" ||
-					p.path().extension().unwrap_or_default() == "child"
-			})
+			.filter(|p| p.path().file_name().unwrap_or_default() == CACHE)
 			.collect::<Vec<_>>();
 
-		assert!(to_delete.len() > 0);
+		let snap: Snapshot<Block> = Builder::<Block>::new().load_snapshot(CACHE.into()).unwrap();
+		assert!(matches!(snap, Snapshot { top, child, .. } if top.len() > 0 && child.len() > 0));
 
-		for d in to_delete {
-			use std::os::unix::fs::MetadataExt;
-			// if we download everything, child tree must also be filled.
-			if d.path().extension().unwrap_or_default() == "child" {
-				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
-			} else {
-				assert!(std::fs::metadata(d.path()).unwrap().size() > 1);
-			}
-			std::fs::remove_file(d.path()).unwrap();
-		}
+		assert!(to_delete.len() == 1);
+		let to_delete = to_delete.first().unwrap();
+		assert!(std::fs::metadata(to_delete.path()).unwrap().size() > 1);
+		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 }
