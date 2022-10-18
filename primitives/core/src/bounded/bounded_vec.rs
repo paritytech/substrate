@@ -1254,6 +1254,18 @@ pub mod test {
 	}
 
 	#[test]
+	fn bounded_vec_debug_works() {
+		let bound = BoundedVec::<u32, ConstU32<5>>::truncate_from(vec![1, 2, 3]);
+		assert_eq!(format!("{:?}", bound), "BoundedVec([1, 2, 3], 5)");
+	}
+
+	#[test]
+	fn bounded_slice_debug_works() {
+		let bound = BoundedSlice::<u32, ConstU32<5>>::truncate_from(&[1, 2, 3]);
+		assert_eq!(format!("{:?}", bound), "BoundedSlice([1, 2, 3], 5)");
+	}
+
+	#[test]
 	fn bounded_vec_sort_by_key_works() {
 		let mut v: BoundedVec<i32, ConstU32<5>> = bounded_vec![-5, 4, 1, -3, 2];
 		// Sort by absolute value.
@@ -1263,8 +1275,24 @@ pub mod test {
 
 	#[test]
 	fn bounded_vec_truncate_from_works() {
-		let unbound = vec![1, 2, 3, 4, 5];
-		let bound: BoundedVec<u32, ConstU32<3>> = TruncateFrom::truncate_from(unbound);
-		assert_eq!(bound, vec![1, 2, 3]);
+		let unbound = vec![1u32, 2, 3];
+		let bound = BoundedVec::<u32, ConstU32<3>>::truncate_from(unbound.clone());
+		assert_eq!(bound, unbound);
+	}
+
+	#[test]
+	fn bounded_slice_truncate_from_works() {
+		let unbound = [1u32, 2, 3];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::truncate_from(&unbound);
+		assert_eq!(bound, &unbound[..]);
+	}
+
+	#[test]
+	fn bounded_slice_partialeq_slice_works() {
+		let unbound = [1u32, 2, 3];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::truncate_from(&unbound);
+
+		assert_eq!(bound, &unbound[..]);
+		assert!(bound == &unbound[..]);
 	}
 }
