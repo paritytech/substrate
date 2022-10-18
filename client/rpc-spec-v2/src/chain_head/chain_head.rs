@@ -34,7 +34,9 @@ use futures::{
 	stream::{self, Stream, StreamExt},
 };
 use jsonrpsee::{core::async_trait, types::SubscriptionResult, SubscriptionSink};
-use sc_client_api::{BlockBackend, BlockchainEvents, StorageKey};
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, StorageData, StorageKey, StorageProvider,
+};
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
@@ -44,7 +46,7 @@ use sp_runtime::{
 use sp_version::RuntimeVersion;
 
 /// An API for chain head RPC calls.
-pub struct ChainHead<Block: BlockT, Client> {
+pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
 	/// Executor to spawn subscriptions.
@@ -55,10 +57,10 @@ pub struct ChainHead<Block: BlockT, Client> {
 
 	// pinned_blocks: Arc<Mutex<Vec<T>>>,
 	/// Phantom member to pin the block type.
-	_phantom: PhantomData<Block>,
+	_phantom: PhantomData<(Block, BE)>,
 }
 
-impl<Block: BlockT, Client> ChainHead<Block, Client> {
+impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Creates a new [`ChainHead`].
 	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
 		Self {
@@ -71,16 +73,18 @@ impl<Block: BlockT, Client> ChainHead<Block, Client> {
 }
 
 #[async_trait]
-impl<Block, Client>
+impl<BE, Block, Client>
 	ChainHeadApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
-	for ChainHead<Block, Client>
+	for ChainHead<BE, Block, Client>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
+	BE: Backend<Block> + 'static,
 	Client: BlockBackend<Block>
 		+ HeaderBackend<Block>
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
+		+ StorageProvider<Block, BE>
 		+ 'static,
 {
 	fn chain_head_unstable_follow(
@@ -93,6 +97,8 @@ where
 
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
+
+		self.subscriptions.insert_subscription(sub_id.clone());
 
 		let sub_id_import = sub_id.clone();
 
@@ -121,7 +127,10 @@ where
 					None
 				};
 
+				println!("\n - PINNING: {:?} - {:?}", sub_id_import, notification.hash);
+
 				if let Err(_) = subscriptions.pin_block(&sub_id_import, notification.hash.clone()) {
+					println!("\n - PINNING: {:?} - {:?} FAILED", sub_id_import, notification.hash);
 					// TODO: signal drop error.
 				}
 
@@ -201,6 +210,11 @@ where
 		// TODO: get this from jsonrpsee
 		let sub_id = "A0".to_string();
 
+		// let res = match self.client.block(&BlockId::hash(hash)) {
+		// 	Ok(Some(block)) => BodyEvent::Done(block),
+		// 	_ => BodyEvent::<SignedBlock<Block>>::Inaccessible,
+		// };
+
 		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
 			BodyEvent::<SignedBlock<Block>>::Disjoint
 		} else {
@@ -230,10 +244,23 @@ where
 		// TODO: get this from jsonrpsee
 		let sub_id = "A0".to_string();
 
+		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
+			BodyEvent::<StorageData>::Disjoint
+		} else {
+			match self.client.storage(&BlockId::hash(hash), &key) {
+				Ok(Some(block)) => BodyEvent::Done(block),
+				_ => BodyEvent::<StorageData>::Inaccessible,
+			}
+		};
+
+		let stream = stream::once(async move { res });
+		let fut = async move {
+			sink.pipe_from_stream(stream.boxed()).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
-
-	// self.backend.storage(block, key).map_err(Into::into)
 }
 
 /// The transaction could not be processed due to an error.
