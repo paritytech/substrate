@@ -204,21 +204,7 @@ where
 		block_numbers: Vec<NumberFor<Block>>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
-		let api = self.client.runtime_api();
-		let block_hash = at.unwrap_or_else(||
-			// If the block hash is not supplied assume the best block.
-			self.client.info().best_hash);
-
-		let (leaves, proof) = api
-			.generate_batch_proof_with_context(
-				&BlockId::hash(block_hash),
-				sp_core::ExecutionContext::OffchainCall(None),
-				block_numbers,
-			)
-			.map_err(runtime_error_into_rpc_error)?
-			.map_err(mmr_error_into_rpc_error)?;
-
-		Ok(LeafBatchProof::new(block_hash, leaves, proof))
+		self.generate_historical_batch_proof(block_numbers, None, at)
 	}
 
 	fn generate_historical_batch_proof(

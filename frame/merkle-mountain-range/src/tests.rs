@@ -236,7 +236,10 @@ fn should_generate_proofs_correctly() {
 		// when generate proofs for all leaves.
 		let proofs = (1_u64..=best_block_number)
 			.into_iter()
-			.map(|block_num| crate::Pallet::<Test>::generate_batch_proof(vec![block_num]).unwrap())
+			.map(|block_num| {
+				crate::Pallet::<Test>::generate_historical_batch_proof(vec![block_num], None)
+					.unwrap()
+			})
 			.collect::<Vec<_>>();
 		// when generate historical proofs for all leaves
 		let historical_proofs = (1_u64..best_block_number)
