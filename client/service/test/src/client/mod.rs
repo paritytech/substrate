@@ -867,7 +867,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
-	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
+	client.finalize_block(&a2.hash(), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -996,7 +996,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	// we finalize block B1 which is on a different branch from current best
 	// which should trigger a re-org.
-	ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &b1.hash(), None).unwrap();
 
 	// B1 should now be the latest finalized
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
@@ -1020,7 +1020,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	assert_eq!(client.chain_info().best_hash, b3.hash());
 
-	ClientExt::finalize_block(&client, BlockId::Hash(b3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &b3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
@@ -1118,7 +1118,7 @@ fn finality_notifications_content() {
 
 	// Postpone import to test behavior of import of finalized block.
 
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a2.hash(), None).unwrap();
 
 	// Import and finalize D4
 	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
@@ -1274,7 +1274,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	// we will finalize A2 which should make it impossible to import a new
 	// B3 at the same height but that doesn't include it
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a2.hash(), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
 	let expected_err =
@@ -1309,7 +1309,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
-	ClientExt::finalize_block(&client, BlockId::Hash(a3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 

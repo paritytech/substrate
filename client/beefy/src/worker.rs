@@ -1506,11 +1506,9 @@ pub(crate) mod tests {
 		// push 15 blocks with `AuthorityChange` digests every 10 blocks
 		net.generate_blocks_and_sync(15, 10, &validator_set, false);
 		// finalize 13 without justifications
-		net.peer(0)
-			.client()
-			.as_client()
-			.finalize_block(BlockId::number(13), None)
-			.unwrap();
+		let hashof13 =
+			backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
+		net.peer(0).client().as_client().finalize_block(&hashof13, None).unwrap();
 
 		// Test initialization at session boundary.
 		{
