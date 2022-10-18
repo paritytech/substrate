@@ -1594,7 +1594,8 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(
 			ValidatorCount::<T>::get() <=
-				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+			"validator count exceeded election max winners"
 		);
 		Ok(())
 	}
