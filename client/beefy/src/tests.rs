@@ -20,6 +20,7 @@
 
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
+use sc_client_api::backend::Backend;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use tokio::{runtime::Runtime, time::Duration};
@@ -509,13 +510,19 @@ fn finalize_block_and_wait_for_beefy(
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
 	for block in finalize_targets {
-		let finalize = BlockId::number(*block);
+		let finalize = net
+			.lock()
+			.peer(0)
+			.client()
+			.as_client()
+			.expect_block_hash_from_id(&BlockId::number(*block))
+			.unwrap();
 		peers.clone().for_each(|(index, _)| {
 			net.lock()
 				.peer(index)
 				.client()
 				.as_client()
-				.finalize_block(finalize, None)
+				.finalize_block(&finalize, None)
 				.unwrap();
 		})
 	}
@@ -604,9 +611,16 @@ fn lagging_validators() {
 	);
 
 	// Alice finalizes #25, Bob lags behind
-	let finalize = BlockId::number(25);
+	let finalize = net
+		.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.block_hash_from_id(&BlockId::number(25))
+		.unwrap()
+		.unwrap();
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(&finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
@@ -614,7 +628,7 @@ fn lagging_validators() {
 
 	// Bob catches up and also finalizes #25
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(&finalize, None).unwrap();
 	// expected beefy finalizes block #17 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[23, 24, 25]);
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[23, 24, 25]);
@@ -628,8 +642,15 @@ fn lagging_validators() {
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	let finalize = BlockId::number(60);
-	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
+	let finalize = net
+		.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.block_hash_from_id(&BlockId::number(60))
+		.unwrap()
+		.unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(&finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
@@ -637,7 +658,7 @@ fn lagging_validators() {
 
 	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
-	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(&finalize, None).unwrap();
 	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #60
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[60]);
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[60]);
@@ -681,24 +702,17 @@ fn correct_beefy_payload() {
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
 
 	// now 2 good validators and 1 bad one are voting
-	net.lock()
+	let hashof11 = net
+		.lock()
 		.peer(0)
 		.client()
 		.as_client()
-		.finalize_block(BlockId::number(11), None)
+		.block_hash_from_id(&BlockId::number(11))
+		.unwrap()
 		.unwrap();
-	net.lock()
-		.peer(1)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
-	net.lock()
-		.peer(3)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(&hashof11, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(&hashof11, None).unwrap();
+	net.lock().peer(3).client().as_client().finalize_block(&hashof11, None).unwrap();
 
 	// verify consensus is _not_ reached
 	let timeout = Some(Duration::from_millis(250));
@@ -708,12 +722,7 @@ fn correct_beefy_payload() {
 	// 3rd good validator catches up and votes as well
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
-	net.lock()
-		.peer(2)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(&hashof11, None).unwrap();
 
 	// verify consensus is reached
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
@@ -923,11 +932,19 @@ fn on_demand_beefy_justification_sync() {
 
 	let (dave_best_blocks, _) =
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
+	let hashof1 = net
+		.lock()
+		.peer(dave_index)
+		.client()
+		.as_client()
+		.block_hash_from_id(&BlockId::number(1))
+		.unwrap()
+		.unwrap();
 	net.lock()
 		.peer(dave_index)
 		.client()
 		.as_client()
-		.finalize_block(BlockId::number(1), None)
+		.finalize_block(&hashof1, None)
 		.unwrap();
 	// Give Dave task some cpu cycles to process the finality notification,
 	run_for(Duration::from_millis(100), &net, &mut runtime);

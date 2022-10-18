@@ -1845,29 +1845,22 @@ where
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		let last_best = self.backend.blockchain().info().best_hash;
-		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.apply_finality_with_block_hash(
-			operation,
-			to_finalize_hash,
-			justification,
-			last_best,
-			notify,
-		)
+		self.apply_finality_with_block_hash(operation, *hash, justification, last_best, notify)
 	}
 
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		self.lock_import_and_run(|operation| {
-			self.apply_finality(operation, id, justification, notify)
+			self.apply_finality(operation, hash, justification, notify)
 		})
 	}
 }
@@ -1881,20 +1874,20 @@ where
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		(**self).apply_finality(operation, id, justification, notify)
+		(**self).apply_finality(operation, hash, justification, notify)
 	}
 
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		(**self).finalize_block(id, justification, notify)
+		(**self).finalize_block(hash, justification, notify)
 	}
 }
 
