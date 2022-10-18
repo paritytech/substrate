@@ -362,11 +362,7 @@ pub struct Epoch {
 
 /// Returns the epoch index the given slot belongs to.
 pub fn epoch_index(slot: Slot, genesis_slot: Slot, epoch_duration: u64) -> u64 {
-	if slot < genesis_slot {
-		return 0
-	}
-
-	(*slot - *genesis_slot) / epoch_duration
+	*slot.saturating_sub(genesis_slot) / epoch_duration
 }
 
 /// Returns the first slot at the given epoch index.
@@ -376,9 +372,11 @@ pub fn epoch_start_slot(epoch_index: u64, genesis_slot: Slot, epoch_duration: u6
 	const PROOF: &str = "slot number is u64; it should relate in some way to wall clock time; \
 						 if u64 is not enough we should crash for safety; qed.";
 
-	let epoch_start = epoch_index.checked_mul(epoch_duration).expect(PROOF);
-
-	epoch_start.checked_add(*genesis_slot).expect(PROOF).into()
+	epoch_index
+		.checked_mul(epoch_duration)
+		.and_then(|slot| slot.checked_add(*genesis_slot))
+		.expect(PROOF)
+		.into()
 }
 
 sp_api::decl_runtime_apis! {
