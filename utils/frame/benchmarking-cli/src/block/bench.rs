@@ -43,15 +43,15 @@ const LOG_TARGET: &'static str = "benchmark::block::weight";
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Number of the first block to consider.
-	#[clap(long)]
+	#[arg(long)]
 	pub from: u32,
 
 	/// Last block number to consider.
-	#[clap(long)]
+	#[arg(long)]
 	pub to: u32,
 
 	/// Number of times that the benchmark should be repeated for each block.
-	#[clap(long, default_value = "10")]
+	#[arg(long, default_value_t = 10)]
 	pub repeat: u32,
 }
 
@@ -131,7 +131,9 @@ where
 	fn consumed_weight(&self, block: &BlockId<Block>) -> Result<NanoSeconds> {
 		// Hard-coded key for System::BlockWeight. It could also be passed in as argument
 		// for the benchmark, but I think this should work as well.
-		let hash = hex::decode("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96")?;
+		let hash = array_bytes::hex2bytes(
+			"26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96",
+		)?;
 		let key = StorageKey(hash);
 
 		let mut raw_weight = &self

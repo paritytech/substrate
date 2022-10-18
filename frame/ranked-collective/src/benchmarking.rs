@@ -27,7 +27,7 @@ use frame_system::RawOrigin as SystemOrigin;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -138,7 +138,7 @@ benchmarks_instance_pallet! {
 	}
 
 	cleanup_poll {
-		let n in 1 .. 100;
+		let n in 0 .. 100;
 
 		// Create a poll
 		let class = T::Polls::classes().into_iter().next().unwrap();

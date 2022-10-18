@@ -54,8 +54,8 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
 		who: &T::AccountId,
-		call: &T::Call,
-		dispatch_info: &DispatchInfoOf<T::Call>,
+		call: &T::RuntimeCall,
+		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
 		fee: Self::Balance,
 		tip: Self::Balance,
@@ -68,8 +68,8 @@ pub trait OnChargeAssetTransaction<T: Config> {
 	/// Note: The `fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
-		dispatch_info: &DispatchInfoOf<T::Call>,
-		post_info: &PostDispatchInfoOf<T::Call>,
+		dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		tip: Self::Balance,
 		already_withdrawn: Self::LiquidityInfo,
@@ -114,8 +114,8 @@ where
 	/// Note: The `fee` already includes the `tip`.
 	fn withdraw_fee(
 		who: &T::AccountId,
-		_call: &T::Call,
-		_info: &DispatchInfoOf<T::Call>,
+		_call: &T::RuntimeCall,
+		_info: &DispatchInfoOf<T::RuntimeCall>,
 		asset_id: Self::AssetId,
 		fee: Self::Balance,
 		_tip: Self::Balance,
@@ -142,8 +142,8 @@ where
 	/// Note: The `corrected_fee` already includes the `tip`.
 	fn correct_and_deposit_fee(
 		who: &T::AccountId,
-		_dispatch_info: &DispatchInfoOf<T::Call>,
-		_post_info: &PostDispatchInfoOf<T::Call>,
+		_dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+		_post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		corrected_fee: Self::Balance,
 		_tip: Self::Balance,
 		paid: Self::LiquidityInfo,

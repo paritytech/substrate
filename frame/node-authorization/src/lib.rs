@@ -67,7 +67,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The maximum number of well known nodes that are allowed to set
 		#[pallet::constant]
@@ -78,16 +78,16 @@ pub mod pallet {
 		type MaxPeerIdLength: Get<u32>;
 
 		/// The origin which can add a well known node.
-		type AddOrigin: EnsureOrigin<Self::Origin>;
+		type AddOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can remove a well known node.
-		type RemoveOrigin: EnsureOrigin<Self::Origin>;
+		type RemoveOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can swap the well known nodes.
-		type SwapOrigin: EnsureOrigin<Self::Origin>;
+		type SwapOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which can reset the well known nodes.
-		type ResetOrigin: EnsureOrigin<Self::Origin>;
+		type ResetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
