@@ -284,7 +284,7 @@ where
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
-				config.add_protocol(params.protocol_id.clone());
+				config.with_kademlia(params.protocol_id.clone());
 				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
@@ -1665,16 +1665,9 @@ where
 						.user_protocol_mut()
 						.add_default_set_discovered_nodes(iter::once(peer_id));
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
-					protocols,
-				))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) =>
 					if let Some(metrics) = this.metrics.as_ref() {
-						for protocol in protocols {
-							metrics
-								.kademlia_random_queries_total
-								.with_label_values(&[protocol.as_ref()])
-								.inc();
-						}
+						metrics.kademlia_random_queries_total.inc();
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
@@ -2015,28 +2008,21 @@ where
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, buckets) in this.network_service.behaviour_mut().num_entries_per_kbucket() {
+			if let Some(buckets) = this.network_service.behaviour_mut().num_entries_per_kbucket() {
 				for (lower_ilog2_bucket_bound, num_entries) in buckets {
 					metrics
 						.kbuckets_num_nodes
-						.with_label_values(&[proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.with_label_values(&[&lower_ilog2_bucket_bound.to_string()])
 						.set(num_entries as u64);
 				}
 			}
-			for (proto, num_entries) in this.network_service.behaviour_mut().num_kademlia_records()
-			{
-				metrics
-					.kademlia_records_count
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+			if let Some(num_entries) = this.network_service.behaviour_mut().num_kademlia_records() {
+				metrics.kademlia_records_count.set(num_entries as u64);
 			}
-			for (proto, num_entries) in
+			if let Some(num_entries) =
 				this.network_service.behaviour_mut().kademlia_records_total_size()
 			{
-				metrics
-					.kademlia_records_sizes_total
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+				metrics.kademlia_records_sizes_total.set(num_entries as u64);
 			}
 			metrics
 				.peerset_num_discovered
