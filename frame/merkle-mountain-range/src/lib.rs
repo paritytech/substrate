@@ -382,21 +382,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Generate a MMR proof for the given `block_numbers`.
-	///
-	/// Note this method can only be used from an off-chain context
-	/// (Offchain Worker or Runtime API call), since it requires
-	/// all the leaves to be present.
-	/// It may return an error or panic if used incorrectly.
-	pub fn generate_batch_proof(
-		block_numbers: Vec<T::BlockNumber>,
-	) -> Result<
-		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
-		primitives::Error,
-	> {
-		Self::generate_historical_batch_proof(block_numbers, None)
-	}
-
-	/// Generate a MMR proof for the given `block_numbers`.
 	/// If `best_known_block_number = Some(n)`, this generates a historical proof for
 	/// the head of the chain was at height `n`.
 	/// Else it generates a proof for the MMR at the current block height.
@@ -405,7 +390,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
-	pub fn generate_historical_batch_proof(
+	pub fn generate_batch_proof(
 		block_numbers: Vec<T::BlockNumber>,
 		best_known_block_number: Option<T::BlockNumber>,
 	) -> Result<

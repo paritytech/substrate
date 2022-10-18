@@ -459,12 +459,9 @@ sp_api::decl_runtime_apis! {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 
-		/// Generate MMR proof for a series of blocks with the specified block numbers.
-		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
-
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.
-		fn generate_historical_batch_proof(
+		fn generate_batch_proof(
 			block_numbers: Vec<BlockNumber>,
 			best_known_block_number: Option<BlockNumber>
 		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;

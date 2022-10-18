@@ -112,23 +112,6 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		at: Option<BlockHash>,
 	) -> RpcResult<LeafProof<BlockHash>>;
 
-	/// Generate MMR proof for the given block numbers.
-	///
-	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// MMR proof for a set of blocks with the specific `block_numbers`.
-	/// Optionally, a block hash at which the runtime should be queried can be specified.
-	///
-	/// Returns the leaves and a proof for these leaves (compact encoding, i.e. hash of
-	/// the leaves). Both parameters are SCALE-encoded.
-	/// The order of entries in the `leaves` field of the returned struct
-	/// is the same as the order of the entries in `block_numbers` supplied
-	#[method(name = "mmr_generateBatchProof")]
-	fn generate_batch_proof(
-		&self,
-		block_numbers: Vec<BlockNumber>,
-		at: Option<BlockHash>,
-	) -> RpcResult<LeafBatchProof<BlockHash>>;
-
 	/// Generate a MMR proof for the given `block_numbers`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
@@ -149,7 +132,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	/// The order of entries in the `leaves` field of the returned struct
 	/// is the same as the order of the entries in `block_numbers` supplied
 	#[method(name = "mmr_generateHistoricalBatchProof")]
-	fn generate_historical_batch_proof(
+	fn generate_batch_proof(
 		&self,
 		block_numbers: Vec<BlockNumber>,
 		best_known_block_number: Option<BlockNumber>,
@@ -202,14 +185,6 @@ where
 	fn generate_batch_proof(
 		&self,
 		block_numbers: Vec<NumberFor<Block>>,
-		at: Option<<Block as BlockT>::Hash>,
-	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
-		self.generate_historical_batch_proof(block_numbers, None, at)
-	}
-
-	fn generate_historical_batch_proof(
-		&self,
-		block_numbers: Vec<NumberFor<Block>>,
 		best_known_block_number: Option<NumberFor<Block>>,
 		at: Option<<Block as BlockT>::Hash>,
 	) -> RpcResult<LeafBatchProof<<Block as BlockT>::Hash>> {
@@ -219,7 +194,7 @@ where
 			self.client.info().best_hash);
 
 		let (leaves, proof) = api
-			.generate_historical_batch_proof_with_context(
+			.generate_batch_proof_with_context(
 				&BlockId::hash(block_hash),
 				sp_core::ExecutionContext::OffchainCall(None),
 				block_numbers,
