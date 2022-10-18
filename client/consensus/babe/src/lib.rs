@@ -1526,10 +1526,11 @@ where
 				old_epoch_changes = Some((*epoch_changes).clone());
 
 				let mut viable_epoch = epoch_changes
-					.viable_epoch_mut(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
+					.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
-					})?;
+					})?
+					.into_cloned();
 
 				let epoch_config = next_config_digest
 					.map(Into::into)
@@ -1552,14 +1553,16 @@ where
 
 					let original_epoch_index = epoch_data.epoch_index;
 
-					// NOTE: notice that we are only updating the `Epoch` from `EpochChanges` (that
-					// is stored in the map), and not the `EpochHeader` that is stored in the fork
-					// tree.  next time we search for an epoch for a given slot we will do it
-					// through the fork tree (which isn't updated), but the reason this works is
-					// because we will search in-depth in the tree with the predicate
-					// `epoch.start_slot <= slot` which will still match correctly without the
-					// updated `start_slot`. the new epoch that will get inserted below (after
-					// `increment`) will already use a correct `start_slot`.
+					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
+					// makes it so that when we insert the new epoch into `EpochChanges` below
+					// (after incrementing it), it will use the correct epoch index and start slot.
+					// we do not update the original epoch that will be re-used because there might
+					// be other forks (that we haven't imported) where the epoch isn't skipped, and
+					// to import those forks we want to keep the original epoch data. not updating
+					// the original epoch works because when we search the tree for which epoch to
+					// use for a given slot, we will search in-depth with the predicate
+					// `epoch.start_slot <= slot` which will still match correctly without updating
+					// `start_slot` to the correct value as below.
 					epoch_data.epoch_index += skipped_epochs;
 					epoch_data.start_slot =
 						Slot::from(*epoch_data.start_slot + skipped_epochs * epoch_data.duration);

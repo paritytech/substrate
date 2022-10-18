@@ -1152,23 +1152,8 @@ fn allows_skipping_epochs() {
 		&mut block_import,
 	);
 
-	// we check the epoch data that was announced at block #7 (that we checked above)
-	let epoch3 = epoch_changes
-		.shared_data()
-		.epoch(&EpochIdentifier {
-			position: EpochIdentifierPosition::Regular,
-			hash: blocks[epoch_length as usize],
-			number: epoch_length + 1,
-		})
-		.unwrap()
-		.clone();
-
-	// and it now is updated to start at epoch 3 with an updated slot
-	assert_eq!(epoch3.epoch_index, 3);
-	assert_eq!(epoch3.start_slot, Slot::from(epoch_length * 3 + 1));
-
 	// and the first block in epoch 3 (#8) announces epoch 4
-	let epoch = epoch_changes
+	let epoch4 = epoch_changes
 		.shared_data()
 		.epoch(&EpochIdentifier {
 			position: EpochIdentifierPosition::Regular,
@@ -1178,6 +1163,38 @@ fn allows_skipping_epochs() {
 		.unwrap()
 		.clone();
 
-	assert_eq!(epoch.epoch_index, 4);
-	assert_eq!(epoch.start_slot, Slot::from(epoch_length * 4 + 1));
+	assert_eq!(epoch4.epoch_index, 4);
+	assert_eq!(epoch4.start_slot, Slot::from(epoch_length * 4 + 1));
+
+	// if we try to get the epoch data for a slot in epoch 3
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&block,
+			epoch_length + 2,
+			(epoch_length * 3 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get back the data for epoch 2
+	assert_eq!(epoch3, epoch2);
+
+	// but if we try to get the epoch data for a slot in epoch 4
+	let epoch4_ = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get epoch 4 as expected
+	assert_eq!(epoch4, epoch4_);
 }
