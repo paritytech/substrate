@@ -1275,21 +1275,21 @@ pub mod test {
 
 	#[test]
 	fn bounded_vec_truncate_from_works() {
-		let unbound = vec![1u32, 2, 3];
+		let unbound = vec![1, 2, 3, 4, 5];
 		let bound = BoundedVec::<u32, ConstU32<3>>::truncate_from(unbound.clone());
-		assert_eq!(bound, unbound);
+		assert_eq!(bound, vec![1, 2, 3]);
 	}
 
 	#[test]
 	fn bounded_slice_truncate_from_works() {
-		let unbound = [1u32, 2, 3];
+		let unbound = [1, 2, 3, 4, 5];
 		let bound = BoundedSlice::<u32, ConstU32<3>>::truncate_from(&unbound);
-		assert_eq!(bound, &unbound[..]);
+		assert_eq!(bound, &[1, 2, 3][..]);
 	}
 
 	#[test]
 	fn bounded_slice_partialeq_slice_works() {
-		let unbound = [1u32, 2, 3];
+		let unbound = [1, 2, 3];
 		let bound = BoundedSlice::<u32, ConstU32<3>>::truncate_from(&unbound);
 
 		assert_eq!(bound, &unbound[..]);
