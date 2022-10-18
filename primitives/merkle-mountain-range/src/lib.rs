@@ -437,9 +437,6 @@ impl Error {
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
-		/// Generate MMR proof for a block with a specified `block_number`.
-		fn generate_proof(block_number: BlockNumber) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
-
 		/// Verify MMR proof against on-chain MMR.
 		///
 		/// Note this function will use on-chain MMR root hash and check if the proof
@@ -461,7 +458,7 @@ sp_api::decl_runtime_apis! {
 
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.
-		fn generate_batch_proof(
+		fn generate_proof(
 			block_numbers: Vec<BlockNumber>,
 			best_known_block_number: Option<BlockNumber>
 		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;

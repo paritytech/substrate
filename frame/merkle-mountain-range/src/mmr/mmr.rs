@@ -163,7 +163,7 @@ where
 	///
 	/// Proof generation requires all the nodes (or their hashes) to be available in the storage.
 	/// (i.e. you can't run the function in the pruned storage).
-	pub fn generate_batch_proof(
+	pub fn generate_proof(
 		&self,
 		leaf_indices: Vec<NodeIndex>,
 	) -> Result<(Vec<L>, primitives::BatchProof<<T as Config<I>>::Hash>), Error> {

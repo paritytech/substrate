@@ -390,7 +390,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
-	pub fn generate_batch_proof(
+	pub fn generate_proof(
 		block_numbers: Vec<T::BlockNumber>,
 		best_known_block_number: Option<T::BlockNumber>,
 	) -> Result<
@@ -413,7 +413,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect::<Result<Vec<LeafIndex>, _>>()?;
 
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(leaves_count);
-		mmr.generate_batch_proof(leaf_indices)
+		mmr.generate_proof(leaf_indices)
 	}
 
 	/// Return the on-chain MMR root hash.
