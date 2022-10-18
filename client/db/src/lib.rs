@@ -798,7 +798,7 @@ impl<Block: BlockT> BlockImportOperation<Block> {
 			return Err(sp_blockchain::Error::InvalidState)
 		}
 
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
+		let child_delta = storage.children_default.values().map(|child_content| {
 			(
 				&child_content.child_info,
 				child_content.data.iter().map(|(k, v)| (&k[..], Some(&v[..]))),

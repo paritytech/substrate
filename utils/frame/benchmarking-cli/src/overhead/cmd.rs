@@ -73,13 +73,13 @@ pub struct OverheadParams {
 	/// Add a header to the generated weight output file.
 	///
 	/// Good for adding LICENSE headers.
-	#[clap(long, value_name = "PATH")]
+	#[arg(long, value_name = "PATH")]
 	pub header: Option<PathBuf>,
 
 	/// Enable the Trie cache.
 	///
 	/// This should only be used for performance analysis and not for final results.
-	#[clap(long)]
+	#[arg(long)]
 	pub enable_trie_cache: bool,
 }
 

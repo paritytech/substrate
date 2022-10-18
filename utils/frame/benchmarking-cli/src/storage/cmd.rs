@@ -68,54 +68,54 @@ pub struct StorageParams {
 	pub hostinfo: HostInfoParams,
 
 	/// Skip the `read` benchmark.
-	#[clap(long)]
+	#[arg(long)]
 	pub skip_read: bool,
 
 	/// Skip the `write` benchmark.
-	#[clap(long)]
+	#[arg(long)]
 	pub skip_write: bool,
 
 	/// Specify the Handlebars template to use for outputting benchmark results.
-	#[clap(long)]
+	#[arg(long)]
 	pub template_path: Option<PathBuf>,
 
 	/// Add a header to the generated weight output file.
 	///
 	/// Good for adding LICENSE headers.
-	#[clap(long, value_name = "PATH")]
+	#[arg(long, value_name = "PATH")]
 	pub header: Option<PathBuf>,
 
 	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
-	#[clap(long)]
+	#[arg(long)]
 	pub json_read_path: Option<PathBuf>,
 
 	/// Path to write the raw 'write' results in JSON format to. Can be a file or directory.
-	#[clap(long)]
+	#[arg(long)]
 	pub json_write_path: Option<PathBuf>,
 
 	/// Rounds of warmups before measuring.
-	#[clap(long, default_value = "1")]
+	#[arg(long, default_value_t = 1)]
 	pub warmups: u32,
 
 	/// The `StateVersion` to use. Substrate `--dev` should use `V1` and Polkadot `V0`.
 	/// Selecting the wrong version can corrupt the DB.
-	#[clap(long, possible_values = ["0", "1"])]
+	#[arg(long, value_parser = clap::value_parser!(u8).range(0..=1))]
 	pub state_version: u8,
 
 	/// Trie cache size in bytes.
 	///
 	/// Providing `0` will disable the cache.
-	#[clap(long, value_name = "Bytes", default_value = "67108864")]
+	#[arg(long, value_name = "Bytes", default_value_t = 67108864)]
 	pub trie_cache_size: usize,
 
 	/// Enable the Trie cache.
 	///
 	/// This should only be used for performance analysis and not for final results.
-	#[clap(long)]
+	#[arg(long)]
 	pub enable_trie_cache: bool,
 
 	/// Include child trees in benchmark.
-	#[clap(long)]
+	#[arg(long)]
 	pub include_child_trees: bool,
 }
 
