@@ -26,7 +26,7 @@ use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use std::{fmt::Debug, str::FromStr, collections::VecDeque};
+use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, WsClient};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
@@ -164,7 +164,7 @@ where
 			full_extensions(),
 		)?;
 
-		let consumed_weight = <Weight as Decode>::decode(&mut &*encoded_result)
+		let consumed_weight = <sp_weight::Weight as Decode>::decode(&mut &*encoded_result)
 			.map_err(|e| format!("failed to decode weight: {:?}", e))?;
 
 		let storage_changes = changes
