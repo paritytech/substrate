@@ -220,7 +220,7 @@ impl TestNetworkBuilder {
 			(Box::new(chain_sync), chain_sync_service)
 		});
 
-		let protocol_id = ProtocolId::from("/test-protocol-name");
+		let protocol_id = ProtocolId::from("test-protocol-name");
 		let fork_id = Some(String::from("test-fork-id"));
 
 		let block_request_protocol_config = {
