@@ -24,10 +24,15 @@ use std::{
 };
 
 use codec::{Codec, Decode, Encode};
-use futures::{stream::Fuse, StreamExt};
+use futures::{stream::Fuse, FutureExt, StreamExt};
 use log::{debug, error, info, log_enabled, trace, warn};
+use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
+use sc_network_common::{
+	protocol::event::Event as NetEvent,
+	service::{NetworkEventStream, NetworkRequest},
+};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -42,19 +47,23 @@ use sp_runtime::{
 };
 
 use beefy_primitives::{
-	ecdsa_crypto, known_payload_ids, BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, SignedCommitment,
+	ecdsa_crypto,
+	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
 
 use crate::{
+	communication::{
+		gossip::{topic, GossipValidator},
+		request_response::outgoing_requests_engine::OnDemandJustificationsEngine,
+	},
 	error::Error,
-	gossip::{topic, GossipValidator},
 	justification::BeefyVersionedFinalityProof,
 	keystore::BeefyKeystore,
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
-	BeefyVoterLinks, Client,
+	BeefyVoterLinks, Client, KnownPeers,
 };
 
 enum RoundAction {
@@ -110,6 +119,17 @@ impl<B: Block> VoterOracle<B> {
 			// when there's multiple sessions, only keep the `!mandatory_done()` ones.
 			self.sessions.retain(|s| !s.mandatory_done())
 		}
+	}
+
+	/// Return current pending mandatory block, if any.
+	pub fn mandatory_pending(&self) -> Option<NumberFor<B>> {
+		self.sessions.front().and_then(|round| {
+			if round.mandatory_done() {
+				None
+			} else {
+				Some(round.session_start())
+			}
+		})
 	}
 
 	/// Return `(A, B)` tuple representing inclusive [A, B] interval of votes to accept.
@@ -174,29 +194,37 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, SO, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub(crate) struct WorkerParams<B: Block, BE, C, R, N, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
+	pub payload_provider: P,
 	pub runtime: Arc<R>,
-	pub sync_oracle: SO,
+	pub network: N,
 	pub key_store: BKS,
+	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B, AuthId, TSignature, BKS>>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	// utilities
 	client: Arc<C>,
 	backend: Arc<BE>,
+	payload_provider: P,
 	runtime: Arc<R>,
-	sync_oracle: SO,
+	network: N,
 	key_store: BKS,
+
+	// communication
+	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B, AuthId, TSignature, BKS>>,
+	on_demand_justifications: OnDemandJustificationsEngine<B, R>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
@@ -217,14 +245,15 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, R, SO, AuthId: Encode + Decode + 
 	voting_oracle: VoterOracle<B>,
 }
 
-impl<B, BE, C, R, SO, AuthId, TSignature, BKS> BeefyWorker<B, BE, C, R, SO, AuthId, TSignature, BKS>
+impl<B, BE, C, P, R, N, AuthId, TSignature, BKS> BeefyWorker<B, BE, C, R, SO, AuthId, TSignature, BKS>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	C: Client<B, BE>,
+	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
-	SO: SyncOracle + Send + Sync + Clone + 'static,
+	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
+	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
         AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
         BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
@@ -236,15 +265,18 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, R, SO, AuthId, TSignature, BKS>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, P, R, N, AuthId, TSignature, BKS>) -> Self {
 		let WorkerParams {
 			client,
 			backend,
+			payload_provider,
 			runtime,
 			key_store,
-			sync_oracle,
+			network,
 			gossip_engine,
 			gossip_validator,
+			on_demand_justifications,
+			known_peers,
 			links,
 			metrics,
 			min_block_delta,
@@ -258,11 +290,14 @@ where
 		BeefyWorker {
 			client: client.clone(),
 			backend,
+			payload_provider,
 			runtime,
-			sync_oracle,
+			network,
+			known_peers,
 			key_store,
 			gossip_engine,
 			gossip_validator,
+			on_demand_justifications,
 			links,
 			metrics,
 			best_grandpa_block_header: last_finalized_header,
@@ -271,17 +306,6 @@ where
 			pending_justifications: BTreeMap::new(),
 			voting_oracle: VoterOracle::new(min_block_delta),
 		}
-	}
-
-	/// Simple wrapper that gets MMR root from header digests or from client state.
-	fn get_mmr_root_digest(&self, header: &B::Header) -> Option<MmrRootHash> {
-		find_mmr_root_digest::<B>(header).or_else(|| {
-			self.runtime
-				.runtime_api()
-				.mmr_root(&BlockId::hash(header.hash()))
-				.ok()
-				.and_then(|r| r.ok())
-		})
 	}
 
 	/// Verify `active` validator set for `block` against the key store
@@ -369,8 +393,6 @@ where
 			{
 				if let Some(new_validator_set) = find_authorities_change::<B>(&header) {
 					self.init_session_at(new_validator_set, *header.number());
-					// TODO (grandpa-bridge-gadget/issues/20): when adding SYNC protocol,
-					// fire up a request for justification for this mandatory block here.
 				}
 			}
 		}
@@ -411,7 +433,10 @@ where
 		let block_num = signed_commitment.commitment.block_number;
 		let best_grandpa = *self.best_grandpa_block_header.number();
 		match self.voting_oracle.triage_round(block_num, best_grandpa)? {
-			RoundAction::Process => self.finalize(justification)?,
+			RoundAction::Process => {
+				debug!(target: "beefy", "🥩 Process justification for round: {:?}.", block_num);
+				self.finalize(justification)?
+			},
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
 				self.pending_justifications.entry(block_num).or_insert(justification);
@@ -432,7 +457,7 @@ where
 		let rounds = self.voting_oracle.rounds_mut().ok_or(Error::UninitSession)?;
 
 		if rounds.add_vote(&round, vote, self_vote) {
-			if let Some(signatures) = rounds.try_conclude(&round) {
+			if let Some(signatures) = rounds.should_conclude(&round) {
 				self.gossip_validator.conclude_round(round.1);
 
 				let block_num = round.1;
@@ -477,9 +502,11 @@ where
 			self.best_beefy_block = Some(block_num);
 			metric_set!(self, beefy_best_block, block_num);
 
+			self.on_demand_justifications.cancel_requests_older_than(block_num);
+
 			if let Err(e) = self.backend.append_justification(
 				BlockId::Number(block_num),
-				(BEEFY_ENGINE_ID, finality_proof.clone().encode()),
+				(BEEFY_ENGINE_ID, finality_proof.encode()),
 			) {
 				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
 			}
@@ -592,13 +619,12 @@ where
 		};
 		let target_hash = target_header.hash();
 
-		let mmr_root = if let Some(hash) = self.get_mmr_root_digest(&target_header) {
+		let payload = if let Some(hash) = self.payload_provider.payload(&target_header) {
 			hash
 		} else {
 			warn!(target: "beefy", "🥩 No MMR root digest found for: {:?}", target_hash);
 			return Ok(())
 		};
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, mmr_root.encode());
 
 		let rounds = self.voting_oracle.rounds_mut().ok_or(Error::UninitSession)?;
 		if !rounds.should_self_vote(&(payload.clone(), target_number)) {
@@ -738,7 +764,7 @@ where
 					let at = BlockId::hash(notif.header.hash());
 					if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
 						self.initialize_voter(&notif.header, active);
-						if !self.sync_oracle.is_major_syncing() {
+						if !self.network.is_major_syncing() {
 							if let Err(err) = self.try_to_vote() {
 								debug!(target: "beefy", "🥩 {}", err);
 							}
@@ -771,6 +797,7 @@ where
 		self.wait_for_runtime_pallet(&mut finality_notifications).await;
 		trace!(target: "beefy", "🥩 BEEFY pallet available, starting voter.");
 
+		let mut network_events = self.network.event_stream("network-gossip").fuse();
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
@@ -791,15 +818,38 @@ where
 			// The branches below only change 'state', actual voting happen afterwards,
 			// based on the new resulting 'state'.
 			futures::select_biased! {
+				// Use `select_biased!` to prioritize order below.
+				// Make sure to pump gossip engine.
+				_ = gossip_engine => {
+					error!(target: "beefy", "🥩 Gossip engine has terminated, closing worker.");
+					return;
+				},
+				// Keep track of connected peers.
+				net_event = network_events.next() => {
+					if let Some(net_event) = net_event {
+						self.handle_network_event(net_event);
+					} else {
+						error!(target: "beefy", "🥩 Network events stream terminated, closing worker.");
+						return;
+					}
+				},
+				// Process finality notifications first since these drive the voter.
 				notification = finality_notifications.next() => {
 					if let Some(notification) = notification {
 						self.handle_finality_notification(&notification);
 					} else {
+						error!(target: "beefy", "🥩 Finality stream terminated, closing worker.");
 						return;
 					}
 				},
-				// TODO: when adding SYNC protocol, join the on-demand justifications stream to
-				// this one, and handle them both here.
+				// Process incoming justifications as these can make some in-flight votes obsolete.
+				justif = self.on_demand_justifications.next().fuse() => {
+					if let Some(justif) = justif {
+						if let Err(err) = self.triage_incoming_justif(justif) {
+							debug!(target: "beefy", "🥩 {}", err);
+						}
+					}
+				},
 				justif = block_import_justif.next() => {
 					if let Some(justif) = justif {
 						// Block import justifications have already been verified to be valid
@@ -808,9 +858,11 @@ where
 							debug!(target: "beefy", "🥩 {}", err);
 						}
 					} else {
+						error!(target: "beefy", "🥩 Block import stream terminated, closing worker.");
 						return;
 					}
 				},
+				// Finally process incoming votes.
 				vote = votes.next() => {
 					if let Some(vote) = vote {
 						// Votes have already been verified to be valid by the gossip validator.
@@ -818,13 +870,10 @@ where
 							debug!(target: "beefy", "🥩 {}", err);
 						}
 					} else {
+						error!(target: "beefy", "🥩 Votes gossiping stream terminated, closing worker.");
 						return;
 					}
 				},
-				_ = gossip_engine => {
-					error!(target: "beefy", "🥩 Gossip engine has terminated.");
-					return;
-				}
 			}
 
 			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
@@ -832,8 +881,14 @@ where
 				debug!(target: "beefy", "🥩 {}", err);
 			}
 
-			// Don't bother voting during major sync.
-			if !self.sync_oracle.is_major_syncing() {
+			// Don't bother voting or requesting justifications during major sync.
+			if !self.network.is_major_syncing() {
+				// If the current target is a mandatory block,
+				// make sure there's also an on-demand justification request out for it.
+				if let Some(block) = self.voting_oracle.mandatory_pending() {
+					// This only starts new request if there isn't already an active one.
+					self.on_demand_justifications.request(block);
+				}
 				// There were external events, 'state' is changed, author a vote if needed/possible.
 				if let Err(err) = self.try_to_vote() {
 					debug!(target: "beefy", "🥩 {}", err);
@@ -843,20 +898,20 @@ where
 			}
 		}
 	}
-}
 
-/// Extract the MMR root hash from a digest in the given header, if it exists.
-fn find_mmr_root_digest<B>(header: &B::Header) -> Option<MmrRootHash>
-where
-	B: Block,
-{
-	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
-
-	let filter = |log: ConsensusLog<ecdsa_crypto::AuthorityId>| match log {
-		ConsensusLog::MmrRoot(root) => Some(root),
-		_ => None,
-	};
-	header.digest().convert_first(|l| l.try_to(id).and_then(filter))
+	/// Update known peers based on network events.
+	fn handle_network_event(&mut self, event: NetEvent) {
+		match event {
+			NetEvent::SyncConnected { remote } => {
+				self.known_peers.lock().add_new(remote);
+			},
+			NetEvent::SyncDisconnected { remote } => {
+				self.known_peers.lock().remove(&remote);
+			},
+			// We don't care about other events.
+			_ => (),
+		}
+	}
 }
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
@@ -936,17 +991,17 @@ where
 pub(crate) mod tests {
 	use super::*;
 	use crate::{
+		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		keystore::tests::Keyring,
-		notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		tests::{
 			create_beefy_keystore, get_beefy_streams, make_beefy_ids, two_validators::TestApi,
-			BeefyPeer, BeefyTestNet, BEEFY_PROTOCOL_NAME,
+			BeefyPeer, BeefyTestNet,
 		},
 		BeefyRPCLinks,
 	};
 
+	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
-
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
 	use sc_network_test::{PeersFullClient, TestNetFactory};
@@ -961,7 +1016,14 @@ pub(crate) mod tests {
 		peer: &BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
-	) -> BeefyWorker<Block, Backend, PeersFullClient, TestApi, Arc<NetworkService<Block, H256>>> {
+	) -> BeefyWorker<
+		Block,
+		Backend,
+		PeersFullClient,
+		MmrRootProvider<Block, TestApi>,
+		TestApi,
+		Arc<NetworkService<Block, H256>>,
+	> {
 		let keystore = create_beefy_keystore(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
@@ -983,23 +1045,33 @@ pub(crate) mod tests {
 
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
-		let sync_oracle = network.clone();
-		let gossip_validator = Arc::new(crate::gossip::GossipValidator::new());
+		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
 		let gossip_engine =
-			GossipEngine::new(network, BEEFY_PROTOCOL_NAME, gossip_validator.clone(), None);
+			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let on_demand_justifications = OnDemandJustificationsEngine::new(
+			network.clone(),
+			api.clone(),
+			"/beefy/justifs/1".into(),
+			known_peers.clone(),
+		);
+		let payload_provider = MmrRootProvider::new(api.clone());
 		let worker_params = crate::worker::WorkerParams {
 			client: peer.client().as_client(),
 			backend: peer.client().as_backend(),
+			payload_provider,
 			runtime: api,
 			key_store: Some(keystore).into(),
+			known_peers,
 			links,
 			gossip_engine,
 			gossip_validator,
 			min_block_delta,
 			metrics: None,
-			sync_oracle,
+			network,
+			on_demand_justifications,
 		};
-		BeefyWorker::<_, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1222,34 +1294,10 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn extract_mmr_root_digest() {
-		let mut header = Header::new(
-			1u32.into(),
-			Default::default(),
-			Default::default(),
-			Default::default(),
-			Digest::default(),
-		);
-
-		// verify empty digest shows nothing
-		assert!(find_mmr_root_digest::<Block>(&header).is_none());
-
-		let mmr_root_hash = H256::random();
-		header.digest_mut().push(DigestItem::Consensus(
-			BEEFY_ENGINE_ID,
-			ConsensusLog::<AuthorityId>::MmrRoot(mmr_root_hash).encode(),
-		));
-
-		// verify validator set is correctly extracted from digest
-		let extracted = find_mmr_root_digest::<Block>(&header);
-		assert_eq!(extracted, Some(mmr_root_hash));
-	}
-
-	#[test]
 	fn keystore_vs_validator_set() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
@@ -1270,19 +1318,21 @@ pub(crate) mod tests {
 
 	#[test]
 	fn should_finalize_correctly() {
-		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let keys = [Keyring::Alice];
+		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
-		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
+		let keys = keys.iter().cloned().enumerate();
+		let (mut best_block_streams, mut finality_proofs) =
+			get_beefy_streams(&mut net, keys.clone());
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		let mut finality_proof = finality_proofs.drain(..).next().unwrap();
 
 		let create_finality_proof = |block_num: NumberFor<Block>| {
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: block_num,
 				validator_set_id: validator_set.id(),
 			};
@@ -1298,7 +1348,8 @@ pub(crate) mod tests {
 		}));
 
 		// unknown hash for block #1
-		let (mut best_block_streams, mut finality_proofs) = get_beefy_streams(&mut net, keys);
+		let (mut best_block_streams, mut finality_proofs) =
+			get_beefy_streams(&mut net, keys.clone());
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		let mut finality_proof = finality_proofs.drain(..).next().unwrap();
 		let justif = create_finality_proof(1);
@@ -1359,7 +1410,7 @@ pub(crate) mod tests {
 	fn should_init_session() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		assert!(worker.voting_oracle.sessions.is_empty());
@@ -1393,14 +1444,14 @@ pub(crate) mod tests {
 	fn should_triage_votes_and_process_later() {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
 		fn new_vote(
 			block_number: NumberFor<Block>,
 		) -> VoteMessage<NumberFor<Block>, AuthorityId, Signature> {
 			let commitment = Commitment {
-				payload: Payload::new(*b"BF", vec![]),
+				payload: Payload::from_single_entry(*b"BF", vec![]),
 				block_number,
 				validator_set_id: 0,
 			};
@@ -1454,7 +1505,7 @@ pub(crate) mod tests {
 	fn should_initialize_correct_voter() {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
-		let mut net = BeefyTestNet::new(1, 0);
+		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 
 		// push 15 blocks with `AuthorityChange` digests every 10 blocks
@@ -1492,7 +1543,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for session boundary block 10
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 10,
 				validator_set_id: validator_set.id(),
 			};
@@ -1526,7 +1577,7 @@ pub(crate) mod tests {
 
 			// import/append BEEFY justification for block 12
 			let commitment = Commitment {
-				payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 				block_number: 12,
 				validator_set_id: validator_set.id(),
 			};

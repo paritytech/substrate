@@ -20,6 +20,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use futures::{channel::mpsc::Receiver, Future};
 use sc_transaction_pool_api::error;
+use sp_blockchain::TreeRoute;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{self, Block as BlockT, SaturatedConversion},
@@ -97,6 +98,13 @@ pub trait ChainApi: Send + Sync {
 		&self,
 		at: &BlockId<Self::Block>,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error>;
+
+	/// Compute a tree-route between two blocks. See [`TreeRoute`] for more details.
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error>;
 }
 
 /// Pool configuration options.
@@ -770,7 +778,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 
@@ -803,7 +811,7 @@ mod tests {
 			assert_eq!(stream.next(), Some(TransactionStatus::Ready));
 			assert_eq!(
 				stream.next(),
-				Some(TransactionStatus::InBlock(H256::from_low_u64_be(2).into())),
+				Some(TransactionStatus::InBlock((H256::from_low_u64_be(2).into(), 0))),
 			);
 		}
 

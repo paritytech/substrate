@@ -32,7 +32,9 @@ pub type T = Runtime;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(2u64 * WEIGHT_PER_SECOND);
+		frame_system::limits::BlockWeights::simple_max(
+			(2u64 * WEIGHT_PER_SECOND).set_proof_size(u64::MAX),
+		);
 }
 
 impl frame_system::Config for Runtime {
@@ -104,7 +106,7 @@ parameter_types! {
 }
 
 pub struct MockElection;
-impl frame_election_provider_support::ElectionProvider for MockElection {
+impl frame_election_provider_support::ElectionProviderBase for MockElection {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type DataProvider = Staking;
@@ -113,7 +115,9 @@ impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn ongoing() -> bool {
 		Ongoing::get()
 	}
+}
 
+impl frame_election_provider_support::ElectionProvider for MockElection {
 	fn elect() -> Result<frame_election_provider_support::Supports<AccountId>, Self::Error> {
 		Err(())
 	}
@@ -164,12 +168,13 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 }
 
 parameter_types! {
-	pub static SlashPerEra: u32 = 100;
+	pub static DepositAmount: u128 = 7;
 }
 
 impl fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type SlashPerEra = SlashPerEra;
+	type Deposit = DepositAmount;
+	type DepositCurrency = Balances;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type WeightInfo = ();
 }
@@ -213,11 +218,11 @@ impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
 			exposed_nominators: vec![
-				(1, 2, 100),
-				(3, 4, 100),
-				(5, 6, 100),
-				(7, 8, 100),
-				(9, 10, 100),
+				(1, 2, 7 + 100),
+				(3, 4, 7 + 100),
+				(5, 6, 7 + 100),
+				(7, 8, 7 + 100),
+				(9, 10, 7 + 100),
 			],
 		}
 	}
@@ -270,8 +275,8 @@ impl ExtBuilder {
 						.into_iter()
 						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),
 				)
-				.chain(validators_range.clone().map(|x| (x, 100)))
-				.chain(nominators_range.clone().map(|x| (x, 100)))
+				.chain(validators_range.clone().map(|x| (x, 7 + 100)))
+				.chain(nominators_range.clone().map(|x| (x, 7 + 100)))
 				.collect::<Vec<_>>(),
 		}
 		.assimilate_storage(&mut storage);

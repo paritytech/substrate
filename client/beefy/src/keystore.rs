@@ -19,13 +19,14 @@
 use sp_application_crypto::RuntimeAppPublic;
 use sp_core::keccak_256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_runtime::traits::Keccak256;
 
 use log::warn;
 
 use beefy_primitives::{
 	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
-    bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
-	KEY_TYPE,
+	bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
+	BeefyVerify, KEY_TYPE,
 };
 
 use codec::{Decode, Encode};
