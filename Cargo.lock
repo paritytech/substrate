@@ -4503,7 +4503,6 @@ dependencies = [
  "platforms",
  "rand 0.8.5",
  "regex",
- "remote-externalities",
  "sc-authority-discovery",
  "sc-basic-authorship",
  "sc-block-builder",
@@ -4551,6 +4550,7 @@ dependencies = [
  "sp-trie",
  "substrate-build-script-utils",
  "substrate-frame-cli",
+ "substrate-rpc-client",
  "tempfile",
  "tokio",
  "try-runtime-cli",
@@ -7278,7 +7278,6 @@ version = "0.10.0-dev"
 dependencies = [
  "env_logger",
  "frame-support",
- "jsonrpsee",
  "log",
  "pallet-elections-phragmen",
  "parity-scale-codec",
@@ -7288,6 +7287,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-version",
+ "substrate-rpc-client",
  "tokio",
 ]
 
@@ -10350,6 +10350,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-rpc-client"
+version = "0.10.0-dev"
+dependencies = [
+ "async-trait",
+ "jsonrpsee",
+ "log",
+ "sc-rpc-api",
+ "serde",
+ "sp-core",
+ "sp-runtime",
+ "tokio",
+]
+
+[[package]]
 name = "substrate-state-trie-migration-rpc"
 version = "4.0.0-dev"
 dependencies = [
@@ -11028,7 +11042,6 @@ version = "0.10.0-dev"
 dependencies = [
  "clap 4.0.11",
  "frame-try-runtime",
- "jsonrpsee",
  "log",
  "parity-scale-codec",
  "remote-externalities",
@@ -11045,6 +11058,7 @@ dependencies = [
  "sp-state-machine",
  "sp-version",
  "sp-weights",
+ "substrate-rpc-client",
  "tokio",
  "zstd",
 ]

@@ -45,6 +45,7 @@ where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
+	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,

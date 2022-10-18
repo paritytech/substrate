@@ -132,7 +132,7 @@ soketto = "0.7.1"
 criterion = { version = "0.3.5", features = ["async_tokio"] }
 tokio = { version = "1.17.0", features = ["macros", "time", "parking_lot"] }
 wait-timeout = "0.2"
-remote-externalities = { path = "../../../utils/frame/remote-externalities" }
+substrate-rpc-client = { path = "../../../utils/frame/rpc/client" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../../../frame/timestamp" }
 
 [build-dependencies]
