@@ -357,77 +357,77 @@ where
 
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
-	/// Given a `BlockId` and a key, return the value under the key in that block.
+	/// Given a block's `Hash` and a key, return the value under the key in that block.
 	fn storage(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
+	/// Given a block's `Hash` and a key prefix, return the matching storage keys in that block.
 	fn storage_keys(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a `BlockId` and a key, return the value under the hash in that block.
+	/// Given a block's `Hash` and a key, return the value under the hash in that block.
 	fn storage_hash(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in
-	/// that block.
+	/// Given a block's `Hash` and a key prefix, return the matching child storage keys and values
+	/// in that block.
 	fn storage_pairs(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
 
-	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in
-	/// that block.
+	/// Given a block's `Hash` and a key prefix, return a `KeyIterator` iterates matching storage
+	/// keys in that block.
 	fn storage_keys_iter<'a>(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that
-	/// block.
+	/// Given a block's `Hash`, a key and a child storage key, return the value under the key in
+	/// that block.
 	fn child_storage(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage
-	/// keys.
+	/// Given a block's `Hash`, a key prefix, and a child storage key, return the matching child
+	/// storage keys.
 	fn child_storage_keys(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a `BlockId` and a key `prefix` and a child storage key,
+	/// Given a block's `Hash` and a key `prefix` and a child storage key,
 	/// return a `KeyIterator` that iterates matching storage keys in that block.
 	fn child_storage_keys_iter<'a>(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that
+	/// Given a block's `Hash`, a key and a child storage key, return the hash under the key in that
 	/// block.
 	fn child_storage_hash(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;

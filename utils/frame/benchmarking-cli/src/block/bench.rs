@@ -22,7 +22,9 @@ use frame_support::weights::constants::WEIGHT_PER_NANOS;
 use frame_system::ConsumedWeight;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{Error, Result};
-use sc_client_api::{Backend as ClientBackend, BlockBackend, StorageProvider, UsageProvider};
+use sc_client_api::{
+	Backend as ClientBackend, BlockBackend, HeaderBackend, StorageProvider, UsageProvider,
+};
 use sp_api::{ApiExt, Core, HeaderT, ProvideRuntimeApi};
 use sp_blockchain::Error::RuntimeApiError;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
@@ -73,7 +75,8 @@ where
 		+ ProvideRuntimeApi<Block>
 		+ StorageProvider<Block, BA>
 		+ UsageProvider<Block>
-		+ BlockBackend<Block>,
+		+ BlockBackend<Block>
+		+ HeaderBackend<Block>,
 	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
 	/// Returns a new [`Self`] from the arguments.
@@ -136,9 +139,10 @@ where
 		)?;
 		let key = StorageKey(hash);
 
+		let block_hash = self.client.expect_block_hash_from_id(block)?;
 		let mut raw_weight = &self
 			.client
-			.storage(&block, &key)?
+			.storage(&block_hash, &key)?
 			.ok_or(format!("Could not find System::BlockWeight for block: {}", block))?
 			.0[..];
 
