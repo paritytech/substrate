@@ -41,7 +41,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
 			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-			Error::<T, I>::ItemsNotTransferable
+			Error::<T, I>::ItemsNonTransferable
 		);
 
 		let item_config = Self::get_item_config(&collection, &item)?;
@@ -276,7 +276,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
 			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-			Error::<T, I>::ItemsNotTransferable
+			Error::<T, I>::ItemsNonTransferable
 		);
 
 		let item_config = Self::get_item_config(&collection, &item)?;

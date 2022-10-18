@@ -227,7 +227,7 @@ fn transfer_should_work() {
 
 		assert_noop!(
 			Nfts::transfer(RuntimeOrigin::signed(1), collection_id, 42, 3,),
-			Error::<Test>::ItemsNotTransferable
+			Error::<Test>::ItemsNonTransferable
 		);
 	});
 }
@@ -248,7 +248,7 @@ fn locking_transfer_should_work() {
 		));
 		assert_noop!(
 			Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2),
-			Error::<Test>::ItemsNotTransferable
+			Error::<Test>::ItemsNonTransferable
 		);
 
 		assert_ok!(Nfts::force_collection_status(
@@ -803,7 +803,7 @@ fn approval_lifecycle_works() {
 
 		assert_noop!(
 			Nfts::approve_transfer(RuntimeOrigin::signed(1), collection_id, 1, 2, None),
-			Error::<Test>::ItemsNotTransferable
+			Error::<Test>::ItemsNonTransferable
 		);
 	});
 }
@@ -1179,7 +1179,7 @@ fn set_price_should_work() {
 
 		assert_noop!(
 			Nfts::set_price(RuntimeOrigin::signed(user_id), collection_id, item_1, Some(2), None),
-			Error::<Test>::ItemsNotTransferable
+			Error::<Test>::ItemsNonTransferable
 		);
 	});
 }
@@ -1318,7 +1318,7 @@ fn buy_item_should_work() {
 			});
 			assert_noop!(
 				buy_item_call.dispatch(RuntimeOrigin::signed(user_2)),
-				Error::<Test>::ItemsNotTransferable
+				Error::<Test>::ItemsNonTransferable
 			);
 
 			// unlock the collection

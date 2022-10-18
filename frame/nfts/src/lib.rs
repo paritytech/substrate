@@ -510,7 +510,7 @@ pub mod pallet {
 		/// Collection ID is already taken.
 		CollectionIdInUse,
 		/// Items within that collection are non-transferable.
-		ItemsNotTransferable,
+		ItemsNonTransferable,
 		/// The provided account is not a delegate.
 		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
@@ -1056,13 +1056,13 @@ pub mod pallet {
 			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
 				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-				Error::<T, I>::ItemsNotTransferable
+				Error::<T, I>::ItemsNonTransferable
 			);
 
 			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
 				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-				Error::<T, I>::ItemsNotTransferable
+				Error::<T, I>::ItemsNonTransferable
 			);
 
 			if let Some(check) = maybe_check {
