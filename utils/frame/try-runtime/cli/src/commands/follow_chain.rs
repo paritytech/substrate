@@ -26,7 +26,7 @@ use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt::Debug, str::FromStr, collections::VecDeque};
 use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, WsClient};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
@@ -36,11 +36,11 @@ const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FollowChainCmd {
 	/// The url to connect to.
-	#[clap(short, long, parse(try_from_str = parse::url))]
+	#[arg(short, long, value_parser = parse::url)]
 	uri: String,
 
 	/// If set, then the state root check is enabled.
-	#[clap(long)]
+	#[arg(long)]
 	state_root_check: bool,
 
 	/// Which try-state targets to execute when running this command.
@@ -52,8 +52,12 @@ pub struct FollowChainCmd {
 	///   `Staking, System`).
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
-	#[clap(long, default_value = "none")]
+	#[arg(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
+
+	/// If present, a single connection to a node will be kept and reused for fetching blocks.
+	#[arg(long)]
+	keep_connection: bool,
 }
 
 /// Start listening for with `SUB` at `url`.
@@ -160,8 +164,8 @@ where
 			full_extensions(),
 		)?;
 
-		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
-			.map_err(|e| format!("failed to decode output: {:?}", e))?;
+		let consumed_weight = <Weight as Decode>::decode(&mut &*encoded_result)
+			.map_err(|e| format!("failed to decode weight: {:?}", e))?;
 
 		let storage_changes = changes
 			.drain_storage_changes(

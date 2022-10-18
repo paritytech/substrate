@@ -28,7 +28,7 @@ pub struct PruningParams {
 	/// Default is to keep only the last 256 blocks,
 	/// otherwise, the state can be kept for all of the blocks (i.e 'archive'),
 	/// or for all of the canonical blocks (i.e 'archive-canonical').
-	#[clap(alias = "pruning", long, value_name = "PRUNING_MODE")]
+	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
 	pub state_pruning: Option<String>,
 	/// Specify the blocks pruning mode, a number of blocks to keep or 'archive'.
 	///
@@ -38,7 +38,7 @@ pub struct PruningParams {
 	/// or for the last N blocks (i.e a number).
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
+	#[arg(alias = "keep-blocks", long, value_name = "COUNT")]
 	pub blocks_pruning: Option<String>,
 }
 

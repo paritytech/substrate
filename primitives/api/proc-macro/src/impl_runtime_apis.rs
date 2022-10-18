@@ -211,19 +211,6 @@ fn generate_runtime_api_base_structures() -> Result<TokenStream> {
 			recorder: std::option::Option<#crate_::ProofRecorder<Block>>,
 		}
 
-		// `RuntimeApi` itself is not threadsafe. However, an instance is only available in a
-		// `ApiRef` object and `ApiRef` also has an associated lifetime. This lifetimes makes it
-		// impossible to move `RuntimeApi` into another thread.
-		#[cfg(any(feature = "std", test))]
-		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Send
-			for RuntimeApiImpl<Block, C>
-		{}
-
-		#[cfg(any(feature = "std", test))]
-		unsafe impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> Sync
-			for RuntimeApiImpl<Block, C>
-		{}
-
 		#[cfg(any(feature = "std", test))]
 		impl<Block: #crate_::BlockT, C: #crate_::CallApiAt<Block>> #crate_::ApiExt<Block> for
 			RuntimeApiImpl<Block, C>
@@ -514,6 +501,8 @@ impl<'a> Fold for ApiRuntimeImplToApiRuntimeApiImpl<'a> {
 			RuntimeApiImplCall::StateBackend:
 				#crate_::StateBackend<#crate_::HashFor<__SR_API_BLOCK__>>
 		});
+
+		where_clause.predicates.push(parse_quote! { &'static RuntimeApiImplCall: Send });
 
 		// Require that all types used in the function signatures are unwind safe.
 		extract_all_signature_types(&input.items).iter().for_each(|i| {
