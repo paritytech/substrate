@@ -8,8 +8,8 @@
 mod tests;
 
 use alt_serde::{de::DeserializeOwned, Deserialize};
-use codec::{Decode, Encode};
-use frame_support::traits::Get;
+use codec::{Decode, Encode, HasCompact};
+use frame_support::traits::{Currency, Get};
 use frame_support::{
     log::{error, info, warn},
     decl_event, decl_module, decl_storage,
@@ -32,6 +32,8 @@ use sp_std::vec::Vec;
 extern crate alloc;
 
 use alloc::string::String;
+use core::fmt::Debug;
+use scale_info::{Type, TypeInfo};
 use sp_runtime::offchain::storage::StorageRetrievalError;
 
 pub const BLOCK_INTERVAL: u32 = 100; // TODO: Change to 1200 later [1h]. Now - 200 [10 minutes] for testing purposes.
@@ -43,6 +45,9 @@ pub const REPORT_DDN_STATUS_SELECTOR: [u8; 4] = hex!("83fd8226");
 pub const CURRENT_PERIOD_MS: [u8; 4] = hex!("ace4ecb3");
 pub const GET_ALL_DDC_NODES_SELECTOR: [u8; 4] = hex!("e6c98b60");
 pub const FINALIZE_METRIC_PERIOD: [u8; 4] = hex!("b269d557");
+
+type BalanceOf<T> =
+<<T as pallet_contracts::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[derive(Encode, Decode)]
 pub struct DDCNode {
@@ -131,7 +136,13 @@ decl_module! {
     pub struct Module<T: Config> for enum Call where 
         origin: T::Origin,
         <T as frame_system::Config>::AccountId: AsRef<[u8]>,
-        <T as frame_system::Config>::AccountId: UncheckedFrom<T::Hash> {
+        <T as frame_system::Config>::AccountId: UncheckedFrom<T::Hash>,
+        <BalanceOf<T> as HasCompact>::Type: Clone,
+        <BalanceOf<T> as HasCompact>::Type: Eq,
+        <BalanceOf<T> as HasCompact>::Type: PartialEq,
+        <BalanceOf<T> as HasCompact>::Type: Debug,
+        <BalanceOf<T> as HasCompact>::Type: TypeInfo,
+        <BalanceOf<T> as HasCompact>::Type: Encode {
         //fn deposit_event() = default;
 
         /// Offchain Worker entry point.
@@ -156,11 +167,15 @@ decl_module! {
 }
 
 decl_storage! {
-    trait Store for Module<T: Config> as DdcMetricsOffchainWorker where <T as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<T::Hash> {
+    trait Store for Module<T: Config> as DdcMetricsOffchainWorker
+        where <T as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<T::Hash>,
+              <BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode {
     }
 }
 
-impl<T: Config> Module<T> where <T as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<T::Hash> {
+impl<T: Config> Module<T>
+    where <T as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<T::Hash>,
+          <BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode {
     fn offchain_worker_main(block_number: T::BlockNumber) -> ResultStr<()> {
         let signer = match Self::get_signer() {
             Err(e) => {
@@ -818,8 +833,9 @@ decl_event!(
     }
 );
 
-pub trait Config: frame_system::Config + pallet_contracts::Config + CreateSignedTransaction<pallet_contracts::Call<Self>> where <Self as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<Self::Hash>{
-
+pub trait Config: frame_system::Config + pallet_contracts::Config + CreateSignedTransaction<pallet_contracts::Call<Self>>
+    where <Self as frame_system::Config>::AccountId: AsRef<[u8]> + UncheckedFrom<Self::Hash>,
+          <BalanceOf<Self> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode {
     /// The identifier type for an offchain worker.
     type AuthorityId: AppCrypto<
         <Self as SigningTypes>::Public,
