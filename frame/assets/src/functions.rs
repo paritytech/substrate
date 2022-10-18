@@ -696,7 +696,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		max_items: u32,
 	) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
-		let mut removed_accounts = 0;
 		let mut remaining_accounts = 0;
 		let _ =
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
@@ -708,8 +707,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				for (who, v) in Account::<T, I>::drain_prefix(id) {
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
 					dead_accounts.push(who);
-					removed_accounts = removed_accounts.saturating_add(1);
-					if removed_accounts >= max_items {
+					if dead_accounts.len() >= (max_items as usize) {
 						break
 					}
 				}
@@ -717,16 +715,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Ok(())
 			})?;
 
-		for who in dead_accounts {
+		for who in &dead_accounts {
 			T::Freezer::died(id, &who);
 		}
 
 		Self::deposit_event(Event::AccountsDestroyed {
 			asset_id: id,
-			accounts_destroyed: removed_accounts as u32,
+			accounts_destroyed: dead_accounts.len() as u32,
 			accounts_remaining: remaining_accounts as u32,
 		});
-		Ok(removed_accounts)
+		Ok(dead_accounts.len() as u32)
 	}
 
 	/// Destroy approvals associated with a given asset up to the max (T::RemoveItemsLimit).
