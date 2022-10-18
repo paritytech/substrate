@@ -1858,6 +1858,8 @@ fn pallet_level_feature_flags_should_work() {
 #[test]
 fn group_roles_by_account_should_work() {
 	new_test_ext().execute_with(|| {
+		assert_eq!(Nfts::group_roles_by_account(vec![]), vec![]);
+
 		let account_to_role = Nfts::group_roles_by_account(vec![
 			(3, CollectionRole::Freezer),
 			(1, CollectionRole::Issuer),
