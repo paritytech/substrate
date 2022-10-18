@@ -247,7 +247,7 @@ where
 		let parent_id = BlockId::Hash(*parent_hash);
 		let parent_header = self
 			.client
-			.header(parent_id.clone())?
+			.header(parent_id)?
 			.ok_or_else(|| Error::Input(format!("Parent header {} not found", parent_hash)))?;
 		let parent_state_root = *parent_header.state_root();
 
