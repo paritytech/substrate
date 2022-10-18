@@ -92,8 +92,6 @@ use std::{
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 
-#[cfg(test)]
-mod chainsync_tests;
 mod metrics;
 mod out_events;
 #[cfg(test)]
