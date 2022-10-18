@@ -512,11 +512,8 @@ fn should_verify_batch_proofs() {
 		let historical_proofs = (*min_block_number..=max_block_number)
 			.map(|best_block| {
 				ext.execute_with(|| {
-					crate::Pallet::<Test>::generate_proof(
-						block_numbers.to_vec(),
-						Some(best_block),
-					)
-					.unwrap()
+					crate::Pallet::<Test>::generate_proof(block_numbers.to_vec(), Some(best_block))
+						.unwrap()
 				})
 			})
 			.collect::<Vec<_>>();

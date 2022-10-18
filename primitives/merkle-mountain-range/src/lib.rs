@@ -437,13 +437,6 @@ impl Error {
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
-		/// Verify MMR proof against on-chain MMR.
-		///
-		/// Note this function will use on-chain MMR root hash and check if the proof
-		/// matches the hash.
-		/// See [Self::verify_proof_stateless] for a stateless verifier.
-		fn verify_proof(leaf: EncodableOpaqueLeaf, proof: Proof<Hash>) -> Result<(), Error>;
-
 		/// Verify MMR proof against given root hash.
 		///
 		/// Note this function does not require any on-chain storage - the
@@ -468,7 +461,7 @@ sp_api::decl_runtime_apis! {
 		/// Note this function will use on-chain MMR root hash and check if the proof matches the hash.
 		/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
 		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
-		fn verify_batch_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>) -> Result<(), Error>;
+		fn verify_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>) -> Result<(), Error>;
 
 		/// Verify MMR proof against given root hash or a batch of leaves.
 		///
