@@ -26,7 +26,7 @@ use log::warn;
 use beefy_primitives::{
 	ecdsa_crypto::{Public as ECDSAPublic, Signature as ECDSASignature},
 	bls_crypto::{Public as BLSPublic, Signature as BLSSignature},
-	BeefyVerify, KEY_TYPE,
+	KEY_TYPE,
 };
 
 use codec::{Decode, Encode};

@@ -17,9 +17,10 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Generating request logic for request/response protocol for syncing BEEFY justifications.
+use std::{fmt::Debug, marker::PhantomData};
+use codec::{Codec, Decode, Encode};
 
-use beefy_primitives::{crypto::AuthorityId, BeefyApi, ValidatorSet};
-use codec::Encode;
+use beefy_primitives::{BeefyApi, ValidatorSet};
 use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, error, warn};
 use parking_lot::Mutex;
@@ -39,6 +40,7 @@ use crate::{
 	communication::request_response::{Error, JustificationRequest},
 	justification::{decode_and_verify_finality_proof, BeefyVersionedFinalityProof},
 	KnownPeers,
+	keystore::BeefyKeystore,
 };
 
 /// Response type received from network.
@@ -51,7 +53,7 @@ enum State<B: Block> {
 	AwaitingResponse(PeerId, NumberFor<B>, ResponseReceiver),
 }
 
-pub struct OnDemandJustificationsEngine<B: Block, R> {
+pub struct OnDemandJustificationsEngine<B: Block, R, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	network: Arc<dyn NetworkRequest + Send + Sync>,
 	runtime: Arc<R>,
 	protocol_name: ProtocolName,
@@ -60,13 +62,20 @@ pub struct OnDemandJustificationsEngine<B: Block, R> {
 	peers_cache: VecDeque<PeerId>,
 
 	state: State<B>,
+	_auth_id : PhantomData::<AuthId>,
+	_signature: PhantomData::<TSignature>,
+	_keystor: PhantomData::<BKS>,
+
 }
 
-impl<B, R> OnDemandJustificationsEngine<B, R>
+impl<B, R, AuthId, TSignature, BKS> OnDemandJustificationsEngine<B, R, AuthId, TSignature, BKS>
 where
 	B: Block,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B>,
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	R::Api: BeefyApi<B, AuthId>,
 {
 	pub fn new(
 		network: Arc<dyn NetworkRequest + Send + Sync>,
@@ -81,6 +90,9 @@ where
 			live_peers,
 			peers_cache: VecDeque::new(),
 			state: State::Idle,
+			_auth_id : PhantomData::<AuthId>,
+			_signature : PhantomData::<TSignature>,
+			_keystor: PhantomData::<BKS>,
 		}
 	}
 
@@ -154,9 +166,9 @@ where
 		&mut self,
 		peer: PeerId,
 		block: NumberFor<B>,
-		validator_set: &ValidatorSet<AuthorityId>,
+		validator_set: &ValidatorSet<AuthId>,
 		response: Result<Response, Canceled>,
-	) -> Result<BeefyVersionedFinalityProof<B>, Error> {
+	) -> Result<BeefyVersionedFinalityProof<B, TSignature>, Error> {
 		response
 			.map_err(|e| {
 				debug!(
@@ -175,7 +187,7 @@ where
 				Error::InvalidResponse
 			})
 			.and_then(|encoded| {
-				decode_and_verify_finality_proof::<B>(&encoded[..], block, &validator_set).map_err(
+				decode_and_verify_finality_proof::<B,AuthId, TSignature, BKS>(&encoded[..], block, &validator_set).map_err(
 					|e| {
 						debug!(
 							target: "beefy::sync",
@@ -188,7 +200,7 @@ where
 			})
 	}
 
-	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
+	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B, TSignature>> {
 		let (peer, block, resp) = match &mut self.state {
 			State::Idle => {
 				futures::pending!();

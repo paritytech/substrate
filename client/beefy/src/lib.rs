@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{marker::PhantomData,};
+use std::{marker::PhantomData, sync::Arc};
 use core::fmt::Debug;
 use beefy_primitives::{BeefyApi, MmrRootHash, PayloadProvider};
 use parking_lot::Mutex;
@@ -33,8 +33,6 @@ use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
 use codec::{Codec, Decode, Encode};
-use crate::notification::{BeefyBestBlockSender, BeefySignedCommitmentSender};
-use std::{marker::PhantomData, sync::Arc};
 
 mod error;
 mod keystore;
@@ -61,6 +59,7 @@ use crate::{
 		},
 	},
 	import::BeefyBlockImport,
+	keystore::BeefyKeystore,
 };
 
 pub use communication::beefy_protocol_name::{
@@ -97,33 +96,33 @@ where
 /// Links between the block importer, the background voter and the RPC layer,
 /// to be used by the voter.
 #[derive(Clone)]
-pub struct BeefyVoterLinks<B: Block> {
+pub struct BeefyVoterLinks<B: Block, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> {
 	// BlockImport -> Voter links
 	/// Stream of BEEFY signed commitments from block import to voter.
-	pub from_block_import_justif_stream: BeefyVersionedFinalityProofStream<B>,
+	pub from_block_import_justif_stream: BeefyVersionedFinalityProofStream<B, TSignature>,
 
 	// Voter -> RPC links
 	/// Sends BEEFY signed commitments from voter to RPC.
-	pub to_rpc_justif_sender: BeefyVersionedFinalityProofSender<B>,
+	pub to_rpc_justif_sender: BeefyVersionedFinalityProofSender<B, TSignature>,
 	/// Sends BEEFY best block hashes from voter to RPC.
 	pub to_rpc_best_block_sender: BeefyBestBlockSender<B>,
 }
 
 /// Links used by the BEEFY RPC layer, from the BEEFY background voter.
 #[derive(Clone)]
-pub struct BeefyRPCLinks<B: Block> {
+pub struct BeefyRPCLinks<B: Block, TSignature: Encode + Decode + Debug + Clone + Sync + Send> {
 	/// Stream of signed commitments coming from the voter.
-	pub from_voter_justif_stream: BeefyVersionedFinalityProofStream<B>,
+	pub from_voter_justif_stream: BeefyVersionedFinalityProofStream<B, TSignature>,
 	/// Stream of BEEFY best block hashes coming from the voter.
 	pub from_voter_best_beefy_stream: BeefyBestBlockStream<B>,
 }
 
 /// Make block importer and link half necessary to tie the background voter to it.
-pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I>(
+pub fn beefy_block_import_and_links<B, BE, RuntimeApi, I, AuthId, TSignature, BKS>(
 	wrapped_block_import: I,
 	backend: Arc<BE>,
-	runtime: Arc<RuntimeApi>,
-) -> (BeefyBlockImport<B, BE, RuntimeApi, I>, BeefyVoterLinks<B>, BeefyRPCLinks<B>)
+	runtime: Arc<RuntimeApi>,	
+) -> (BeefyBlockImport<B, BE, RuntimeApi, I, AuthId, TSignature, BKS>, BeefyVoterLinks<B, TSignature>, BeefyRPCLinks<B, TSignature>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -131,17 +130,20 @@ where
 		+ Send
 		+ Sync,
 	RuntimeApi: ProvideRuntimeApi<B> + Send + Sync,
-	RuntimeApi::Api: BeefyApi<B>,
+	RuntimeApi::Api: BeefyApi<B, AuthId>,
+        AuthId: Encode + Decode + Debug + Ord + Sync + Send,
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+	BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 {
 	// Voter -> RPC links
 	let (to_rpc_justif_sender, from_voter_justif_stream) =
-		BeefyVersionedFinalityProofStream::<B>::channel();
+		BeefyVersionedFinalityProofStream::<B, TSignature>::channel();
 	let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 		BeefyBestBlockStream::<B>::channel();
 
 	// BlockImport -> Voter links
 	let (to_voter_justif_sender, from_block_import_justif_stream) =
-		BeefyVersionedFinalityProofStream::<B>::channel();
+		BeefyVersionedFinalityProofStream::<B, TSignature>::channel();
 
 	// BlockImport
 	let import =
@@ -180,8 +182,8 @@ where
 	BKS: keystore::BeefyKeystore<AuthId, TSignature, Public = AuthId>,
 	AuthId: Encode + Decode + Debug + Ord + Sync + Send,
 	TSignature: Encode + Decode + Debug + Clone + Sync + Send, 
-	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash>,
-	N: GossipNetwork<B> + Clone + SyncOracle + Send + Sync + 'static,
+	R::Api: BeefyApi<B, AuthId> + MmrApi<B, MmrRootHash, NumberFor<B>>,
+	N: GossipNetwork<B> + NetworkRequest +  SyncOracle + Send + Sync + 'static,
 {
 	/// BEEFY client
 	pub client: Arc<C>,
@@ -199,16 +201,17 @@ where
 	/// Prometheus metric registry
 	pub prometheus_registry: Option<Registry>,
 	/// Links between the block importer, the background voter and the RPC layer.
-	pub links: BeefyVoterLinks<B>,
+	pub links: BeefyVoterLinks<B, TSignature>,
 	/// Handler for incoming BEEFY justifications requests from a remote peer.
 	pub on_demand_justifications_handler: BeefyJustifsRequestHandler<B, C>,
-	pub _auth_id : PhantomData::<AuthId>
+	pub _auth_id : PhantomData::<AuthId>,
+	pub _signature: PhantomData::<TSignature>,
 }
 
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
+pub async fn start_beefy_gadget<B, BE, C, N, P, R, AuthId, TSignature, BKS>(beefy_params: BeefyParams<B, BE, C, N, P, R, AuthId, TSignature, BKS>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -234,6 +237,7 @@ where
 		links,
 		on_demand_justifications_handler,
 		_auth_id,
+		_signature,
 	} = beefy_params;
 
 	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =

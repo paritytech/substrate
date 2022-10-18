@@ -74,7 +74,7 @@ enum RoundAction {
 
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
-struct VoterOracle<B: Block> {
+struct VoterOracle<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
 	/// There are three voter states coresponding to three queue states:
@@ -84,12 +84,12 @@ struct VoterOracle<B: Block> {
 	/// 3. lagging behind GRANDPA: queue has [1, N] elements, where all `mandatory_done == false`.
 	///    In this state, everytime a session gets its mandatory block BEEFY finalized, it's
 	///    popped off the queue, eventually getting to state `2. up-to-date`.
-	sessions: VecDeque<Rounds<Payload, B>>,
+	sessions: VecDeque<Rounds<Payload, B, AuthId, TSignature>>,
 	/// Min delta in block numbers between two blocks, BEEFY should vote on.
 	min_block_delta: u32,
 }
 
-impl<B: Block> VoterOracle<B> {
+impl<B: Block, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send> VoterOracle<B, AuthId, TSignature> {
 	pub fn new(min_block_delta: u32) -> Self {
 		Self {
 			sessions: VecDeque::new(),
@@ -100,12 +100,12 @@ impl<B: Block> VoterOracle<B> {
 
 	/// Return mutable reference to rounds pertaining to first session in the queue.
 	/// Voting will always happen at the head of the queue.
-	pub fn rounds_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
+	pub fn rounds_mut(&mut self) -> Option<&mut Rounds<Payload, B, AuthId, TSignature>> {
 		self.sessions.front_mut()
 	}
 
 	/// Add new observed session to the Oracle.
-	pub fn add_session(&mut self, rounds: Rounds<Payload, B>) {
+	pub fn add_session(&mut self, rounds: Rounds<Payload, B, AuthId, TSignature>) {
 		self.sessions.push_back(rounds);
 		self.try_prune();
 	}
@@ -194,7 +194,7 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, C, R, N, AuthId: Encode + Decode + Debug + Ord + Sync + Send, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
+pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>> {
 	pub client: Arc<C>,
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
@@ -204,8 +204,8 @@ pub(crate) struct WorkerParams<B: Block, BE, C, R, N, AuthId: Encode + Decode + 
 	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
 	pub gossip_validator: Arc<GossipValidator<B, AuthId, TSignature, BKS>>,
-	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
-	pub links: BeefyVoterLinks<B>,
+	pub on_demand_justifications: OnDemandJustificationsEngine<B, R, AuthId, TSignature, BKS>,
+	pub links: BeefyVoterLinks<B, TSignature>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
 }
@@ -224,11 +224,11 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N, AuthId: Encode + Decode 
 	known_peers: Arc<Mutex<KnownPeers<B>>>,
 	gossip_engine: GossipEngine<B>,
 	gossip_validator: Arc<GossipValidator<B, AuthId, TSignature, BKS>>,
-	on_demand_justifications: OnDemandJustificationsEngine<B, R>,
+	on_demand_justifications: OnDemandJustificationsEngine<B, R, AuthId, TSignature, BKS>,
 
 	// channels
 	/// Links between the block importer, the background voter and the RPC layer.
-	links: BeefyVoterLinks<B>,
+	links: BeefyVoterLinks<B, TSignature>,
 
 	// voter state
 	/// BEEFY client metrics.
@@ -238,14 +238,14 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N, AuthId: Encode + Decode 
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>>,
+	pending_votes: BTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthId, TSignature>>>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
+	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B, TSignature>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
-	voting_oracle: VoterOracle<B>,
+	voting_oracle: VoterOracle<B, AuthId, TSignature>,
 }
 
-impl<B, BE, C, P, R, N, AuthId, TSignature, BKS> BeefyWorker<B, BE, C, R, SO, AuthId, TSignature, BKS>
+impl<B, BE, C, P, R, N, AuthId, TSignature, BKS> BeefyWorker<B, BE, C, P, R, N, AuthId, TSignature, BKS>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
@@ -391,7 +391,7 @@ where
 				})
 				.chain(std::iter::once(header.clone()))
 			{
-				if let Some(new_validator_set) = find_authorities_change::<B>(&header) {
+				if let Some(new_validator_set) = find_authorities_change::<B, AuthId>(&header) {
 					self.init_session_at(new_validator_set, *header.number());
 				}
 			}
@@ -425,7 +425,7 @@ where
 	/// Expects `justification` to be valid.
 	fn triage_incoming_justif(
 		&mut self,
-		justification: BeefyVersionedFinalityProof<B>,
+		justification: BeefyVersionedFinalityProof<B, TSignature>,
 	) -> Result<(), Error> {
 		let signed_commitment = match justification {
 			VersionedFinalityProof::V1(ref sc) => sc,
@@ -487,7 +487,7 @@ where
 	/// 3. Send best block hash and `finality_proof` to RPC worker.
 	///
 	/// Expects `finality proof` to be valid.
-	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
+	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B, TSignature>) -> Result<(), Error> {
 		let block_num = match finality_proof {
 			VersionedFinalityProof::V1(ref sc) => sc.commitment.block_number,
 		};
@@ -684,7 +684,7 @@ where
 	///
 	/// Should be called only once during worker initialization with latest GRANDPA finalized
 	/// `header` and the validator set `active` at that point.
-	fn initialize_voter(&mut self, header: &B::Header, active: ValidatorSet<AuthorityId>) {
+	fn initialize_voter(&mut self, header: &B::Header, active: ValidatorSet<AuthId>) {
 		// just a sanity check.
 		if let Some(rounds) = self.voting_oracle.rounds_mut() {
 			error!(
@@ -730,7 +730,7 @@ where
 					break
 				}
 
-				if let Some(validator_set) = find_authorities_change::<B>(&header) {
+				if let Some(validator_set) = find_authorities_change::<B, AuthId>(&header) {
 					info!(
 						target: "beefy",
 						"🥩 Initialize voting session at current session boundary: {:?}.",
@@ -919,7 +919,7 @@ where
 fn find_authorities_change<B, AuthId>(header: &B::Header) -> Option<ValidatorSet<AuthId>>
 where
 	B: Block,
-	AuthId: Encode + Decode + Debug + Ord + Sync + Send
+	AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash
 {
 	let id = OpaqueDigestItemId::Consensus(&BEEFY_ENGINE_ID);
 

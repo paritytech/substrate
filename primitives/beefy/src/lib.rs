@@ -52,19 +52,6 @@ pub const KEY_TYPE: sp_application_crypto::KeyTypeId = sp_application_crypto::Ke
 /// Trait representing BEEFY authority id.
 pub trait BeefyAuthorityId: RuntimeAppPublic {}
 
-/// Means of verification for a BEEFY authority signature.
-///
-/// Accepts custom hashing fn for the message and custom convertor fn for the signer.
-pub trait BeefyVerify<MsgHash: Hash> {
-	/// Type of the signer.
-	type Signer: BeefyAuthorityId;
-
-	/// Verify a signature.
-	///
-	/// Return `true` if signature is valid for the value.
-	fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool;
-}
-
 /// BEEFY cryptographic types
 ///
 /// This module basically introduces three crypto types:
@@ -88,25 +75,6 @@ pub mod ecdsa_crypto {
 	/// Signature for a BEEFY authority using ECDSA as its crypto.
 	pub type AuthoritySignature = Signature;
 
-	impl BeefyAuthorityId for AuthorityId {}
-
-	impl<MsgHash: Hash> BeefyVerify<MsgHash> for AuthoritySignature
-	where
-		<MsgHash as Hash>::Output: Into<[u8; 32]>,
-	{
-		type Signer = AuthorityId;
-
-		fn verify(&self, msg: &[u8], signer: &Self::Signer) -> bool {
-			let msg_hash = <MsgHash as Hash>::hash(msg).into();
-			match sp_io::crypto::secp256k1_ecdsa_recover_compressed(
-				self.as_inner_ref().as_ref(),
-				&msg_hash,
-			) {
-				Ok(raw_pubkey) => raw_pubkey.as_ref() == AsRef::<[u8]>::as_ref(signer),
-				_ => false,
-			}
-		}
-	}
 }
 
 pub mod bls_crypto {

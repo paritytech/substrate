@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use core::fmt::Debug;
 use crate::keystore::BeefyKeystore;
 use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
 	ValidatorSet, VersionedFinalityProof,
 };
 use codec::{Decode, Encode};
@@ -26,25 +26,25 @@ use sp_consensus::Error as ConsensusError;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A finality proof with matching BEEFY authorities' signatures.
-pub type BeefyVersionedFinalityProof<Block> =
-	beefy_primitives::VersionedFinalityProof<NumberFor<Block>, Signature>;
+pub type BeefyVersionedFinalityProof<Block, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> =
+	beefy_primitives::VersionedFinalityProof<NumberFor<Block>, TSignature>;
 
 /// Decode and verify a Beefy FinalityProof.
-pub(crate) fn decode_and_verify_finality_proof<Block: BlockT>(
+pub(crate) fn decode_and_verify_finality_proof<Block: BlockT, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>>(
 	encoded: &[u8],
 	target_number: NumberFor<Block>,
-	validator_set: &ValidatorSet<AuthorityId>,
-) -> Result<BeefyVersionedFinalityProof<Block>, ConsensusError> {
-	let proof = <BeefyVersionedFinalityProof<Block>>::decode(&mut &*encoded)
+	validator_set: &ValidatorSet<AuthId>,
+) -> Result<BeefyVersionedFinalityProof<Block, TSignature>, ConsensusError> {
+	let proof = <BeefyVersionedFinalityProof<Block, TSignature>>::decode(&mut &*encoded)
 		.map_err(|_| ConsensusError::InvalidJustification)?;
-	verify_with_validator_set::<Block>(target_number, validator_set, &proof).map(|_| proof)
+	verify_with_validator_set::<Block, AuthId, TSignature, BKS>(target_number, validator_set, &proof).map(|_| proof)
 }
 
 /// Verify the Beefy finality proof against the validator set at the block it was generated.
-fn verify_with_validator_set<Block: BlockT>(
+fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash, TSignature: Encode + Decode + Debug + Clone + Sync + Send, BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,>(
 	target_number: NumberFor<Block>,
-	validator_set: &ValidatorSet<AuthorityId>,
-	proof: &BeefyVersionedFinalityProof<Block>,
+	validator_set: &ValidatorSet<AuthId>,
+	proof: &BeefyVersionedFinalityProof<Block, TSignature>,
 ) -> Result<(), ConsensusError> {
 	match proof {
 		VersionedFinalityProof::V1(signed_commitment) => {
@@ -65,7 +65,7 @@ fn verify_with_validator_set<Block: BlockT>(
 				.filter(|(id, signature)| {
 					signature
 						.as_ref()
-						.map(|sig| BeefyKeystore::verify(id, sig, &message[..]))
+						.map(|sig| BKS::verify(id, sig, &message[..]))
 						.unwrap_or(false)
 				})
 				.count();
