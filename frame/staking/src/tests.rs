@@ -5635,56 +5635,46 @@ fn cannot_set_unsupported_validator_count() {
 		// setting validator count above 100 does not work
 		assert_noop!(
 			Staking::set_validator_count(RuntimeOrigin::root(), 51),
-			Error::<Test>::TooManyElectionWinners,
+			Error::<Test>::TooManyValidators,
 		);
 	})
 }
 
 #[test]
-fn increase_validator_count_is_capped() {
+fn increase_validator_count_errors() {
 	ExtBuilder::default().build_and_execute(|| {
 		MaxWinners::set(50);
 		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 40));
 
-		// increased by full value
+		// increase works
 		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 6));
 		assert_eq!(ValidatorCount::<Test>::get(), 46);
 
-		// capped to max winners
-		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 5));
-		assert_eq!(ValidatorCount::<Test>::get(), 50);
-
-		// further increment does not do anything
-		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 4));
-		assert_eq!(ValidatorCount::<Test>::get(), 50);
+		// errors
+		assert_noop!(
+			Staking::increase_validator_count(RuntimeOrigin::root(), 5),
+			Error::<Test>::TooManyValidators,
+		);
 	})
 }
 
 #[test]
-fn scale_validator_count_is_capped() {
+fn scale_validator_count_errors() {
 	ExtBuilder::default().build_and_execute(|| {
 		MaxWinners::set(50);
 		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 20));
 
-		// scaled by full value
+		// scale value works
 		assert_ok!(Staking::scale_validator_count(
 			RuntimeOrigin::root(),
 			Percent::from_percent(200)
 		));
 		assert_eq!(ValidatorCount::<Test>::get(), 40);
 
-		// capped to max winners
-		assert_ok!(Staking::scale_validator_count(
-			RuntimeOrigin::root(),
-			Percent::from_percent(200)
-		));
-		assert_eq!(ValidatorCount::<Test>::get(), 50);
-
-		// further scale does not do anything
-		assert_ok!(Staking::scale_validator_count(
-			RuntimeOrigin::root(),
-			Percent::from_percent(200)
-		));
-		assert_eq!(ValidatorCount::<Test>::get(), 50);
+		// errors
+		assert_noop!(
+			Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(126)),
+			Error::<Test>::TooManyValidators,
+		);
 	})
 }

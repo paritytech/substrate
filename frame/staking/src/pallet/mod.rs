@@ -34,7 +34,7 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-	Perbill, Percent,
+	ArithmeticError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::prelude::*;
@@ -756,8 +756,6 @@ pub mod pallet {
 		CommissionTooLow,
 		/// Some bound is not met.
 		BoundNotMet,
-		/// Validator count exceeded the maximum supported by the `ElectionProvider`.
-		TooManyElectionWinners,
 	}
 
 	#[pallet::hooks]
@@ -1282,7 +1280,7 @@ pub mod pallet {
 			// support by election provider.
 			ensure!(
 				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
-				Error::<T>::TooManyElectionWinners
+				Error::<T>::TooManyValidators
 			);
 			ValidatorCount::<T>::put(new);
 			Ok(())
@@ -1302,10 +1300,14 @@ pub mod pallet {
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| {
-				*n = <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
-					.min(*n + additional);
-			});
+			let old = ValidatorCount::<T>::get();
+			let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
+			ensure!(
+				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				Error::<T>::TooManyValidators
+			);
+
+			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
 
@@ -1320,10 +1322,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| {
-				*n = <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
-					.min(*n + factor * *n)
-			});
+			let old = ValidatorCount::<T>::get();
+			let new = old.checked_add(factor.mul_floor(old)).ok_or(ArithmeticError::Overflow)?;
+
+			ensure!(
+				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				Error::<T>::TooManyValidators
+			);
+
+			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
 
