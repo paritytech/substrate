@@ -54,11 +54,7 @@ pub struct LightClientRequestHandler<B, Client> {
 impl<B, Client> LightClientRequestHandler<B, Client>
 where
 	B: Block,
-	Client: BlockBackend<B>
-		+ ProofProvider<B>
-		+ Send
-		+ Sync
-		+ 'static,
+	Client: BlockBackend<B> + ProofProvider<B> + Send + Sync + 'static,
 {
 	/// Create a new [`LightClientRequestHandler`].
 	pub fn new(
