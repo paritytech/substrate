@@ -544,8 +544,8 @@ pub enum FeasibilityError {
 	InvalidRound,
 	/// Comparison against `MinimumUntrustedScore` failed.
 	UntrustedScoreTooLow,
-	/// A bound was not satisfied.
-	BoundNotMet,
+	/// Data Provider returned too many desired targets
+	TooManyDesiredTargets,
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -966,7 +966,7 @@ pub mod pallet {
 			ensure!(Self::current_phase().is_emergency(), <Error<T>>::CallNotAllowed);
 
 			// bound supports with T::MaxWinners
-			let supports = supports.try_into().map_err(|_| Error::<T>::BoundNotMet)?;
+			let supports = supports.try_into().map_err(|_| Error::<T>::TooManyWinners)?;
 
 			// Note: we don't `rotate_round` at this point; the next call to
 			// `ElectionProvider::elect` will succeed and take care of that.
@@ -1158,6 +1158,8 @@ pub mod pallet {
 		FallbackFailed,
 		/// Some bound not met
 		BoundNotMet,
+		/// Submitted solution has too many winners
+		TooManyWinners,
 	}
 
 	#[pallet::validate_unsigned]
@@ -1475,6 +1477,11 @@ impl<T: Config> Pallet<T> {
 			Self::desired_targets().ok_or(FeasibilityError::SnapshotUnavailable)?;
 
 		ensure!(winners.len() as u32 == desired_targets, FeasibilityError::WrongWinnerCount);
+		// Fail early if targets requested by data provider exceed maximum winners supported.
+		ensure!(
+			desired_targets <= <T as pallet::Config>::MaxWinners::get(),
+			FeasibilityError::TooManyDesiredTargets
+		);
 
 		// Ensure that the solution's score can pass absolute min-score.
 		let submitted_score = raw_solution.score;
@@ -1535,9 +1542,8 @@ impl<T: Config> Pallet<T> {
 		let known_score = supports.evaluate();
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
-		// Miner mines a solution with target size equal to `DataProvider::desired_targets()`,
-		// which can never be larger than `MaxWinners`.
-		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundNotMet)?;
+		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
+		let supports = supports.try_into().expect("checked desired_targets <= MaxWinners; qed");
 		Ok(ReadySolution { supports, compute, score })
 	}
 

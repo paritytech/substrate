@@ -81,7 +81,7 @@ pub trait Config {
 
 	/// Upper bound on maximum winners from electable targets.
 	///
-	/// As as noted in the documentation of [`ElectionProviderBase::MaxWinners`], this value should
+	/// As noted in the documentation of [`ElectionProviderBase::MaxWinners`], this value should
 	/// always be more than `DataProvider::desired_target`.
 	type MaxWinners: Get<u32>;
 

@@ -521,10 +521,14 @@ impl<T: Config> Pallet<T> {
 		>,
 		new_planned_era: EraIndex,
 	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
-		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
-		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = elected_stashes
+		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = exposures
+			.iter()
+			.cloned()
+			.map(|(x, _)| x)
+			.collect::<Vec<_>>()
 			.try_into()
 			.expect("since we only map through exposures, size of elected_stashes is always same as exposures; qed");
+
 		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
 		exposures.into_iter().for_each(|(stash, exposure)| {
