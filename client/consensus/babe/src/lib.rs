@@ -1543,11 +1543,24 @@ where
 				};
 
 				if viable_epoch.as_ref().end_slot() <= slot {
+					// some epochs must have been skipped as our current slot
+					// fits outside the current epoch. we will figure out
+					// which epoch it belongs to and we will re-use the same
+					// data for that epoch
+
 					let mut epoch_data = viable_epoch.as_mut();
 					let skipped_epochs = (*slot - *epoch_data.start_slot) / epoch_data.duration;
 
 					let original_epoch_index = epoch_data.epoch_index;
 
+					// NOTE: notice that we are only updating the `Epoch` from `EpochChanges` (that
+					// is stored in the map), and not the `EpochHeader` that is stored in the fork
+					// tree.  next time we search for an epoch for a given slot we will do it
+					// through the fork tree (which isn't updated), but the reason this works is
+					// because we will search in-depth in the tree with the predicate
+					// `epoch.start_slot <= slot` which will still match correctly without the
+					// updated `start_slot`. the new epoch that will get inserted below (after
+					// `increment`) will already use a correct `start_slot`.
 					epoch_data.epoch_index += skipped_epochs;
 					epoch_data.start_slot =
 						Slot::from(*epoch_data.start_slot + skipped_epochs * epoch_data.duration);
