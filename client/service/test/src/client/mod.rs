@@ -1602,7 +1602,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.add_extra_child_storage(&child_info, b"third".to_vec(), vec![0u8; 32])
 		.build();
 
-	let block_hash = client.block_hash_from_id(&BlockId::Number(0)).unwrap().unwrap();
+	let block_hash = client.info().best_hash;
 
 	let child_root = b":child_storage:default:child".to_vec();
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
@@ -1668,7 +1668,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 fn storage_keys_iter_works() {
 	let client = substrate_test_runtime_client::new();
 
-	let block_hash = client.block_hash_from_id(&BlockId::Number(0)).unwrap().unwrap();
+	let block_hash = client.info().best_hash;
 
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
