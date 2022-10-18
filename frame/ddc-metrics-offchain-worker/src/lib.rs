@@ -344,6 +344,7 @@ impl<T: Config> Module<T>
             contract_id,
             0u32.into(),
             100_000_000_000,
+            None,
             call_data,
             false,
         );
@@ -383,6 +384,7 @@ impl<T: Config> Module<T>
                 dest: contract_id_unl.clone(),
                 value: 0u32.into(),
                 gas_limit: 100_000_000_000,
+                storage_deposit_limit: None,
                 data: call_data.clone(),
             }
         });
@@ -441,6 +443,7 @@ impl<T: Config> Module<T>
                     dest: contract_id_unl,
                     value: 0u32.into(),
                     gas_limit: 100_000_000_000,
+                    storage_deposit_limit: None,
                     data: call_data,
                 }
             });
@@ -490,6 +493,7 @@ impl<T: Config> Module<T>
                     dest: contract_id_unl,
                     value: 0u32.into(),
                     gas_limit: 100_000_000_000,
+                    storage_deposit_limit: None,
                     data: call_data,
                 }
             });
@@ -528,6 +532,7 @@ impl<T: Config> Module<T>
                 dest: contract_id_unl,
                 value: 0u32.into(),
                 gas_limit: 100_000_000_000,
+                storage_deposit_limit: None,
                 data: call_data,
             }
         });
@@ -587,6 +592,7 @@ impl<T: Config> Module<T>
             contract_id,
             0u32.into(),
             100_000_000_000,
+            None,
             call_data,
             false
         );
