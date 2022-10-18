@@ -382,6 +382,13 @@ pub trait ElectionProviderBase {
 		AccountId = Self::AccountId,
 		BlockNumber = Self::BlockNumber,
 	>;
+
+	fn desired_targets_checked() -> u32 {
+		match Self::DataProvider::desired_targets() {
+			Ok(desired_targets) => desired_targets.min(Self::MaxWinners::get()),
+			Err(e) => Self::MaxWinners::get(),
+		}
+	}
 }
 
 /// Elect a new set of winners, bounded by `MaxWinners`.
