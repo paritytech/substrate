@@ -1508,7 +1508,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
 	}
 
-	fn stash(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
 		Self::ledger(controller)
 			.map(|l| l.stash)
 			.ok_or(Error::<T>::NotController.into())

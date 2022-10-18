@@ -234,7 +234,7 @@ pub mod pallet {
 			let ctrl = ensure_signed(origin)?;
 
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
-			let stash = T::Staking::stash(&ctrl)?;
+			let stash = T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
 			ensure!(!Queue::<T>::contains_key(&stash), Error::<T>::AlreadyQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
@@ -242,7 +242,7 @@ pub mod pallet {
 			);
 
 			// second part of the && is defensive.
-			ensure!(!T::Staking::is_unbonding(&stash), Error::<T>::NotFullyBonded);
+			ensure!(T::Staking::is_unbonding(&stash), Error::<T>::NotFullyBonded);
 
 			// chill and fully unstake.
 			T::Staking::chill(&stash)?;
@@ -268,7 +268,7 @@ pub mod pallet {
 
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
 
-			let stash = T::Staking::stash(&ctrl)?;
+			let stash = T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
 			ensure!(Queue::<T>::contains_key(&stash), Error::<T>::NotQueued);
 			ensure!(
 				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),

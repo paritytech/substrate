@@ -19,6 +19,8 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
+extern crate core;
+
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::collections::btree_map::BTreeMap;
 
@@ -99,7 +101,7 @@ pub trait StakingInterface {
 	///
 	/// The controller abstraction is not permanent and might go away. Avoid using this as much as
 	/// possible.
-	fn stash(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError>;
+	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError>;
 
 	/// Number of eras that staked funds must remain bonded for.
 	fn bonding_duration() -> EraIndex;
