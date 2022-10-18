@@ -117,8 +117,8 @@ pub trait StakingInterface {
 	/// TODO: Possibly return a result here too for consistency.
 	fn is_unbonding(who: &Self::AccountId) -> bool {
 		match Self::stake(who) {
-			Ok(stake) if stake.active == stake.total => true,
-			_ => false,
+			Ok(stake) if stake.active == stake.total => false,
+			_ => true,
 		}
 	}
 

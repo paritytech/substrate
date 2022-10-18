@@ -241,8 +241,7 @@ pub mod pallet {
 				Error::<T>::AlreadyHead
 			);
 
-			// second part of the && is defensive.
-			ensure!(T::Staking::is_unbonding(&stash), Error::<T>::NotFullyBonded);
+			ensure!(!T::Staking::is_unbonding(&stash), Error::<T>::NotFullyBonded);
 
 			// chill and fully unstake.
 			T::Staking::chill(&stash)?;
