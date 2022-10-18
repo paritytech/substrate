@@ -5939,7 +5939,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "itertools",
  "log",
  "pallet-balances",
  "parity-scale-codec",

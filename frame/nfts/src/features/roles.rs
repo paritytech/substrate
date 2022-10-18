@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::*;
-use itertools::Itertools;
+use sp_std::collections::btree_map::BTreeMap;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn has_role(
@@ -34,18 +34,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Returns a grouped vector.
 	pub fn group_roles_by_account(
-		mut input: Vec<(T::AccountId, CollectionRole)>,
+		input: Vec<(T::AccountId, CollectionRole)>,
 	) -> Vec<(T::AccountId, CollectionRoles)> {
-		input.sort_by(|a, b| a.0.cmp(&b.0));
-
-		let mut result = vec![];
-		for (account, group) in &input.into_iter().group_by(|elt| elt.0.clone()) {
-			let mut roles = CollectionRoles::none();
-			for (_, role) in group.collect::<Vec<(T::AccountId, CollectionRole)>>() {
-				roles.add_role(role);
-			}
-			result.push((account, roles));
+		let mut result = BTreeMap::new();
+		for (account, role) in input.into_iter() {
+			let roles = result.entry(account).or_insert(CollectionRoles::none());
+			roles.add_role(role);
 		}
-		result
+		result.into_iter().collect()
 	}
 }
