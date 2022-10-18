@@ -50,7 +50,8 @@ use std::{
 // `hashed_prefix` and pallets are both empty, then we scrape everything. Not the biggest fan
 // myself, but needed to keep things backwards compatible.
 // 2. snapshot format has changed and now is a single file, and contains block hash as well.
-//
+// 3. `build_with_block_hash` can be used to build and get the eventual final block hash that
+// corresponded to the state.
 //
 
 pub mod rpc_api;
@@ -60,9 +61,11 @@ type TopKeyValues = Vec<KeyValue>;
 type ChildKeyValues = Vec<(ChildInfo, Vec<KeyValue>)>;
 
 const LOG_TARGET: &str = "remote-ext";
-const DEFAULT_TARGET: &str = "wss://rpc.polkadot.io:443";
-const BATCH_SIZE: usize = 1000;
-const PAGE: u32 = 1000;
+const DEFAULT_WS_ENDPOINT: &str = "wss://rpc.polkadot.io:443";
+const VALUE_DOWNLOAD_THREADS: usize = 8;
+const VALUE_DOWNLOAD_BATCH: usize = 4096;
+// NOTE: increasing this value does not seem to impact speed all that much.
+const KEY_DOWNLOAD_PAGE: u32 = 1000;
 
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
@@ -148,20 +151,29 @@ impl Transport {
 		}
 	}
 
+	fn uri(&self) -> Option<String> {
+		match self {
+			Self::Uri(uri) => Some(uri.clone()),
+			Self::RemoteClient(_) => None,
+		}
+	}
+
+	async fn build_ws_client(uri: &str) -> Result<WsClient, &'static str> {
+		WsClientBuilder::default()
+			.max_request_body_size(u32::MAX)
+			.build(&uri)
+			.await
+			.map_err(|e| {
+				log::error!(target: LOG_TARGET, "error: {:?}", e);
+				"failed to build ws client"
+			})
+	}
+
 	// Open a new WebSocket connection if it's not connected.
 	async fn map_uri(&mut self) -> Result<(), &'static str> {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
-
-			let ws_client = WsClientBuilder::default()
-				.max_request_body_size(u32::MAX)
-				.build(&uri)
-				.await
-				.map_err(|e| {
-					log::error!(target: LOG_TARGET, "error: {:?}", e);
-					"failed to build ws client"
-				})?;
-
+			let ws_client = Self::build_ws_client(uri).await?;
 			*self = Self::RemoteClient(Arc::new(ws_client))
 		}
 
@@ -226,7 +238,7 @@ impl<B: BlockT> OnlineConfig<B> {
 impl<B: BlockT> Default for OnlineConfig<B> {
 	fn default() -> Self {
 		Self {
-			transport: Transport::Uri(DEFAULT_TARGET.to_owned()),
+			transport: Transport::Uri(DEFAULT_WS_ENDPOINT.to_owned()),
 			child_trie: true,
 			at: None,
 			state_snapshot: None,
@@ -358,7 +370,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			let page = self
 				.as_online()
 				.rpc_client()
-				.get_keys_paged(Some(prefix.clone()), PAGE, last_key.clone(), Some(at))
+				.get_keys_paged(Some(prefix.clone()), KEY_DOWNLOAD_PAGE, last_key.clone(), Some(at))
 				.await
 				.map_err(|e| {
 					error!(target: LOG_TARGET, "Error = {:?}", e);
@@ -368,7 +380,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 			all_keys.extend(page);
 
-			if page_len < PAGE as usize {
+			if page_len < KEY_DOWNLOAD_PAGE as usize {
 				log::debug!(target: LOG_TARGET, "last page received: {}", page_len);
 				break all_keys
 			} else {
@@ -398,11 +410,11 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
 		let keys_count = keys.len();
-		log::debug!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
+		log::info!(target: LOG_TARGET, "Querying a total of {} keys", keys.len());
 
 		let mut key_values: Vec<KeyValue> = vec![];
 		let client = self.as_online().rpc_client();
-		for chunk_keys in keys.chunks(BATCH_SIZE) {
+		for chunk_keys in keys.chunks(VALUE_DOWNLOAD_BATCH) {
 			let batch = chunk_keys
 				.iter()
 				.cloned()
@@ -428,7 +440,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 					StorageData(vec![])
 				});
 				key_values.push((key.clone(), value));
-				if key_values.len() % (10 * BATCH_SIZE) == 0 {
+				if key_values.len() % (10 * VALUE_DOWNLOAD_BATCH) == 0 {
 					let ratio: f64 = key_values.len() as f64 / keys_count as f64;
 					log::debug!(
 						target: LOG_TARGET,
@@ -444,6 +456,90 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		Ok(key_values)
 	}
 
+	pub(crate) async fn rpc_get_pairs_paged_multi_threaded(
+		&self,
+		prefix: StorageKey,
+		at: B::Hash,
+	) -> Result<Vec<KeyValue>, &'static str> {
+		let now = std::time::Instant::now();
+		let keys = self.rpc_get_keys_paged(prefix, at).await?;
+		log::info!(
+			target: LOG_TARGET,
+			"Querying a total of {} keys, took {}s to fetch keys",
+			keys.len(),
+			now.elapsed().as_secs()
+		);
+
+		// TODO: This is really bad.
+		let uri =
+			Arc::new(self.as_online().transport.uri().unwrap_or("ws://localhost:9944".to_string()));
+
+		let thread_chunk_size = keys.len() / VALUE_DOWNLOAD_THREADS;
+
+		let mut handles = Vec::new();
+		let keys_chunked: Vec<Vec<StorageKey>> =
+			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
+		for thread_keys in keys_chunked {
+			let uri = Arc::clone(&uri);
+			let handle = std::thread::spawn(move || {
+				use async_std::task::block_on;
+				let client = block_on(Transport::build_ws_client(&*uri)).unwrap();
+				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
+				for chunk_keys in thread_keys.chunks(VALUE_DOWNLOAD_BATCH) {
+					let batch = chunk_keys
+						.iter()
+						.cloned()
+						.map(|key| ("state_getStorage", rpc_params![key, at]))
+						.collect::<Vec<_>>();
+
+					let values = block_on(client.batch_request::<Option<StorageData>>(batch))
+						.map_err(|e| {
+							log::error!(
+								target: LOG_TARGET,
+								"failed to execute batch: {:?}. Error: {:?}",
+								chunk_keys.iter().map(HexDisplay::from).collect::<Vec<_>>(),
+								e
+							);
+							"batch failed."
+						})
+						.unwrap();
+
+					for (idx, key) in chunk_keys.iter().enumerate() {
+						let maybe_value = values[idx].clone();
+						let value = maybe_value.unwrap_or_else(|| {
+							log::warn!(
+								target: LOG_TARGET,
+								"key {:?} had none corresponding value.",
+								&key
+							);
+							StorageData(vec![])
+						});
+						thread_key_values.push((key.clone(), value));
+						if thread_key_values.len() % (10 * VALUE_DOWNLOAD_BATCH) == 0 {
+							let ratio: f64 =
+								thread_key_values.len() as f64 / thread_keys.len() as f64;
+							log::debug!(
+								target: LOG_TARGET,
+								"[thread = {:?}] progress = {:.2} [{} / {}]",
+								std::thread::current().id(),
+								ratio,
+								thread_key_values.len(),
+								thread_keys.len(),
+							);
+						}
+					}
+				}
+				thread_key_values
+			});
+			handles.push(handle);
+		}
+
+		let keys_and_values =
+			handles.into_iter().map(|h| h.join().unwrap()).flatten().collect::<Vec<_>>();
+
+		Ok(keys_and_values)
+	}
+
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
 		&self,
@@ -452,7 +548,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		at: B::Hash,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let mut child_kv_inner = vec![];
-		for batch_child_key in child_keys.chunks(BATCH_SIZE) {
+		for batch_child_key in child_keys.chunks(VALUE_DOWNLOAD_BATCH) {
 			let batch_request = batch_child_key
 				.iter()
 				.cloned()
@@ -586,13 +682,16 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		let mut keys_and_values = Vec::new();
 		for prefix in &config.hashed_prefixes {
+			let now = std::time::Instant::now();
+			let additional_key_values =
+				self.rpc_get_pairs_paged_multi_threaded(StorageKey(prefix.to_vec()), at).await?;
+			let elapsed = now.elapsed();
 			log::info!(
 				target: LOG_TARGET,
-				"adding data for hashed prefix: {:?}",
-				HexDisplay::from(prefix)
+				"adding data for hashed prefix: {:?}, took {:?}s",
+				HexDisplay::from(prefix),
+				elapsed.as_secs()
 			);
-			let additional_key_values =
-				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
 			keys_and_values.extend(additional_key_values);
 		}
 
@@ -633,7 +732,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		// Finally, if by now, we have put any limitations on prefixes that we are interested in, we
 		// download everything.
-		if online_config.hashed_prefixes.is_empty() {
+		if online_config
+			.hashed_prefixes
+			.iter()
+			.filter(|p| *p != DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+			.count() == 0
+		{
 			log::info!(
 				target: LOG_TARGET,
 				"since no prefix is filtered, the data for all pallets will be downloaded"
@@ -823,7 +927,7 @@ mod test_prelude {
 		let _ = env_logger::Builder::from_default_env()
 			.format_module_path(true)
 			.format_level(true)
-			.filter_module(LOG_TARGET, log::LevelFilter::Debug)
+			.filter_module(LOG_TARGET, log::LevelFilter::Info)
 			.try_init();
 	}
 }
@@ -843,8 +947,8 @@ mod tests {
 					child_trie: false,
 					state_snapshot: Some(SnapshotConfig::new("test_data/proxy_test")),
 					..Default::default()
-				})
-			)
+				},
+			))
 			.build()
 			.await
 			.unwrap()
@@ -1055,7 +1159,7 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	#[ignore = "only works if a local node is present."]
+	// #[ignore = "only works if a local node is present."]
 	async fn can_fetch_all() {
 		const CACHE: &'static str = "can_fetch_all_data";
 		init_logger();

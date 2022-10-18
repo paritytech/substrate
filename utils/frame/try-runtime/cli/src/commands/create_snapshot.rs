@@ -41,7 +41,7 @@ const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
 
 /// Configurations of the [`Command::FollowChain`].
 #[derive(Debug, Clone, clap::Parser)]
-pub struct FollowChainCmd {
+pub struct Crete {
 	state: State
 }
 

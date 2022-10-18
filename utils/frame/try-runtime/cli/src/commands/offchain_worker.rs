@@ -23,7 +23,6 @@ use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
-use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 
