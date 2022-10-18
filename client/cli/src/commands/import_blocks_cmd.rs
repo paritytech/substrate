@@ -37,17 +37,17 @@ use std::{
 #[derive(Debug, Parser)]
 pub struct ImportBlocksCmd {
 	/// Input file or stdin if unspecified.
-	#[clap(parse(from_os_str))]
+	#[arg()]
 	pub input: Option<PathBuf>,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
 	/// Don't alter this unless you know what you're doing.
-	#[clap(long, value_name = "COUNT")]
+	#[arg(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
 	/// Try importing blocks from binary format rather than JSON.
-	#[clap(long)]
+	#[arg(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]

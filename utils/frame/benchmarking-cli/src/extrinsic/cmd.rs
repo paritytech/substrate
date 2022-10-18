@@ -62,21 +62,21 @@ pub struct ExtrinsicParams {
 	/// List all available pallets and extrinsics.
 	///
 	/// The format is CSV with header `pallet, extrinsic`.
-	#[clap(long)]
+	#[arg(long)]
 	pub list: bool,
 
 	/// Pallet name of the extrinsic to benchmark.
-	#[clap(long, value_name = "PALLET", required_unless_present = "list")]
+	#[arg(long, value_name = "PALLET", required_unless_present = "list")]
 	pub pallet: Option<String>,
 
 	/// Extrinsic to benchmark.
-	#[clap(long, value_name = "EXTRINSIC", required_unless_present = "list")]
+	#[arg(long, value_name = "EXTRINSIC", required_unless_present = "list")]
 	pub extrinsic: Option<String>,
 
 	/// Enable the Trie cache.
 	///
 	/// This should only be used for performance analysis and not for final results.
-	#[clap(long)]
+	#[arg(long)]
 	pub enable_trie_cache: bool,
 }
 

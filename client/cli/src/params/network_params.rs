@@ -33,11 +33,11 @@ use std::{borrow::Cow, path::PathBuf};
 #[derive(Debug, Clone, Args)]
 pub struct NetworkParams {
 	/// Specify a list of bootnodes.
-	#[clap(long, value_name = "ADDR", multiple_values(true))]
+	#[arg(long, value_name = "ADDR", num_args = 1..)]
 	pub bootnodes: Vec<MultiaddrWithPeerId>,
 
 	/// Specify a list of reserved node addresses.
-	#[clap(long, value_name = "ADDR", multiple_values(true))]
+	#[arg(long, value_name = "ADDR", num_args = 1..)]
 	pub reserved_nodes: Vec<MultiaddrWithPeerId>,
 
 	/// Whether to only synchronize the chain with reserved nodes.
@@ -48,12 +48,12 @@ pub struct NetworkParams {
 	/// In particular, if you are a validator your node might still connect to other
 	/// validator nodes and collator nodes regardless of whether they are defined as
 	/// reserved nodes.
-	#[clap(long)]
+	#[arg(long)]
 	pub reserved_only: bool,
 
 	/// The public address that other nodes will use to connect to it.
 	/// This can be used if there's a proxy in front of this node.
-	#[clap(long, value_name = "PUBLIC_ADDR", multiple_values(true))]
+	#[arg(long, value_name = "PUBLIC_ADDR", num_args = 1..)]
 	pub public_addr: Vec<Multiaddr>,
 
 	/// Listen on this multiaddress.
@@ -61,49 +61,49 @@ pub struct NetworkParams {
 	/// By default:
 	/// If `--validator` is passed: `/ip4/0.0.0.0/tcp/<port>` and `/ip6/[::]/tcp/<port>`.
 	/// Otherwise: `/ip4/0.0.0.0/tcp/<port>/ws` and `/ip6/[::]/tcp/<port>/ws`.
-	#[clap(long, value_name = "LISTEN_ADDR", multiple_values(true))]
+	#[arg(long, value_name = "LISTEN_ADDR", num_args = 1..)]
 	pub listen_addr: Vec<Multiaddr>,
 
 	/// Specify p2p protocol TCP port.
-	#[clap(long, value_name = "PORT", conflicts_with_all = &[ "listen-addr" ])]
+	#[arg(long, value_name = "PORT", conflicts_with_all = &[ "listen_addr" ])]
 	pub port: Option<u16>,
 
 	/// Always forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
 	/// `--reserved-nodes` or `--bootnodes`. Enabled by default for chains marked as "live" in
 	/// their chain specifications.
-	#[clap(long, conflicts_with_all = &["allow-private-ipv4"])]
+	#[arg(long, conflicts_with_all = &["allow_private_ipv4"])]
 	pub no_private_ipv4: bool,
 
 	/// Always accept connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)). Enabled by default for chains marked as
 	/// "local" in their chain specifications, or when `--dev` is passed.
-	#[clap(long, conflicts_with_all = &["no-private-ipv4"])]
+	#[arg(long, conflicts_with_all = &["no_private_ipv4"])]
 	pub allow_private_ipv4: bool,
 
 	/// Specify the number of outgoing connections we're trying to maintain.
-	#[clap(long, value_name = "COUNT", default_value = "25")]
+	#[arg(long, value_name = "COUNT", default_value_t = 25)]
 	pub out_peers: u32,
 
 	/// Maximum number of inbound full nodes peers.
-	#[clap(long, value_name = "COUNT", default_value = "25")]
+	#[arg(long, value_name = "COUNT", default_value_t = 25)]
 	pub in_peers: u32,
 	/// Maximum number of inbound light nodes peers.
-	#[clap(long, value_name = "COUNT", default_value = "100")]
+	#[arg(long, value_name = "COUNT", default_value_t = 100)]
 	pub in_peers_light: u32,
 
 	/// Disable mDNS discovery.
 	///
 	/// By default, the network will use mDNS to discover other nodes on the
 	/// local network. This disables it. Automatically implied when using --dev.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_mdns: bool,
 
 	/// Maximum number of peers from which to ask for the same blocks in parallel.
 	///
 	/// This allows downloading announced blocks from multiple peers. Decrease to save
 	/// traffic and risk increased latency.
-	#[clap(long, value_name = "COUNT", default_value = "5")]
+	#[arg(long, value_name = "COUNT", default_value_t = 5)]
 	pub max_parallel_downloads: u32,
 
 	#[allow(missing_docs)]
@@ -114,7 +114,7 @@ pub struct NetworkParams {
 	///
 	/// By default this option is `true` for `--dev` or when the chain type is
 	/// `Local`/`Development` and false otherwise.
-	#[clap(long)]
+	#[arg(long)]
 	pub discover_local: bool,
 
 	/// Require iterative Kademlia DHT queries to use disjoint paths for increased resiliency in
@@ -122,11 +122,11 @@ pub struct NetworkParams {
 	///
 	/// See the S/Kademlia paper for more information on the high level design as well as its
 	/// security improvements.
-	#[clap(long)]
+	#[arg(long)]
 	pub kademlia_disjoint_query_paths: bool,
 
 	/// Join the IPFS network and serve transactions over bitswap protocol.
-	#[clap(long)]
+	#[arg(long)]
 	pub ipfs_server: bool,
 
 	/// Blockchain syncing mode.
@@ -135,11 +135,11 @@ pub struct NetworkParams {
 	/// - `fast`: Download blocks and the latest state only.
 	/// - `fast-unsafe`: Same as `fast`, but skip downloading state proofs.
 	/// - `warp`: Download the latest state and proof.
-	#[clap(
+	#[arg(
 		long,
-		arg_enum,
+		value_enum,
 		value_name = "SYNC_MODE",
-		default_value = "full",
+		default_value_t = SyncMode::Full,
 		ignore_case = true,
 		verbatim_doc_comment
 	)]
