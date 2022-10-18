@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, NetworkWorker};
+use crate::{config, ChainSyncInterface, NetworkWorker};
 
 use futures::prelude::*;
 use libp2p::PeerId;
@@ -35,7 +35,7 @@ use sc_network_common::{
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, mock::MockChainSync,
-	state_request_handler::StateRequestHandler,
+	service::mock::MockChainSyncInterface, state_request_handler::StateRequestHandler,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -56,6 +56,7 @@ const PROTOCOL_NAME: &str = "/foo";
 
 fn make_network(
 	chain_sync: Box<dyn ChainSyncT<substrate_test_runtime_client::runtime::Block>>,
+	chain_sync_service: Box<dyn ChainSyncInterface<substrate_test_runtime_client::runtime::Block>>,
 	client: Arc<substrate_test_runtime_client::TestClient>,
 ) -> (TestNetworkWorker, Arc<substrate_test_runtime_client::TestClient>) {
 	let network_config = config::NetworkConfiguration {
@@ -174,6 +175,7 @@ fn make_network(
 		fork_id,
 		import_queue,
 		chain_sync,
+		chain_sync_service,
 		metrics_registry: None,
 		block_request_protocol_config,
 		state_request_protocol_config,
@@ -193,7 +195,7 @@ fn set_default_expecations_no_peers(
 	chain_sync.expect_state_request().returning(|| None);
 	chain_sync.expect_justification_requests().returning(|| Box::new(iter::empty()));
 	chain_sync.expect_warp_sync_request().returning(|| None);
-	chain_sync.expect_poll_block_announce_validation().returning(|_| Poll::Pending);
+	chain_sync.expect_poll().returning(|_| Poll::Pending);
 	chain_sync.expect_status().returning(|| SyncStatus {
 		state: SyncState::Idle,
 		best_seen_block: None,
@@ -207,11 +209,18 @@ fn set_default_expecations_no_peers(
 #[async_std::test]
 async fn normal_network_poll_no_peers() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 	set_default_expecations_no_peers(&mut chain_sync);
 
-	let (mut network, _) = make_network(chain_sync, client);
+	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
+	// called)
+	let chain_sync_service =
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+
+	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
 
 	// poll the network once
 	futures::future::poll_fn(|cx| {
@@ -224,6 +233,13 @@ async fn normal_network_poll_no_peers() {
 #[async_std::test]
 async fn request_justification() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
+	// called)
+	let chain_sync_service =
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+
+	// build `ChainSync` and verify that call to `request_justification()` is made
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 
@@ -237,7 +253,7 @@ async fn request_justification() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, client);
+	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
 
 	// send "request justifiction" message and poll the network
 	network.service().request_justification(&hash, number);
@@ -252,13 +268,20 @@ async fn request_justification() {
 #[async_std::test]
 async fn clear_justification_requests(&mut self) {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
+	// called)
+	let chain_sync_service =
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+
+	// build `ChainSync` and verify that call to `clear_justification_requests()` is made
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 
 	chain_sync.expect_clear_justification_requests().once().returning(|| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, client);
+	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
 
 	// send "request justifiction" message and poll the network
 	network.service().clear_justification_requests();
@@ -273,15 +296,23 @@ async fn clear_justification_requests(&mut self) {
 #[async_std::test]
 async fn set_sync_fork_request() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+
+	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
+	set_default_expecations_no_peers(&mut chain_sync);
+
+	// build `ChainSyncInterface` provider and verify that the `set_sync_fork_request()`
+	// call is delegated to `ChainSyncInterface` (which eventually forwards it to `ChainSync`)
+	let mut chain_sync_service =
+		MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new();
 
 	let hash = H256::random();
 	let number = 1337u64;
 	let peers = (0..3).map(|_| PeerId::random()).collect::<Vec<_>>();
 	let copy_peers = peers.clone();
 
-	chain_sync
+	chain_sync_service
 		.expect_set_sync_fork_request()
 		.withf(move |in_peers, in_hash, in_number| {
 			&peers == in_peers && &hash == in_hash && &number == in_number
@@ -289,8 +320,7 @@ async fn set_sync_fork_request() {
 		.once()
 		.returning(|_, _, _| ());
 
-	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, client);
+	let (mut network, _) = make_network(chain_sync, Box::new(chain_sync_service), client);
 
 	// send "set sync fork request" message and poll the network
 	network.service().set_sync_fork_request(copy_peers, hash, number);
@@ -305,6 +335,12 @@ async fn set_sync_fork_request() {
 #[async_std::test]
 async fn on_block_finalized() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
+	// called)
+	let chain_sync_service =
+		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
+
+	// build `ChainSync` and verify that call to `on_block_finalized()` is made
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
 
@@ -326,7 +362,7 @@ async fn on_block_finalized() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, client);
+	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
 
 	// send "set sync fork request" message and poll the network
 	network.on_block_finalized(hash, header);
