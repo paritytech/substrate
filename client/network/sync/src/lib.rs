@@ -1444,8 +1444,7 @@ where
 		if let SyncMode::LightState { skip_proofs, .. } = &self.mode {
 			if self.state_sync.is_none() && !self.peers.is_empty() && self.queue_blocks.is_empty() {
 				// Finalized a recent block.
-				let mut heads: Vec<_> =
-					self.peers.iter().map(|(_, peer)| peer.best_number).collect();
+				let mut heads: Vec<_> = self.peers.values().map(|peer| peer.best_number).collect();
 				heads.sort();
 				let median = heads[heads.len() / 2];
 				if number + STATE_SYNC_FINALITY_THRESHOLD.saturated_into() >= median {
