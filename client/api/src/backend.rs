@@ -400,7 +400,7 @@ pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
 	fn child_storage(
 		&self,
 		hash: &Block::Hash,
-		nhild_info: &ChildInfo,
+		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
