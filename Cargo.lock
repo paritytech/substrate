@@ -11056,8 +11056,8 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
- "substrate-rpc-client",
  "sp-weights",
+ "substrate-rpc-client",
  "tokio",
  "zstd",
 ]
