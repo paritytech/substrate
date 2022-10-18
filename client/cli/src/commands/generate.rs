@@ -25,10 +25,10 @@ use clap::Parser;
 
 /// The `generate` command
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "generate", about = "Generate a random account")]
+#[command(name = "generate", about = "Generate a random account")]
 pub struct GenerateCmd {
 	/// The number of words in the phrase to generate. One of 12 (default), 15, 18, 21 and 24.
-	#[clap(short = 'w', long, value_name = "WORDS")]
+	#[arg(short = 'w', long, value_name = "WORDS")]
 	words: Option<usize>,
 
 	#[allow(missing_docs)]

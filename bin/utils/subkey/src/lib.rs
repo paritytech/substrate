@@ -23,7 +23,7 @@ use sc_cli::{
 };
 
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
 	name = "subkey",
 	author = "Parity Team <admin@parity.io>",
 	about = "Utility for generating and restoring with Substrate keys",

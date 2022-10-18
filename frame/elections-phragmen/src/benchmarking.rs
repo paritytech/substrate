@@ -362,7 +362,7 @@ benchmarks! {
 		// total number of voters.
 		let v in (T::MaxVoters::get() / 2) .. T::MaxVoters::get();
 		// those that are defunct and need removal.
-		let d in 1 .. (T::MaxVoters::get() / 2);
+		let d in 0 .. (T::MaxVoters::get() / 2);
 
 		// remove any previous stuff.
 		clean::<T>();

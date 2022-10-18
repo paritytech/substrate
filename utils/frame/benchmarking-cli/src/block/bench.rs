@@ -43,15 +43,15 @@ const LOG_TARGET: &'static str = "benchmark::block::weight";
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Number of the first block to consider.
-	#[clap(long)]
+	#[arg(long)]
 	pub from: u32,
 
 	/// Last block number to consider.
-	#[clap(long)]
+	#[arg(long)]
 	pub to: u32,
 
 	/// Number of times that the benchmark should be repeated for each block.
-	#[clap(long, default_value = "10")]
+	#[arg(long, default_value_t = 10)]
 	pub repeat: u32,
 }
 

@@ -29,16 +29,16 @@ use std::sync::Arc;
 
 /// The `insert` command
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "insert", about = "Insert a key to the keystore of a node.")]
+#[command(name = "insert", about = "Insert a key to the keystore of a node.")]
 pub struct InsertKeyCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[clap(long)]
+	#[arg(long)]
 	suri: Option<String>,
 
 	/// Key type, examples: "gran", or "imon"
-	#[clap(long)]
+	#[arg(long)]
 	key_type: String,
 
 	#[allow(missing_docs)]
@@ -50,7 +50,7 @@ pub struct InsertKeyCmd {
 	pub keystore_params: KeystoreParams,
 
 	/// The cryptography scheme that should be used to generate the key out of the given URI.
-	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true)]
+	#[arg(long, value_name = "SCHEME", value_enum, ignore_case = true)]
 	pub scheme: CryptoScheme,
 }
 
