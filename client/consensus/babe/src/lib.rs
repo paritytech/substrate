@@ -1547,7 +1547,6 @@ where
 					// fits outside the current epoch. we will figure out
 					// which epoch it belongs to and we will re-use the same
 					// data for that epoch
-
 					let mut epoch_data = viable_epoch.as_mut();
 					let skipped_epochs = (*slot - *epoch_data.start_slot) / epoch_data.duration;
 
