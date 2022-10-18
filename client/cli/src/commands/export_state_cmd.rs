@@ -32,7 +32,7 @@ use std::{fmt::Debug, io::Write, str::FromStr, sync::Arc};
 #[derive(Debug, Clone, Parser)]
 pub struct ExportStateCmd {
 	/// Block hash or number.
-	#[clap(value_name = "HASH or NUMBER")]
+	#[arg(value_name = "HASH or NUMBER")]
 	pub input: Option<BlockNumberOrHash>,
 
 	#[allow(missing_docs)]

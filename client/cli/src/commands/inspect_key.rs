@@ -27,7 +27,7 @@ use std::str::FromStr;
 
 /// The `inspect` command
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
 	name = "inspect",
 	about = "Gets a public key and a SS58 address from the provided Secret URI"
 )]
@@ -44,7 +44,7 @@ pub struct InspectKeyCmd {
 	uri: Option<String>,
 
 	/// Is the given `uri` a hex encoded public key?
-	#[clap(long)]
+	#[arg(long)]
 	public: bool,
 
 	#[allow(missing_docs)]
@@ -72,7 +72,7 @@ pub struct InspectKeyCmd {
 	///
 	/// If there is no derivation in `--uri`, the public key will be checked against the public key
 	/// of `--uri` directly.
-	#[clap(long, conflicts_with = "public")]
+	#[arg(long, conflicts_with = "public")]
 	pub expect_public: Option<String>,
 }
 
