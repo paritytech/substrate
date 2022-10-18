@@ -423,9 +423,9 @@ pub mod pallet {
 		/// Some asset `asset_id` was thawed.
 		AssetThawed { asset_id: T::AssetId },
 		/// Accounts were destroyed for given asset.
-		DestroyedAccounts { asset_id: T::AssetId, accounts_destroyed: u32, accounts_remaining: u32 },
+		AccountsDestroyed { asset_id: T::AssetId, accounts_destroyed: u32, accounts_remaining: u32 },
 		/// Approvals were destroyed for given asset.
-		DestroyedApprovals {
+		ApprovalsDestroyed {
 			asset_id: T::AssetId,
 			approvals_destroyed: u32,
 			approvals_remaining: u32,

@@ -399,12 +399,12 @@ fn partial_destroy_should_work() {
 		// cleaned up.
 		assert_noop!(Assets::finish_destroy(RuntimeOrigin::signed(1), 0), Error::<Test>::InUse);
 
-		System::assert_has_event(RuntimeEvent::Assets(crate::Event::DestroyedAccounts {
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::AccountsDestroyed {
 			asset_id: 0,
 			accounts_destroyed: 5,
 			accounts_remaining: 2,
 		}));
-		System::assert_has_event(RuntimeEvent::Assets(crate::Event::DestroyedApprovals {
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::ApprovalsDestroyed {
 			asset_id: 0,
 			approvals_destroyed: 0,
 			approvals_remaining: 0,
@@ -414,7 +414,7 @@ fn partial_destroy_should_work() {
 
 		// Second call to destroy on PartiallyDestroyed asset
 		assert_ok!(Assets::destroy_accounts(RuntimeOrigin::signed(1), 0));
-		System::assert_has_event(RuntimeEvent::Assets(crate::Event::DestroyedAccounts {
+		System::assert_has_event(RuntimeEvent::Assets(crate::Event::AccountsDestroyed {
 			asset_id: 0,
 			accounts_destroyed: 2,
 			accounts_remaining: 0,

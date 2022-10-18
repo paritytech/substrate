@@ -721,7 +721,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Freezer::died(id, &who);
 		}
 
-		Self::deposit_event(Event::DestroyedAccounts {
+		Self::deposit_event(Event::AccountsDestroyed {
 			asset_id: id,
 			accounts_destroyed: removed_accounts as u32,
 			accounts_remaining: remaining_accounts as u32,
@@ -754,7 +754,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						break
 					}
 				}
-				Self::deposit_event(Event::DestroyedApprovals {
+				Self::deposit_event(Event::ApprovalsDestroyed {
 					asset_id: id,
 					approvals_destroyed: removed_approvals as u32,
 					approvals_remaining: details.approvals as u32,
