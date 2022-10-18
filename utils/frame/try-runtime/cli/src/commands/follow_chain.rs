@@ -164,7 +164,7 @@ where
 			full_extensions(),
 		)?;
 
-		let consumed_weight = <sp_weight::Weight as Decode>::decode(&mut &*encoded_result)
+		let consumed_weight = <sp_weights::Weight as Decode>::decode(&mut &*encoded_result)
 			.map_err(|e| format!("failed to decode weight: {:?}", e))?;
 
 		let storage_changes = changes
