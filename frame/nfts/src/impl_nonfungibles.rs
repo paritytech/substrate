@@ -19,7 +19,8 @@
 
 use super::*;
 use frame_support::{
-	traits::{tokens::nonfungibles::*, Get},
+	ensure,
+	traits::{tokens::nonfungibles_v2::*, Get},
 	BoundedSlice,
 };
 use sp_runtime::{DispatchError, DispatchResult};
@@ -78,26 +79,40 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	///
 	/// Default implementation is that all items are transferable.
 	fn can_transfer(collection: &Self::CollectionId, item: &Self::ItemId) -> bool {
-		match (Collection::<T, I>::get(collection), Item::<T, I>::get(collection, item)) {
-			(Some(cd), Some(id)) if !cd.is_frozen && !id.is_frozen => true,
+		match (
+			CollectionConfigOf::<T, I>::get(collection),
+			ItemConfigOf::<T, I>::get(collection, item),
+		) {
+			(Some(cc), Some(ic))
+				if cc.is_setting_enabled(CollectionSetting::TransferableItems) &&
+					ic.is_setting_enabled(ItemSetting::Transferable) =>
+				true,
 			_ => false,
 		}
 	}
 }
 
-impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfig>
+	for Pallet<T, I>
+{
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
 	fn create_collection(
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
+		config: &CollectionConfig,
 	) -> DispatchResult {
+		// DepositRequired can be disabled by calling the force_create() only
+		ensure!(
+			!config.has_disabled_setting(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
 			admin.clone(),
+			*config,
 			T::CollectionDeposit::get(),
-			false,
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)
 	}
@@ -119,13 +134,16 @@ impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettings>
+	for Pallet<T, I>
+{
 	fn mint_into(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		who: &T::AccountId,
+		settings: &ItemSettings,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), |_| Ok(()))
+		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings), |_| Ok(()))
 	}
 
 	fn burn(

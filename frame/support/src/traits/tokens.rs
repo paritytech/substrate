@@ -23,7 +23,9 @@ pub mod fungibles;
 pub mod imbalance;
 mod misc;
 pub mod nonfungible;
+pub mod nonfungible_v2;
 pub mod nonfungibles;
+pub mod nonfungibles_v2;
 pub use imbalance::Imbalance;
 pub use misc::{
 	AssetId, Balance, BalanceConversion, BalanceStatus, DepositConsequence, ExistenceRequirement,

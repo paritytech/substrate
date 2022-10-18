@@ -18,16 +18,24 @@
 //! Various basic types for use in the Nfts pallet.
 
 use super::*;
+use crate::macros::*;
+use codec::EncodeLike;
+use enumflags2::{bitflags, BitFlags};
 use frame_support::{
 	pallet_prelude::{BoundedVec, MaxEncodedLen},
 	traits::Get,
 };
-use scale_info::TypeInfo;
+use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type CollectionDetailsFor<T, I> =
 	CollectionDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>>;
+pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
+	<T as SystemConfig>::AccountId,
+	Option<<T as SystemConfig>::BlockNumber>,
+	<T as Config<I>>::ApprovalsLimit,
+>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
@@ -39,6 +47,12 @@ pub(super) type ItemTipOf<T, I = ()> = ItemTip<
 	<T as SystemConfig>::AccountId,
 	BalanceOf<T, I>,
 >;
+
+pub trait Incrementable {
+	fn increment(&self) -> Self;
+	fn initial_value() -> Self;
+}
+impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
@@ -53,16 +67,12 @@ pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// The total balance deposited for the all storage associated with this collection.
 	/// Used by `destroy`.
 	pub(super) total_deposit: DepositBalance,
-	/// If `true`, then no deposit is needed to hold items of this collection.
-	pub(super) free_holding: bool,
 	/// The total number of outstanding items of this collection.
 	pub(super) items: u32,
 	/// The total number of outstanding item metadata of this collection.
 	pub(super) item_metadatas: u32,
 	/// The total number of attributes for this collection.
 	pub(super) attributes: u32,
-	/// Whether the collection is frozen for non-admin transfers.
-	pub(super) is_frozen: bool,
 }
 
 /// Witness data for the destroy transactions.
@@ -96,8 +106,6 @@ pub struct ItemDetails<AccountId, DepositBalance, Approvals> {
 	pub(super) owner: AccountId,
 	/// The approved transferrer of this item, if one is set.
 	pub(super) approvals: Approvals,
-	/// Whether the item can be transferred or not.
-	pub(super) is_frozen: bool,
 	/// The amount held in the pallet's default account for this item. Free-hold items will have
 	/// this as zero.
 	pub(super) deposit: DepositBalance,
@@ -115,8 +123,6 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// will generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: BoundedVec<u8, StringLimit>,
-	/// Whether the collection's metadata may be changed by a non Force origin.
-	pub(super) is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
@@ -131,8 +137,6 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	/// generally be either a JSON dump or the hash of some JSON which can be found on a
 	/// hash-addressable global publication system such as IPFS.
 	pub(super) data: BoundedVec<u8, StringLimit>,
-	/// Whether the item metadata may be changed by a non Force origin.
-	pub(super) is_frozen: bool,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -172,3 +176,128 @@ pub struct PriceWithDirection<Amount> {
 	/// A direction (send or receive).
 	pub(super) direction: PriceDirection,
 }
+
+/// Support for up to 64 user-enabled features on a collection.
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum CollectionSetting {
+	/// Items in this collection are transferable.
+	TransferableItems,
+	/// The metadata of this collection can be modified.
+	UnlockedMetadata,
+	/// Attributes of this collection can be modified.
+	UnlockedAttributes,
+	/// When this isn't set then the deposit is required to hold the items of this collection.
+	DepositRequired,
+}
+pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
+
+/// Wrapper type for `CollectionSettings` that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct CollectionConfig(pub CollectionSettings);
+
+impl CollectionConfig {
+	pub fn all_settings_enabled() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+	pub fn get_disabled_settings(&self) -> CollectionSettings {
+		self.0
+	}
+	pub fn is_setting_enabled(&self, setting: CollectionSetting) -> bool {
+		!self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_setting(&self, setting: CollectionSetting) -> bool {
+		self.get_disabled_settings().contains(setting)
+	}
+	pub fn disable_settings(settings: CollectionSettings) -> Self {
+		Self(settings)
+	}
+	pub fn enable_setting(&mut self, setting: CollectionSetting) {
+		self.0.remove(setting);
+	}
+	pub fn disable_setting(&mut self, setting: CollectionSetting) {
+		self.0.insert(setting);
+	}
+}
+impl_codec_bitflags!(CollectionConfig, u64, CollectionSetting);
+
+/// Support for up to 64 user-enabled features on an item.
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum ItemSetting {
+	/// This item is transferable.
+	Transferable,
+	/// The metadata of this item can be modified.
+	UnlockedMetadata,
+	/// Attributes of this item can be modified.
+	UnlockedAttributes,
+}
+pub(super) type ItemSettings = BitFlags<ItemSetting>;
+
+/// Wrapper type for `ItemSettings` that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct ItemConfig(pub ItemSettings);
+
+impl ItemConfig {
+	pub fn all_settings_enabled() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+	pub fn get_disabled_settings(&self) -> ItemSettings {
+		self.0
+	}
+	pub fn is_setting_enabled(&self, setting: ItemSetting) -> bool {
+		!self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_setting(&self, setting: ItemSetting) -> bool {
+		self.get_disabled_settings().contains(setting)
+	}
+	pub fn has_disabled_settings(&self) -> bool {
+		!self.get_disabled_settings().is_empty()
+	}
+	pub fn disable_settings(settings: ItemSettings) -> Self {
+		Self(settings)
+	}
+	pub fn enable_setting(&mut self, setting: ItemSetting) {
+		self.0.remove(setting);
+	}
+	pub fn disable_setting(&mut self, setting: ItemSetting) {
+		self.0.insert(setting);
+	}
+}
+impl_codec_bitflags!(ItemConfig, u64, ItemSetting);
+
+/// Support for up to 64 system-enabled features on a collection.
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum PalletFeature {
+	/// Enable/disable trading operations.
+	Trading,
+	/// Allow/disallow setting attributes.
+	Attributes,
+	/// Allow/disallow transfer approvals.
+	Approvals,
+	/// Allow/disallow atomic items swap.
+	Swaps,
+	/// Allow/disallow public mints.
+	PublicMints,
+}
+
+/// Wrapper type for `BitFlags<PalletFeature>` that implements `Codec`.
+#[derive(Default, RuntimeDebug)]
+pub struct PalletFeatures(pub BitFlags<PalletFeature>);
+
+impl PalletFeatures {
+	pub fn all_enabled() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+	pub fn disable(features: BitFlags<PalletFeature>) -> Self {
+		Self(features)
+	}
+	pub fn is_enabled(&self, feature: PalletFeature) -> bool {
+		!self.0.contains(feature)
+	}
+}
+impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);

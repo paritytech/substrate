@@ -36,12 +36,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(!collection_details.is_frozen, Error::<T, I>::Frozen);
-		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::Locked);
+		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
+
+		let collection_config = Self::get_collection_config(&collection)?;
+		ensure!(
+			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+			Error::<T, I>::ItemsNotTransferable
+		);
+
+		let item_config = Self::get_item_config(&collection, &item)?;
+		ensure!(
+			item_config.is_setting_enabled(ItemSetting::Transferable),
+			Error::<T, I>::ItemLocked
+		);
 
 		let mut details =
-			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		with_details(&collection_details, &mut details)?;
 
 		Account::<T, I>::remove((&details.owner, &collection, &item));
@@ -71,11 +81,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		owner: T::AccountId,
 		admin: T::AccountId,
+		config: CollectionConfig,
 		deposit: DepositBalanceOf<T, I>,
-		free_holding: bool,
 		event: Event<T, I>,
 	) -> DispatchResult {
-		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::InUse);
+		ensure!(!Collection::<T, I>::contains_key(collection), Error::<T, I>::CollectionIdInUse);
 
 		T::Currency::reserve(&owner, deposit)?;
 
@@ -87,16 +97,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				admin: admin.clone(),
 				freezer: admin,
 				total_deposit: deposit,
-				free_holding,
 				items: 0,
 				item_metadatas: 0,
 				attributes: 0,
-				is_frozen: false,
 			},
 		);
 
 		let next_id = collection.increment();
 
+		CollectionConfigOf::<T, I>::insert(&collection, config);
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
 		NextCollectionId::<T, I>::set(Some(next_id));
 
@@ -138,6 +147,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
+			CollectionConfigOf::<T, I>::remove(&collection);
+			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.items, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
@@ -153,6 +164,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 		owner: T::AccountId,
+		config: ItemConfig,
 		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
@@ -173,21 +185,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
 
-				let deposit = match collection_details.free_holding {
-					true => Zero::zero(),
-					false => T::ItemDeposit::get(),
+				let collection_config = Self::get_collection_config(&collection)?;
+				let deposit = match collection_config
+					.is_setting_enabled(CollectionSetting::DepositRequired)
+				{
+					true => T::ItemDeposit::get(),
+					false => Zero::zero(),
 				};
 				T::Currency::reserve(&collection_details.owner, deposit)?;
 				collection_details.total_deposit += deposit;
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
-				let details = ItemDetails {
-					owner,
-					approvals: ApprovalsOf::<T, I>::default(),
-					is_frozen: false,
-					deposit,
-				};
+
+				if let Ok(existing_config) = ItemConfigOf::<T, I>::try_get(&collection, &item) {
+					ensure!(existing_config == config, Error::<T, I>::InconsistentItemConfig);
+				} else {
+					ItemConfigOf::<T, I>::insert(&collection, &item, config);
+				}
+
+				let details =
+					ItemDetails { owner, approvals: ApprovalsOf::<T, I>::default(), deposit };
 				Item::<T, I>::insert(&collection, &item, details);
 				Ok(())
 			},
@@ -224,6 +242,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 		PendingSwapOf::<T, I>::remove(&collection, &item);
 
+		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
+		// then we keep the record and don't remove it
+		let config = Self::get_item_config(&collection, &item)?;
+		if !config.has_disabled_settings() {
+			ItemConfigOf::<T, I>::remove(&collection, &item);
+		}
+
 		Self::deposit_event(Event::Burned { collection, item, owner });
 		Ok(())
 	}
@@ -235,8 +260,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		price: Option<ItemPrice<T, I>>,
 		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
+		ensure!(
+			Self::is_pallet_feature_enabled(PalletFeature::Trading),
+			Error::<T, I>::MethodDisabled
+		);
+
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
+
+		let collection_config = Self::get_collection_config(&collection)?;
+		ensure!(
+			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+			Error::<T, I>::ItemsNotTransferable
+		);
+
+		let item_config = Self::get_item_config(&collection, &item)?;
+		ensure!(
+			item_config.is_setting_enabled(ItemSetting::Transferable),
+			Error::<T, I>::ItemLocked
+		);
 
 		if let Some(ref price) = price {
 			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
@@ -260,6 +302,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		buyer: T::AccountId,
 		bid_price: ItemPrice<T, I>,
 	) -> DispatchResult {
+		ensure!(
+			Self::is_pallet_feature_enabled(PalletFeature::Trading),
+			Error::<T, I>::MethodDisabled
+		);
+
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner != buyer, Error::<T, I>::NoPermission);
 

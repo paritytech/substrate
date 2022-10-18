@@ -24,6 +24,7 @@ use frame_benchmarking::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
 use frame_support::{
+	assert_ok,
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, Get},
 	BoundedVec,
@@ -42,8 +43,11 @@ fn create_collection<T: Config<I>, I: 'static>(
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Nfts::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
-		.is_ok());
+	assert_ok!(Nfts::<T, I>::force_create(
+		SystemOrigin::Root.into(),
+		caller_lookup.clone(),
+		CollectionConfig::all_settings_enabled()
+	));
 	(collection, caller, caller_lookup)
 }
 
@@ -53,13 +57,11 @@ fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, Account
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	assert!(Nfts::<T, I>::set_collection_metadata(
+	assert_ok!(Nfts::<T, I>::set_collection_metadata(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
-		false,
-	)
-	.is_ok());
+	));
 	(caller, caller_lookup)
 }
 
@@ -72,13 +74,13 @@ fn mint_item<T: Config<I>, I: 'static>(
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let item = T::Helper::item(index);
-	assert!(Nfts::<T, I>::mint(
+	assert_ok!(Nfts::<T, I>::mint(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		item,
 		caller_lookup.clone(),
-	)
-	.is_ok());
+		ItemConfig::all_settings_enabled(),
+	));
 	(item, caller, caller_lookup)
 }
 
@@ -90,14 +92,12 @@ fn add_item_metadata<T: Config<I>, I: 'static>(
 		whitelist_account!(caller);
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
-	assert!(Nfts::<T, I>::set_metadata(
+	assert_ok!(Nfts::<T, I>::set_metadata(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		item,
 		vec![0; T::StringLimit::get() as usize].try_into().unwrap(),
-		false,
-	)
-	.is_ok());
+	));
 	(caller, caller_lookup)
 }
 
@@ -110,14 +110,13 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 	}
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let key: BoundedVec<_, _> = vec![0; T::KeyLimit::get() as usize].try_into().unwrap();
-	assert!(Nfts::<T, I>::set_attribute(
+	assert_ok!(Nfts::<T, I>::set_attribute(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		Some(item),
 		key.clone(),
 		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
-	)
-	.is_ok());
+	));
 	(key, caller, caller_lookup)
 }
 
@@ -137,7 +136,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { admin };
+		let call = Call::<T, I>::create { admin, config: CollectionConfig::all_settings_enabled() };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -146,25 +145,19 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, caller_lookup, true)
+	}: _(SystemOrigin::Root, caller_lookup, CollectionConfig::all_settings_enabled())
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
 
 	destroy {
 		let n in 0 .. 1_000;
-		let m in 0 .. 1_000;
-		let a in 0 .. 1_000;
 
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		add_collection_metadata::<T, I>();
 		for i in 0..n {
 			mint_item::<T, I>(i as u16);
-		}
-		for i in 0..m {
 			add_item_metadata::<T, I>(T::Helper::item(i as u16));
-		}
-		for i in 0..a {
 			add_item_attribute::<T, I>(T::Helper::item(i as u16));
 		}
 		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();
@@ -176,7 +169,7 @@ benchmarks_instance_pallet! {
 	mint {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let item = T::Helper::item(0);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, ItemConfig::all_settings_enabled())
 	verify {
 		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
 	}
@@ -204,56 +197,51 @@ benchmarks_instance_pallet! {
 		let i in 0 .. 5_000;
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let items = (0..i).map(|x| mint_item::<T, I>(x as u16).0).collect::<Vec<_>>();
-		Nfts::<T, I>::force_item_status(
+		Nfts::<T, I>::force_collection_status(
 			SystemOrigin::Root.into(),
 			collection,
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup,
-			true,
-			false,
+			CollectionConfig(CollectionSetting::DepositRequired.into()),
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
 		assert_last_event::<T, I>(Event::Redeposited { collection, successful_items: items }.into());
 	}
 
-	freeze {
+	lock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::item(0))
 	verify {
-		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
+		assert_last_event::<T, I>(Event::ItemTransferLocked { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
 	}
 
-	thaw {
+	unlock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-		Nfts::<T, I>::freeze(
+		Nfts::<T, I>::lock_item_transfer(
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
 			item,
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed { collection, item }.into());
+		assert_last_event::<T, I>(Event::ItemTransferUnlocked { collection, item }.into());
 	}
 
-	freeze_collection {
+	lock_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-	}: _(SystemOrigin::Signed(caller.clone()), collection)
+		let lock_config = CollectionConfig(
+			CollectionSetting::TransferableItems |
+				CollectionSetting::UnlockedMetadata |
+				CollectionSetting::UnlockedAttributes,
+		);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_config)
 	verify {
-		assert_last_event::<T, I>(Event::CollectionFrozen { collection }.into());
-	}
-
-	thaw_collection {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let origin = SystemOrigin::Signed(caller.clone()).into();
-		Nfts::<T, I>::freeze_collection(origin, collection)?;
-	}: _(SystemOrigin::Signed(caller.clone()), collection)
-	verify {
-		assert_last_event::<T, I>(Event::CollectionThawed { collection }.into());
+		assert_last_event::<T, I>(Event::CollectionLocked { collection }.into());
 	}
 
 	transfer_ownership {
@@ -283,21 +271,30 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	force_item_status {
+	force_collection_status {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_item_status {
+		let call = Call::<T, I>::force_collection_status {
 			collection,
 			owner: caller_lookup.clone(),
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			free_holding: true,
-			is_frozen: false,
+			config: CollectionConfig(CollectionSetting::DepositRequired.into()),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::ItemStatusChanged { collection }.into());
+		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
+	}
+
+	lock_item_properties {
+		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let lock_metadata = true;
+		let lock_attributes = true;
+	}: _(SystemOrigin::Signed(caller), collection, item, lock_metadata, lock_attributes)
+	verify {
+		assert_last_event::<T, I>(Event::ItemPropertiesLocked { collection, item, lock_metadata, lock_attributes }.into());
 	}
 
 	set_attribute {
@@ -327,9 +324,9 @@ benchmarks_instance_pallet! {
 
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller), collection, item, data.clone(), false)
+	}: _(SystemOrigin::Signed(caller), collection, item, data.clone())
 	verify {
-		assert_last_event::<T, I>(Event::MetadataSet { collection, item, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::MetadataSet { collection, item, data }.into());
 	}
 
 	clear_metadata {
@@ -345,9 +342,9 @@ benchmarks_instance_pallet! {
 		let data: BoundedVec<_, _> = vec![0u8; T::StringLimit::get() as usize].try_into().unwrap();
 
 		let (collection, caller, _) = create_collection::<T, I>();
-	}: _(SystemOrigin::Signed(caller), collection, data.clone(), false)
+	}: _(SystemOrigin::Signed(caller), collection, data.clone())
 	verify {
-		assert_last_event::<T, I>(Event::CollectionMetadataSet { collection, data, is_frozen: false }.into());
+		assert_last_event::<T, I>(Event::CollectionMetadataSet { collection, data }.into());
 	}
 
 	clear_collection_metadata {
