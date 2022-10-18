@@ -18,7 +18,7 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ElectionProviderBase,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
 	ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
@@ -1598,7 +1598,7 @@ impl<T: Config> Pallet<T> {
 
 		ensure!(
 			ValidatorCount::<T>::get() <=
-				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				<T::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners::get(),
 			"validator count exceeded election max winners"
 		);
 		Ok(())
