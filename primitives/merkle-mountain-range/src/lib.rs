@@ -437,15 +437,6 @@ impl Error {
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
-		/// Verify MMR proof against given root hash.
-		///
-		/// Note this function does not require any on-chain storage - the
-		/// proof is verified against given MMR root hash.
-		///
-		/// The leaf data is expected to be encoded in its compact form.
-		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
-			-> Result<(), Error>;
-
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 
@@ -463,14 +454,14 @@ sp_api::decl_runtime_apis! {
 		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
 		fn verify_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>) -> Result<(), Error>;
 
-		/// Verify MMR proof against given root hash or a batch of leaves.
+		/// Verify MMR proof against given root hash for a batch of leaves.
 		///
 		/// Note this function does not require any on-chain storage - the
 		/// proof is verified against given MMR root hash.
 		///
 		/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
 		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
-		fn verify_batch_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
+		fn verify_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
 			-> Result<(), Error>;
 	}
 }

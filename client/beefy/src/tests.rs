@@ -246,14 +246,6 @@ macro_rules! create_test_api {
 				}
 
 				impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
-					fn verify_proof_stateless(
-						_root: MmrRootHash,
-						_leaf: EncodableOpaqueLeaf,
-						_proof: Proof<MmrRootHash>
-					) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
 					fn mmr_root() -> Result<MmrRootHash, MmrError> {
 						Ok($mmr_root)
 					}
@@ -269,7 +261,7 @@ macro_rules! create_test_api {
 						unimplemented!()
 					}
 
-					fn verify_batch_proof_stateless(
+					fn verify_proof_stateless(
 						_root: MmrRootHash,
 						_leaves: Vec<EncodableOpaqueLeaf>,
 						_proof: BatchProof<MmrRootHash>
