@@ -38,9 +38,11 @@ use crate::{
 	transport, ChainSyncInterface, ReputationChange,
 };
 
+use codec::Encode;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
+	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
@@ -264,6 +266,11 @@ where
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
+		let block_request_protocol_name = params.block_request_protocol_config.name.clone();
+		let state_request_protocol_name = params.state_request_protocol_config.name.clone();
+		let warp_sync_protocol_name =
+			params.warp_sync_protocol_config.as_ref().map(|c| c.name.clone());
+
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
@@ -455,6 +462,9 @@ where
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
+			block_request_protocol_name,
+			state_request_protocol_name,
+			warp_sync_protocol_name,
 			_marker: Default::default(),
 		})
 	}
@@ -1273,6 +1283,15 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
+	/// Protocol name used to send out block requests via
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
+	block_request_protocol_name: ProtocolName,
+	/// Protocol name used to send out state requests via
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
+	state_request_protocol_name: ProtocolName,
+	/// Protocol name used to send out warp sync requests via
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
+	warp_sync_protocol_name: Option<ProtocolName>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -1451,6 +1470,84 @@ where
 					}
 					this.import_queue.import_justifications(origin, hash, nb, justifications);
 				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match this
+						.network_service
+						.behaviour()
+						.user_protocol()
+						.encode_block_request(&request)
+					{
+						Ok(data) => {
+							this.network_service.behaviour_mut().send_request(
+								&target,
+								&this.block_request_protocol_name,
+								data,
+								pending_response,
+								IfDisconnected::ImmediateError,
+							);
+						},
+						Err(err) => {
+							log::warn!(
+								target: "sync",
+								"Failed to encode block request {:?}: {:?}",
+								request, err
+							);
+						},
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::StateRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match this
+						.network_service
+						.behaviour()
+						.user_protocol()
+						.encode_state_request(&request)
+					{
+						Ok(data) => {
+							this.network_service.behaviour_mut().send_request(
+								&target,
+								&this.state_request_protocol_name,
+								data,
+								pending_response,
+								IfDisconnected::ImmediateError,
+							);
+						},
+						Err(err) => {
+							log::warn!(
+								target: "sync",
+								"Failed to encode state request {:?}: {:?}",
+								request, err
+							);
+						},
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::WarpSyncRequest {
+					target,
+					request,
+					pending_response,
+				})) => match &this.warp_sync_protocol_name {
+					Some(name) => this.network_service.behaviour_mut().send_request(
+						&target,
+						&name,
+						request.encode(),
+						pending_response,
+						IfDisconnected::ImmediateError,
+					),
+					None => {
+						log::warn!(
+							target: "sync",
+							"Trying to send warp sync request when no protocol is configured {:?}",
+							request,
+						);
+					},
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
 					result,
@@ -1526,14 +1623,58 @@ where
 							},
 						}
 					},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::ReputationChanges {
+					peer,
+					changes,
+				})) =>
+					for change in changes {
+						this.network_service.behaviour().user_protocol().report_peer(peer, change);
+					},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
+					peer_id,
+					info:
+						IdentifyInfo {
+							protocol_version,
+							agent_version,
+							mut listen_addrs,
+							protocols,
+							..
+						},
+				})) => {
+					if listen_addrs.len() > 30 {
+						debug!(
+							target: "sub-libp2p",
+							"Node {:?} has reported more than 30 addresses; it is identified by {:?} and {:?}",
+							peer_id, protocol_version, agent_version
+						);
+						listen_addrs.truncate(30);
+					}
+					for addr in listen_addrs {
+						this.network_service
+							.behaviour_mut()
+							.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
+					}
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id))) => {
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
-					protocol,
+					protocols,
 				))) =>
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics
-							.kademlia_random_queries_total
-							.with_label_values(&[protocol.as_ref()])
-							.inc();
+						for protocol in protocols {
+							metrics
+								.kademlia_random_queries_total
+								.with_label_values(&[protocol.as_ref()])
+								.inc();
+						}
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
@@ -1653,6 +1794,9 @@ where
 					}
 
 					this.event_streams.send(Event::Dht(event));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::None)) => {
+					// Ignored event from lower layers.
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,
