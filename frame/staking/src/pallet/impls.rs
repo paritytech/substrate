@@ -1593,6 +1593,25 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add_era_stakers(
+		current_era: &EraIndex,
+		stash: &T::AccountId,
+		exposures: Vec<(Self::AccountId, Self::Balance)>,
+	) {
+		let others = exposures
+			.map(|(who, value)| pallet_staking::IndividualExposure { who, value })
+			.collect::<Vec<_>>();
+		let exposure =
+			pallet_staking::Exposure { total: Default::default(), own: Default::default(), others };
+		Self::add_era_stakers(current_era.clone(), stash.clone(), &exposure)
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_current_era(era: EraIndex) {
+		CurrentEra::<T>::put(era);
+	}
 }
 
 #[cfg(any(test, feature = "try-runtime"))]
