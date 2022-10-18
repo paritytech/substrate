@@ -42,12 +42,12 @@ pub struct RunCmd {
 	/// The node will be started with the authority role and actively
 	/// participate in any consensus task that it can (e.g. depending on
 	/// availability of local keys).
-	#[clap(long)]
+	#[arg(long)]
 	pub validator: bool,
 
 	/// Disable GRANDPA voter when running in validator mode, otherwise disable the GRANDPA
 	/// observer.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_grandpa: bool,
 
 	/// Listen to all RPC interfaces.
@@ -56,13 +56,13 @@ pub struct RunCmd {
 	/// proxy server to filter out dangerous methods. More details:
 	/// <https://docs.substrate.io/main-docs/build/custom-rpc/#public-rpcs>.
 	/// Use `--unsafe-rpc-external` to suppress the warning if you understand the risks.
-	#[clap(long)]
+	#[arg(long)]
 	pub rpc_external: bool,
 
 	/// Listen to all RPC interfaces.
 	///
 	/// Same as `--rpc-external`.
-	#[clap(long)]
+	#[arg(long)]
 	pub unsafe_rpc_external: bool,
 
 	/// RPC methods to expose.
@@ -71,12 +71,12 @@ pub struct RunCmd {
 	/// - `safe`: Exposes only a safe subset of RPC methods, denying unsafe RPC methods.
 	/// - `auto`: Acts as `safe` if RPC is served externally, e.g. when `--{rpc,ws}-external` is
 	///   passed, otherwise acts as `unsafe`.
-	#[clap(
+	#[arg(
 		long,
 		value_name = "METHOD SET",
-		arg_enum,
+		value_enum,
 		ignore_case = true,
-		default_value = "auto",
+		default_value_t = RpcMethods::Auto,
 		verbatim_doc_comment
 	)]
 	pub rpc_methods: RpcMethods,
@@ -87,59 +87,59 @@ pub struct RunCmd {
 	/// proxy server to filter out dangerous methods. More details:
 	/// <https://docs.substrate.io/main-docs/build/custom-rpc/#public-rpcs>.
 	/// Use `--unsafe-ws-external` to suppress the warning if you understand the risks.
-	#[clap(long)]
+	#[arg(long)]
 	pub ws_external: bool,
 
 	/// Listen to all Websocket interfaces.
 	///
 	/// Same as `--ws-external` but doesn't warn you about it.
-	#[clap(long)]
+	#[arg(long)]
 	pub unsafe_ws_external: bool,
 
 	/// DEPRECATED, this has no affect anymore. Use `rpc_max_request_size` or
 	/// `rpc_max_response_size` instead.
-	#[clap(long)]
+	#[arg(long)]
 	pub rpc_max_payload: Option<usize>,
 
 	/// Set the the maximum RPC request payload size for both HTTP and WS in megabytes.
 	/// Default is 15MiB.
-	#[clap(long)]
+	#[arg(long)]
 	pub rpc_max_request_size: Option<usize>,
 
 	/// Set the the maximum RPC response payload size for both HTTP and WS in megabytes.
 	/// Default is 15MiB.
-	#[clap(long)]
+	#[arg(long)]
 	pub rpc_max_response_size: Option<usize>,
 
 	/// Set the the maximum concurrent subscriptions per connection.
 	/// Default is 1024.
-	#[clap(long)]
+	#[arg(long)]
 	pub rpc_max_subscriptions_per_connection: Option<usize>,
 
 	/// Expose Prometheus exporter on all interfaces.
 	///
 	/// Default is local.
-	#[clap(long)]
+	#[arg(long)]
 	pub prometheus_external: bool,
 
 	/// DEPRECATED, IPC support has been removed.
-	#[clap(long, value_name = "PATH")]
+	#[arg(long, value_name = "PATH")]
 	pub ipc_path: Option<String>,
 
 	/// Specify HTTP RPC server TCP port.
-	#[clap(long, value_name = "PORT")]
+	#[arg(long, value_name = "PORT")]
 	pub rpc_port: Option<u16>,
 
 	/// Specify WebSockets RPC server TCP port.
-	#[clap(long, value_name = "PORT")]
+	#[arg(long, value_name = "PORT")]
 	pub ws_port: Option<u16>,
 
 	/// Maximum number of WS RPC server connections.
-	#[clap(long, value_name = "COUNT")]
+	#[arg(long, value_name = "COUNT")]
 	pub ws_max_connections: Option<usize>,
 
 	/// DEPRECATED, this has no affect anymore. Use `rpc_max_response_size` instead.
-	#[clap(long)]
+	#[arg(long)]
 	pub ws_max_out_buffer_capacity: Option<usize>,
 
 	/// Specify browser Origins allowed to access the HTTP & WS RPC servers.
@@ -148,29 +148,29 @@ pub struct RunCmd {
 	/// value). Value of `all` will disable origin validation. Default is to
 	/// allow localhost and <https://polkadot.js.org> origins. When running in
 	/// --dev mode the default is to allow all origins.
-	#[clap(long, value_name = "ORIGINS", parse(from_str = parse_cors))]
+	#[arg(long, value_name = "ORIGINS", value_parser = parse_cors)]
 	pub rpc_cors: Option<Cors>,
 
 	/// Specify Prometheus exporter TCP Port.
-	#[clap(long, value_name = "PORT")]
+	#[arg(long, value_name = "PORT")]
 	pub prometheus_port: Option<u16>,
 
 	/// Do not expose a Prometheus exporter endpoint.
 	///
 	/// Prometheus metric endpoint is enabled by default.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_prometheus: bool,
 
 	/// The human-readable name for this node.
 	///
 	/// The node name will be reported to the telemetry server, if enabled.
-	#[clap(long, value_name = "NAME")]
+	#[arg(long, value_name = "NAME")]
 	pub name: Option<String>,
 
 	/// Disable connecting to the Substrate telemetry server.
 	///
 	/// Telemetry is on by default on global chains.
-	#[clap(long)]
+	#[arg(long)]
 	pub no_telemetry: bool,
 
 	/// The URL of the telemetry server to connect to.
@@ -179,7 +179,7 @@ pub struct RunCmd {
 	/// telemetry endpoints. Verbosity levels range from 0-9, with 0 denoting
 	/// the least verbosity.
 	/// Expected format is 'URL VERBOSITY', e.g. `--telemetry-url 'wss://foo/bar 0'`.
-	#[clap(long = "telemetry-url", value_name = "URL VERBOSITY", parse(try_from_str = parse_telemetry_endpoints))]
+	#[arg(long = "telemetry-url", value_name = "URL VERBOSITY", value_parser = parse_telemetry_endpoints)]
 	pub telemetry_endpoints: Vec<(String, u8)>,
 
 	#[allow(missing_docs)]
@@ -203,40 +203,40 @@ pub struct RunCmd {
 	pub pool_config: TransactionPoolParams,
 
 	/// Shortcut for `--name Alice --validator` with session keys for `Alice` added to keystore.
-	#[clap(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["bob", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub alice: bool,
 
 	/// Shortcut for `--name Bob --validator` with session keys for `Bob` added to keystore.
-	#[clap(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "charlie", "dave", "eve", "ferdie", "one", "two"])]
 	pub bob: bool,
 
 	/// Shortcut for `--name Charlie --validator` with session keys for `Charlie` added to
 	/// keystore.
-	#[clap(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "dave", "eve", "ferdie", "one", "two"])]
 	pub charlie: bool,
 
 	/// Shortcut for `--name Dave --validator` with session keys for `Dave` added to keystore.
-	#[clap(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "eve", "ferdie", "one", "two"])]
 	pub dave: bool,
 
 	/// Shortcut for `--name Eve --validator` with session keys for `Eve` added to keystore.
-	#[clap(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "ferdie", "one", "two"])]
 	pub eve: bool,
 
 	/// Shortcut for `--name Ferdie --validator` with session keys for `Ferdie` added to keystore.
-	#[clap(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "one", "two"])]
 	pub ferdie: bool,
 
 	/// Shortcut for `--name One --validator` with session keys for `One` added to keystore.
-	#[clap(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "two"])]
 	pub one: bool,
 
 	/// Shortcut for `--name Two --validator` with session keys for `Two` added to keystore.
-	#[clap(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
+	#[arg(long, conflicts_with_all = &["alice", "bob", "charlie", "dave", "eve", "ferdie", "one"])]
 	pub two: bool,
 
 	/// Enable authoring even when offline.
-	#[clap(long)]
+	#[arg(long)]
 	pub force_authoring: bool,
 
 	#[allow(missing_docs)]
@@ -246,11 +246,11 @@ pub struct RunCmd {
 	/// The size of the instances cache for each runtime.
 	///
 	/// The default value is 8 and the values higher than 256 are ignored.
-	#[clap(long)]
+	#[arg(long)]
 	pub max_runtime_instances: Option<usize>,
 
 	/// Maximum number of different runtimes that can be cached.
-	#[clap(long, default_value = "2")]
+	#[arg(long, default_value_t = 2)]
 	pub runtime_cache_size: u8,
 
 	/// Run a temporary node.
@@ -262,7 +262,7 @@ pub struct RunCmd {
 	/// which includes: database, node key and keystore.
 	///
 	/// When `--dev` is given and no explicit `--base-path`, this option is implied.
-	#[clap(long, conflicts_with = "base-path")]
+	#[arg(long, conflicts_with = "base_path")]
 	pub tmp: bool,
 }
 
@@ -597,7 +597,7 @@ impl From<Cors> for Option<Vec<String>> {
 }
 
 /// Parse cors origins.
-fn parse_cors(s: &str) -> Cors {
+fn parse_cors(s: &str) -> Result<Cors> {
 	let mut is_all = false;
 	let mut origins = Vec::new();
 	for part in s.split(',') {
@@ -611,9 +611,9 @@ fn parse_cors(s: &str) -> Cors {
 	}
 
 	if is_all {
-		Cors::All
+		Ok(Cors::All)
 	} else {
-		Cors::List(origins)
+		Ok(Cors::List(origins))
 	}
 }
 

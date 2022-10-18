@@ -33,11 +33,11 @@ use std::{fmt::Debug, str::FromStr};
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
-	#[clap(long)]
+	#[arg(long)]
 	overwrite_wasm_code: bool,
 
 	/// If set the state root check is disabled.
-	#[clap(long)]
+	#[arg(long)]
 	no_state_root_check: bool,
 
 	/// Which try-state targets to execute when running this command.
@@ -49,17 +49,16 @@ pub struct ExecuteBlockCmd {
 	///   `Staking, System`).
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
-	#[clap(long, default_value = "none")]
+	#[arg(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
 
 	/// The block hash at which to fetch the block.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = crate::parse::hash)
+		value_parser = crate::parse::hash
 	)]
 	block_at: Option<String>,
 
@@ -67,10 +66,9 @@ pub struct ExecuteBlockCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = crate::parse::url)
+		value_parser = crate::parse::url
 	)]
 	block_ws_uri: Option<String>,
 
@@ -79,7 +77,7 @@ pub struct ExecuteBlockCmd {
 	/// For this command only, if the `live` is used, then state of the parent block is fetched.
 	///
 	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	state: State,
 }
 

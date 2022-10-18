@@ -124,7 +124,7 @@ fn build_test_full_node(
 		protocol_config
 	};
 
-	let chain_sync = ChainSync::new(
+	let (chain_sync, chain_sync_service) = ChainSync::new(
 		match network_config.sync_mode {
 			config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -172,6 +172,7 @@ fn build_test_full_node(
 		fork_id,
 		import_queue,
 		chain_sync: Box::new(chain_sync),
+		chain_sync_service,
 		metrics_registry: None,
 		block_request_protocol_config,
 		state_request_protocol_config,
