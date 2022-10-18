@@ -79,8 +79,8 @@ fn test_setup_works() {
 		let reward_account = Pools::create_reward_account(last_pool);
 
 		// the bonded_account should be bonded by the depositor's funds.
-		assert_eq!(StakingMock::active_stake(&bonded_account).unwrap(), 10);
-		assert_eq!(StakingMock::total_stake(&bonded_account).unwrap(), 10);
+		assert_eq!(StakingMock::stake(&bonded_account).map(|s| s.active).unwrap(), 10);
+		assert_eq!(StakingMock::stake(&bonded_account).map(|l| l.total).unwrap(), 10);
 
 		// but not nominating yet.
 		assert!(Nominations::get().is_none());
@@ -2368,7 +2368,7 @@ mod unbond {
 				}
 			);
 
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
+			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(), 0);
 		});
 	}
 
@@ -2415,7 +2415,10 @@ mod unbond {
 					]
 				);
 
-				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
+				assert_eq!(
+					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
+					94
+				);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(40).unwrap().unbonding_eras,
 					member_unbonding_eras!(0 + 3 => 6)
@@ -2443,7 +2446,10 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
+				assert_eq!(
+					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
+					2
+				);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(550).unwrap().unbonding_eras,
 					member_unbonding_eras!(0 + 3 => 92)
@@ -2486,7 +2492,10 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
+				assert_eq!(
+					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
+					0
+				);
 
 				assert_eq!(Balances::free_balance(&550), 550 + 550 + 92);
 				assert_eq!(
@@ -2614,7 +2623,10 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 10);
+				assert_eq!(
+					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
+					10
+				);
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2724,7 +2736,7 @@ mod unbond {
 					}
 				}
 			);
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
+			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(), 0);
 			assert_eq!(*UnbondingBalanceMap::get().get(&default_bonded_account()).unwrap(), 10);
 		});
 	}
@@ -3083,18 +3095,18 @@ mod pool_withdraw_unbonded {
 	fn pool_withdraw_unbonded_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given 10 unbond'ed directly against the pool account
-			assert_ok!(StakingMock::unbond(default_bonded_account(), 5));
+			assert_ok!(StakingMock::unbond(&default_bonded_account(), 5));
 			// and the pool account only has 10 balance
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(10));
+			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active), Ok(5));
+			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.total), Ok(10));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 
 			// When
 			assert_ok!(Pools::pool_withdraw_unbonded(RuntimeOrigin::signed(10), 1, 0));
 
 			// Then there unbonding balance is no longer locked
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(5));
+			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active), Ok(5));
+			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.total), Ok(5));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 		});
 	}
@@ -3141,7 +3153,8 @@ mod withdraw_unbonded {
 					);
 					StakingMock::set_bonded_balance(
 						default_bonded_account(),
-						StakingMock::active_stake(&default_bonded_account()).unwrap() / 2,
+						StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap() /
+							2,
 					);
 				};
 
@@ -3270,7 +3283,7 @@ mod withdraw_unbonded {
 				// current bond is 600, we slash it all to 300.
 				StakingMock::set_bonded_balance(default_bonded_account(), 300);
 				Balances::make_free_balance_be(&default_bonded_account(), 300);
-				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(300));
+				assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.total), Ok(300));
 
 				assert_ok!(fully_unbond_permissioned(40));
 				assert_ok!(fully_unbond_permissioned(550));
@@ -4074,12 +4087,15 @@ mod create {
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!PoolMembers::<Runtime>::contains_key(11));
-			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
+			assert_err!(
+				StakingMock::stake(&next_pool_stash).map(|s| s.active),
+				DispatchError::Other("balance not found")
+			);
 
-			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
+			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
-				StakingMock::minimum_bond(),
+				StakingMock::minimum_nominator_bond(),
 				123,
 				456,
 				789
@@ -4090,7 +4106,7 @@ mod create {
 				PoolMembers::<Runtime>::get(11).unwrap(),
 				PoolMember {
 					pool_id: 2,
-					points: StakingMock::minimum_bond(),
+					points: StakingMock::minimum_nominator_bond(),
 					..Default::default()
 				}
 			);
@@ -4099,7 +4115,7 @@ mod create {
 				BondedPool {
 					id: 2,
 					inner: BondedPoolInner {
-						points: StakingMock::minimum_bond(),
+						points: StakingMock::minimum_nominator_bond(),
 						member_counter: 1,
 						state: PoolState::Open,
 						roles: PoolRoles {
@@ -4112,8 +4128,8 @@ mod create {
 				}
 			);
 			assert_eq!(
-				StakingMock::active_stake(&next_pool_stash).unwrap(),
-				StakingMock::minimum_bond()
+				StakingMock::stake(&next_pool_stash).map(|s| s.active).unwrap(),
+				StakingMock::minimum_nominator_bond()
 			);
 			assert_eq!(
 				RewardPools::<Runtime>::get(2).unwrap(),
@@ -4142,7 +4158,7 @@ mod create {
 
 			// Given
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-			assert_eq!(StakingMock::minimum_bond(), 10);
+			assert_eq!(StakingMock::minimum_nominator_bond(), 10);
 
 			// Then
 			assert_noop!(
