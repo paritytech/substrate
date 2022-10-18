@@ -81,7 +81,7 @@ fn verify_with_validator_set<Block: BlockT>(
 #[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
-		known_payload_ids, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
+		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
 	};
 	use substrate_test_runtime_client::runtime::Block;
 
@@ -94,7 +94,7 @@ pub(crate) mod tests {
 		keys: &[Keyring],
 	) -> BeefyVersionedFinalityProof<Block> {
 		let commitment = Commitment {
-			payload: Payload::new(known_payload_ids::MMR_ROOT_ID, vec![]),
+			payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 			block_number: block_num,
 			validator_set_id: validator_set.id(),
 		};

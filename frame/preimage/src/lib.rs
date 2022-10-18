@@ -30,6 +30,7 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
@@ -37,15 +38,18 @@ mod tests;
 pub mod weights;
 
 use sp_runtime::traits::{BadOrigin, Hash, Saturating};
-use sp_std::prelude::*;
+use sp_std::{borrow::Cow, prelude::*};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::Pays,
 	ensure,
 	pallet_prelude::Get,
-	traits::{Currency, PreimageProvider, PreimageRecipient, ReservableCurrency},
-	BoundedVec,
+	traits::{
+		Currency, Defensive, FetchResult, Hash as PreimageHash, PreimageProvider,
+		PreimageRecipient, QueryPreimage, ReservableCurrency, StorePreimage,
+	},
+	BoundedSlice, BoundedVec,
 };
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
@@ -59,19 +63,26 @@ pub use pallet::*;
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, RuntimeDebug)]
 pub enum RequestStatus<AccountId, Balance> {
 	/// The associated preimage has not yet been requested by the system. The given deposit (if
-	/// some) is being held until either it becomes requested or the user retracts the primage.
-	Unrequested(Option<(AccountId, Balance)>),
+	/// some) is being held until either it becomes requested or the user retracts the preimage.
+	Unrequested { deposit: (AccountId, Balance), len: u32 },
 	/// There are a non-zero number of outstanding requests for this hash by this chain. If there
-	/// is a preimage registered, then it may be removed iff this counter becomes zero.
-	Requested(u32),
+	/// is a preimage registered, then `len` is `Some` and it may be removed iff this counter
+	/// becomes zero.
+	Requested { deposit: Option<(AccountId, Balance)>, count: u32, len: Option<u32> },
 }
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+/// Maximum size of preimage we can store is 4mb.
+const MAX_SIZE: u32 = 4 * 1024 * 1024;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -88,9 +99,6 @@ pub mod pallet {
 		/// manage existing preimages.
 		type ManagerOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// Max size allowed for a preimage.
-		type MaxSize: Get<u32>;
-
 		/// The base deposit for placing a preimage on chain.
 		type BaseDeposit: Get<BalanceOf<Self>>;
 
@@ -100,6 +108,7 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::event]
@@ -116,7 +125,7 @@ pub mod pallet {
 	#[pallet::error]
 	pub enum Error<T> {
 		/// Preimage is too large to store on-chain.
-		TooLarge,
+		TooBig,
 		/// Preimage has already been noted on-chain.
 		AlreadyNoted,
 		/// The user is not authorized to perform this action.
@@ -134,10 +143,9 @@ pub mod pallet {
 	pub(super) type StatusFor<T: Config> =
 		StorageMap<_, Identity, T::Hash, RequestStatus<T::AccountId, BalanceOf<T>>>;
 
-	/// The preimages stored by this pallet.
 	#[pallet::storage]
 	pub(super) type PreimageFor<T: Config> =
-		StorageMap<_, Identity, T::Hash, BoundedVec<u8, T::MaxSize>>;
+		StorageMap<_, Identity, (T::Hash, u32), BoundedVec<u8, ConstU32<MAX_SIZE>>>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -150,9 +158,7 @@ pub mod pallet {
 			// We accept a signed origin which will pay a deposit, or a root origin where a deposit
 			// is not taken.
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
-			let bounded_vec =
-				BoundedVec::<u8, T::MaxSize>::try_from(bytes).map_err(|()| Error::<T>::TooLarge)?;
-			let system_requested = Self::note_bytes(bounded_vec, maybe_sender.as_ref())?;
+			let (system_requested, _) = Self::note_bytes(bytes.into(), maybe_sender.as_ref())?;
 			if system_requested || maybe_sender.is_none() {
 				Ok(Pays::No.into())
 			} else {
@@ -161,6 +167,11 @@ pub mod pallet {
 		}
 
 		/// Clear an unrequested preimage from the runtime storage.
+		///
+		/// If `len` is provided, then it will be a much cheaper operation.
+		///
+		/// - `hash`: The hash of the preimage to be removed from the store.
+		/// - `len`: The length of the preimage of `hash`.
 		#[pallet::weight(T::WeightInfo::unnote_preimage())]
 		pub fn unnote_preimage(origin: OriginFor<T>, hash: T::Hash) -> DispatchResult {
 			let maybe_sender = Self::ensure_signed_or_manager(origin)?;
@@ -203,41 +214,46 @@ impl<T: Config> Pallet<T> {
 
 	/// Store some preimage on chain.
 	///
+	/// If `maybe_depositor` is `None` then it is also requested. If `Some`, then it is not.
+	///
 	/// We verify that the preimage is within the bounds of what the pallet supports.
 	///
 	/// If the preimage was requested to be uploaded, then the user pays no deposits or tx fees.
 	fn note_bytes(
-		preimage: BoundedVec<u8, T::MaxSize>,
+		preimage: Cow<[u8]>,
 		maybe_depositor: Option<&T::AccountId>,
-	) -> Result<bool, DispatchError> {
+	) -> Result<(bool, T::Hash), DispatchError> {
 		let hash = T::Hashing::hash(&preimage);
-		ensure!(!PreimageFor::<T>::contains_key(hash), Error::<T>::AlreadyNoted);
+		let len = preimage.len() as u32;
+		ensure!(len <= MAX_SIZE, Error::<T>::TooBig);
 
-		// We take a deposit only if there is a provided depositor, and the preimage was not
+		// We take a deposit only if there is a provided depositor and the preimage was not
 		// previously requested. This also allows the tx to pay no fee.
-		let was_requested = match (StatusFor::<T>::get(hash), maybe_depositor) {
-			(Some(RequestStatus::Requested(..)), _) => true,
-			(Some(RequestStatus::Unrequested(..)), _) =>
+		let status = match (StatusFor::<T>::get(hash), maybe_depositor) {
+			(Some(RequestStatus::Requested { count, deposit, .. }), _) =>
+				RequestStatus::Requested { count, deposit, len: Some(len) },
+			(Some(RequestStatus::Unrequested { .. }), Some(_)) =>
 				return Err(Error::<T>::AlreadyNoted.into()),
-			(None, None) => {
-				StatusFor::<T>::insert(hash, RequestStatus::Unrequested(None));
-				false
-			},
+			(Some(RequestStatus::Unrequested { len, deposit }), None) =>
+				RequestStatus::Requested { deposit: Some(deposit), count: 1, len: Some(len) },
+			(None, None) => RequestStatus::Requested { count: 1, len: Some(len), deposit: None },
 			(None, Some(depositor)) => {
 				let length = preimage.len() as u32;
 				let deposit = T::BaseDeposit::get()
 					.saturating_add(T::ByteDeposit::get().saturating_mul(length.into()));
 				T::Currency::reserve(depositor, deposit)?;
-				let status = RequestStatus::Unrequested(Some((depositor.clone(), deposit)));
-				StatusFor::<T>::insert(hash, status);
-				false
+				RequestStatus::Unrequested { deposit: (depositor.clone(), deposit), len }
 			},
 		};
+		let was_requested = matches!(status, RequestStatus::Requested { .. });
+		StatusFor::<T>::insert(hash, status);
 
-		PreimageFor::<T>::insert(hash, preimage);
+		let _ = Self::insert(&hash, preimage)
+			.defensive_proof("Unable to insert. Logic error in `note_bytes`?");
+
 		Self::deposit_event(Event::Noted { hash });
 
-		Ok(was_requested)
+		Ok((was_requested, hash))
 	}
 
 	// This function will add a hash to the list of requested preimages.
@@ -245,25 +261,23 @@ impl<T: Config> Pallet<T> {
 	// If the preimage already exists before the request is made, the deposit for the preimage is
 	// returned to the user, and removed from their management.
 	fn do_request_preimage(hash: &T::Hash) {
-		let count = StatusFor::<T>::get(hash).map_or(1, |x| match x {
-			RequestStatus::Requested(mut count) => {
-				count.saturating_inc();
-				count
-			},
-			RequestStatus::Unrequested(None) => 1,
-			RequestStatus::Unrequested(Some((owner, deposit))) => {
-				// Return the deposit - the preimage now has outstanding requests.
-				T::Currency::unreserve(&owner, deposit);
-				1
-			},
-		});
-		StatusFor::<T>::insert(hash, RequestStatus::Requested(count));
+		let (count, len, deposit) =
+			StatusFor::<T>::get(hash).map_or((1, None, None), |x| match x {
+				RequestStatus::Requested { mut count, len, deposit } => {
+					count.saturating_inc();
+					(count, len, deposit)
+				},
+				RequestStatus::Unrequested { deposit, len } => (1, Some(len), Some(deposit)),
+			});
+		StatusFor::<T>::insert(hash, RequestStatus::Requested { count, len, deposit });
 		if count == 1 {
 			Self::deposit_event(Event::Requested { hash: *hash });
 		}
 	}
 
 	// Clear a preimage from the storage of the chain, returning any deposit that may be reserved.
+	//
+	// If `len` is provided, it will be a much cheaper operation.
 	//
 	// If `maybe_owner` is provided, we verify that it is the correct owner before clearing the
 	// data.
@@ -272,51 +286,101 @@ impl<T: Config> Pallet<T> {
 		maybe_check_owner: Option<T::AccountId>,
 	) -> DispatchResult {
 		match StatusFor::<T>::get(hash).ok_or(Error::<T>::NotNoted)? {
-			RequestStatus::Unrequested(Some((owner, deposit))) => {
+			RequestStatus::Requested { deposit: Some((owner, deposit)), count, len } => {
 				ensure!(maybe_check_owner.map_or(true, |c| c == owner), Error::<T>::NotAuthorized);
 				T::Currency::unreserve(&owner, deposit);
+				StatusFor::<T>::insert(
+					hash,
+					RequestStatus::Requested { deposit: None, count, len },
+				);
+				Ok(())
 			},
-			RequestStatus::Unrequested(None) => {
+			RequestStatus::Requested { deposit: None, .. } => {
 				ensure!(maybe_check_owner.is_none(), Error::<T>::NotAuthorized);
+				Self::do_unrequest_preimage(hash)
 			},
-			RequestStatus::Requested(_) => return Err(Error::<T>::Requested.into()),
+			RequestStatus::Unrequested { deposit: (owner, deposit), len } => {
+				ensure!(maybe_check_owner.map_or(true, |c| c == owner), Error::<T>::NotAuthorized);
+				T::Currency::unreserve(&owner, deposit);
+				StatusFor::<T>::remove(hash);
+
+				Self::remove(hash, len);
+				Self::deposit_event(Event::Cleared { hash: *hash });
+				Ok(())
+			},
 		}
-		StatusFor::<T>::remove(hash);
-		PreimageFor::<T>::remove(hash);
-		Self::deposit_event(Event::Cleared { hash: *hash });
-		Ok(())
 	}
 
 	/// Clear a preimage request.
 	fn do_unrequest_preimage(hash: &T::Hash) -> DispatchResult {
 		match StatusFor::<T>::get(hash).ok_or(Error::<T>::NotRequested)? {
-			RequestStatus::Requested(mut count) if count > 1 => {
+			RequestStatus::Requested { mut count, len, deposit } if count > 1 => {
 				count.saturating_dec();
-				StatusFor::<T>::insert(hash, RequestStatus::Requested(count));
+				StatusFor::<T>::insert(hash, RequestStatus::Requested { count, len, deposit });
 			},
-			RequestStatus::Requested(count) => {
+			RequestStatus::Requested { count, len, deposit } => {
 				debug_assert!(count == 1, "preimage request counter at zero?");
-				PreimageFor::<T>::remove(hash);
-				StatusFor::<T>::remove(hash);
-				Self::deposit_event(Event::Cleared { hash: *hash });
+				match (len, deposit) {
+					// Preimage was never noted.
+					(None, _) => StatusFor::<T>::remove(hash),
+					// Preimage was noted without owner - just remove it.
+					(Some(len), None) => {
+						Self::remove(hash, len);
+						StatusFor::<T>::remove(hash);
+						Self::deposit_event(Event::Cleared { hash: *hash });
+					},
+					// Preimage was noted with owner - move to unrequested so they can get refund.
+					(Some(len), Some(deposit)) => {
+						StatusFor::<T>::insert(hash, RequestStatus::Unrequested { deposit, len });
+					},
+				}
 			},
-			RequestStatus::Unrequested(_) => return Err(Error::<T>::NotRequested.into()),
+			RequestStatus::Unrequested { .. } => return Err(Error::<T>::NotRequested.into()),
 		}
 		Ok(())
+	}
+
+	fn insert(hash: &T::Hash, preimage: Cow<[u8]>) -> Result<(), ()> {
+		BoundedSlice::<u8, ConstU32<MAX_SIZE>>::try_from(preimage.as_ref())
+			.map(|s| PreimageFor::<T>::insert((hash, s.len() as u32), s))
+	}
+
+	fn remove(hash: &T::Hash, len: u32) {
+		PreimageFor::<T>::remove((hash, len))
+	}
+
+	fn have(hash: &T::Hash) -> bool {
+		Self::len(hash).is_some()
+	}
+
+	fn len(hash: &T::Hash) -> Option<u32> {
+		use RequestStatus::*;
+		match StatusFor::<T>::get(hash) {
+			Some(Requested { len: Some(len), .. }) | Some(Unrequested { len, .. }) => Some(len),
+			_ => None,
+		}
+	}
+
+	fn fetch(hash: &T::Hash, len: Option<u32>) -> FetchResult {
+		let len = len.or_else(|| Self::len(hash)).ok_or(DispatchError::Unavailable)?;
+		PreimageFor::<T>::get((hash, len))
+			.map(|p| p.into_inner())
+			.map(Into::into)
+			.ok_or(DispatchError::Unavailable)
 	}
 }
 
 impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 	fn have_preimage(hash: &T::Hash) -> bool {
-		PreimageFor::<T>::contains_key(hash)
+		Self::have(hash)
 	}
 
 	fn preimage_requested(hash: &T::Hash) -> bool {
-		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested(..)))
+		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested { .. }))
 	}
 
 	fn get_preimage(hash: &T::Hash) -> Option<Vec<u8>> {
-		PreimageFor::<T>::get(hash).map(|preimage| preimage.to_vec())
+		Self::fetch(hash, None).ok().map(Cow::into_owned)
 	}
 
 	fn request_preimage(hash: &T::Hash) {
@@ -330,15 +394,60 @@ impl<T: Config> PreimageProvider<T::Hash> for Pallet<T> {
 }
 
 impl<T: Config> PreimageRecipient<T::Hash> for Pallet<T> {
-	type MaxSize = T::MaxSize;
+	type MaxSize = ConstU32<MAX_SIZE>; // 2**22
 
 	fn note_preimage(bytes: BoundedVec<u8, Self::MaxSize>) {
 		// We don't really care if this fails, since that's only the case if someone else has
 		// already noted it.
-		let _ = Self::note_bytes(bytes, None);
+		let _ = Self::note_bytes(bytes.into_inner().into(), None);
 	}
 
 	fn unnote_preimage(hash: &T::Hash) {
+		// Should never fail if authorization check is skipped.
+		let res = Self::do_unrequest_preimage(hash);
+		debug_assert!(res.is_ok(), "unnote_preimage failed - request outstanding?");
+	}
+}
+
+impl<T: Config<Hash = PreimageHash>> QueryPreimage for Pallet<T> {
+	fn len(hash: &T::Hash) -> Option<u32> {
+		Pallet::<T>::len(hash)
+	}
+
+	fn fetch(hash: &T::Hash, len: Option<u32>) -> FetchResult {
+		Pallet::<T>::fetch(hash, len)
+	}
+
+	fn is_requested(hash: &T::Hash) -> bool {
+		matches!(StatusFor::<T>::get(hash), Some(RequestStatus::Requested { .. }))
+	}
+
+	fn request(hash: &T::Hash) {
+		Self::do_request_preimage(hash)
+	}
+
+	fn unrequest(hash: &T::Hash) {
+		let res = Self::do_unrequest_preimage(hash);
+		debug_assert!(res.is_ok(), "do_unrequest_preimage failed - counter underflow?");
+	}
+}
+
+impl<T: Config<Hash = PreimageHash>> StorePreimage for Pallet<T> {
+	const MAX_LENGTH: usize = MAX_SIZE as usize;
+
+	fn note(bytes: Cow<[u8]>) -> Result<T::Hash, DispatchError> {
+		// We don't really care if this fails, since that's only the case if someone else has
+		// already noted it.
+		let maybe_hash = Self::note_bytes(bytes, None).map(|(_, h)| h);
+		// Map to the correct trait error.
+		if maybe_hash == Err(DispatchError::from(Error::<T>::TooBig)) {
+			Err(DispatchError::Exhausted)
+		} else {
+			maybe_hash
+		}
+	}
+
+	fn unnote(hash: &T::Hash) {
 		// Should never fail if authorization check is skipped.
 		let res = Self::do_unnote_preimage(hash, None);
 		debug_assert!(res.is_ok(), "unnote_preimage failed - request outstanding?");

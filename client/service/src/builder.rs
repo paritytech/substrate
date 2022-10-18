@@ -40,6 +40,7 @@ use sc_keystore::LocalKeystore;
 use sc_network::{config::SyncMode, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
+	protocol::role::Roles,
 	service::{NetworkStateInfo, NetworkStatusProvider},
 	sync::warp::WarpSyncProvider,
 };
@@ -843,6 +844,18 @@ where
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
 	)?;
+	let block_announce_config = chain_sync.get_block_announce_proto_config(
+		protocol_id.clone(),
+		&config.chain_spec.fork_id().map(ToOwned::to_owned),
+		Roles::from(&config.role.clone()),
+		client.info().best_number,
+		client.info().best_hash,
+		client
+			.block_hash(Zero::zero())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed"),
+	);
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
@@ -865,6 +878,7 @@ where
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
+		block_announce_config,
 		block_request_protocol_config,
 		state_request_protocol_config,
 		warp_sync_protocol_config,
