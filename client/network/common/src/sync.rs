@@ -74,6 +74,8 @@ pub struct StateDownloadProgress {
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
 	pub state: SyncState<NumberFor<Block>>,
+	/// Target sync block number.
+	pub best_seen_block: Option<NumberFor<Block>>,
 	/// Number of peers participating in syncing.
 	pub num_peers: u32,
 	/// Number of blocks queued for import

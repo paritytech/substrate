@@ -390,6 +390,8 @@ where
 	/// Returns the current sync status.
 	fn status(&self) -> SyncStatus<B> {
 		let median_seen = self.median_seen();
+		let best_seen_block =
+			median_seen.and_then(|median| (median > self.best_queued_number).then_some(median));
 		let sync_state = if let Some(target) = median_seen {
 			// A chain is classified as downloading if the provided best block is
 			// more than `MAJOR_SYNC_BLOCKS` behind the best block or as importing
@@ -422,6 +424,7 @@ where
 
 		SyncStatus {
 			state: sync_state,
+			best_seen_block,
 			num_peers: self.peers.len() as u32,
 			queued_blocks: self.queue_blocks.len() as u32,
 			state_sync: self.state_sync.as_ref().map(|s| s.progress()),

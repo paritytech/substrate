@@ -53,7 +53,7 @@ use sc_network_common::{
 		warp::{EncodedProof, WarpProofRequest},
 		BadPeer, ChainSync, OnBlockData, OnBlockJustification, OnStateData, OpaqueBlockRequest,
 		OpaqueBlockResponse, OpaqueStateRequest, OpaqueStateResponse, PollBlockAnnounceValidation,
-		SyncState, SyncStatus,
+		SyncStatus,
 	},
 };
 use sp_arithmetic::traits::SaturatedConversion;
@@ -494,11 +494,7 @@ where
 
 	/// Target sync block number.
 	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		match self.chain_sync.status().state {
-			SyncState::Idle => None,
-			SyncState::Downloading { target } => Some(target),
-			SyncState::Importing { .. } => None,
-		}
+		self.chain_sync.status().best_seen_block
 	}
 
 	/// Number of peers participating in syncing.
