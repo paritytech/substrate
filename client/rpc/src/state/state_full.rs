@@ -43,7 +43,8 @@ use sp_core::{
 	storage::{
 		ChildInfo, ChildType, PrefixedStorageKey, StorageChangeSet, StorageData, StorageKey,
 	},
-	Bytes, traits::CallContext,
+	traits::CallContext,
+	Bytes,
 };
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_version::RuntimeVersion;

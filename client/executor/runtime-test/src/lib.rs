@@ -351,7 +351,7 @@ sp_core::wasm_export_functions! {
 		}
 
 		data.iter().map(|d| d.capacity() as u32).sum()
-    }
+	}
 
 	fn test_abort_on_panic() {
 		sp_io::panic_handler::abort_on_panic("test_abort_on_panic called");

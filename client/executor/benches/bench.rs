@@ -21,7 +21,7 @@ use codec::Encode;
 
 use sc_executor_common::{
 	runtime_blob::RuntimeBlob,
-	wasm_runtime::{WasmInstance, WasmModule, HeapPages},
+	wasm_runtime::{HeapPages, WasmInstance, WasmModule},
 };
 #[cfg(feature = "wasmtime")]
 use sc_executor_wasmtime::InstantiationStrategy;

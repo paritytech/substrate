@@ -285,7 +285,7 @@ use sp_core::{
 	},
 	storage::{well_known_keys, StorageData, StorageKey},
 	testing::TaskExecutor,
-	traits::{TaskExecutorExt, CallContext},
+	traits::{CallContext, TaskExecutorExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
