@@ -232,6 +232,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The items in existence and their ownership details.
 	#[pallet::storage]
 	#[pallet::storage_prefix = "Asset"]
 	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
@@ -510,15 +511,13 @@ pub mod pallet {
 		CollectionIdInUse,
 		/// Items within that collection are non-transferable.
 		ItemsNotTransferable,
-		/// The item or collection is frozen.
-		Frozen,
 		/// The provided account is not a delegate.
 		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
 		WrongDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
-		/// The named owner has not signed ownership of the collection is acceptable.
+		/// The named owner has not signed ownership acceptance of the collection.
 		Unaccepted,
 		/// The item is locked (non-transferable).
 		ItemLocked,
@@ -552,6 +551,8 @@ pub mod pallet {
 		WrongDuration,
 		/// The method is disabled by system settings.
 		MethodDisabled,
+		/// The provided is setting can't be set.
+		WrongSetting,
 		/// Item's config already exists and should be equal to the provided one.
 		InconsistentItemConfig,
 		/// Config for a collection or an item can't be found.
@@ -599,11 +600,11 @@ pub mod pallet {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			let mut config = config;
-			// RequiredDeposit could be disabled by calling the force_create() only
-			if config.has_disabled_setting(CollectionSetting::RequiredDeposit) {
-				config.enable_setting(CollectionSetting::RequiredDeposit);
-			}
+			// DepositRequired can be disabled by calling the force_create() only
+			ensure!(
+				!config.has_disabled_setting(CollectionSetting::DepositRequired),
+				Error::<T, I>::WrongSetting
+			);
 
 			Self::do_create_collection(
 				collection,
@@ -825,7 +826,7 @@ pub mod pallet {
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 
 			let config = Self::get_collection_config(&collection)?;
-			let deposit = match config.is_setting_enabled(CollectionSetting::RequiredDeposit) {
+			let deposit = match config.is_setting_enabled(CollectionSetting::DepositRequired) {
 				true => T::ItemDeposit::get(),
 				false => Zero::zero(),
 			};
@@ -1051,6 +1052,12 @@ pub mod pallet {
 
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
+
+			let collection_config = Self::get_collection_config(&collection)?;
+			ensure!(
+				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+				Error::<T, I>::ItemsNotTransferable
+			);
 
 			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
@@ -1343,7 +1350,7 @@ pub mod pallet {
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit) &&
+			if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
 				maybe_check_owner.is_some()
 			{
 				deposit = T::DepositPerByte::get()
@@ -1476,7 +1483,7 @@ pub mod pallet {
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				collection_details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit) &&
+				if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
 					maybe_check_owner.is_some()
 				{
 					deposit = T::DepositPerByte::get()
@@ -1590,7 +1597,7 @@ pub mod pallet {
 				details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
 				if maybe_check_owner.is_some() &&
-					collection_config.is_setting_enabled(CollectionSetting::RequiredDeposit)
+					collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
 				{
 					deposit = T::DepositPerByte::get()
 						.saturating_mul(((data.len()) as u32).into())

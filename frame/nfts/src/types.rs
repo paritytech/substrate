@@ -183,7 +183,7 @@ pub enum CollectionSetting {
 	/// Attributes of this collection can be modified.
 	UnlockedAttributes,
 	/// When this isn't set then the deposit is required to hold the items of this collection.
-	RequiredDeposit,
+	DepositRequired,
 }
 pub(super) type CollectionSettings = BitFlags<CollectionSetting>;
 

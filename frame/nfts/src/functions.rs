@@ -153,8 +153,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionMaxSupply::<T, I>::remove(&collection);
 			CollectionConfigOf::<T, I>::remove(&collection);
-			#[allow(deprecated)]
-			ItemConfigOf::<T, I>::remove_prefix(&collection, None);
+			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.items, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
@@ -193,7 +192,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let collection_config = Self::get_collection_config(&collection)?;
 				let deposit = match collection_config
-					.is_setting_enabled(CollectionSetting::RequiredDeposit)
+					.is_setting_enabled(CollectionSetting::DepositRequired)
 				{
 					true => T::ItemDeposit::get(),
 					false => Zero::zero(),

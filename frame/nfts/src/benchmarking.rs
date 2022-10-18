@@ -204,7 +204,7 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup,
-			CollectionConfig(CollectionSetting::RequiredDeposit.into()),
+			CollectionConfig(CollectionSetting::DepositRequired.into()),
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
@@ -280,7 +280,7 @@ benchmarks_instance_pallet! {
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			config: CollectionConfig(CollectionSetting::RequiredDeposit.into()),
+			config: CollectionConfig(CollectionSetting::DepositRequired.into()),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {

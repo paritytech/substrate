@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::{
+	ensure,
 	traits::{tokens::nonfungibles_v2::*, Get},
 	BoundedSlice,
 };
@@ -91,7 +92,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionSettings>
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfig>
 	for Pallet<T, I>
 {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
@@ -99,18 +100,18 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
-		disabled_settings: &CollectionSettings,
+		config: &CollectionConfig,
 	) -> DispatchResult {
-		let mut disabled_settings = *disabled_settings;
-		// RequiredDeposit can be disabled by calling the force_create() only
-		if disabled_settings.contains(CollectionSetting::RequiredDeposit) {
-			disabled_settings.remove(CollectionSetting::RequiredDeposit);
-		}
+		// DepositRequired can be disabled by calling the force_create() only
+		ensure!(
+			!config.has_disabled_setting(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
 			admin.clone(),
-			CollectionConfig::disable_settings(disabled_settings),
+			*config,
 			T::CollectionDeposit::get(),
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)

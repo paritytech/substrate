@@ -93,7 +93,7 @@ fn events() -> Vec<Event<Test>> {
 }
 
 fn default_collection_config() -> CollectionConfig {
-	CollectionConfig::disable_settings(CollectionSetting::RequiredDeposit.into())
+	CollectionConfig::disable_settings(CollectionSetting::DepositRequired.into())
 }
 
 fn default_item_config() -> ItemConfig {
@@ -126,7 +126,11 @@ fn basic_minting_should_work() {
 fn lifecycle_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, default_collection_config()));
+		assert_ok!(Nfts::create(
+			RuntimeOrigin::signed(1),
+			1,
+			CollectionConfig::all_settings_enabled()
+		));
 		assert_eq!(Balances::reserved_balance(&1), 2);
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(1), 0, bvec![0, 0]));
@@ -170,9 +174,13 @@ fn lifecycle_should_work() {
 fn destroy_with_bad_witness_should_not_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
-		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, default_collection_config()));
+		assert_ok!(Nfts::create(
+			RuntimeOrigin::signed(1),
+			1,
+			CollectionConfig::all_settings_enabled()
+		));
 
-		let w = Nfts::get_destroy_witness(&0).unwrap();
+		let w = Collection::<Test>::get(0).unwrap().destroy_witness();
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 1, default_item_config()));
 		assert_noop!(Nfts::destroy(RuntimeOrigin::signed(1), 0, w), Error::<Test>::BadWitness);
 	});
@@ -211,7 +219,7 @@ fn transfer_should_work() {
 			RuntimeOrigin::root(),
 			1,
 			CollectionConfig::disable_settings(
-				CollectionSetting::TransferableItems | CollectionSetting::RequiredDeposit
+				CollectionSetting::TransferableItems | CollectionSetting::DepositRequired
 			)
 		));
 
@@ -299,7 +307,11 @@ fn transfer_owner_should_work() {
 		Balances::make_free_balance_be(&1, 100);
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 100);
-		assert_ok!(Nfts::create(RuntimeOrigin::signed(1), 1, default_collection_config()));
+		assert_ok!(Nfts::create(
+			RuntimeOrigin::signed(1),
+			1,
+			CollectionConfig::all_settings_enabled()
+		));
 		assert_eq!(collections(), vec![(1, 0)]);
 		assert_noop!(
 			Nfts::transfer_ownership(RuntimeOrigin::signed(1), 0, 2),
@@ -656,7 +668,7 @@ fn force_collection_status_should_work() {
 			1,
 			1,
 			1,
-			CollectionConfig::disable_settings(CollectionSetting::RequiredDeposit.into()),
+			CollectionConfig::disable_settings(CollectionSetting::DepositRequired.into()),
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 142, 1, default_item_config()));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 169, 2, default_item_config()));
@@ -777,7 +789,7 @@ fn approval_lifecycle_works() {
 			RuntimeOrigin::root(),
 			1,
 			CollectionConfig::disable_settings(
-				CollectionSetting::TransferableItems | CollectionSetting::RequiredDeposit
+				CollectionSetting::TransferableItems | CollectionSetting::DepositRequired
 			)
 		));
 
@@ -894,7 +906,7 @@ fn approval_deadline_works() {
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
 			1,
-			CollectionConfig::disable_settings(CollectionSetting::RequiredDeposit.into())
+			CollectionConfig::disable_settings(CollectionSetting::DepositRequired.into())
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, 2, default_item_config()));
 
@@ -1153,7 +1165,7 @@ fn set_price_should_work() {
 			RuntimeOrigin::root(),
 			user_id,
 			CollectionConfig::disable_settings(
-				CollectionSetting::TransferableItems | CollectionSetting::RequiredDeposit
+				CollectionSetting::TransferableItems | CollectionSetting::DepositRequired
 			)
 		));
 
