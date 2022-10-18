@@ -668,8 +668,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Start the process of destroying an asset, by setting the asset status to Destroying, and
-	/// emitting the DestructionStarted event.
+	/// Start the process of destroying an asset, by setting the asset status to `Destroying`, and
+	/// emitting the `DestructionStarted` event.
 	pub(super) fn do_start_destroy(
 		id: T::AssetId,
 		maybe_check_owner: Option<T::AccountId>,
