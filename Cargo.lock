@@ -824,6 +824,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfg-expr"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0aacacf4d96c24b2ad6eb8ee6df040e4f27b0d0b39a5710c30091baa830485db"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "cfg-if"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1727,6 +1736,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ed25519-zebra"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "403ef3e961ab98f0ba902771d29f842058578bb1ce7e3c59dad5a6a93e784c69"
+dependencies = [
+ "curve25519-dalek 3.2.0",
+ "hex",
+ "rand_core 0.6.4",
+ "sha2 0.9.9",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2034,10 +2057,12 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "paste 1.0.9",
+ "rusty-fork",
  "scale-info",
  "serde",
  "sp-api",
  "sp-application-crypto",
+ "sp-core",
  "sp-io",
  "sp-keystore",
  "sp-runtime",
@@ -2154,6 +2179,7 @@ dependencies = [
  "extrinsic-shuffler",
  "frame-support",
  "frame-system",
+ "frame-try-runtime",
  "hex-literal",
  "merlin",
  "pallet-balances",
@@ -2224,7 +2250,9 @@ name = "frame-support-procedural"
 version = "4.0.0-dev"
 dependencies = [
  "Inflector",
+ "cfg-expr",
  "frame-support-procedural-tools",
+ "itertools",
  "proc-macro2",
  "quote",
  "syn",
@@ -2342,6 +2370,7 @@ name = "frame-try-runtime"
 version = "0.10.0-dev"
 dependencies = [
  "frame-support",
+ "parity-scale-codec",
  "sp-api",
  "sp-runtime",
  "sp-std",
@@ -3238,6 +3267,100 @@ dependencies = [
  "hash-db",
  "hash256-std-hasher",
  "tiny-keccak",
+]
+
+[[package]]
+name = "kitchensink-runtime"
+version = "3.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-election-provider-support",
+ "frame-executive",
+ "frame-support",
+ "frame-system",
+ "frame-system-benchmarking",
+ "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
+ "hex-literal",
+ "log",
+ "node-primitives",
+ "pallet-alliance",
+ "pallet-asset-tx-payment",
+ "pallet-assets",
+ "pallet-authority-discovery",
+ "pallet-authorship",
+ "pallet-babe",
+ "pallet-bags-list",
+ "pallet-balances",
+ "pallet-bounties",
+ "pallet-child-bounties",
+ "pallet-collective",
+ "pallet-contracts",
+ "pallet-contracts-primitives",
+ "pallet-contracts-rpc-runtime-api",
+ "pallet-conviction-voting",
+ "pallet-democracy",
+ "pallet-election-provider-multi-phase",
+ "pallet-election-provider-support-benchmarking",
+ "pallet-elections-phragmen",
+ "pallet-gilt",
+ "pallet-grandpa",
+ "pallet-identity",
+ "pallet-im-online",
+ "pallet-indices",
+ "pallet-lottery",
+ "pallet-membership",
+ "pallet-mmr",
+ "pallet-multisig",
+ "pallet-nomination-pools",
+ "pallet-nomination-pools-benchmarking",
+ "pallet-nomination-pools-runtime-api",
+ "pallet-offences",
+ "pallet-offences-benchmarking",
+ "pallet-preimage",
+ "pallet-proxy",
+ "pallet-randomness-collective-flip",
+ "pallet-ranked-collective",
+ "pallet-recovery",
+ "pallet-referenda",
+ "pallet-remark",
+ "pallet-scheduler",
+ "pallet-session",
+ "pallet-session-benchmarking",
+ "pallet-society",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-state-trie-migration",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-tips",
+ "pallet-transaction-payment",
+ "pallet-transaction-payment-rpc-runtime-api",
+ "pallet-transaction-storage",
+ "pallet-treasury",
+ "pallet-uniques",
+ "pallet-utility",
+ "pallet-vesting",
+ "pallet-whitelist",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-authority-discovery",
+ "sp-block-builder",
+ "sp-consensus-babe",
+ "sp-core",
+ "sp-inherents",
+ "sp-io",
+ "sp-offchain",
+ "sp-runtime",
+ "sp-sandbox",
+ "sp-session",
+ "sp-staking",
+ "sp-std",
+ "sp-transaction-pool",
+ "sp-version",
+ "static_assertions",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -4401,6 +4524,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-primitives"
+version = "2.0.0"
+dependencies = [
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-runtime",
+]
+
+[[package]]
 name = "node-template-runtime"
 version = "4.0.0-dev"
 dependencies = [
@@ -5483,6 +5618,32 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-offences-benchmarking"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-election-provider-support",
+ "frame-support",
+ "frame-system",
+ "pallet-babe",
+ "pallet-balances",
+ "pallet-grandpa",
+ "pallet-im-online",
+ "pallet-offences",
+ "pallet-session",
+ "pallet-staking",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "scale-info",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7027,9 +7188,9 @@ dependencies = [
 
 [[package]]
 name = "rpassword"
-version = "5.0.1"
+version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
+checksum = "26b763cb66df1c928432cc35053f8bd4cec3335d8559fc16010017d16b3c1680"
 dependencies = [
  "libc",
  "winapi",
@@ -7154,6 +7315,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97477e48b4cf8603ad5f7aaf897467cf42ab4218a38ef76fb14c2d6773a6d6a8"
 
 [[package]]
+name = "rusty-fork"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb3dcc6e454c328bb824492db107ab7c0ae8fcffe4ad210136ef014458c1bc4f"
+dependencies = [
+ "fnv",
+ "quick-error",
+ "tempfile",
+]
+
+[[package]]
 name = "rw-stream-sink"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7211,6 +7383,7 @@ dependencies = [
 name = "sc-authority-discovery"
 version = "0.10.0-dev"
 dependencies = [
+ "async-trait",
  "futures",
  "futures-timer",
  "ip_network",
@@ -7222,7 +7395,6 @@ dependencies = [
  "quickcheck",
  "rand 0.7.3",
  "sc-client-api",
- "sc-network",
  "sc-network-common",
  "sp-api",
  "sp-authority-discovery",
@@ -7333,7 +7505,7 @@ dependencies = [
  "memmap2",
  "parity-scale-codec",
  "sc-chain-spec-derive",
- "sc-network",
+ "sc-network-common",
  "sc-telemetry",
  "serde",
  "serde_json",
@@ -7424,7 +7596,9 @@ dependencies = [
 name = "sc-client-db"
 version = "0.10.0-dev"
 dependencies = [
+ "criterion",
  "hash-db",
+ "kitchensink-runtime",
  "kvdb",
  "kvdb-memorydb",
  "kvdb-rocksdb",
@@ -7434,6 +7608,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "quickcheck",
+ "rand 0.8.5",
  "sc-client-api",
  "sc-state-db",
  "sp-arithmetic",
@@ -7778,6 +7953,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-wasm 0.42.2",
  "paste 1.0.9",
+ "rustix 0.33.7",
  "rustix 0.35.11",
  "sc-allocator",
  "sc-executor-common",
@@ -7940,7 +8116,9 @@ dependencies = [
  "prost-build",
  "sc-consensus",
  "sc-peerset",
+ "serde",
  "smallvec",
+ "sp-blockchain",
  "sp-consensus",
  "sp-finality-grandpa",
  "sp-runtime",
@@ -7959,8 +8137,8 @@ dependencies = [
  "log",
  "lru",
  "quickcheck",
- "sc-network",
  "sc-network-common",
+ "sc-peerset",
  "sp-runtime",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
@@ -8061,6 +8239,7 @@ dependencies = [
  "hyper",
  "hyper-rustls",
  "lazy_static",
+ "libp2p",
  "num_cpus",
  "once_cell",
  "parity-scale-codec",
@@ -8069,8 +8248,8 @@ dependencies = [
  "sc-block-builder",
  "sc-client-api",
  "sc-client-db",
- "sc-network",
  "sc-network-common",
+ "sc-peerset",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
  "sc-utils",
@@ -8124,6 +8303,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-network",
+ "sc-network-common",
  "sc-rpc-api",
  "sc-tracing",
  "sc-transaction-pool",
@@ -8917,6 +9097,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-test-primitives",
+ "sp-trie",
  "sp-version",
  "thiserror",
 ]
@@ -9160,7 +9341,7 @@ dependencies = [
  "byteorder",
  "criterion",
  "dyn-clonable",
- "ed25519-dalek",
+ "ed25519-zebra",
  "futures",
  "hash-db",
  "hash256-std-hasher",
@@ -9581,6 +9762,7 @@ dependencies = [
  "sp-trie",
  "thiserror",
  "tracing",
+ "trie-db",
  "trie-root",
 ]
 
@@ -9678,16 +9860,23 @@ dependencies = [
 name = "sp-trie"
 version = "6.0.0"
 dependencies = [
+ "ahash",
  "criterion",
  "hash-db",
+ "hashbrown 0.12.3",
  "hex-literal",
+ "lazy_static",
+ "lru",
  "memory-db",
+ "nohash-hasher",
  "parity-scale-codec",
+ "parking_lot 0.12.1",
  "scale-info",
  "sp-core",
  "sp-runtime",
  "sp-std",
  "thiserror",
+ "tracing",
  "trie-bench",
  "trie-db",
  "trie-root",
@@ -10487,9 +10676,9 @@ dependencies = [
 
 [[package]]
 name = "trie-bench"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57ecec5d10427b35e9ae374b059dccc0801d02d832617c04c78afc7a8c5c4a34"
+checksum = "c5704f0d6130bd83608e4370c19e20c8a6ec03e80363e493d0234efca005265a"
 dependencies = [
  "criterion",
  "hash-db",
@@ -10503,9 +10692,9 @@ dependencies = [
 
 [[package]]
 name = "trie-db"
-version = "0.23.1"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32d034c0d3db64b43c31de38e945f15b40cd4ca6d2dcfc26d4798ce8de4ab83"
+checksum = "004e1e8f92535694b4cb1444dc5a8073ecf0815e3357f729638b9f8fc4062908"
 dependencies = [
  "hash-db",
  "hashbrown 0.12.3",
@@ -10587,6 +10776,7 @@ name = "try-runtime-cli"
 version = "0.10.0-dev"
 dependencies = [
  "clap 3.2.22",
+ "frame-try-runtime",
  "jsonrpsee",
  "log",
  "parity-scale-codec",
@@ -10603,6 +10793,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-version",
+ "tokio",
  "zstd",
 ]
 

@@ -189,7 +189,11 @@ where
 			weights.get(DispatchClass::Normal).max_total.unwrap_or(weights.max_block);
 		let current_block_weight = <frame_system::Pallet<T>>::block_weight();
 		let normal_block_weight =
-			*current_block_weight.get(DispatchClass::Normal).min(&normal_max_weight);
+			current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
+
+		// TODO: Handle all weight dimensions
+		let normal_max_weight = normal_max_weight.ref_time();
+		let normal_block_weight = normal_block_weight.ref_time();
 
 		let s = S::get();
 		let v = V::get();
@@ -336,7 +340,7 @@ pub mod pallet {
 			assert!(
 				<Multiplier as sp_runtime::traits::Bounded>::max_value() >=
 					Multiplier::checked_from_integer::<u128>(
-						T::BlockWeights::get().max_block.try_into().unwrap()
+						T::BlockWeights::get().max_block.ref_time().try_into().unwrap()
 					)
 					.unwrap(),
 			);
@@ -348,7 +352,7 @@ pub mod pallet {
 				);
 			// add 1 percent;
 			let addition = target / 100;
-			if addition == 0 {
+			if addition == Weight::zero() {
 				// this is most likely because in a test setup we set everything to ().
 				return
 			}
@@ -519,7 +523,7 @@ where
 	}
 
 	fn length_to_fee(length: u32) -> BalanceOf<T> {
-		T::LengthToFee::weight_to_fee(&(length as Weight))
+		T::LengthToFee::weight_to_fee(&Weight::from_ref_time(length as u64))
 	}
 
 	fn weight_to_fee(weight: Weight) -> BalanceOf<T> {
@@ -620,7 +624,11 @@ where
 		let max_block_weight = T::BlockWeights::get().max_block;
 		let max_block_length = *T::BlockLength::get().max.get(info.class) as u64;
 
-		let bounded_weight = info.weight.max(1).min(max_block_weight);
+		// TODO: Take into account all dimensions of weight
+		let max_block_weight = max_block_weight.ref_time();
+		let info_weight = info.weight.ref_time();
+
+		let bounded_weight = info_weight.max(1).min(max_block_weight);
 		let bounded_length = (len as u64).max(1).min(max_block_length);
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;

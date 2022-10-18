@@ -1,0 +1,20 @@
+# Github action to ensure the `release` tag always tracks latest release
+
+name: Retag release
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set Git tag
+        uses: s3krit/walking-tag-action@d04f7a53b72ceda4e20283736ce3627011275178 # latest version from master
+        with:
+          TAG_NAME: release
+          TAG_MESSAGE: Latest release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

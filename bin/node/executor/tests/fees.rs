@@ -73,7 +73,7 @@ fn fee_multiplier_increases_and_decreases_on_big_weight() {
 	let block2 = construct_block(
 		&mut tt,
 		2,
-		block1.1.clone(),
+		block1.1,
 		vec![
 			CheckedExtrinsic {
 				signed: None,
@@ -208,7 +208,7 @@ fn transaction_fee_is_correct() {
 		// we know that weight to fee multiplier is effect-less in block 1.
 		// current weight of transfer = 200_000_000
 		// Linear weight to fee is 1:1 right now (1 weight = 1 unit of balance)
-		assert_eq!(weight_fee, weight as Balance);
+		assert_eq!(weight_fee, weight.ref_time() as Balance);
 		balance_alice -= base_fee;
 		balance_alice -= weight_fee;
 		balance_alice -= tip;

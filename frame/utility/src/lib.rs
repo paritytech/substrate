@@ -64,7 +64,7 @@ use frame_support::{
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Dispatchable, TrailingZeroInput};
+use sp_runtime::traits::{BadOrigin, Dispatchable, TrailingZeroInput};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -185,7 +185,7 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
+				.fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch(calls.len() as u32));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
@@ -203,12 +203,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
+			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, don't apply any dispatch filters; root can call anything.
@@ -253,9 +258,9 @@ pub mod pallet {
 			let dispatch_info = call.get_dispatch_info();
 			(
 				T::WeightInfo::as_derivative()
-					.saturating_add(dispatch_info.weight)
 					// AccountData for inner call origin accountdata.
-					.saturating_add(T::DbWeight::get().reads_writes(1, 1)),
+					.saturating_add(T::DbWeight::get().reads_writes(1, 1))
+					.saturating_add(dispatch_info.weight),
 				dispatch_info.class,
 			)
 		})]
@@ -301,7 +306,7 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
+				.fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::batch_all(calls.len() as u32));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
@@ -319,12 +324,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
+			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::zero();
 			for (index, call) in calls.into_iter().enumerate() {
 				let info = call.get_dispatch_info();
 				// If origin is root, bypass any dispatch filter; root can call anything.
@@ -352,7 +362,7 @@ pub mod pallet {
 			}
 			Self::deposit_event(Event::BatchCompleted);
 			let base_weight = T::WeightInfo::batch_all(calls_len as u32);
-			Ok(Some(base_weight + weight).into())
+			Ok(Some(base_weight.saturating_add(weight)).into())
 		}
 
 		/// Dispatches a function call with a provided origin.
@@ -406,7 +416,7 @@ pub mod pallet {
 			let dispatch_infos = calls.iter().map(|call| call.get_dispatch_info()).collect::<Vec<_>>();
 			let dispatch_weight = dispatch_infos.iter()
 				.map(|di| di.weight)
-				.fold(0, |total: Weight, weight: Weight| total.saturating_add(weight))
+				.fold(Weight::zero(), |total: Weight, weight: Weight| total.saturating_add(weight))
 				.saturating_add(T::WeightInfo::force_batch(calls.len() as u32));
 			let dispatch_class = {
 				let all_operational = dispatch_infos.iter()
@@ -424,12 +434,17 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::Call>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
+			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
 			// Track the actual weight of each of the batch calls.
-			let mut weight: Weight = 0;
+			let mut weight = Weight::zero();
 			// Track failed dispatch occur.
 			let mut has_error: bool = false;
 			for call in calls.into_iter() {
@@ -455,7 +470,7 @@ pub mod pallet {
 				Self::deposit_event(Event::BatchCompleted);
 			}
 			let base_weight = T::WeightInfo::batch(calls_len as u32);
-			Ok(Some(base_weight + weight).into())
+			Ok(Some(base_weight.saturating_add(weight)).into())
 		}
 	}
 }

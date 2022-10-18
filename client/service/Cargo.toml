@@ -26,14 +26,14 @@ jsonrpsee = { version = "0.15.1", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.21"
 rand = "0.7.3"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
 pin-project = "1.0.10"
 hash-db = "0.15.2"
 serde = "1.0.136"
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
@@ -82,7 +82,7 @@ tracing-futures = { version = "0.2.4" }
 parity-util-mem = { version = "0.11.0", default-features = false, features = [
 	"primitive-types",
 ] }
-async-trait = "0.1.50"
+async-trait = "0.1.57"
 tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"

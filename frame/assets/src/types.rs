@@ -165,7 +165,7 @@ pub trait FrozenBalance<AssetId, AccountId, Balance> {
 	///
 	/// Under normal behaviour, the account balance should not go below the sum of this (if `Some`)
 	/// and the asset's minimum balance. However, the account balance may reasonably begin below
-	/// this sum (e.g. if less than the sum had ever been transfered into the account).
+	/// this sum (e.g. if less than the sum had ever been transferred into the account).
 	///
 	/// In special cases (privileged intervention) the account balance may also go below the sum.
 	///
