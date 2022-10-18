@@ -29,16 +29,20 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
+use sc_client_api::CallExecutor;
+
 use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 };
 use jsonrpsee::{core::async_trait, types::SubscriptionResult, SubscriptionSink};
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, StorageData, StorageKey, StorageProvider,
+	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageData, StorageKey,
+	StorageProvider,
 };
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
+use sp_core::Bytes;
 use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
@@ -81,6 +85,7 @@ where
 	Block::Header: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: BlockBackend<Block>
+		+ ExecutorProvider<Block>
 		+ HeaderBackend<Block>
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
@@ -218,7 +223,7 @@ where
 		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
 			BodyEvent::<SignedBlock<Block>>::Disjoint
 		} else {
-			match self.client.block(&BlockId::hash(hash)) {
+			match self.client.block(&BlockId::Hash(hash)) {
 				Ok(Some(block)) => BodyEvent::Done(block),
 				_ => BodyEvent::<SignedBlock<Block>>::Inaccessible,
 			}
@@ -247,9 +252,45 @@ where
 		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
 			BodyEvent::<StorageData>::Disjoint
 		} else {
-			match self.client.storage(&BlockId::hash(hash), &key) {
+			match self.client.storage(&BlockId::Hash(hash), &key) {
 				Ok(Some(block)) => BodyEvent::Done(block),
 				_ => BodyEvent::<StorageData>::Inaccessible,
+			}
+		};
+
+		let stream = stream::once(async move { res });
+		let fut = async move {
+			sink.pipe_from_stream(stream.boxed()).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
+		Ok(())
+	}
+
+	fn chainHead_unstable_call(
+		&self,
+		mut sink: SubscriptionSink,
+		follow_subscription: String,
+		hash: Block::Hash,
+		function: String,
+		call_parameters: Bytes,
+		network_config: Option<()>,
+	) -> SubscriptionResult {
+		// TODO: get this from jsonrpsee
+		let sub_id = "A0".to_string();
+
+		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
+			BodyEvent::<Vec<u8>>::Disjoint
+		} else {
+			match self.client.executor().call(
+				&BlockId::Hash(hash),
+				&function,
+				&call_parameters,
+				self.client.execution_extensions().strategies().other,
+				None,
+			) {
+				Ok(res) => BodyEvent::Done(res),
+				_ => BodyEvent::<Vec<u8>>::Inaccessible,
 			}
 		};
 

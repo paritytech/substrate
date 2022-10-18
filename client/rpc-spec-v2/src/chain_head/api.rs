@@ -21,7 +21,7 @@
 use crate::chain_head::chain_head::{BodyEvent, FollowEvent};
 use jsonrpsee::proc_macros::rpc;
 use sc_client_api::StorageKey;
-
+use sp_core::Bytes;
 #[rpc(client, server)]
 pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	/// Track the state of the head of the chain: the finalized, non-finalized, and best blocks.
@@ -61,6 +61,20 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 		follow_subscription: String,
 		hash: Hash,
 		key: StorageKey,
+		network_config: Option<()>,
+	);
+
+	#[subscription(
+		name = "chainHead_unstable_call" => "chainHead_unstable_runtimeCall",
+		unsubscribe = "chainHead_unstable_stopCall",
+		item = FollowEvent<Header>,
+	)]
+	fn chainHead_unstable_call(
+		&self,
+		follow_subscription: String,
+		hash: Hash,
+		function: String,
+		call_parameters: Bytes,
 		network_config: Option<()>,
 	);
 }
