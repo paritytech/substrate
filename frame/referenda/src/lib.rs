@@ -82,7 +82,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Dispatchable, One, Saturating, Zero},
 	DispatchError,
 };
-use sp_arithmetic::{Perbill};
+use sp_arithmetic::Perbill;
 use sp_std::{fmt::Debug, prelude::*};
 
 mod branch;

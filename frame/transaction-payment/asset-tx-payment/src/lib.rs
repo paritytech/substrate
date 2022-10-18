@@ -57,7 +57,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	}
 };
-use sp_arithmetic::{FixedPointOperand};
+use sp_arithmetic::FixedPointOperand;
 
 #[cfg(test)]
 mod tests;

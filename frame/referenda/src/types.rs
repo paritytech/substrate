@@ -25,7 +25,7 @@ use frame_support::{
 };
 use scale_info::TypeInfo;
 use sp_arithmetic::{Rounding::*, SignedRounding::*};
-use sp_runtime::{ RuntimeDebug};
+use sp_runtime::RuntimeDebug;
 use sp_arithmetic::{FixedI64, PerThing};
 use sp_std::fmt::Debug;
 

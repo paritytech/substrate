@@ -28,7 +28,7 @@ mod tests;
 
 use codec::{Decode, Encode};
 use frame_support::weights::Weight;
-use sp_runtime::{traits::Hash};
+use sp_runtime::traits::Hash;
 use sp_arithmetic::Perbill;
 use sp_staking::{
 	offence::{Kind, Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},

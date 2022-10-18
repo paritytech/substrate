@@ -6145,6 +6145,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "sp-arithmetic",
+ "sp-runtime",
  "syn",
 ]
 

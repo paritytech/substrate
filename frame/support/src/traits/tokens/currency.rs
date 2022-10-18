@@ -28,7 +28,7 @@ use crate::{
 use codec::MaxEncodedLen;
 use sp_runtime::{traits::MaybeSerializeDeserialize};
 use sp_std::fmt::Debug;
-use sp_arithmetic::{FixedPointOperand};
+use sp_arithmetic::FixedPointOperand;
 
 mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};

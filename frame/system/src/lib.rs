@@ -77,7 +77,7 @@ use sp_runtime::{
 	},
 	DispatchError, RuntimeDebug,
 };
-use sp_arithmetic::{Perbill};
+use sp_arithmetic::Perbill;
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
 use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};

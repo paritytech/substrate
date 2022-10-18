@@ -25,6 +25,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
 sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
+
 [dev-dependencies]
 criterion = "0.3.3"
 sp-externalities = { version = "0.12.0", path = "../../primitives/externalities" }

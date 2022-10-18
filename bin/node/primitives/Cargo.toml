@@ -21,6 +21,7 @@ sp-application-crypto = { version = "6.0.0", default-features = false, path = ".
 sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
+
 [features]
 default = ["std"]
 std = [

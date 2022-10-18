@@ -30,6 +30,7 @@ sp-session = { version = "4.0.0-dev", default-features = false, path = "../../pr
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
+
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.16.0", features = ["derive-codec"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }

@@ -185,9 +185,9 @@ use sp_runtime::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, RuntimeDebug,
+	ArithmeticError, DispatchError, RuntimeDebug
 };
-use sp_arithmetic::{FixedPointOperand};
+use sp_arithmetic::FixedPointOperand;
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
 

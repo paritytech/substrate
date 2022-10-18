@@ -22,7 +22,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{fungible, tokens::BalanceConversion},
 };
-use sp_runtime::{traits::Convert};
+use sp_runtime::traits::Convert;
 use sp_arithmetic::{FixedPointNumber, FixedPointOperand, FixedU128};
 
 pub(super) type DepositBalanceOf<T, I = ()> =
