@@ -61,7 +61,7 @@ pub struct BenchmarkParams {
 /// The results of multiple runs in nano seconds.
 pub(crate) type TimeRecord = Vec<u64>;
 
-/// Proof size in bytes.
+/// Proof size in bytes of a storage proof.
 #[derive(Debug, Default, Serialize, Clone)]
 pub(crate) struct ProofSize {
 	/// The storage proof size.
@@ -74,10 +74,12 @@ pub(crate) struct ProofSize {
 	pub storage_compressed_zstd: u64,
 }
 
-/// Proof size for proving the execution of a block.
+/// Proof size for proving the execution blocks.
 #[derive(Debug, Default, Serialize, Clone)]
 pub(crate) struct BlockProofSize {
+	/// The proof size of an empty (= inherents only) block.
 	pub empty: ProofSize,
+	/// The proof size of a non-empty (= one extrinsic) block.
 	pub non_empty: ProofSize,
 }
 
@@ -85,7 +87,7 @@ pub(crate) struct BlockProofSize {
 #[derive(Debug, Default, Serialize, Clone)]
 pub(crate) struct BlockWeight {
 	/// The ref time that it took to execute the block.
-	pub base_time: TimeStats,
+	pub ref_time: TimeStats,
 	/// The proof size that is required to prove the execution of the block.
 	pub proof: BlockProofSize,
 }
@@ -121,14 +123,14 @@ where
 	/// Returns the execution ref time of the empty block and the proof sizes of both.
 	pub fn bench_block(&self, noop_builder: &dyn ExtrinsicBuilder) -> Result<BlockWeight> {
 		let (empty_block, _) = self.build_block(None, None)?;
-		let empty_record = self.measure_block(&empty_block)?;
+		let empty_weight = self.measure_block(&empty_block)?;
 
 		let (non_empty_block, _) = self.build_block(Some(noop_builder), Some(1))?;
-		let non_empty_record = self.measure_block(&non_empty_block)?;
+		let non_empty_proof = self.measure_block_proof_size(&non_empty_block)?;
 
 		Ok(BlockWeight {
-			base_time: TimeStats::new(&empty_record.0)?,
-			proof: BlockProofSize { empty: empty_record.1, non_empty: non_empty_record.1 },
+			ref_time: TimeStats::new(&empty_weight.0)?,
+			proof: BlockProofSize { empty: empty_weight.1, non_empty: non_empty_proof },
 		})
 	}
 
@@ -141,7 +143,7 @@ where
 	pub fn bench_extrinsic(&self, ext_builder: &dyn ExtrinsicBuilder) -> Result<TimeStats> {
 		let (block, _) = self.build_block(None, None)?;
 		let (base, _proof) = self.measure_block(&block)?;
-		let base_time = TimeStats::new(&base)?.select(StatSelect::Average);
+		let ref_time = TimeStats::new(&base)?.select(StatSelect::Average);
 
 		let (block, num_ext) = self.build_block(Some(ext_builder), None)?;
 		let num_ext = num_ext.ok_or_else(|| Error::Input("Block was empty".into()))?;
@@ -149,7 +151,7 @@ where
 
 		for r in &mut full {
 			// Subtract the base time.
-			*r = r.saturating_sub(base_time);
+			*r = r.saturating_sub(ref_time);
 			// Divide by the number of extrinsics in the block.
 			*r = ((*r as f64) / (num_ext as f64)).ceil() as u64;
 		}
@@ -204,16 +206,11 @@ where
 		Ok((block, Some(num_ext)))
 	}
 
-	/// Measures the time that it take to execute a block or an extrinsic.
+	/// Measure the time that it takes to execute a block and the storage proof size
+	/// that it takes to proof its execution.
 	fn measure_block(&self, block: &Block) -> Result<(TimeRecord, ProofSize)> {
-		let mut time = TimeRecord::new();
 		let parent_hash = block.header().parent_hash();
 		let parent_id = BlockId::Hash(*parent_hash);
-		let parent_header = self
-			.client
-			.header(BlockId::Hash(*parent_hash))?
-			.ok_or_else(|| Error::Input(format!("Parent header {} not found", parent_hash)))?;
-		let parent_state_root = *parent_header.state_root();
 
 		info!("Running {} warmups...", self.params.warmup);
 		for _ in 0..self.params.warmup {
@@ -223,7 +220,37 @@ where
 				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		}
 
-		// One round just for recording the PoV size.
+		info!("Executing block {} times...", self.params.repeat);
+		// Interesting part here:
+		// Execute a block multiple times and record each execution time.
+		let mut time = TimeRecord::new();
+		for _ in 0..self.params.repeat {
+			let block = block.clone();
+			let runtime_api = self.client.runtime_api();
+			let start = Instant::now();
+
+			runtime_api
+				.execute_block(&parent_id, block)
+				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
+
+			let elapsed = start.elapsed().as_nanos();
+			time.push(elapsed as u64);
+		}
+		let proof = self.measure_block_proof_size(block)?;
+
+		Ok((time, proof))
+	}
+
+	/// Measure the storage proof size of a block.
+	fn measure_block_proof_size(&self, block: &Block) -> Result<ProofSize> {
+		let parent_hash = block.header().parent_hash();
+		let parent_id = BlockId::Hash(*parent_hash);
+		let parent_header = self
+			.client
+			.header(parent_id.clone())?
+			.ok_or_else(|| Error::Input(format!("Parent header {} not found", parent_hash)))?;
+		let parent_state_root = *parent_header.state_root();
+
 		info!("Recording storage proof size...");
 		let mut runtime_api = self.client.runtime_api();
 		runtime_api.record_proof();
@@ -232,7 +259,7 @@ where
 			.map_err(|e| Error::Client(RuntimeApiError(e)))?;
 		let proof = runtime_api
 			.extract_proof()
-			.expect("We enabled proof recording. A proof must be available; qed");
+			.expect("Proof recording is enabled - a proof must be available; qed");
 		let proof_len = proof.encoded_size() as u64;
 		let compact_proof = proof
 			.clone()
@@ -248,30 +275,11 @@ where
 			compressed_proof
 		);
 
-		info!("Executing block {} times...", self.params.repeat);
-		// Interesting part here:
-		// Execute a block multiple times and record each execution time.
-		for _ in 0..self.params.repeat {
-			let block = block.clone();
-			let runtime_api = self.client.runtime_api();
-			let start = Instant::now();
-
-			runtime_api
-				.execute_block(&parent_id, block)
-				.map_err(|e| Error::Client(RuntimeApiError(e)))?;
-
-			let elapsed = start.elapsed().as_nanos();
-			time.push(elapsed as u64);
-		}
-
-		Ok((
-			time,
-			ProofSize {
-				storage: proof_len,
-				storage_compact: compact_proof.encoded_size() as u64,
-				storage_compressed_zstd: compressed_proof,
-			},
-		))
+		Ok(ProofSize {
+			storage: proof_len,
+			storage_compact: compact_proof.encoded_size() as u64,
+			storage_compressed_zstd: compressed_proof,
+		})
 	}
 
 	fn max_ext_per_block(&self) -> u32 {

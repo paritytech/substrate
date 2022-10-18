@@ -75,7 +75,7 @@ impl TemplateData {
 			BenchmarkType::Block,
 			cfg.chain_spec.name(),
 			params,
-			block.base_time,
+			block.ref_time,
 			Some(block.proof),
 		)
 	}

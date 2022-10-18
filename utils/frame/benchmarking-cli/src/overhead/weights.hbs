@@ -112,7 +112,7 @@ mod test_weights {
 		assert!(
 			BlockExecutionWeight::get().proof_size() ==
 				EmptyBlockProofSize::get().max(NonEmptyBlockProofSize::get()),
-			"Block weight is has wrong proof size"
+			"The resulting block weight has an incorrect proof size"
 		);
 		{{else}}
 		assert!(
