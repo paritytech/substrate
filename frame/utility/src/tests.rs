@@ -806,3 +806,77 @@ fn batch_works_with_council_origin() {
 		}));
 	})
 }
+
+#[test]
+fn force_batch_works_with_council_origin() {
+	new_test_ext().execute_with(|| {
+		let proposal = RuntimeCall::Utility(UtilityCall::force_batch {
+			calls: vec![call_transfer(1, 5), call_transfer(1, 5)],
+		});
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash = BlakeTwo256::hash_of(&proposal);
+
+		assert_ok!(Council::propose(
+			RuntimeOrigin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		assert_ok!(Council::vote(RuntimeOrigin::signed(1), hash, 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(2), hash, 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(3), hash, 0, true));
+
+		System::set_block_number(4);
+		assert_ok!(Council::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
+
+		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
+			proposal_hash: hash,
+			result: Ok(()),
+		}));
+	})
+}
+
+#[test]
+fn batch_all_doesnt_work_with_council_origin() {
+	new_test_ext().execute_with(|| {
+		let proposal = RuntimeCall::Utility(UtilityCall::batch_all {
+			calls: vec![call_transfer(1, 5), call_transfer(1, 5)],
+		});
+		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
+		let proposal_weight = proposal.get_dispatch_info().weight;
+		let hash = BlakeTwo256::hash_of(&proposal);
+
+		assert_ok!(Council::propose(
+			RuntimeOrigin::signed(1),
+			3,
+			Box::new(proposal.clone()),
+			proposal_len
+		));
+
+		assert_ok!(Council::vote(RuntimeOrigin::signed(1), hash, 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(2), hash, 0, true));
+		assert_ok!(Council::vote(RuntimeOrigin::signed(3), hash, 0, true));
+
+		System::set_block_number(4);
+		assert_ok!(Council::close(
+			RuntimeOrigin::signed(4),
+			hash,
+			0,
+			proposal_weight,
+			proposal_len
+		));
+
+		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
+			proposal_hash: hash,
+			result: Err(BadOrigin.into()),
+		}));
+	})
+}
