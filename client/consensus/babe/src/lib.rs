@@ -1554,7 +1554,7 @@ where
 					let original_epoch_index = epoch_data.epoch_index;
 
 					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
-					// makes it so that when we insert the new epoch into `EpochChanges` below
+					// makes it so that when we insert the next epoch into `EpochChanges` below
 					// (after incrementing it), it will use the correct epoch index and start slot.
 					// we do not update the original epoch that will be re-used because there might
 					// be other forks (that we haven't imported) where the epoch isn't skipped, and
