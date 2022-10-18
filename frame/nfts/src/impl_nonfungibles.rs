@@ -121,7 +121,7 @@ impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Palle
 	type DestroyWitness = DestroyWitness;
 
 	fn get_destroy_witness(collection: &Self::CollectionId) -> Option<DestroyWitness> {
-		return Collection::<T, I>::get(collection).map(|a| a.destroy_witness())
+		Collection::<T, I>::get(collection).map(|a| a.destroy_witness())
 	}
 
 	fn destroy(
