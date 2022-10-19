@@ -182,7 +182,7 @@ impl<T: Config> ListScenario<T> {
 		self.origin1_member = Some(joiner.clone());
 		CurrencyOf::<T>::make_free_balance_be(&joiner, amount * 2u32.into());
 
-		let original_bonded = T::Staking::active_stake(&self.origin1).unwrap();
+		let original_bonded = T::Staking::stake(&self.origin1).map(|s| s.active).unwrap();
 
 		// Unbond `amount` from the underlying pool account so when the member joins
 		// we will maintain `current_bonded`.
@@ -216,7 +216,7 @@ frame_benchmarking::benchmarks! {
 		// setup the worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		assert_eq!(
-			T::Staking::active_stake(&scenario.origin1).unwrap(),
+			T::Staking::stake(&scenario.origin1).map(|s| s.active).unwrap(),
 			origin_weight
 		);
 
@@ -231,7 +231,7 @@ frame_benchmarking::benchmarks! {
 	verify {
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), joiner_free - max_additional);
 		assert_eq!(
-			T::Staking::active_stake(&scenario.origin1).unwrap(),
+			T::Staking::stake(&scenario.origin1).map(|s| s.active).unwrap(),
 			scenario.dest_weight
 		);
 	}
@@ -246,7 +246,7 @@ frame_benchmarking::benchmarks! {
 	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::FreeBalance(extra))
 	verify {
 		assert!(
-			T::Staking::active_stake(&scenario.origin1).unwrap() >=
+			T::Staking::stake(&scenario.origin1).map(|s| s.active).unwrap() >=
 			scenario.dest_weight
 		);
 	}
@@ -264,7 +264,7 @@ frame_benchmarking::benchmarks! {
 	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
 	verify {
 		assert!(
-			T::Staking::active_stake(&scenario.origin1).unwrap() >=
+			T::Staking::stake(&scenario.origin1).map(|s| s.active).unwrap() >=
 			scenario.dest_weight
 		);
 	}
@@ -311,7 +311,7 @@ frame_benchmarking::benchmarks! {
 		whitelist_account!(member_id);
 	}: _(RuntimeOrigin::Signed(member_id.clone()), member_id_lookup, all_points)
 	verify {
-		let bonded_after = T::Staking::active_stake(&scenario.origin1).unwrap();
+		let bonded_after = T::Staking::stake(&scenario.origin1).map(|s| s.active).unwrap();
 		// We at least went down to the destination bag
 		assert!(bonded_after <= scenario.dest_weight);
 		let member = PoolMembers::<T>::get(
@@ -342,7 +342,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check join worked
 		assert_eq!(
-			T::Staking::active_stake(&pool_account).unwrap(),
+			T::Staking::stake(&pool_account).map(|s| s.active).unwrap(),
 			min_create_bond + min_join_bond
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
@@ -352,7 +352,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::Staking::active_stake(&pool_account).unwrap(),
+			T::Staking::stake(&pool_account).map(|s| s.active).unwrap(),
 			min_create_bond
 		);
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
@@ -385,7 +385,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check join worked
 		assert_eq!(
-			T::Staking::active_stake(&pool_account).unwrap(),
+			T::Staking::stake(&pool_account).map(|s| s.active).unwrap(),
 			min_create_bond + min_join_bond
 		);
 		assert_eq!(CurrencyOf::<T>::free_balance(&joiner), min_join_bond);
@@ -396,7 +396,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::Staking::active_stake(&pool_account).unwrap(),
+			T::Staking::stake(&pool_account).map(|s| s.active).unwrap(),
 			min_create_bond
 		);
 		assert_eq!(pallet_staking::Ledger::<T>::get(&pool_account).unwrap().unlocking.len(), 1);
@@ -443,7 +443,7 @@ frame_benchmarking::benchmarks! {
 
 		// Sanity check that unbond worked
 		assert_eq!(
-			T::Staking::active_stake(&pool_account).unwrap(),
+			T::Staking::stake(&pool_account).map(|s| s.active).unwrap(),
 			Zero::zero()
 		);
 		assert_eq!(
@@ -522,7 +522,7 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::Staking::active_stake(&Pools::<T>::create_bonded_account(1)),
+			T::Staking::stake(&Pools::<T>::create_bonded_account(1)).map(|s| s.active),
 			Some(min_create_bond)
 		);
 	}
@@ -561,7 +561,7 @@ frame_benchmarking::benchmarks! {
 			}
 		);
 		assert_eq!(
-			T::Staking::active_stake(&Pools::<T>::create_bonded_account(1)),
+			T::Staking::stake(&Pools::<T>::create_bonded_account(1)).map(|s| s.active),
 			Some(min_create_bond)
 		);
 	}
