@@ -178,9 +178,9 @@ mod tests {
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId},
 		traits::{ConvertInto, IdentityLookup, OpaqueKeys},
-		KeyTypeId, Perbill,
+		Perbill,
 	};
-
+	use sp_arithmetic::Perbill;
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 	type Block = frame_system::mocking::MockBlock<Test>;
 

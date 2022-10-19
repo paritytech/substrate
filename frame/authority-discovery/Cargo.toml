@@ -26,6 +26,7 @@ sp-application-crypto = { version = "6.0.0", default-features = false, path = ".
 sp-authority-discovery = { version = "4.0.0-dev", default-features = false, path = "../../primitives/authority-discovery" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
@@ -43,5 +44,6 @@ std = [
 	"sp-authority-discovery/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-arithmetic/std"
 ]
 try-runtime = ["frame-support/try-runtime"]
