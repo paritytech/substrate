@@ -322,5 +322,9 @@ impl CollectionRoles {
 	pub fn add_role(&mut self, role: CollectionRole) {
 		self.0.insert(role);
 	}
+	pub fn max_roles() -> u8 {
+		let all: BitFlags<CollectionRole> = BitFlags::all();
+		all.len() as u8
+	}
 }
 impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);

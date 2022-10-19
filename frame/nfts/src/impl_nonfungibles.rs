@@ -143,7 +143,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettin
 		who: &T::AccountId,
 		settings: &ItemSettings,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings), |_| Ok(()))
+		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings))
 	}
 
 	fn burn(

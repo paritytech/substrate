@@ -16,9 +16,33 @@
 // limitations under the License.
 
 use crate::*;
+use frame_support::pallet_prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	/// Clears all the roles in a specified collection.
+	///
+	/// - `collection_id`: A collection to clear the roles in.
+	///
+	/// Throws an error if some of the roles were left in storage.
+	/// This means the `CollectionRoles::max_roles()` needs to be adjusted.
+	pub(crate) fn clear_roles(collection_id: &T::CollectionId) -> Result<(), DispatchError> {
+		let res = CollectionRoleOf::<T, I>::clear_prefix(
+			&collection_id,
+			CollectionRoles::max_roles() as u32,
+			None,
+		);
+		ensure!(res.maybe_cursor.is_none(), Error::<T, I>::RolesNotCleared);
+		Ok(())
+	}
+
+	/// Returns true if a specified account has a provided role within that collection.
+	///
+	/// - `collection_id`: A collection to check the role in.
+	/// - `account_id`: An account to check the role for.
+	/// - `role`: A role to validate.
+	///
+	/// Returns boolean.
 	pub(crate) fn has_role(
 		collection_id: &T::CollectionId,
 		account_id: &T::AccountId,
@@ -38,8 +62,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Vec<(T::AccountId, CollectionRoles)> {
 		let mut result = BTreeMap::new();
 		for (account, role) in input.into_iter() {
-			let roles = result.entry(account).or_insert(CollectionRoles::none());
-			roles.add_role(role);
+			result.entry(account).or_insert(CollectionRoles::none()).add_role(role);
 		}
 		result.into_iter().collect()
 	}

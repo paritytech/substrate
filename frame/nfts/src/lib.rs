@@ -557,6 +557,8 @@ pub mod pallet {
 		InconsistentItemConfig,
 		/// Config for a collection or an item can't be found.
 		NoConfig,
+		/// Some roles were not cleared.
+		RolesNotCleared,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -719,7 +721,7 @@ pub mod pallet {
 				Self::has_role(&collection, &origin, CollectionRole::Issuer),
 				Error::<T, I>::NoPermission
 			);
-			Self::do_mint(collection, item, owner, config, |_| Ok(()))
+			Self::do_mint(collection, item, owner, config)
 		}
 
 		/// Destroy a single item.
@@ -1003,7 +1005,7 @@ pub mod pallet {
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
 				// delete previous values
-				let _ = CollectionRoleOf::<T, I>::clear_prefix(&collection, 3, None);
+				Self::clear_roles(&collection)?;
 
 				let account_to_role = Self::group_roles_by_account(vec![
 					(issuer.clone(), CollectionRole::Issuer),
@@ -1238,7 +1240,7 @@ pub mod pallet {
 				let freezer = T::Lookup::lookup(freezer)?;
 
 				// delete previous values
-				let _ = CollectionRoleOf::<T, I>::clear_prefix(&collection, 3, None);
+				Self::clear_roles(&collection)?;
 
 				let account_to_role = Self::group_roles_by_account(vec![
 					(issuer, CollectionRole::Issuer),

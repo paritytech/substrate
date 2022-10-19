@@ -146,7 +146,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			#[allow(deprecated)]
 			PendingSwapOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
-			let _ = CollectionRoleOf::<T, I>::clear_prefix(&collection, 3, None);
+			Self::clear_roles(&collection)?;
 			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
@@ -170,7 +170,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		owner: T::AccountId,
 		config: ItemConfig,
-		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
 
@@ -179,8 +178,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			|maybe_collection_details| -> DispatchResult {
 				let collection_details =
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-
-				with_details(collection_details)?;
 
 				if let Ok(max_supply) = CollectionMaxSupply::<T, I>::try_get(&collection) {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
