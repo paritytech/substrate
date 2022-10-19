@@ -2764,12 +2764,19 @@ pub struct StorageInput {
 impl StorageInput {
 	pub fn new(key: Vec<u8>) -> Result<Self, codec::Error> {
 		let (total_length, exists) = if let Some(len) = sp_io::storage::read(&key, &mut [], 0) {
-			(len, true)
+			dbg!((len, true))
 		} else {
 			(0, false)
 		};
 
-		Ok(Self { total_length, offset: 0, key, exists, buffer: Vec::with_capacity(2048), buffer_pos: 0 })
+		Ok(Self {
+			total_length,
+			offset: 0,
+			key,
+			exists,
+			buffer: Vec::with_capacity(2048),
+			buffer_pos: 0,
+		})
 	}
 
 	fn fill_buffer(&mut self) {
@@ -2802,13 +2809,27 @@ impl codec::Input for StorageInput {
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
 		if into.len() > self.buffer.capacity() {
 			unimplemented!()
-		} else if self.buffer_pos + into.len() > self.buffer.len() {
+		} else if dbg!(self.buffer_pos) + dbg!(into.len()) > dbg!(self.buffer.len()) {
 			self.fill_buffer();
 		}
 
 		let end = self.buffer_pos + into.len();
 		into[..].copy_from_slice(&self.buffer[self.buffer_pos..end]);
+		self.buffer_pos = end;
 
 		Ok(())
 	}
+}
+
+#[test]
+fn stream_read_test() {
+	#[crate::storage_alias]
+	pub type StreamReadTest = StorageValue<Test, Vec<u32>>;
+
+	sp_io::TestExternalities::default().execute_with(|| {
+		let data: Vec<u32> = vec![1, 2, 3, 4, 5];
+		StreamReadTest::put(&data);
+
+		assert_eq!(data, StreamReadTest::stream().collect::<Vec<_>>());
+	})
 }
