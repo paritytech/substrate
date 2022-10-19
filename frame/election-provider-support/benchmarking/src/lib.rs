@@ -68,7 +68,7 @@ benchmarks! {
 		let (voters, targets) = set_up_voters_targets::<T::AccountId>(v, t, d as usize);
 	}: {
 		assert!(
-			SequentialPhragmen::<T::AccountId, sp_runtime::Perbill>
+			SequentialPhragmen::<T::AccountId, sp_arithmetic::Perbill>
 				::solve(d as usize, targets, voters).is_ok()
 		);
 	}

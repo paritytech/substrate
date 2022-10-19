@@ -42,8 +42,8 @@ use frame_support::weights::Weight;
 use frame_system::RawOrigin;
 use sp_runtime::{
 	traits::{Bounded, Hash},
-	Perbill,
 };
+use sp_arithmetic::Perbill;
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 

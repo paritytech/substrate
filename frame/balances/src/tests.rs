@@ -24,7 +24,8 @@ macro_rules! decl_tests {
 	($test:ty, $ext_builder:ty, $existential_deposit:expr) => {
 
 		use crate::*;
-		use sp_runtime::{ArithmeticError, FixedPointNumber, traits::{SignedExtension, BadOrigin}};
+		use sp_runtime::{ArithmeticError, traits::{SignedExtension, BadOrigin}};
+		use sp_arithmetic::{FixedPointNumber};
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{

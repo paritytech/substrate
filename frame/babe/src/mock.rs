@@ -37,8 +37,9 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Digest, DigestItem, Header, TestXt},
 	traits::{Header as _, IdentityLookup, OpaqueKeys},
-	Perbill,
+
 };
+use sp_arithmetic::Perbill;
 use sp_staking::{EraIndex, SessionIndex};
 
 type DummyValidatorId = u64;

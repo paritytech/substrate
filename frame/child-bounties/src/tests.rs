@@ -35,9 +35,8 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	Perbill, Permill,
 };
-
+use sp_arithmetic::{Permill,Perbill};
 use super::Event as ChildBountiesEvent;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

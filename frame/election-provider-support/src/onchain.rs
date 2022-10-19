@@ -203,7 +203,7 @@ mod tests {
 	use crate::{PhragMMS, SequentialPhragmen};
 	use frame_support::traits::ConstU32;
 	use sp_npos_elections::Support;
-	use sp_runtime::Perbill;
+	use sp_arithmetic::Perbill;
 	type AccountId = u64;
 	type BlockNumber = u64;
 

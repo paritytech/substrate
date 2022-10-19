@@ -232,7 +232,7 @@ pub(crate) fn apply_elected<AccountId: IdentifierT>(
 mod tests {
 	use super::*;
 	use crate::{Assignment, ElectionResult};
-	use sp_runtime::{Perbill, Percent};
+	use sp_arithmetic::{Perbill, Percent};
 	use sp_std::rc::Rc;
 
 	#[test]

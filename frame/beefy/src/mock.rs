@@ -29,8 +29,9 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::Header,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
-	Perbill,
+
 };
+use sp_arithmetic::Perbill;
 
 use crate as pallet_beefy;
 
