@@ -21,6 +21,7 @@ sp-io = { version = "6.0.0", default-features = false, path = "../../../primitiv
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-tasks = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/tasks" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 
 [features]
 default = ["std"]
@@ -34,5 +35,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-tasks/std",
+	"sp-arithmetic/std"
 ]
 try-runtime = ["frame-support/try-runtime"]
