@@ -1592,10 +1592,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		exposures: Vec<(Self::AccountId, Self::Balance)>,
 	) {
 		let others = exposures
-			.map(|(who, value)| pallet_staking::IndividualExposure { who, value })
+			.map(|(who, value)| IndividualExposure { who, value })
 			.collect::<Vec<_>>();
-		let exposure =
-			pallet_staking::Exposure { total: Default::default(), own: Default::default(), others };
+		let exposure = Exposure { total: Default::default(), own: Default::default(), others };
 		Self::add_era_stakers(current_era.clone(), stash.clone(), &exposure)
 	}
 
