@@ -20,7 +20,6 @@
 
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
-use sc_client_api::backend::Backend;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use tokio::{runtime::Runtime, time::Duration};
@@ -616,8 +615,7 @@ fn lagging_validators() {
 		.peer(0)
 		.client()
 		.as_client()
-		.block_hash_from_id(&BlockId::number(25))
-		.unwrap()
+		.expect_block_hash_from_id(&BlockId::number(25))
 		.unwrap();
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(&finalize, None).unwrap();
