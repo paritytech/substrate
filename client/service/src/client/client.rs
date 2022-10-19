@@ -1171,7 +1171,7 @@ where
 
 	fn execution_proof(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: &Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
@@ -1180,7 +1180,7 @@ where
 
 	fn read_proof_collection(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: &Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)> {
@@ -1199,7 +1199,7 @@ where
 
 	fn storage_collection(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: &Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
