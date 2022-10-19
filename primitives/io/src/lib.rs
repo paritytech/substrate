@@ -851,7 +851,7 @@ pub trait Crypto {
 	/// Returns `true` when the verification was successful.
 	#[version(2)]
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
-		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
+		ecdsa::Pair::verify(sig, msg, pub_key)
 	}
 
 	/// Verify `ecdsa` signature with pre-hashed `msg`.
@@ -1626,7 +1626,7 @@ pub fn panic(info: &core::panic::PanicInfo) -> ! {
 #[alloc_error_handler]
 pub fn oom(_: core::alloc::Layout) -> ! {
 	logging::log(LogLevel::Error, "runtime", b"Runtime memory exhausted. Aborting");
-	unsafe { core::arch::wasm32::unreachable() };
+	core::arch::wasm32::unreachable();
 }
 
 /// Type alias for Externalities implementation used in tests.
