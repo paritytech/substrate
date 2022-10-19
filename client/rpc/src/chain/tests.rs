@@ -198,8 +198,8 @@ async fn should_return_finalized_hash() {
 
 	// import new block
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_hash = block.hash();
 	client.import(BlockOrigin::Own, block).await.unwrap();
-	let block_hash = client.block_hash(1).unwrap().unwrap();
 
 	// no finalization yet
 	let res: H256 = api.call("chain_getFinalizedHead", EmptyParams::new()).await.unwrap();
@@ -233,7 +233,7 @@ async fn test_head_subscription(method: &str) {
 		let api = new_full(client.clone(), test_executor()).into_rpc();
 		let sub = api.subscribe(method, EmptyParams::new()).await.unwrap();
 		let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
-		let block_hash = client.block_hash(1).unwrap().unwrap();
+		let block_hash = block.hash();
 		client.import(BlockOrigin::Own, block).await.unwrap();
 		client.finalize_block(&block_hash, None).unwrap();
 		sub
