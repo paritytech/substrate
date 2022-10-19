@@ -339,8 +339,9 @@ impl<T: Config> Module<T>
         contract_id: <T as frame_system::Config>::AccountId,
     ) -> ResultStr<u64> {
         let call_data = Self::encode_get_current_period_ms();
+        let nobody = T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes());
         let contract_exec_result = pallet_contracts::Pallet::<T>::bare_call(
-            Default::default(),
+            nobody.unwrap(),
             contract_id,
             0u32.into(),
             100_000_000_000,
@@ -586,9 +587,10 @@ impl<T: Config> Module<T>
     fn fetch_nodes(
         contract_id: <T as frame_system::Config>::AccountId,
     ) -> ResultStr<Vec<DDCNode>> {
+        let nobody = T::AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes());
         let call_data = Self::encode_get_all_ddc_nodes();
         let contract_exec_result = pallet_contracts::Pallet::<T>::bare_call(
-            Default::default(),
+            nobody.unwrap(),
             contract_id,
             0u32.into(),
             100_000_000_000,
