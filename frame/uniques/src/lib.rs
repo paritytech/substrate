@@ -114,7 +114,7 @@ pub mod pallet {
 		type CreateOrigin: EnsureOriginWithArg<
 			Self::Origin,
 			Self::CollectionId,
-			Success = Self::AccountId
+			Success = Self::AccountId,
 		>;
 
 		/// Locker trait to enable Locking mechanism downstream.
