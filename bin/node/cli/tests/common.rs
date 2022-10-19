@@ -23,8 +23,7 @@ use nix::{
 	sys::signal::{kill, Signal::SIGINT},
 	unistd::Pid,
 };
-use node_primitives::Block;
-use remote_externalities::rpc_api::RpcService;
+use node_primitives::{Hash, Header};
 use std::{
 	io::{BufRead, BufReader, Read},
 	ops::{Deref, DerefMut},
@@ -69,12 +68,14 @@ pub async fn wait_n_finalized_blocks(
 
 /// Wait for at least n blocks to be finalized from a specified node
 pub async fn wait_n_finalized_blocks_from(n: usize, url: &str) {
+	use substrate_rpc_client::{ws_client, ChainApi};
+
 	let mut built_blocks = std::collections::HashSet::new();
 	let mut interval = tokio::time::interval(Duration::from_secs(2));
-	let rpc_service = RpcService::new(url, false).await.unwrap();
+	let rpc = ws_client(url).await.unwrap();
 
 	loop {
-		if let Ok(block) = rpc_service.get_finalized_head::<Block>().await {
+		if let Ok(block) = ChainApi::<(), Hash, Header, ()>::finalized_head(&rpc).await {
 			built_blocks.insert(block);
 			if built_blocks.len() > n {
 				break

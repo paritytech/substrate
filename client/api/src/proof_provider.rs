@@ -18,7 +18,7 @@
 
 //! Proof utilities
 use crate::{CompactProof, StorageProof};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use sp_state_machine::{KeyValueStates, KeyValueStorageLevel};
 use sp_storage::ChildInfo;
 
@@ -27,7 +27,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// Reads storage value at a given block + key, returning read proof.
 	fn read_proof(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
@@ -35,7 +35,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// read proof.
 	fn read_child_proof(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
@@ -46,12 +46,12 @@ pub trait ProofProvider<Block: BlockT> {
 	/// No changes are made.
 	fn execution_proof(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)>;
 
-	/// Given a `BlockId` iterate over all storage values starting at `start_keys`.
+	/// Given a `Hash` iterate over all storage values starting at `start_keys`.
 	/// Last `start_keys` element contains last accessed key value.
 	/// With multiple `start_keys`, first `start_keys` element is
 	/// the current storage key of of the last accessed child trie.
@@ -61,12 +61,12 @@ pub trait ProofProvider<Block: BlockT> {
 	/// Returns combined proof and the numbers of collected keys.
 	fn read_proof_collection(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		start_keys: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)>;
 
-	/// Given a `BlockId` iterate over all storage values starting at `start_key`.
+	/// Given a `Hash` iterate over all storage values starting at `start_key`.
 	/// Returns collected keys and values.
 	/// Returns the collected keys values content of the top trie followed by the
 	/// collected keys values of child tries.
@@ -76,7 +76,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// end.
 	fn storage_collection(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>>;

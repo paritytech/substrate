@@ -90,7 +90,7 @@ benchmarks! {
 	}
 
 	sr25519_verification {
-		let i in 1 .. 100;
+		let i in 0 .. 100;
 
 		let public = SignerId::generate_pair(None);
 
@@ -176,7 +176,7 @@ pub mod mock {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountIndex;
 		type BlockNumber = BlockNumber;
 		type RuntimeCall = RuntimeCall;

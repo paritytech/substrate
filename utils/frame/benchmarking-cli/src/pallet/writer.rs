@@ -24,6 +24,7 @@ use std::{
 };
 
 use inflector::Inflector;
+use itertools::Itertools;
 use serde::Serialize;
 
 use crate::{pallet::command::ComponentRange, shared::UnderscoreHelper, PalletCmd};
@@ -314,18 +315,21 @@ pub(crate) fn write_results(
 
 	// Organize results by pallet into a JSON map
 	let all_results = map_results(batches, storage_info, component_ranges, &analysis_choice)?;
+	let mut created_files = Vec::new();
+
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
 		if file_path.is_dir() {
+			// Start with "path/to/pallet_name".
+			let mut file_name = pallet.clone();
 			// Check if there might be multiple instances benchmarked.
 			if all_results.keys().any(|(p, i)| p == pallet && i != instance) {
-				// Create new file: "path/to/pallet_name_instance_name.rs".
-				file_path.push(pallet.clone() + "_" + instance.to_snake_case().as_str());
-			} else {
-				// Create new file: "path/to/pallet_name.rs".
-				file_path.push(pallet.clone());
+				// Append "_instance_name".
+				file_name = format!("{}_{}", file_name, instance.to_snake_case());
 			}
+			// "mod::pallet_name.rs" becomes "mod_pallet_name.rs".
+			file_path.push(file_name.replace("::", "_"));
 			file_path.set_extension("rs");
 		}
 
@@ -342,10 +346,18 @@ pub(crate) fn write_results(
 			benchmarks: results.clone(),
 		};
 
-		let mut output_file = fs::File::create(file_path)?;
+		let mut output_file = fs::File::create(&file_path)?;
 		handlebars
 			.render_template_to_write(&template, &hbs_data, &mut output_file)
 			.map_err(|e| io_error(&e.to_string()))?;
+		println!("Created file: {:?}", &file_path);
+		created_files.push(file_path);
+	}
+
+	for file in created_files.iter().duplicates() {
+		// This can happen when there are multiple instances of a pallet deployed
+		// and `--output` forces the output of all instances into the same file.
+		println!("Multiple benchmarks were written to the same file: {:?}.", file);
 	}
 	Ok(())
 }

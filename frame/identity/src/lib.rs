@@ -142,10 +142,10 @@ pub mod pallet {
 		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The origin which may forcibly set or remove a name. Root can always do this.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which may add or remove registrars. Root can always do this.
-		type RegistrarOrigin: EnsureOrigin<Self::Origin>;
+		type RegistrarOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -238,6 +238,8 @@ pub mod pallet {
 		NotOwned,
 		/// The provided judgement was for a different identity.
 		JudgementForDifferentIdentity,
+		/// Error that occurs when there is an issue paying for judgement.
+		JudgementPaymentFailed,
 	}
 
 	#[pallet::event]
@@ -788,12 +790,13 @@ pub mod pallet {
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(position) => {
 					if let Judgement::FeePaid(fee) = id.judgements[position].1 {
-						let _ = T::Currency::repatriate_reserved(
+						T::Currency::repatriate_reserved(
 							&target,
 							&sender,
 							fee,
 							BalanceStatus::Free,
-						);
+						)
+						.map_err(|_| Error::<T>::JudgementPaymentFailed)?;
 					}
 					id.judgements[position] = item
 				},

@@ -257,7 +257,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 	SyncOracle = SO,
 	JustificationSyncLink = L,
 	Claim = P::Public,
-	EpochData = Vec<AuthorityId<P>>,
+	AuxData = Vec<AuthorityId<P>>,
 >
 where
 	B: BlockT,
@@ -330,7 +330,7 @@ where
 		Pin<Box<dyn Future<Output = Result<E::Proposer, sp_consensus::Error>> + Send + 'static>>;
 	type Proposer = E::Proposer;
 	type Claim = P::Public;
-	type EpochData = Vec<AuthorityId<P>>;
+	type AuxData = Vec<AuthorityId<P>>;
 
 	fn logging_target(&self) -> &'static str {
 		"aura"
@@ -340,15 +340,15 @@ where
 		&mut self.block_import
 	}
 
-	fn epoch_data(
+	fn aux_data(
 		&self,
 		header: &B::Header,
 		_slot: Slot,
-	) -> Result<Self::EpochData, sp_consensus::Error> {
+	) -> Result<Self::AuxData, sp_consensus::Error> {
 		authorities(self.client.as_ref(), &BlockId::Hash(header.hash()))
 	}
 
-	fn authorities_len(&self, epoch_data: &Self::EpochData) -> Option<usize> {
+	fn authorities_len(&self, epoch_data: &Self::AuxData) -> Option<usize> {
 		Some(epoch_data.len())
 	}
 
@@ -356,7 +356,7 @@ where
 		&self,
 		_header: &B::Header,
 		slot: Slot,
-		epoch_data: &Self::EpochData,
+		epoch_data: &Self::AuxData,
 	) -> Option<Self::Claim> {
 		let expected_author = slot_author::<P>(slot, epoch_data);
 		expected_author.and_then(|p| {
@@ -382,7 +382,7 @@ where
 		body: Vec<B::Extrinsic>,
 		storage_changes: StorageChanges<<Self::BlockImport as BlockImport<B>>::Transaction, B>,
 		public: Self::Claim,
-		_epoch: Self::EpochData,
+		_epoch: Self::AuxData,
 	) -> Result<
 		sc_consensus::BlockImportParams<B, <Self::BlockImport as BlockImport<B>>::Transaction>,
 		sp_consensus::Error,
@@ -569,7 +569,7 @@ mod tests {
 		traits::{Block as BlockT, Header as _},
 		Digest,
 	};
-	use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
+	use sp_timestamp::Timestamp;
 	use std::{
 		task::Poll,
 		time::{Duration, Instant},
@@ -578,6 +578,8 @@ mod tests {
 		runtime::{Header, H256},
 		TestClient,
 	};
+
+	const SLOT_DURATION_MS: u64 = 1000;
 
 	type Error = sp_blockchain::Error;
 
@@ -619,8 +621,6 @@ mod tests {
 		}
 	}
 
-	const SLOT_DURATION: u64 = 1000;
-
 	type AuraVerifier = import_queue::AuraVerifier<
 		PeersFullClient,
 		AuthorityPair,
@@ -628,7 +628,7 @@ mod tests {
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
 	>;
@@ -648,17 +648,15 @@ mod tests {
 			let client = client.as_client();
 			let slot_duration = slot_duration(&*client).expect("slot duration available");
 
-			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION);
+			assert_eq!(slot_duration.as_millis() as u64, SLOT_DURATION_MS);
 			import_queue::AuraVerifier::new(
 				client,
 				Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
+						Timestamp::current(),
+						SlotDuration::from_millis(SLOT_DURATION_MS),
 					);
-
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				CheckForEquivocation::Yes,
 				None,
@@ -736,13 +734,12 @@ mod tests {
 					sync_oracle: DummyOracle,
 					justification_sync_link: (),
 					create_inherent_data_providers: |_, _| async {
-						let timestamp = TimestampInherentDataProvider::from_system_time();
 						let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-							*timestamp,
-							SlotDuration::from_millis(6000),
+							Timestamp::current(),
+							SlotDuration::from_millis(SLOT_DURATION_MS),
 						);
 
-						Ok((timestamp, slot))
+						Ok((slot,))
 					},
 					force_authoring: false,
 					backoff_authoring_blocks: Some(
@@ -772,7 +769,7 @@ mod tests {
 
 		assert_eq!(client.chain_info().best_number, 0);
 		assert_eq!(
-			authorities(&client, &BlockId::Number(0)).unwrap(),
+			authorities(&client, &BlockId::Hash(client.chain_info().best_hash)).unwrap(),
 			vec![
 				Keyring::Alice.public().into(),
 				Keyring::Bob.public().into(),
@@ -875,7 +872,6 @@ mod tests {
 
 		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
-			timestamp: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),
 			inherent_data: InherentData::new(),
 			duration: Duration::from_millis(1000),

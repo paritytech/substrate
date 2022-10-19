@@ -37,6 +37,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
+	time::Duration,
 };
 
 use finality_grandpa::{
@@ -68,6 +69,9 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
+// How often to rebroadcast neighbor packets, in cases where no new packets are created.
+pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 * 60);
+
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
 	use sc_network_common::protocol::ProtocolName;
@@ -83,9 +87,10 @@ pub mod grandpa_protocol_name {
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
 	) -> ProtocolName {
+		let genesis_hash = genesis_hash.as_ref();
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
+			Some(fork_id) => format!("/{}/{}", array_bytes::bytes2hex("", genesis_hash), fork_id),
+			None => format!("/{}", array_bytes::bytes2hex("", genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
@@ -102,6 +107,8 @@ mod cost {
 	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Unknown voter");
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
+	pub(super) const DUPLICATE_NEIGHBOR_MESSAGE: Rep =
+		Rep::new(-500, "Grandpa: Duplicate neighbor message without grace period");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
@@ -278,7 +285,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		}
 
 		let (neighbor_packet_worker, neighbor_packet_sender) =
-			periodic::NeighborPacketWorker::new();
+			periodic::NeighborPacketWorker::new(NEIGHBOR_REBROADCAST_PERIOD);
 
 		NetworkBridge {
 			service,
