@@ -40,6 +40,7 @@ mod functions;
 mod impl_nonfungibles;
 mod types;
 
+pub mod macros;
 pub mod weights;
 
 use codec::{Decode, Encode};
@@ -175,15 +176,9 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	pub type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
-		<T as SystemConfig>::AccountId,
-		Option<<T as SystemConfig>::BlockNumber>,
-		<T as Config<I>>::ApprovalsLimit,
-	>;
-
+	/// Details of a collection.
 	#[pallet::storage]
 	#[pallet::storage_prefix = "Class"]
-	/// Details of a collection.
 	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -191,14 +186,14 @@ pub mod pallet {
 		CollectionDetails<T::AccountId, DepositBalanceOf<T, I>>,
 	>;
 
-	#[pallet::storage]
 	/// The collection, if any, of which an account is willing to take ownership.
+	#[pallet::storage]
 	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::CollectionId>;
 
-	#[pallet::storage]
 	/// The items held by any given account; set out this way so that items owned by a single
 	/// account can be enumerated.
+	#[pallet::storage]
 	pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
@@ -210,10 +205,10 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
-	#[pallet::storage_prefix = "ClassAccount"]
 	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
+	#[pallet::storage]
+	#[pallet::storage_prefix = "ClassAccount"]
 	pub(super) type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -224,9 +219,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// The items in existence and their ownership details.
 	#[pallet::storage]
 	#[pallet::storage_prefix = "Asset"]
-	/// The items in existence and their ownership details.
 	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -237,9 +232,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Metadata of a collection.
 	#[pallet::storage]
 	#[pallet::storage_prefix = "ClassMetadataOf"]
-	/// Metadata of a collection.
 	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -248,9 +243,9 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
+	/// Metadata of an item.
 	#[pallet::storage]
 	#[pallet::storage_prefix = "InstanceMetadataOf"]
-	/// Metadata of an item.
 	pub(super) type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -261,8 +256,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
 	/// Attributes of a collection.
+	#[pallet::storage]
 	pub(super) type Attribute<T: Config<I>, I: 'static = ()> = StorageNMap<
 		_,
 		(
@@ -274,8 +269,8 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
 	/// Price of an asset instance.
+	#[pallet::storage]
 	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -286,14 +281,14 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
 	/// Stores the `CollectionId` that is going to be used for the next collection.
 	/// This gets incremented by 1 whenever a new collection is created.
+	#[pallet::storage]
 	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, OptionQuery>;
 
-	#[pallet::storage]
 	/// Handles all the pending swaps.
+	#[pallet::storage]
 	pub(super) type PendingSwapOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -309,13 +304,13 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	#[pallet::storage]
 	/// Config of a collection.
+	#[pallet::storage]
 	pub(super) type CollectionConfigOf<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionConfigFor<T, I>, OptionQuery>;
 
-	#[pallet::storage]
 	/// Config of an item.
+	#[pallet::storage]
 	pub(super) type ItemConfigOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -346,12 +341,12 @@ pub mod pallet {
 		},
 		/// An `item` was destroyed.
 		Burned { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
-		/// Some `item` was frozen.
-		Frozen { collection: T::CollectionId, item: T::ItemId },
-		/// Some `item` was thawed.
-		Thawed { collection: T::CollectionId, item: T::ItemId },
-		/// Some `item` was locked.
-		ItemLocked {
+		/// An `item` became non-transferable.
+		ItemTransferLocked { collection: T::CollectionId, item: T::ItemId },
+		/// An `item` became transferable.
+		ItemTransferUnlocked { collection: T::CollectionId, item: T::ItemId },
+		/// `item` metadata or attributes were locked.
+		ItemPropertiesLocked {
 			collection: T::CollectionId,
 			item: T::ItemId,
 			lock_metadata: bool,
@@ -494,23 +489,21 @@ pub mod pallet {
 		ApprovalExpired,
 		/// The owner turned out to be different to what was expected.
 		WrongOwner,
-		/// Invalid witness data given.
+		/// The witness data given does not match the current state of the chain.
 		BadWitness,
 		/// Collection ID is already taken.
 		CollectionIdInUse,
 		/// Items within that collection are non-transferable.
 		ItemsNotTransferable,
-		/// The item or collection is frozen.
-		Frozen,
 		/// The provided account is not a delegate.
 		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
 		WrongDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
-		/// The named owner has not signed ownership of the collection is acceptable.
+		/// The named owner has not signed ownership acceptance of the collection.
 		Unaccepted,
-		/// The item is locked.
+		/// The item is locked (non-transferable).
 		ItemLocked,
 		/// Item's attributes are locked.
 		LockedItemAttributes,
@@ -542,6 +535,8 @@ pub mod pallet {
 		WrongDuration,
 		/// The method is disabled by system settings.
 		MethodDisabled,
+		/// The provided is setting can't be set.
+		WrongSetting,
 		/// Item's config already exists and should be equal to the provided one.
 		InconsistentItemConfig,
 		/// Config for a collection or an item can't be found.
@@ -593,12 +588,11 @@ pub mod pallet {
 			let owner = T::CreateOrigin::ensure_origin(origin, &collection)?;
 			let admin = T::Lookup::lookup(admin)?;
 
-			let mut settings = config.settings.values();
-			// FreeHolding could be set by calling the force_create() only
-			if settings.contains(CollectionSetting::FreeHolding) {
-				settings.remove(CollectionSetting::FreeHolding);
-			}
-			let config = CollectionConfig { settings: CollectionSettings(settings), ..config };
+			// DepositRequired can be disabled by calling the force_create() only
+			ensure!(
+				!config.has_disabled_setting(CollectionSetting::DepositRequired),
+				Error::<T, I>::WrongSetting
+			);
 
 			Self::do_create_collection(
 				collection,
@@ -900,10 +894,10 @@ pub mod pallet {
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 
-			let settings = Self::get_collection_settings(&collection)?;
-			let deposit = match settings.contains(CollectionSetting::FreeHolding) {
-				true => Zero::zero(),
-				false => T::ItemDeposit::get(),
+			let config = Self::get_collection_config(&collection)?;
+			let deposit = match config.is_setting_enabled(CollectionSetting::DepositRequired) {
+				true => T::ItemDeposit::get(),
+				false => Zero::zero(),
 			};
 
 			let mut successful = Vec::with_capacity(items.len());
@@ -944,40 +938,40 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
-		/// - `collection`: The collection of the item to be frozen.
-		/// - `item`: The item of the item to be frozen.
+		/// - `collection`: The collection of the item to be changed.
+		/// - `item`: The item to become non-transferable.
 		///
-		/// Emits `Frozen`.
+		/// Emits `ItemTransferLocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::freeze())]
-		pub fn freeze(
+		#[pallet::weight(T::WeightInfo::lock_item_transfer())]
+		pub fn lock_item_transfer(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_freeze_item(origin, collection, item)
+			Self::do_lock_item_transfer(origin, collection, item)
 		}
 
 		/// Re-allow unprivileged transfer of an item.
 		///
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
-		/// - `collection`: The collection of the item to be thawed.
-		/// - `item`: The item of the item to be thawed.
+		/// - `collection`: The collection of the item to be changed.
+		/// - `item`: The item to become transferable.
 		///
-		/// Emits `Thawed`.
+		/// Emits `ItemTransferUnlocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::thaw())]
-		pub fn thaw(
+		#[pallet::weight(T::WeightInfo::unlock_item_transfer())]
+		pub fn unlock_item_transfer(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_thaw_item(origin, collection, item)
+			Self::do_unlock_item_transfer(origin, collection, item)
 		}
 
 		/// Disallows specified settings for the whole collection.
@@ -995,10 +989,10 @@ pub mod pallet {
 		pub fn lock_collection(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			lock_settings: CollectionSettings,
+			lock_config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_lock_collection(origin, collection, lock_settings)
+			Self::do_lock_collection(origin, collection, lock_config)
 		}
 
 		/// Change the Owner of a collection.
@@ -1108,7 +1102,7 @@ pub mod pallet {
 			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
 			ensure!(
-				Self::is_pallet_feature_disabled(PalletFeature::NoApprovals),
+				Self::is_pallet_feature_enabled(PalletFeature::Approvals),
 				Error::<T, I>::MethodDisabled
 			);
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -1122,11 +1116,11 @@ pub mod pallet {
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let (action_allowed, _) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::NonTransferableItems,
-			)?;
-			ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
+			let collection_config = Self::get_collection_config(&collection)?;
+			ensure!(
+				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+				Error::<T, I>::ItemsNotTransferable
+			);
 
 			if let Some(check) = maybe_check {
 				let permitted = check == collection_details.admin || check == details.owner;
@@ -1314,11 +1308,11 @@ pub mod pallet {
 		/// - `lock_config`: The config with the settings to be locked.
 		///
 		/// Note: when the metadata or attributes are locked, it won't be possible the unlock them.
-		/// Emits `ItemLocked`.
+		/// Emits `ItemPropertiesLocked`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::lock_item())]
-		pub fn lock_item(
+		#[pallet::weight(T::WeightInfo::lock_item_properties())]
+		pub fn lock_item_properties(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
@@ -1329,7 +1323,13 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			Self::do_lock_item(maybe_check_owner, collection, item, lock_metadata, lock_attributes)
+			Self::do_lock_item_properties(
+				maybe_check_owner,
+				collection,
+				item,
+				lock_metadata,
+				lock_attributes,
+			)
 		}
 
 		/// Set an attribute for a collection or item.
@@ -1358,7 +1358,7 @@ pub mod pallet {
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
 			ensure!(
-				Self::is_pallet_feature_disabled(PalletFeature::NoAttributes),
+				Self::is_pallet_feature_enabled(PalletFeature::Attributes),
 				Error::<T, I>::MethodDisabled
 			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
@@ -1372,17 +1372,17 @@ pub mod pallet {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let collection_settings = Self::get_collection_settings(&collection)?;
+			let collection_config = Self::get_collection_config(&collection)?;
 			match maybe_item {
 				None => {
 					ensure!(
-						!collection_settings.contains(CollectionSetting::LockedAttributes),
+						collection_config.is_setting_enabled(CollectionSetting::UnlockedAttributes),
 						Error::<T, I>::LockedCollectionAttributes
 					)
 				},
 				Some(item) => {
-					let maybe_is_locked = Self::get_item_settings(&collection, &item)
-						.map(|v| v.contains(ItemSetting::LockedAttributes))?;
+					let maybe_is_locked = Self::get_item_config(&collection, &item)
+						.map(|c| c.has_disabled_setting(ItemSetting::UnlockedAttributes))?;
 					ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
 				},
 			};
@@ -1394,7 +1394,7 @@ pub mod pallet {
 			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 			collection_details.total_deposit.saturating_reduce(old_deposit);
 			let mut deposit = Zero::zero();
-			if !collection_settings.contains(CollectionSetting::FreeHolding) &&
+			if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
 				maybe_check_owner.is_some()
 			{
 				deposit = T::DepositPerByte::get()
@@ -1448,17 +1448,20 @@ pub mod pallet {
 			if maybe_check_owner.is_some() {
 				match maybe_item {
 					None => {
-						let collection_settings = Self::get_collection_settings(&collection)?;
+						let collection_config = Self::get_collection_config(&collection)?;
 						ensure!(
-							!collection_settings.contains(CollectionSetting::LockedAttributes),
+							collection_config
+								.is_setting_enabled(CollectionSetting::UnlockedAttributes),
 							Error::<T, I>::LockedCollectionAttributes
 						)
 					},
 					Some(item) => {
 						// NOTE: if the item was previously burned, the ItemConfigOf record might
 						// not exists. In that case, we allow to clear the attribute.
-						let maybe_is_locked = Self::get_item_settings(&collection, &item)
-							.map_or(false, |v| v.contains(ItemSetting::LockedAttributes));
+						let maybe_is_locked = Self::get_item_config(&collection, &item)
+							.map_or(false, |c| {
+								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
+							});
 						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
 					},
 				};
@@ -1504,18 +1507,18 @@ pub mod pallet {
 			let mut collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 
-			let (action_allowed, _) =
-				Self::is_item_setting_disabled(&collection, &item, ItemSetting::LockedMetadata)?;
+			let item_config = Self::get_item_config(&collection, &item)?;
 			ensure!(
-				maybe_check_owner.is_none() || action_allowed,
+				maybe_check_owner.is_none() ||
+					item_config.is_setting_enabled(ItemSetting::UnlockedMetadata),
 				Error::<T, I>::LockedItemMetadata
 			);
-
-			let collection_settings = Self::get_collection_settings(&collection)?;
 
 			if let Some(check_owner) = &maybe_check_owner {
 				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 			}
+
+			let collection_config = Self::get_collection_config(&collection)?;
 
 			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
 				if metadata.is_none() {
@@ -1524,7 +1527,7 @@ pub mod pallet {
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				collection_details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if !collection_settings.contains(CollectionSetting::FreeHolding) &&
+				if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
 					maybe_check_owner.is_some()
 				{
 					deposit = T::DepositPerByte::get()
@@ -1576,8 +1579,8 @@ pub mod pallet {
 			}
 
 			// NOTE: if the item was previously burned, the ItemConfigOf record might not exists
-			let is_locked = Self::get_item_settings(&collection, &item)
-				.map_or(false, |v| v.contains(ItemSetting::LockedMetadata));
+			let is_locked = Self::get_item_config(&collection, &item)
+				.map_or(false, |c| c.has_disabled_setting(ItemSetting::UnlockedMetadata));
 
 			ensure!(maybe_check_owner.is_none() || !is_locked, Error::<T, I>::LockedItemMetadata);
 
@@ -1620,12 +1623,10 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let (action_allowed, settings) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::LockedMetadata,
-			)?;
+			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
-				maybe_check_owner.is_none() || action_allowed,
+				maybe_check_owner.is_none() ||
+					collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
 				Error::<T, I>::LockedCollectionMetadata
 			);
 
@@ -1639,7 +1640,8 @@ pub mod pallet {
 				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
 				details.total_deposit.saturating_reduce(old_deposit);
 				let mut deposit = Zero::zero();
-				if maybe_check_owner.is_some() && !settings.contains(CollectionSetting::FreeHolding)
+				if maybe_check_owner.is_some() &&
+					collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
 				{
 					deposit = T::DepositPerByte::get()
 						.saturating_mul(((data.len()) as u32).into())
@@ -1688,12 +1690,10 @@ pub mod pallet {
 				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
 			}
 
-			let (action_allowed, _) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::LockedMetadata,
-			)?;
+			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
-				maybe_check_owner.is_none() || action_allowed,
+				maybe_check_owner.is_none() ||
+					collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
 				Error::<T, I>::LockedCollectionMetadata
 			);
 
@@ -1759,11 +1759,11 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
 
-			let (action_allowed, _) = Self::is_collection_setting_disabled(
-				&collection,
-				CollectionSetting::LockedMaxSupply,
-			)?;
-			ensure!(action_allowed, Error::<T, I>::MaxSupplyLocked);
+			let collection_config = Self::get_collection_config(&collection)?;
+			ensure!(
+				collection_config.is_setting_enabled(CollectionSetting::UnlockedMaxSupply),
+				Error::<T, I>::MaxSupplyLocked
+			);
 
 			let details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;

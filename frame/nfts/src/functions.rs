@@ -38,15 +38,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 		ensure!(!T::Locker::is_locked(collection, item), Error::<T, I>::ItemLocked);
 
-		let (action_allowed, _) = Self::is_collection_setting_disabled(
-			&collection,
-			CollectionSetting::NonTransferableItems,
-		)?;
-		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
+		let collection_config = Self::get_collection_config(&collection)?;
+		ensure!(
+			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+			Error::<T, I>::ItemsNotTransferable
+		);
 
-		let (action_allowed, _) =
-			Self::is_item_setting_disabled(&collection, &item, ItemSetting::NonTransferable)?;
-		ensure!(action_allowed, Error::<T, I>::ItemLocked);
+		let item_config = Self::get_item_config(&collection, &item)?;
+		ensure!(
+			item_config.is_setting_enabled(ItemSetting::Transferable),
+			Error::<T, I>::ItemLocked
+		);
 
 		let mut details =
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
@@ -145,8 +147,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
 			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
 			CollectionConfigOf::<T, I>::remove(&collection);
-			#[allow(deprecated)]
-			ItemConfigOf::<T, I>::remove_prefix(&collection, None);
+			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.items, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 
@@ -187,10 +188,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					collection_details.items.checked_add(1).ok_or(ArithmeticError::Overflow)?;
 				collection_details.items = items;
 
-				let settings = collection_config.settings.values();
-				let deposit = match settings.contains(CollectionSetting::FreeHolding) {
-					true => Zero::zero(),
-					false => T::ItemDeposit::get(),
+				let collection_config = Self::get_collection_config(&collection)?;
+				let deposit = match collection_config
+					.is_setting_enabled(CollectionSetting::DepositRequired)
+				{
+					true => T::ItemDeposit::get(),
+					false => Zero::zero(),
 				};
 				T::Currency::reserve(&collection_details.owner, deposit)?;
 				collection_details.total_deposit += deposit;
@@ -244,8 +247,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
 		// then we keep the record and don't remove it
-		let settings = Self::get_item_settings(&collection, &item)?;
-		if settings.is_empty() {
+		let config = Self::get_item_config(&collection, &item)?;
+		if !config.has_disabled_settings() {
 			ItemConfigOf::<T, I>::remove(&collection, &item);
 		}
 
@@ -261,22 +264,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		whitelisted_buyer: Option<T::AccountId>,
 	) -> DispatchResult {
 		ensure!(
-			Self::is_pallet_feature_disabled(PalletFeature::NoTrading),
+			Self::is_pallet_feature_enabled(PalletFeature::Trading),
 			Error::<T, I>::MethodDisabled
 		);
 
 		let details = Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
-		let (action_allowed, _) = Self::is_collection_setting_disabled(
-			&collection,
-			CollectionSetting::NonTransferableItems,
-		)?;
-		ensure!(action_allowed, Error::<T, I>::ItemsNotTransferable);
+		let collection_config = Self::get_collection_config(&collection)?;
+		ensure!(
+			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+			Error::<T, I>::ItemsNotTransferable
+		);
 
-		let (action_allowed, _) =
-			Self::is_item_setting_disabled(&collection, &item, ItemSetting::NonTransferable)?;
-		ensure!(action_allowed, Error::<T, I>::ItemLocked);
+		let item_config = Self::get_item_config(&collection, &item)?;
+		ensure!(
+			item_config.is_setting_enabled(ItemSetting::Transferable),
+			Error::<T, I>::ItemLocked
+		);
 
 		if let Some(ref price) = price {
 			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
@@ -301,7 +306,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		bid_price: ItemPrice<T, I>,
 	) -> DispatchResult {
 		ensure!(
-			Self::is_pallet_feature_disabled(PalletFeature::NoTrading),
+			Self::is_pallet_feature_enabled(PalletFeature::Trading),
 			Error::<T, I>::MethodDisabled
 		);
 

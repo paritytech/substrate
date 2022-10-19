@@ -30,6 +30,7 @@ use std::{marker::PhantomData, pin::Pin, sync::Arc};
 use prometheus_endpoint::Registry as PrometheusRegistry;
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend};
 use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_blockchain::{HeaderMetadata, TreeRoute};
 use sp_core::traits::SpawnEssentialNamed;
 use sp_runtime::{
 	generic::BlockId,
@@ -111,8 +112,11 @@ impl<Client, Block> FullChainApi<Client, Block> {
 impl<Client, Block> graph::ChainApi for FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client:
-		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
+		+ BlockIdTo<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -190,6 +194,14 @@ where
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
 		self.client.header(*at).map_err(Into::into)
 	}
+
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error> {
+		sp_blockchain::tree_route::<Block, Client>(&*self.client, from, to).map_err(Into::into)
+	}
 }
 
 /// Helper function to validate a transaction using a full chain API.
@@ -202,8 +214,11 @@ fn validate_transaction_blocking<Client, Block>(
 ) -> error::Result<TransactionValidity>
 where
 	Block: BlockT,
-	Client:
-		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
+		+ BlockIdTo<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {
@@ -264,8 +279,11 @@ where
 impl<Client, Block> FullChainApi<Client, Block>
 where
 	Block: BlockT,
-	Client:
-		ProvideRuntimeApi<Block> + BlockBackend<Block> + BlockIdTo<Block> + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block>
+		+ BlockBackend<Block>
+		+ BlockIdTo<Block>
+		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = sp_blockchain::Error>,
 	Client: Send + Sync + 'static,
 	Client::Api: TaggedTransactionQueue<Block>,
 {

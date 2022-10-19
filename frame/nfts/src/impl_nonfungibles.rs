@@ -19,6 +19,7 @@
 
 use super::*;
 use frame_support::{
+	ensure,
 	traits::{tokens::nonfungibles_v2::*, Get},
 	BoundedSlice,
 };
@@ -83,8 +84,8 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 			ItemConfigOf::<T, I>::get(collection, item),
 		) {
 			(Some(cc), Some(ic))
-				if !cc.settings.values().contains(CollectionSetting::NonTransferableItems) &&
-					!ic.settings.values().contains(ItemSetting::NonTransferable) =>
+				if cc.is_setting_enabled(CollectionSetting::TransferableItems) &&
+					ic.is_setting_enabled(ItemSetting::Transferable) =>
 				true,
 			_ => false,
 		}
@@ -101,16 +102,16 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		admin: &T::AccountId,
 		config: &CollectionConfigFor<T, I>,
 	) -> DispatchResult {
-		let mut settings = config.settings.values();
-		// FreeHolding could be set by calling the force_create() only
-		if settings.contains(CollectionSetting::FreeHolding) {
-			settings.remove(CollectionSetting::FreeHolding);
-		}
+		// DepositRequired can be disabled by calling the force_create() only
+		ensure!(
+			!config.has_disabled_setting(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
 		Self::do_create_collection(
 			*collection,
 			who.clone(),
 			admin.clone(),
-			CollectionConfig { settings: CollectionSettings(settings), ..*config },
+			*config,
 			T::CollectionDeposit::get(),
 			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
 		)

@@ -18,14 +18,11 @@
 use crate::*;
 use frame_support::pallet_prelude::*;
 
-/// Lock functions allow to lock collection/items metadata and attributes.
-/// Additionally, it's possible to make all collection items non-transferable.
-/// Those settings are irreversible.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn do_lock_collection(
+	pub(crate) fn do_lock_collection(
 		origin: T::AccountId,
 		collection: T::CollectionId,
-		lock_settings: CollectionSettings,
+		lock_config: CollectionConfigFor<T, I>,
 	) -> DispatchResult {
 		let details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -33,30 +30,64 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
-			let mut settings = config.settings.values();
-			let lock_settings = lock_settings.values();
 
-			if lock_settings.contains(CollectionSetting::NonTransferableItems) {
-				settings.insert(CollectionSetting::NonTransferableItems);
+			if lock_config.has_disabled_setting(CollectionSetting::TransferableItems) {
+				config.disable_setting(CollectionSetting::TransferableItems);
 			}
-			if lock_settings.contains(CollectionSetting::LockedMetadata) {
-				settings.insert(CollectionSetting::LockedMetadata);
+			if lock_config.has_disabled_setting(CollectionSetting::UnlockedMetadata) {
+				config.disable_setting(CollectionSetting::UnlockedMetadata);
 			}
-			if lock_settings.contains(CollectionSetting::LockedAttributes) {
-				settings.insert(CollectionSetting::LockedAttributes);
+			if lock_config.has_disabled_setting(CollectionSetting::UnlockedAttributes) {
+				config.disable_setting(CollectionSetting::UnlockedAttributes);
 			}
-			if lock_settings.contains(CollectionSetting::LockedMaxSupply) {
-				settings.insert(CollectionSetting::LockedMaxSupply);
+			if lock_config.has_disabled_setting(CollectionSetting::UnlockedMaxSupply) {
+				config.disable_setting(CollectionSetting::UnlockedMaxSupply);
 			}
-
-			config.settings = CollectionSettings(settings);
 
 			Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
 			Ok(())
 		})
 	}
 
-	pub fn do_lock_item(
+	pub(crate) fn do_lock_item_transfer(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		item: T::ItemId,
+	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+
+		let mut config = Self::get_item_config(&collection, &item)?;
+		if !config.has_disabled_setting(ItemSetting::Transferable) {
+			config.disable_setting(ItemSetting::Transferable);
+		}
+		ItemConfigOf::<T, I>::insert(&collection, &item, config);
+
+		Self::deposit_event(Event::<T, I>::ItemTransferLocked { collection, item });
+		Ok(())
+	}
+
+	pub(crate) fn do_unlock_item_transfer(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		item: T::ItemId,
+	) -> DispatchResult {
+		let collection_details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+
+		let mut config = Self::get_item_config(&collection, &item)?;
+		if config.has_disabled_setting(ItemSetting::Transferable) {
+			config.enable_setting(ItemSetting::Transferable);
+		}
+		ItemConfigOf::<T, I>::insert(&collection, &item, config);
+
+		Self::deposit_event(Event::<T, I>::ItemTransferUnlocked { collection, item });
+		Ok(())
+	}
+
+	pub(crate) fn do_lock_item_properties(
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -72,18 +103,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ItemConfigOf::<T, I>::try_mutate(collection, item, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::UnknownItem)?;
-			let mut settings = config.settings.values();
 
 			if lock_metadata {
-				settings.insert(ItemSetting::LockedMetadata);
+				config.disable_setting(ItemSetting::UnlockedMetadata);
 			}
 			if lock_attributes {
-				settings.insert(ItemSetting::LockedAttributes);
+				config.disable_setting(ItemSetting::UnlockedAttributes);
 			}
 
-			config.settings = ItemSettings(settings);
-
-			Self::deposit_event(Event::<T, I>::ItemLocked {
+			Self::deposit_event(Event::<T, I>::ItemPropertiesLocked {
 				collection,
 				item,
 				lock_metadata,

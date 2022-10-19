@@ -134,7 +134,7 @@ fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<
 where
 	<T as Config<I>>::CollectionId: sp_std::default::Default,
 {
-	CollectionConfig::default()
+	CollectionConfig::all_settings_enabled()
 }
 
 benchmarks_instance_pallet! {
@@ -213,40 +213,42 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup,
-			CollectionConfig { settings: CollectionSetting::FreeHolding.into(), ..Default::default() },
+			CollectionConfig { settings: CollectionSetting::DepositRequired.into(), ..Default::default() },
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
 		assert_last_event::<T, I>(Event::Redeposited { collection, successful_items: items }.into());
 	}
 
-	freeze {
+	lock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 	}: _(SystemOrigin::Signed(caller.clone()), T::Helper::collection(0), T::Helper::item(0))
 	verify {
-		assert_last_event::<T, I>(Event::Frozen { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
+		assert_last_event::<T, I>(Event::ItemTransferLocked { collection: T::Helper::collection(0), item: T::Helper::item(0) }.into());
 	}
 
-	thaw {
+	unlock_item_transfer {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-		Nfts::<T, I>::freeze(
+		Nfts::<T, I>::lock_item_transfer(
 			SystemOrigin::Signed(caller.clone()).into(),
 			collection,
 			item,
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item)
 	verify {
-		assert_last_event::<T, I>(Event::Thawed { collection, item }.into());
+		assert_last_event::<T, I>(Event::ItemTransferUnlocked { collection, item }.into());
 	}
 
 	lock_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let lock_settings = CollectionSettings(CollectionSetting::NonTransferableItems |
-				CollectionSetting::LockedMetadata |
-				CollectionSetting::LockedAttributes);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_settings)
+		let lock_config = CollectionConfig(
+			CollectionSetting::TransferableItems |
+				CollectionSetting::UnlockedMetadata |
+				CollectionSetting::UnlockedAttributes,
+		);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_config)
 	verify {
 		assert_last_event::<T, I>(Event::CollectionLocked { collection }.into());
 	}
@@ -287,21 +289,21 @@ benchmarks_instance_pallet! {
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			config: CollectionConfig { settings: CollectionSetting::FreeHolding.into(), ..Default::default() },
+			config: CollectionConfig { settings: CollectionSetting::DepositRequired.into(), ..Default::default() },
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
 	}
 
-	lock_item {
+	lock_item_properties {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
 		let lock_metadata = true;
 		let lock_attributes = true;
 	}: _(SystemOrigin::Signed(caller), collection, item, lock_metadata, lock_attributes)
 	verify {
-		assert_last_event::<T, I>(Event::ItemLocked { collection, item, lock_metadata, lock_attributes }.into());
+		assert_last_event::<T, I>(Event::ItemPropertiesLocked { collection, item, lock_metadata, lock_attributes }.into());
 	}
 
 	set_attribute {

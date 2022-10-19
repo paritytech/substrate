@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::*;
-use enumflags2::BitFlags;
 use frame_support::pallet_prelude::*;
 
 /// The helper methods bellow allow to read and validate different
@@ -24,7 +23,7 @@ use frame_support::pallet_prelude::*;
 /// For example, those settings allow to disable NFTs trading on a pallet level, or for a particular
 /// collection, or for a specific item.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub fn get_collection_config(
+	pub(crate) fn get_collection_config(
 		collection_id: &T::CollectionId,
 	) -> Result<CollectionConfigFor<T, I>, DispatchError> {
 		let config =
@@ -32,41 +31,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(config)
 	}
 
-	pub fn get_collection_settings(
-		collection_id: &T::CollectionId,
-	) -> Result<BitFlags<CollectionSetting>, DispatchError> {
-		let config = Self::get_collection_config(collection_id)?;
-		Ok(config.settings.values())
-	}
-
-	pub fn get_item_settings(
+	pub(crate) fn get_item_config(
 		collection_id: &T::CollectionId,
 		item_id: &T::ItemId,
-	) -> Result<BitFlags<ItemSetting>, DispatchError> {
+	) -> Result<ItemConfig, DispatchError> {
 		let config = ItemConfigOf::<T, I>::get(&collection_id, &item_id)
 			.ok_or(Error::<T, I>::UnknownItem)?;
-		Ok(config.settings.values())
+		Ok(config)
 	}
 
-	pub fn is_collection_setting_disabled(
-		collection_id: &T::CollectionId,
-		setting: CollectionSetting,
-	) -> Result<(bool, BitFlags<CollectionSetting>), DispatchError> {
-		let settings = Self::get_collection_settings(&collection_id)?;
-		Ok((!settings.contains(setting), settings))
-	}
-
-	pub fn is_item_setting_disabled(
-		collection_id: &T::CollectionId,
-		item_id: &T::ItemId,
-		setting: ItemSetting,
-	) -> Result<(bool, BitFlags<ItemSetting>), DispatchError> {
-		let settings = Self::get_item_settings(&collection_id, &item_id)?;
-		Ok((!settings.contains(setting), settings))
-	}
-
-	pub fn is_pallet_feature_disabled(feature: PalletFeature) -> bool {
+	pub(crate) fn is_pallet_feature_enabled(feature: PalletFeature) -> bool {
 		let features = T::Features::get();
-		return !features.0.contains(feature)
+		return features.is_enabled(feature)
 	}
 }
