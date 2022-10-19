@@ -249,7 +249,7 @@ impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumb
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct MintWitness<ItemId> {
-	/// The total number of outstanding items of this collection.
+	/// Provide the id of the item in a required collection.
 	pub owner_of_item: ItemId,
 }
 
@@ -292,6 +292,7 @@ impl<Price, BlockNumber, CollectionId> CollectionConfig<Price, BlockNumber, Coll
 		self.settings.0.insert(setting);
 	}
 }
+
 /// Support for up to 64 user-enabled features on an item.
 #[bitflags]
 #[repr(u64)]
