@@ -39,10 +39,7 @@ use sp_core::{
 	},
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT},
-	StateVersion,
-};
+use sp_runtime::{traits::Block as BlockT, StateVersion};
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -880,7 +877,7 @@ mod test_prelude {
 		let _ = env_logger::Builder::from_default_env()
 			.format_module_path(true)
 			.format_level(true)
-			// .filter_module(LOG_TARGET, log::LevelFilter::Debug)
+			.filter_module(LOG_TARGET, log::LevelFilter::Debug)
 			.try_init();
 	}
 }
@@ -945,13 +942,18 @@ mod remote_tests {
 	use std::os::unix::fs::MetadataExt;
 
 	#[tokio::test]
-	async fn single_thread_works() {
-		todo!();
-	}
-
-	#[tokio::test]
 	async fn single_multi_thread_result_is_same() {
-		todo!();
+		let c = |threads| OnlineConfig {
+			pallets: vec!["Proxy".to_owned(), "Crowdloan".to_owned()],
+			child_trie: true,
+			threads,
+			..Default::default()
+		};
+		let ext1 = Builder::<Block>::new().mode(Mode::Online(c(1))).build().await.unwrap();
+
+		let ext2 = Builder::<Block>::new().mode(Mode::Online(c(8))).build().await.unwrap();
+
+		assert_eq!(ext1.as_backend().root(), ext2.as_backend().root());
 	}
 
 	#[tokio::test]
@@ -1056,26 +1058,6 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test(flavor = "multi_thread")]
-	async fn can_build_big_pallet() {
-		init_logger();
-		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig {
-				transport: "wss://rpc.polkadot.io:443".into(),
-				// transport: "wss://polkadot.api.onfinality.io:443/public-ws".into(),
-				// transport: "wss://public-rpc.pinknode.io:443/polkadot".into(),
-				// transport: "ws://127.0.0.1:9944".into(),
-				pallets: vec!["Staking".to_owned()],
-				child_trie: false,
-				threads:2 ,
-				..Default::default()
-			}))
-			.build()
-			.await
-			.unwrap()
-			.execute_with(|| {});
-	}
-
 	#[tokio::test]
 	async fn can_create_snapshot() {
 		const CACHE: &'static str = "can_create_snapshot";
@@ -1142,12 +1124,17 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	// #[ignore = "only works if a local node is present."]
-	async fn can_fetch_all_local() {
+	async fn can_build_big_pallet() {
+		if std::option_env!("TEST_WS").is_none() {
+			return
+		}
 		init_logger();
 		Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
-				transport: "ws://localhost:9944".into(),
+				transport: std::option_env!("TEST_WS").unwrap().into(),
+				pallets: vec!["Staking".to_owned()],
+				child_trie: false,
+				threads: 2,
 				..Default::default()
 			}))
 			.build()
@@ -1157,11 +1144,16 @@ mod remote_tests {
 	}
 
 	#[tokio::test]
-	// #[ignore = "slow af."]
-	async fn can_fetch_all_remote() {
+	async fn can_fetch_all() {
+		if std::option_env!("TEST_WS").is_none() {
+			return
+		}
 		init_logger();
 		Builder::<Block>::new()
-			.mode(Mode::Online(OnlineConfig::default()))
+			.mode(Mode::Online(OnlineConfig {
+				transport: std::option_env!("TEST_WS").unwrap().into(),
+				..Default::default()
+			}))
 			.build()
 			.await
 			.unwrap()
