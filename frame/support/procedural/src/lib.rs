@@ -1261,3 +1261,8 @@ pub fn validate_unsigned(_: TokenStream, _: TokenStream) -> TokenStream {
 pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
+
+#[proc_macro_attribute]
+pub fn dev_mode(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
