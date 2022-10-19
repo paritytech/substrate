@@ -1152,42 +1152,39 @@ where
 {
 	fn read_proof(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.state_at(&hash)
+		self.state_at(hash)
 			.and_then(|state| prove_read(state, keys).map_err(Into::into))
 	}
 
 	fn read_child_proof(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.state_at(&hash)
+		self.state_at(hash)
 			.and_then(|state| prove_child_read(state, child_info, keys).map_err(Into::into))
 	}
 
 	fn execution_proof(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor.prove_execution(id, method, call_data)
+		self.executor.prove_execution(&BlockId::Hash(*hash), method, call_data)
 	}
 
 	fn read_proof_collection(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)> {
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		let state = self.state_at(&hash)?;
+		let state = self.state_at(hash)?;
 		// this is a read proof, using version V0 or V1 is equivalent.
 		let root = state.storage_root(std::iter::empty(), StateVersion::V0).0;
 
@@ -1202,14 +1199,13 @@ where
 
 	fn storage_collection(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
 		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
 			return Err(Error::Backend("Invalid start key.".to_string()))
 		}
-		let hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
 		let state = self.state_at(&hash)?;
 		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
 			let storage_key = PrefixedStorageKey::new_ref(storage_key);
