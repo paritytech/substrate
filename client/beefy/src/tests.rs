@@ -20,7 +20,6 @@
 
 use futures::{future, stream::FuturesUnordered, Future, StreamExt};
 use parking_lot::Mutex;
-use sc_client_api::backend::Backend;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc, task::Poll};
 use tokio::{runtime::Runtime, time::Duration};
