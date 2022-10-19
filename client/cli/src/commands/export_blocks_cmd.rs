@@ -32,23 +32,23 @@ use std::{fmt::Debug, fs, io, path::PathBuf, str::FromStr, sync::Arc};
 #[derive(Debug, Clone, Parser)]
 pub struct ExportBlocksCmd {
 	/// Output file name or stdout if unspecified.
-	#[clap(parse(from_os_str))]
+	#[arg()]
 	pub output: Option<PathBuf>,
 
 	/// Specify starting block number.
 	///
 	/// Default is 1.
-	#[clap(long, value_name = "BLOCK")]
+	#[arg(long, value_name = "BLOCK")]
 	pub from: Option<GenericNumber>,
 
 	/// Specify last block number.
 	///
 	/// Default is best block.
-	#[clap(long, value_name = "BLOCK")]
+	#[arg(long, value_name = "BLOCK")]
 	pub to: Option<GenericNumber>,
 
 	/// Use binary output rather than JSON.
-	#[clap(long)]
+	#[arg(long)]
 	pub binary: bool,
 
 	#[allow(missing_docs)]
