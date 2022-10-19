@@ -373,7 +373,6 @@ benchmarks! {
 		// User requests judgement from all the registrars, and they approve
 		for i in 0..r {
 			let registrar: T::AccountId = account("registrar", i, SEED);
-			let registrar_lookup = T::Lookup::unlookup(registrar.clone());
 			let balance_to_use =  T::Currency::minimum_balance() * 10u32.into();
 			let _ = T::Currency::make_free_balance_be(&registrar, balance_to_use);
 
