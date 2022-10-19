@@ -43,15 +43,18 @@
 
 use scale_info::TypeInfo;
 use sp_arithmetic::traits::Saturating;
-use sp_runtime::{traits::Convert, ArithmeticError::Overflow, Perbill, RuntimeDebug};
+use sp_runtime::{
+	traits::{Convert, StaticLookup},
+	ArithmeticError::Overflow,
+	Perbill, RuntimeDebug,
+};
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
-	dispatch::{DispatchError, DispatchResultWithPostInfo},
+	dispatch::{DispatchError, DispatchResultWithPostInfo, PostDispatchInfo},
 	ensure,
 	traits::{EnsureOrigin, PollStatus, Polling, VoteTally},
-	weights::PostDispatchInfo,
 	CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 
@@ -109,6 +112,7 @@ impl<T: Config<I>, I: 'static, M: GetMaxVoters> Tally<T, I, M> {
 
 pub type TallyOf<T, I = ()> = Tally<T, I, Pallet<T, I>>;
 pub type PollIndexOf<T, I = ()> = <<T as Config<I>>::Polls as Polling<TallyOf<T, I>>>::Index;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 impl<T: Config<I>, I: 'static, M: GetMaxVoters> VoteTally<Votes, Rank> for Tally<T, I, M> {
 	fn new(_: Rank) -> Self {
@@ -195,11 +199,11 @@ impl Convert<Rank, Votes> for Unit {
 /// Vote-weight scheme where all voters get one vote plus an additional vote for every excess rank
 /// they have. I.e.:
 ///
-/// - Each member with no excess rank gets 1 vote;
+/// - Each member with an excess rank of 0 gets 1 vote;
 /// - ...with an excess rank of 1 gets 2 votes;
-/// - ...with an excess rank of 2 gets 2 votes;
-/// - ...with an excess rank of 3 gets 3 votes;
-/// - ...with an excess rank of 4 gets 4 votes.
+/// - ...with an excess rank of 2 gets 3 votes;
+/// - ...with an excess rank of 3 gets 4 votes;
+/// - ...with an excess rank of 4 gets 5 votes.
 pub struct Linear;
 impl Convert<Rank, Votes> for Linear {
 	fn convert(r: Rank) -> Votes {
@@ -210,11 +214,11 @@ impl Convert<Rank, Votes> for Linear {
 /// Vote-weight scheme where all voters get one vote plus additional votes for every excess rank
 /// they have incrementing by one vote for each excess rank. I.e.:
 ///
-/// - Each member with no excess rank gets 1 vote;
-/// - ...with an excess rank of 1 gets 2 votes;
-/// - ...with an excess rank of 2 gets 3 votes;
-/// - ...with an excess rank of 3 gets 6 votes;
-/// - ...with an excess rank of 4 gets 10 votes.
+/// - Each member with an excess rank of 0 gets 1 vote;
+/// - ...with an excess rank of 1 gets 3 votes;
+/// - ...with an excess rank of 2 gets 6 votes;
+/// - ...with an excess rank of 3 gets 10 votes;
+/// - ...with an excess rank of 4 gets 15 votes.
 pub struct Geometric;
 impl Convert<Rank, Votes> for Geometric {
 	fn convert(r: Rank) -> Votes {
@@ -237,12 +241,12 @@ impl<T: Config<I>, I: 'static> GetMaxVoters for Pallet<T, I> {
 /// Guard to ensure that the given origin is a member of the collective. The rank of the member is
 /// the `Success` value.
 pub struct EnsureRanked<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureRanked<T, I, MIN_RANK>
 {
 	type Success = Rank;
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(rank),
@@ -251,13 +255,13 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
+	fn successful_origin() -> T::RuntimeOrigin {
 		match Self::try_successful_origin() {
 			Ok(o) => o,
 			Err(()) => {
@@ -273,12 +277,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 /// Guard to ensure that the given origin is a member of the collective. The account ID of the
 /// member is the `Success` value.
 pub struct EnsureMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureMember<T, I, MIN_RANK>
 {
 	type Success = T::AccountId;
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok(who),
@@ -287,13 +291,13 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
+	fn successful_origin() -> T::RuntimeOrigin {
 		match Self::try_successful_origin() {
 			Ok(o) => o,
 			Err(()) => {
@@ -309,12 +313,12 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 /// Guard to ensure that the given origin is a member of the collective. The pair of including both
 /// the account ID and the rank of the member is the `Success` value.
 pub struct EnsureRankedMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
-impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
+impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureRankedMember<T, I, MIN_RANK>
 {
 	type Success = (T::AccountId, Rank);
 
-	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
+	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
 		let who = frame_system::EnsureSigned::try_origin(o)?;
 		match Members::<T, I>::get(&who) {
 			Some(MemberRecord { rank, .. }) if rank >= MIN_RANK => Ok((who, rank)),
@@ -323,13 +327,13 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::Origin>
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::Origin, ()> {
+	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
 		let who = IndexToId::<T, I>::get(MIN_RANK, 0).ok_or(())?;
 		Ok(frame_system::RawOrigin::Signed(who).into())
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn successful_origin() -> T::Origin {
+	fn successful_origin() -> T::RuntimeOrigin {
 		match Self::try_successful_origin() {
 			Ok(o) => o,
 			Err(()) => {
@@ -357,16 +361,17 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The outer event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		/// The runtime event type.
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The origin required to add or promote a mmember. The success value indicates the
 		/// maximum rank *to which* the promotion may be.
-		type PromoteOrigin: EnsureOrigin<Self::Origin, Success = Rank>;
+		type PromoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The origin required to demote or remove a member. The success value indicates the
 		/// maximum rank *from which* the demotion/removal may be.
-		type DemoteOrigin: EnsureOrigin<Self::Origin, Success = Rank>;
+		type DemoteOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Rank>;
 
 		/// The polling system used for our voting.
 		type Polls: Polling<TallyOf<Self, I>, Votes = Votes, Moment = Self::BlockNumber>;
@@ -466,8 +471,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::add_member())]
-		pub fn add_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn add_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let _ = T::PromoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			Self::do_add_member(who)
 		}
 
@@ -478,8 +484,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::promote_member(0))]
-		pub fn promote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn promote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::PromoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			Self::do_promote_member(who, Some(max_rank))
 		}
 
@@ -491,8 +498,9 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`, less if the member's index is highest in its rank.
 		#[pallet::weight(T::WeightInfo::demote_member(0))]
-		pub fn demote_member(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+		pub fn demote_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			let mut record = Self::ensure_member(&who)?;
 			let rank = record.rank;
 			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);
@@ -523,10 +531,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_member(*min_rank as u32))]
 		pub fn remove_member(
 			origin: OriginFor<T>,
-			who: T::AccountId,
+			who: AccountIdLookupOf<T>,
 			min_rank: Rank,
 		) -> DispatchResultWithPostInfo {
 			let max_rank = T::DemoteOrigin::ensure_origin(origin)?;
+			let who = T::Lookup::lookup(who)?;
 			let MemberRecord { rank, .. } = Self::ensure_member(&who)?;
 			ensure!(min_rank >= rank, Error::<T, I>::InvalidWitness);
 			ensure!(max_rank >= rank, Error::<T, I>::NoPermission);

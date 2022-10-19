@@ -84,13 +84,13 @@ impl<H: Clone, BH: Clone> Sender<H, BH> {
 	}
 
 	/// Extrinsic has been included in block with given hash.
-	pub fn in_block(&mut self, hash: BH) {
-		self.send(TransactionStatus::InBlock(hash));
+	pub fn in_block(&mut self, hash: BH, index: usize) {
+		self.send(TransactionStatus::InBlock((hash, index)));
 	}
 
 	/// Extrinsic has been finalized by a finality gadget.
-	pub fn finalized(&mut self, hash: BH) {
-		self.send(TransactionStatus::Finalized(hash));
+	pub fn finalized(&mut self, hash: BH, index: usize) {
+		self.send(TransactionStatus::Finalized((hash, index)));
 		self.is_finalized = true;
 	}
 

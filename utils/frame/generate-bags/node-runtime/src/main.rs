@@ -25,19 +25,19 @@ use std::path::PathBuf;
 // #[clap(author, version, about)]
 struct Opt {
 	/// How many bags to generate.
-	#[clap(long, default_value = "200")]
+	#[arg(long, default_value_t = 200)]
 	n_bags: usize,
 
 	/// Where to write the output.
 	output: PathBuf,
 
 	/// The total issuance of the currency used to create `VoteWeight`.
-	#[clap(short, long)]
+	#[arg(short, long)]
 	total_issuance: u128,
 
 	/// The minimum account balance (i.e. existential deposit) for the currency used to create
 	/// `VoteWeight`.
-	#[clap(short, long)]
+	#[arg(short, long)]
 	minimum_balance: u128,
 }
 

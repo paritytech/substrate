@@ -37,6 +37,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 	task::{Context, Poll},
+	time::Duration,
 };
 
 use finality_grandpa::{
@@ -68,8 +69,12 @@ mod periodic;
 #[cfg(test)]
 pub(crate) mod tests;
 
+// How often to rebroadcast neighbor packets, in cases where no new packets are created.
+pub(crate) const NEIGHBOR_REBROADCAST_PERIOD: Duration = Duration::from_secs(2 * 60);
+
 pub mod grandpa_protocol_name {
 	use sc_chain_spec::ChainSpec;
+	use sc_network_common::protocol::ProtocolName;
 
 	pub(crate) const NAME: &str = "/grandpa/1";
 	/// Old names for the notifications protocol, used for backward compatibility.
@@ -81,10 +86,11 @@ pub mod grandpa_protocol_name {
 	pub fn standard_name<Hash: AsRef<[u8]>>(
 		genesis_hash: &Hash,
 		chain_spec: &Box<dyn ChainSpec>,
-	) -> std::borrow::Cow<'static, str> {
+	) -> ProtocolName {
+		let genesis_hash = genesis_hash.as_ref();
 		let chain_prefix = match chain_spec.fork_id() {
-			Some(fork_id) => format!("/{}/{}", hex::encode(genesis_hash), fork_id),
-			None => format!("/{}", hex::encode(genesis_hash)),
+			Some(fork_id) => format!("/{}/{}", array_bytes::bytes2hex("", genesis_hash), fork_id),
+			None => format!("/{}", array_bytes::bytes2hex("", genesis_hash)),
 		};
 		format!("{}{}", chain_prefix, NAME).into()
 	}
@@ -101,6 +107,8 @@ mod cost {
 	pub(super) const UNKNOWN_VOTER: Rep = Rep::new(-150, "Grandpa: Unknown voter");
 
 	pub(super) const INVALID_VIEW_CHANGE: Rep = Rep::new(-500, "Grandpa: Invalid view change");
+	pub(super) const DUPLICATE_NEIGHBOR_MESSAGE: Rep =
+		Rep::new(-500, "Grandpa: Duplicate neighbor message without grace period");
 	pub(super) const PER_UNDECODABLE_BYTE: i32 = -5;
 	pub(super) const PER_SIGNATURE_CHECKED: i32 = -25;
 	pub(super) const PER_BLOCK_LOADED: i32 = -10;
@@ -277,7 +285,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		}
 
 		let (neighbor_packet_worker, neighbor_packet_sender) =
-			periodic::NeighborPacketWorker::new();
+			periodic::NeighborPacketWorker::new(NEIGHBOR_REBROADCAST_PERIOD);
 
 		NetworkBridge {
 			service,
@@ -311,8 +319,8 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		round: Round,
 		set_id: SetId,
 		voters: Arc<VoterSet<AuthorityId>>,
-		has_voted: HasVoted<B>,
-	) -> (impl Stream<Item = SignedMessage<B>> + Unpin, OutgoingMessages<B>) {
+		has_voted: HasVoted<B::Header>,
+	) -> (impl Stream<Item = SignedMessage<B::Header>> + Unpin, OutgoingMessages<B>) {
 		self.note_round(round, set_id, &voters);
 
 		let keystore = keystore.and_then(|ks| {
@@ -674,15 +682,15 @@ pub(crate) struct OutgoingMessages<Block: BlockT> {
 	round: RoundNumber,
 	set_id: SetIdNumber,
 	keystore: Option<LocalIdKeystore>,
-	sender: mpsc::Sender<SignedMessage<Block>>,
+	sender: mpsc::Sender<SignedMessage<Block::Header>>,
 	network: Arc<Mutex<GossipEngine<Block>>>,
-	has_voted: HasVoted<Block>,
+	has_voted: HasVoted<Block::Header>,
 	telemetry: Option<TelemetryHandle>,
 }
 
 impl<B: BlockT> Unpin for OutgoingMessages<B> {}
 
-impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
+impl<Block: BlockT> Sink<Message<Block::Header>> for OutgoingMessages<Block> {
 	type Error = Error;
 
 	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -693,7 +701,10 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
 		})
 	}
 
-	fn start_send(mut self: Pin<&mut Self>, mut msg: Message<Block>) -> Result<(), Self::Error> {
+	fn start_send(
+		mut self: Pin<&mut Self>,
+		mut msg: Message<Block::Header>,
+	) -> Result<(), Self::Error> {
 		// if we've voted on this round previously under the same key, send that vote instead
 		match &mut msg {
 			finality_grandpa::Message::PrimaryPropose(ref mut vote) => {
@@ -783,7 +794,7 @@ impl<Block: BlockT> Sink<Message<Block>> for OutgoingMessages<Block> {
 // checks a compact commit. returns the cost associated with processing it if
 // the commit was bad.
 fn check_compact_commit<Block: BlockT>(
-	msg: &CompactCommit<Block>,
+	msg: &CompactCommit<Block::Header>,
 	voters: &VoterSet<AuthorityId>,
 	round: Round,
 	set_id: SetId,
@@ -851,7 +862,7 @@ fn check_compact_commit<Block: BlockT>(
 // checks a catch up. returns the cost associated with processing it if
 // the catch up was bad.
 fn check_catch_up<Block: BlockT>(
-	msg: &CatchUp<Block>,
+	msg: &CatchUp<Block::Header>,
 	voters: &VoterSet<AuthorityId>,
 	set_id: SetId,
 	telemetry: Option<TelemetryHandle>,
@@ -901,7 +912,7 @@ fn check_catch_up<Block: BlockT>(
 	) -> Result<usize, ReputationChange>
 	where
 		B: BlockT,
-		I: Iterator<Item = (Message<B>, &'a AuthorityId, &'a AuthoritySignature)>,
+		I: Iterator<Item = (Message<B::Header>, &'a AuthorityId, &'a AuthoritySignature)>,
 	{
 		use crate::communication::gossip::Misbehavior;
 
@@ -995,7 +1006,7 @@ impl<Block: BlockT> CommitsOut<Block> {
 	}
 }
 
-impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
+impl<Block: BlockT> Sink<(RoundNumber, Commit<Block::Header>)> for CommitsOut<Block> {
 	type Error = Error;
 
 	fn poll_ready(self: Pin<&mut Self>, _: &mut Context) -> Poll<Result<(), Self::Error>> {
@@ -1004,7 +1015,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 
 	fn start_send(
 		self: Pin<&mut Self>,
-		input: (RoundNumber, Commit<Block>),
+		input: (RoundNumber, Commit<Block::Header>),
 	) -> Result<(), Self::Error> {
 		if !self.is_voter {
 			return Ok(())
@@ -1026,7 +1037,7 @@ impl<Block: BlockT> Sink<(RoundNumber, Commit<Block>)> for CommitsOut<Block> {
 			.map(|signed| (signed.precommit, (signed.signature, signed.id)))
 			.unzip();
 
-		let compact_commit = CompactCommit::<Block> {
+		let compact_commit = CompactCommit::<Block::Header> {
 			target_hash: commit.target_hash,
 			target_number: commit.target_number,
 			precommits,

@@ -96,6 +96,8 @@ pub enum OnBlockData<Block: BlockT> {
 	Import(BlockOrigin, Vec<IncomingBlock<Block>>),
 	/// A new block request needs to be made to the given peer.
 	Request(PeerId, BlockRequest<Block>),
+	/// Continue processing events.
+	Continue,
 }
 
 /// Result of [`ChainSync::on_block_justification`].
@@ -267,12 +269,14 @@ pub trait ChainSync<Block: BlockT>: Send {
 	);
 
 	/// Get an iterator over all scheduled justification requests.
-	fn justification_requests(
-		&mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + '_>;
+	fn justification_requests<'a>(
+		&'a mut self,
+	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
 
 	/// Get an iterator over all block requests of all peers.
-	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<Block>)> + '_>;
+	fn block_requests<'a>(
+		&'a mut self,
+	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
 
 	/// Get a state request, if any.
 	fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)>;
@@ -357,9 +361,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 	///
 	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to
 	/// import passed header (call `on_block_data`). The network request isn't sent in this case.
-	fn poll_block_announce_validation(
+	fn poll_block_announce_validation<'a>(
 		&mut self,
-		cx: &mut std::task::Context,
+		cx: &mut std::task::Context<'a>,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 
 	/// Call when a peer has disconnected.
@@ -391,4 +395,14 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Decode implementation-specific state response.
 	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
+
+	/// Advance the state of `ChainSync`
+	///
+	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
+	/// this function should be polled until it returns [`Poll::Pending`] to
+	/// consume all pending events.
+	fn poll(
+		&mut self,
+		cx: &mut std::task::Context,
+	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 }

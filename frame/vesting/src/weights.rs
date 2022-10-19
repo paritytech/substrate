@@ -65,26 +65,26 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_locked(l: u32, s: u32, ) -> Weight {
-		(32_525_000 as Weight)
+		Weight::from_ref_time(32_978_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((71_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(82_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((69_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(88_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_unlocked(l: u32, s: u32, ) -> Weight {
-		(32_281_000 as Weight)
+		Weight::from_ref_time(32_856_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((69_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(79_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((38_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(2 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(56_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -92,13 +92,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_other_locked(l: u32, s: u32, ) -> Weight {
-		(32_010_000 as Weight)
+		Weight::from_ref_time(33_522_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((75_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(74_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((71_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(72_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -106,13 +106,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_other_unlocked(l: u32, s: u32, ) -> Weight {
-		(31_778_000 as Weight)
+		Weight::from_ref_time(32_558_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((73_000 as Weight).saturating_mul(l as Weight))
-			// Standard Error: 1_000
-			.saturating_add((44_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(78_000 as u64).saturating_mul(l as u64))
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(61_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
@@ -120,13 +120,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[0, 27]`.
 	fn vested_transfer(l: u32, s: u32, ) -> Weight {
-		(48_457_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((61_000 as Weight).saturating_mul(l as Weight))
+		Weight::from_ref_time(49_260_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(80_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 3_000
-			.saturating_add((19_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(55_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:2 w:2)
@@ -134,13 +134,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[0, 27]`.
 	fn force_vested_transfer(l: u32, s: u32, ) -> Weight {
-		(47_351_000 as Weight)
+		Weight::from_ref_time(49_166_000 as u64)
 			// Standard Error: 2_000
-			.saturating_add((70_000 as Weight).saturating_mul(l as Weight))
-			// Standard Error: 3_000
-			.saturating_add((30_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(77_000 as u64).saturating_mul(l as u64))
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(43_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -148,13 +148,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[2, 28]`.
 	fn not_unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
-		(33_082_000 as Weight)
+		Weight::from_ref_time(34_042_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((79_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(83_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((63_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(80_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -162,25 +162,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[2, 28]`.
 	fn unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
-		(32_668_000 as Weight)
+		Weight::from_ref_time(33_937_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((77_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(78_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((64_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
-	}
-	// Storage: Vesting Vesting (r:1 w:1)
-	// Storage: Balances Locks (r:1 w:1)
-	// Storage: System Account (r:1 w:1)
-	/// The range of component `l` is `[0, 49]`.
-	/// The range of component `s` is `[0, 28]`.
-	fn force_remove_vesting_schedule(l: u32, _s: u32, ) -> Weight {
-		(34_336_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((76_000 as Weight).saturating_mul(l as Weight))
-			.saturating_add(T::DbWeight::get().reads(3 as Weight))
-			.saturating_add(T::DbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(73_000 as u64).saturating_mul(s as u64))
+			.saturating_add(T::DbWeight::get().reads(3 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 }
 
@@ -191,26 +179,26 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_locked(l: u32, s: u32, ) -> Weight {
-		(32_525_000 as Weight)
+		Weight::from_ref_time(32_978_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((71_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(82_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((69_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(88_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_unlocked(l: u32, s: u32, ) -> Weight {
-		(32_281_000 as Weight)
+		Weight::from_ref_time(32_856_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((69_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(79_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((38_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(2 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+			.saturating_add(Weight::from_ref_time(56_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -218,13 +206,13 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_other_locked(l: u32, s: u32, ) -> Weight {
-		(32_010_000 as Weight)
+		Weight::from_ref_time(33_522_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((75_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(74_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((71_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(72_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -232,13 +220,13 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[1, 28]`.
 	fn vest_other_unlocked(l: u32, s: u32, ) -> Weight {
-		(31_778_000 as Weight)
+		Weight::from_ref_time(32_558_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((73_000 as Weight).saturating_mul(l as Weight))
-			// Standard Error: 1_000
-			.saturating_add((44_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(78_000 as u64).saturating_mul(l as u64))
+			// Standard Error: 2_000
+			.saturating_add(Weight::from_ref_time(61_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:1 w:1)
@@ -246,13 +234,13 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[0, 27]`.
 	fn vested_transfer(l: u32, s: u32, ) -> Weight {
-		(48_457_000 as Weight)
-			// Standard Error: 2_000
-			.saturating_add((61_000 as Weight).saturating_mul(l as Weight))
+		Weight::from_ref_time(49_260_000 as u64)
+			// Standard Error: 1_000
+			.saturating_add(Weight::from_ref_time(80_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 3_000
-			.saturating_add((19_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(55_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: System Account (r:2 w:2)
@@ -260,13 +248,13 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[0, 27]`.
 	fn force_vested_transfer(l: u32, s: u32, ) -> Weight {
-		(47_351_000 as Weight)
+		Weight::from_ref_time(49_166_000 as u64)
 			// Standard Error: 2_000
-			.saturating_add((70_000 as Weight).saturating_mul(l as Weight))
-			// Standard Error: 3_000
-			.saturating_add((30_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(4 as Weight))
+			.saturating_add(Weight::from_ref_time(77_000 as u64).saturating_mul(l as u64))
+			// Standard Error: 4_000
+			.saturating_add(Weight::from_ref_time(43_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -274,13 +262,13 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[2, 28]`.
 	fn not_unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
-		(33_082_000 as Weight)
+		Weight::from_ref_time(34_042_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((79_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(83_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((63_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(80_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	// Storage: Vesting Vesting (r:1 w:1)
 	// Storage: Balances Locks (r:1 w:1)
@@ -288,24 +276,12 @@ impl WeightInfo for () {
 	/// The range of component `l` is `[0, 49]`.
 	/// The range of component `s` is `[2, 28]`.
 	fn unlocking_merge_schedules(l: u32, s: u32, ) -> Weight {
-		(32_668_000 as Weight)
+		Weight::from_ref_time(33_937_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add((77_000 as Weight).saturating_mul(l as Weight))
+			.saturating_add(Weight::from_ref_time(78_000 as u64).saturating_mul(l as u64))
 			// Standard Error: 2_000
-			.saturating_add((64_000 as Weight).saturating_mul(s as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
-	}
-	// Storage: Vesting Vesting (r:1 w:1)
-	// Storage: Balances Locks (r:1 w:1)
-	// Storage: System Account (r:1 w:1)
-	/// The range of component `l` is `[0, 49]`.
-	/// The range of component `s` is `[0, 28]`.
-	fn force_remove_vesting_schedule(l: u32, _s: u32, ) -> Weight {
-		(34_336_000 as Weight)
-			// Standard Error: 0
-			.saturating_add((76_000 as Weight).saturating_mul(l as Weight))
-			.saturating_add(RocksDbWeight::get().reads(3 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(3 as Weight))
+			.saturating_add(Weight::from_ref_time(73_000 as u64).saturating_mul(s as u64))
+			.saturating_add(RocksDbWeight::get().reads(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 }

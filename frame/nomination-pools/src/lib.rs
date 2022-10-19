@@ -282,7 +282,10 @@ use frame_support::{
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
-	traits::{AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, Zero},
+	traits::{
+		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
+	},
 	FixedPointNumber, FixedPointOperand,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
@@ -320,6 +323,8 @@ pub type BalanceOf<T> =
 pub type PoolId = u32;
 
 type UnbondingPoolsWithEra<T> = BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 pub const POINTS_TO_BALANCE_INIT_RATIO: u32 = 1;
 
@@ -1105,7 +1110,7 @@ impl<T: Config> SubPools<T> {
 	}
 
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
-	#[cfg(any(test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
 	fn sum_unbonding_balance(&self) -> BalanceOf<T> {
 		self.no_era.balance.saturating_add(
 			self.with_era
@@ -1136,7 +1141,7 @@ pub mod pallet {
 	use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
@@ -1146,7 +1151,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: weights::WeightInfo;
@@ -1448,7 +1453,7 @@ pub mod pallet {
 		PartialUnbondNotAllowedPermissionlessly,
 	}
 
-	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError)]
+	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
 	pub enum DefensiveError {
 		/// There isn't enough space in the unbond pool.
 		NotEnoughSpaceInUnbondPool,
@@ -1629,10 +1634,11 @@ pub mod pallet {
 		#[transactional]
 		pub fn unbond(
 			origin: OriginFor<T>,
-			member_account: T::AccountId,
+			member_account: AccountIdLookupOf<T>,
 			#[pallet::compact] unbonding_points: BalanceOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let (mut member, mut bonded_pool, mut reward_pool) =
 				Self::get_member_with_pools(&member_account)?;
 
@@ -1741,18 +1747,19 @@ pub mod pallet {
 		#[transactional]
 		pub fn withdraw_unbonded(
 			origin: OriginFor<T>,
-			member_account: T::AccountId,
+			member_account: AccountIdLookupOf<T>,
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let caller = ensure_signed(origin)?;
+			let member_account = T::Lookup::lookup(member_account)?;
 			let mut member =
 				PoolMembers::<T>::get(&member_account).ok_or(Error::<T>::PoolMemberNotFound)?;
 			let current_era = T::StakingInterface::current_era();
 
 			let bonded_pool = BondedPool::<T>::get(member.pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::PoolNotFound.into())?;
-			let mut sub_pools = SubPoolsStorage::<T>::get(member.pool_id)
-				.defensive_ok_or::<Error<T>>(DefensiveError::SubPoolsNotFound.into())?;
+			let mut sub_pools =
+				SubPoolsStorage::<T>::get(member.pool_id).ok_or(Error::<T>::SubPoolsNotFound)?;
 
 			bonded_pool.ok_to_withdraw_unbonded_with(&caller, &member_account)?;
 
@@ -1863,11 +1870,14 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
-			root: T::AccountId,
-			nominator: T::AccountId,
-			state_toggler: T::AccountId,
+			root: AccountIdLookupOf<T>,
+			nominator: AccountIdLookupOf<T>,
+			state_toggler: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let root = T::Lookup::lookup(root)?;
+			let nominator = T::Lookup::lookup(nominator)?;
+			let state_toggler = T::Lookup::lookup(state_toggler)?;
 
 			ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
 			ensure!(
@@ -1877,10 +1887,10 @@ pub mod pallet {
 			);
 			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
-			let pool_id = LastPoolId::<T>::mutate(|id| {
-				*id += 1;
-				*id
-			});
+			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
+				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
+				Ok(*id)
+			})?;
 			let mut bonded_pool = BondedPool::<T>::new(
 				pool_id,
 				PoolRoles {
@@ -2128,6 +2138,11 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		#[cfg(feature = "try-runtime")]
+		fn try_state(_n: BlockNumberFor<T>) -> Result<(), &'static str> {
+			Self::do_try_state(u8::MAX)
+		}
+
 		fn integrity_test() {
 			assert!(
 				T::MaxPointsToBalance::get() > 0,
@@ -2146,16 +2161,20 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Returns the pending rewards for the specified `member_account`.
 	///
-	/// In the case of error the function returns balance of zero.
-	pub fn pending_rewards(member_account: T::AccountId) -> BalanceOf<T> {
+	/// In the case of error, `None` is returned.
+	pub fn pending_rewards(member_account: T::AccountId) -> Option<BalanceOf<T>> {
 		if let Some(pool_member) = PoolMembers::<T>::get(member_account) {
-			if let Some(reward_pool) = RewardPools::<T>::get(pool_member.pool_id) {
-				return pool_member
-					.pending_rewards(reward_pool.last_recorded_reward_counter())
-					.unwrap_or_default()
+			if let Some((reward_pool, bonded_pool)) = RewardPools::<T>::get(pool_member.pool_id)
+				.zip(BondedPools::<T>::get(pool_member.pool_id))
+			{
+				let current_reward_counter = reward_pool
+					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
+					.ok()?;
+				return pool_member.pending_rewards(current_reward_counter).ok()
 			}
 		}
-		BalanceOf::<T>::default()
+
+		None
 	}
 
 	/// The amount of bond that MUST REMAIN IN BONDED in ALL POOLS.
@@ -2165,15 +2184,16 @@ impl<T: Config> Pallet<T> {
 	///
 	/// It is essentially `max { MinNominatorBond, MinCreateBond, MinJoinBond }`, where the former
 	/// is coming from the staking pallet and the latter two are configured in this pallet.
-	fn depositor_min_bond() -> BalanceOf<T> {
+	pub fn depositor_min_bond() -> BalanceOf<T> {
 		T::StakingInterface::minimum_bond()
 			.max(MinCreateBond::<T>::get())
 			.max(MinJoinBond::<T>::get())
+			.max(T::Currency::minimum_balance())
 	}
 	/// Remove everything related to the given bonded pool.
 	///
-	/// All sub-pools are also deleted. All accounts are dusted and the leftover of the reward
-	/// account is returned to the depositor.
+	/// Metadata and all of the sub-pools are also deleted. All accounts are dusted and the leftover
+	/// of the reward account is returned to the depositor.
 	pub fn dissolve_pool(bonded_pool: BondedPool<T>) {
 		let reward_account = bonded_pool.reward_account();
 		let bonded_account = bonded_pool.bonded_account();
@@ -2210,6 +2230,9 @@ impl<T: Config> Pallet<T> {
 		T::Currency::make_free_balance_be(&bonded_pool.bonded_account(), Zero::zero());
 
 		Self::deposit_event(Event::<T>::Destroyed { pool_id: bonded_pool.id });
+		// Remove bonded pool metadata.
+		Metadata::<T>::remove(bonded_pool.id);
+
 		bonded_pool.remove();
 	}
 
@@ -2375,9 +2398,9 @@ impl<T: Config> Pallet<T> {
 	///
 	/// To cater for tests that want to escape parts of these checks, this function is split into
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
-	/// `sanity_check(255)` is the strongest sanity check, and `0` performs no checks.
-	#[cfg(any(test, debug_assertions))]
-	pub fn sanity_checks(level: u8) -> Result<(), &'static str> {
+	/// `try_state(255)` is the strongest sanity check, and `0` performs no checks.
+	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
+	pub fn do_try_state(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
 			return Ok(())
 		}
@@ -2394,16 +2417,46 @@ impl<T: Config> Pallet<T> {
 
 		for id in reward_pools {
 			let account = Self::create_reward_account(id);
-			assert!(T::Currency::free_balance(&account) >= T::Currency::minimum_balance());
+			assert!(
+				T::Currency::free_balance(&account) >= T::Currency::minimum_balance(),
+				"reward pool of {id}: {:?} (ed = {:?})",
+				T::Currency::free_balance(&account),
+				T::Currency::minimum_balance()
+			);
 		}
 
 		let mut pools_members = BTreeMap::<PoolId, u32>::new();
+		let mut pools_members_pending_rewards = BTreeMap::<PoolId, BalanceOf<T>>::new();
 		let mut all_members = 0u32;
 		PoolMembers::<T>::iter().for_each(|(_, d)| {
-			assert!(BondedPools::<T>::contains_key(d.pool_id));
+			let bonded_pool = BondedPools::<T>::get(d.pool_id).unwrap();
 			assert!(!d.total_points().is_zero(), "no member should have zero points: {:?}", d);
 			*pools_members.entry(d.pool_id).or_default() += 1;
 			all_members += 1;
+
+			let reward_pool = RewardPools::<T>::get(d.pool_id).unwrap();
+			if !bonded_pool.points.is_zero() {
+				let current_rc =
+					reward_pool.current_reward_counter(d.pool_id, bonded_pool.points).unwrap();
+				*pools_members_pending_rewards.entry(d.pool_id).or_default() +=
+					d.pending_rewards(current_rc).unwrap();
+			} // else this pool has been heavily slashed and cannot have any rewards anymore.
+		});
+
+		RewardPools::<T>::iter_keys().for_each(|id| {
+			// the sum of the pending rewards must be less than the leftover balance. Since the
+			// reward math rounds down, we might accumulate some dust here.
+			log!(
+				trace,
+				"pool {:?}, sum pending rewards = {:?}, remaining balance = {:?}",
+				id,
+				pools_members_pending_rewards.get(&id),
+				RewardPool::<T>::current_balance(id)
+			);
+			assert!(
+				RewardPool::<T>::current_balance(id) >=
+					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
+			)
 		});
 
 		BondedPools::<T>::iter().for_each(|(id, inner)| {
@@ -2448,6 +2501,7 @@ impl<T: Config> Pallet<T> {
 				sum_unbonding_balance
 			);
 		}
+
 		Ok(())
 	}
 
@@ -2461,14 +2515,15 @@ impl<T: Config> Pallet<T> {
 		member: T::AccountId,
 	) -> DispatchResult {
 		let points = PoolMembers::<T>::get(&member).map(|d| d.active_points()).unwrap_or_default();
-		Self::unbond(origin, member, points)
+		let member_lookup = T::Lookup::unlookup(member);
+		Self::unbond(origin, member_lookup, points)
 	}
 }
 
 impl<T: Config> OnStakerSlash<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_slash(
 		pool_account: &T::AccountId,
-		// Bonded balance is always read directly from staking, therefore we need not update
+		// Bonded balance is always read directly from staking, therefore we don't need to update
 		// anything here.
 		slashed_bonded: BalanceOf<T>,
 		slashed_unlocking: &BTreeMap<EraIndex, BalanceOf<T>>,

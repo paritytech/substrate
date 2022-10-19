@@ -20,6 +20,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 use sp_runtime::traits;
 #[cfg(not(feature = "std"))]
@@ -69,7 +70,7 @@ impl<Hash> OnNewRoot<Hash> for () {
 }
 
 /// A MMR proof data for one of the leaves.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
 pub struct Proof<Hash> {
 	/// The index of the leaf the proof is for.
 	pub leaf_index: LeafIndex,
@@ -352,7 +353,7 @@ impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 
 /// A MMR proof data for a group of leaves.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq)]
+#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
 pub struct BatchProof<Hash> {
 	/// The indices of the leaves the proof is for.
 	pub leaf_indices: Vec<LeafIndex>,
@@ -386,6 +387,8 @@ impl<Hash> Proof<Hash> {
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
+	/// Error during translation of a block number into a leaf index.
+	BlockNumToLeafIndex,
 	/// Error while pushing new node.
 	Push,
 	/// Error getting the new root.
@@ -402,6 +405,8 @@ pub enum Error {
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
 	InvalidLeafIndex,
+	/// The provided best know block number is invalid.
+	InvalidBestKnownBlock,
 }
 
 impl Error {
@@ -431,9 +436,9 @@ impl Error {
 
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
-	pub trait MmrApi<Hash: codec::Codec> {
-		/// Generate MMR proof for a leaf under given index.
-		fn generate_proof(leaf_index: LeafIndex) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
+	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
+		/// Generate MMR proof for a block with a specified `block_number`.
+		fn generate_proof(block_number: BlockNumber) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR.
 		///
@@ -454,8 +459,14 @@ sp_api::decl_runtime_apis! {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 
-		/// Generate MMR proof for a series of leaves under given indices.
-		fn generate_batch_proof(leaf_indices: Vec<LeafIndex>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+		/// Generate MMR proof for a series of blocks with the specified block numbers.
+		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+
+		/// Generate MMR proof for a series of `block_numbers`, given the `best_known_block_number`.
+		fn generate_historical_batch_proof(
+			block_numbers: Vec<BlockNumber>,
+			best_known_block_number: BlockNumber
+		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///
@@ -535,11 +546,16 @@ mod tests {
 			cases.into_iter().map(Result::<_, codec::Error>::Ok).collect::<Vec<_>>()
 		);
 		// check encoding correctness
-		assert_eq!(&encoded[0], &hex_literal::hex!("00343048656c6c6f20576f726c6421"));
+		assert_eq!(
+			&encoded[0],
+			&array_bytes::hex2bytes_unchecked("00343048656c6c6f20576f726c6421")
+		);
 		assert_eq!(
 			encoded[1].as_slice(),
-			hex_literal::hex!("01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd")
-				.as_ref()
+			array_bytes::hex2bytes_unchecked(
+				"01c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"
+			)
+			.as_slice()
 		);
 	}
 
