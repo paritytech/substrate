@@ -252,7 +252,8 @@ pub struct DiscoveryBehaviour {
 	/// Same as `permanent_addresses`, except that addresses that fail to reach a peer are
 	/// removed.
 	ephemeral_addresses: HashMap<PeerId, Vec<Multiaddr>>,
-	/// Kademlia requests and answers.
+	/// Kademlia requests and answers. Even though it's wrapped in `Toggle`, currently
+	/// it's always enabled in `NetworkWorker::new()`.
 	kademlia: Toggle<Kademlia<MemoryStore>>,
 	/// Discovers nodes on the local network.
 	mdns: Option<Mdns>,
