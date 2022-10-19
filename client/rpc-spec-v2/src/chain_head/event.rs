@@ -24,7 +24,7 @@ use sp_version::RuntimeVersion;
 /// The transaction could not be processed due to an error.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RuntimeErrorEvent {
+pub struct ErrorEvent {
 	/// Reason of the error.
 	pub error: String,
 }
@@ -42,7 +42,7 @@ pub struct RuntimeVersionEvent {
 #[serde(tag = "type")]
 pub enum RuntimeEvent {
 	Valid(RuntimeVersionEvent),
-	Invalid(RuntimeErrorEvent),
+	Invalid(ErrorEvent),
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -132,10 +132,17 @@ pub enum FollowEvent<Hash> {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[serde(tag = "event", content = "value")]
-pub enum BodyEvent<Body> {
-	Done(Body),
-	Inaccessible,
+pub struct ChainHeadResult<T> {
+	pub result: T,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(tag = "event")]
+pub enum ChainHeadEvent<T> {
+	Done(ChainHeadResult<T>),
+	Inaccessible(ErrorEvent),
+	Error(ErrorEvent),
 	Disjoint,
 }
 
@@ -304,6 +311,56 @@ mod tests {
 		assert_eq!(ser, exp);
 
 		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_done_event() {
+		let event: ChainHeadEvent<String> =
+			ChainHeadEvent::Done(ChainHeadResult { result: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"done","result":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_inaccessible_event() {
+		let event: ChainHeadEvent<String> =
+			ChainHeadEvent::Inaccessible(ErrorEvent { error: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"inaccessible","error":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_error_event() {
+		let event: ChainHeadEvent<String> = ChainHeadEvent::Error(ErrorEvent { error: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"error","error":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_disjoint_event() {
+		let event: ChainHeadEvent<String> = ChainHeadEvent::Disjoint;
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"disjoint"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
 		assert_eq!(event_dec, event);
 	}
 }
