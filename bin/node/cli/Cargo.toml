@@ -165,7 +165,7 @@ runtime-benchmarks = [
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["kitchensink-runtime/try-runtime", "try-runtime-cli"]
+try-runtime = ["kitchensink-runtime/try-runtime", "try-runtime-cli/try-runtime"]
 
 [[bench]]
 name = "transaction_pool"
