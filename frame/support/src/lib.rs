@@ -1473,6 +1473,7 @@ pub mod pallet_prelude {
 /// * [`pallet::inherent`](#inherent-palletinherent-optional)
 /// * [`pallet::validate_unsigned`](#validate-unsigned-palletvalidate_unsigned-optional)
 /// * [`pallet::origin`](#origin-palletorigin-optional)
+/// * [`pallet::dev_mode`](#palletdev_mode-optional)
 ///
 /// Note that at compile-time, the `#[pallet]` macro will analyze and expand all of these
 /// attributes, ultimately removing their AST nodes before they can be parsed as real
@@ -2167,6 +2168,19 @@ pub mod pallet_prelude {
 /// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
 ///
 /// Also see [`pallet::origin`](`frame_support::pallet_macros::origin`)
+///
+/// # `#[pallet::dev_mode]` (optional)
+///
+/// The `#[pallet::dev_mode]` attribute can be applied to a pallet to indicate that you are
+/// tinkering with the pallet and don't intend to use it in its current form in production.
+///
+/// Doing so has a few implications:
+/// * The [`weight`](`frame_support::pallet_macros::weight`) for the pallet will be set to 0
+/// * `MaxEncodedLen` will be set automatically (expand on this)
+/// * A number of dev-mode-only traits will be available for your pallet to use (expand on
+///   this)
+///
+/// Also see [`pallet::dev_mode`](`frame_support::pallet_macros::dev_mode`)
 ///
 /// # General notes on instantiable pallets
 ///
