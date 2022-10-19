@@ -287,15 +287,15 @@ pub mod pallet {
 
 /// Stateless MMR proof verification for batch of leaves.
 ///
-/// This function can be used to verify received MMR [primitives::BatchProof] (`proof`)
+/// This function can be used to verify received MMR [primitives::Proof] (`proof`)
 /// for given leaves set (`leaves`) against a known MMR root hash (`root`).
 /// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
 /// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
-/// [primitives::BatchProof].
+/// [primitives::Proof].
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<mmr::Node<H, L>>,
-	proof: primitives::BatchProof<H::Output>,
+	proof: primitives::Proof<H::Output>,
 ) -> Result<(), primitives::Error>
 where
 	H: traits::Hash,
@@ -393,10 +393,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn generate_proof(
 		block_numbers: Vec<T::BlockNumber>,
 		best_known_block_number: Option<T::BlockNumber>,
-	) -> Result<
-		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
-		primitives::Error,
-	> {
+	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
 		// check whether best_known_block_number provided, else use current best block
 		let best_known_block_number =
 			best_known_block_number.unwrap_or_else(|| <frame_system::Pallet<T>>::block_number());
@@ -429,7 +426,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// or the proof is invalid.
 	pub fn verify_leaves(
 		leaves: Vec<LeafOf<T, I>>,
-		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
+		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
 		if proof.leaf_count > Self::mmr_leaves() ||
 			proof.leaf_count == 0 ||

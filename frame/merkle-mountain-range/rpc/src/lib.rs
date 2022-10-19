@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
-use sp_mmr_primitives::{BatchProof, Error as MmrError, Proof};
+use sp_mmr_primitives::{Error as MmrError, Proof};
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 
 pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
@@ -51,17 +51,17 @@ pub struct LeavesProof<BlockHash> {
 	pub block_hash: BlockHash,
 	/// SCALE-encoded vector of `LeafData`.
 	pub leaves: Bytes,
-	/// SCALE-encoded proof data. See [sp_mmr_primitives::BatchProof].
+	/// SCALE-encoded proof data. See [sp_mmr_primitives::Proof].
 	pub proof: Bytes,
 }
 
 impl<BlockHash> LeavesProof<BlockHash> {
 	/// Create new `LeavesProof` from a given vector of `Leaf` and a
-	/// [sp_mmr_primitives::BatchProof].
+	/// [sp_mmr_primitives::Proof].
 	pub fn new<Leaf, MmrHash>(
 		block_hash: BlockHash,
 		leaves: Vec<Leaf>,
-		proof: BatchProof<MmrHash>,
+		proof: Proof<MmrHash>,
 	) -> Self
 	where
 		Leaf: Encode,
@@ -93,7 +93,7 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 	/// the leaves). Both parameters are SCALE-encoded.
 	/// The order of entries in the `leaves` field of the returned struct
 	/// is the same as the order of the entries in `block_numbers` supplied
-	#[method(name = "mmr_generateHistoricalBatchProof")]
+	#[method(name = "mmr_generateProof")]
 	fn generate_proof(
 		&self,
 		block_numbers: Vec<BlockNumber>,
@@ -185,7 +185,7 @@ mod tests {
 	fn should_serialize_leaf_proof() {
 		// given
 		let leaf = vec![1_u8, 2, 3, 4];
-		let proof = BatchProof {
+		let proof = Proof {
 			leaf_indices: vec![1],
 			leaf_count: 9,
 			items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
@@ -208,7 +208,7 @@ mod tests {
 		// given
 		let leaf_a = vec![1_u8, 2, 3, 4];
 		let leaf_b = vec![2_u8, 2, 3, 4];
-		let proof = BatchProof {
+		let proof = Proof {
 			leaf_indices: vec![1, 2],
 			leaf_count: 9,
 			items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
@@ -233,7 +233,7 @@ mod tests {
 			block_hash: H256::repeat_byte(0),
 			leaves: Bytes(vec![vec![1_u8, 2, 3, 4]].encode()),
 			proof: Bytes(
-				BatchProof {
+				Proof {
 					leaf_indices: vec![1],
 					leaf_count: 9,
 					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],
@@ -260,7 +260,7 @@ mod tests {
 			block_hash: H256::repeat_byte(0),
 			leaves: Bytes(vec![vec![1_u8, 2, 3, 4], vec![2_u8, 2, 3, 4]].encode()),
 			proof: Bytes(
-				BatchProof {
+				Proof {
 					leaf_indices: vec![1, 2],
 					leaf_count: 9,
 					items: vec![H256::repeat_byte(1), H256::repeat_byte(2)],

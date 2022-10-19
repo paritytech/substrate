@@ -29,11 +29,11 @@ use sp_std::prelude::*;
 /// Stateless verification of the proof for a batch of leaves.
 /// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
 /// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
-/// [primitives::BatchProof]
+/// [primitives::Proof]
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<Node<H, L>>,
-	proof: primitives::BatchProof<H::Output>,
+	proof: primitives::Proof<H::Output>,
 ) -> Result<bool, Error>
 where
 	H: sp_runtime::traits::Hash,
@@ -91,11 +91,11 @@ where
 	/// Verify proof for a set of leaves.
 	/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have
 	/// the same position in both the `leaves` vector and the `leaf_indices` vector contained in the
-	/// [primitives::BatchProof]
+	/// [primitives::Proof]
 	pub fn verify_leaves_proof(
 		&self,
 		leaves: Vec<L>,
-		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
+		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<bool, Error> {
 		let p = mmr_lib::MerkleProof::<NodeOf<T, I, L>, Hasher<HashingOf<T, I>, L>>::new(
 			self.mmr.mmr_size(),
@@ -166,7 +166,7 @@ where
 	pub fn generate_proof(
 		&self,
 		leaf_indices: Vec<NodeIndex>,
-	) -> Result<(Vec<L>, primitives::BatchProof<<T as Config<I>>::Hash>), Error> {
+	) -> Result<(Vec<L>, primitives::Proof<<T as Config<I>>::Hash>), Error> {
 		let positions = leaf_indices
 			.iter()
 			.map(|index| mmr_lib::leaf_index_to_pos(*index))
@@ -184,7 +184,7 @@ where
 		self.mmr
 			.gen_proof(positions)
 			.map_err(|e| Error::GenerateProof.log_error(e))
-			.map(|p| primitives::BatchProof {
+			.map(|p| primitives::Proof {
 				leaf_indices,
 				leaf_count,
 				items: p.proof_items().iter().map(|x| x.hash()).collect(),

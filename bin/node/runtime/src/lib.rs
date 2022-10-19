@@ -2028,7 +2028,7 @@ impl_runtime_apis! {
 		fn generate_proof(
 			block_numbers: Vec<BlockNumber>,
 			best_known_block_number: Option<BlockNumber>,
-		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
+		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::Proof<mmr::Hash>), mmr::Error> {
 			Mmr::generate_proof(block_numbers, best_known_block_number).map(
 				|(leaves, proof)| {
 					(
@@ -2042,7 +2042,7 @@ impl_runtime_apis! {
 			)
 		}
 
-		fn verify_proof(leaves: Vec<mmr::EncodableOpaqueLeaf>, proof: mmr::BatchProof<mmr::Hash>)
+		fn verify_proof(leaves: Vec<mmr::EncodableOpaqueLeaf>, proof: mmr::Proof<mmr::Hash>)
 			-> Result<(), mmr::Error>
 		{
 			let leaves = leaves.into_iter().map(|leaf|
@@ -2055,7 +2055,7 @@ impl_runtime_apis! {
 		fn verify_proof_stateless(
 			root: mmr::Hash,
 			leaves: Vec<mmr::EncodableOpaqueLeaf>,
-			proof: mmr::BatchProof<mmr::Hash>
+			proof: mmr::Proof<mmr::Hash>
 		) -> Result<(), mmr::Error> {
 			let nodes = leaves.into_iter().map(|leaf|mmr::DataOrHash::Data(leaf.into_opaque_leaf())).collect();
 			pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, proof)

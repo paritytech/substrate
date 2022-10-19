@@ -43,7 +43,7 @@ use beefy_primitives::{
 	KEY_TYPE as BeefyKeyType,
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
-use sp_mmr_primitives::{BatchProof, EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
+use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
@@ -253,18 +253,18 @@ macro_rules! create_test_api {
 					fn generate_proof(
 						_block_numbers: Vec<u64>,
 						_best_known_block_number: Option<u64>
-					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
+					) -> Result<(Vec<EncodableOpaqueLeaf>, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
 
-					fn verify_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
+					fn verify_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: Proof<MmrRootHash>) -> Result<(), MmrError> {
 						unimplemented!()
 					}
 
 					fn verify_proof_stateless(
 						_root: MmrRootHash,
 						_leaves: Vec<EncodableOpaqueLeaf>,
-						_proof: BatchProof<MmrRootHash>
+						_proof: Proof<MmrRootHash>
 					) -> Result<(), MmrError> {
 						unimplemented!()
 					}

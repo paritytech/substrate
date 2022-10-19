@@ -27,7 +27,7 @@ use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
 };
-use sp_mmr_primitives::{BatchProof, Compact};
+use sp_mmr_primitives::{Compact, Proof};
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
@@ -261,7 +261,7 @@ fn should_generate_proofs_correctly() {
 			proofs[0],
 			(
 				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![0],
 					leaf_count: 7,
 					items: vec![
@@ -276,7 +276,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[0][0],
 			(
 				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
-				BatchProof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
+				Proof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
 			)
 		);
 
@@ -292,7 +292,7 @@ fn should_generate_proofs_correctly() {
 			proofs[2],
 			(
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![2],
 					leaf_count: 7,
 					items: vec![
@@ -312,7 +312,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[2][0],
 			(
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![2],
 					leaf_count: 3,
 					items: vec![hex(
@@ -332,7 +332,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[2][2],
 			(
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![2],
 					leaf_count: 5,
 					items: vec![
@@ -350,7 +350,7 @@ fn should_generate_proofs_correctly() {
 			(
 				// NOTE: the leaf index is equivalent to the block number(in this case 5) - 1
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![4],
 					leaf_count: 7,
 					items: vec![
@@ -365,7 +365,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[4][0],
 			(
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![4],
 					leaf_count: 5,
 					items: vec![hex(
@@ -380,7 +380,7 @@ fn should_generate_proofs_correctly() {
 			proofs[6],
 			(
 				vec![Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![6],
 					leaf_count: 7,
 					items: vec![
@@ -411,7 +411,7 @@ fn should_generate_batch_proof_correctly() {
 		// then
 		assert_eq!(
 			proof,
-			BatchProof {
+			Proof {
 				// the leaf indices are equivalent to the above specified block numbers - 1.
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 7,
@@ -429,7 +429,7 @@ fn should_generate_batch_proof_correctly() {
 		// then
 		assert_eq!(
 			historical_proof,
-			BatchProof {
+			Proof {
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 6,
 				items: vec![
