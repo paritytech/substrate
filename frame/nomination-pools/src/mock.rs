@@ -56,7 +56,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn desired_validator_count() -> u32 {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 
 	fn current_era() -> EraIndex {
@@ -113,7 +113,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn stash_by_ctrl(_controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
@@ -129,15 +129,15 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn election_ongoing() -> bool {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 
 	fn force_unstake(_who: Self::AccountId) -> sp_runtime::DispatchResult {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 
 	fn is_exposed_in_era(_who: &Self::AccountId, _era: &EraIndex) -> bool {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -146,12 +146,12 @@ impl sp_staking::StakingInterface for StakingMock {
 		_stash: &Self::AccountId,
 		_exposures: Vec<(Self::AccountId, Self::Balance)>,
 	) {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_era: EraIndex) {
-		todo!()
+		unimplemented!("method currently not used in testing")
 	}
 }
 
