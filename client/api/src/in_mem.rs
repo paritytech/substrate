@@ -695,10 +695,9 @@ where
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: BlockId<Block>,
+		block: &Block::Hash,
 	) -> sp_blockchain::Result<()> {
-		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
-		operation.old_state = self.state_at(&hash)?;
+		operation.old_state = self.state_at(block)?;
 		Ok(())
 	}
 
