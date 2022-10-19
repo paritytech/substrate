@@ -381,6 +381,9 @@ pub enum Command {
 	/// initializes the state from the remote node, and starts applying that block, plus all the
 	/// blocks that follow, to the same growing state.
 	FollowChain(commands::follow_chain::FollowChainCmd),
+
+	/// Create a new snapshot file.
+	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd)
 }
 
 /// Shared parameters of the `try-runtime` commands
@@ -443,6 +446,46 @@ pub struct TryRuntimeCmd {
 	pub command: Command,
 }
 
+/// A `Live` variant [`State`]
+#[derive(Debug, Clone, clap::Args)]
+pub struct LiveState {
+	/// The url to connect to.
+	#[arg(
+		short,
+		long,
+		value_parser = parse::url,
+	)]
+	uri: String,
+
+	/// The block hash at which to fetch the state.
+	///
+	/// If non provided, then the latest finalized head is used. This is particularly useful
+	/// for [`Command::OnRuntimeUpgrade`].
+	#[arg(
+		short,
+		long,
+		value_parser = parse::hash,
+	)]
+	at: Option<String>,
+
+	/// An optional state snapshot file to WRITE to. Not written if set to `None`.
+	#[arg(short, long)]
+	snapshot_path: Option<PathBuf>,
+
+	/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
+	/// be scraped.
+	#[arg(short, long, num_args = 1..)]
+	pallet: Vec<String>,
+
+	/// Fetch the child-keys as well.
+	///
+	/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
+	/// words, if you scrape the whole state the child tree data is included out of the box.
+	/// Otherwise, it must be enabled explicitly using this flag.
+	#[arg(long)]
+	child_tree: bool,
+}
+
 /// The source of runtime *state* to use.
 #[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
@@ -455,43 +498,7 @@ pub enum State {
 	},
 
 	/// Use a live chain as the source of runtime state.
-	Live {
-		/// The url to connect to.
-		#[arg(
-			short,
-			long,
-			value_parser = parse::url,
-		)]
-		uri: String,
-
-		/// The block hash at which to fetch the state.
-		///
-		/// If non provided, then the latest finalized head is used. This is particularly useful
-		/// for [`Command::OnRuntimeUpgrade`].
-		#[arg(
-			short,
-			long,
-			value_parser = parse::hash,
-		)]
-		at: Option<String>,
-
-		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-		#[arg(short, long)]
-		snapshot_path: Option<PathBuf>,
-
-		/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
-		/// be scraped.
-		#[arg(short, long, num_args = 1..)]
-		pallet: Vec<String>,
-
-		/// Fetch the child-keys as well.
-		///
-		/// Default is `false`, if specific `--pallets` are specified, `true` otherwise. In other
-		/// words, if you scrape the whole state the child tree data is included out of the box.
-		/// Otherwise, it must be enabled explicitly using this flag.
-		#[arg(long)]
-		child_tree: bool,
-	},
+	Live(LiveState),
 }
 
 impl State {
@@ -506,7 +513,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live { snapshot_path, pallet, uri, at, child_tree } => {
+			State::Live(LiveState { snapshot_path, pallet, uri, at, child_tree }) => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -523,6 +530,7 @@ impl State {
 							[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat()
 						],
 						hashed_prefixes: vec![],
+						threads: 8,
 					}))
 			},
 		})
@@ -531,7 +539,7 @@ impl State {
 	/// Get the uri, if self is `Live`.
 	pub(crate) fn live_uri(&self) -> Option<String> {
 		match self {
-			State::Live { uri, .. } => Some(uri.clone()),
+			State::Live(LiveState { uri, .. }) => Some(uri.clone()),
 			_ => None,
 		}
 	}
@@ -577,6 +585,10 @@ impl TryRuntimeCmd {
 					config,
 				)
 				.await,
+			Command::CreateSnapshot(cmd) => commands::create_snapshot::create_snapshot::<Block>(
+				self.shared.clone(),
+				cmd.clone(),
+			).await,
 		}
 	}
 }

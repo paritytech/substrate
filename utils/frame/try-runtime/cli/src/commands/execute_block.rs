@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
+	state_machine_call_with_proof, LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
@@ -94,14 +94,14 @@ impl ExecuteBlockCmd {
 				log::warn!(target: LOG_TARGET, "--block-at is provided while state type is live. the `Live::at` will be ignored");
 				hash_of::<Block>(block_at)
 			},
-			(None, State::Live { at: None, .. }) => {
+			(None, State::Live(LiveState { at: None, .. })) => {
 				log::warn!(
 					target: LOG_TARGET,
 					"No --block-at or --at provided, using the latest finalized block instead"
 				);
 				rpc_service.get_finalized_head::<Block>().await.map_err(Into::into)
 			},
-			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
+			(None, State::Live(LiveState { at: Some(at), .. })) => hash_of::<Block>(at),
 			_ => {
 				panic!("either `--block-at` must be provided, or state must be `live with a proper `--at``");
 			},
@@ -119,7 +119,7 @@ impl ExecuteBlockCmd {
 				log::error!(target: LOG_TARGET, "--block-uri is provided while state type is live, Are you sure you know what you are doing?");
 				block_ws_uri.to_owned()
 			},
-			(None, State::Live { uri, .. }) => uri.clone(),
+			(None, State::Live(LiveState{ uri, .. })) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--block-uri` must be provided, or state must be `live`");
 			},

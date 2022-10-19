@@ -39,13 +39,17 @@ use sp_core::{
 	},
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_runtime::{
+	traits::{Block as BlockT, Header as HeaderT},
+	StateVersion,
+};
 use std::{
 	fs,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
 
+// CHANGELOG:
 // 1. `pallets` no longer has the interpretation of an empty list implying everything. If
 // `hashed_prefix` and pallets are both empty, then we scrape everything. Not the biggest fan
 // myself, but needed to keep things backwards compatible.
@@ -149,6 +153,7 @@ impl Transport {
 	}
 
 	async fn build_ws_client(uri: &str) -> Result<WsClient, &'static str> {
+		log::info!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 		WsClientBuilder::default()
 			.max_request_body_size(u32::MAX)
 			.build(&uri)
@@ -162,7 +167,6 @@ impl Transport {
 	// Open a new WebSocket connection if it's not connected.
 	async fn map_uri(&mut self) -> Result<(), &'static str> {
 		if let Some(uri) = &self.uri {
-			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 			let ws_client = Self::build_ws_client(&uri).await?;
 			self.remote_client = Some(Arc::new(ws_client));
 		}
@@ -408,16 +412,17 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let now = std::time::Instant::now();
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
+		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
+		let thread_chunk_size = (keys.len() / self.as_online().threads).max(1);
+
 		log::info!(
 			target: LOG_TARGET,
-			"Querying a total of {} keys, took {}s to fetch keys",
+			"Querying a total of {} keys, took {}s to fetch keys, splitting among {} threads, {} keys per thread",
 			keys.len(),
-			now.elapsed().as_secs()
+			now.elapsed().as_secs(),
+			self.as_online().threads,
+			thread_chunk_size,
 		);
-
-		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
-
-		let thread_chunk_size = keys.len() / self.as_online().threads;
 
 		let mut handles = Vec::new();
 		let keys_chunked: Vec<Vec<StorageKey>> =
@@ -875,7 +880,7 @@ mod test_prelude {
 		let _ = env_logger::Builder::from_default_env()
 			.format_module_path(true)
 			.format_level(true)
-			.filter_module(LOG_TARGET, log::LevelFilter::Debug)
+			// .filter_module(LOG_TARGET, log::LevelFilter::Debug)
 			.try_init();
 	}
 }
@@ -1043,6 +1048,26 @@ mod remote_tests {
 			.mode(Mode::Online(OnlineConfig {
 				pallets: vec!["Proxy".to_owned(), "Multisig".to_owned()],
 				child_trie: false,
+				..Default::default()
+			}))
+			.build()
+			.await
+			.unwrap()
+			.execute_with(|| {});
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn can_build_big_pallet() {
+		init_logger();
+		Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				transport: "wss://rpc.polkadot.io:443".into(),
+				// transport: "wss://polkadot.api.onfinality.io:443/public-ws".into(),
+				// transport: "wss://public-rpc.pinknode.io:443/polkadot".into(),
+				// transport: "ws://127.0.0.1:9944".into(),
+				pallets: vec!["Staking".to_owned()],
+				child_trie: false,
+				threads:2 ,
 				..Default::default()
 			}))
 			.build()
