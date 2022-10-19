@@ -363,27 +363,6 @@ pub struct BatchProof<Hash> {
 	pub items: Vec<Hash>,
 }
 
-impl<Hash> BatchProof<Hash> {
-	/// Converts batch proof to single leaf proof
-	pub fn into_single_leaf_proof(proof: BatchProof<Hash>) -> Result<Proof<Hash>, Error> {
-		Ok(Proof {
-			leaf_index: *proof.leaf_indices.get(0).ok_or(Error::InvalidLeafIndex)?,
-			leaf_count: proof.leaf_count,
-			items: proof.items,
-		})
-	}
-}
-
-impl<Hash> Proof<Hash> {
-	/// Converts a single leaf proof into a batch proof
-	pub fn into_batch_proof(proof: Proof<Hash>) -> BatchProof<Hash> {
-		BatchProof {
-			leaf_indices: vec![proof.leaf_index],
-			leaf_count: proof.leaf_count,
-			items: proof.items,
-		}
-	}
-}
 /// Merkle Mountain Range operation error.
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
@@ -480,13 +459,13 @@ mod tests {
 
 	type Test = DataOrHash<Keccak256, String>;
 	type TestCompact = Compact<Keccak256, (Test, Test)>;
-	type TestProof = Proof<<Keccak256 as traits::Hash>::Output>;
+	type TestProof = BatchProof<<Keccak256 as traits::Hash>::Output>;
 
 	#[test]
 	fn should_encode_decode_proof() {
 		// given
-		let proof: TestProof = Proof {
-			leaf_index: 5,
+		let proof: TestProof = BatchProof {
+			leaf_indices: vec![5],
 			leaf_count: 10,
 			items: vec![
 				hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"),
