@@ -1535,15 +1535,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 			.ok_or(Error::<T>::NotStash.into())
 	}
 
-	/// TODO: Find usages and depreacte those in favour of stake
-	// fn active_stake(who: &Self::AccountId) -> Option<Self::Balance> {
-	// 	Self::bonded(who).and_then(|c| Self::stake(c)).map(|l| l.active)
-	// }
-	//
-	// fn total_stake(who: &Self::AccountId) -> Option<Self::Balance> {
-	// 	Self::bonded(who).and_then(|c| Self::ledger(c)).map(|l| l.active)
-	// }
-
 	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
 	}
