@@ -81,6 +81,7 @@ impl frame_system::Config for Test {
     type SystemWeightInfo = ();
     type SS58Prefix = ();
     type OnSetCode = ();
+    type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_balances::Config for Test {
@@ -147,11 +148,15 @@ impl contracts::Config for Test {
     type Schedule = Schedule;
     type Call = Call;
     type CallFilter = Nothing;
-    type ContractDeposit = ();
+    type DepositPerByte = DepositPerByte;
+    type DepositPerItem = DepositPerItem;
+    type AddressGenerator = pallet_contracts::DefaultAddressGenerator;
 }
 
 parameter_types! {
     pub const TransactionByteFee: u64 = 0;
+    pub const DepositPerItem: Balance = 0;
+	pub const DepositPerByte: Balance = 0;
 }
 
 impl Convert<Weight, BalanceOf<Self>> for Test {

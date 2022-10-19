@@ -1001,7 +1001,7 @@ where
 			frame_system::CheckEra::<Runtime>::from(era),
 			frame_system::CheckNonce::<Runtime>::from(nonce),
 			frame_system::CheckWeight::<Runtime>::new(),
-			pallet_asset_tx_payment::ChargeAssetTxPayment::<Runtime>::from(tip, None),
+			pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
 		);
 		let raw_payload = SignedPayload::new(call, extra)
 			.map_err(|e| {
@@ -1319,6 +1319,45 @@ pub type Executive = frame_executive::Executive<
 	AllPalletsWithSystem,
 	pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
 >;
+
+#[cfg(feature = "runtime-benchmarks")]
+#[macro_use]
+extern crate frame_benchmarking;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benches {
+	define_benchmarks!(
+		[frame_benchmarking, BaselineBench::<Runtime>]
+		[pallet_babe, Babe]
+		[pallet_bags_list, BagsList]
+		[pallet_balances, Balances]
+		[pallet_bounties, Bounties]
+		[pallet_child_bounties, ChildBounties]
+		[pallet_collective, Council]
+		[pallet_contracts, Contracts]
+		[pallet_democracy, Democracy]
+		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
+		[pallet_elections_phragmen, Elections]
+		[pallet_grandpa, Grandpa]
+		[pallet_identity, Identity]
+		[pallet_im_online, ImOnline]
+		[pallet_indices, Indices]
+		[pallet_membership, TechnicalMembership]
+		[pallet_multisig, Multisig]
+		[pallet_offences, OffencesBench::<Runtime>]
+		[pallet_preimage, Preimage]
+		[pallet_proxy, Proxy]
+		[pallet_scheduler, Scheduler]
+		[pallet_session, SessionBench::<Runtime>]
+		[pallet_staking, Staking]
+		[frame_system, SystemBench::<Runtime>]
+		[pallet_timestamp, Timestamp]
+		[pallet_tips, Tips]
+		[pallet_treasury, Treasury]
+		[pallet_utility, Utility]
+		[pallet_vesting, Vesting]
+	);
+}
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
