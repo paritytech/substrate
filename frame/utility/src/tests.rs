@@ -30,7 +30,7 @@ use frame_support::{
 	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
 	weights::Weight,
 };
-use pallet_collective::Instance1;
+use pallet_collective::{EnsureProportionAtLeast, Instance1};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -85,6 +85,42 @@ pub mod example {
 	}
 }
 
+mod mock_democracy {
+	pub use pallet::*;
+	#[frame_support::pallet]
+	pub mod pallet {
+		use frame_support::pallet_prelude::*;
+		use frame_system::pallet_prelude::*;
+
+		#[pallet::pallet]
+		#[pallet::generate_store(pub(super) trait Store)]
+		pub struct Pallet<T>(_);
+
+		#[pallet::config]
+		pub trait Config: frame_system::Config + Sized {
+			type RuntimeEvent: From<Event<Self>>
+				+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+			type ExternalMajorityOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		}
+
+		#[pallet::call]
+		impl<T: Config> Pallet<T> {
+			#[pallet::weight(0)]
+			pub fn external_propose_majority(origin: OriginFor<T>) -> DispatchResult {
+				T::ExternalMajorityOrigin::ensure_origin(origin)?;
+				Self::deposit_event(Event::<T>::ExternalProposed);
+				Ok(())
+			}
+		}
+
+		#[pallet::event]
+		#[pallet::generate_deposit(pub(super) fn deposit_event)]
+		pub enum Event<T: Config> {
+			ExternalProposed,
+		}
+	}
+}
+
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -100,6 +136,7 @@ frame_support::construct_runtime!(
 		Council: pallet_collective::<Instance1>,
 		Utility: utility::{Pallet, Call, Event},
 		Example: example::{Pallet, Call},
+		Democracy: mock_democracy::{Pallet, Call, Event<T>},
 	}
 );
 
@@ -191,6 +228,10 @@ impl Contains<RuntimeCall> for TestBaseCallFilter {
 			_ => false,
 		}
 	}
+}
+impl mock_democracy::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type ExternalMajorityOrigin = EnsureProportionAtLeast<u64, Instance1, 3, 4>;
 }
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -774,7 +815,7 @@ fn batch_all_doesnt_work_with_inherents() {
 fn batch_works_with_council_origin() {
 	new_test_ext().execute_with(|| {
 		let proposal = RuntimeCall::Utility(UtilityCall::batch {
-			calls: vec![call_transfer(1, 5), call_transfer(1, 5)],
+			calls: vec![RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {})],
 		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -811,7 +852,7 @@ fn batch_works_with_council_origin() {
 fn force_batch_works_with_council_origin() {
 	new_test_ext().execute_with(|| {
 		let proposal = RuntimeCall::Utility(UtilityCall::force_batch {
-			calls: vec![call_transfer(1, 5), call_transfer(1, 5)],
+			calls: vec![RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {})],
 		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -845,10 +886,10 @@ fn force_batch_works_with_council_origin() {
 }
 
 #[test]
-fn batch_all_doesnt_work_with_council_origin() {
+fn batch_all_works_with_council_origin() {
 	new_test_ext().execute_with(|| {
 		let proposal = RuntimeCall::Utility(UtilityCall::batch_all {
-			calls: vec![call_transfer(1, 5), call_transfer(1, 5)],
+			calls: vec![RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {})],
 		});
 		let proposal_len: u32 = proposal.using_encoded(|p| p.len() as u32);
 		let proposal_weight = proposal.get_dispatch_info().weight;
@@ -876,7 +917,7 @@ fn batch_all_doesnt_work_with_council_origin() {
 
 		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
 			proposal_hash: hash,
-			result: Err(BadOrigin.into()),
+			result: Ok(()),
 		}));
 	})
 }
