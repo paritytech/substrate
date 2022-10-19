@@ -23,9 +23,9 @@
 use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 use sp_runtime::traits;
+use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
-use sp_std::{fmt, vec};
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
