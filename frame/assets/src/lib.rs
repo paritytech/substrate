@@ -617,8 +617,14 @@ pub mod pallet {
 					status: AssetStatus::Live,
 				},
 			);
+
+			Self::deposit_event(Event::Created {
+				asset_id: id,
+				creator: owner.clone(),
+				owner: admin,
+			});
 			T::CallbackHandle::created(&id, &owner);
-			Self::deposit_event(Event::Created { asset_id: id, creator: owner, owner: admin });
+
 			Ok(())
 		}
 

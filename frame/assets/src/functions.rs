@@ -664,8 +664,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				status: AssetStatus::Live,
 			},
 		);
+		Self::deposit_event(Event::ForceCreated { asset_id: id, owner: owner.clone() });
 		T::CallbackHandle::created(&id, &owner);
-		Self::deposit_event(Event::ForceCreated { asset_id: id, owner });
 		Ok(())
 	}
 
