@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use sp_runtime::traits::{AtLeast32BitUnsigned, Zero};
 use sp_std::prelude::*;
 
-use frame_support::weights::{DispatchClass, Weight};
+use frame_support::{dispatch::DispatchClass, weights::Weight};
 
 /// The base fee and adjusted weight and length fees constitute the _inclusion fee_.
 #[derive(Encode, Decode, Clone, Eq, PartialEq)]
@@ -135,12 +135,13 @@ mod tests {
 	#[test]
 	fn should_serialize_and_deserialize_properly_with_string() {
 		let info = RuntimeDispatchInfo {
-			weight: 5,
+			weight: Weight::from_ref_time(5),
 			class: DispatchClass::Normal,
 			partial_fee: 1_000_000_u64,
 		};
 
-		let json_str = r#"{"weight":5,"class":"normal","partialFee":"1000000"}"#;
+		let json_str =
+			r#"{"weight":{"ref_time":5,"proof_size":0},"class":"normal","partialFee":"1000000"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
 		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u64>>(json_str).unwrap(), info);
@@ -152,12 +153,12 @@ mod tests {
 	#[test]
 	fn should_serialize_and_deserialize_properly_large_value() {
 		let info = RuntimeDispatchInfo {
-			weight: 5,
+			weight: Weight::from_ref_time(5),
 			class: DispatchClass::Normal,
 			partial_fee: u128::max_value(),
 		};
 
-		let json_str = r#"{"weight":5,"class":"normal","partialFee":"340282366920938463463374607431768211455"}"#;
+		let json_str = r#"{"weight":{"ref_time":5,"proof_size":0},"class":"normal","partialFee":"340282366920938463463374607431768211455"}"#;
 
 		assert_eq!(serde_json::to_string(&info).unwrap(), json_str);
 		assert_eq!(serde_json::from_str::<RuntimeDispatchInfo<u128>>(json_str).unwrap(), info);

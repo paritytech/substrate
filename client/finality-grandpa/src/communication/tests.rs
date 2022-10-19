@@ -27,7 +27,8 @@ use futures::prelude::*;
 use parity_scale_codec::Encode;
 use sc_network::{config::Role, Multiaddr, PeerId, ReputationChange};
 use sc_network_common::{
-	protocol::event::{Event as NetworkEvent, ObservedRole},
+	config::MultiaddrWithPeerId,
+	protocol::{event::Event as NetworkEvent, role::ObservedRole, ProtocolName},
 	service::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
@@ -40,7 +41,6 @@ use sp_finality_grandpa::AuthorityList;
 use sp_keyring::Ed25519Keyring;
 use sp_runtime::traits::NumberFor;
 use std::{
-	borrow::Cow,
 	collections::HashSet,
 	pin::Pin,
 	sync::Arc,
@@ -77,7 +77,7 @@ impl NetworkPeers for TestNetwork {
 		let _ = self.sender.unbounded_send(Event::Report(who, cost_benefit));
 	}
 
-	fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {}
+	fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {}
 
 	fn accept_unreserved_peers(&self) {
 		unimplemented!();
@@ -87,7 +87,7 @@ impl NetworkPeers for TestNetwork {
 		unimplemented!();
 	}
 
-	fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+	fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
 		unimplemented!();
 	}
 
@@ -97,7 +97,7 @@ impl NetworkPeers for TestNetwork {
 
 	fn set_reserved_peers(
 		&self,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 		_peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		unimplemented!();
@@ -105,23 +105,23 @@ impl NetworkPeers for TestNetwork {
 
 	fn add_peers_to_reserved_set(
 		&self,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 		_peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		unimplemented!();
 	}
 
-	fn remove_peers_from_reserved_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {}
+	fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
 
 	fn add_to_peers_set(
 		&self,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 		_peers: HashSet<Multiaddr>,
 	) -> Result<(), String> {
 		unimplemented!();
 	}
 
-	fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+	fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 		unimplemented!();
 	}
 
@@ -142,14 +142,14 @@ impl NetworkEventStream for TestNetwork {
 }
 
 impl NetworkNotification for TestNetwork {
-	fn write_notification(&self, target: PeerId, _protocol: Cow<'static, str>, message: Vec<u8>) {
+	fn write_notification(&self, target: PeerId, _protocol: ProtocolName, message: Vec<u8>) {
 		let _ = self.sender.unbounded_send(Event::WriteNotification(target, message));
 	}
 
 	fn notification_sender(
 		&self,
 		_target: PeerId,
-		_protocol: Cow<'static, str>,
+		_protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		unimplemented!();
 	}
@@ -177,7 +177,7 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_message(&mut self, who: &PeerId, data: Vec<u8>) {
 		<Self as NetworkNotification>::write_notification(
 			self,
-			who.clone(),
+			*who,
 			grandpa_protocol_name::NAME.into(),
 			data,
 		);
@@ -280,7 +280,7 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 }
 
 fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
-	keys.iter().map(|key| key.clone().public().into()).map(|id| (id, 1)).collect()
+	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
 struct NoopContext;
@@ -305,8 +305,7 @@ fn good_commit_leads_to_relay() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit =
-			finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+		let precommit = finality_grandpa::Precommit { target_hash, target_number };
 		let payload = sp_finality_grandpa::localized_payload(
 			round,
 			set_id,
@@ -362,19 +361,19 @@ fn good_commit_leads_to_relay() {
 			// asking for global communication will cause the test network
 			// to send us an event asking us for a stream. use it to
 			// send a message.
-			let sender_id = id.clone();
+			let sender_id = id;
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
 					// Add the sending peer and send the commit
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						messages: vec![(
 							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
@@ -384,7 +383,7 @@ fn good_commit_leads_to_relay() {
 					// Add a random peer which will be the recipient of this message
 					let receiver_id = PeerId::random();
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: receiver_id.clone(),
+						remote: receiver_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
@@ -456,8 +455,7 @@ fn bad_commit_leads_to_report() {
 		let target_hash: Hash = [1; 32].into();
 		let target_number = 500;
 
-		let precommit =
-			finality_grandpa::Precommit { target_hash: target_hash.clone(), target_number };
+		let precommit = finality_grandpa::Precommit { target_hash, target_number };
 		let payload = sp_finality_grandpa::localized_payload(
 			round,
 			set_id,
@@ -513,17 +511,17 @@ fn bad_commit_leads_to_report() {
 			// asking for global communication will cause the test network
 			// to send us an event asking us for a stream. use it to
 			// send a message.
-			let sender_id = id.clone();
+			let sender_id = id;
 			let send_message = tester.filter_network_events(move |event| match event {
 				Event::EventStream(sender) => {
 					let _ = sender.unbounded_send(NetworkEvent::NotificationStreamOpened {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						protocol: grandpa_protocol_name::NAME.into(),
 						negotiated_fallback: None,
 						role: ObservedRole::Full,
 					});
 					let _ = sender.unbounded_send(NetworkEvent::NotificationsReceived {
-						remote: sender_id.clone(),
+						remote: sender_id,
 						messages: vec![(
 							grandpa_protocol_name::NAME.into(),
 							commit_to_send.clone().into(),
@@ -645,7 +643,7 @@ fn grandpa_protocol_name() {
 
 	// Create protocol name using random genesis hash.
 	let genesis_hash = sp_core::H256::random();
-	let expected = format!("/{}/grandpa/1", hex::encode(genesis_hash));
+	let expected = format!("/{}/grandpa/1", array_bytes::bytes2hex("", genesis_hash.as_ref()));
 	let proto_name = grandpa_protocol_name::standard_name(&genesis_hash, &chain_spec);
 	assert_eq!(proto_name.to_string(), expected);
 

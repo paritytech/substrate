@@ -20,9 +20,10 @@
 //! careful when using it onchain.
 
 use crate::{
-	Debug, ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolver, WeightInfo,
+	Debug, ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolver, WeightInfo,
 };
-use frame_support::{traits::Get, weights::DispatchClass};
+use frame_support::{dispatch::DispatchClass, traits::Get};
 use sp_npos_elections::*;
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 
@@ -133,11 +134,6 @@ fn elect_with<T: Config>(
 }
 
 impl<T: Config> ElectionProvider for UnboundedExecution<T> {
-	type AccountId = <T::System as frame_system::Config>::AccountId;
-	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
-	type Error = Error;
-	type DataProvider = T::DataProvider;
-
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		// This should not be called if not in `std` mode (and therefore neither in genesis nor in
 		// testing)
@@ -152,6 +148,17 @@ impl<T: Config> ElectionProvider for UnboundedExecution<T> {
 	}
 }
 
+impl<T: Config> ElectionProviderBase for UnboundedExecution<T> {
+	type AccountId = <T::System as frame_system::Config>::AccountId;
+	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
+	type Error = Error;
+	type DataProvider = T::DataProvider;
+
+	fn ongoing() -> bool {
+		false
+	}
+}
+
 impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	fn elect_with_bounds(
 		max_voters: usize,
@@ -161,12 +168,18 @@ impl<T: Config> InstantElectionProvider for UnboundedExecution<T> {
 	}
 }
 
-impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
+impl<T: BoundedConfig> ElectionProviderBase for BoundedExecution<T> {
 	type AccountId = <T::System as frame_system::Config>::AccountId;
 	type BlockNumber = <T::System as frame_system::Config>::BlockNumber;
 	type Error = Error;
 	type DataProvider = T::DataProvider;
 
+	fn ongoing() -> bool {
+		false
+	}
+}
+
+impl<T: BoundedConfig> ElectionProvider for BoundedExecution<T> {
 	fn elect() -> Result<Supports<Self::AccountId>, Self::Error> {
 		elect_with::<T>(Some(T::VotersBound::get() as usize), Some(T::TargetsBound::get() as usize))
 	}
@@ -211,16 +224,16 @@ mod tests {
 	impl frame_system::Config for Runtime {
 		type SS58Prefix = ();
 		type BaseCallFilter = frame_support::traits::Everything;
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = AccountId;
 		type BlockNumber = BlockNumber;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = sp_core::H256;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type Event = ();
+		type RuntimeEvent = ();
 		type BlockHashCount = ();
 		type DbWeight = ();
 		type BlockLength = ();

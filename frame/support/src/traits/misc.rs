@@ -18,7 +18,8 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
-use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
+use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
+use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
 #[doc(hidden)]
@@ -150,10 +151,10 @@ pub trait DefensiveOption<T> {
 
 	/// Defensively transform this option to a result, mapping `None` to the return value of an
 	/// error closure.
-	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+	fn defensive_ok_or_else<E: sp_std::fmt::Debug, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
 
 	/// Defensively transform this option to a result, mapping `None` to a default value.
-	fn defensive_ok_or<E>(self, err: E) -> Result<T, E>;
+	fn defensive_ok_or<E: sp_std::fmt::Debug>(self, err: E) -> Result<T, E>;
 
 	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
 	/// is `None`.
@@ -317,16 +318,17 @@ impl<T> DefensiveOption<T> for Option<T> {
 		)
 	}
 
-	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
+	fn defensive_ok_or_else<E: sp_std::fmt::Debug, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
 		self.ok_or_else(|| {
-			defensive!();
-			err()
+			let err_value = err();
+			defensive!(err_value);
+			err_value
 		})
 	}
 
-	fn defensive_ok_or<E>(self, err: E) -> Result<T, E> {
+	fn defensive_ok_or<E: sp_std::fmt::Debug>(self, err: E) -> Result<T, E> {
 		self.ok_or_else(|| {
-			defensive!();
+			defensive!(err);
 			err
 		})
 	}
@@ -467,14 +469,18 @@ impl<A, B> SameOrOther<A, B> {
 }
 
 /// Handler for when a new account has been created.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_killed_account(who: &AccountId);
@@ -632,7 +638,9 @@ impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 /// but cannot preform any alterations. More specifically alterations are
 /// not forbidden, but they are not persisted in any way after the worker
 /// has finished.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
@@ -703,13 +711,13 @@ pub trait EstimateCallFee<Call, Balance> {
 	///
 	/// The dispatch info and the length is deduced from the call. The post info can optionally be
 	/// provided.
-	fn estimate_call_fee(call: &Call, post_info: crate::weights::PostDispatchInfo) -> Balance;
+	fn estimate_call_fee(call: &Call, post_info: crate::dispatch::PostDispatchInfo) -> Balance;
 }
 
 // Useful for building mocks.
 #[cfg(feature = "std")]
 impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
-	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
+	fn estimate_call_fee(_: &Call, _: crate::dispatch::PostDispatchInfo) -> Balance {
 		T.into()
 	}
 }
@@ -745,7 +753,10 @@ impl<T: Encode> Encode for WrapperOpaque<T> {
 
 impl<T: Decode> Decode for WrapperOpaque<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(Self(T::decode_all(&mut &<Vec<u8>>::decode(input)?[..])?))
+		Ok(Self(T::decode_all_with_depth_limit(
+			sp_api::MAX_EXTRINSIC_DEPTH,
+			&mut &<Vec<u8>>::decode(input)?[..],
+		)?))
 	}
 
 	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -807,7 +818,7 @@ impl<T: Decode> WrapperKeepOpaque<T> {
 	///
 	/// Returns `None` if the decoding failed.
 	pub fn try_decode(&self) -> Option<T> {
-		T::decode_all(&mut &self.data[..]).ok()
+		T::decode_all_with_depth_limit(sp_api::MAX_EXTRINSIC_DEPTH, &mut &self.data[..]).ok()
 	}
 
 	/// Returns the length of the encoded `T`.
@@ -921,7 +932,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// Maximum size of a preimage.
 	type MaxSize: Get<u32>;
 
-	/// Store the bytes of a preimage on chain.
+	/// Store the bytes of a preimage on chain infallible due to the bounded type.
 	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a
@@ -939,6 +950,30 @@ impl<Hash> PreimageRecipient<Hash> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_std::marker::PhantomData;
+
+	#[derive(Encode, Decode)]
+	enum NestedType {
+		Nested(Box<Self>),
+		Done,
+	}
+
+	#[test]
+	fn test_opaque_wrapper_decode_limit() {
+		let limit = sp_api::MAX_EXTRINSIC_DEPTH as usize;
+		let mut ok_bytes = vec![0u8; limit];
+		ok_bytes.push(1u8);
+		let mut err_bytes = vec![0u8; limit + 1];
+		err_bytes.push(1u8);
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &ok_bytes.encode()[..]).is_ok());
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &err_bytes.encode()[..]).is_err());
+
+		let ok_keep_opaque = WrapperKeepOpaque { data: ok_bytes, _phantom: PhantomData };
+		let err_keep_opaque = WrapperKeepOpaque { data: err_bytes, _phantom: PhantomData };
+
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&ok_keep_opaque).is_some());
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&err_keep_opaque).is_none());
+	}
 
 	#[test]
 	fn test_opaque_wrapper() {

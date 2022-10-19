@@ -132,9 +132,7 @@ impl DeriveJunction {
 		let mut cc: [u8; JUNCTION_ID_LEN] = Default::default();
 		index.using_encoded(|data| {
 			if data.len() > JUNCTION_ID_LEN {
-				let hash_result = blake2_rfc::blake2b::blake2b(JUNCTION_ID_LEN, &[], data);
-				let hash = hash_result.as_bytes();
-				cc.copy_from_slice(hash);
+				cc.copy_from_slice(&sp_core_hashing::blake2_256(data));
 			} else {
 				cc[0..data.len()].copy_from_slice(data);
 			}
@@ -292,7 +290,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		}
 
 		let hash = ss58hash(&data[0..body_len + prefix_len]);
-		let checksum = &hash.as_bytes()[0..CHECKSUM_LEN];
+		let checksum = &hash[0..CHECKSUM_LEN];
 		if data[body_len + prefix_len..body_len + prefix_len + CHECKSUM_LEN] != *checksum {
 			// Invalid checksum.
 			return Err(PublicError::InvalidChecksum)
@@ -333,7 +331,7 @@ pub trait Ss58Codec: Sized + AsMut<[u8]> + AsRef<[u8]> + ByteArray {
 		};
 		v.extend(self.as_ref());
 		let r = ss58hash(&v);
-		v.extend(&r.as_bytes()[0..2]);
+		v.extend(&r[0..2]);
 		v.to_base58()
 	}
 
@@ -366,11 +364,13 @@ pub trait Derive: Sized {
 const PREFIX: &[u8] = b"SS58PRE";
 
 #[cfg(feature = "std")]
-fn ss58hash(data: &[u8]) -> blake2_rfc::blake2b::Blake2bResult {
-	let mut context = blake2_rfc::blake2b::Blake2b::new(64);
-	context.update(PREFIX);
-	context.update(data);
-	context.finalize()
+fn ss58hash(data: &[u8]) -> Vec<u8> {
+	use blake2::{Blake2b512, Digest};
+
+	let mut ctx = Blake2b512::new();
+	ctx.update(PREFIX);
+	ctx.update(data);
+	ctx.finalize().to_vec()
 }
 
 /// Default prefix number
@@ -421,7 +421,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Public + Derive> Ss58Codec for T {
 		let cap = SS58_REGEX.captures(s).ok_or(PublicError::InvalidFormat)?;
 		let s = cap.name("ss58").map(|r| r.as_str()).unwrap_or(DEV_ADDRESS);
 		let addr = if let Some(stripped) = s.strip_prefix("0x") {
-			let d = hex::decode(stripped).map_err(|_| PublicError::InvalidFormat)?;
+			let d = array_bytes::hex2bytes(stripped).map_err(|_| PublicError::InvalidFormat)?;
 			Self::from_slice(&d).map_err(|()| PublicError::BadLength)?
 		} else {
 			Self::from_ss58check(s)?
@@ -614,10 +614,7 @@ impl sp_std::str::FromStr for AccountId32 {
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let hex_or_ss58_without_prefix = s.trim_start_matches("0x");
 		if hex_or_ss58_without_prefix.len() == 64 {
-			let mut bytes = [0u8; 32];
-			hex::decode_to_slice(hex_or_ss58_without_prefix, &mut bytes)
-				.map_err(|_| "invalid hex address.")
-				.map(|_| Self::from(bytes))
+			array_bytes::hex_n_into(hex_or_ss58_without_prefix).map_err(|_| "invalid hex address.")
 		} else {
 			Self::from_ss58check(s).map_err(|_| "invalid ss58 address.")
 		}
@@ -943,7 +940,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 			password_override.or_else(|| password.as_ref().map(|p| p.expose_secret().as_str()));
 
 		let (root, seed) = if let Some(stripped) = phrase.expose_secret().strip_prefix("0x") {
-			hex::decode(stripped)
+			array_bytes::hex2bytes(stripped)
 				.ok()
 				.and_then(|seed_vec| {
 					let mut seed = Self::Seed::default();
@@ -987,6 +984,11 @@ pub trait IsWrappedBy<Outer>: From<Outer> + Into<Outer> {
 pub trait Wraps: Sized {
 	/// The inner type it is wrapping.
 	type Inner: IsWrappedBy<Self>;
+
+	/// Get a reference to the inner type that is wrapped.
+	fn as_inner_ref(&self) -> &Self::Inner {
+		Self::Inner::from_ref(self)
+	}
 }
 
 impl<T, Outer> IsWrappedBy<Outer> for T
@@ -1127,7 +1129,6 @@ pub mod key_types {
 mod tests {
 	use super::*;
 	use crate::DeriveJunction;
-	use hex_literal::hex;
 
 	#[derive(Clone, Eq, PartialEq, Debug)]
 	enum TestPair {
@@ -1269,7 +1270,7 @@ mod tests {
 	fn interpret_std_seed_should_work() {
 		assert_eq!(
 			TestPair::from_string("0x0123456789abcdef", None),
-			Ok(TestPair::Seed(hex!["0123456789abcdef"][..].to_owned()))
+			Ok(TestPair::Seed(array_bytes::hex2bytes_unchecked("0123456789abcdef")))
 		);
 	}
 
@@ -1312,6 +1313,14 @@ mod tests {
 			})
 		);
 		assert_eq!(
+			TestPair::from_string("hello world/0123456789012345678901234567890123456789", None),
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::soft("0123456789012345678901234567890123456789")]
+			})
+		);
+		assert_eq!(
 			TestPair::from_string("hello world//1", None),
 			Ok(TestPair::Standard {
 				phrase: "hello world".to_owned(),
@@ -1325,6 +1334,14 @@ mod tests {
 				phrase: "hello world".to_owned(),
 				password: None,
 				path: vec![DeriveJunction::hard("DOT")]
+			})
+		);
+		assert_eq!(
+			TestPair::from_string("hello world//0123456789012345678901234567890123456789", None),
+			Ok(TestPair::Standard {
+				phrase: "hello world".to_owned(),
+				password: None,
+				path: vec![DeriveJunction::hard("0123456789012345678901234567890123456789")]
 			})
 		);
 		assert_eq!(

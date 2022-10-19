@@ -67,16 +67,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -90,7 +90,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_session::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
@@ -147,9 +147,10 @@ impl BeefyDataProvider<Vec<u8>> for DummyDataProvider {
 	fn extra_data() -> Vec<u8> {
 		let mut col = vec![(15, vec![1, 2, 3]), (5, vec![4, 5, 6])];
 		col.sort();
-		beefy_merkle_tree::merkle_root::<crate::Pallet<Test>, _, _>(
+		beefy_merkle_tree::merkle_root::<<Test as pallet_mmr::Config>::Hashing, _>(
 			col.into_iter().map(|pair| pair.encode()),
 		)
+		.as_ref()
 		.to_vec()
 	}
 }

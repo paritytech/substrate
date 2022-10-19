@@ -32,32 +32,31 @@ const DEFAULT_KEYSTORE_CONFIG_PATH: &str = "keystore";
 #[derive(Debug, Clone, Args)]
 pub struct KeystoreParams {
 	/// Specify custom URIs to connect to for keystore-services
-	#[clap(long)]
+	#[arg(long)]
 	pub keystore_uri: Option<String>,
 
 	/// Specify custom keystore path.
-	#[clap(long, value_name = "PATH", parse(from_os_str))]
+	#[arg(long, value_name = "PATH")]
 	pub keystore_path: Option<PathBuf>,
 
 	/// Use interactive shell for entering the password used by the keystore.
-	#[clap(long, conflicts_with_all = &["password", "password-filename"])]
+	#[arg(long, conflicts_with_all = &["password", "password_filename"])]
 	pub password_interactive: bool,
 
 	/// Password used by the keystore. This allows appending an extra user-defined secret to the
 	/// seed.
-	#[clap(
+	#[arg(
 		long,
-		parse(try_from_str = secret_string_from_str),
-		conflicts_with_all = &["password-interactive", "password-filename"]
+		value_parser = secret_string_from_str,
+		conflicts_with_all = &["password_interactive", "password_filename"]
 	)]
 	pub password: Option<SecretString>,
 
 	/// File that contains the password used by the keystore.
-	#[clap(
+	#[arg(
 		long,
 		value_name = "PATH",
-		parse(from_os_str),
-		conflicts_with_all = &["password-interactive", "password"]
+		conflicts_with_all = &["password_interactive", "password"]
 	)]
 	pub password_filename: Option<PathBuf>,
 }
@@ -94,7 +93,7 @@ impl KeystoreParams {
 		let (password_interactive, password) = (self.password_interactive, self.password.clone());
 
 		let pass = if password_interactive {
-			let password = rpassword::read_password_from_tty(Some("Key password: "))?;
+			let password = rpassword::prompt_password("Key password: ")?;
 			Some(SecretString::new(password))
 		} else {
 			password
@@ -105,6 +104,5 @@ impl KeystoreParams {
 }
 
 fn input_keystore_password() -> Result<String> {
-	rpassword::read_password_from_tty(Some("Keystore password: "))
-		.map_err(|e| format!("{:?}", e).into())
+	rpassword::prompt_password("Keystore password: ").map_err(|e| format!("{:?}", e).into())
 }

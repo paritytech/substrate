@@ -19,7 +19,7 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
 
 use clap::{Args, Parser};
 use log::info;
@@ -62,16 +62,22 @@ pub struct ExtrinsicParams {
 	/// List all available pallets and extrinsics.
 	///
 	/// The format is CSV with header `pallet, extrinsic`.
-	#[clap(long)]
+	#[arg(long)]
 	pub list: bool,
 
 	/// Pallet name of the extrinsic to benchmark.
-	#[clap(long, value_name = "PALLET", required_unless_present = "list")]
+	#[arg(long, value_name = "PALLET", required_unless_present = "list")]
 	pub pallet: Option<String>,
 
 	/// Extrinsic to benchmark.
-	#[clap(long, value_name = "EXTRINSIC", required_unless_present = "list")]
+	#[arg(long, value_name = "EXTRINSIC", required_unless_present = "list")]
 	pub extrinsic: Option<String>,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[arg(long)]
+	pub enable_trie_cache: bool,
 }
 
 impl ExtrinsicCmd {
@@ -82,6 +88,7 @@ impl ExtrinsicCmd {
 		&self,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
+		digest_items: Vec<DigestItem>,
 		ext_factory: &ExtrinsicFactory,
 	) -> Result<()>
 	where
@@ -109,7 +116,7 @@ impl ExtrinsicCmd {
 				return Err("Unknown pallet or extrinsic. Use --list for a complete list.".into()),
 		};
 
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, digest_items);
 		let stats = bench.bench_extrinsic(ext_builder)?;
 		info!(
 			"Executing a {}::{} extrinsic takes[ns]:\n{:?}",
@@ -130,5 +137,13 @@ impl CliConfiguration for ExtrinsicCmd {
 
 	fn import_params(&self) -> Option<&ImportParams> {
 		Some(&self.import_params)
+	}
+
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.params.enable_trie_cache {
+			Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
+		} else {
+			Ok(None)
+		}
 	}
 }
