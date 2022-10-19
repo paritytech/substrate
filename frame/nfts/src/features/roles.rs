@@ -28,7 +28,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.map_or(false, |roles| roles.has_role(role))
 	}
 
-	/// Groups provided roles by account, give one account could have multiple roles.
+	/// Groups provided roles by account, given one account could have multiple roles.
 	///
 	/// - `input`: A vector of (Account, Role) tuples.
 	///
