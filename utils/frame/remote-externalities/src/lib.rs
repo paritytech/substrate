@@ -956,7 +956,7 @@ mod remote_tests {
 		todo!();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn snapshot_block_hash_works() {
 		const CACHE: &'static str = "snapshot_block_hash_works";
 		init_logger();
@@ -983,7 +983,7 @@ mod remote_tests {
 		assert_eq!(block_hash, cached_block_hash);
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn offline_else_online_works() {
 		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
@@ -1028,7 +1028,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete[0].path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_one_small_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1043,7 +1043,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_few_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1078,7 +1078,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_create_snapshot() {
 		const CACHE: &'static str = "can_create_snapshot";
 		init_logger();
@@ -1111,7 +1111,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_create_child_snapshot() {
 		const CACHE: &'static str = "can_create_child_snapshot";
 		init_logger();
@@ -1143,7 +1143,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	// #[ignore = "only works if a local node is present."]
 	async fn can_fetch_all_local() {
 		init_logger();
@@ -1158,7 +1158,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	// #[ignore = "slow af."]
 	async fn can_fetch_all_remote() {
 		init_logger();
