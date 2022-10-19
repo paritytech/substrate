@@ -29,8 +29,9 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup},
-	Permill,
+
 };
+use sp_arithmetic::Permill;
 use sp_staking::{
 	offence::{OffenceError, ReportOffence},
 	SessionIndex,

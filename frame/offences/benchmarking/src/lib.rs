@@ -25,13 +25,15 @@ mod mock;
 use sp_std::{prelude::*, vec};
 
 use frame_benchmarking::{account, benchmarks};
+use frame_election_provider_support::sp_arithmetic;
 use frame_support::traits::{Currency, Get, ValidatorSet, ValidatorSetWithIdentification};
 use frame_system::{Config as SystemConfig, Pallet as System, RawOrigin};
 
 use sp_runtime::{
 	traits::{Convert, Saturating, StaticLookup, UniqueSaturatedInto},
-	Perbill,
+
 };
+use sp_arithmetic::Perbill;
 use sp_staking::offence::{Offence, ReportOffence};
 
 use pallet_babe::BabeEquivocationOffence;

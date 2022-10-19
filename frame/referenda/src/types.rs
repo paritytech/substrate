@@ -517,7 +517,7 @@ impl Debug for Curve {
 mod tests {
 	use super::*;
 	use frame_support::traits::ConstU32;
-	use sp_runtime::PerThing;
+	use sp_arithmetic::PerThing;
 
 	const fn percent(x: u128) -> FixedI64 {
 		FixedI64::from_rational(x, 100)

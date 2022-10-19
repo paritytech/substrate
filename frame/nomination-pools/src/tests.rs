@@ -4717,7 +4717,7 @@ mod update_roles {
 }
 
 mod reward_counter_precision {
-	use sp_runtime::FixedU128;
+	use sp_arithmetic::FixedU128;
 
 	use super::*;
 

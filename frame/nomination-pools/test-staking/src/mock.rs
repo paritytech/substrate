@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use frame_election_provider_support::VoteWeight;
+use frame_election_provider_support::{sp_arithmetic, VoteWeight};
 use frame_support::{
 	assert_ok,
 	pallet_prelude::*,
@@ -24,10 +24,9 @@ use frame_support::{
 	PalletId,
 };
 use sp_runtime::{
-	traits::{Convert, IdentityLookup},
-	FixedU128,
+	traits::{Convert, IdentityLookup}
 };
-
+use sp_arithmetic::FixedU128;
 type AccountId = u128;
 type AccountIndex = u32;
 type BlockNumber = u64;

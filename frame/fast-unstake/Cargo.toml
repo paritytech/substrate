@@ -24,6 +24,7 @@ sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 
 pallet-balances = { default-features = false, path = "../balances" }
 pallet-timestamp = { default-features = false, path = "../timestamp" }
@@ -52,6 +53,7 @@ std = [
 	"sp-staking/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-arithmetic/std",
 
 	"pallet-staking/std",
 	"pallet-balances/std",

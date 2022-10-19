@@ -38,8 +38,9 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Header, TestXt, UintAuthorityId},
 	traits::{IdentityLookup, OpaqueKeys},
-	DigestItem, Perbill,
+	DigestItem
 };
+use sp_arithmetic::Perbill;
 use sp_staking::{EraIndex, SessionIndex};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;

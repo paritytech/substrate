@@ -20,6 +20,7 @@ sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 log = { version = "0.4.17", default-features = false }
+sp-arithmetic =  { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
@@ -43,6 +44,7 @@ std = [
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
+	"sp-arithmetic/std"
 ]
 try-runtime = [
 	"frame-support/try-runtime",

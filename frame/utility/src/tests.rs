@@ -386,7 +386,7 @@ fn batch_early_exit_works() {
 
 #[test]
 fn batch_weight_calculation_doesnt_overflow() {
-	use sp_runtime::Perbill;
+	use sp_arithmetic::Perbill;
 	new_test_ext().execute_with(|| {
 		let big_call =
 			RuntimeCall::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });

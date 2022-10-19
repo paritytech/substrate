@@ -16,13 +16,13 @@
 // limitations under the License.
 
 use crate::VoterBagsListInstance;
-use frame_election_provider_support::VoteWeight;
+use frame_election_provider_support::{sp_arithmetic, VoteWeight};
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::{
 	traits::{Convert, IdentityLookup},
-	FixedU128,
-};
 
+};
+use sp_arithmetic::FixedU128;
 type AccountId = u128;
 type AccountIndex = u32;
 type BlockNumber = u64;

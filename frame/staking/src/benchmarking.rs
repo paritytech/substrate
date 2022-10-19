@@ -30,8 +30,9 @@ use frame_support::{
 };
 use sp_runtime::{
 	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
-	Perbill, Percent,
+
 };
+use sp_arithmetic::{Perbill, Percent};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 

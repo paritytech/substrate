@@ -30,8 +30,9 @@ use pallet_balances::Error as BalancesError;
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
-	Perbill, Percent, Rounding,
+
 };
+use sp_arithmetic::{Perbill, Percent, Rounding};
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
@@ -5392,7 +5393,7 @@ fn proportional_ledger_slash_works() {
 	assert_eq!(LedgerSlashPerEra::get().1, BTreeMap::from([(4, 0), (5, 0), (6, 0), (7, 0)]));
 
 	// Given
-	use sp_runtime::PerThing as _;
+	use sp_arithmetic::PerThing as _;
 	let slash = u64::MAX as Balance * 2;
 	let value = u64::MAX as Balance * 2;
 	let unit = 100;
@@ -5410,7 +5411,7 @@ fn proportional_ledger_slash_works() {
 	// The amount slashed out of `unit`
 	let affected_balance = value + unit * 4;
 	let ratio =
-		Perquintill::from_rational_with_rounding(slash, affected_balance, Rounding::Up).unwrap();
+		sp_arithmetic::Perquintill::from_rational_with_rounding(slash, affected_balance, Rounding::Up).unwrap();
 	// `unit` after the slash is applied
 	let unit_slashed = {
 		let unit_slash = ratio.mul_ceil(unit);

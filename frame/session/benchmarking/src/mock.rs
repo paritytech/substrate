@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use frame_election_provider_support::{onchain, SequentialPhragmen};
+use frame_election_provider_support::{onchain, SequentialPhragmen, sp_arithmetic};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -147,7 +147,7 @@ parameter_types! {
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
 	type System = Test;
-	type Solver = SequentialPhragmen<AccountId, sp_runtime::Perbill>;
+	type Solver = SequentialPhragmen<AccountId, sp_arithmetic::Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
 }

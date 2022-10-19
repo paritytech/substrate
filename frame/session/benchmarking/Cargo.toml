@@ -22,6 +22,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../../primitives/arithmetic" }
 
 [dev-dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
@@ -45,6 +46,7 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",
+	"sp-arithmetic/std"
 ]
 
 runtime-benchmarks = [

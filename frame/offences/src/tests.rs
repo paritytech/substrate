@@ -25,7 +25,7 @@ use crate::mock::{
 	RuntimeEvent, System, KIND,
 };
 use frame_system::{EventRecord, Phase};
-use sp_runtime::Perbill;
+use sp_arithmetic::Perbill;
 
 #[test]
 fn should_report_an_authority_and_trigger_on_offence() {

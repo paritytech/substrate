@@ -29,7 +29,8 @@ use sp_io::hashing::blake2_256;
 
 use frame_election_provider_support::SortedListProvider;
 use frame_support::{pallet_prelude::*, traits::Currency};
-use sp_runtime::{traits::StaticLookup, Perbill};
+use sp_runtime::traits::StaticLookup;
+use sp_arithmetic::Perbill;
 use sp_std::prelude::*;
 
 const SEED: u32 = 0;
