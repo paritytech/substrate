@@ -22,7 +22,7 @@
 extern crate core;
 
 use sp_runtime::{DispatchError, DispatchResult};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod offence;
 
