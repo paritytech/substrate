@@ -41,7 +41,6 @@ sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = 
 sp-version = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/version" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/npos-elections" }
 sp-io = { version = "4.0.0", default-features = false, path = "../../../primitives/io" }
-sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
 # frame dependencies
 frame-executive = { version = "4.0.0-dev", default-features = false, path = "../../../frame/executive" }
