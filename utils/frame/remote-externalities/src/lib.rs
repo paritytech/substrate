@@ -20,6 +20,7 @@
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
 
+use async_std::task::block_on;
 use codec::{Decode, Encode};
 use jsonrpsee::{
 	core::{client::ClientT, Error as RpcError},
@@ -27,6 +28,7 @@ use jsonrpsee::{
 	rpc_params,
 	ws_client::{WsClient, WsClientBuilder},
 };
+use std::thread;
 
 use log::*;
 use serde::de::DeserializeOwned;
@@ -410,7 +412,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let now = std::time::Instant::now();
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
 		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
-		let thread_chunk_size = (keys.len() / self.as_online().threads).max(1);
+		let thread_chunk_size = ((keys.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
 
 		log::info!(
 			target: LOG_TARGET,
@@ -426,8 +428,9 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
 		for thread_keys in keys_chunked {
 			let uri = Arc::clone(&uri);
-			let handle = std::thread::spawn(move || {
-				use async_std::task::block_on;
+			// TODO: niklasd use this?
+			// let thread_client = Arc::clone(&self.as_online().transport.remote_client.unwrap());
+			let handle = thread::spawn(move || {
 				let thread_client = block_on(Transport::build_ws_client(&*uri)).unwrap();
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
 				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
@@ -488,7 +491,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 	/// Get the values corresponding to `child_keys` at the given `prefixed_top_key`.
 	pub(crate) async fn rpc_child_get_storage_paged(
-		&self,
+		client: &WsClient,
 		prefixed_top_key: &StorageKey,
 		child_keys: Vec<StorageKey>,
 		at: B::Hash,
@@ -510,12 +513,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 				})
 				.collect::<Vec<_>>();
 
-			let batch_response = self
-				.as_online()
-				.rpc_client()
-				.batch_request::<Option<StorageData>>(batch_request)
-				.await
-				.map_err(|e| {
+			let batch_response =
+				client.batch_request::<Option<StorageData>>(batch_request).await.map_err(|e| {
 					log::error!(
 						target: LOG_TARGET,
 						"failed to execute batch: {:?}. Error: {:?}",
@@ -541,14 +540,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	}
 
 	pub(crate) async fn rpc_child_get_keys(
-		&self,
+		client: &WsClient,
 		prefixed_top_key: &StorageKey,
 		child_prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		let child_keys = self
-			.as_online()
-			.rpc_client()
+		let child_keys = client
 			.child_get_keys(
 				PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
 				child_prefix,
@@ -562,7 +559,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 		debug!(
 			target: LOG_TARGET,
-			"scraped {} child-keys of the child-bearing top key: {}",
+			"[thread = {:?}] scraped {} child-keys of the child-bearing top key: {}",
+			std::thread::current().id(),
 			child_keys.len(),
 			HexDisplay::from(prefixed_top_key)
 		);
@@ -578,9 +576,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	///
 	/// `top_kv` need not be only child-bearing top keys. It should be all of the top keys that are
 	/// included thus far.
-	async fn load_child_remote(&self, top_kv: &[KeyValue]) -> Result<ChildKeyValues, &'static str> {
+	async fn load_child_remote(
+		&self,
+		top_kv: Vec<KeyValue>,
+	) -> Result<ChildKeyValues, &'static str> {
 		let child_roots = top_kv
-			.iter()
+			.into_iter()
 			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k))
 			.collect::<Vec<_>>();
 
@@ -588,32 +589,74 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			return Ok(Default::default())
 		}
 
+		// div-ceil simulation: TODO: rework properly.
+		let child_roots_per_thread =
+			((child_roots.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
+
 		info!(
 			target: LOG_TARGET,
-			"👩‍👦 scraping child-tree data from {} top keys",
-			child_roots.len()
+			"👩‍👦 scraping child-tree data from {} top keys, split among {} threads, {} top keys per thread",
+			child_roots.len(),
+			self.as_online().threads,
+			child_roots_per_thread,
 		);
 
-		let mut child_kv = vec![];
-		for prefixed_top_key in child_roots {
-			let at = self.as_online().at_expected();
-			let child_keys =
-				self.rpc_child_get_keys(prefixed_top_key, StorageKey(vec![]), at).await?;
-			let child_kv_inner =
-				self.rpc_child_get_storage_paged(prefixed_top_key, child_keys, at).await?;
+		let mut handles = vec![];
+		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
+		let at = self.as_online().at_expected();
 
-			let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
-			let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
-				Some((ChildType::ParentKeyId, storage_key)) => storage_key,
-				None => {
-					log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
-					return Err("Invalid child key")
-				},
-			};
+		for thread_child_roots in child_roots
+			.chunks(child_roots_per_thread)
+			.map(|x| x.into())
+			.collect::<Vec<Vec<_>>>()
+		{
+			let uri = Arc::clone(&uri);
+			let handle = thread::spawn(move || {
+				debug!(
+					target: LOG_TARGET,
+					"thread {:?} has {:?}",
+					std::thread::current().id(),
+					thread_child_roots.len()
+				);
+				let thread_client = block_on(Transport::build_ws_client(&*uri)).unwrap();
+				let mut thread_child_kv = vec![];
+				for prefixed_top_key in thread_child_roots {
+					let child_keys = block_on(Self::rpc_child_get_keys(
+						&thread_client,
+						&prefixed_top_key,
+						StorageKey(vec![]),
+						at,
+					))?;
+					let child_kv_inner = block_on(Self::rpc_child_get_storage_paged(
+						&thread_client,
+						&prefixed_top_key,
+						child_keys,
+						at,
+					))?;
 
-			child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
+					let prefixed_top_key = PrefixedStorageKey::new(prefixed_top_key.clone().0);
+					let un_prefixed = match ChildType::from_prefixed_key(&prefixed_top_key) {
+						Some((ChildType::ParentKeyId, storage_key)) => storage_key,
+						None => {
+							log::error!(target: LOG_TARGET, "invalid key: {:?}", prefixed_top_key);
+							return Err("Invalid child key")
+						},
+					};
+
+					thread_child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
+				}
+
+				Ok(thread_child_kv)
+			});
+			handles.push(handle);
 		}
 
+		let child_kv = handles
+			.into_iter()
+			.map(|h| h.join().unwrap())
+			.flatten()
+			.flatten()
+			.collect::<Vec<_>>();
 		Ok(child_kv)
 	}
 
@@ -703,7 +746,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		&mut self,
 	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
 		let top_kv = self.load_top_remote().await?;
-		let child_kv = self.load_child_remote(&top_kv).await?;
+		let child_kv = self.load_child_remote(top_kv.clone()).await?;
 
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
 			let snapshot = Snapshot::<B> {
