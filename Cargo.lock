@@ -955,7 +955,7 @@ dependencies = [
 name = "chain-spec-builder"
 version = "2.0.0"
 dependencies = [
- "ansi_term",
+ "ansi_term 0.12.1",
  "clap 3.0.7",
  "node-cli",
  "rand 0.8.4",
@@ -2102,7 +2102,7 @@ dependencies = [
  "sc-executor",
  "sc-service",
  "serde",
- "serde_json",
+ "serde_json 1.0.74",
  "sp-core",
  "sp-externalities",
  "sp-keystore",
@@ -3331,7 +3331,7 @@ dependencies = [
  "jsonrpsee-types 0.8.0",
  "rustc-hash",
  "serde",
- "serde_json",
+ "serde_json 1.0.74",
  "soketto 0.7.1",
  "thiserror",
  "tokio",
@@ -3364,7 +3364,7 @@ dependencies = [
  "hyper 0.14.16",
  "log 0.4.14",
  "serde",
- "serde_json",
+ "serde_json 1.0.74",
  "soketto 0.7.1",
  "thiserror",
 ]
@@ -3378,7 +3378,7 @@ dependencies = [
  "anyhow",
  "beef",
  "serde",
- "serde_json",
+ "serde_json 1.0.74",
  "thiserror",
  "tracing",
 ]
@@ -3410,7 +3410,7 @@ dependencies = [
  "pin-project 1.0.10",
  "rustls-native-certs 0.5.0",
  "serde",
- "serde_json",
+ "serde_json 1.0.74",
  "soketto 0.7.1",
  "thiserror",
  "tokio",
