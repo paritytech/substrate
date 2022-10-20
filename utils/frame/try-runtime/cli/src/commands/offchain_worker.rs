@@ -17,7 +17,7 @@
 
 use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	parse, state_machine_call, SharedParams, State, LOG_TARGET, LiveState,
+	parse, state_machine_call, LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
 use remote_externalities::rpc_api;
@@ -70,7 +70,7 @@ impl OffchainWorkerCmd {
 				log::error!(target: LOG_TARGET, "--header-at is provided while state type is live, this will most likely lead to a nonsensical result.");
 				hash_of::<Block>(header_at)
 			},
-			(None, State::Live( LiveState { at: Some(at), .. })) => hash_of::<Block>(at),
+			(None, State::Live(LiveState { at: Some(at), .. })) => hash_of::<Block>(at),
 			_ => {
 				panic!("either `--header-at` must be provided, or state must be `live` with a proper `--at`");
 			},
@@ -88,7 +88,7 @@ impl OffchainWorkerCmd {
 				log::error!(target: LOG_TARGET, "--header-uri is provided while state type is live, this will most likely lead to a nonsensical result.");
 				header_ws_uri.to_owned()
 			},
-			(None, State::Live(LiveState{ uri, .. })) => uri.clone(),
+			(None, State::Live(LiveState { uri, .. })) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--header-uri` must be provided, or state must be `live`");
 			},

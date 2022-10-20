@@ -119,7 +119,7 @@ impl ExecuteBlockCmd {
 				log::error!(target: LOG_TARGET, "--block-uri is provided while state type is live, Are you sure you know what you are doing?");
 				block_ws_uri.to_owned()
 			},
-			(None, State::Live(LiveState{ uri, .. })) => uri.clone(),
+			(None, State::Live(LiveState { uri, .. })) => uri.clone(),
 			(None, State::Snap { .. }) => {
 				panic!("either `--block-uri` must be provided, or state must be `live`");
 			},

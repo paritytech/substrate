@@ -20,7 +20,6 @@
 //! An equivalent of `sp_io::TestExternalities` that can load its state from a remote substrate
 //! based chain, or a local state snapshot file.
 
-use async_std::task::block_on;
 use codec::{Decode, Encode};
 use jsonrpsee::{
 	core::{client::ClientT, Error as RpcError},
@@ -157,6 +156,9 @@ impl Transport {
 		log::info!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 		WsClientBuilder::default()
 			.max_request_body_size(u32::MAX)
+			.request_timeout(std::time::Duration::from_secs(5 * 10))
+			.connection_timeout(std::time::Duration::from_secs(60))
+			.max_notifs_per_subscription(1024)
 			.build(&uri)
 			.await
 			.map_err(|e| {
@@ -413,7 +415,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let now = std::time::Instant::now();
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
-		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
+		let client = self.as_online().transport.remote_client.clone().unwrap();
 		let thread_chunk_size =
 			((keys.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
 
@@ -430,11 +432,9 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let keys_chunked: Vec<Vec<StorageKey>> =
 			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
 		for thread_keys in keys_chunked {
-			let uri = Arc::clone(&uri);
-			// TODO: niklasd use this?
-			// let thread_client = Arc::clone(&self.as_online().transport.remote_client.unwrap());
-			let handle = thread::spawn(move || {
-				let thread_client = block_on(Transport::build_ws_client(&*uri)).unwrap();
+			let thread_client = client.clone();
+			let handle = std::thread::spawn(move || {
+				let rt = tokio::runtime::Runtime::new().unwrap();
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
 				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
 					let batch = chunk_keys
@@ -443,18 +443,18 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 						.map(|key| ("state_getStorage", rpc_params![key, at]))
 						.collect::<Vec<_>>();
 
-					let values =
-						block_on(thread_client.batch_request::<Option<StorageData>>(batch))
-							.map_err(|e| {
-								log::error!(
-									target: LOG_TARGET,
-									"failed to execute batch of {} values. Error: {:?}",
-									chunk_keys.len(),
-									e
-								);
-								"batch failed."
-							})
-							.unwrap();
+					let values = rt
+						.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
+						.map_err(|e| {
+							log::error!(
+								target: LOG_TARGET,
+								"failed to execute batch of {} values. Error: {:?}",
+								chunk_keys.len(),
+								e
+							);
+							"batch failed."
+						})
+						.unwrap();
 
 					for (idx, key) in chunk_keys.iter().enumerate() {
 						let maybe_value = values[idx].clone();
@@ -604,8 +604,12 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			child_roots_per_thread,
 		);
 
+		// NOTE: the threading done here is the simpler, yet slightly un-elegant because we are
+		// splitting child root among threads, and it is very common for these root to have vastly
+		// different child tries underneath them, causing some threads to finish way faster than
+		// others. Certainly still better than single thread though.
 		let mut handles = vec![];
-		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
+		let client = self.as_online().transport.remote_client.clone().unwrap();
 		let at = self.as_online().at_expected();
 
 		for thread_child_roots in child_roots
@@ -613,24 +617,18 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			.map(|x| x.into())
 			.collect::<Vec<Vec<_>>>()
 		{
-			let uri = Arc::clone(&uri);
+			let thread_client = client.clone();
 			let handle = thread::spawn(move || {
-				debug!(
-					target: LOG_TARGET,
-					"thread {:?} has {:?}",
-					std::thread::current().id(),
-					thread_child_roots.len()
-				);
-				let thread_client = block_on(Transport::build_ws_client(&*uri)).unwrap();
+				let rt = tokio::runtime::Runtime::new().unwrap();
 				let mut thread_child_kv = vec![];
 				for prefixed_top_key in thread_child_roots {
-					let child_keys = block_on(Self::rpc_child_get_keys(
+					let child_keys = rt.block_on(Self::rpc_child_get_keys(
 						&thread_client,
 						&prefixed_top_key,
 						StorageKey(vec![]),
 						at,
 					))?;
-					let child_kv_inner = block_on(Self::rpc_child_get_storage_paged(
+					let child_kv_inner = rt.block_on(Self::rpc_child_get_storage_paged(
 						&thread_client,
 						&prefixed_top_key,
 						child_keys,
@@ -914,16 +912,16 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 #[cfg(test)]
 mod test_prelude {
+	use tracing_subscriber::EnvFilter;
+
 	pub(crate) use super::*;
 	pub(crate) use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
-
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
 	pub(crate) fn init_logger() {
-		let _ = env_logger::Builder::from_default_env()
-			.format_module_path(true)
-			.format_level(true)
-			.filter_module(LOG_TARGET, log::LevelFilter::Debug)
+		let _ = tracing_subscriber::fmt()
+			.with_env_filter(EnvFilter::from_default_env())
+			.with_level(true)
 			.try_init();
 	}
 }
@@ -984,25 +982,27 @@ mod tests {
 
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
+	use sp_core::storage::well_known_keys;
+
 	use super::test_prelude::*;
 	use std::os::unix::fs::MetadataExt;
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn single_multi_thread_result_is_same() {
 		let c = |threads| OnlineConfig {
 			pallets: vec!["Proxy".to_owned(), "Crowdloan".to_owned()],
+			hashed_keys: vec![well_known_keys::CODE.to_vec()],
 			child_trie: true,
 			threads,
 			..Default::default()
 		};
+
 		let ext1 = Builder::<Block>::new().mode(Mode::Online(c(1))).build().await.unwrap();
-
 		let ext2 = Builder::<Block>::new().mode(Mode::Online(c(8))).build().await.unwrap();
-
 		assert_eq!(ext1.as_backend().root(), ext2.as_backend().root());
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn snapshot_block_hash_works() {
 		const CACHE: &'static str = "snapshot_block_hash_works";
 		init_logger();
@@ -1029,7 +1029,7 @@ mod remote_tests {
 		assert_eq!(block_hash, cached_block_hash);
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn offline_else_online_works() {
 		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
@@ -1074,7 +1074,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete[0].path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_one_small_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1089,7 +1089,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_few_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1104,7 +1104,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_create_snapshot() {
 		const CACHE: &'static str = "can_create_snapshot";
 		init_logger();
@@ -1137,7 +1137,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_create_child_snapshot() {
 		const CACHE: &'static str = "can_create_child_snapshot";
 		init_logger();
@@ -1169,7 +1169,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_big_pallet() {
 		if std::option_env!("TEST_WS").is_none() {
 			return
@@ -1189,7 +1189,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_fetch_all() {
 		if std::option_env!("TEST_WS").is_none() {
 			return

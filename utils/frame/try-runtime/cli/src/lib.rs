@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//!
+//! 
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -386,7 +386,7 @@ pub enum Command {
 	FollowChain(commands::follow_chain::FollowChainCmd),
 
 	/// Create a new snapshot file.
-	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd)
+	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd),
 }
 
 /// Shared parameters of the `try-runtime` commands
@@ -506,7 +506,9 @@ pub enum State {
 
 impl State {
 	/// Create the [`remote_externalities::Builder`] from self.
-	pub(crate) fn ext_builder<Block: BlockT + DeserializeOwned>(&self) -> sc_cli::Result<Builder<Block>>
+	pub(crate) fn ext_builder<Block: BlockT + DeserializeOwned>(
+		&self,
+	) -> sc_cli::Result<Builder<Block>>
 	where
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
@@ -521,20 +523,19 @@ impl State {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
 				};
-				Builder::<Block>::new()
-					.mode(Mode::Online(OnlineConfig {
-						at,
-						transport: uri.to_owned().into(),
-						state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
-						pallets: pallet.clone(),
-						child_trie: *child_tree,
-						hashed_keys: vec![
-							well_known_keys::CODE.to_vec(),
-							[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat()
-						],
-						hashed_prefixes: vec![],
-						threads: 8,
-					}))
+				Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
+					at,
+					transport: uri.to_owned().into(),
+					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+					pallets: pallet.clone(),
+					child_trie: *child_tree,
+					hashed_keys: vec![
+						well_known_keys::CODE.to_vec(),
+						[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
+					],
+					hashed_prefixes: vec![],
+					threads: 8,
+				}))
 			},
 		})
 	}
@@ -588,10 +589,12 @@ impl TryRuntimeCmd {
 					config,
 				)
 				.await,
-			Command::CreateSnapshot(cmd) => commands::create_snapshot::create_snapshot::<Block>(
-				self.shared.clone(),
-				cmd.clone(),
-			).await,
+			Command::CreateSnapshot(cmd) =>
+				commands::create_snapshot::create_snapshot::<Block>(
+					self.shared.clone(),
+					cmd.clone(),
+				)
+				.await,
 		}
 	}
 }

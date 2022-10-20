@@ -16,8 +16,8 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
-	state_machine_call_with_proof, LiveState, SharedParams, State, LOG_TARGET, hash_of,
+	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
+	parse, state_machine_call_with_proof, LiveState, SharedParams, State, LOG_TARGET,
 };
 use jsonrpsee::{
 	core::{
