@@ -265,6 +265,9 @@
 //!     -s snap \
 //! ```
 
+// CHANGELOG
+// 1. state_version can now be set, otherwise is fetched from the remoter version.
+
 use parity_scale_codec::Decode;
 use remote_externalities::{
 	rpc_api::RpcService, Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig,

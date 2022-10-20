@@ -55,7 +55,9 @@ use std::{
 // 2. snapshot format has changed and now is a single file, and contains block hash as well.
 // 3. `build_with_block_hash` can be used to build and get the eventual final block hash that
 // corresponded to the state.
-//
+// 4. Transport has new format, but maintains the same `impl From<String>` which is the most common
+// for of use. 5. value download of both child tree and top tree are now multi-threaded, which can
+// be configured in `OnlineConfig`.
 
 pub mod rpc_api;
 
@@ -412,7 +414,8 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let now = std::time::Instant::now();
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
 		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
-		let thread_chunk_size = ((keys.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
+		let thread_chunk_size =
+			((keys.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
 
 		log::info!(
 			target: LOG_TARGET,
