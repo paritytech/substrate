@@ -22,6 +22,7 @@ use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncod
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+use sp_core::bounded::bounded_vec::TruncateFrom;
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -366,6 +367,43 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	}
 	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
+	}
+}
+
+/// Construct an object by defensively truncating an input if the `TryFrom` conversion fails.
+pub trait DefensiveTruncateFrom<T> {
+	/// Use `TryFrom` first and defensively fall back to truncating otherwise.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::{BoundedVec, traits::DefensiveTruncateFrom};
+	/// use sp_runtime::traits::ConstU32;
+	///
+	/// let unbound = vec![1, 2];
+	/// let bound = BoundedVec::<u8, ConstU32<2>>::defensive_truncate_from(unbound);
+	///
+	/// assert_eq!(bound, vec![1, 2]);
+	/// ```
+	fn defensive_truncate_from(unbound: T) -> Self;
+}
+
+impl<T, U> DefensiveTruncateFrom<U> for T
+where
+	// NOTE: We use the fact that `BoundedVec` and
+	// `BoundedSlice` use `Self` as error type. We could also
+	// require a `Clone` bound and use `unbound.clone()` in the
+	// error case.
+	T: TruncateFrom<U> + TryFrom<U, Error = U>,
+{
+	fn defensive_truncate_from(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveTruncateFrom truncating");
+				T::truncate_from(err)
+			},
+			|bound| bound,
+		)
 	}
 }
 
@@ -950,7 +988,58 @@ impl<Hash> PreimageRecipient<Hash> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_core::bounded::{BoundedSlice, BoundedVec};
 	use sp_std::marker::PhantomData;
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_vec_defensive_works() {
+		let unbound = vec![1u32, 2];
+		let bound = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, vec![1u32]);
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_slice_defensive_works() {
+		let unbound = &[1u32, 2];
+		let bound = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, &[1u32][..]);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
+	)]
+	fn defensive_truncating_from_vec_defensive_panics() {
+		let unbound = vec![1u32, 2];
+		let _ = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
+	)]
+	fn defensive_truncating_from_slice_defensive_panics() {
+		let unbound = &[1u32, 2];
+		let _ = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+	}
+
+	#[test]
+	fn defensive_truncate_from_vec_works() {
+		let unbound = vec![1u32, 2, 3];
+		let bound = BoundedVec::<u32, ConstU32<3>>::defensive_truncate_from(unbound.clone());
+		assert_eq!(bound, unbound);
+	}
+
+	#[test]
+	fn defensive_truncate_from_slice_works() {
+		let unbound = [1u32, 2, 3];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::defensive_truncate_from(&unbound);
+		assert_eq!(bound, &unbound[..]);
+	}
 
 	#[derive(Encode, Decode)]
 	enum NestedType {

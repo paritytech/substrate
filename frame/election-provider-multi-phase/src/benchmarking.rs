@@ -320,21 +320,14 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		// the solution will be worse than all of them meaning the score need to be checked against
-		// ~ log2(c)
-		let solution = RawSolution {
-			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
-			..Default::default()
-		};
-
+		// the queue is full and the solution is only better than the worse.
 		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
 		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
 
-		// Insert `max - 1` submissions because the call to `submit` will insert another
-		// submission and the score is worse then the previous scores.
+		// Insert `max` submissions
 		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
 			let raw_solution = RawSolution {
 				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
@@ -349,6 +342,12 @@ frame_benchmarking::benchmarks! {
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();
+
+		// this score will eject the weakest one.
+		let solution = RawSolution {
+			score: ElectionScore { minimal_stake: 10_000_000u128 + 1, ..Default::default() },
+			..Default::default()
+		};
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		let deposit = MultiPhase::<T>::deposit_for(

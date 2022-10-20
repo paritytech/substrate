@@ -238,6 +238,8 @@ pub mod pallet {
 		NotOwned,
 		/// The provided judgement was for a different identity.
 		JudgementForDifferentIdentity,
+		/// Error that occurs when there is an issue paying for judgement.
+		JudgementPaymentFailed,
 	}
 
 	#[pallet::event]
@@ -788,12 +790,13 @@ pub mod pallet {
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {
 				Ok(position) => {
 					if let Judgement::FeePaid(fee) = id.judgements[position].1 {
-						let _ = T::Currency::repatriate_reserved(
+						T::Currency::repatriate_reserved(
 							&target,
 							&sender,
 							fee,
 							BalanceStatus::Free,
-						);
+						)
+						.map_err(|_| Error::<T>::JudgementPaymentFailed)?;
 					}
 					id.judgements[position] = item
 				},
