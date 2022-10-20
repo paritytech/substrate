@@ -1178,7 +1178,7 @@ pub mod pallet {
 		/// a PITA to do).
 		///
 		/// See the inline code docs of `Member::pending_rewards` and `RewardPool::update_recorded`
-		/// for example analysis. A [`sp_runtime::FixedU128`] should be fine for chains with balance
+		/// for example analysis. A [`sp_arithmetic::FixedU128`] should be fine for chains with balance
 		/// types similar to that of Polkadot and Kusama, in the absence of severe slashing (or
 		/// prevented via a reasonable `MaxPointsToBalance`), for many many years to come.
 		type RewardCounter: FixedPointNumber + MaxEncodedLen + TypeInfo + Default + codec::FullCodec;
