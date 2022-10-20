@@ -199,18 +199,6 @@ impl OnRuntimeUpgrade for Tuple {
 		)* );
 		weight
 	}
-
-	#[cfg(feature = "try-runtime")]
-	/// noop
-	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		Ok(Vec::new())
-	}
-
-	#[cfg(feature = "try-runtime")]
-	/// noop
-	fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
-		Ok(())
-	}
 }
 
 /// Type that provide some integrity tests.

@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -521,6 +521,8 @@ impl State {
 	) -> sc_cli::Result<Builder<Block>>
 	where
 		Block::Hash: FromStr,
+		Block::Header: DeserializeOwned,
+		Block::Hash: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
 		Ok(match self {
@@ -800,14 +802,11 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	let mut changes = Default::default();
 	let backend = ext.backend.clone();
 	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
-
 	let proving_backend =
 		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
-
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
 	let pre_root = *backend.root();
-
 	let encoded_results = StateMachine::new(
 		&proving_backend,
 		&mut changes,

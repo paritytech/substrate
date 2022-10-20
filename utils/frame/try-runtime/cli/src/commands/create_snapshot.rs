@@ -16,9 +16,10 @@
 // limitations under the License.
 
 use crate::{hash_of, LiveState, LOG_TARGET};
-use remote_externalities::{rpc_api::RpcService, Builder, Mode, OnlineConfig, SnapshotConfig};
+use remote_externalities::{Builder, Mode, OnlineConfig, SnapshotConfig};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{StateApi, ws_client};
 
 /// Configurations of the [`Command::CreateSnapshot`].
 #[derive(Debug, Clone, clap::Parser)]
@@ -32,7 +33,8 @@ pub struct CreateSnapshotCmd {
 pub(crate) async fn create_snapshot<Block>(command: CreateSnapshotCmd) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
-	Block::Hash: FromStr,
+	Block::Hash: FromStr + serde::de::DeserializeOwned,
+	Block::Header: serde::de::DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
@@ -47,8 +49,8 @@ where
 	let path = match command.snapshot_path {
 		Some(path) => path,
 		None => {
-			let rpc_service = RpcService::new(&command.uri, false).await.unwrap();
-			let remote_spec = rpc_service.get_runtime_version::<Block>(at).await.unwrap();
+			let rpc = ws_client(&command.uri).await.unwrap();
+			let remote_spec = StateApi::<Block::Hash>::runtime_version(&rpc, None).await.unwrap();
 			let path_str = format!(
 				"{}-{}@{}.snap",
 				remote_spec.spec_name.to_lowercase(),

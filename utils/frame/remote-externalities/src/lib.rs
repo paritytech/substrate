@@ -40,16 +40,6 @@ use std::{
 	thread,
 };
 
-// CHANGELOG:
-// 1. `pallets` no longer has the interpretation of an empty list implying everything. If
-// `hashed_prefix` and pallets are both empty, then we scrape everything. Not the biggest fan
-// myself, but needed to keep things backwards compatible.
-// 2. snapshot format has changed and now is a single file, and contains block hash as well.
-// 3. `build_with_block_hash` can be used to build and get the eventual final block hash that
-// corresponded to the state.
-// 4. Transport has new format, but maintains the same `impl From<String>` which is the most common
-// for of use. 5. value download of both child tree and top tree are now multi-threaded, which can
-// be configured in `OnlineConfig`.
 
 use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
