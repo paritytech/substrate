@@ -168,7 +168,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
 		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::Yes).await?;
-		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+		Ok(self.validated_pool.submit(validated_transactions.into_values()))
 	}
 
 	/// Resubmit the given extrinsics to the pool.
@@ -182,7 +182,7 @@ impl<B: ChainApi> Pool<B> {
 	) -> Result<Vec<Result<ExtrinsicHash<B>, B::Error>>, B::Error> {
 		let xts = xts.into_iter().map(|xt| (source, xt));
 		let validated_transactions = self.verify(at, xts, CheckBannedBeforeVerify::No).await?;
-		Ok(self.validated_pool.submit(validated_transactions.into_iter().map(|(_, tx)| tx)))
+		Ok(self.validated_pool.submit(validated_transactions.into_values()))
 	}
 
 	/// Imports one unverified extrinsic to the pool
@@ -349,7 +349,7 @@ impl<B: ChainApi> Pool<B> {
 			at,
 			known_imported_hashes,
 			pruned_hashes,
-			reverified_transactions.into_iter().map(|(_, xt)| xt).collect(),
+			reverified_transactions.into_values().collect(),
 		)
 	}
 
