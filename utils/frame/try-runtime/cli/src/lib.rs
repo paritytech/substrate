@@ -113,6 +113,8 @@
 //! well with try-runtime's expensive RPC queries:
 //!
 //! - set `--rpc-max-payload 1000` to ensure large RPC queries can work.
+//! - set `--ws-max-out-buffer-capacity 1000` to ensure the websocket connection can handle large
+//!   RPC queries.
 //! - set `--rpc-cors all` to ensure ws connections can come through.
 //!
 //! Note that *none* of the try-runtime operations need unsafe RPCs.
@@ -141,7 +143,9 @@
 //!
 //! These hooks allow you to execute some code, only within the `on-runtime-upgrade` command, before
 //! and after the migration. If any data needs to be temporarily stored between the pre/post
-//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that.
+//! migration hooks, `OnRuntimeUpgradeHelpersExt` can help with that. Note that you should be
+//! mindful with any mutable storage ops in the pre/post migration checks, as you almost certainly
+//! will not want to mutate any of the storage that is to be migrated.
 //!
 //! #### Logging
 //!
@@ -293,7 +297,7 @@ pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &'static str = "try-runtime::cli";
 
 /// Possible commands of `try-runtime`.
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Subcommand)]
 pub enum Command {
 	/// Execute the migrations of the "local runtime".
 	///
@@ -373,70 +377,64 @@ pub enum Command {
 }
 
 /// Shared parameters of the `try-runtime` commands
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct SharedParams {
 	/// Shared parameters of substrate cli.
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: sc_cli::SharedParams,
 
 	/// The execution strategy that should be used.
-	#[structopt(
-		long = "execution",
-		value_name = "STRATEGY",
-		possible_values = &ExecutionStrategy::variants(),
-		case_insensitive = true,
-		default_value = "Wasm",
-	)]
+	#[clap(long, value_name = "STRATEGY", arg_enum, ignore_case = true, default_value = "Wasm")]
 	pub execution: ExecutionStrategy,
 
 	/// Type of wasm execution used.
-	#[structopt(
+	#[clap(
 		long = "wasm-execution",
 		value_name = "METHOD",
-		possible_values = &WasmExecutionMethod::variants(),
-		case_insensitive = true,
+		possible_values = WasmExecutionMethod::variants(),
+		ignore_case = true,
 		default_value = "Compiled"
 	)]
 	pub wasm_method: WasmExecutionMethod,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
-	#[structopt(long)]
+	#[clap(long)]
 	pub heap_pages: Option<u64>,
 
 	/// When enabled, the spec name check will not panic, and instead only show a warning.
-	#[structopt(long)]
+	#[clap(long)]
 	pub no_spec_name_check: bool,
 }
 
 /// Our `try-runtime` command.
 ///
 /// See [`Command`] for more info.
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Parser)]
 pub struct TryRuntimeCmd {
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared: SharedParams,
 
-	#[structopt(subcommand)]
+	#[clap(subcommand)]
 	pub command: Command,
 }
 
 /// The source of runtime *state* to use.
-#[derive(Debug, Clone, structopt::StructOpt)]
+#[derive(Debug, Clone, clap::Subcommand)]
 pub enum State {
 	/// Use a state snapshot as the source of runtime state.
 	///
 	/// This can be crated by passing a value to [`State::Live::snapshot_path`].
 	Snap {
-		#[structopt(short, long)]
+		#[clap(short, long)]
 		snapshot_path: PathBuf,
 	},
 
 	/// Use a live chain as the source of runtime state.
 	Live {
 		/// The url to connect to.
-		#[structopt(
+		#[clap(
 			short,
 			long,
 			parse(try_from_str = parse::url),
@@ -447,20 +445,20 @@ pub enum State {
 		///
 		/// If non provided, then the latest finalized head is used. This is particularly useful
 		/// for [`Command::OnRuntimeUpgrade`].
-		#[structopt(
+		#[clap(
 			short,
 			long,
-			multiple = false,
+			multiple_values = false,
 			parse(try_from_str = parse::hash),
 		)]
 		at: Option<String>,
 
 		/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-		#[structopt(short, long)]
+		#[clap(short, long)]
 		snapshot_path: Option<PathBuf>,
 
 		/// The pallets to scrape. If empty, entire chain state will be scraped.
-		#[structopt(short, long, require_delimiter = true)]
+		#[clap(short, long, require_delimiter = true)]
 		pallets: Option<Vec<String>>,
 
 		/// Fetch the child-keys as well.
@@ -468,7 +466,7 @@ pub enum State {
 		/// Default is `false`, if specific `pallets` are specified, true otherwise. In other
 		/// words, if you scrape the whole state the child tree data is included out of the box.
 		/// Otherwise, it must be enabled explicitly using this flag.
-		#[structopt(long, require_delimiter = true)]
+		#[clap(long, require_delimiter = true)]
 		child_tree: bool,
 	},
 }
@@ -709,7 +707,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {:?}", e))
+	.map_err(|e| format!("failed to execute 'TryRuntime_on_runtime_upgrade': {}", e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	Ok((changes, encoded_results))
@@ -750,7 +748,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		sp_core::testing::TaskExecutor::new(),
 	)
 	.execute(execution.into())
-	.map_err(|e| format!("failed to execute {}: {:?}", method, e))
+	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
 	let proof = proving_backend.extract_proof();

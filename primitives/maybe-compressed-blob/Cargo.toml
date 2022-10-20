@@ -11,4 +11,5 @@ documentation = "https://docs.rs/sp-maybe-compressed-blob"
 readme = "README.md"
 
 [dependencies]
+thiserror = "1.0"
 zstd = { version = "0.9.0", default-features = false }

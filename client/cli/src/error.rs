@@ -31,7 +31,7 @@ pub enum Error {
 	Io(#[from] std::io::Error),
 
 	#[error(transparent)]
-	Cli(#[from] structopt::clap::Error),
+	Cli(#[from] clap::Error),
 
 	#[error(transparent)]
 	Service(#[from] sc_service::Error),

@@ -378,7 +378,7 @@ where
 							.expect("forwards closure result; the closure always returns Ok; qed.");
 					}
 				}) {
-					error!(target: "beefy", "🥩 Failed to get hash for block number {}; err: {:?}",
+					error!(target: "beefy", "🥩 Failed to get hash for block number {}: {}",
 						block_num, err);
 				}
 

@@ -104,7 +104,7 @@ pub struct OverlayedChanges {
 	stats: StateMachineStats,
 }
 
-/// Transcation index operation.
+/// Transaction index operation.
 #[derive(Debug, Clone)]
 pub enum IndexOperation {
 	/// Insert transaction into index.

@@ -748,7 +748,9 @@ pub trait Extrinsic: Sized + MaybeMallocSizeOf {
 
 /// Implementor is an [`Extrinsic`] and provides metadata about this extrinsic.
 pub trait ExtrinsicMetadata {
-	/// The version of the `Extrinsic`.
+	/// The format version of the `Extrinsic`.
+	///
+	/// By format is meant the encoded representation of the `Extrinsic`.
 	const VERSION: u8;
 
 	/// Signed extensions attached to this `Extrinsic`.
@@ -1585,7 +1587,7 @@ impl Printable for Tuple {
 #[cfg(feature = "std")]
 pub trait BlockIdTo<Block: self::Block> {
 	/// The error type that will be returned by the functions.
-	type Error: std::fmt::Debug;
+	type Error: std::error::Error;
 
 	/// Convert the given `block_id` to the corresponding block hash.
 	fn to_hash(

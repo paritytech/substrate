@@ -34,25 +34,24 @@ use sp_runtime::{
 use std::{collections::HashMap, sync::Arc};
 
 /// Warp proof processing error.
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Decoding error.
-	#[display(fmt = "Failed to decode block hash: {}.", _0)]
-	DecodeScale(codec::Error),
+	#[error("Failed to decode block hash: {0}.")]
+	DecodeScale(#[from] codec::Error),
 	/// Client backend error.
-	Client(sp_blockchain::Error),
+	#[error("{0}")]
+	Client(#[from] sp_blockchain::Error),
 	/// Invalid request data.
-	#[from(ignore)]
+	#[error("{0}")]
 	InvalidRequest(String),
 	/// Invalid warp proof.
-	#[from(ignore)]
+	#[error("{0}")]
 	InvalidProof(String),
 	/// Missing header or authority set change data.
-	#[display(fmt = "Missing required data to be able to answer request.")]
+	#[error("Missing required data to be able to answer request.")]
 	MissingData,
 }
-
-impl std::error::Error for Error {}
 
 /// The maximum size in bytes of the `WarpSyncProof`.
 pub(super) const MAX_WARP_SYNC_PROOF_SIZE: usize = 8 * 1024 * 1024;

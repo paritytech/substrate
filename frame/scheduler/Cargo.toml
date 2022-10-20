@@ -14,15 +14,15 @@ codec = { package = "parity-scale-codec", version = "2.0.0", default-features = 
 scale-info = { version = "1.0", default-features = false, features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
+sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
 
-sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
 [dev-dependencies]
-sp-core = { version = "4.1.0-dev", path = "../../primitives/core", default-features = false }
+sp-core = { version = "5.0.0", path = "../../primitives/core", default-features = false }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }
 

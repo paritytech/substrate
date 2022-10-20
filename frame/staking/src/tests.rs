@@ -4248,7 +4248,11 @@ fn count_check_works() {
 		Validators::<Test>::insert(987654321, ValidatorPrefs::default());
 		Nominators::<Test>::insert(
 			987654321,
-			Nominations { targets: vec![], submitted_in: Default::default(), suppressed: false },
+			Nominations {
+				targets: Default::default(),
+				submitted_in: Default::default(),
+				suppressed: false,
+			},
 		);
 	})
 }
@@ -4589,6 +4593,100 @@ fn min_commission_works() {
 	})
 }
 
+#[test]
+fn change_of_max_nominations() {
+	use frame_election_provider_support::ElectionDataProvider;
+	ExtBuilder::default()
+		.add_staker(60, 61, 10, StakerStatus::Nominator(vec![1]))
+		.add_staker(70, 71, 10, StakerStatus::Nominator(vec![1, 2, 3]))
+		.balance_factor(10)
+		.build_and_execute(|| {
+			// pre-condition
+			assert_eq!(MaxNominations::get(), 16);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			// 3 validators and 3 nominators
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 16 to 4, everyone should be fine.
+			MaxNominations::set(4);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 4 to 3, everyone should be fine.
+			MaxNominations::set(3);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 3), (101, 2), (60, 1)]
+			);
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 3);
+
+			// abrupt change from 3 to 2, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(2);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(101, 2), (60, 1)]
+			);
+			// 70 is still in storage..
+			assert!(Nominators::<Test>::contains_key(70));
+			// but its value cannot be decoded and default is returned.
+			assert!(Nominators::<Test>::get(70).is_none());
+
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 2);
+			assert!(Nominators::<Test>::contains_key(101));
+
+			// abrupt change from 2 to 1, this should cause some nominators to be non-decodable, and
+			// thus non-existent unless if they update.
+			MaxNominations::set(1);
+
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(60, 1)]
+			);
+			assert!(Nominators::<Test>::contains_key(70));
+			assert!(Nominators::<Test>::contains_key(60));
+			assert!(Nominators::<Test>::get(70).is_none());
+			assert!(Nominators::<Test>::get(60).is_some());
+			assert_eq!(Staking::voters(None).unwrap().len(), 3 + 1);
+
+			// now one of them can revive themselves by re-nominating to a proper value.
+			assert_ok!(Staking::nominate(Origin::signed(71), vec![1]));
+			assert_eq!(
+				Nominators::<Test>::iter()
+					.map(|(k, n)| (k, n.targets.len()))
+					.collect::<Vec<_>>(),
+				vec![(70, 1), (60, 1)]
+			);
+
+			// or they can be chilled by any account.
+			assert!(Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+			assert_ok!(Staking::chill_other(Origin::signed(70), 100));
+			assert!(!Nominators::<Test>::contains_key(101));
+			assert!(Nominators::<Test>::get(101).is_none());
+		})
+}
+
 mod sorted_list_provider {
 	use super::*;
 	use frame_election_provider_support::SortedListProvider;
@@ -4612,4 +4710,39 @@ mod sorted_list_provider {
 			assert_eq!(<Test as Config>::SortedListProvider::iter().collect::<Vec<_>>(), vec![101]);
 		});
 	}
+}
+
+#[test]
+fn force_apply_min_commission_works() {
+	let prefs = |c| ValidatorPrefs { commission: Perbill::from_percent(c), blocked: false };
+	let validators = || Validators::<Test>::iter().collect::<Vec<_>>();
+	ExtBuilder::default().build_and_execute(|| {
+		assert_ok!(Staking::validate(Origin::signed(30), prefs(10)));
+		assert_ok!(Staking::validate(Origin::signed(20), prefs(5)));
+
+		// Given
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
+		MinCommission::<Test>::set(Perbill::from_percent(5));
+
+		// When applying to a commission greater than min
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 31));
+		// Then the commission is not changed
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
+
+		// When applying to a commission that is equal to min
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 21));
+		// Then the commission is not changed
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(0))]);
+
+		// When applying to a commission that is less than the min
+		assert_ok!(Staking::force_apply_min_commission(Origin::signed(1), 11));
+		// Then the commission is bumped to the min
+		assert_eq!(validators(), vec![(31, prefs(10)), (21, prefs(5)), (11, prefs(5))]);
+
+		// When applying commission to a validator that doesn't exist then storage is not altered
+		assert_noop!(
+			Staking::force_apply_min_commission(Origin::signed(1), 420),
+			Error::<Test>::NotStash
+		);
+	});
 }

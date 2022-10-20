@@ -36,11 +36,11 @@ rand_pcg = { version = "0.3", optional = true }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-pallet-contracts-primitives = { version = "4.0.0-dev", default-features = false, path = "common" }
+pallet-contracts-primitives = { version = "5.0.0", default-features = false, path = "common" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
-sp-core = { version = "4.1.0-dev", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "4.0.0-dev", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "4.1.0-dev", default-features = false, path = "../../primitives/runtime" }
+sp-core = { version = "5.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "5.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "5.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 

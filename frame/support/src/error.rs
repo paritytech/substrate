@@ -153,11 +153,11 @@ macro_rules! decl_error {
 					::index::<$module<$generic $(, $inst_generic)?>>()
 					.expect("Every active module has an index in the runtime; qed") as u8;
 
-				$crate::sp_runtime::DispatchError::Module {
+				$crate::sp_runtime::DispatchError::Module($crate::sp_runtime::ModuleError {
 					index,
 					error: err.as_u8(),
 					message: Some(err.as_str()),
-				}
+				})
 			}
 		}
 	};

@@ -17,8 +17,11 @@
 
 //! Traits for dealing with dispatching calls and the origin from which they are dispatched.
 
-use crate::dispatch::DispatchResultWithPostInfo;
-use sp_runtime::{traits::BadOrigin, Either};
+use crate::dispatch::{DispatchResultWithPostInfo, Parameter, RawOrigin};
+use sp_runtime::{
+	traits::{BadOrigin, Member},
+	Either,
+};
 
 /// Some sort of check on the origin is performed by this object.
 pub trait EnsureOrigin<OuterOrigin> {
@@ -56,7 +59,7 @@ pub trait OriginTrait: Sized {
 	type Call;
 
 	/// The caller origin, overarching type of all pallets origins.
-	type PalletsOrigin;
+	type PalletsOrigin: Parameter + Member + Into<Self> + From<RawOrigin<Self::AccountId>>;
 
 	/// The AccountId used across the system.
 	type AccountId;

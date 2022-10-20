@@ -26,7 +26,7 @@
 //! but we imagine they will be useful for other chains that either want to bridge with Polkadot
 //! or are completely standalone, but heavily inspired by Polkadot.
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 /// A standard leaf that gets added every block to the MMR constructed by Substrate's `pallet_mmr`.
@@ -81,7 +81,7 @@ impl MmrLeafVersion {
 }
 
 /// Details of the next BEEFY authority set.
-#[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct BeefyNextAuthoritySet<MerkleRoot> {
 	/// Id of the next set.
 	///

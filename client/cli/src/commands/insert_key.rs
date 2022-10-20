@@ -20,42 +20,37 @@
 use crate::{
 	utils, with_crypto_scheme, CryptoScheme, Error, KeystoreParams, SharedParams, SubstrateCli,
 };
+use clap::Parser;
 use sc_keystore::LocalKeystore;
 use sc_service::config::{BasePath, KeystoreConfig};
 use sp_core::crypto::{KeyTypeId, SecretString};
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use std::{convert::TryFrom, sync::Arc};
-use structopt::StructOpt;
 
 /// The `insert` command
-#[derive(Debug, StructOpt, Clone)]
-#[structopt(name = "insert", about = "Insert a key to the keystore of a node.")]
+#[derive(Debug, Clone, Parser)]
+#[clap(name = "insert", about = "Insert a key to the keystore of a node.")]
 pub struct InsertKeyCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[structopt(long)]
+	#[clap(long)]
 	suri: Option<String>,
 
 	/// Key type, examples: "gran", or "imon"
-	#[structopt(long)]
+	#[clap(long)]
 	key_type: String,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub shared_params: SharedParams,
 
 	#[allow(missing_docs)]
-	#[structopt(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 
 	/// The cryptography scheme that should be used to generate the key out of the given URI.
-	#[structopt(
-		long,
-		value_name = "SCHEME",
-		possible_values = &CryptoScheme::variants(),
-		case_insensitive = true,
-	)]
+	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true)]
 	pub scheme: CryptoScheme,
 }
 
@@ -100,7 +95,6 @@ mod tests {
 	use super::*;
 	use sc_service::{ChainSpec, ChainType, GenericChainSpec, NoExtension};
 	use sp_core::{sr25519::Pair, ByteArray, Pair as _};
-	use structopt::StructOpt;
 	use tempfile::TempDir;
 
 	struct Cli;
@@ -156,7 +150,7 @@ mod tests {
 		let path_str = format!("{}", path.path().display());
 		let (key, uri, _) = Pair::generate_with_phrase(None);
 
-		let inspect = InsertKeyCmd::from_iter(&[
+		let inspect = InsertKeyCmd::parse_from(&[
 			"insert-key",
 			"-d",
 			&path_str,

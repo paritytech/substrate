@@ -20,13 +20,13 @@ jsonrpc-derive = "18.0.0"
 serde = { version = "1", features = ["derive"] }
 
 # Substrate Dependencies
-pallet-contracts-primitives = { version = "4.0.0-dev", path = "../common" }
+pallet-contracts-primitives = { version = "5.0.0", path = "../common" }
 pallet-contracts-rpc-runtime-api = { version = "4.0.0-dev", path = "./runtime-api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-core = { version = "4.1.0-dev", path = "../../../primitives/core" }
-sp-rpc = { version = "4.0.0-dev", path = "../../../primitives/rpc" }
-sp-runtime = { version = "4.1.0-dev", path = "../../../primitives/runtime" }
+sp-core = { version = "5.0.0", path = "../../../primitives/core" }
+sp-rpc = { version = "5.0.0", path = "../../../primitives/rpc" }
+sp-runtime = { version = "5.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1"

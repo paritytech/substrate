@@ -18,7 +18,14 @@
 //! Traits and associated data structures concerned with voting, and moving between tokens and
 //! votes.
 
-use sp_arithmetic::traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto};
+use crate::dispatch::{DispatchError, Parameter};
+use codec::HasCompact;
+use sp_arithmetic::{
+	traits::{SaturatedConversion, UniqueSaturatedFrom, UniqueSaturatedInto},
+	Perbill,
+};
+use sp_runtime::traits::Member;
+use sp_std::prelude::*;
 
 /// A trait similar to `Convert` to convert values from `B` an abstract balance type
 /// into u64 and back from u128. (This conversion is used in election and other places where complex
@@ -85,5 +92,76 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
 
 	fn to_currency(value: u128, _: B) -> B {
 		B::unique_saturated_from(value)
+	}
+}
+
+pub trait VoteTally<Votes> {
+	fn ayes(&self) -> Votes;
+	fn turnout(&self) -> Perbill;
+	fn approval(&self) -> Perbill;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn unanimity() -> Self;
+	#[cfg(feature = "runtime-benchmarks")]
+	fn from_requirements(turnout: Perbill, approval: Perbill) -> Self;
+}
+
+pub enum PollStatus<Tally, Moment, Class> {
+	None,
+	Ongoing(Tally, Class),
+	Completed(Moment, bool),
+}
+
+impl<Tally, Moment, Class> PollStatus<Tally, Moment, Class> {
+	pub fn ensure_ongoing(self) -> Option<(Tally, Class)> {
+		match self {
+			Self::Ongoing(t, c) => Some((t, c)),
+			_ => None,
+		}
+	}
+}
+
+pub trait Polling<Tally> {
+	type Index: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
+	type Votes: Parameter + Member + Ord + PartialOrd + Copy + HasCompact;
+	type Class: Parameter + Member + Ord + PartialOrd;
+	type Moment;
+
+	/// Provides a vec of values that `T` may take.
+	fn classes() -> Vec<Self::Class>;
+
+	/// `Some` if the referendum `index` can be voted on, along with the tally and class of
+	/// referendum.
+	///
+	/// Don't use this if you might mutate - use `try_access_poll` instead.
+	fn as_ongoing(index: Self::Index) -> Option<(Tally, Self::Class)>;
+
+	fn access_poll<R>(
+		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment, Self::Class>) -> R,
+	) -> R;
+
+	fn try_access_poll<R>(
+		index: Self::Index,
+		f: impl FnOnce(PollStatus<&mut Tally, Self::Moment, Self::Class>) -> Result<R, DispatchError>,
+	) -> Result<R, DispatchError>;
+
+	/// Create an ongoing majority-carries poll of given class lasting given period for the purpose
+	/// of benchmarking.
+	///
+	/// May return `Err` if it is impossible.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn create_ongoing(class: Self::Class) -> Result<Self::Index, ()>;
+
+	/// End the given ongoing poll and return the result.
+	///
+	/// Returns `Err` if `index` is not an ongoing poll.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn end_ongoing(index: Self::Index, approved: bool) -> Result<(), ()>;
+
+	/// The maximum amount of ongoing polls within any single class. By default it practically
+	/// unlimited (`u32::max_value()`).
+	#[cfg(feature = "runtime-benchmarks")]
+	fn max_ongoing() -> (Self::Class, u32) {
+		(Self::classes().into_iter().next().expect("Always one class"), u32::max_value())
 	}
 }

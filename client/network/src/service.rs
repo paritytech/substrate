@@ -1391,7 +1391,7 @@ impl<'a> NotificationSenderReady<'a> {
 }
 
 /// Error returned by [`NetworkService::send_notification`].
-#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum NotificationSenderError {
 	/// The notification receiver has been closed, usually because the underlying connection
 	/// closed.
@@ -1399,8 +1399,10 @@ pub enum NotificationSenderError {
 	/// Some of the notifications most recently sent may not have been received. However,
 	/// the peer may still be connected and a new `NotificationSender` for the same
 	/// protocol obtained from [`NetworkService::notification_sender`].
+	#[error("The notification receiver has been closed")]
 	Closed,
 	/// Protocol name hasn't been registered.
+	#[error("Protocol name hasn't been registered")]
 	BadProtocol,
 }
 

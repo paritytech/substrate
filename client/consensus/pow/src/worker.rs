@@ -169,7 +169,7 @@ where
 				Err(err) => {
 					warn!(
 						target: "pow",
-						"Unable to import mined block: {:?}",
+						"Unable to import mined block: {}",
 						err,
 					);
 					return false
@@ -238,7 +238,7 @@ where
 			Err(err) => {
 				warn!(
 					target: "pow",
-					"Unable to import mined block: {:?}",
+					"Unable to import mined block: {}",
 					err,
 				);
 				false

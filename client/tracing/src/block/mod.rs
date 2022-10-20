@@ -253,7 +253,7 @@ where
 				self.client.runtime_api().execute_block(&parent_id, block)
 			}) {
 				return Err(Error::Dispatch(
-					format!("Failed to collect traces and execute block: {:?}", e).to_string(),
+					format!("Failed to collect traces and execute block: {}", e).to_string(),
 				))
 			}
 		}

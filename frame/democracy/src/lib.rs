@@ -156,6 +156,7 @@ use codec::{Decode, Encode, Input};
 use frame_support::{
 	ensure,
 	traits::{
+		defensive_prelude::*,
 		schedule::{DispatchTime, Named as ScheduleNamed},
 		BalanceStatus, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced,
 		ReservableCurrency, WithdrawReasons,
@@ -437,14 +438,6 @@ pub mod pallet {
 		Voting<BalanceOf<T>, T::AccountId, T::BlockNumber>,
 		ValueQuery,
 	>;
-
-	/// Accounts for which there are locks in action which may be removed at some point in the
-	/// future. The value is the block number at which the lock expires and may be removed.
-	///
-	/// TWOX-NOTE: OK ― `AccountId` is a secure hash.
-	#[pallet::storage]
-	#[pallet::getter(fn locks)]
-	pub type Locks<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::BlockNumber>;
 
 	/// True if the last referendum tabled was submitted externally. False if it was a public
 	/// proposal.
@@ -1650,7 +1643,7 @@ impl<T: Config> Pallet<T> {
 		let mut public_props = Self::public_props();
 		if let Some((winner_index, _)) = public_props.iter().enumerate().max_by_key(
 			// defensive only: All current public proposals have an amount locked
-			|x| Self::backing_for((x.1).0).unwrap_or_else(Zero::zero),
+			|x| Self::backing_for((x.1).0).defensive_unwrap_or_else(Zero::zero),
 		) {
 			let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
 			<PublicProps<T>>::put(public_props);

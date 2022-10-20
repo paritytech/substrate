@@ -190,6 +190,8 @@ where
 	}
 
 	/// Mutate the item, only if an `Ok` value is returned. Deletes the item if mutated to a `None`.
+	/// `f` will always be called with an option representing if the storage item exists (`Some<V>`)
+	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
 		KeyArg: EncodeLike<Key> + Clone,
@@ -400,6 +402,13 @@ where
 		starting_raw_key: Vec<u8>,
 	) -> crate::storage::PrefixIterator<(Key, Value), OnRemovalCounterUpdate<Prefix>> {
 		<Self as MapWrapper>::Map::iter_from(starting_raw_key).convert_on_removal()
+	}
+
+	/// Enumerate all keys in the counted map.
+	///
+	/// If you alter the map while doing this, you'll get undefined results.
+	pub fn iter_keys() -> crate::storage::KeyPrefixIterator<Key> {
+		<Self as MapWrapper>::Map::iter_keys()
 	}
 }
 

@@ -106,7 +106,7 @@ async fn batch_revalidate<Api: ChainApi>(
 			Err(validation_err) => {
 				log::debug!(
 					target: "txpool",
-					"[{:?}]: Error during revalidation: {:?}. Removing.",
+					"[{:?}]: Removing due to error during revalidation: {}",
 					ext_hash,
 					validation_err
 				);

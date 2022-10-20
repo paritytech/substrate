@@ -18,7 +18,7 @@
 // NOTE: we allow missing docs here because arg_enum! creates the function variants without doc
 #![allow(missing_docs)]
 
-use structopt::clap::arg_enum;
+use clap::ArgEnum;
 
 /// How to execute Wasm runtime code.
 #[derive(Debug, Clone, Copy)]
@@ -86,12 +86,11 @@ impl Into<sc_service::config::WasmExecutionMethod> for WasmExecutionMethod {
 	}
 }
 
-arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum TracingReceiver {
-		Log,
-	}
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum TracingReceiver {
+	Log,
 }
 
 impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
@@ -102,44 +101,40 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 	}
 }
 
-arg_enum! {
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum NodeKeyType {
-		Ed25519
-	}
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum NodeKeyType {
+	Ed25519,
 }
 
-arg_enum! {
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum CryptoScheme {
-		Ed25519,
-		Sr25519,
-		Ecdsa,
-	}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum CryptoScheme {
+	Ed25519,
+	Sr25519,
+	Ecdsa,
 }
 
-arg_enum! {
-	#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-	pub enum OutputType {
-		Json,
-		Text,
-	}
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum OutputType {
+	Json,
+	Text,
 }
 
-arg_enum! {
-	/// How to execute blocks
-	#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-	pub enum ExecutionStrategy {
-		// Execute with native build (if available, WebAssembly otherwise).
-		Native,
-		// Only execute with the WebAssembly build.
-		Wasm,
-		// Execute with both native (where available) and WebAssembly builds.
-		Both,
-		// Execute with the native build if possible; if it fails, then execute with WebAssembly.
-		NativeElseWasm,
-	}
+/// How to execute blocks
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum ExecutionStrategy {
+	// Execute with native build (if available, WebAssembly otherwise).
+	Native,
+	// Only execute with the WebAssembly build.
+	Wasm,
+	// Execute with both native (where available) and WebAssembly builds.
+	Both,
+	// Execute with the native build if possible; if it fails, then execute with WebAssembly.
+	NativeElseWasm,
 }
 
 impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
@@ -165,19 +160,18 @@ impl ExecutionStrategy {
 	}
 }
 
-arg_enum! {
-	/// Available RPC methods.
-	#[allow(missing_docs)]
-	#[derive(Debug, Copy, Clone, PartialEq)]
-	pub enum RpcMethods {
-		// Expose every RPC method only when RPC is listening on `localhost`,
-		// otherwise serve only safe RPC methods.
-		Auto,
-		// Allow only a safe subset of RPC methods.
-		Safe,
-		// Expose every RPC method (even potentially unsafe ones).
-		Unsafe,
-	}
+/// Available RPC methods.
+#[allow(missing_docs)]
+#[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum RpcMethods {
+	// Expose every RPC method only when RPC is listening on `localhost`,
+	// otherwise serve only safe RPC methods.
+	Auto,
+	// Allow only a safe subset of RPC methods.
+	Safe,
+	// Expose every RPC method (even potentially unsafe ones).
+	Unsafe,
 }
 
 impl Into<sc_service::config::RpcMethods> for RpcMethods {
@@ -225,31 +219,28 @@ impl Database {
 	}
 }
 
-arg_enum! {
-	/// Whether off-chain workers are enabled.
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone)]
-	pub enum OffchainWorkerEnabled {
-		Always,
-		Never,
-		WhenValidating,
-	}
+/// Whether off-chain workers are enabled.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum OffchainWorkerEnabled {
+	Always,
+	Never,
+	WhenValidating,
 }
 
-arg_enum! {
-	/// Syncing mode.
-	#[allow(missing_docs)]
-	#[derive(Debug, Clone, Copy)]
-	pub enum SyncMode {
-		// Full sync. Donwnload end verify all blocks.
-		Full,
-		// Download blocks without executing them. Download latest state with proofs.
-		Fast,
-		// Download blocks without executing them. Download latest state without proofs.
-		FastUnsafe,
-		// Prove finality and download the latest state.
-		Warp,
-	}
+/// Syncing mode.
+#[derive(Debug, Clone, Copy, ArgEnum)]
+#[clap(rename_all = "PascalCase")]
+pub enum SyncMode {
+	// Full sync. Donwnload end verify all blocks.
+	Full,
+	// Download blocks without executing them. Download latest state with proofs.
+	Fast,
+	// Download blocks without executing them. Download latest state without proofs.
+	FastUnsafe,
+	// Prove finality and download the latest state.
+	Warp,
 }
 
 impl Into<sc_network::config::SyncMode> for SyncMode {

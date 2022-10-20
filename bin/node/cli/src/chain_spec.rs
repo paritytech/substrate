@@ -23,8 +23,8 @@ use hex_literal::hex;
 use node_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
 	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
-	ImOnlineConfig, IndicesConfig, SessionConfig, SessionKeys, SocietyConfig, StakerStatus,
-	StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig, MAX_NOMINATIONS,
+	ImOnlineConfig, IndicesConfig, MaxNominations, SessionConfig, SessionKeys, SocietyConfig,
+	StakerStatus, StakingConfig, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
 };
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
@@ -278,7 +278,7 @@ pub fn testnet_genesis(
 		.map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
 		.chain(initial_nominators.iter().map(|x| {
 			use rand::{seq::SliceRandom, Rng};
-			let limit = (MAX_NOMINATIONS as usize).min(initial_authorities.len());
+			let limit = (MaxNominations::get() as usize).min(initial_authorities.len());
 			let count = rng.gen::<usize>() % limit;
 			let nominations = initial_authorities
 				.as_slice()

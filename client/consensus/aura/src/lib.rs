@@ -491,33 +491,34 @@ fn aura_err<B: BlockT>(error: Error<B>) -> Error<B> {
 }
 
 /// Aura Errors
-#[derive(derive_more::Display, Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error<B: BlockT> {
 	/// Multiple Aura pre-runtime headers
-	#[display(fmt = "Multiple Aura pre-runtime headers")]
+	#[error("Multiple Aura pre-runtime headers")]
 	MultipleHeaders,
 	/// No Aura pre-runtime digest found
-	#[display(fmt = "No Aura pre-runtime digest found")]
+	#[error("No Aura pre-runtime digest found")]
 	NoDigestFound,
 	/// Header is unsealed
-	#[display(fmt = "Header {:?} is unsealed", _0)]
+	#[error("Header {0:?} is unsealed")]
 	HeaderUnsealed(B::Hash),
 	/// Header has a bad seal
-	#[display(fmt = "Header {:?} has a bad seal", _0)]
+	#[error("Header {0:?} has a bad seal")]
 	HeaderBadSeal(B::Hash),
 	/// Slot Author not found
-	#[display(fmt = "Slot Author not found")]
+	#[error("Slot Author not found")]
 	SlotAuthorNotFound,
 	/// Bad signature
-	#[display(fmt = "Bad signature on {:?}", _0)]
+	#[error("Bad signature on {0:?}")]
 	BadSignature(B::Hash),
 	/// Client Error
+	#[error(transparent)]
 	Client(sp_blockchain::Error),
 	/// Unknown inherent error for identifier
-	#[display(fmt = "Unknown inherent error for identifier: {}", "String::from_utf8_lossy(_0)")]
+	#[error("Unknown inherent error for identifier: {}", String::from_utf8_lossy(.0))]
 	UnknownInherentError(sp_inherents::InherentIdentifier),
-	#[display(fmt = "Inherent error: {}", _0)]
 	/// Inherents Error
+	#[error("Inherent error: {0}")]
 	Inherent(sp_inherents::Error),
 }
 

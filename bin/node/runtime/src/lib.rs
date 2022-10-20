@@ -23,6 +23,7 @@
 #![recursion_limit = "256"]
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_election_provider_support::onchain;
 use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
@@ -389,7 +390,7 @@ impl pallet_babe::Config for Runtime {
 }
 
 parameter_types! {
-	pub const IndexDeposit: Balance = 10 * DOLLARS;
+	pub const IndexDeposit: Balance = 1 * DOLLARS;
 }
 
 impl pallet_indices::Config for Runtime {
@@ -506,12 +507,6 @@ parameter_types! {
 	pub OffchainRepeat: BlockNumber = 5;
 }
 
-use frame_election_provider_support::onchain;
-impl onchain::Config for Runtime {
-	type Accuracy = Perbill;
-	type DataProvider = Staking;
-}
-
 pub struct StakingBenchmarkingConfig;
 impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 	type MaxNominators = ConstU32<1000>;
@@ -519,7 +514,7 @@ impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 }
 
 impl pallet_staking::Config for Runtime {
-	const MAX_NOMINATIONS: u32 = MAX_NOMINATIONS;
+	type MaxNominations = MaxNominations;
 	type Currency = Balances;
 	type UnixTime = Timestamp;
 	type CurrencyToVote = U128CurrencyToVote;
@@ -583,7 +578,9 @@ sp_npos_elections::generate_solution_type!(
 	>(16)
 );
 
-pub const MAX_NOMINATIONS: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
+parameter_types! {
+	pub MaxNominations: u32 = <NposSolution16 as sp_npos_elections::NposSolution>::LIMIT as u32;
+}
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
 /// to ensure election snapshot will not run out of memory. For now, we set them to smaller values
@@ -625,6 +622,11 @@ impl frame_support::pallet_prelude::Get<Option<(usize, sp_npos_elections::Extend
 	}
 }
 
+impl onchain::Config for Runtime {
+	type Accuracy = Perbill;
+	type DataProvider = <Self as pallet_election_provider_multi_phase::Config>::DataProvider;
+}
+
 impl pallet_election_provider_multi_phase::Config for Runtime {
 	type Event = Event;
 	type Currency = Balances;
@@ -647,6 +649,8 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 	type DataProvider = Staking;
 	type Solution = NposSolution16;
 	type Fallback = pallet_election_provider_multi_phase::NoFallback<Self>;
+	type GovernanceFallback =
+		frame_election_provider_support::onchain::OnChainSequentialPhragmen<Self>;
 	type Solver = frame_election_provider_support::SequentialPhragmen<
 		AccountId,
 		pallet_election_provider_multi_phase::SolutionAccuracyOf<Self>,
@@ -670,6 +674,83 @@ impl pallet_bags_list::Config for Runtime {
 	type VoteWeightProvider = Staking;
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 	type BagThresholds = BagThresholds;
+}
+
+parameter_types! {
+	pub const VoteLockingPeriod: BlockNumber = 30 * DAYS;
+}
+
+impl pallet_conviction_voting::Config for Runtime {
+	type WeightInfo = pallet_conviction_voting::weights::SubstrateWeight<Self>;
+	type Event = Event;
+	type Currency = Balances;
+	type VoteLockingPeriod = VoteLockingPeriod;
+	type MaxVotes = ConstU32<512>;
+	type MaxTurnout = frame_support::traits::TotalIssuanceOf<Balances, Self::AccountId>;
+	type Polls = Referenda;
+}
+
+parameter_types! {
+	pub const AlarmInterval: BlockNumber = 1;
+	pub const SubmissionDeposit: Balance = 100 * DOLLARS;
+	pub const UndecidingTimeout: BlockNumber = 28 * DAYS;
+}
+
+pub struct TracksInfo;
+impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
+	type Id = u8;
+	type Origin = <Origin as frame_support::traits::OriginTrait>::PalletsOrigin;
+	fn tracks() -> &'static [(Self::Id, pallet_referenda::TrackInfo<Balance, BlockNumber>)] {
+		static DATA: [(u8, pallet_referenda::TrackInfo<Balance, BlockNumber>); 1] = [(
+			0u8,
+			pallet_referenda::TrackInfo {
+				name: "root",
+				max_deciding: 1,
+				decision_deposit: 10,
+				prepare_period: 4,
+				decision_period: 4,
+				confirm_period: 2,
+				min_enactment_period: 4,
+				min_approval: pallet_referenda::Curve::LinearDecreasing {
+					begin: Perbill::from_percent(100),
+					delta: Perbill::from_percent(50),
+				},
+				min_turnout: pallet_referenda::Curve::LinearDecreasing {
+					begin: Perbill::from_percent(100),
+					delta: Perbill::from_percent(100),
+				},
+			},
+		)];
+		&DATA[..]
+	}
+	fn track_for(id: &Self::Origin) -> Result<Self::Id, ()> {
+		if let Ok(system_origin) = frame_system::RawOrigin::try_from(id.clone()) {
+			match system_origin {
+				frame_system::RawOrigin::Root => Ok(0),
+				_ => Err(()),
+			}
+		} else {
+			Err(())
+		}
+	}
+}
+
+impl pallet_referenda::Config for Runtime {
+	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
+	type Call = Call;
+	type Event = Event;
+	type Scheduler = Scheduler;
+	type Currency = pallet_balances::Pallet<Self>;
+	type CancelOrigin = EnsureRoot<AccountId>;
+	type KillOrigin = EnsureRoot<AccountId>;
+	type Slash = ();
+	type Votes = pallet_conviction_voting::VotesOf<Runtime>;
+	type Tally = pallet_conviction_voting::TallyOf<Runtime>;
+	type SubmissionDeposit = SubmissionDeposit;
+	type MaxQueued = ConstU32<100>;
+	type UndecidingTimeout = UndecidingTimeout;
+	type AlarmInterval = AlarmInterval;
+	type Tracks = TracksInfo;
 }
 
 parameter_types! {
@@ -1251,6 +1332,8 @@ construct_runtime!(
 		Tips: pallet_tips,
 		BagsList: pallet_bags_list,
 		ChildBounties: pallet_child_bounties,
+		Referenda: pallet_referenda,
+		ConvictionVoting: pallet_conviction_voting,
 		CereDDCModule: pallet_cere_ddc::{Pallet, Call, Storage, Event<T>},
 		ChainBridge: pallet_chainbridge::{Pallet, Call, Storage, Event<T>},
 		Erc721: pallet_erc721::{Pallet, Call, Storage, Event<T>},
@@ -1314,6 +1397,7 @@ mod benches {
 		[pallet_bounties, Bounties]
 		[pallet_child_bounties, ChildBounties]
 		[pallet_collective, Council]
+		[pallet_conviction_voting, ConvictionVoting]
 		[pallet_contracts, Contracts]
 		[pallet_democracy, Democracy]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
@@ -1326,6 +1410,7 @@ mod benches {
 		[pallet_multisig, Multisig]
 		[pallet_offences, OffencesBench::<Runtime>]
 		[pallet_proxy, Proxy]
+		[pallet_referenda, Referenda]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
@@ -1668,7 +1753,7 @@ mod tests {
 	#[test]
 	fn perbill_as_onchain_accuracy() {
 		type OnChainAccuracy = <Runtime as onchain::Config>::Accuracy;
-		let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracy>> = (0..MAX_NOMINATIONS)
+		let maximum_chain_accuracy: Vec<UpperOf<OnChainAccuracy>> = (0..MaxNominations::get())
 			.map(|_| <UpperOf<OnChainAccuracy>>::from(OnChainAccuracy::one().deconstruct()))
 			.collect();
 		let _: UpperOf<OnChainAccuracy> =
