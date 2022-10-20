@@ -32,7 +32,7 @@ use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
 };
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use std::{
 	hash::{Hash, Hasher},
 	sync::Arc,
@@ -205,14 +205,14 @@ where
 
 			if !request.no_proof {
 				let (proof, _count) = self.client.read_proof_collection(
-					&BlockId::hash(block),
+					&block,
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;
 				response.proof = proof.encode();
 			} else {
 				let entries = self.client.storage_collection(
-					&BlockId::hash(block),
+					&block,
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;

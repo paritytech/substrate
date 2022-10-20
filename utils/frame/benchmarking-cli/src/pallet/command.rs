@@ -268,9 +268,8 @@ impl PalletCmd {
 
 					for s in 0..self.steps {
 						// This is the value we will be testing for component `name`
-						let component_value = ((lowest as f32 + step_size * s as f32) as u32)
-							.min(highest)
-							.max(lowest);
+						let component_value =
+							((lowest as f32 + step_size * s as f32) as u32).clamp(lowest, highest);
 
 						// Select the max value for all the other components.
 						let c: Vec<(BenchmarkParameter, u32)> = components
