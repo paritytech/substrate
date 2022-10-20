@@ -92,7 +92,7 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		subscription_id: &String,
 		hash: &Block::Hash,
 	) -> Result<(), SubscriptionError> {
-		let mut subs = self.inner.read();
+		let subs = self.inner.read();
 
 		match subs.get(subscription_id) {
 			Some(set) =>

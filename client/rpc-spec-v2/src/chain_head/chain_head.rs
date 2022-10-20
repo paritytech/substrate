@@ -29,25 +29,17 @@ use crate::{
 	},
 	SubscriptionTaskExecutor,
 };
-use serde::{Deserialize, Serialize};
-use std::{
-	collections::{hash_map::Entry, HashMap, HashSet},
-	marker::PhantomData,
-	sync::{Arc, Mutex},
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use sc_client_api::CallExecutor;
 
 use futures::{
-	future::{self, FutureExt},
-	stream::{self, Stream, StreamExt},
+	future::FutureExt,
+	stream::{self, StreamExt},
 };
 use jsonrpsee::{
 	core::async_trait,
-	types::{
-		error::{ErrorObject, PARSE_ERROR_CODE},
-		SubscriptionEmptyError, SubscriptionResult,
-	},
+	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
 use sc_client_api::{
@@ -61,7 +53,6 @@ use sp_runtime::{
 	generic::{BlockId, SignedBlock},
 	traits::{Block as BlockT, Header, NumberFor},
 };
-use sp_version::RuntimeVersion;
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -203,7 +194,7 @@ where
 					Some(&BlockId::Hash(*notification.header.parent_hash())),
 				);
 
-				subscriptions.pin_block(&sub_id_import, notification.hash.clone());
+				let _ = subscriptions.pin_block(&sub_id_import, notification.hash.clone());
 
 				let new_block = FollowEvent::NewBlock(NewBlock {
 					block_hash: notification.hash,
@@ -224,14 +215,13 @@ where
 			})
 			.flatten();
 
-		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 		let sub_id_import = sub_id.clone();
 
 		let stream_finalized =
 			self.client.finality_notification_stream().map(move |notification| {
 				// We might not receive all new blocks reports, also pin the block here.
-				subscriptions.pin_block(&sub_id_import, notification.hash.clone());
+				let _ = subscriptions.pin_block(&sub_id_import, notification.hash.clone());
 
 				FollowEvent::Finalized(Finalized {
 					finalized_block_hashes: notification.tree_route.iter().cloned().collect(),
@@ -250,7 +240,7 @@ where
 			None,
 		);
 
-		self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone());
+		let _ = self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone());
 
 		let stream = stream::once(async move {
 			FollowEvent::Initialized(Initialized {
@@ -269,12 +259,12 @@ where
 		Ok(())
 	}
 
-	fn chainHead_unstable_body(
+	fn chain_head_unstable_body(
 		&self,
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		network_config: Option<()>,
+		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
 			ChainHeadEvent::<SignedBlock<Block>>::Disjoint
@@ -300,13 +290,13 @@ where
 		Ok(())
 	}
 
-	fn chainHead_unstable_storage(
+	fn chain_head_unstable_storage(
 		&self,
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
 		key: StorageKey,
-		network_config: Option<()>,
+		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
 			ChainHeadEvent::<StorageData>::Disjoint
@@ -332,14 +322,14 @@ where
 		Ok(())
 	}
 
-	fn chainHead_unstable_call(
+	fn chain_head_unstable_call(
 		&self,
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
 		function: String,
 		call_parameters: Bytes,
-		network_config: Option<()>,
+		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
 			ChainHeadEvent::<Vec<u8>>::Disjoint

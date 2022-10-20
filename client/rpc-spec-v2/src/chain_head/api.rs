@@ -25,9 +25,6 @@ use sp_core::Bytes;
 #[rpc(client, server)]
 pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	/// Track the state of the head of the chain: the finalized, non-finalized, and best blocks.
-	///
-	/// See [`TransactionEvent`](crate::transaction::event::TransactionEvent) for details on
-	/// transaction life cycle.
 	#[subscription(
 		name = "chainHead_unstable_follow" => "chainHead_unstable_followBlock",
 		unsubscribe = "chainHead_unstable_unfollow",
@@ -35,24 +32,26 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	)]
 	fn chain_head_unstable_follow(&self, runtime_updates: bool);
 
+	/// Get the header, body and justifications of a relay chain block.
 	#[subscription(
 		name = "chainHead_unstable_body" => "chainHead_unstable_getBody",
 		unsubscribe = "chainHead_unstable_stopBody",
 		item = ChainHeadEvent<SignedBlock>,
 	)]
-	fn chainHead_unstable_body(
+	fn chain_head_unstable_body(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
 		network_config: Option<()>,
 	);
 
+	/// Return a storage entry at a specific block's state.
 	#[subscription(
 		name = "chainHead_unstable_storage" => "chainHead_unstable_queryStorage",
 		unsubscribe = "chainHead_unstable_stopStorage",
 		item = ChainHeadEvent<StorageData>,
 	)]
-	fn chainHead_unstable_storage(
+	fn chain_head_unstable_storage(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
@@ -60,12 +59,13 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 		network_config: Option<()>,
 	);
 
+	/// Call into the Runtime API at a specified block's state.
 	#[subscription(
 		name = "chainHead_unstable_call" => "chainHead_unstable_runtimeCall",
 		unsubscribe = "chainHead_unstable_stopCall",
 		item = ChainHeadEvent<Vec<u8>>,
 	)]
-	fn chainHead_unstable_call(
+	fn chain_head_unstable_call(
 		&self,
 		follow_subscription: String,
 		hash: Hash,
