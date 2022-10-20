@@ -223,10 +223,10 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Set an existing block as head.
-	pub fn set_head(&self, id: Block::Hash) -> sp_blockchain::Result<()> {
+	pub fn set_head(&self, hash: Block::Hash) -> sp_blockchain::Result<()> {
 		let header = self
-			.header(BlockId::Hash(id))?
-			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id)))?;
+			.header(BlockId::Hash(hash))?
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))?;
 
 		self.apply_head(&header)
 	}
@@ -738,10 +738,10 @@ where
 
 	fn finalize_block(
 		&self,
-		block: &Block::Hash,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		self.blockchain.finalize_header(block, justification)
+		self.blockchain.finalize_header(hash, justification)
 	}
 
 	fn append_justification(

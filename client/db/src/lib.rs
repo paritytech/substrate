@@ -904,9 +904,9 @@ impl<Block: BlockT> sc_client_api::backend::BlockImportOperation<Block>
 		Ok(())
 	}
 
-	fn mark_head(&mut self, block: &Block::Hash) -> ClientResult<()> {
+	fn mark_head(&mut self, hash: &Block::Hash) -> ClientResult<()> {
 		assert!(self.set_head.is_none(), "Only one set head per operation is allowed");
-		self.set_head = Some(*block);
+		self.set_head = Some(*hash);
 		Ok(())
 	}
 
@@ -1992,16 +1992,16 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 	fn finalize_block(
 		&self,
-		block: &Block::Hash,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> ClientResult<()> {
 		let mut transaction = Transaction::new();
-		let header = self.blockchain.expect_header(BlockId::Hash(*block))?;
+		let header = self.blockchain.expect_header(BlockId::Hash(*hash))?;
 		let mut displaced = None;
 
 		let m = self.finalize_block_with_transaction(
 			&mut transaction,
-			block,
+			hash,
 			&header,
 			None,
 			justification,
