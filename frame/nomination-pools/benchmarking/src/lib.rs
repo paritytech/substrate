@@ -132,7 +132,7 @@ impl<T: Config> ListScenario<T> {
 		sp_std::mem::forget(i);
 
 		// Create accounts with the origin weight
-		let (_, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
+		let (pool_creator1, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
 		T::Staking::nominate(
 			&pool_origin1,
 			// NOTE: these don't really need to be validators.
