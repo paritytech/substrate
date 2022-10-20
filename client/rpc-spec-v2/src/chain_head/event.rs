@@ -215,7 +215,10 @@ pub enum ChainHeadEvent<T> {
 	Disjoint,
 }
 
+#[cfg(test)]
 mod tests {
+	use super::*;
+
 	#[test]
 	fn follow_initialized_event_no_updates() {
 		// Runtime flag is false.
