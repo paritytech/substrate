@@ -20,3 +20,4 @@
 
 pub mod chain_sync;
 pub mod mock;
+pub mod network;
