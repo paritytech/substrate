@@ -69,6 +69,7 @@ struct BenchmarkData {
 	component_writes: Vec<ComponentSlope>,
 	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
+	#[serde(serialize_with = "string_serialize")]
 	min_execution_time: u128,
 }
 
