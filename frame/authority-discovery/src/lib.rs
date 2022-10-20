@@ -173,7 +173,7 @@ mod tests {
 	};
 	use sp_application_crypto::Pair;
 	use sp_authority_discovery::AuthorityPair;
-	use sp_core::{crypto::key_types, H256};
+	use sp_core::{crypto::{key_types, KeyTypeId}, H256};
 	use sp_io::TestExternalities;
 	use sp_runtime::{
 		testing::{Header, UintAuthorityId},
