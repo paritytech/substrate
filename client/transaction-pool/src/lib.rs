@@ -434,8 +434,9 @@ where
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
 		use sp_runtime::{
-			traits::SaturatedConversion, transaction_validity::TransactionValidityError,
+			transaction_validity::TransactionValidityError,
 		};
+		use sp_arithmetic::traits::SaturatedConversion;
 
 		let validity = self
 			.api

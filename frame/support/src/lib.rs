@@ -67,6 +67,8 @@ pub use sp_state_machine::BasicExternalities;
 pub use sp_std;
 #[doc(hidden)]
 pub use tt_call::*;
+#[doc(hidden)]
+pub use sp_arithmetic;
 
 #[macro_use]
 pub mod dispatch;

@@ -20,11 +20,12 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	generic::Era,
-	traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
+	traits::{DispatchInfoOf, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
+use sp_arithmetic::traits::SaturatedConversion;
 
 /// Check for transaction mortality.
 ///
