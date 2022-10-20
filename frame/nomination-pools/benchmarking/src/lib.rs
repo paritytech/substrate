@@ -186,8 +186,7 @@ impl<T: Config> ListScenario<T> {
 
 		// Unbond `amount` from the underlying pool account so when the member joins
 		// we will maintain `current_bonded`.
-		T::Staking::unbond(self.origin1.clone(), amount)
-			.expect("the pool was created in `Self::new`.");
+		T::Staking::unbond(&self.origin1, amount).expect("the pool was created in `Self::new`.");
 
 		// Account pool points for the unbonded balance.
 		BondedPools::<T>::mutate(&1, |maybe_pool| {
@@ -523,7 +522,7 @@ frame_benchmarking::benchmarks! {
 		);
 		assert_eq!(
 			T::Staking::stake(&Pools::<T>::create_bonded_account(1)).map(|s| s.active),
-			Some(min_create_bond)
+			Ok(min_create_bond)
 		);
 	}
 
@@ -562,7 +561,7 @@ frame_benchmarking::benchmarks! {
 		);
 		assert_eq!(
 			T::Staking::stake(&Pools::<T>::create_bonded_account(1)).map(|s| s.active),
-			Some(min_create_bond)
+			Ok(min_create_bond)
 		);
 	}
 
@@ -644,7 +643,7 @@ frame_benchmarking::benchmarks! {
 			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
-		assert_ok!(Pools::<T>::nominate(&pool_account, 1, validators));
+		assert_ok!(Pools::<T>::nominate(pool_account, 1, validators));
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_some());
 
 		whitelist_account!(depositor);
