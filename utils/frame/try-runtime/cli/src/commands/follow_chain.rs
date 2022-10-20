@@ -162,6 +162,10 @@ where
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
 			full_extensions(),
+			shared
+				.export_proof
+				.as_ref()
+				.map(|path| path.as_path().join(&format!("{}-{}", number, hash))),
 		)?;
 
 		let consumed_weight = <sp_weights::Weight as Decode>::decode(&mut &*encoded_result)

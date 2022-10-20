@@ -212,6 +212,7 @@ where
 		"TryRuntime_execute_block",
 		&payload,
 		full_extensions(),
+		shared.export_proof,
 	)?;
 
 	log::info!(target: LOG_TARGET, "Core_execute_block executed without errors.");

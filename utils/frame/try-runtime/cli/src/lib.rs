@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -431,6 +431,12 @@ pub struct SharedParams {
 	/// State version that is used by the chain.
 	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
 	pub state_version: StateVersion,
+
+	/// Path to a file to extract the storage proof
+	/// If several blocks are executed, the path is interpreted as a folder
+	/// where one file per block will be written (named `{block_number}-{block_hash}`).
+	#[clap(long, parse(from_os_str))]
+	pub export_proof: Option<PathBuf>,
 }
 
 /// Our `try-runtime` command.
@@ -756,6 +762,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
+	maybe_export_proof: Option<PathBuf>,
 ) -> sc_cli::Result<(OverlayedChanges, Vec<u8>)> {
 	use parity_scale_codec::Encode;
 	use sp_core::hexdisplay::HexDisplay;
@@ -788,6 +795,13 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	let proof = proving_backend
 		.extract_proof()
 		.expect("A recorder was set and thus, a storage proof can be extracted; qed");
+
+	if let Some(path) = maybe_export_proof {
+		let mut file = std::fs::File::create(path)?;
+		use std::io::Write as _;
+		proof.using_encoded(|encoded_proof| file.write_all(encoded_proof))?;
+	}
+
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
