@@ -500,35 +500,27 @@ where
 
 			self.on_demand_justifications.cancel_requests_older_than(block_num);
 
-			let maybe_block_hash = self
-				.backend
-				.blockchain()
-				.expect_block_hash_from_id(&BlockId::Number(block_num));
+			let maybe_block_hash =
+				self.backend.blockchain().expect_block_hash_from_id(&BlockId::Number(block_num));
 
-			let error = match maybe_block_hash {
+			match maybe_block_hash {
 				Ok(hash) => {
+					if let Err(err) = self
+						.backend
+						.append_justification(&hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
+					{
+						error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", err, finality_proof);
+					};
+
 					self.links
 						.to_rpc_best_block_sender
 						.notify(|| Ok::<_, ()>(hash))
 						.expect("forwards closure result; the closure always returns Ok; qed.");
-
-					self
-						.backend
-						.append_justification(&hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
-				}
-				Err(err) => Err(err)
+				},
+				Err(err) => {
+					error!(target: "beefy", "🥩 Error {:?} hash not know for given block_num: {:?}", err, finality_proof);
+				},
 			};
-
-			if let Err(err) = error {
-				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", err, finality_proof);
-			}
-
-			self.backend.blockchain().hash(block_num).ok().flatten().map(|hash| {
-				self.links
-					.to_rpc_best_block_sender
-					.notify(|| Ok::<_, ()>(hash))
-					.expect("forwards closure result; the closure always returns Ok; qed.");
-				});
 
 			self.links
 				.to_rpc_justif_sender
