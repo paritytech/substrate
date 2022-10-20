@@ -740,7 +740,7 @@ pub mod pallet {
 					match mint_settings.mint_type {
 						MintType::Private => {
 							ensure!(
-								collection_details.issuer == caller,
+								Self::has_role(&collection, &caller, CollectionRole::Issuer),
 								Error::<T, I>::NoPermission
 							)
 						},
