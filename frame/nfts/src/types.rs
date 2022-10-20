@@ -296,6 +296,7 @@ impl PalletFeatures {
 }
 impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);
 
+/// Support for up to 8 different roles for collections.
 #[bitflags]
 #[repr(u8)]
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
