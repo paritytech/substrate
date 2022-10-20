@@ -2220,7 +2220,7 @@ mod tests {
 	use frame_support::traits::WhitelistedStorageKeys;
 	use frame_system::offchain::CreateSignedTransaction;
 	use sp_core::hexdisplay::HexDisplay;
-	use sp_runtime::UpperOf;
+	use sp_arithmetic::UpperOf;
 	use std::collections::HashSet;
 
 	#[test]

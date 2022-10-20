@@ -121,9 +121,9 @@ mod multiplier_tests {
 	use sp_runtime::{
 		assert_eq_error_rate,
 		traits::{Convert, One, Zero},
-		FixedPointNumber,
-	};
 
+	};
+	use sp_arithmetic::FixedPointNumber;
 	use crate::{
 		constants::{currency::*, time::*},
 		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,

@@ -24,8 +24,9 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	Perbill,
+
 };
+use sp_arithmetic::Perbill;
 
 #[frame_support::pallet]
 mod module {
