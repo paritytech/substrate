@@ -992,20 +992,37 @@ mod test {
 	use sp_std::marker::PhantomData;
 
 	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_vec_defensive_works() {
+		let unbound = vec![1u32, 2];
+		let bound = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, vec![1u32]);
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_slice_defensive_works() {
+		let unbound = &[1u32, 2];
+		let bound = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, &[1u32][..]);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(
 		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
 	)]
-	fn defensive_truncate_from_vec_panics() {
-		// NOTE: We cannot test the truncating case since defensive failures panic in tests.
+	fn defensive_truncating_from_vec_defensive_panics() {
 		let unbound = vec![1u32, 2];
 		let _ = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
 	}
 
 	#[test]
+	#[cfg(debug_assertions)]
 	#[should_panic(
 		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
 	)]
-	fn defensive_truncate_from_slice_panics() {
+	fn defensive_truncating_from_slice_defensive_panics() {
 		let unbound = &[1u32, 2];
 		let _ = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
 	}
