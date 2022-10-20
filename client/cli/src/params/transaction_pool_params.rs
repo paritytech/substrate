@@ -23,15 +23,15 @@ use sc_service::config::TransactionPoolOptions;
 #[derive(Debug, Clone, Args)]
 pub struct TransactionPoolParams {
 	/// Maximum number of transactions in the transaction pool.
-	#[clap(long, value_name = "COUNT", default_value = "8192")]
+	#[arg(long, value_name = "COUNT", default_value_t = 8192)]
 	pub pool_limit: usize,
 
 	/// Maximum number of kilobytes of all transactions stored in the pool.
-	#[clap(long, value_name = "COUNT", default_value = "20480")]
+	#[arg(long, value_name = "COUNT", default_value_t = 20480)]
 	pub pool_kbytes: usize,
 
 	/// How long a transaction is banned for, if it is considered invalid. Defaults to 1800s.
-	#[clap(long, value_name = "SECONDS")]
+	#[arg(long, value_name = "SECONDS")]
 	pub tx_ban_seconds: Option<u64>,
 }
 
