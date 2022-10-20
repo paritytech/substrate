@@ -131,10 +131,7 @@ pub trait StakingInterface {
 		-> DispatchResult;
 
 	/// Have `who` nominate `validators`.
-	fn nominate(
-		who: &Self::AccountId,
-		validators: sp_std::vec::Vec<Self::AccountId>,
-	) -> DispatchResult;
+	fn nominate(who: &Self::AccountId, validators: Vec<Self::AccountId>) -> DispatchResult;
 
 	/// Chill `who`.
 	fn chill(who: &Self::AccountId) -> DispatchResult;
@@ -177,7 +174,7 @@ pub trait StakingInterface {
 
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<sp_std::prelude::Vec<Self::AccountId>>;
+	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(
