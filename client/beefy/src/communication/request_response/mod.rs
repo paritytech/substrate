@@ -99,3 +99,9 @@ pub enum Error {
 	#[error("Received invalid response.")]
 	InvalidResponse,
 }
+
+// Peer Reputation Changes
+mod cost {
+	use sc_network::ReputationChange as Rep;
+	pub(super) const BAD_REQUEST: Rep = Rep::new(-(1 << 12), "bad request");
+}

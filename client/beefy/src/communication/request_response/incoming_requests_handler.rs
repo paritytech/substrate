@@ -78,6 +78,13 @@ impl<B: Block> IncomingRequest<B> {
 				if let Err(_) = pending_response.send(response) {
 					return Err(Error::DecodingErrorNoReputationChange(peer, err))
 				}
+				/*
+				let new_response = IncomingRequest.pending_response.send(OutgoingResponse{
+					result: Err(Error::DecodingError(peer, err)),
+					reputation_changes: vec![ReputationChange::new(-(1 << 12), "bad request")],
+					sent_feedback: None,
+				})
+				*/
 				return Err(Error::DecodingError(peer, err))
 			},
 		};
