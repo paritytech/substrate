@@ -26,6 +26,7 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuild},
 };
 use sp_core::H256;
+use sp_io::storage;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -91,11 +92,11 @@ impl pallet_balances::Config for Test {
 pub struct AssetsCallbackHandle;
 impl AssetsCallback<AssetId, AccountId> for AssetsCallbackHandle {
 	fn created(_id: &AssetId, _owner: &AccountId) {
-		sp_io::storage::set(b"asset_created", &true.encode());
+		storage::set(b"asset_created", &true.encode());
 	}
 
 	fn destroyed(_id: &AssetId) {
-		sp_io::storage::set(b"asset_destroyed", &true.encode());
+		storage::set(b"asset_destroyed", &true.encode());
 	}
 }
 
