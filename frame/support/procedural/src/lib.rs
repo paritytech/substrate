@@ -1261,15 +1261,3 @@ pub fn validate_unsigned(_: TokenStream, _: TokenStream) -> TokenStream {
 pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
 	pallet_macro_stub()
 }
-
-/// The `#[pallet::dev_mode]` attribute can be applied to a pallet to indicate that you are
-/// tinkering with the pallet and don't intend to use it in its current form in production.
-///
-/// Doing so has a few implications:
-/// * The [`macro@weight`] for the pallet will be set to 0
-/// * `MaxEncodedLen` will be set automatically (expand on this)
-/// * A number of dev-mode-only traits will be available for your pallet to use (expand on this)
-#[proc_macro_attribute]
-pub fn dev_mode(_: TokenStream, _: TokenStream) -> TokenStream {
-	pallet_macro_stub()
-}
