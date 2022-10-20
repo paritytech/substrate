@@ -403,7 +403,7 @@ pub mod pallet {
 		/// Send a batch of dispatch calls.
 		/// Unlike `batch`, it allows errors and won't interrupt.
 		///
-		/// May be called from either the root or a signed origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
