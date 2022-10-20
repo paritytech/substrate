@@ -47,8 +47,8 @@ pub use per_things::{
 };
 pub use rational::{Rational128, RationalInfinite};
 
-use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};
 use crate::traits::{BaseArithmetic, One, SaturatedConversion, Unsigned, Zero};
+use sp_std::{cmp::Ordering, fmt::Debug, prelude::*};
 
 /// Trait for comparing two numbers with an threshold.
 ///

@@ -433,10 +433,8 @@ where
 		at: &BlockId<Self::Block>,
 		xt: sc_transaction_pool_api::LocalTransactionFor<Self>,
 	) -> Result<Self::Hash, Self::Error> {
-		use sp_runtime::{
-			transaction_validity::TransactionValidityError,
-		};
 		use sp_arithmetic::traits::SaturatedConversion;
+		use sp_runtime::transaction_validity::TransactionValidityError;
 
 		let validity = self
 			.api

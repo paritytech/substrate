@@ -18,6 +18,7 @@
 use crate::{BlockHash, Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_runtime::{
 	generic::Era,
 	traits::{DispatchInfoOf, SignedExtension},
@@ -25,7 +26,6 @@ use sp_runtime::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
 };
-use sp_arithmetic::traits::SaturatedConversion;
 
 /// Check for transaction mortality.
 ///
