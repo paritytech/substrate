@@ -38,7 +38,7 @@ use futures::{
 	stream::{self, StreamExt},
 };
 use jsonrpsee::{
-	core::async_trait,
+	core::{async_trait, error::SubscriptionClosed},
 	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
@@ -216,12 +216,12 @@ where
 			.flatten();
 
 		let subscriptions = self.subscriptions.clone();
-		let sub_id_import = sub_id.clone();
+		let sub_id_finalized = sub_id.clone();
 
 		let stream_finalized =
 			self.client.finality_notification_stream().map(move |notification| {
 				// We might not receive all new blocks reports, also pin the block here.
-				let _ = subscriptions.pin_block(&sub_id_import, notification.hash.clone());
+				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash.clone());
 
 				FollowEvent::Finalized(Finalized {
 					finalized_block_hashes: notification.tree_route.iter().cloned().collect(),
@@ -251,8 +251,15 @@ where
 		})
 		.chain(merged);
 
+		let subscriptions = self.subscriptions.clone();
 		let fut = async move {
-			sink.pipe_from_stream(stream.boxed()).await;
+			if let SubscriptionClosed::Failed(_) = sink.pipe_from_stream(stream.boxed()).await {
+				// The subscription failed to pipe from the stream.
+				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
+			}
+
+			// The client disconnected or called the unsubscribe method.
+			subscriptions.remove_subscription(&sub_id);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
