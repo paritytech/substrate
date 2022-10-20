@@ -431,9 +431,9 @@ where
 		// Check that `parent_hash` is correct.
 		let n = header.number().clone();
 		assert!(
-			n > System::BlockNumber::zero()
-				&& <frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one())
-					== *header.parent_hash(),
+			n > System::BlockNumber::zero() &&
+				<frame_system::Pallet<System>>::block_hash(n - System::BlockNumber::one()) ==
+					*header.parent_hash(),
 			"Parent hash should be valid.",
 		);
 
@@ -1027,8 +1027,8 @@ mod tests {
 			.assimilate_storage(&mut t)
 			.unwrap();
 		let xt = TestXt::new(call_transfer(2, 69), sign_extra(1, 0, 0));
-		let weight = xt.get_dispatch_info().weight
-			+ <Runtime as frame_system::Config>::BlockWeights::get()
+		let weight = xt.get_dispatch_info().weight +
+			<Runtime as frame_system::Config>::BlockWeights::get()
 				.get(DispatchClass::Normal)
 				.base_extrinsic;
 		let fee: Balance =
@@ -1320,8 +1320,8 @@ mod tests {
 					Call::System(SystemCall::remark { remark: vec![1u8] }),
 					sign_extra(1, 0, 0),
 				);
-				let weight = xt.get_dispatch_info().weight
-					+ <Runtime as frame_system::Config>::BlockWeights::get()
+				let weight = xt.get_dispatch_info().weight +
+					<Runtime as frame_system::Config>::BlockWeights::get()
 						.get(DispatchClass::Normal)
 						.base_extrinsic;
 				let fee: Balance =
@@ -1571,10 +1571,9 @@ mod tests {
 			// Weights are recorded correctly
 			assert_eq!(
 				frame_system::Pallet::<Runtime>::block_weight().total(),
-				custom_runtime_upgrade_weight
-					+ runtime_upgrade_weight
-					+ on_initialize_weight
-					+ base_block_weight,
+				custom_runtime_upgrade_weight +
+					runtime_upgrade_weight +
+					on_initialize_weight + base_block_weight,
 			);
 		});
 	}

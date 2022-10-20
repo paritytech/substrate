@@ -22,10 +22,10 @@
 
 //! It does this by extending transactions to include an optional `AssetId` that specifies the asset
 //! to be used for payment (defaulting to the native token on `None`). It expects an
-//! [`OnChargeAssetTransaction`] implementation analogously to [`pallet-transaction-payment-mangata`]. The
-//! included [`FungiblesAdapter`] (implementing [`OnChargeAssetTransaction`]) determines the fee
-//! amount by converting the fee calculated by [`pallet-transaction-payment-mangata`] into the desired
-//! asset.
+//! [`OnChargeAssetTransaction`] implementation analogously to
+//! [`pallet-transaction-payment-mangata`]. The included [`FungiblesAdapter`] (implementing
+//! [`OnChargeAssetTransaction`]) determines the fee amount by converting the fee calculated by
+//! [`pallet-transaction-payment-mangata`] into the desired asset.
 //!
 //! ## Integration
 
@@ -127,8 +127,9 @@ pub mod pallet {
 /// Require the transactor pay for themselves and maybe include a tip to gain additional priority
 /// in the queue. Allows paying via both `Currency` as well as `fungibles::Balanced`.
 ///
-/// Wraps the transaction logic in [`pallet_transaction_payment_mangata`] and extends it with assets.
-/// An asset id of `None` falls back to the underlying transaction payment via the native currency.
+/// Wraps the transaction logic in [`pallet_transaction_payment_mangata`] and extends it with
+/// assets. An asset id of `None` falls back to the underlying transaction payment via the native
+/// currency.
 #[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct ChargeAssetTxPayment<T: Config> {
@@ -159,7 +160,9 @@ where
 		info: &DispatchInfoOf<T::Call>,
 		len: usize,
 	) -> Result<(BalanceOf<T>, InitialPayment<T>), TransactionValidityError> {
-		let fee = pallet_transaction_payment_mangata::Pallet::<T>::compute_fee(len as u32, info, self.tip);
+		let fee = pallet_transaction_payment_mangata::Pallet::<T>::compute_fee(
+			len as u32, info, self.tip,
+		);
 		debug_assert!(self.tip <= fee, "tip should be included in the computed fee");
 		if fee.is_zero() {
 			Ok((fee, InitialPayment::Nothing))
@@ -262,9 +265,10 @@ where
 					)?;
 				},
 				InitialPayment::Asset(already_withdrawn) => {
-					let actual_fee = pallet_transaction_payment_mangata::Pallet::<T>::compute_actual_fee(
-						len as u32, info, post_info, tip,
-					);
+					let actual_fee =
+						pallet_transaction_payment_mangata::Pallet::<T>::compute_actual_fee(
+							len as u32, info, post_info, tip,
+						);
 					T::OnChargeAssetTransaction::correct_and_deposit_fee(
 						&who,
 						info,
