@@ -64,7 +64,6 @@ use frame_support::{
 };
 use frame_system::{self as system, RawOrigin};
 use scale_info::TypeInfo;
-use sp_core::GetU16ToU32;
 use sp_io::hashing::blake2_256;
 use sp_runtime::{
 	traits::{Dispatchable, TrailingZeroInput, Zero},
@@ -166,7 +165,7 @@ pub mod pallet {
 
 		/// The maximum amount of signatories allowed in the multisig.
 		#[pallet::constant]
-		type MaxSignatories: Get<u16>;
+		type MaxSignatories: Get<u32>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -188,7 +187,7 @@ pub mod pallet {
 		T::AccountId,
 		Blake2_128Concat,
 		[u8; 32],
-		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId, GetU16ToU32<T::MaxSignatories>>,
+		Multisig<T::BlockNumber, BalanceOf<T>, T::AccountId, T::MaxSignatories>,
 	>;
 
 	#[pallet::error]

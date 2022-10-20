@@ -21,13 +21,13 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 
 # third party
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-core = { version = "6.0.0", path = "../../primitives/core" }
 
 [features]
 default = ["std"]
@@ -37,7 +37,6 @@ std = [
 	"frame-support/std",
 	"frame-system/std",
 	"scale-info/std",
-	"sp-core/std",
 	"sp-io/std",
 	"sp-runtime/std",
 	"sp-std/std",
