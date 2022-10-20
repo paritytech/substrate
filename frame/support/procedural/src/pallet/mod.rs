@@ -39,9 +39,11 @@ pub fn pallet(
 	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
+	let mut dev_mode = false;
 	if !attr.is_empty() {
 		if let Ok(_) = syn::parse::<keyword::dev_mode>(attr.clone()) {
 			println!("dev mode detected!");
+			dev_mode = true;
 		} else {
 			let msg = "Invalid pallet macro call: unexpected attribute. Macro call must be \
 				bare, such as `#[frame_support::pallet]` or `#[pallet]`, or must specify the \
@@ -54,7 +56,10 @@ pub fn pallet(
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
 	match parse::Def::try_from(item) {
-		Ok(def) => expand::expand(def).into(),
+		Ok(mut def) => {
+			def.dev_mode = dev_mode;
+			expand::expand(def).into()
+		},
 		Err(e) => e.to_compile_error().into(),
 	}
 }

@@ -59,6 +59,7 @@ pub struct Def {
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
+	pub dev_mode: bool,
 }
 
 impl Def {
@@ -173,6 +174,7 @@ impl Def {
 			type_values,
 			frame_system,
 			frame_support,
+			dev_mode: false,
 		};
 
 		def.check_instance_usage()?;
