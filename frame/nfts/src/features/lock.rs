@@ -24,10 +24,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		lock_config: CollectionConfigFor<T, I>,
 	) -> DispatchResult {
-		let details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(origin == details.freezer, Error::<T, I>::NoPermission);
-
+		ensure!(
+			Self::has_role(&collection, &origin, CollectionRole::Freezer),
+			Error::<T, I>::NoPermission
+		);
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
 
@@ -54,9 +54,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 	) -> DispatchResult {
-		let collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+		ensure!(
+			Self::has_role(&collection, &origin, CollectionRole::Freezer),
+			Error::<T, I>::NoPermission
+		);
 
 		let mut config = Self::get_item_config(&collection, &item)?;
 		if !config.has_disabled_setting(ItemSetting::Transferable) {
@@ -73,9 +74,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		collection: T::CollectionId,
 		item: T::ItemId,
 	) -> DispatchResult {
-		let collection_details =
-			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-		ensure!(collection_details.freezer == origin, Error::<T, I>::NoPermission);
+		ensure!(
+			Self::has_role(&collection, &origin, CollectionRole::Freezer),
+			Error::<T, I>::NoPermission
+		);
 
 		let mut config = Self::get_item_config(&collection, &item)?;
 		if config.has_disabled_setting(ItemSetting::Transferable) {
