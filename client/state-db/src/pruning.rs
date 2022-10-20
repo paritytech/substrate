@@ -117,7 +117,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		window_size: u32,
 	) -> Result<DeathRowQueue<BlockHash, Key, D>, Error<D::Error>> {
 		// limit the cache capacity from 1 to `DEFAULT_MAX_BLOCK_CONSTRAINT`
-		let cache_capacity = window_size.max(1).min(DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
+		let cache_capacity = window_size.clamp(1, DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
 		let mut cache = VecDeque::with_capacity(cache_capacity);
 		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
 		// Load block from db
