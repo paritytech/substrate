@@ -19,7 +19,14 @@
 //! Blockchain API backend for full nodes.
 
 use crate::{
-	chain_head::{api::ChainHeadApiServer, subscription::SubscriptionManagement},
+	chain_head::{
+		api::ChainHeadApiServer,
+		event::{
+			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
+			Initialized, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+		},
+		subscription::SubscriptionManagement,
+	},
 	SubscriptionTaskExecutor,
 };
 use serde::{Deserialize, Serialize};
@@ -35,7 +42,14 @@ use futures::{
 	future::{self, FutureExt},
 	stream::{self, Stream, StreamExt},
 };
-use jsonrpsee::{core::async_trait, types::SubscriptionResult, SubscriptionSink};
+use jsonrpsee::{
+	core::async_trait,
+	types::{
+		error::{ErrorObject, PARSE_ERROR_CODE},
+		SubscriptionEmptyError, SubscriptionResult,
+	},
+	SubscriptionSink,
+};
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageData, StorageKey,
 	StorageProvider,
@@ -55,17 +69,14 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	client: Arc<Client>,
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
-
 	/// Keep track of the pinned blocks for each subscription.
 	subscriptions: Arc<SubscriptionManagement<Block>>,
-
-	// pinned_blocks: Arc<Mutex<Vec<T>>>,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<(Block, BE)>,
 }
 
 impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
-	/// Creates a new [`ChainHead`].
+	/// Create a new [`ChainHead`].
 	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
 		Self {
 			client,
@@ -73,6 +84,82 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			_phantom: PhantomData,
 		}
+	}
+
+	/// Accept the subscription and return the subscription ID on success.
+	///
+	/// Also keep track of the subscription ID internally.
+	fn accept_subscription(
+		&self,
+		sink: &mut SubscriptionSink,
+	) -> Result<String, SubscriptionEmptyError> {
+		// The subscription must be accepted before it can provide a valid subscription ID.
+		sink.accept()?;
+
+		// TODO: Jsonrpsee needs release + merge in substrate
+		// let sub_id = match sink.subscription_id() {
+		// 	Some(id) => id,
+		// 	// This can only happen if the subscription was not accepted.
+		// 	None => {
+		// 		let err = ErrorObject::owned(PARSE_ERROR_CODE, "invalid subscription ID", None);
+		// 		sink.close(err);
+		// 		return Err(SubscriptionEmptyError)
+		// 	}
+		// };
+		// // Get the string representation for the subscription.
+		// let sub_id = match serde_json::to_string(&sub_id) {
+		// 	Ok(sub_id) => sub_id,
+		// 	Err(err) => {
+		// 		sink.close(err);
+		// 		return Err(SubscriptionEmptyError)
+		// 	},
+		// };
+
+		let sub_id: String = "A".into();
+		Ok(sub_id)
+	}
+}
+
+fn generate_runtime_event<Client, Block>(
+	client: &Arc<Client>,
+	runtime_updates: bool,
+	block: &BlockId<Block>,
+	parent: Option<&BlockId<Block>>,
+) -> Option<RuntimeEvent>
+where
+	Block: BlockT + 'static,
+	Client: CallApiAt<Block> + 'static,
+{
+	// No runtime versions should be reported.
+	if runtime_updates {
+		return None
+	}
+
+	// Helper for uniform conversions on errors.
+	let to_event_err =
+		|err| Some(RuntimeEvent::Invalid(ErrorEvent { error: format!("Api error: {}", err) }));
+
+	let block_rt = match client.runtime_version_at(block) {
+		Ok(rt) => rt,
+		Err(err) => return to_event_err(err),
+	};
+
+	let parent = match parent {
+		Some(parent) => parent,
+		// Nothing to compare against, always report.
+		None => return Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: block_rt })),
+	};
+
+	let parent_rt = match client.runtime_version_at(parent) {
+		Ok(rt) => rt,
+		Err(err) => return to_event_err(err),
+	};
+
+	// Report the runtime version change.
+	if block_rt != parent_rt {
+		Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: block_rt }))
+	} else {
+		None
 	}
 }
 
@@ -97,52 +184,32 @@ where
 		mut sink: SubscriptionSink,
 		runtime_updates: bool,
 	) -> SubscriptionResult {
-		// TODO: get this from jsonrpsee
-		let sub_id = "A0".to_string();
+		let sub_id = self.accept_subscription(&mut sink)?;
+		// Keep track of the subscription.
+		self.subscriptions.insert_subscription(sub_id.clone());
 
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
-		self.subscriptions.insert_subscription(sub_id.clone());
-
 		let sub_id_import = sub_id.clone();
-
 		let stream_import = self
 			.client
 			.import_notification_stream()
 			.map(move |notification| {
-				let new_runtime = if runtime_updates {
-					match (
-						client.runtime_version_at(&BlockId::Hash(notification.hash)),
-						client
-							.runtime_version_at(&BlockId::Hash(*notification.header.parent_hash())),
-					) {
-						(Ok(spec), Ok(parent_spec)) =>
-							if spec != parent_spec {
-								Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec }))
-							} else {
-								None
-							},
-						(Err(err), _) | (_, Err(err)) =>
-							Some(RuntimeEvent::Invalid(RuntimeErrorEvent {
-								error: format!("Api error: {}", err),
-							})),
-					}
-				} else {
-					None
-				};
+				let new_runtime = generate_runtime_event(
+					&client,
+					runtime_updates,
+					&BlockId::Hash(notification.hash),
+					Some(&BlockId::Hash(*notification.header.parent_hash())),
+				);
 
-				println!("\n - PINNING: {:?} - {:?}", sub_id_import, notification.hash);
-
-				if let Err(_) = subscriptions.pin_block(&sub_id_import, notification.hash.clone()) {
-					println!("\n - PINNING: {:?} - {:?} FAILED", sub_id_import, notification.hash);
-					// TODO: signal drop error.
-				}
+				subscriptions.pin_block(&sub_id_import, notification.hash.clone());
 
 				let new_block = FollowEvent::NewBlock(NewBlock {
 					block_hash: notification.hash,
-					parent_hash: *notification.header.parent_hash(),
+					parent_block_hash: *notification.header.parent_hash(),
 					new_runtime,
+					runtime_updates,
 				});
 
 				if !notification.is_new_best {
@@ -163,36 +230,34 @@ where
 
 		let stream_finalized =
 			self.client.finality_notification_stream().map(move |notification| {
-				// We might not receive all new blocks reports, therefore we make sure to include it
-				// here.
-				if let Err(_) = subscriptions.pin_block(&sub_id_import, notification.hash.clone()) {
-					// TODO: signal drop error.
-				}
+				// We might not receive all new blocks reports, also pin the block here.
+				subscriptions.pin_block(&sub_id_import, notification.hash.clone());
 
-				FollowEvent::Finalized(Finalized { block_hash: notification.hash })
+				FollowEvent::Finalized(Finalized {
+					finalized_block_hashes: notification.tree_route.iter().cloned().collect(),
+					pruned_block_hashes: notification.stale_heads.iter().cloned().collect(),
+				})
 			});
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 
 		// The initialized event is the first one sent.
 		let finalized_block_hash = self.client.info().finalized_hash;
-		let finalized_block_runtime = if runtime_updates {
-			Some(match self.client.runtime_version_at(&BlockId::Hash(finalized_block_hash)) {
-				Ok(spec) => RuntimeEvent::Valid(RuntimeVersionEvent { spec }),
-				Err(err) => RuntimeEvent::Invalid(RuntimeErrorEvent {
-					error: format!("Api error: {}", err),
-				}),
-			})
-		} else {
-			None
-		};
+		let finalized_block_runtime = generate_runtime_event(
+			&self.client,
+			runtime_updates,
+			&BlockId::Hash(finalized_block_hash),
+			None,
+		);
 
-		if let Err(_) = self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone()) {
-			// TODO: signal drop error.
-		}
+		self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone());
 
 		let stream = stream::once(async move {
-			FollowEvent::Initialized(Initialized { finalized_block_hash, finalized_block_runtime })
+			FollowEvent::Initialized(Initialized {
+				finalized_block_hash,
+				finalized_block_runtime,
+				runtime_updates,
+			})
 		})
 		.chain(merged);
 
@@ -204,7 +269,6 @@ where
 		Ok(())
 	}
 
-	// mut sink: SubscriptionSink, runtime_updates: bool) -> SubscriptionResult {
 	fn chainHead_unstable_body(
 		&self,
 		mut sink: SubscriptionSink,
@@ -212,20 +276,18 @@ where
 		hash: Block::Hash,
 		network_config: Option<()>,
 	) -> SubscriptionResult {
-		// TODO: get this from jsonrpsee
-		let sub_id = "A0".to_string();
-
-		// let res = match self.client.block(&BlockId::hash(hash)) {
-		// 	Ok(Some(block)) => BodyEvent::Done(block),
-		// 	_ => BodyEvent::<SignedBlock<Block>>::Inaccessible,
-		// };
-
-		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
-			BodyEvent::<SignedBlock<Block>>::Disjoint
+		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
+			ChainHeadEvent::<SignedBlock<Block>>::Disjoint
 		} else {
 			match self.client.block(&BlockId::Hash(hash)) {
-				Ok(Some(block)) => BodyEvent::Done(block),
-				_ => BodyEvent::<SignedBlock<Block>>::Inaccessible,
+				Ok(Some(block)) => ChainHeadEvent::Done(ChainHeadResult { result: block }),
+				// TODO: Trigger event::stop for the follow subscription.
+				Ok(None) => ChainHeadEvent::<SignedBlock<Block>>::Inaccessible(ErrorEvent {
+					error: format!("Block hash not available"),
+				}),
+				Err(error) => ChainHeadEvent::<SignedBlock<Block>>::Inaccessible(ErrorEvent {
+					error: error.to_string(),
+				}),
 			}
 		};
 
@@ -246,15 +308,18 @@ where
 		key: StorageKey,
 		network_config: Option<()>,
 	) -> SubscriptionResult {
-		// TODO: get this from jsonrpsee
-		let sub_id = "A0".to_string();
-
-		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
-			BodyEvent::<StorageData>::Disjoint
+		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
+			ChainHeadEvent::<StorageData>::Disjoint
 		} else {
 			match self.client.storage(&hash, &key) {
-				Ok(Some(block)) => BodyEvent::Done(block),
-				_ => BodyEvent::<StorageData>::Inaccessible,
+				Ok(Some(storage)) => ChainHeadEvent::Done(ChainHeadResult { result: storage }),
+				// TODO: Trigger event::stop for the follow subscription.
+				Ok(None) => ChainHeadEvent::<StorageData>::Inaccessible(ErrorEvent {
+					error: format!("Block hash not available"),
+				}),
+				Err(error) => ChainHeadEvent::<StorageData>::Inaccessible(ErrorEvent {
+					error: error.to_string(),
+				}),
 			}
 		};
 
@@ -276,11 +341,8 @@ where
 		call_parameters: Bytes,
 		network_config: Option<()>,
 	) -> SubscriptionResult {
-		// TODO: get this from jsonrpsee
-		let sub_id = "A0".to_string();
-
-		let res = if self.subscriptions.contains(&sub_id, &hash).is_err() {
-			BodyEvent::<Vec<u8>>::Disjoint
+		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
+			ChainHeadEvent::<Vec<u8>>::Disjoint
 		} else {
 			match self.client.executor().call(
 				&BlockId::Hash(hash),
@@ -289,8 +351,9 @@ where
 				self.client.execution_extensions().strategies().other,
 				None,
 			) {
-				Ok(res) => BodyEvent::Done(res),
-				_ => BodyEvent::<Vec<u8>>::Inaccessible,
+				Ok(result) => ChainHeadEvent::Done(ChainHeadResult { result }),
+				Err(error) =>
+					ChainHeadEvent::<Vec<u8>>::Inaccessible(ErrorEvent { error: error.to_string() }),
 			}
 		};
 
@@ -302,80 +365,4 @@ where
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
-}
-
-/// The transaction could not be processed due to an error.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeErrorEvent {
-	/// Reason of the error.
-	pub error: String,
-}
-
-/// The transaction could not be processed due to an error.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RuntimeVersionEvent {
-	/// Reason of the error.
-	pub spec: RuntimeVersion,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(tag = "type")]
-pub enum RuntimeEvent {
-	Valid(RuntimeVersionEvent),
-	Invalid(RuntimeErrorEvent),
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Initialized<Hash> {
-	/// The hash of the imported block.
-	pub finalized_block_hash: Hash,
-	pub finalized_block_runtime: Option<RuntimeEvent>,
-}
-
-/// The transaction was included in a block of the chain.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NewBlock<Hash> {
-	/// The hash of the imported block.
-	pub block_hash: Hash,
-	/// The parent hash of the imported block.
-	pub parent_hash: Hash,
-	pub new_runtime: Option<RuntimeEvent>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BestBlockChanged<Hash> {
-	pub best_block_hash: Hash,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Finalized<Hash> {
-	/// The hash of the finalized block.
-	pub block_hash: Hash,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(tag = "event")]
-pub enum FollowEvent<Hash> {
-	Initialized(Initialized<Hash>),
-	NewBlock(NewBlock<Hash>),
-	BestBlockChanged(BestBlockChanged<Hash>),
-	Finalized(Finalized<Hash>),
-	Stop,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(tag = "event", content = "value")]
-pub enum BodyEvent<Body> {
-	Done(Body),
-	Inaccessible,
-	Disjoint,
 }

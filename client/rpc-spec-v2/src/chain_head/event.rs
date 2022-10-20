@@ -52,7 +52,7 @@ pub struct Initialized<Hash> {
 	pub finalized_block_hash: Hash,
 	pub finalized_block_runtime: Option<RuntimeEvent>,
 	#[serde(default)]
-	runtime_updates: bool,
+	pub(crate) runtime_updates: bool,
 }
 
 impl<Hash: Serialize> Serialize for Initialized<Hash> {
@@ -83,7 +83,7 @@ pub struct NewBlock<Hash> {
 	pub parent_block_hash: Hash,
 	pub new_runtime: Option<RuntimeEvent>,
 	#[serde(default)]
-	runtime_updates: bool,
+	pub(crate) runtime_updates: bool,
 }
 
 impl<Hash: Serialize> Serialize for NewBlock<Hash> {

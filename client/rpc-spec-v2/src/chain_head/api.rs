@@ -17,9 +17,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! API trait of the chain head.
-use crate::chain_head::chain_head::{BodyEvent, FollowEvent};
+use crate::chain_head::event::{ChainHeadEvent, FollowEvent};
 use jsonrpsee::proc_macros::rpc;
-use sc_client_api::StorageKey;
+use sc_client_api::{StorageData, StorageKey};
 use sp_core::Bytes;
 
 #[rpc(client, server)]
@@ -35,14 +35,10 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	)]
 	fn chain_head_unstable_follow(&self, runtime_updates: bool);
 
-	// /// Unfollow `chain_head_unstable_follow`.
-	// #[method(name = "chainHead_unstable_unfollow")]
-	// fn chain_head_unstable_follow(&self, follow_subscription: String);
-
 	#[subscription(
 		name = "chainHead_unstable_body" => "chainHead_unstable_getBody",
 		unsubscribe = "chainHead_unstable_stopBody",
-		item = BodyEvent<Header>,
+		item = ChainHeadEvent<SignedBlock>,
 	)]
 	fn chainHead_unstable_body(
 		&self,
@@ -54,7 +50,7 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chainHead_unstable_storage" => "chainHead_unstable_queryStorage",
 		unsubscribe = "chainHead_unstable_stopStorage",
-		item = FollowEvent<Header>,
+		item = ChainHeadEvent<StorageData>,
 	)]
 	fn chainHead_unstable_storage(
 		&self,
@@ -67,7 +63,7 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chainHead_unstable_call" => "chainHead_unstable_runtimeCall",
 		unsubscribe = "chainHead_unstable_stopCall",
-		item = FollowEvent<Header>,
+		item = ChainHeadEvent<Vec<u8>>,
 	)]
 	fn chainHead_unstable_call(
 		&self,
