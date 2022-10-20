@@ -66,11 +66,11 @@ pub mod weights;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use sp_arithmetic::Permill;
 use sp_runtime::{
 	traits::{AccountIdConversion, Saturating, StaticLookup, Zero},
 	RuntimeDebug,
 };
-use sp_arithmetic::Permill;
 use sp_std::prelude::*;
 
 use frame_support::{

@@ -265,14 +265,14 @@ use rand_chacha::{
 	ChaChaRng,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::Percent;
 use sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedSub, Hash, IntegerSquareRoot, Saturating, StaticLookup,
 		TrailingZeroInput, Zero,
 	},
-	 RuntimeDebug,
+	RuntimeDebug,
 };
-use sp_arithmetic::Percent;
 use sp_std::prelude::*;
 
 pub use pallet::*;

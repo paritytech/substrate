@@ -19,13 +19,13 @@
 
 #![cfg(test)]
 
+use sp_arithmetic::{Perbill, Permill};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
-	BuildStorage
+	BuildStorage,
 };
-use sp_arithmetic::{Perbill, Permill};
 use sp_storage::Storage;
 
 use frame_support::{

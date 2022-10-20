@@ -40,10 +40,8 @@ use codec::{Encode, MaxEncodedLen};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::weights::Weight;
 use frame_system::RawOrigin;
-use sp_runtime::{
-	traits::{Bounded, Hash},
-};
 use sp_arithmetic::Perbill;
+use sp_runtime::traits::{Bounded, Hash};
 use sp_std::prelude::*;
 use wasm_instrument::parity_wasm::elements::{BlockType, BrTableData, Instruction, ValueType};
 

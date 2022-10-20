@@ -39,6 +39,7 @@ use sp_std::prelude::*;
 
 use codec::{self as codec, Decode, Encode};
 use frame_support::traits::{Get, KeyOwnerProofSystem};
+use sp_arithmetic::Perbill;
 use sp_finality_grandpa::{EquivocationProof, RoundNumber, SetId};
 use sp_runtime::{
 	transaction_validity::{
@@ -47,7 +48,6 @@ use sp_runtime::{
 	},
 	DispatchResult,
 };
-use sp_arithmetic::Perbill;
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,

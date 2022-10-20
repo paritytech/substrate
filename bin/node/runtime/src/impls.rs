@@ -117,13 +117,6 @@ impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider
 
 #[cfg(test)]
 mod multiplier_tests {
-	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
-	use sp_runtime::{
-		assert_eq_error_rate,
-		traits::{Convert, One, Zero},
-
-	};
-	use sp_arithmetic::FixedPointNumber;
 	use crate::{
 		constants::{currency::*, time::*},
 		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,
@@ -132,6 +125,12 @@ mod multiplier_tests {
 	use frame_support::{
 		dispatch::DispatchClass,
 		weights::{Weight, WeightToFee},
+	};
+	use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
+	use sp_arithmetic::FixedPointNumber;
+	use sp_runtime::{
+		assert_eq_error_rate,
+		traits::{Convert, One, Zero},
 	};
 
 	fn max_normal() -> Weight {

@@ -126,11 +126,11 @@ use frame_support::{
 	weights::Weight,
 	Parameter,
 };
+use sp_arithmetic::Permill;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Convert, Member, One, OpaqueKeys, Zero},
 	ConsensusEngineId, KeyTypeId, RuntimeAppPublic,
 };
-use sp_arithmetic::Permill;
 use sp_staking::SessionIndex;
 use sp_std::{
 	marker::PhantomData,

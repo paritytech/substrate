@@ -20,13 +20,12 @@ use frame_support::{
 	traits::{ConstU32, ConstU64},
 	weights::Weight,
 };
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-
 };
-use sp_arithmetic::Perbill;
 
 #[frame_support::pallet]
 mod module {

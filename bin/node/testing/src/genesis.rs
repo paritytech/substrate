@@ -24,8 +24,8 @@ use kitchensink_runtime::{
 	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
 	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
-use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 use sp_arithmetic::Perbill;
+use sp_keyring::{Ed25519Keyring, Sr25519Keyring};
 
 /// Create genesis runtime configuration for tests.
 pub fn config(code: Option<&[u8]>) -> GenesisConfig {

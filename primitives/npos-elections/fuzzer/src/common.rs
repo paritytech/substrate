@@ -21,8 +21,8 @@
 #![allow(dead_code)]
 
 use rand::{self, seq::SliceRandom, Rng, RngCore};
-use sp_npos_elections::{phragmms, seq_phragmen, BalancingConfig, ElectionResult, VoteWeight};
 use sp_arithmetic::Perbill;
+use sp_npos_elections::{phragmms, seq_phragmen, BalancingConfig, ElectionResult, VoteWeight};
 use std::collections::{BTreeMap, HashSet};
 
 /// converts x into the range [a, b] in a pseudo-fair way.

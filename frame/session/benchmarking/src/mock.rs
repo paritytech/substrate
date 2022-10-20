@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use frame_election_provider_support::{onchain, SequentialPhragmen, sp_arithmetic};
+use frame_election_provider_support::{onchain, sp_arithmetic, SequentialPhragmen};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},

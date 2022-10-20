@@ -28,11 +28,8 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{Currency, CurrencyToVote, Get, Imbalance},
 };
-use sp_runtime::{
-	traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero},
-
-};
 use sp_arithmetic::{Perbill, Percent};
+use sp_runtime::traits::{Bounded, One, StaticLookup, TrailingZeroInput, Zero};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 

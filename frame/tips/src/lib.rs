@@ -60,11 +60,11 @@ mod tests;
 pub mod migrations;
 pub mod weights;
 
+use sp_arithmetic::Percent;
 use sp_runtime::{
 	traits::{AccountIdConversion, BadOrigin, Hash, StaticLookup, TrailingZeroInput, Zero},
 	RuntimeDebug,
 };
-use sp_arithmetic::Percent;
 use sp_std::prelude::*;
 
 use codec::{Decode, Encode};

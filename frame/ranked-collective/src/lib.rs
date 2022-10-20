@@ -42,13 +42,12 @@
 #![recursion_limit = "128"]
 
 use scale_info::TypeInfo;
-use sp_arithmetic::traits::Saturating;
+use sp_arithmetic::{traits::Saturating, Perbill};
 use sp_runtime::{
 	traits::{Convert, StaticLookup},
 	ArithmeticError::Overflow,
 	RuntimeDebug,
 };
-use sp_arithmetic::Perbill;
 use sp_std::{marker::PhantomData, prelude::*};
 
 use frame_support::{

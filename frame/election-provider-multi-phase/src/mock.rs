@@ -31,6 +31,7 @@ use frame_support::{
 };
 use multi_phase::unsigned::{IndexAssignmentOf, VoterOf};
 use parking_lot::RwLock;
+use sp_arithmetic::PerU16;
 use sp_core::{
 	offchain::{
 		testing::{PoolState, TestOffchainExt, TestTransactionPoolExt},
@@ -45,9 +46,7 @@ use sp_npos_elections::{
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-
 };
-use sp_arithmetic::PerU16;
 use std::sync::Arc;
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;

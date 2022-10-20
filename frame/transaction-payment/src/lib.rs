@@ -50,6 +50,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
+use sp_arithmetic::{FixedPointNumber, FixedPointOperand, FixedU128, Perquintill};
 use sp_runtime::{
 	traits::{
 		Convert, DispatchInfoOf, Dispatchable, One, PostDispatchInfoOf, SaturatedConversion,
@@ -58,9 +59,8 @@ use sp_runtime::{
 	transaction_validity::{
 		TransactionPriority, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
-	 RuntimeDebug,
+	RuntimeDebug,
 };
-use sp_arithmetic::{FixedPointNumber, FixedPointOperand, FixedU128, Perquintill};
 use sp_std::prelude::*;
 
 use frame_support::{

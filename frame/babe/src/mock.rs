@@ -25,6 +25,7 @@ use frame_support::{
 	traits::{ConstU128, ConstU32, ConstU64, GenesisBuild, KeyOwnerProofSystem, OnInitialize},
 };
 use pallet_session::historical as pallet_session_historical;
+use sp_arithmetic::Perbill;
 use sp_consensus_babe::{AuthorityId, AuthorityPair, Slot};
 use sp_consensus_vrf::schnorrkel::{VRFOutput, VRFProof};
 use sp_core::{
@@ -37,9 +38,7 @@ use sp_runtime::{
 	impl_opaque_keys,
 	testing::{Digest, DigestItem, Header, TestXt},
 	traits::{Header as _, IdentityLookup, OpaqueKeys},
-
 };
-use sp_arithmetic::Perbill;
 use sp_staking::{EraIndex, SessionIndex};
 
 type DummyValidatorId = u64;

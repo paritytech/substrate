@@ -22,8 +22,8 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{fungible, tokens::BalanceConversion},
 };
-use sp_runtime::traits::Convert;
 use sp_arithmetic::{FixedPointNumber, FixedPointOperand, FixedU128};
+use sp_runtime::traits::Convert;
 
 pub(super) type DepositBalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;

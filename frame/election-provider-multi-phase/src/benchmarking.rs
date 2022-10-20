@@ -27,8 +27,7 @@ use frame_support::{
 };
 use frame_system::RawOrigin;
 use rand::{prelude::SliceRandom, rngs::SmallRng, SeedableRng};
-use sp_arithmetic::{per_things::Percent, traits::One};
-use sp_arithmetic::InnerOf;
+use sp_arithmetic::{per_things::Percent, traits::One, InnerOf};
 
 const SEED: u32 = 999;
 

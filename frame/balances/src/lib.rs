@@ -180,14 +180,14 @@ use frame_support::{
 };
 use frame_system as system;
 use scale_info::TypeInfo;
+use sp_arithmetic::FixedPointOperand;
 use sp_runtime::{
 	traits::{
 		AtLeast32BitUnsigned, Bounded, CheckedAdd, CheckedSub, MaybeSerializeDeserialize,
 		Saturating, StaticLookup, Zero,
 	},
-	ArithmeticError, DispatchError, RuntimeDebug
+	ArithmeticError, DispatchError, RuntimeDebug,
 };
-use sp_arithmetic::FixedPointOperand;
 use sp_std::{cmp, fmt::Debug, mem, ops::BitOr, prelude::*, result};
 pub use weights::WeightInfo;
 

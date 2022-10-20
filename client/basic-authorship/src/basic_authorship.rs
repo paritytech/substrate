@@ -33,6 +33,7 @@ use sc_client_api::backend;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_INFO};
 use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_arithmetic::{traits::SaturatedConversion, Percent};
 use sp_blockchain::{ApplyExtrinsicFailed::Validity, Error::ApplyExtrinsicFailed, HeaderBackend};
 use sp_consensus::{DisableProofRecording, EnableProofRecording, ProofRecording, Proposal};
 use sp_core::traits::SpawnNamed;
@@ -40,9 +41,8 @@ use sp_inherents::InherentData;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{BlakeTwo256, Block as BlockT, Hash as HashT, Header as HeaderT},
-	Digest
+	Digest,
 };
-use sp_arithmetic::{traits::SaturatedConversion, Percent};
 use std::{marker::PhantomData, pin::Pin, sync::Arc, time};
 
 use prometheus_endpoint::Registry as PrometheusRegistry;

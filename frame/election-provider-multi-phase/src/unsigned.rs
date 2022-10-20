@@ -26,6 +26,7 @@ use frame_election_provider_support::{NposSolution, NposSolver, PerThing128, Vot
 use frame_support::{dispatch::DispatchResult, ensure, traits::Get, BoundedVec};
 use frame_system::offchain::SubmitTransaction;
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, assignment_staked_to_ratio_normalized, ElectionResult,
 	ElectionScore,
@@ -34,7 +35,6 @@ use sp_runtime::{
 	offchain::storage::{MutateStorageError, StorageValueRef},
 	DispatchError,
 };
-use sp_arithmetic::traits::SaturatedConversion;
 use sp_std::prelude::*;
 
 /// Storage key used to store the last block number at which offchain worker ran.
@@ -1065,13 +1065,13 @@ mod tests {
 	use frame_support::{
 		assert_noop, assert_ok, bounded_vec, dispatch::Dispatchable, traits::OffchainWorker,
 	};
+	use sp_arithmetic::{PerU16, Perbill};
 	use sp_npos_elections::ElectionScore;
 	use sp_runtime::{
 		offchain::storage_lock::{BlockAndTime, StorageLock},
 		traits::ValidateUnsigned,
-		ModuleError
+		ModuleError,
 	};
-	use sp_arithmetic::{Perbill, PerU16};
 	type Assignment = crate::unsigned::Assignment<Runtime>;
 
 	#[test]

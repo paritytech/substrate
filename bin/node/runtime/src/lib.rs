@@ -57,6 +57,7 @@ use pallet_session::historical::{self as pallet_session_historical};
 pub use pallet_transaction_payment::{CurrencyAdapter, Multiplier, TargetedFeeAdjustment};
 use pallet_transaction_payment::{FeeDetails, RuntimeDispatchInfo};
 use sp_api::impl_runtime_apis;
+use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill};
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_inherents::{CheckInherentsResult, InherentData};
@@ -71,7 +72,6 @@ use sp_runtime::{
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult,
 };
-use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Percent, Permill, Perquintill};
 use sp_std::prelude::*;
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
@@ -2219,8 +2219,8 @@ mod tests {
 	use frame_election_provider_support::NposSolution;
 	use frame_support::traits::WhitelistedStorageKeys;
 	use frame_system::offchain::CreateSignedTransaction;
-	use sp_core::hexdisplay::HexDisplay;
 	use sp_arithmetic::UpperOf;
+	use sp_core::hexdisplay::HexDisplay;
 	use std::collections::HashSet;
 
 	#[test]

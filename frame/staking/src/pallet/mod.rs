@@ -30,11 +30,8 @@ use frame_support::{
 	BoundedVec,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use sp_runtime::{
-	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-
-};
 use sp_arithmetic::{Perbill, Percent};
+use sp_runtime::traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero};
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::prelude::*;
 

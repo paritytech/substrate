@@ -108,12 +108,12 @@ use frame_support::{
 	weights::Weight,
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::Perbill;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
 	DispatchError, RuntimeDebug,
 };
-use sp_arithmetic::Perbill;
 use sp_std::{cmp::Ordering, prelude::*};
 
 mod benchmarking;

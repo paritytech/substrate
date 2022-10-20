@@ -23,15 +23,14 @@ use frame_support::{
 	traits::{ConstU16, ConstU32, ConstU64, GenesisBuild},
 	BasicExternalities,
 };
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	app_crypto::ecdsa::Public,
 	impl_opaque_keys,
 	testing::Header,
 	traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys},
-
 };
-use sp_arithmetic::Perbill;
 
 use crate as pallet_beefy;
 

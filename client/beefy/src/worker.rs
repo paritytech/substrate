@@ -36,16 +36,14 @@ use sc_network_common::{
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
+use sp_arithmetic::traits::{AtLeast32Bit, SaturatedConversion, Saturating};
 use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
 	traits::{Block, Header, NumberFor},
-
 };
-use sp_arithmetic::traits::SaturatedConversion;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},

@@ -29,11 +29,9 @@ use frame_support::{
 	DefaultNoBound, RuntimeDebugNoBound,
 };
 use pallet_contracts_primitives::StorageDeposit as Deposit;
-use sp_core::crypto::UncheckedFrom;
-use sp_runtime::{
-	traits::{Saturating, Zero},
-};
 use sp_arithmetic::{FixedPointNumber, FixedU128};
+use sp_core::crypto::UncheckedFrom;
+use sp_runtime::traits::{Saturating, Zero};
 use sp_std::{marker::PhantomData, vec::Vec};
 
 /// Deposit that uses the native currency's balance type.

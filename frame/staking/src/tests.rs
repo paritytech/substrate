@@ -27,12 +27,11 @@ use frame_support::{
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
+use sp_arithmetic::{Perbill, Percent, Rounding};
 use sp_runtime::{
 	assert_eq_error_rate,
 	traits::{BadOrigin, Dispatchable},
-
 };
-use sp_arithmetic::{Perbill, Percent, Rounding};
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
 	SessionIndex,
@@ -5410,8 +5409,12 @@ fn proportional_ledger_slash_works() {
 	// Then
 	// The amount slashed out of `unit`
 	let affected_balance = value + unit * 4;
-	let ratio =
-		sp_arithmetic::Perquintill::from_rational_with_rounding(slash, affected_balance, Rounding::Up).unwrap();
+	let ratio = sp_arithmetic::Perquintill::from_rational_with_rounding(
+		slash,
+		affected_balance,
+		Rounding::Up,
+	)
+	.unwrap();
 	// `unit` after the slash is applied
 	let unit_slashed = {
 		let unit_slash = ratio.mul_ceil(unit);

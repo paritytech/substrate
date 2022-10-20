@@ -34,15 +34,15 @@
 //! definition.
 
 use frame_support::traits::{Get, KeyOwnerProofSystem};
+use sp_arithmetic::Perbill;
 use sp_consensus_babe::{EquivocationProof, Slot};
 use sp_runtime::{
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchResult
+	DispatchResult,
 };
-use sp_arithmetic::Perbill;
 use sp_staking::{
 	offence::{Kind, Offence, OffenceError, ReportOffence},
 	SessionIndex,

@@ -243,8 +243,8 @@ use frame_support::{
 use frame_system::{ensure_none, offchain::SendTransactionTypes};
 use scale_info::TypeInfo;
 use sp_arithmetic::{
-	traits::{Bounded, CheckedAdd, Zero},
-	UpperOf,
+	traits::{Bounded, CheckedAdd, SaturatedConversion, Zero},
+	PerThing, Perbill, UpperOf,
 };
 use sp_npos_elections::{
 	assignment_ratio_to_staked_normalized, ElectionScore, EvaluateSupport, Supports, VoteWeight,
@@ -254,11 +254,7 @@ use sp_runtime::{
 		InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
 		TransactionValidityError, ValidTransaction,
 	},
-	DispatchError, ModuleError,RuntimeDebug,
-};
-use sp_arithmetic::{
-	traits::SaturatedConversion,
-	PerThing, Perbill
+	DispatchError, ModuleError, RuntimeDebug,
 };
 use sp_std::prelude::*;
 

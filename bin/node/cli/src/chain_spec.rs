@@ -19,6 +19,7 @@
 //! Substrate chain configurations.
 
 use grandpa_primitives::AuthorityId as GrandpaId;
+pub use kitchensink_runtime::GenesisConfig;
 use kitchensink_runtime::{
 	constants::currency::*, wasm_binary_unwrap, AuthorityDiscoveryConfig, BabeConfig,
 	BalancesConfig, Block, CouncilConfig, DemocracyConfig, ElectionsConfig, GrandpaConfig,
@@ -26,21 +27,17 @@ use kitchensink_runtime::{
 	SessionKeys, SocietyConfig, StakerStatus, StakingConfig, SudoConfig, SystemConfig,
 	TechnicalCommitteeConfig,
 };
+pub use node_primitives::{AccountId, Balance, Signature};
 use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use sc_chain_spec::ChainSpecExtension;
 use sc_service::ChainType;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
+use sp_arithmetic::Perbill;
 use sp_authority_discovery::AuthorityId as AuthorityDiscoveryId;
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_core::{crypto::UncheckedInto, sr25519, Pair, Public};
-use sp_runtime::{
-	traits::{IdentifyAccount, Verify},
-
-};
-use sp_arithmetic::Perbill;
-pub use kitchensink_runtime::GenesisConfig;
-pub use node_primitives::{AccountId, Balance, Signature};
+use sp_runtime::traits::{IdentifyAccount, Verify};
 
 type AccountPublic = <Signature as Verify>::Signer;
 

@@ -18,13 +18,12 @@
 use crate::{self as pallet_example_parallel, *};
 
 use frame_support::parameter_types;
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-
 };
-use sp_arithmetic::Perbill;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 

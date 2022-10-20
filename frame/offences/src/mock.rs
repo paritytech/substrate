@@ -30,13 +30,12 @@ use frame_support::{
 		Weight,
 	},
 };
+use sp_arithmetic::Perbill;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-
 };
-use sp_arithmetic::Perbill;
 use sp_staking::{
 	offence::{self, DisableStrategy, Kind, OffenceDetails},
 	SessionIndex,

@@ -30,8 +30,8 @@ use frame_support::{
 	weights::{constants, Weight},
 };
 use scale_info::TypeInfo;
+use sp_arithmetic::Perbill;
 use sp_runtime::{traits::Bounded, RuntimeDebug};
-use sp_arithmetic::{Perbill};
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
 pub struct BlockLength {

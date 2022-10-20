@@ -17,12 +17,9 @@
 
 //! Provides some utilities to define a piecewise linear function.
 
-use crate::{
-	traits::{AtLeast32BitUnsigned, SaturatedConversion},
-
-};
-use sp_arithmetic::Perbill;
+use crate::traits::{AtLeast32BitUnsigned, SaturatedConversion};
 use core::ops::Sub;
+use sp_arithmetic::Perbill;
 
 /// Piecewise Linear function in [0, 1] -> [0, 1].
 #[derive(PartialEq, Eq, sp_core::RuntimeDebug)]

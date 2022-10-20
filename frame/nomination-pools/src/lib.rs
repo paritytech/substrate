@@ -280,14 +280,11 @@ use frame_support::{
 	transactional, CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
-use sp_core::U256;
-use sp_runtime::{
-	traits::{
-		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
-		Zero,
-	}
-};
 use sp_arithmetic::{FixedPointNumber, FixedPointOperand};
+use sp_core::U256;
+use sp_runtime::traits::{
+	AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero,
+};
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
 

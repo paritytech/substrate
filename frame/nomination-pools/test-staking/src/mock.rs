@@ -23,10 +23,8 @@ use frame_support::{
 	traits::{ConstU64, ConstU8},
 	PalletId,
 };
-use sp_runtime::{
-	traits::{Convert, IdentityLookup}
-};
 use sp_arithmetic::FixedU128;
+use sp_runtime::traits::{Convert, IdentityLookup};
 type AccountId = u128;
 type AccountIndex = u32;
 type BlockNumber = u64;

@@ -101,10 +101,7 @@ use sp_runtime::{
 	RuntimeDebug,
 };
 
-use sp_arithmetic::{
-	traits::SaturatedConversion,
-	PerThing, Perbill, Permill
-};
+use sp_arithmetic::{traits::SaturatedConversion, PerThing, Perbill, Permill};
 use sp_staking::{
 	offence::{Kind, Offence, ReportOffence},
 	SessionIndex,
