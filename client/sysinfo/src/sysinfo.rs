@@ -166,7 +166,7 @@ pub(crate) fn benchmark<E>(
 		}
 	}
 
-	let score = Throughput::from_mibs((size * count) as f64 / elapsed.as_secs_f64());
+	let score = Throughput::from_kibs((size * count) as f64 / (elapsed.as_secs_f64() * 1024.0));
 	log::trace!(
 		"Calculated {} of {} in {} iterations in {}ms",
 		name,
