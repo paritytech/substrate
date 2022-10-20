@@ -78,7 +78,12 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 	/// Mint some `item` to be owned by `who`.
 	///
 	/// By default, this is not a supported operation.
-	fn mint_into(_item: &Self::ItemId, _who: &AccountId, _config: &ItemConfig) -> DispatchResult {
+	fn mint_into(
+		_item: &Self::ItemId,
+		_who: &AccountId,
+		_config: &ItemConfig,
+		_deposit_collection_owner: bool,
+	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}
 
@@ -164,8 +169,19 @@ impl<
 		ItemConfig,
 	> Mutate<AccountId, ItemConfig> for ItemOf<F, A, AccountId>
 {
-	fn mint_into(item: &Self::ItemId, who: &AccountId, config: &ItemConfig) -> DispatchResult {
-		<F as nonfungibles::Mutate<AccountId, ItemConfig>>::mint_into(&A::get(), item, who, config)
+	fn mint_into(
+		item: &Self::ItemId,
+		who: &AccountId,
+		config: &ItemConfig,
+		deposit_collection_owner: bool,
+	) -> DispatchResult {
+		<F as nonfungibles::Mutate<AccountId, ItemConfig>>::mint_into(
+			&A::get(),
+			item,
+			who,
+			config,
+			deposit_collection_owner,
+		)
 	}
 	fn burn(item: &Self::ItemId, maybe_check_owner: Option<&AccountId>) -> DispatchResult {
 		<F as nonfungibles::Mutate<AccountId, ItemConfig>>::burn(&A::get(), item, maybe_check_owner)

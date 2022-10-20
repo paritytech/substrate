@@ -54,6 +54,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 		with_details(&collection_details, &mut details)?;
 
+		if details.deposit.account == details.owner {
+			// Move the deposit to the new owner.
+			T::Currency::repatriate_reserved(
+				&details.owner,
+				&dest,
+				details.deposit.amount,
+				Reserved,
+			)?;
+		}
+
 		Account::<T, I>::remove((&details.owner, &collection, &item));
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
@@ -138,6 +148,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			for (item, details) in Item::<T, I>::drain_prefix(&collection) {
 				Account::<T, I>::remove((&details.owner, &collection, &item));
+				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
 			}
 			#[allow(deprecated)]
 			ItemMetadataOf::<T, I>::remove_prefix(&collection, None);
@@ -169,6 +180,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		owner: T::AccountId,
 		item_config: ItemConfig,
+		deposit_collection_owner: bool,
 		with_details_and_config: impl FnOnce(
 			&CollectionDetailsFor<T, I>,
 			&CollectionConfigFor<T, I>,
@@ -194,14 +206,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				collection_details.items = items;
 
 				let collection_config = Self::get_collection_config(&collection)?;
-				let deposit = match collection_config
+				let deposit_amount = match collection_config
 					.is_setting_enabled(CollectionSetting::DepositRequired)
 				{
 					true => T::ItemDeposit::get(),
 					false => Zero::zero(),
 				};
-				T::Currency::reserve(&collection_details.owner, deposit)?;
-				collection_details.total_deposit += deposit;
+				let deposit_account = match deposit_collection_owner {
+					true => collection_details.owner.clone(),
+					false => owner.clone(),
+				};
 
 				let owner = owner.clone();
 				Account::<T, I>::insert((&owner, &collection, &item), ());
@@ -212,6 +226,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ItemConfigOf::<T, I>::insert(&collection, &item, item_config);
 				}
 
+				T::Currency::reserve(&deposit_account, deposit_amount)?;
+
+				let deposit = ItemDeposit { amount: deposit_amount, account: deposit_account };
 				let details =
 					ItemDetails { owner, approvals: ApprovalsOf::<T, I>::default(), deposit };
 				Item::<T, I>::insert(&collection, &item, details);
@@ -238,8 +255,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				with_details(&details)?;
 
 				// Return the deposit.
-				T::Currency::unreserve(&collection_details.owner, details.deposit);
-				collection_details.total_deposit.saturating_reduce(details.deposit);
+				T::Currency::unreserve(&details.deposit.account, details.deposit.amount);
 				collection_details.items.saturating_dec();
 				Ok(details.owner)
 			},

@@ -36,8 +36,10 @@ pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
 	Option<<T as SystemConfig>::BlockNumber>,
 	<T as Config<I>>::ApprovalsLimit,
 >;
+pub(super) type ItemDepositOf<T, I> =
+	ItemDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type ItemDetailsFor<T, I> =
-	ItemDetails<<T as SystemConfig>::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>;
+	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as SystemConfig>::AccountId>>::Balance;
 pub(super) type ItemPrice<T, I = ()> = BalanceOf<T, I>;
@@ -100,14 +102,23 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 
 /// Information concerning the ownership of a single unique item.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
-pub struct ItemDetails<AccountId, DepositBalance, Approvals> {
+pub struct ItemDetails<AccountId, Deposit, Approvals> {
 	/// The owner of this item.
 	pub(super) owner: AccountId,
 	/// The approved transferrer of this item, if one is set.
 	pub(super) approvals: Approvals,
 	/// The amount held in the pallet's default account for this item. Free-hold items will have
 	/// this as zero.
-	pub(super) deposit: DepositBalance,
+	pub(super) deposit: Deposit,
+}
+
+/// Information about the reserved item deposit.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct ItemDeposit<DepositBalance, AccountId> {
+	/// An amount that gets reserved.
+	pub(super) amount: DepositBalance,
+	/// A depositor account.
+	pub(super) account: AccountId,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]

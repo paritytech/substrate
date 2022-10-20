@@ -140,8 +140,16 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig
 		item: &Self::ItemId,
 		who: &T::AccountId,
 		item_config: &ItemConfig,
+		deposit_collection_owner: bool,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), *item_config, |_, _| Ok(()))
+		Self::do_mint(
+			*collection,
+			*item,
+			who.clone(),
+			*item_config,
+			deposit_collection_owner,
+			|_, _| Ok(()),
+		)
 	}
 
 	fn burn(

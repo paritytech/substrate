@@ -168,6 +168,7 @@ pub trait Mutate<AccountId, ItemConfig>: Inspect<AccountId> {
 		_item: &Self::ItemId,
 		_who: &AccountId,
 		_config: &ItemConfig,
+		_deposit_collection_owner: bool,
 	) -> DispatchResult {
 		Err(TokenError::Unsupported.into())
 	}

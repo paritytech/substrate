@@ -241,7 +241,7 @@ pub mod pallet {
 		T::CollectionId,
 		Blake2_128Concat,
 		T::ItemId,
-		ItemDetails<T::AccountId, DepositBalanceOf<T, I>, ApprovalsOf<T, I>>,
+		ItemDetails<T::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>,
 		OptionQuery,
 	>;
 
@@ -726,6 +726,7 @@ pub mod pallet {
 				item,
 				caller.clone(),
 				item_config,
+				false,
 				|collection_details, collection_config| {
 					let mint_settings = collection_config.mint_settings;
 					let now = frame_system::Pallet::<T>::block_number();
@@ -806,7 +807,7 @@ pub mod pallet {
 					Error::<T, I>::NoPermission
 				);
 			}
-			Self::do_mint(collection, item, owner, item_config, |_, _| Ok(()))
+			Self::do_mint(collection, item, owner, item_config, true, |_, _| Ok(()))
 		}
 
 		/// Destroy a single item.
@@ -908,7 +909,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
-			let mut collection_details =
+			let collection_details =
 				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			ensure!(collection_details.owner == origin, Error::<T, I>::NoPermission);
 
@@ -924,11 +925,11 @@ pub mod pallet {
 					Some(x) => x,
 					None => continue,
 				};
-				let old = details.deposit;
+				let old = details.deposit.amount;
 				if old > deposit {
-					T::Currency::unreserve(&collection_details.owner, old - deposit);
+					T::Currency::unreserve(&details.deposit.account, old - deposit);
 				} else if deposit > old {
-					if T::Currency::reserve(&collection_details.owner, deposit - old).is_err() {
+					if T::Currency::reserve(&details.deposit.account, deposit - old).is_err() {
 						// NOTE: No alterations made to collection_details in this iteration so far,
 						// so this is OK to do.
 						continue
@@ -936,13 +937,10 @@ pub mod pallet {
 				} else {
 					continue
 				}
-				collection_details.total_deposit.saturating_accrue(deposit);
-				collection_details.total_deposit.saturating_reduce(old);
-				details.deposit = deposit;
+				details.deposit.amount = deposit;
 				Item::<T, I>::insert(&collection, &item, &details);
 				successful.push(item);
 			}
-			Collection::<T, I>::insert(&collection, &collection_details);
 
 			Self::deposit_event(Event::<T, I>::Redeposited {
 				collection,
