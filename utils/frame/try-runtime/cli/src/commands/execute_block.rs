@@ -181,12 +181,13 @@ where
 	let block = Block::new(header, extrinsics);
 	let payload = (block.clone(), !command.no_state_root_check, command.try_state).encode();
 
-	let (expected_spec_name, expected_spec_version, _) =
+	let (expected_spec_name, expected_spec_version, expected_state_version) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
 	ensure_matching_spec::<Block>(
 		block_ws_uri.clone(),
 		expected_spec_name,
 		expected_spec_version,
+		expected_state_version,
 		shared.no_spec_check_panic,
 	)
 	.await;

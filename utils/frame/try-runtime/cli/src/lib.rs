@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//! 
+//!
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -304,6 +304,7 @@ use std::{fmt::Debug, path::PathBuf, str::FromStr};
 mod commands;
 pub(crate) mod parse;
 pub(crate) const LOG_TARGET: &str = "try-runtime::cli";
+pub(crate) const DEFAULT_THREADS: usize = 8;
 
 /// Possible commands of `try-runtime`.
 #[derive(Debug, Clone, clap::Subcommand)]
@@ -432,7 +433,10 @@ pub struct SharedParams {
 	#[arg(long)]
 	pub no_spec_check_panic: bool,
 
-	/// State version that is used by the chain.
+	/// The final state version that is set in the created externalities for executing commands.
+	///
+	/// This is checked to match the one from the chain that you connect to, similar other fields
+	/// of the runtime specification.
 	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
 	pub state_version: StateVersion,
 }
@@ -487,6 +491,10 @@ pub struct LiveState {
 	/// Otherwise, it must be enabled explicitly using this flag.
 	#[arg(long)]
 	child_tree: bool,
+
+	/// The number of threads to use when downloading data, when possible.
+	#[arg(long, default_value_t = DEFAULT_THREADS)]
+	pub threads: usize,
 }
 
 /// The source of runtime *state* to use.
@@ -518,7 +526,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live(LiveState { snapshot_path, pallet, uri, at, child_tree }) => {
+			State::Live(LiveState { snapshot_path, pallet, uri, at, child_tree, threads }) => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -534,7 +542,7 @@ impl State {
 						[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
 					],
 					hashed_prefixes: vec![],
-					threads: 8,
+					threads: *threads,
 				}))
 			},
 		})
@@ -590,11 +598,7 @@ impl TryRuntimeCmd {
 				)
 				.await,
 			Command::CreateSnapshot(cmd) =>
-				commands::create_snapshot::create_snapshot::<Block>(
-					self.shared.clone(),
-					cmd.clone(),
-				)
-				.await,
+				commands::create_snapshot::create_snapshot::<Block>(cmd.clone()).await,
 		}
 	}
 }
@@ -647,16 +651,18 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 	uri: String,
 	expected_spec_name: String,
 	expected_spec_version: u32,
+	expected_state_version: StateVersion,
 	relaxed: bool,
 ) {
 	let rpc_service = RpcService::new(uri.clone(), false).await.unwrap();
-	match rpc_service
-		.get_runtime_version::<Block>(None)
-		.await
-		.map(|version| (String::from(version.spec_name.clone()), version.spec_version))
-		.map(|(spec_name, spec_version)| (spec_name.to_lowercase(), spec_version))
-	{
-		Ok((name, version)) => {
+	match rpc_service.get_runtime_version::<Block>(None).await.map(|version| {
+		(
+			String::from(version.spec_name.clone()).to_lowercase(),
+			version.spec_version,
+			version.state_version(),
+		)
+	}) {
+		Ok((name, version, state_version)) => {
 			// first, deal with spec name
 			if expected_spec_name.to_lowercase() == name {
 				log::info!(target: LOG_TARGET, "found matching spec name: {:?}", name);
@@ -678,6 +684,20 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
 			} else {
 				let msg = format!(
 					"spec version mismatch (local {} != remote {}). This could cause some issues.",
+					expected_spec_version, version
+				);
+				if relaxed {
+					log::warn!(target: LOG_TARGET, "{}", msg);
+				} else {
+					panic!("{}", msg);
+				}
+			}
+
+			if expected_state_version == state_version {
+				log::info!(target: LOG_TARGET, "found matching state version: {:?}", state_version);
+			} else {
+				let msg = format!(
+					"state version mismatch (local {} != remote {}). This could cause some issues.",
 					expected_spec_version, version
 				);
 				if relaxed {

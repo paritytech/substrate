@@ -467,7 +467,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 							StorageData(vec![])
 						});
 						thread_key_values.push((key.clone(), value));
-						if thread_key_values.len() % (10 * DEFAULT_VALUE_DOWNLOAD_BATCH) == 0 {
+						if thread_key_values.len() % (thread_keys.len() / 10) == 0 {
 							let ratio: f64 =
 								thread_key_values.len() as f64 / thread_keys.len() as f64;
 							log::debug!(
@@ -878,6 +878,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			state_version,
 		);
 
+		// OPTIMIZATION: we can do this while child keys are being fetched.
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top_kv.len());
 		for (k, v) in top_kv {
 			// skip writing the child root data.

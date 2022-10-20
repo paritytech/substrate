@@ -143,12 +143,13 @@ where
 		.build()
 		.await?;
 
-	let (expected_spec_name, expected_spec_version, _) =
+	let (expected_spec_name, expected_spec_version, expected_state_version) =
 		local_spec::<Block, ExecDispatch>(&ext, &executor);
 	ensure_matching_spec::<Block>(
 		header_ws_uri,
 		expected_spec_name,
 		expected_spec_version,
+		expected_state_version,
 		shared.no_spec_check_panic,
 	)
 	.await;

@@ -15,29 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	parse, state_machine_call_with_proof, LiveState, SharedParams, State, LOG_TARGET,
-};
-use jsonrpsee::{
-	core::{
-		async_trait,
-		client::{Client, Subscription, SubscriptionClientT},
-	},
-	ws_client::WsClientBuilder,
-};
-use parity_scale_codec::{Decode, Encode};
-use remote_externalities::{
-	rpc_api::{self, RpcService},
-	Builder, Mode, OnlineConfig, SnapshotConfig,
-};
-use sc_executor::NativeExecutionDispatch;
-use sc_service::Configuration;
-use serde::de::DeserializeOwned;
-use sp_core::H256;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
-use sp_weights::Weight;
-use std::{collections::VecDeque, fmt::Debug, str::FromStr};
+use crate::{hash_of, LiveState, LOG_TARGET};
+use remote_externalities::{rpc_api::RpcService, Builder, Mode, OnlineConfig, SnapshotConfig};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
+use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::CreateSnapshot`].
 #[derive(Debug, Clone, clap::Parser)]
@@ -47,8 +28,8 @@ pub struct CreateSnapshotCmd {
 	from: LiveState,
 }
 
+/// inner command for `Command::CreateSnapshot`.
 pub(crate) async fn create_snapshot<Block>(
-	shared: SharedParams,
 	command: CreateSnapshotCmd,
 ) -> sc_cli::Result<()>
 where
@@ -58,25 +39,40 @@ where
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 {
-	assert!(command.from.snapshot_path.is_some(), "snapshot path must be provided.");
+	let command = command.from;
 
-	let at = match command.from.at {
-		Some(at_str) => Some(hash_of::<Block>(&at_str)?),
+	let at = match command.at {
+		Some(ref at_str) => Some(hash_of::<Block>(at_str)?),
 		None => None,
+	};
+
+	let path = match command.snapshot_path {
+		Some(path) => path,
+		None => {
+			let rpc_service = RpcService::new(&command.uri, false).await.unwrap();
+			let remote_spec = rpc_service.get_runtime_version::<Block>(at).await.unwrap();
+			let path_str = format!(
+				"{}-{}@{}.snap",
+				remote_spec.spec_name.to_lowercase(),
+				remote_spec.spec_version,
+				command.at.clone().unwrap_or("latest".to_owned())
+			);
+			log::info!(target: LOG_TARGET, "snapshot path not created (-s), using '{}'", path_str);
+			path_str.into()
+		},
 	};
 
 	let _ = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			at,
-			state_snapshot: command.from.snapshot_path.as_ref().map(SnapshotConfig::new),
-			pallets: command.from.pallet,
-			transport: command.from.uri.into(),
-			child_trie: command.from.child_tree,
+			state_snapshot: Some(SnapshotConfig::new(path)),
+			pallets: command.pallet,
+			transport: command.uri.into(),
+			child_trie: command.child_tree,
 			hashed_prefixes: vec![],
 			hashed_keys: vec![],
-			threads: 8,
+			threads: command.threads,
 		}))
-		.state_version(shared.state_version)
 		.build()
 		.await?;
 
