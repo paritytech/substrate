@@ -21,14 +21,6 @@
 //! based chain, or a local state snapshot file.
 
 use codec::{Decode, Encode};
-use jsonrpsee::{
-	core::{client::ClientT, Error as RpcError},
-	proc_macros::rpc,
-	rpc_params,
-	ws_client::{WsClient, WsClientBuilder},
-};
-use std::thread;
-
 use log::*;
 use serde::de::DeserializeOwned;
 use sp_core::{
@@ -45,6 +37,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 	sync::Arc,
+	thread,
 };
 
 // CHANGELOG:
@@ -58,7 +51,7 @@ use std::{
 // for of use. 5. value download of both child tree and top tree are now multi-threaded, which can
 // be configured in `OnlineConfig`.
 
-pub mod rpc_api;
+use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -76,40 +69,6 @@ struct Snapshot<B: BlockT> {
 	block_hash: B::Hash,
 	top: TopKeyValues,
 	child: ChildKeyValues,
-}
-
-#[rpc(client)]
-pub trait RpcApi<Hash> {
-	#[method(name = "childstate_getKeys")]
-	fn child_get_keys(
-		&self,
-		child_key: PrefixedStorageKey,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> Result<Vec<StorageKey>, RpcError>;
-
-	#[method(name = "childstate_getStorage")]
-	fn child_get_storage(
-		&self,
-		child_key: PrefixedStorageKey,
-		prefix: StorageKey,
-		hash: Option<Hash>,
-	) -> Result<StorageData, RpcError>;
-
-	#[method(name = "state_getStorage")]
-	fn get_storage(&self, prefix: StorageKey, hash: Option<Hash>) -> Result<StorageData, RpcError>;
-
-	#[method(name = "state_getKeysPaged")]
-	fn get_keys_paged(
-		&self,
-		prefix: Option<StorageKey>,
-		count: u32,
-		start_key: Option<StorageKey>,
-		hash: Option<Hash>,
-	) -> Result<Vec<StorageKey>, RpcError>;
-
-	#[method(name = "chain_getFinalizedHead")]
-	fn finalized_head(&self) -> Result<Hash, RpcError>;
 }
 
 /// The execution mode.
@@ -152,25 +111,10 @@ impl Transport {
 		self.remote_client.as_ref().map(|x| x.as_ref())
 	}
 
-	async fn build_ws_client(uri: &str) -> Result<WsClient, &'static str> {
-		log::info!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
-		WsClientBuilder::default()
-			.max_request_body_size(u32::MAX)
-			.request_timeout(std::time::Duration::from_secs(5 * 10))
-			.connection_timeout(std::time::Duration::from_secs(60))
-			.max_notifs_per_subscription(1024)
-			.build(&uri)
-			.await
-			.map_err(|e| {
-				log::error!(target: LOG_TARGET, "error: {:?}", e);
-				"failed to build ws client"
-			})
-	}
-
 	// Open a new WebSocket connection if it's not connected.
 	async fn map_uri(&mut self) -> Result<(), &'static str> {
 		if let Some(uri) = &self.uri {
-			let ws_client = Self::build_ws_client(&uri).await?;
+			let ws_client = ws_client(uri).await.unwrap();
 			self.remote_client = Some(Arc::new(ws_client));
 		}
 
@@ -304,7 +248,7 @@ pub struct Builder<B: BlockT> {
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
 // that.
-impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
+impl<B: BlockT> Default for Builder<B> {
 	fn default() -> Self {
 		Self {
 			mode: Default::default(),
@@ -317,7 +261,7 @@ impl<B: BlockT + DeserializeOwned> Default for Builder<B> {
 }
 
 // Mode methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B> {
 	fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
 			Mode::Online(config) => config,
@@ -336,26 +280,38 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 }
 
 // RPC methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B>
+where
+	B::Hash: DeserializeOwned,
+	B::Header: DeserializeOwned,
+{
 	async fn rpc_get_storage(
 		&self,
 		key: StorageKey,
 		maybe_at: Option<B::Hash>,
 	) -> Result<StorageData, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: get_storage");
-		self.as_online().rpc_client().get_storage(key, maybe_at).await.map_err(|e| {
-			error!(target: LOG_TARGET, "Error = {:?}", e);
-			"rpc get_storage failed."
-		})
+		match self.as_online().rpc_client().storage(key, maybe_at).await {
+			Ok(Some(res)) => Ok(res),
+			Ok(None) => Err("get_storage not found"),
+			Err(e) => {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				Err("rpc get_storage failed.")
+			},
+		}
 	}
 
 	/// Get the latest finalized head.
 	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
-		self.as_online().rpc_client().finalized_head().await.map_err(|e| {
-			error!(target: LOG_TARGET, "Error = {:?}", e);
-			"rpc finalized_head failed."
-		})
+
+		// sadly this pretty much unreadable...
+		ChainApi::<(), _, B::Header, ()>::finalized_head(self.as_online().rpc_client())
+			.await
+			.map_err(|e| {
+				error!(target: LOG_TARGET, "Error = {:?}", e);
+				"rpc finalized_head failed."
+			})
 	}
 
 	/// Get all the keys at `prefix` at `hash` using the paged, safe RPC methods.
@@ -370,7 +326,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 			let page = self
 				.as_online()
 				.rpc_client()
-				.get_keys_paged(
+				.storage_keys_paged(
 					Some(prefix.clone()),
 					DEFAULT_KEY_DOWNLOAD_PAGE,
 					last_key.clone(),
@@ -548,17 +504,19 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		child_prefix: StorageKey,
 		at: B::Hash,
 	) -> Result<Vec<StorageKey>, &'static str> {
-		let child_keys = client
-			.child_get_keys(
-				PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
-				child_prefix,
-				Some(at),
-			)
-			.await
-			.map_err(|e| {
-				error!(target: LOG_TARGET, "Error = {:?}", e);
-				"rpc child_get_keys failed."
-			})?;
+		// This is deprecated and will generate a warning which causes the CI to fail.
+		#[allow(warnings)]
+		let child_keys = substrate_rpc_client::ChildStateApi::storage_keys(
+			client,
+			PrefixedStorageKey::new(prefixed_top_key.as_ref().to_vec()),
+			child_prefix,
+			Some(at),
+		)
+		.await
+		.map_err(|e| {
+			error!(target: LOG_TARGET, "Error = {:?}", e);
+			"rpc child_get_keys failed."
+		})?;
 
 		debug!(
 			target: LOG_TARGET,
@@ -573,7 +531,11 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 }
 
 // Internal methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT + DeserializeOwned> Builder<B>
+where
+	B::Hash: DeserializeOwned,
+	B::Header: DeserializeOwned,
+{
 	/// Load all of the child keys from the remote config, given the already scraped list of top key
 	/// pairs.
 	///
@@ -825,7 +787,11 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 }
 
 // Public methods
-impl<B: BlockT + DeserializeOwned> Builder<B> {
+impl<B: BlockT> Builder<B>
+where
+	B::Hash: DeserializeOwned,
+	B::Header: DeserializeOwned,
+{
 	/// Create a new builder.
 	pub fn new() -> Self {
 		Default::default()
@@ -867,7 +833,14 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	pub async fn build(self) -> Result<TestExternalities, &'static str> {
 		self.do_build().await.map(|(e, _)| e)
 	}
+}
 
+// Public methods
+impl<B: BlockT> Builder<B>
+where
+	B::Hash: DeserializeOwned,
+	B::Header: DeserializeOwned,
+{
 	/// Build the test externalities.
 	async fn do_build(mut self) -> Result<(TestExternalities, B::Hash), &'static str> {
 		let state_version = self.state_version;

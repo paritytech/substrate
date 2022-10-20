@@ -75,4 +75,4 @@ runtime-benchmarks = [
 ]
 # Enable features that allow the runtime to be tried and debugged. Name might be subject to change
 # in the near future.
-try-runtime = ["node-template-runtime/try-runtime", "try-runtime-cli"]
+try-runtime = ["node-template-runtime/try-runtime", "try-runtime-cli/try-runtime"]

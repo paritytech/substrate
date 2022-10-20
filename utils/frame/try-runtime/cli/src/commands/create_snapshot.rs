@@ -29,9 +29,7 @@ pub struct CreateSnapshotCmd {
 }
 
 /// inner command for `Command::CreateSnapshot`.
-pub(crate) async fn create_snapshot<Block>(
-	command: CreateSnapshotCmd,
-) -> sc_cli::Result<()>
+pub(crate) async fn create_snapshot<Block>(command: CreateSnapshotCmd) -> sc_cli::Result<()>
 where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
