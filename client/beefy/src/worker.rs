@@ -500,19 +500,27 @@ where
 
 			self.on_demand_justifications.cancel_requests_older_than(block_num);
 
-			if let Err(e) = self.backend.append_justification(
-				BlockId::Number(block_num),
-				(BEEFY_ENGINE_ID, finality_proof.encode()),
-			) {
-				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
-			}
+			let maybe_block_hash =
+				self.backend.blockchain().expect_block_hash_from_id(&BlockId::Number(block_num));
 
-			self.backend.blockchain().hash(block_num).ok().flatten().map(|hash| {
-				self.links
-					.to_rpc_best_block_sender
-					.notify(|| Ok::<_, ()>(hash))
-					.expect("forwards closure result; the closure always returns Ok; qed.")
-			});
+			match maybe_block_hash {
+				Ok(hash) => {
+					if let Err(err) = self
+						.backend
+						.append_justification(&hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
+					{
+						error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", err, finality_proof);
+					};
+
+					self.links
+						.to_rpc_best_block_sender
+						.notify(|| Ok::<_, ()>(hash))
+						.expect("forwards closure result; the closure always returns Ok; qed.");
+				},
+				Err(err) => {
+					error!(target: "beefy", "🥩 Error {:?} hash not know for given block_num: {:?}", err, finality_proof);
+				},
+			};
 
 			self.links
 				.to_rpc_justif_sender
@@ -1546,8 +1554,10 @@ pub(crate) mod tests {
 				commitment,
 				signatures: vec![None],
 			});
+			let hashof10 =
+				backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
 			backend
-				.append_justification(BlockId::Number(10), (BEEFY_ENGINE_ID, justif.encode()))
+				.append_justification(&hashof10, (BEEFY_ENGINE_ID, justif.encode()))
 				.unwrap();
 
 			// initialize voter at block 13, expect rounds initialized at last beefy finalized 10
@@ -1580,8 +1590,10 @@ pub(crate) mod tests {
 				commitment,
 				signatures: vec![None],
 			});
+			let hashof12 =
+				backend.blockchain().expect_block_hash_from_id(&BlockId::Number(12)).unwrap();
 			backend
-				.append_justification(BlockId::Number(12), (BEEFY_ENGINE_ID, justif.encode()))
+				.append_justification(&hashof12, (BEEFY_ENGINE_ID, justif.encode()))
 				.unwrap();
 
 			// initialize voter at block 13, expect rounds initialized at last beefy finalized 12
