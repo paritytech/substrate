@@ -5434,6 +5434,7 @@ dependencies = [
  "frame-election-provider-support",
  "frame-system",
  "parity-scale-codec",
+ "sp-arithmetic",
  "sp-npos-elections",
  "sp-runtime",
 ]
