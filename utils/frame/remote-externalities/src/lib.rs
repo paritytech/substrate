@@ -423,7 +423,7 @@ where
 							StorageData(vec![])
 						});
 						thread_key_values.push((key.clone(), value));
-						if thread_key_values.len() % (thread_keys.len() / 10) == 0 {
+						if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
 							let ratio: f64 =
 								thread_key_values.len() as f64 / thread_keys.len() as f64;
 							log::debug!(
@@ -787,7 +787,7 @@ where
 }
 
 // Public methods
-impl<B: BlockT> Builder<B>
+impl<B: BlockT + DeserializeOwned> Builder<B>
 where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
@@ -836,7 +836,7 @@ where
 }
 
 // Public methods
-impl<B: BlockT> Builder<B>
+impl<B: BlockT + DeserializeOwned> Builder<B>
 where
 	B::Hash: DeserializeOwned,
 	B::Header: DeserializeOwned,
