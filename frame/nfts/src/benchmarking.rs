@@ -68,7 +68,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, Account
 fn mint_item<T: Config<I>, I: 'static>(
 	index: u16,
 ) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
-	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
+	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
 	}

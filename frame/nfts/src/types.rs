@@ -56,14 +56,8 @@ impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
-	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
+	/// Collection's owner.
 	pub(super) owner: AccountId,
-	/// Can mint tokens.
-	pub(super) issuer: AccountId,
-	/// Can thaw tokens, force transfers and burn tokens from any account.
-	pub(super) admin: AccountId,
-	/// Can freeze tokens.
-	pub(super) freezer: AccountId,
 	/// The total balance deposited for the all storage associated with this collection.
 	/// Used by `destroy`.
 	pub(super) total_deposit: DepositBalance,
@@ -84,8 +78,8 @@ pub struct DestroyWitness {
 	/// The total number of items in this collection that have outstanding item metadata.
 	#[codec(compact)]
 	pub item_metadatas: u32,
-	#[codec(compact)]
 	/// The total number of attributes for this collection.
+	#[codec(compact)]
 	pub attributes: u32,
 }
 
@@ -301,3 +295,37 @@ impl PalletFeatures {
 	}
 }
 impl_codec_bitflags!(PalletFeatures, u64, PalletFeature);
+
+/// Support for up to 8 different roles for collections.
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub enum CollectionRole {
+	/// Can mint items.
+	Issuer,
+	/// Can freeze items.
+	Freezer,
+	/// Can thaw items, force transfers and burn items from any account.
+	Admin,
+}
+
+/// A wrapper type that implements `Codec`.
+#[derive(Clone, Copy, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct CollectionRoles(pub BitFlags<CollectionRole>);
+
+impl CollectionRoles {
+	pub fn none() -> Self {
+		Self(BitFlags::EMPTY)
+	}
+	pub fn has_role(&self, role: CollectionRole) -> bool {
+		self.0.contains(role)
+	}
+	pub fn add_role(&mut self, role: CollectionRole) {
+		self.0.insert(role);
+	}
+	pub fn max_roles() -> u8 {
+		let all: BitFlags<CollectionRole> = BitFlags::all();
+		all.len() as u8
+	}
+}
+impl_codec_bitflags!(CollectionRoles, u8, CollectionRole);

@@ -41,7 +41,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
 			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-			Error::<T, I>::ItemsNotTransferable
+			Error::<T, I>::ItemsNonTransferable
 		);
 
 		let item_config = Self::get_item_config(&collection, &item)?;
@@ -93,14 +93,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			collection,
 			CollectionDetails {
 				owner: owner.clone(),
-				issuer: admin.clone(),
-				admin: admin.clone(),
-				freezer: admin,
 				total_deposit: deposit,
 				items: 0,
 				item_metadatas: 0,
 				attributes: 0,
 			},
+		);
+		CollectionRoleOf::<T, I>::insert(
+			collection,
+			admin,
+			CollectionRoles(
+				CollectionRole::Admin | CollectionRole::Freezer | CollectionRole::Issuer,
+			),
 		);
 
 		let next_id = collection.increment();
@@ -142,6 +146,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			#[allow(deprecated)]
 			PendingSwapOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
+			Self::clear_roles(&collection)?;
 			#[allow(deprecated)]
 			Attribute::<T, I>::remove_prefix((&collection,), None);
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
@@ -165,7 +170,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		item: T::ItemId,
 		owner: T::AccountId,
 		config: ItemConfig,
-		with_details: impl FnOnce(&CollectionDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		ensure!(!Item::<T, I>::contains_key(collection, item), Error::<T, I>::AlreadyExists);
 
@@ -174,8 +178,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			|maybe_collection_details| -> DispatchResult {
 				let collection_details =
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-
-				with_details(collection_details)?;
 
 				if let Ok(max_supply) = CollectionMaxSupply::<T, I>::try_get(&collection) {
 					ensure!(collection_details.items < max_supply, Error::<T, I>::MaxSupplyReached);
@@ -218,7 +220,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn do_burn(
 		collection: T::CollectionId,
 		item: T::ItemId,
-		with_details: impl FnOnce(&CollectionDetailsFor<T, I>, &ItemDetailsFor<T, I>) -> DispatchResult,
+		with_details: impl FnOnce(&ItemDetailsFor<T, I>) -> DispatchResult,
 	) -> DispatchResult {
 		let owner = Collection::<T, I>::try_mutate(
 			&collection,
@@ -227,7 +229,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					maybe_collection_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				let details = Item::<T, I>::get(&collection, &item)
 					.ok_or(Error::<T, I>::UnknownCollection)?;
-				with_details(collection_details, &details)?;
+				with_details(&details)?;
 
 				// Return the deposit.
 				T::Currency::unreserve(&collection_details.owner, details.deposit);
@@ -271,7 +273,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let collection_config = Self::get_collection_config(&collection)?;
 		ensure!(
 			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-			Error::<T, I>::ItemsNotTransferable
+			Error::<T, I>::ItemsNonTransferable
 		);
 
 		let item_config = Self::get_item_config(&collection, &item)?;

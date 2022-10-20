@@ -221,6 +221,19 @@ pub mod pallet {
 
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
+	/// Stores collection roles as per account.
+	pub(super) type CollectionRoleOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
+		_,
+		Blake2_128Concat,
+		T::CollectionId,
+		Blake2_128Concat,
+		T::AccountId,
+		CollectionRoles,
+		OptionQuery,
+	>;
+
+	/// The items in existence and their ownership details.
+	#[pallet::storage]
 	#[pallet::storage_prefix = "Asset"]
 	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -497,7 +510,7 @@ pub mod pallet {
 		/// Collection ID is already taken.
 		CollectionIdInUse,
 		/// Items within that collection are non-transferable.
-		ItemsNotTransferable,
+		ItemsNonTransferable,
 		/// The provided account is not a delegate.
 		NotDelegate,
 		/// The delegate turned out to be different to what was expected.
@@ -544,6 +557,8 @@ pub mod pallet {
 		InconsistentItemConfig,
 		/// Config for a collection or an item can't be found.
 		NoConfig,
+		/// Some roles were not cleared.
+		RolesNotCleared,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
@@ -702,10 +717,11 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
 
-			Self::do_mint(collection, item, owner, config, |collection_details| {
-				ensure!(collection_details.issuer == origin, Error::<T, I>::NoPermission);
-				Ok(())
-			})
+			ensure!(
+				Self::has_role(&collection, &origin, CollectionRole::Issuer),
+				Error::<T, I>::NoPermission
+			);
+			Self::do_mint(collection, item, owner, config)
 		}
 
 		/// Destroy a single item.
@@ -731,8 +747,9 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let check_owner = check_owner.map(T::Lookup::lookup).transpose()?;
 
-			Self::do_burn(collection, item, |collection_details, details| {
-				let is_permitted = collection_details.admin == origin || details.owner == origin;
+			Self::do_burn(collection, item, |details| {
+				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
+				let is_permitted = is_admin || details.owner == origin;
 				ensure!(is_permitted, Error::<T, I>::NoPermission);
 				ensure!(
 					check_owner.map_or(true, |o| o == details.owner),
@@ -767,8 +784,9 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 			let dest = T::Lookup::lookup(dest)?;
 
-			Self::do_transfer(collection, item, dest, |collection_details, details| {
-				if details.owner != origin && collection_details.admin != origin {
+			Self::do_transfer(collection, item, dest, |_, details| {
+				let is_admin = Self::has_role(&collection, &origin, CollectionRole::Admin);
+				if details.owner != origin && !is_admin {
 					let deadline =
 						details.approvals.get(&origin).ok_or(Error::<T, I>::NoPermission)?;
 					if let Some(d) = deadline {
@@ -986,9 +1004,17 @@ pub mod pallet {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
 				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
 
-				details.issuer = issuer.clone();
-				details.admin = admin.clone();
-				details.freezer = freezer.clone();
+				// delete previous values
+				Self::clear_roles(&collection)?;
+
+				let account_to_role = Self::group_roles_by_account(vec![
+					(issuer.clone(), CollectionRole::Issuer),
+					(admin.clone(), CollectionRole::Admin),
+					(freezer.clone(), CollectionRole::Freezer),
+				]);
+				for (account, roles) in account_to_role {
+					CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
+				}
 
 				Self::deposit_event(Event::TeamChanged { collection, issuer, admin, freezer });
 				Ok(())
@@ -1026,19 +1052,24 @@ pub mod pallet {
 
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 
 			let collection_config = Self::get_collection_config(&collection)?;
 			ensure!(
 				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-				Error::<T, I>::ItemsNotTransferable
+				Error::<T, I>::ItemsNonTransferable
+			);
+
+			let collection_config = Self::get_collection_config(&collection)?;
+			ensure!(
+				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
+				Error::<T, I>::ItemsNonTransferable
 			);
 
 			if let Some(check) = maybe_check {
-				let permitted = check == collection_details.admin || check == details.owner;
+				let is_admin = Self::has_role(&collection, &check, CollectionRole::Admin);
+				let permitted = is_admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
@@ -1090,10 +1121,8 @@ pub mod pallet {
 
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
 
 			let maybe_deadline =
 				details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
@@ -1107,7 +1136,8 @@ pub mod pallet {
 
 			if !is_past_deadline {
 				if let Some(check) = maybe_check {
-					let permitted = check == collection_details.admin || check == details.owner;
+					let is_admin = Self::has_role(&collection, &check, CollectionRole::Admin);
+					let permitted = is_admin || check == details.owner;
 					ensure!(permitted, Error::<T, I>::NoPermission);
 				}
 			}
@@ -1148,12 +1178,12 @@ pub mod pallet {
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 
-			let collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
 			let mut details =
 				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
+
 			if let Some(check) = maybe_check {
-				let permitted = check == collection_details.admin || check == details.owner;
+				let is_admin = Self::has_role(&collection, &check, CollectionRole::Admin);
+				let permitted = is_admin || check == details.owner;
 				ensure!(permitted, Error::<T, I>::NoPermission);
 			}
 
@@ -1200,13 +1230,26 @@ pub mod pallet {
 				let old_owner = collection_info.owner;
 				let new_owner = T::Lookup::lookup(owner)?;
 				collection_info.owner = new_owner.clone();
-				collection_info.issuer = T::Lookup::lookup(issuer)?;
-				collection_info.admin = T::Lookup::lookup(admin)?;
-				collection_info.freezer = T::Lookup::lookup(freezer)?;
 				*maybe_collection = Some(collection_info);
 				CollectionAccount::<T, I>::remove(&old_owner, &collection);
 				CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
 				CollectionConfigOf::<T, I>::insert(&collection, config);
+
+				let issuer = T::Lookup::lookup(issuer)?;
+				let admin = T::Lookup::lookup(admin)?;
+				let freezer = T::Lookup::lookup(freezer)?;
+
+				// delete previous values
+				Self::clear_roles(&collection)?;
+
+				let account_to_role = Self::group_roles_by_account(vec![
+					(issuer, CollectionRole::Issuer),
+					(admin, CollectionRole::Admin),
+					(freezer, CollectionRole::Freezer),
+				]);
+				for (account, roles) in account_to_role {
+					CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
+				}
 
 				Self::deposit_event(Event::CollectionStatusChanged { collection });
 				Ok(())

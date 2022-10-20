@@ -143,7 +143,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettin
 		who: &T::AccountId,
 		settings: &ItemSettings,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings), |_| Ok(()))
+		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings))
 	}
 
 	fn burn(
@@ -151,7 +151,7 @@ impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettin
 		item: &Self::ItemId,
 		maybe_check_owner: Option<&T::AccountId>,
 	) -> DispatchResult {
-		Self::do_burn(*collection, *item, |_, d| {
+		Self::do_burn(*collection, *item, |d| {
 			if let Some(check_owner) = maybe_check_owner {
 				if &d.owner != check_owner {
 					return Err(Error::<T, I>::NoPermission.into())
