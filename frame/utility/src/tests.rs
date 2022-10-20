@@ -226,7 +226,7 @@ impl Contains<RuntimeCall> for TestBaseCallFilter {
 			// For tests
 			RuntimeCall::Example(_) => true,
 			// For council origin tests.
-			RuntimeCall::Collective(_) => true,
+			RuntimeCall::Democracy(_) => true,
 			_ => false,
 		}
 	}
@@ -894,10 +894,5 @@ fn batch_all_works_with_council_origin() {
 			RuntimeOrigin::from(pallet_collective::RawOrigin::Members(3, 3)),
 			vec![RuntimeCall::Democracy(mock_democracy::Call::external_propose_majority {})]
 		));
-
-		System::assert_last_event(RuntimeEvent::Council(pallet_collective::Event::Executed {
-			proposal_hash: hash,
-			result: Ok(()),
-		}));
 	})
 }
