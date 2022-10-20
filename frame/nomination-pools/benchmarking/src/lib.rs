@@ -643,7 +643,7 @@ frame_benchmarking::benchmarks! {
 			.map(|i| account("stash", USER_SEED, i))
 			.collect();
 
-		assert_ok!(Pools::<T>::nominate(pool_account, 1, validators));
+		assert_ok!(Pools::<T>::nominate(depositor, 1, validators));
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_some());
 
 		whitelist_account!(depositor);
