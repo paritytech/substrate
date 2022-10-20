@@ -28,7 +28,7 @@ use std::{
 
 /// The `generate-node-key` command
 #[derive(Debug, Parser)]
-#[clap(
+#[command(
 	name = "generate-node-key",
 	about = "Generate a random node key, write it to a file or stdout \
 		 	and write the corresponding peer-id to stderr"
@@ -37,13 +37,13 @@ pub struct GenerateNodeKeyCmd {
 	/// Name of file to save secret key to.
 	///
 	/// If not given, the secret key is printed to stdout.
-	#[clap(long)]
+	#[arg(long)]
 	file: Option<PathBuf>,
 
 	/// The output is in raw binary format.
 	///
 	/// If not given, the output is written as an hex encoded string.
-	#[clap(long)]
+	#[arg(long)]
 	bin: bool,
 }
 
