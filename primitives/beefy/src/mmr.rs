@@ -101,6 +101,7 @@ impl MmrLeafVersion {
 
 /// Details of a BEEFY authority set.
 #[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct BeefyAuthoritySet<MerkleRoot> {
 	/// Id of the set.
 	///

@@ -228,11 +228,11 @@ where
 
 		if positive {
 			let excess = first_term.saturating_add(second_term).saturating_mul(previous);
-			previous.saturating_add(excess).max(min_multiplier).min(max_multiplier)
+			previous.saturating_add(excess).clamp(min_multiplier, max_multiplier)
 		} else {
 			// Defensive-only: first_term > second_term. Safe subtraction.
 			let negative = first_term.saturating_sub(second_term).saturating_mul(previous);
-			previous.saturating_sub(negative).max(min_multiplier).min(max_multiplier)
+			previous.saturating_sub(negative).clamp(min_multiplier, max_multiplier)
 		}
 	}
 }
@@ -713,8 +713,8 @@ where
 		let max_block_weight = max_block_weight.ref_time();
 		let info_weight = info.weight.ref_time();
 
-		let bounded_weight = info_weight.max(1).min(max_block_weight);
-		let bounded_length = (len as u64).max(1).min(max_block_length);
+		let bounded_weight = info_weight.clamp(1, max_block_weight);
+		let bounded_length = (len as u64).clamp(1, max_block_length);
 
 		let max_tx_per_block_weight = max_block_weight / bounded_weight;
 		let max_tx_per_block_length = max_block_length / bounded_length;

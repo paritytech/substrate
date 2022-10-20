@@ -10,7 +10,7 @@ homepage = "https://substrate.io"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-clap = { version = "3.0", features = ["derive"] }
+clap = { version = "4.0.9", features = ["derive"] }
 flate2 = "1.0"
 fs_extra = "1"
 git2 = "0.8"
