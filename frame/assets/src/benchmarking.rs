@@ -169,7 +169,7 @@ benchmarks_instance_pallet! {
 		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default())?;
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
-		assert_last_event::<T, I>(Event::DestroyedAccounts {
+		assert_last_event::<T, I>(Event::AccountsDestroyed {
 			asset_id: Default::default() ,
 			accounts_destroyed: c,
 			accounts_remaining: 0,
@@ -187,7 +187,7 @@ benchmarks_instance_pallet! {
 		Assets::<T,I>::start_destroy(SystemOrigin::Signed(caller.clone()).into(), Default::default())?;
 	}:_(SystemOrigin::Signed(caller), Default::default())
 	verify {
-		assert_last_event::<T, I>(Event::DestroyedApprovals {
+		assert_last_event::<T, I>(Event::ApprovalsDestroyed {
 			asset_id: Default::default() ,
 			approvals_destroyed: a,
 			approvals_remaining: 0,
