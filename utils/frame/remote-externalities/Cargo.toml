@@ -14,7 +14,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0" }
-env_logger = "0.9"
 jsonrpsee = { version = "0.15.1", features = ["ws-client", "macros"] }
 log = "0.4.17"
 serde = "1.0.136"
@@ -24,12 +23,12 @@ sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
-async-std = { version = "1.0.0", features = ["tokio1"] }
+tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 
 [dev-dependencies]
-tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
 pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 
 [features]
 remote-test = ["frame-support"]

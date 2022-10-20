@@ -40,7 +40,7 @@ use sp_core::{
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{
-	traits::{Block as BlockT, Header as HeaderT},
+	traits::{Block as BlockT},
 	StateVersion,
 };
 use std::{
@@ -156,6 +156,9 @@ impl Transport {
 		log::info!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 		WsClientBuilder::default()
 			.max_request_body_size(u32::MAX)
+			.request_timeout(std::time::Duration::from_secs(5 * 10))
+			.connection_timeout(std::time::Duration::from_secs(60))
+			.max_notifs_per_subscription(1024)
 			.build(&uri)
 			.await
 			.map_err(|e| {
@@ -412,7 +415,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let now = std::time::Instant::now();
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
-		let uri = Arc::new(self.as_online().transport.uri.clone().unwrap());
+		let client = self.as_online().transport.remote_client.clone().unwrap();
 		let thread_chunk_size = (keys.len() / self.as_online().threads).max(1);
 
 		log::info!(
@@ -428,10 +431,10 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 		let keys_chunked: Vec<Vec<StorageKey>> =
 			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
 		for thread_keys in keys_chunked {
-			let uri = Arc::clone(&uri);
+			let thread_client = client.clone();
 			let handle = std::thread::spawn(move || {
-				use async_std::task::block_on;
-				let thread_client = block_on(Transport::build_ws_client(&*uri)).unwrap();
+				let rt = tokio::runtime::Runtime::new().unwrap();
+
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
 				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
 					let batch = chunk_keys
@@ -441,7 +444,7 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 						.collect::<Vec<_>>();
 
 					let values =
-						block_on(thread_client.batch_request::<Option<StorageData>>(batch))
+						rt.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
 							.map_err(|e| {
 								log::error!(
 									target: LOG_TARGET,
@@ -871,16 +874,15 @@ impl<B: BlockT + DeserializeOwned> Builder<B> {
 
 #[cfg(test)]
 mod test_prelude {
+	use tracing_subscriber::EnvFilter;
+
 	pub(crate) use super::*;
 	pub(crate) use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
-
 	pub(crate) type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
 	pub(crate) fn init_logger() {
-		let _ = env_logger::Builder::from_default_env()
-			.format_module_path(true)
-			.format_level(true)
-			// .filter_module(LOG_TARGET, log::LevelFilter::Debug)
+		let _ = tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env())
+			.with_level(true)
 			.try_init();
 	}
 }
@@ -954,7 +956,7 @@ mod remote_tests {
 		todo!();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn snapshot_block_hash_works() {
 		const CACHE: &'static str = "snapshot_block_hash_works";
 		init_logger();
@@ -981,7 +983,7 @@ mod remote_tests {
 		assert_eq!(block_hash, cached_block_hash);
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn offline_else_online_works() {
 		const CACHE: &'static str = "offline_else_online_works_data";
 		init_logger();
@@ -1026,7 +1028,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete[0].path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_one_small_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1041,7 +1043,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_few_pallet() {
 		init_logger();
 		Builder::<Block>::new()
@@ -1076,7 +1078,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_create_snapshot() {
 		const CACHE: &'static str = "can_create_snapshot";
 		init_logger();
@@ -1109,7 +1111,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_create_child_snapshot() {
 		const CACHE: &'static str = "can_create_child_snapshot";
 		init_logger();
@@ -1141,7 +1143,7 @@ mod remote_tests {
 		std::fs::remove_file(to_delete.path()).unwrap();
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	// #[ignore = "only works if a local node is present."]
 	async fn can_fetch_all_local() {
 		init_logger();
@@ -1156,7 +1158,7 @@ mod remote_tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	// #[ignore = "slow af."]
 	async fn can_fetch_all_remote() {
 		init_logger();
