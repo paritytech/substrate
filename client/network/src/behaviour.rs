@@ -34,7 +34,6 @@ use libp2p::{
 
 use sc_consensus::import_queue::{IncomingBlock, RuntimeOrigin};
 use sc_network_common::{
-	config::ProtocolId,
 	protocol::{
 		event::DhtEvent,
 		role::{ObservedRole, Roles},
@@ -79,7 +78,7 @@ pub enum BehaviourOut<B: BlockT> {
 	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
 
 	/// Started a random iterative Kademlia discovery query.
-	RandomKademliaStarted(Vec<ProtocolId>),
+	RandomKademliaStarted,
 
 	/// We have received a request from a peer and answered it.
 	///
@@ -267,25 +266,20 @@ where
 		self.discovery.add_known_address(peer_id, addr)
 	}
 
-	/// Returns the number of nodes in each Kademlia kbucket for each Kademlia instance.
+	/// Returns the number of nodes in each Kademlia kbucket.
 	///
-	/// Identifies Kademlia instances by their [`ProtocolId`] and kbuckets by the base 2 logarithm
-	/// of their lower bound.
-	pub fn num_entries_per_kbucket(
-		&mut self,
-	) -> impl ExactSizeIterator<Item = (&ProtocolId, Vec<(u32, usize)>)> {
+	/// Identifies kbuckets by the base 2 logarithm of their lower bound.
+	pub fn num_entries_per_kbucket(&mut self) -> Option<Vec<(u32, usize)>> {
 		self.discovery.num_entries_per_kbucket()
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
-	pub fn num_kademlia_records(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+	pub fn num_kademlia_records(&mut self) -> Option<usize> {
 		self.discovery.num_kademlia_records()
 	}
 
 	/// Returns the total size in bytes of all the records in the Kademlia record stores.
-	pub fn kademlia_records_total_size(
-		&mut self,
-	) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+	pub fn kademlia_records_total_size(&mut self) -> Option<usize> {
 		self.discovery.kademlia_records_total_size()
 	}
 
@@ -438,8 +432,7 @@ impl<B: BlockT> From<DiscoveryOut> for BehaviourOut<B> {
 				BehaviourOut::Dht(DhtEvent::ValuePut(key), duration),
 			DiscoveryOut::ValuePutFailed(key, duration) =>
 				BehaviourOut::Dht(DhtEvent::ValuePutFailed(key), duration),
-			DiscoveryOut::RandomKademliaStarted(protocols) =>
-				BehaviourOut::RandomKademliaStarted(protocols),
+			DiscoveryOut::RandomKademliaStarted => BehaviourOut::RandomKademliaStarted,
 		}
 	}
 }
