@@ -252,7 +252,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -272,7 +272,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	/// while performing major synchronization work.
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;

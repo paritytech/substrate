@@ -3172,9 +3172,7 @@ mod test {
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		let just = (*b"TEST", Vec::new());
-		client
-			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
-			.unwrap();
+		client.finalize_block(&finalized_block.hash(), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
 		let peer_id1 = PeerId::random();
@@ -3303,9 +3301,7 @@ mod test {
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		let just = (*b"TEST", Vec::new());
-		client
-			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
-			.unwrap();
+		client.finalize_block(&finalized_block.hash(), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
 		let peer_id1 = PeerId::random();

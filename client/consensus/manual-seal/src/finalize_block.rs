@@ -20,7 +20,7 @@
 
 use crate::rpc;
 use sc_client_api::backend::{Backend as ClientBackend, Finalizer};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT, Justification};
+use sp_runtime::{traits::Block as BlockT, Justification};
 use std::{marker::PhantomData, sync::Arc};
 
 /// params for block finalization.
@@ -46,7 +46,7 @@ where
 {
 	let FinalizeBlockParams { hash, mut sender, justification, finalizer, .. } = params;
 
-	match finalizer.finalize_block(BlockId::Hash(hash), justification, true) {
+	match finalizer.finalize_block(&hash, justification, true) {
 		Err(e) => {
 			log::warn!("Failed to finalize block {}", e);
 			rpc::send_result(&mut sender, Err(e.into()))
