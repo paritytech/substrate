@@ -34,14 +34,14 @@ use std::io::Write;
 #[derive(Debug, Clone, Parser)]
 pub struct BuildSpecCmd {
 	/// Force raw genesis storage output.
-	#[clap(long)]
+	#[arg(long)]
 	pub raw: bool,
 
 	/// Disable adding the default bootnode to the specification.
 	///
 	/// By default the `/ip4/127.0.0.1/tcp/30333/p2p/NODE_PEER_ID` bootnode is added to the
 	/// specification when no bootnode exists.
-	#[clap(long)]
+	#[arg(long)]
 	pub disable_default_bootnode: bool,
 
 	#[allow(missing_docs)]
