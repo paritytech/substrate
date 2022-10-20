@@ -90,8 +90,8 @@ const MAX_KNOWN_EXTERNAL_ADDRESSES: usize = 32;
 
 /// `DiscoveryBehaviour` configuration.
 ///
-/// Note: In order to discover nodes or load and store values via Kademlia one has to add at least
-///       one protocol via [`DiscoveryConfig::add_protocol`].
+/// Note: In order to discover nodes or load and store values via Kademlia one has to add
+///       Kademlia protocol via [`DiscoveryConfig::with_kademlia`].
 pub struct DiscoveryConfig {
 	local_peer_id: PeerId,
 	permanent_addresses: Vec<(PeerId, Multiaddr)>,
