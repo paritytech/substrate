@@ -306,10 +306,21 @@ where
 
 	fn chain_head_unstable_header(
 		&self,
-		_follow_subscription: String,
-		_hash: Block::Hash,
+		follow_subscription: String,
+		hash: Block::Hash,
 	) -> RpcResult<Option<String>> {
-		Ok(None)
+		match self.subscriptions.contains(&follow_subscription, &hash) {
+			Err(SubscriptionError::InvalidBlock) =>
+				return Err(ChainHeadRpcError::InvalidBlock.into()),
+			Err(SubscriptionError::InvalidSubId) => return Ok(None),
+			_ => (),
+		};
+
+		self.client
+			.header(BlockId::Hash(hash))
+			.map(|opt_header| opt_header.map(|h| format!("0x{}", HexDisplay::from(&h.encode()))))
+			.map_err(ChainHeadRpcError::FetchBlockHeader)
+			.map_err(Into::into)
 	}
 
 	fn chain_head_unstable_storage(
