@@ -273,24 +273,32 @@ where
 		hash: Block::Hash,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
-		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
-			ChainHeadEvent::<String>::Disjoint
-		} else {
-			match self.client.block(&BlockId::Hash(hash)) {
-				Ok(Some(block)) => {
-					let result = format!("0x{}", HexDisplay::from(&block.encode()));
-					ChainHeadEvent::Done(ChainHeadResult { result })
-				},
-				Ok(None) => ChainHeadEvent::<String>::Inaccessible(ErrorEvent {
-					error: format!("Block hash not available"),
-				}),
-				Err(error) =>
-					ChainHeadEvent::<String>::Inaccessible(ErrorEvent { error: error.to_string() }),
-			}
-		};
+		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
 
-		let stream = stream::once(async move { res });
 		let fut = async move {
+			let res = match subscriptions.contains(&follow_subscription, &hash) {
+				Err(SubscriptionError::InvalidBlock) => {
+					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+					return
+				},
+				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<String>::Disjoint,
+				Ok(()) => match client.block(&BlockId::Hash(hash)) {
+					Ok(Some(signed_block)) => {
+						let extrinsics = signed_block.block.extrinsics();
+						let result = format!("0x{}", HexDisplay::from(&extrinsics.encode()));
+						ChainHeadEvent::Done(ChainHeadResult { result })
+					},
+					Ok(None) => {
+						// The block's body was pruned. This subscription ID has become invalid.
+						// TODO: Stop the `follow` method.
+						ChainHeadEvent::<String>::Disjoint
+					},
+					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+				},
+			};
+
+			let stream = stream::once(async move { res });
 			sink.pipe_from_stream(stream.boxed()).await;
 		};
 
