@@ -340,26 +340,36 @@ where
 		call_parameters: Bytes,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
-		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
-			ChainHeadEvent::<String>::Disjoint
-		} else {
-			match self.client.executor().call(
-				&BlockId::Hash(hash),
-				&function,
-				&call_parameters,
-				self.client.execution_extensions().strategies().other,
-				None,
-			) {
-				Ok(result) => {
-					let result = format!("0x{}", HexDisplay::from(&result));
-					ChainHeadEvent::Done(ChainHeadResult { result })
-				},
-				Err(error) => ChainHeadEvent::Inaccessible(ErrorEvent { error: error.to_string() }),
-			}
-		};
+		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
 
-		let stream = stream::once(async move { res });
 		let fut = async move {
+			let res = match subscriptions.contains(&follow_subscription, &hash) {
+				// TODO: Reject subscription if runtime_updates is false.
+				Err(SubscriptionError::InvalidBlock) => {
+					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+					return
+				},
+				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<String>::Disjoint,
+				Ok(()) => {
+					match client.executor().call(
+						&BlockId::Hash(hash),
+						&function,
+						&call_parameters,
+						client.execution_extensions().strategies().other,
+						None,
+					) {
+						Ok(result) => {
+							let result = format!("0x{}", HexDisplay::from(&result));
+							ChainHeadEvent::Done(ChainHeadResult { result })
+						},
+						Err(error) =>
+							ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+					}
+				},
+			};
+
+			let stream = stream::once(async move { res });
 			sink.pipe_from_stream(stream.boxed()).await;
 		};
 

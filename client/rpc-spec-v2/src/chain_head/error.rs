@@ -41,16 +41,22 @@ const INVALID_BLOCK_ERROR: i32 = BASE_ERROR + 1;
 /// Fetch block header error.
 const FETCH_BLOCK_HEADER_ERROR: i32 = BASE_ERROR + 2;
 
-impl From<Error> for RpcError {
+impl From<Error> for ErrorObject<'static> {
 	fn from(e: Error) -> Self {
 		let msg = e.to_string();
 
 		match e {
 			Error::InvalidBlock =>
-				CallError::Custom(ErrorObject::owned(INVALID_BLOCK_ERROR, msg, None::<()>)),
+				ErrorObject::owned(INVALID_BLOCK_ERROR, msg, None::<()>),
 			Error::FetchBlockHeader(_) =>
-				CallError::Custom(ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>)),
+				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
 		}
 		.into()
+	}
+}
+
+impl From<Error> for RpcError {
+	fn from(e: Error) -> Self {
+		CallError::Custom(e.into()).into()
 	}
 }
