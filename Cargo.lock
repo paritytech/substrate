@@ -8869,6 +8869,7 @@ dependencies = [
  "sc-utils",
  "serde",
  "sp-api",
+ "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
