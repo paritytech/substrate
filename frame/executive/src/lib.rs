@@ -236,8 +236,6 @@ where
 		try_state_root: bool,
 		select: frame_try_runtime::TryStateSelect,
 	) -> Result<frame_support::weights::Weight, &'static str> {
-		use frame_support::traits::TryState;
-
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
@@ -246,7 +244,7 @@ where
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
 		// run the try-state checks of all pallets.
-		<AllPalletsWithSystem as TryState<System::BlockNumber>>::try_state(
+		<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 			*header.number(),
 			select,
 		)
@@ -286,8 +284,20 @@ where
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
-	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		let weight = Self::execute_on_runtime_upgrade();
+	pub fn try_runtime_upgrade(
+		checks: bool,
+	) -> Result<frame_support::weights::Weight, &'static str> {
+		let weight =
+			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
+				checks,
+			);
+		if checks {
+			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+				frame_system::Pallet::<System>::block_number(),
+				frame_try_runtime::TryStateSelect::All,
+			)
+			.unwrap();
+		}
 		Ok(weight)
 	}
 }

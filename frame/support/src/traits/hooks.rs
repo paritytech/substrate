@@ -136,6 +136,32 @@ pub trait OnRuntimeUpgrade {
 		Weight::zero()
 	}
 
+	/// Same as [`on_runtime_upgrade`], but perform the optional [`pre_upgrade`] and
+	/// [`post_upgrade`] as well.
+	#[cfg(feature = "try-runtime")]
+	fn try_on_runtime_upgrade(checks: bool) -> Weight {
+		let maybe_state = if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			let state = Self::pre_upgrade().unwrap();
+			drop(_guard);
+			Some(state)
+		} else {
+			None
+		};
+
+		let weight = Self::on_runtime_upgrade();
+
+		if checks {
+			let _guard = frame_support::StorageNoopGuard::default();
+			// we want to panic if any checks fail right here right now.
+			Self::post_upgrade(maybe_state.expect("checks has not changed; value is Some; qed"))
+				.unwrap();
+			drop(_guard);
+		}
+
+		weight
+	}
+
 	/// Execute some pre-checks prior to a runtime upgrade.
 	///
 	/// Return a `Vec<u8>` that can contain arbitrary encoded data (usually some pre-upgrade state),
@@ -143,6 +169,9 @@ pub trait OnRuntimeUpgrade {
 	/// should be returned if there is no such need.
 	///
 	/// This hook is never meant to be executed on-chain but is meant to be used by testing tools.
+	///
+	/// This hook must not write to any state, as it would make the main `on_runtime_upgrade` path
+	/// inaccurate.
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 		Ok(Vec::new())
@@ -165,7 +194,6 @@ pub trait OnRuntimeUpgrade {
 #[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
 #[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 impl OnRuntimeUpgrade for Tuple {
-	#[cfg(not(feature = "try-runtime"))]
 	fn on_runtime_upgrade() -> Weight {
 		let mut weight = Weight::zero();
 		for_tuples!( #( weight = weight.saturating_add(Tuple::on_runtime_upgrade()); )* );
@@ -176,27 +204,9 @@ impl OnRuntimeUpgrade for Tuple {
 	/// We are executing pre- and post-checks sequentially in order to be able to test several
 	/// consecutive migrations for the same pallet without errors. Therefore pre and post upgrade
 	/// hooks for tuples are a noop.
-	fn on_runtime_upgrade() -> Weight {
-		use scale_info::prelude::format;
-
+	fn try_on_runtime_upgrade(checks: bool) -> Weight {
 		let mut weight = Weight::zero();
-		// migration index in the tuple, start with 1 for better readability
-		let mut i = 1;
-		for_tuples!( #(
-			let _guard = frame_support::StorageNoopGuard::default();
-			// we want to panic if any checks fail right here right now.
-			let state = Tuple::pre_upgrade().expect(&format!("PreUpgrade failed for migration #{}", i));
-			drop(_guard);
-
-			weight = weight.saturating_add(Tuple::on_runtime_upgrade());
-
-			let _guard = frame_support::StorageNoopGuard::default();
-			// we want to panic if any checks fail right here right now.
-			Tuple::post_upgrade(state).expect(&format!("PostUpgrade failed for migration #{}", i));
-			drop(_guard);
-
-			i += 1;
-		)* );
+		for_tuples!( #( weight = weight.saturating_add(Tuple::try_on_runtime_upgrade(checks)); )* );
 		weight
 	}
 }

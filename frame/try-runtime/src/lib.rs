@@ -33,7 +33,7 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Returns the consumed weight of the migration in case of a successful one, combined with
 		/// the total allowed block weight of the runtime.
-		fn on_runtime_upgrade() -> (Weight, Weight);
+		fn on_runtime_upgrade(checks: bool) -> (Weight, Weight);
 
 		/// Execute the given block, but don't check that its state root matches that of yours.
 		///

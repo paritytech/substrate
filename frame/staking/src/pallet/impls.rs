@@ -1558,9 +1558,9 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			T::VoterList::iter()
 				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
-			"VoterList contains non-nominators"
+			"VoterList contains non-staker"
 		);
-		T::VoterList::try_state()?;
+
 		Self::check_nominators()?;
 		Self::check_exposures()?;
 		Self::check_ledgers()?;
@@ -1571,6 +1571,10 @@ impl<T: Config> Pallet<T> {
 		ensure!(
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
+			"wrong external count"
+		);
+		ensure!(
+			<T as Config>::TargetList::count() == Validators::<T>::count(),
 			"wrong external count"
 		);
 		Ok(())
@@ -1608,7 +1612,7 @@ impl<T: Config> Pallet<T> {
 		<Nominators<T>>::iter()
 			.filter_map(
 				|(nominator, nomination)| {
-					if nomination.submitted_in > era {
+					if nomination.submitted_in < era {
 						Some(nominator)
 					} else {
 						None

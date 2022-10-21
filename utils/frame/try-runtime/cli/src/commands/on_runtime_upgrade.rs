@@ -17,7 +17,7 @@
 
 use std::{fmt::Debug, str::FromStr};
 
-use parity_scale_codec::Decode;
+use parity_scale_codec::{Decode, Encode};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -34,6 +34,12 @@ pub struct OnRuntimeUpgradeCmd {
 	/// The state type to use.
 	#[command(subcommand)]
 	pub state: State,
+
+	/// Execute `try_state`, `pre_upgrade` and `post_upgrade` checks as well.
+	///
+	/// This will perform more checks, but it will also makes the reported PoV/Weight be inaccurate.
+	#[clap(long)]
+	pub checks: bool,
 }
 
 pub(crate) async fn on_runtime_upgrade<Block, ExecDispatch>(
@@ -87,7 +93,7 @@ where
 		&executor,
 		execution,
 		"TryRuntime_on_runtime_upgrade",
-		&[],
+		command.checks.encode().as_ref(),
 		Default::default(), // we don't really need any extensions here.
 	)?;
 

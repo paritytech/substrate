@@ -19,7 +19,7 @@ use crate::{hash_of, LiveState, LOG_TARGET};
 use remote_externalities::{Builder, Mode, OnlineConfig, SnapshotConfig};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
-use substrate_rpc_client::{StateApi, ws_client};
+use substrate_rpc_client::{ws_client, StateApi};
 
 /// Configurations of the [`Command::CreateSnapshot`].
 #[derive(Debug, Clone, clap::Parser)]

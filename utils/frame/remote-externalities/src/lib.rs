@@ -40,7 +40,6 @@ use std::{
 	thread,
 };
 
-
 use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
 type KeyValue = (StorageKey, StorageData);
