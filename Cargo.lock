@@ -4584,6 +4584,7 @@ dependencies = [
  "sc-executor",
  "scale-info",
  "sp-application-crypto",
+ "sp-arithmetic",
  "sp-consensus-babe",
  "sp-core",
  "sp-externalities",
