@@ -1452,8 +1452,7 @@ where
 		if let SyncMode::LightState { skip_proofs, .. } = &self.mode {
 			if self.state_sync.is_none() && !self.peers.is_empty() && self.queue_blocks.is_empty() {
 				// Finalized a recent block.
-				let mut heads: Vec<_> =
-					self.peers.iter().map(|(_, peer)| peer.best_number).collect();
+				let mut heads: Vec<_> = self.peers.values().map(|peer| peer.best_number).collect();
 				heads.sort();
 				let median = heads[heads.len() / 2];
 				if number + STATE_SYNC_FINALITY_THRESHOLD.saturated_into() >= median {
@@ -3176,9 +3175,7 @@ mod test {
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		let just = (*b"TEST", Vec::new());
-		client
-			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
-			.unwrap();
+		client.finalize_block(&finalized_block.hash(), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
 		let peer_id1 = PeerId::random();
@@ -3307,9 +3304,7 @@ mod test {
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		let just = (*b"TEST", Vec::new());
-		client
-			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
-			.unwrap();
+		client.finalize_block(&finalized_block.hash(), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
 		let peer_id1 = PeerId::random();
