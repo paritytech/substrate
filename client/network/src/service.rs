@@ -70,7 +70,7 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::{SyncState, SyncStatus},
+	sync::SyncStatus,
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
@@ -1997,11 +1997,13 @@ where
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing =
-			match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
-				SyncState::Idle => false,
-				SyncState::Downloading => true,
-			};
+		let is_major_syncing = this
+			.network_service
+			.behaviour_mut()
+			.user_protocol_mut()
+			.sync_state()
+			.state
+			.is_major_syncing();
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
