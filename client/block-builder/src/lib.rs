@@ -258,12 +258,11 @@ where
 
 		let proof = self.api.extract_proof();
 
-		let state = self.backend.state_at(self.block_id)?;
-		let parent_hash = self.parent_hash;
+		let state = self.backend.state_at(&self.parent_hash)?;
 
 		let storage_changes = self
 			.api
-			.into_storage_changes(&state, parent_hash)
+			.into_storage_changes(&state, self.parent_hash)
 			.map_err(sp_blockchain::Error::StorageChanges)?;
 
 		Ok(BuiltBlock {

@@ -1552,11 +1552,12 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 }
 
-#[cfg(feature = "try-runtime")]
+#[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
 	pub(crate) fn do_try_state(_: BlockNumberFor<T>) -> Result<(), &'static str> {
 		ensure!(
-			T::VoterList::iter().all(|x| <Nominators<T>>::contains_key(&x)),
+			T::VoterList::iter()
+				.all(|x| <Nominators<T>>::contains_key(&x) || <Validators<T>>::contains_key(&x)),
 			"VoterList contains non-nominators"
 		);
 		T::VoterList::try_state()?;

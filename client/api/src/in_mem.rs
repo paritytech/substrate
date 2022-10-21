@@ -223,10 +223,10 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Set an existing block as head.
-	pub fn set_head(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
+	pub fn set_head(&self, hash: Block::Hash) -> sp_blockchain::Result<()> {
 		let header = self
-			.header(id)?
-			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id)))?;
+			.header(BlockId::Hash(hash))?
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))?;
 
 		self.apply_head(&header)
 	}
@@ -271,21 +271,16 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	fn finalize_header(
 		&self,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		let hash = match self.header(id)? {
-			Some(h) => h.hash(),
-			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
-		};
-
 		let mut storage = self.storage.write();
-		storage.finalized_hash = hash;
+		storage.finalized_hash = *block;
 
 		if justification.is_some() {
 			let block = storage
 				.blocks
-				.get_mut(&hash)
+				.get_mut(block)
 				.expect("hash was fetched from a block in the db; qed");
 
 			let block_justifications = match block {
@@ -500,8 +495,8 @@ pub struct BlockImportOperation<Block: BlockT> {
 	new_state:
 		Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
-	set_head: Option<BlockId<Block>>,
+	finalized_blocks: Vec<(Block::Hash, Option<Justification>)>,
+	set_head: Option<Block::Hash>,
 }
 
 impl<Block: BlockT> BlockImportOperation<Block>
@@ -516,7 +511,7 @@ where
 	) -> sp_blockchain::Result<Block::Hash> {
 		check_genesis_storage(&storage)?;
 
-		let child_delta = storage.children_default.iter().map(|(_storage_key, child_content)| {
+		let child_delta = storage.children_default.values().map(|child_content| {
 			(
 				&child_content.child_info,
 				child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
@@ -605,16 +600,16 @@ where
 
 	fn mark_finalized(
 		&mut self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		self.finalized_blocks.push((block, justification));
+		self.finalized_blocks.push((*hash, justification));
 		Ok(())
 	}
 
-	fn mark_head(&mut self, block: BlockId<Block>) -> sp_blockchain::Result<()> {
+	fn mark_head(&mut self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one set block per operation is allowed");
-		self.set_head = Some(block);
+		self.set_head = Some(*hash);
 		Ok(())
 	}
 
@@ -686,7 +681,7 @@ where
 	type OffchainStorage = OffchainStorage;
 
 	fn begin_operation(&self) -> sp_blockchain::Result<Self::BlockImportOperation> {
-		let old_state = self.state_at(BlockId::Hash(Default::default()))?;
+		let old_state = self.state_at(&Default::default())?;
 		Ok(BlockImportOperation {
 			pending_block: None,
 			old_state,
@@ -700,7 +695,7 @@ where
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: BlockId<Block>,
+		block: &Block::Hash,
 	) -> sp_blockchain::Result<()> {
 		operation.old_state = self.state_at(block)?;
 		Ok(())
@@ -709,7 +704,7 @@ where
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
-				self.blockchain.finalize_header(block, justification)?;
+				self.blockchain.finalize_header(&block, justification)?;
 			}
 		}
 
@@ -742,10 +737,10 @@ where
 
 	fn finalize_block(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		self.blockchain.finalize_header(block, justification)
+		self.blockchain.finalize_header(hash, justification)
 	}
 
 	fn append_justification(
@@ -768,16 +763,16 @@ where
 		None
 	}
 
-	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State> {
-		match block {
-			BlockId::Hash(h) if h == Default::default() => return Ok(Self::State::default()),
-			_ => {},
+	fn state_at(&self, hash: &Block::Hash) -> sp_blockchain::Result<Self::State> {
+		if *hash == Default::default() {
+			return Ok(Self::State::default())
 		}
 
-		self.blockchain
-			.id(block)
-			.and_then(|id| self.states.read().get(&id).cloned())
-			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", block)))
+		self.states
+			.read()
+			.get(hash)
+			.cloned()
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))
 	}
 
 	fn revert(

@@ -190,11 +190,11 @@ impl PeersClient {
 
 	pub fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> ClientResult<()> {
-		self.client.finalize_block(id, justification, notify)
+		self.client.finalize_block(hash, justification, notify)
 	}
 }
 
@@ -864,7 +864,7 @@ where
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
-		let chain_sync = ChainSync::new(
+		let (chain_sync, chain_sync_service) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -902,6 +902,7 @@ where
 			fork_id,
 			import_queue,
 			chain_sync: Box::new(chain_sync),
+			chain_sync_service,
 			metrics_registry: None,
 			block_announce_config,
 			block_request_protocol_config,
@@ -1112,7 +1113,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0
-			.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.finalize_block(&hash, Some(justification), true)
 			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }

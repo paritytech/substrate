@@ -24,6 +24,7 @@ message BlockRequest {
 		bytes number = 3;
 	}
 	// Sequence direction.
+	// If missing, should be interpreted as "Ascending".
 	Direction direction = 5;
 	// Maximum number of blocks to return. An implementation defined maximum is used when unspecified.
 	uint32 max_blocks = 6; // optional
