@@ -43,7 +43,7 @@
 //!
 //! ```rust
 //! # use sp_npos_elections::*;
-//! # use sp_runtime::Perbill;
+//! # use sp_arithmetic::Perbill;
 //! // the winners.
 //! let winners = vec![(1, 100), (2, 50)];
 //! let assignments = vec![
