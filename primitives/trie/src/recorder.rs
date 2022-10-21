@@ -111,7 +111,6 @@ impl<H: Hasher> Recorder<H> {
 		let recorder = self.inner.lock();
 
 		StorageProof::new(recorder.accessed_nodes.values().map(|v| v.clone()))
-
 	}
 
 	/// Returns the estimated encoded size of the proof.
