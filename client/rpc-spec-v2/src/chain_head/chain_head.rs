@@ -266,11 +266,41 @@ where
 
 	fn chain_head_unstable_body(
 		&self,
-		mut _sink: SubscriptionSink,
-		_follow_subscription: String,
-		_hash: Block::Hash,
+		mut sink: SubscriptionSink,
+		follow_subscription: String,
+		hash: Block::Hash,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
+		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
+
+		let fut = async move {
+			let res = match subscriptions.contains(&follow_subscription, &hash) {
+				Err(SubscriptionError::InvalidBlock) => {
+					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+					return
+				},
+				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<String>::Disjoint,
+				Ok(()) => match client.block(&BlockId::Hash(hash)) {
+					Ok(Some(signed_block)) => {
+						let extrinsics = signed_block.block.extrinsics();
+						let result = format!("0x{}", HexDisplay::from(&extrinsics.encode()));
+						ChainHeadEvent::Done(ChainHeadResult { result })
+					},
+					Ok(None) => {
+						// The block's body was pruned. This subscription ID has become invalid.
+						// TODO: Stop the `follow` method.
+						ChainHeadEvent::<String>::Disjoint
+					},
+					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+				},
+			};
+
+			let stream = stream::once(async move { res });
+			sink.pipe_from_stream(stream.boxed()).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 
