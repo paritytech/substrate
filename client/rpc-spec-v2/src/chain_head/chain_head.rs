@@ -19,11 +19,26 @@
 //! API implementation for `chainHead`.
 
 use crate::{
-	chain_head::{api::ChainHeadApiServer, subscription::SubscriptionManagement},
+	chain_head::{
+		api::ChainHeadApiServer,
+		error::Error as ChainHeadRpcError,
+		event::{
+			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
+			Initialized, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+		},
+		subscription::{SubscriptionError, SubscriptionManagement},
+	},
 	SubscriptionTaskExecutor,
 };
+use std::{marker::PhantomData, sync::Arc};
+use sc_client_api::CallExecutor;
+use codec::Encode;
+use futures::{
+	future::FutureExt,
+	stream::{self, StreamExt},
+};
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::{async_trait, error::SubscriptionClosed, RpcResult},
 	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
@@ -32,9 +47,11 @@ use sc_client_api::{
 };
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
-use sp_core::Bytes;
-use sp_runtime::traits::{Block as BlockT, Header};
-use std::{marker::PhantomData, sync::Arc};
+use sp_core::{hexdisplay::HexDisplay, Bytes};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header},
+};
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -90,6 +107,49 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 
 		let sub_id: String = "A".into();
 		Ok(sub_id)
+	}
+}
+
+fn generate_runtime_event<Client, Block>(
+	client: &Arc<Client>,
+	runtime_updates: bool,
+	block: &BlockId<Block>,
+	parent: Option<&BlockId<Block>>,
+) -> Option<RuntimeEvent>
+where
+	Block: BlockT + 'static,
+	Client: CallApiAt<Block> + 'static,
+{
+	// No runtime versions should be reported.
+	if runtime_updates {
+		return None
+	}
+
+	// Helper for uniform conversions on errors.
+	let to_event_err =
+		|err| Some(RuntimeEvent::Invalid(ErrorEvent { error: format!("Api error: {}", err) }));
+
+	let block_rt = match client.runtime_version_at(block) {
+		Ok(rt) => rt,
+		Err(err) => return to_event_err(err),
+	};
+
+	let parent = match parent {
+		Some(parent) => parent,
+		// Nothing to compare against, always report.
+		None => return Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: block_rt })),
+	};
+
+	let parent_rt = match client.runtime_version_at(parent) {
+		Ok(rt) => rt,
+		Err(err) => return to_event_err(err),
+	};
+
+	// Report the runtime version change.
+	if block_rt != parent_rt {
+		Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: block_rt }))
+	} else {
+		None
 	}
 }
 
