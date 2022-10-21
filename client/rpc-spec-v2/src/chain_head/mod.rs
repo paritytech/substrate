@@ -22,4 +22,6 @@
 //!
 //! Methods are prefixed by `chainHead`.
 
+pub mod api;
+pub mod error;
 pub mod event;
