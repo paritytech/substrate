@@ -23,6 +23,7 @@
 //! Methods are prefixed by `chainHead`.
 
 pub mod api;
+pub mod chain_head;
 pub mod error;
 pub mod event;
 
