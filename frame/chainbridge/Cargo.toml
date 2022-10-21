@@ -13,7 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
@@ -23,7 +23,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 lite-json = { version = "0.2.0", default-features = false }
 sp-keystore = { version = "0.12.0", path = "../../primitives/keystore", optional = true }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 

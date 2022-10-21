@@ -14,7 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 serde = { version = "1.0.101", optional = true }
-codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-balances = { version = "4.0.0-dev", default-features = false, path = "../balances" }
@@ -23,7 +23,7 @@ sp-std = { version = "4.0.0-dev", default-features = false, path = "../../primit
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 sp-core = { version = "6.0.0", path = "../../primitives/core", default-features = false }
 pallet-chainbridge = { version = "2.0.0", default-features = false, path = "../chainbridge" }
-scale-info = { version = "1.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
 
