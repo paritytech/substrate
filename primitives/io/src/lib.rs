@@ -67,6 +67,12 @@ use sp_runtime_interface::{
 use codec::{Decode, Encode};
 
 #[cfg(feature = "std")]
+use secp256k1::{
+	ecdsa::{RecoverableSignature, RecoveryId},
+	Message, SECP256K1,
+};
+
+#[cfg(feature = "std")]
 use sp_externalities::{Externalities, ExternalitiesExt};
 
 #[cfg(feature = "std")]
@@ -647,7 +653,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| ed25519::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| ed25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify `ed25519` signature.
@@ -771,7 +777,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| sr25519::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| sr25519::Signature::from_slice(&sig))
 	}
 
 	/// Verify an `sr25519` signature.
@@ -820,7 +826,7 @@ pub trait Crypto {
 		SyncCryptoStore::sign_with(keystore, id, &pub_key.into(), msg)
 			.ok()
 			.flatten()
-			.map(|sig| ecdsa::Signature::from_slice(sig.as_slice()))
+			.and_then(|sig| ecdsa::Signature::from_slice(&sig))
 	}
 
 	/// Sign the given a pre-hashed `msg` with the `ecdsa` key that corresponds to the given public
@@ -842,7 +848,9 @@ pub trait Crypto {
 	/// Verify `ecdsa` signature.
 	///
 	/// Returns `true` when the verification was successful.
+	/// This version is able to handle, non-standard, overflowing signatures.
 	fn ecdsa_verify(sig: &ecdsa::Signature, msg: &[u8], pub_key: &ecdsa::Public) -> bool {
+		#[allow(deprecated)]
 		ecdsa::Pair::verify_deprecated(sig, msg, pub_key)
 	}
 
@@ -891,18 +899,20 @@ pub trait Crypto {
 	///
 	/// Returns `Err` if the signature is bad, otherwise the 64-byte pubkey
 	/// (doesn't include the 0x04 prefix).
+	/// This version is able to handle, non-standard, overflowing signatures.
 	fn secp256k1_ecdsa_recover(
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
-			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		let rid = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8,
 		)
 		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
-			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let sig = libsecp256k1::Signature::parse_overflowing_slice(&sig[..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let msg = libsecp256k1::Message::parse(msg);
+		let pubkey =
+			libsecp256k1::recover(&msg, &sig, &rid).map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
 		res.copy_from_slice(&pubkey.serialize()[1..65]);
 		Ok(res)
@@ -920,16 +930,16 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 64], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_standard_slice(&sig[0..64])
+		let rid = RecoveryId::from_i32(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as i32)
+			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let sig = RecoverableSignature::from_compact(&sig[..64], rid)
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
-		)
-		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
+		let msg = Message::from_slice(msg).expect("Message is 32 bytes; qed");
+		let pubkey = SECP256K1
+			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
 		let mut res = [0u8; 64];
-		res.copy_from_slice(&pubkey.serialize()[1..65]);
+		res.copy_from_slice(&pubkey.serialize_uncompressed()[1..]);
 		Ok(res)
 	}
 
@@ -943,14 +953,15 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
-			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
+		let rid = libsecp256k1::RecoveryId::parse(
+			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8,
 		)
 		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
-			.map_err(|_| EcdsaVerifyError::BadSignature)?;
+		let sig = libsecp256k1::Signature::parse_overflowing_slice(&sig[0..64])
+			.map_err(|_| EcdsaVerifyError::BadRS)?;
+		let msg = libsecp256k1::Message::parse(msg);
+		let pubkey =
+			libsecp256k1::recover(&msg, &sig, &rid).map_err(|_| EcdsaVerifyError::BadSignature)?;
 		Ok(pubkey.serialize_compressed())
 	}
 
@@ -965,15 +976,15 @@ pub trait Crypto {
 		sig: &[u8; 65],
 		msg: &[u8; 32],
 	) -> Result<[u8; 33], EcdsaVerifyError> {
-		let rs = libsecp256k1::Signature::parse_standard_slice(&sig[0..64])
+		let rid = RecoveryId::from_i32(if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as i32)
+			.map_err(|_| EcdsaVerifyError::BadV)?;
+		let sig = RecoverableSignature::from_compact(&sig[..64], rid)
 			.map_err(|_| EcdsaVerifyError::BadRS)?;
-		let v = libsecp256k1::RecoveryId::parse(
-			if sig[64] > 26 { sig[64] - 27 } else { sig[64] } as u8
-		)
-		.map_err(|_| EcdsaVerifyError::BadV)?;
-		let pubkey = libsecp256k1::recover(&libsecp256k1::Message::parse(msg), &rs, &v)
+		let msg = Message::from_slice(msg).expect("Message is 32 bytes; qed");
+		let pubkey = SECP256K1
+			.recover_ecdsa(&msg, &sig)
 			.map_err(|_| EcdsaVerifyError::BadSignature)?;
-		Ok(pubkey.serialize_compressed())
+		Ok(pubkey.serialize())
 	}
 }
 

@@ -15,42 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[cfg(feature = "std")]
-use std::error::Error as StdError;
-#[cfg(feature = "std")]
-use std::fmt;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 /// Error for trie node decoding.
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum Error {
-	/// Bad format.
+	#[cfg_attr(feature = "std", error("Bad format"))]
 	BadFormat,
-	/// Decoding error.
-	Decode(codec::Error),
+	#[cfg_attr(feature = "std", error("Decoding failed: {0}"))]
+	Decode(#[cfg_attr(feature = "std", source)] codec::Error),
 }
 
 impl From<codec::Error> for Error {
 	fn from(x: codec::Error) -> Self {
 		Error::Decode(x)
-	}
-}
-
-#[cfg(feature = "std")]
-impl StdError for Error {
-	fn description(&self) -> &str {
-		match self {
-			Error::BadFormat => "Bad format error",
-			Error::Decode(_) => "Decoding error",
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match self {
-			Error::Decode(e) => write!(f, "Decode error: {}", e),
-			Error::BadFormat => write!(f, "Bad format"),
-		}
 	}
 }

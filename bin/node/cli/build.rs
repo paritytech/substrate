@@ -25,7 +25,7 @@ fn main() {
 mod cli {
 	include!("src/cli.rs");
 
-	use clap::{ArgEnum, IntoApp};
+	use clap::{ArgEnum, CommandFactory};
 	use clap_complete::{generate_to, Shell};
 	use std::{env, fs, path::Path};
 	use substrate_build_script_utils::{generate_cargo_keys, rerun_if_git_head_changed};
@@ -61,6 +61,6 @@ mod cli {
 
 		fs::create_dir(&path).ok();
 
-		let _ = generate_to(*shell, &mut Cli::into_app(), "substrate-node", &path);
+		let _ = generate_to(*shell, &mut Cli::command(), "substrate-node", &path);
 	}
 }

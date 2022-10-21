@@ -123,7 +123,7 @@ impl TypeId for PalletId {
 #[macro_export]
 #[cfg(feature = "std")]
 macro_rules! bounded_vec {
-	($ ($values:expr),* ) => {
+	($ ($values:expr),* $(,)?) => {
 		{
 			use $crate::sp_std::convert::TryInto as _;
 			$crate::sp_std::vec![$($values),*].try_into().unwrap()

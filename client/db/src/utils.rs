@@ -40,7 +40,7 @@ use sp_trie::DBValue;
 	feature = "test-helpers",
 	test
 ))]
-pub const NUM_COLUMNS: u32 = 12;
+pub const NUM_COLUMNS: u32 = 13;
 /// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: u32 = 0;
 
@@ -252,7 +252,7 @@ impl From<OpenDbError> for sp_blockchain::Error {
 #[cfg(feature = "with-parity-db")]
 impl From<parity_db::Error> for OpenDbError {
 	fn from(err: parity_db::Error) -> Self {
-		if err.to_string().contains("use open_or_create") {
+		if matches!(err, parity_db::Error::DatabaseNotFound) {
 			OpenDbError::DoesNotExist
 		} else {
 			OpenDbError::Internal(err.to_string())
@@ -272,8 +272,14 @@ impl From<io::Error> for OpenDbError {
 
 #[cfg(feature = "with-parity-db")]
 fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: bool) -> OpenDbResult {
-	let db = crate::parity_db::open(path, db_type, create)?;
-	Ok(db)
+	match crate::parity_db::open(path, db_type, create, false) {
+		Ok(db) => Ok(db),
+		Err(parity_db::Error::InvalidConfiguration(_)) => {
+			// Try to update the database with the new config
+			Ok(crate::parity_db::open(path, db_type, create, true)?)
+		},
+		Err(e) => Err(e.into()),
+	}
 }
 
 #[cfg(not(feature = "with-parity-db"))]
@@ -573,7 +579,7 @@ impl<'a, 'b> codec::Input for JoinInput<'a, 'b> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{KeepBlocks, TransactionStorageMode};
+	use crate::KeepBlocks;
 	use codec::Input;
 	use sc_state_db::PruningMode;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
@@ -689,7 +695,6 @@ mod tests {
 			state_pruning: PruningMode::ArchiveAll,
 			source,
 			keep_blocks: KeepBlocks::All,
-			transaction_storage: TransactionStorageMode::BlockBody,
 		}
 	}
 

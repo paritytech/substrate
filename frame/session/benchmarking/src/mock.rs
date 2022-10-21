@@ -181,6 +181,7 @@ impl pallet_staking::Config for Test {
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider = onchain::OnChainSequentialPhragmen<Self>;
 	type GenesisElectionProvider = Self::ElectionProvider;
+	type MaxUnlockingChunks = ConstU32<32>;
 	type SortedListProvider = pallet_staking::UseNominatorsMap<Self>;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();

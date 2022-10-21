@@ -35,7 +35,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 			// is bags-list.
 			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
 			at: None,
-			state_snapshot: None,
+			..Default::default()
 		}))
 		.inject_hashed_prefix(&<pallet_staking::Bonded<Runtime>>::prefix_hash())
 		.inject_hashed_prefix(&<pallet_staking::Ledger<Runtime>>::prefix_hash())

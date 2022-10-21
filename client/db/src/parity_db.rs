@@ -38,20 +38,22 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 	path: &std::path::Path,
 	db_type: DatabaseType,
 	create: bool,
+	upgrade: bool,
 ) -> parity_db::Result<std::sync::Arc<dyn Database<H>>> {
 	let mut config = parity_db::Options::with_columns(path, NUM_COLUMNS as u8);
 
 	match db_type {
 		DatabaseType::Full => {
-			let indexes = [
+			let compressed = [
 				columns::STATE,
 				columns::HEADER,
 				columns::BODY,
+				columns::BODY_INDEX,
 				columns::TRANSACTION,
 				columns::JUSTIFICATIONS,
 			];
 
-			for i in indexes {
+			for i in compressed {
 				let mut column = &mut config.columns[i as usize];
 				column.compression = parity_db::CompressionType::Lz4;
 			}
@@ -60,7 +62,19 @@ pub fn open<H: Clone + AsRef<[u8]>>(
 			state_col.ref_counted = true;
 			state_col.preimage = true;
 			state_col.uniform = true;
+
+			let mut tx_col = &mut config.columns[columns::TRANSACTION as usize];
+			tx_col.ref_counted = true;
+			tx_col.preimage = true;
+			tx_col.uniform = true;
 		},
+	}
+
+	if upgrade {
+		log::info!("Upgrading database metadata.");
+		if let Some(meta) = parity_db::Options::load_metadata(path)? {
+			config.write_metadata(path, &meta.salt)?;
+		}
 	}
 
 	let db = if create {

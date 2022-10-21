@@ -203,7 +203,7 @@ impl<B: ChainApi> ValidatedPool<B> {
 				let imported = self.pool.write().import(tx)?;
 
 				if let base::Imported::Ready { ref hash, .. } = imported {
-					self.import_notification_sinks.lock().retain_mut(|sink| {
+					RetainMut::retain_mut(&mut *self.import_notification_sinks.lock(), |sink| {
 						match sink.try_send(*hash) {
 							Ok(()) => true,
 							Err(e) =>

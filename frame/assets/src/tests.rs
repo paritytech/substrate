@@ -125,6 +125,21 @@ fn refunding_asset_deposit_without_burn_should_work() {
 	});
 }
 
+/// Refunding reaps an account and calls the `FrozenBalance::died` hook.
+#[test]
+fn refunding_calls_died_hook() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, false, 1));
+		Balances::make_free_balance_be(&1, 100);
+		assert_ok!(Assets::touch(Origin::signed(1), 0));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::refund(Origin::signed(1), 0, true));
+
+		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
+		assert_eq!(hooks(), vec![Hook::Died(0, 1)]);
+	});
+}
+
 #[test]
 fn approval_lifecycle_works() {
 	new_test_ext().execute_with(|| {
@@ -389,19 +404,32 @@ fn min_balance_should_work() {
 		);
 
 		// When deducting from an account to below minimum, it should be reaped.
+		// Death by `transfer`.
 		assert_ok!(Assets::transfer(Origin::signed(1), 0, 2, 91));
 		assert!(Assets::maybe_balance(0, 1).is_none());
 		assert_eq!(Assets::balance(0, 2), 100);
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
+		assert_eq!(take_hooks(), vec![Hook::Died(0, 1)]);
 
+		// Death by `force_transfer`.
 		assert_ok!(Assets::force_transfer(Origin::signed(1), 0, 2, 1, 91));
 		assert!(Assets::maybe_balance(0, 2).is_none());
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 1);
+		assert_eq!(take_hooks(), vec![Hook::Died(0, 2)]);
 
+		// Death by `burn`.
 		assert_ok!(Assets::burn(Origin::signed(1), 0, 1, 91));
 		assert!(Assets::maybe_balance(0, 1).is_none());
 		assert_eq!(Asset::<Test>::get(0).unwrap().accounts, 0);
+		assert_eq!(take_hooks(), vec![Hook::Died(0, 1)]);
+
+		// Death by `transfer_approved`.
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		Balances::make_free_balance_be(&1, 1);
+		assert_ok!(Assets::approve_transfer(Origin::signed(1), 0, 2, 100));
+		assert_ok!(Assets::transfer_approved(Origin::signed(2), 0, 1, 3, 91));
+		assert_eq!(take_hooks(), vec![Hook::Died(0, 1)]);
 	});
 }
 
@@ -448,6 +476,7 @@ fn transferring_enough_to_kill_source_when_keep_alive_should_fail() {
 		assert_ok!(Assets::transfer_keep_alive(Origin::signed(1), 0, 2, 90));
 		assert_eq!(Assets::balance(0, 1), 10);
 		assert_eq!(Assets::balance(0, 2), 90);
+		assert!(hooks().is_empty());
 	});
 }
 
@@ -682,6 +711,24 @@ fn set_metadata_should_work() {
 		assert_ok!(Assets::clear_metadata(Origin::signed(1), 0));
 		assert!(!Metadata::<Test>::contains_key(0));
 	});
+}
+
+/// Destroying an asset calls the `FrozenBalance::died` hooks of all accounts.
+#[test]
+fn destroy_calls_died_hooks() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Assets::force_create(Origin::root(), 0, 1, true, 50));
+		// Create account 1 and 2.
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 1, 100));
+		assert_ok!(Assets::mint(Origin::signed(1), 0, 2, 100));
+		// Destroy the asset.
+		let w = Asset::<Test>::get(0).unwrap().destroy_witness();
+		assert_ok!(Assets::destroy(Origin::signed(1), 0, w));
+
+		// Asset is gone and accounts 1 and 2 died.
+		assert!(Asset::<Test>::get(0).is_none());
+		assert_eq!(hooks(), vec![Hook::Died(0, 1), Hook::Died(0, 2)]);
+	})
 }
 
 #[test]

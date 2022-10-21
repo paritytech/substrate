@@ -31,7 +31,7 @@ use sc_service::{
 		NodeKeyConfig, OffchainWorkerConfig, PrometheusConfig, PruningMode, Role, RpcMethods,
 		TelemetryEndpoints, TransactionPoolOptions, WasmExecutionMethod,
 	},
-	ChainSpec, KeepBlocks, TracingReceiver, TransactionStorageMode,
+	ChainSpec, KeepBlocks, TracingReceiver,
 };
 use sc_tracing::logging::LoggerBuilder;
 use std::{net::SocketAddr, path::PathBuf};
@@ -198,14 +198,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(self.database_params().map(|x| x.database_cache_size()).unwrap_or_default())
 	}
 
-	/// Get the database transaction storage scheme.
-	fn database_transaction_storage(&self) -> Result<TransactionStorageMode> {
-		Ok(self
-			.database_params()
-			.map(|x| x.transaction_storage())
-			.unwrap_or(TransactionStorageMode::BlockBody))
-	}
-
 	/// Get the database backend variant.
 	///
 	/// By default this is retrieved from `DatabaseParams` if it is available. Otherwise its `None`.
@@ -230,6 +222,13 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 		Ok(match database {
 			Database::RocksDb => DatabaseSource::RocksDb { path: rocksdb_path, cache_size },
 			Database::ParityDb => DatabaseSource::ParityDb { path: paritydb_path },
+			Database::ParityDbDeprecated => {
+				eprintln!(
+					"WARNING: \"paritydb-experimental\" database setting is deprecated and will be removed in future releases. \
+				Please update your setup to use the new value: \"paritydb\"."
+				);
+				DatabaseSource::ParityDb { path: paritydb_path }
+			},
 			Database::Auto => DatabaseSource::Auto { paritydb_path, rocksdb_path, cache_size },
 		})
 	}
@@ -519,7 +518,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			state_cache_child_ratio: self.state_cache_child_ratio()?,
 			state_pruning: self.state_pruning(unsafe_pruning, &role)?,
 			keep_blocks: self.keep_blocks()?,
-			transaction_storage: self.database_transaction_storage()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,

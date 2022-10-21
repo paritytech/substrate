@@ -191,10 +191,13 @@ impl<'a, T: Config> ContractModule<'a, T> {
 	}
 
 	fn inject_stack_height_metering(self) -> Result<Self, &'static str> {
-		let contract_module =
-			wasm_instrument::inject_stack_limiter(self.module, self.schedule.limits.stack_height)
+		if let Some(limit) = self.schedule.limits.stack_height {
+			let contract_module = wasm_instrument::inject_stack_limiter(self.module, limit)
 				.map_err(|_| "stack height instrumentation failed")?;
-		Ok(ContractModule { module: contract_module, schedule: self.schedule })
+			Ok(ContractModule { module: contract_module, schedule: self.schedule })
+		} else {
+			Ok(ContractModule { module: self.module, schedule: self.schedule })
+		}
 	}
 
 	/// Check that the module has required exported functions. For now

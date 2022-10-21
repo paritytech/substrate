@@ -24,10 +24,7 @@ use frame_support::{
 	Hashable,
 };
 use frame_system::{EventRecord, Phase};
-use sp_core::{
-	u32_trait::{_3, _4},
-	H256,
-};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -142,7 +139,7 @@ impl Config<Instance2> for Test {
 }
 impl mock_democracy::Config for Test {
 	type Event = Event;
-	type ExternalMajorityOrigin = EnsureProportionAtLeast<_3, _4, u64, Instance1>;
+	type ExternalMajorityOrigin = EnsureProportionAtLeast<u64, Instance1, 3, 4>;
 }
 impl Config for Test {
 	type Origin = Origin;

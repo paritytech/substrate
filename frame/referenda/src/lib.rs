@@ -866,7 +866,7 @@ impl<T: Config> Pallet<T> {
 					let new_pos = queue.binary_search_by_key(&ayes, |x| x.1).unwrap_or_else(|x| x);
 					branch = if maybe_old_pos.is_none() && new_pos > 0 {
 						// Just insert.
-						queue.force_insert_keep_right(new_pos, (index, ayes));
+						let _ = queue.force_insert_keep_right(new_pos, (index, ayes));
 						ServiceBranch::RequeuedInsertion
 					} else if let Some(old_pos) = maybe_old_pos {
 						// We were in the queue - slide into the correct position.

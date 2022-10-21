@@ -49,7 +49,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeEncode` is
     |
     = note: required because of the requirements on the impl of `Encode` for `<T as pallet::Config>::Bar`
 note: required by a bound in `encode_to`
-   --> $CARGO/parity-scale-codec-2.3.1/src/codec.rs
+   --> $CARGO/parity-scale-codec-3.0.0/src/codec.rs
     |
     |     fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
     |                     ^^^^^^ required by this bound in `encode_to`
@@ -63,7 +63,7 @@ error[E0277]: the trait bound `<T as pallet::Config>::Bar: WrapperTypeDecode` is
     |
     = note: required because of the requirements on the impl of `Decode` for `<T as pallet::Config>::Bar`
 note: required by a bound in `parity_scale_codec::Decode::decode`
-   --> $CARGO/parity-scale-codec-2.3.1/src/codec.rs
+   --> $CARGO/parity-scale-codec-3.0.0/src/codec.rs
     |
     |     fn decode<I: Input>(input: &mut I) -> Result<Self, Error>;
     |                  ^^^^^ required by this bound in `parity_scale_codec::Decode::decode`

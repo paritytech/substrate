@@ -23,20 +23,23 @@ use codec::Encode;
 use hash_db::{self, AsHashDB, HashDB, HashDBRef, Hasher, Prefix};
 #[cfg(feature = "std")]
 use parking_lot::RwLock;
-use sp_core::storage::ChildInfo;
+use sp_core::storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 use sp_std::{boxed::Box, vec::Vec};
 use sp_trie::{
-	empty_child_trie_root, read_child_trie_value, read_trie_value,
+	child_delta_trie_root, delta_trie_root, empty_child_trie_root, read_child_trie_value,
+	read_trie_value,
 	trie_types::{TrieDB, TrieError},
-	DBValue, KeySpacedDB, PrefixedMemoryDB, Trie, TrieDBIterator, TrieDBKeyIterator,
+	DBValue, KeySpacedDB, LayoutV1 as Layout, PrefixedMemoryDB, Trie, TrieDBIterator,
+	TrieDBKeyIterator,
 };
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::Arc;
-// In this module, we only use layout for read operation and empty root,
-// where V1 and V0 are equivalent.
-use sp_trie::LayoutV1 as Layout;
+use trie_db::{
+	node::{NodePlan, ValuePlan},
+	TrieDBNodeIterator,
+};
 
 #[cfg(not(feature = "std"))]
 macro_rules! format {
@@ -58,12 +61,12 @@ pub trait Storage<H: Hasher>: Send + Sync {
 
 /// Local cache for child root.
 #[cfg(feature = "std")]
-pub(crate) struct Cache {
-	pub child_root: HashMap<Vec<u8>, Option<Vec<u8>>>,
+pub(crate) struct Cache<H> {
+	pub child_root: HashMap<Vec<u8>, Option<H>>,
 }
 
 #[cfg(feature = "std")]
-impl Cache {
+impl<H> Cache<H> {
 	fn new() -> Self {
 		Cache { child_root: HashMap::new() }
 	}
@@ -75,7 +78,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 	empty: H::Out,
 	#[cfg(feature = "std")]
-	pub(crate) cache: Arc<RwLock<Cache>>,
+	pub(crate) cache: Arc<RwLock<Cache<H::Out>>>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H>
@@ -130,22 +133,26 @@ where
 	}
 
 	/// Access the root of the child storage in its parent trie
-	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<StorageValue>> {
+	fn child_root(&self, child_info: &ChildInfo) -> Result<Option<H::Out>> {
 		#[cfg(feature = "std")]
 		{
 			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
-				return Ok(result.clone())
+				return Ok(*result)
 			}
 		}
 
-		let result = self.storage(child_info.prefixed_storage_key().as_slice())?;
+		let result = self.storage(child_info.prefixed_storage_key().as_slice())?.map(|r| {
+			let mut hash = H::Out::default();
+
+			// root is fetched from DB, not writable by runtime, so it's always valid.
+			hash.as_mut().copy_from_slice(&r[..]);
+
+			hash
+		});
 
 		#[cfg(feature = "std")]
 		{
-			self.cache
-				.write()
-				.child_root
-				.insert(child_info.storage_key().to_vec(), result.clone());
+			self.cache.write().child_root.insert(child_info.storage_key().to_vec(), result);
 		}
 
 		Ok(result)
@@ -163,15 +170,7 @@ where
 			None => return Ok(None),
 		};
 
-		let mut hash = H::Out::default();
-
-		if child_root.len() != hash.as_ref().len() {
-			return Err(format!("Invalid child storage hash at {:?}", child_info.storage_key()))
-		}
-		// note: child_root and hash must be same size, panics otherwise.
-		hash.as_mut().copy_from_slice(&child_root[..]);
-
-		self.next_storage_key_from_root(&hash, Some(child_info), key)
+		self.next_storage_key_from_root(&child_root, Some(child_info), key)
 	}
 
 	/// Return next key from main trie or child trie by providing corresponding root.
@@ -231,9 +230,10 @@ where
 		child_info: &ChildInfo,
 		key: &[u8],
 	) -> Result<Option<StorageValue>> {
-		let root = self
-			.child_root(child_info)?
-			.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode());
+		let root = match self.child_root(child_info)? {
+			Some(root) => root,
+			None => return Ok(None),
+		};
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
@@ -253,19 +253,13 @@ where
 		f: impl FnMut(Vec<u8>, Vec<u8>) -> bool,
 		allow_missing_nodes: bool,
 	) -> Result<bool> {
-		let mut child_root;
 		let root = if let Some(child_info) = child_info.as_ref() {
-			if let Some(fetched_child_root) = self.child_root(child_info)? {
-				child_root = H::Out::default();
-				// root is fetched from DB, not writable by runtime, so it's always valid.
-				child_root.as_mut().copy_from_slice(fetched_child_root.as_slice());
-
-				&child_root
-			} else {
-				return Ok(true)
+			match self.child_root(child_info)? {
+				Some(child_root) => child_root,
+				None => return Ok(true),
 			}
 		} else {
-			&self.root
+			self.root
 		};
 
 		self.trie_iter_inner(&root, prefix, f, child_info, start_at, allow_missing_nodes)
@@ -279,22 +273,21 @@ where
 		prefix: Option<&[u8]>,
 		mut f: F,
 	) {
-		let mut child_root = H::Out::default();
 		let root = if let Some(child_info) = child_info.as_ref() {
-			let root_vec = match self.child_root(child_info) {
-				Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
+			match self.child_root(child_info) {
+				Ok(Some(v)) => v,
+				// If the child trie doesn't exist, there is no need to continue.
+				Ok(None) => return,
 				Err(e) => {
 					debug!(target: "trie", "Error while iterating child storage: {}", e);
 					return
 				},
-			};
-			child_root.as_mut().copy_from_slice(&root_vec);
-			&child_root
+			}
 		} else {
-			&self.root
+			self.root
 		};
 
-		self.trie_iter_key_inner(root, prefix, |k| f(k), child_info)
+		self.trie_iter_key_inner(&root, prefix, |k| f(k), child_info)
 	}
 
 	/// Execute given closure for all keys starting with prefix.
@@ -304,15 +297,16 @@ where
 		prefix: &[u8],
 		mut f: impl FnMut(&[u8]),
 	) {
-		let root_vec = match self.child_root(child_info) {
-			Ok(v) => v.unwrap_or_else(|| empty_child_trie_root::<Layout<H>>().encode()),
+		let root = match self.child_root(child_info) {
+			Ok(Some(v)) => v,
+			// If the child trie doesn't exist, there is no need to continue.
+			Ok(None) => return,
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
 				return
 			},
 		};
-		let mut root = H::Out::default();
-		root.as_mut().copy_from_slice(&root_vec);
+
 		self.trie_iter_key_inner(
 			&root,
 			Some(prefix),
@@ -437,6 +431,196 @@ where
 			None,
 			false,
 		);
+	}
+
+	/// Check remaining state item to migrate. Note this function should be remove when all state
+	/// migration did finished as it is only an utility.
+	// original author: @cheme
+	pub fn check_migration_state(&self) -> Result<(u64, u64)> {
+		let threshold: u32 = sp_core::storage::TRIE_VALUE_NODE_THRESHOLD;
+		let mut nb_to_migrate = 0;
+		let mut nb_to_migrate_child = 0;
+
+		let trie = sp_trie::trie_types::TrieDB::new(self, &self.root)
+			.map_err(|e| format!("TrieDB creation error: {}", e))?;
+		let iter_node = TrieDBNodeIterator::new(&trie)
+			.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+		for node in iter_node {
+			let node = node.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+			match node.2.node_plan() {
+				NodePlan::Leaf { value, .. } |
+				NodePlan::NibbledBranch { value: Some(value), .. } =>
+					if let ValuePlan::Inline(range) = value {
+						if (range.end - range.start) as u32 >= threshold {
+							nb_to_migrate += 1;
+						}
+					},
+				_ => (),
+			}
+		}
+
+		let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();
+		// get all child trie roots
+		for key_value in trie.iter().map_err(|e| format!("TrieDB node iterator error: {}", e))? {
+			let (key, value) =
+				key_value.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+			if key[..]
+				.starts_with(sp_core::storage::well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX)
+			{
+				let prefixed_key = PrefixedStorageKey::new(key);
+				let (_type, unprefixed) = ChildType::from_prefixed_key(&prefixed_key).unwrap();
+				child_roots.push((ChildInfo::new_default(unprefixed), value));
+			}
+		}
+		for (child_info, root) in child_roots {
+			let mut child_root = H::Out::default();
+			let storage = KeySpacedDB::new(self, child_info.keyspace());
+
+			child_root.as_mut()[..].copy_from_slice(&root[..]);
+			let trie = sp_trie::trie_types::TrieDB::new(&storage, &child_root)
+				.map_err(|e| format!("New child TrieDB error: {}", e))?;
+			let iter_node = TrieDBNodeIterator::new(&trie)
+				.map_err(|e| format!("TrieDB node iterator error: {}", e))?;
+			for node in iter_node {
+				let node = node.map_err(|e| format!("Child TrieDB node iterator error: {}", e))?;
+				match node.2.node_plan() {
+					NodePlan::Leaf { value, .. } |
+					NodePlan::NibbledBranch { value: Some(value), .. } =>
+						if let ValuePlan::Inline(range) = value {
+							if (range.end - range.start) as u32 >= threshold {
+								nb_to_migrate_child += 1;
+							}
+						},
+					_ => (),
+				}
+			}
+		}
+
+		Ok((nb_to_migrate, nb_to_migrate_child))
+	}
+
+	/// Returns all `(key, value)` pairs in the trie.
+	pub fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
+		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(self, &self.root)?;
+			let mut v = Vec::new();
+			for x in trie.iter()? {
+				let (key, value) = x?;
+				v.push((key.to_vec(), value.to_vec()));
+			}
+
+			Ok(v)
+		};
+
+		match collect_all() {
+			Ok(v) => v,
+			Err(e) => {
+				debug!(target: "trie", "Error extracting trie values: {}", e);
+				Vec::new()
+			},
+		}
+	}
+
+	/// Returns all keys that start with the given `prefix`.
+	pub fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
+		let collect_all = || -> sp_std::result::Result<_, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(self, &self.root)?;
+			let mut v = Vec::new();
+			for x in trie.iter()? {
+				let (key, _) = x?;
+				if key.starts_with(prefix) {
+					v.push(key.to_vec());
+				}
+			}
+
+			Ok(v)
+		};
+
+		collect_all()
+			.map_err(|e| debug!(target: "trie", "Error extracting trie keys: {}", e))
+			.unwrap_or_default()
+	}
+
+	/// Return the storage root after applying the given `delta`.
+	pub fn storage_root<'a>(
+		&self,
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (H::Out, S::Overlay)
+	where
+		H::Out: Ord,
+	{
+		let mut write_overlay = S::Overlay::default();
+		let mut root = self.root;
+
+		{
+			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
+			let res = match state_version {
+				StateVersion::V0 =>
+					delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _>(&mut eph, root, delta),
+				StateVersion::V1 =>
+					delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _>(&mut eph, root, delta),
+			};
+
+			match res {
+				Ok(ret) => root = ret,
+				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+			}
+		}
+
+		(root, write_overlay)
+	}
+
+	/// Returns the child storage root for the child trie `child_info` after applying the given
+	/// `delta`.
+	pub fn child_storage_root<'a>(
+		&self,
+		child_info: &ChildInfo,
+		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
+		state_version: StateVersion,
+	) -> (H::Out, bool, S::Overlay)
+	where
+		H::Out: Ord,
+	{
+		let default_root = match child_info.child_type() {
+			ChildType::ParentKeyId => empty_child_trie_root::<sp_trie::LayoutV1<H>>(),
+		};
+		let mut write_overlay = S::Overlay::default();
+		let mut root = match self.child_root(child_info) {
+			Ok(Some(hash)) => hash,
+			Ok(None) => default_root,
+			Err(e) => {
+				warn!(target: "trie", "Failed to read child storage root: {}", e);
+				default_root.clone()
+			},
+		};
+
+		{
+			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
+			match match state_version {
+				StateVersion::V0 =>
+					child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
+						child_info.keyspace(),
+						&mut eph,
+						root,
+						delta,
+					),
+				StateVersion::V1 =>
+					child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
+						child_info.keyspace(),
+						&mut eph,
+						root,
+						delta,
+					),
+			} {
+				Ok(ret) => root = ret,
+				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+			}
+		}
+
+		let is_default = root == default_root;
+
+		(root, is_default, write_overlay)
 	}
 }
 

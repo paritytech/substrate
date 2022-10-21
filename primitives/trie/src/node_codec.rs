@@ -23,7 +23,7 @@ use codec::{Compact, Decode, Encode, Input};
 use hash_db::Hasher;
 use sp_std::{borrow::Borrow, marker::PhantomData, ops::Range, vec::Vec};
 use trie_db::{
-	self, nibble_ops,
+	nibble_ops,
 	node::{NibbleSlicePlan, NodeHandlePlan, NodePlan, Value, ValuePlan},
 	ChildReference, NodeCodec as NodeCodecT, Partial,
 };
@@ -54,9 +54,7 @@ impl<'a> ByteSliceInput<'a> {
 
 impl<'a> Input for ByteSliceInput<'a> {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		let remaining =
-			if self.offset <= self.data.len() { Some(self.data.len() - self.offset) } else { None };
-		Ok(remaining)
+		Ok(Some(self.data.len().saturating_sub(self.offset)))
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
@@ -76,7 +74,9 @@ impl<'a> Input for ByteSliceInput<'a> {
 	}
 }
 
-/// Concrete implementation of a `NodeCodec` with Parity Codec encoding, generic over the `Hasher`
+/// Concrete implementation of a [`NodeCodecT`] with SCALE encoding.
+///
+/// It is generic over `H` the [`Hasher`].
 #[derive(Default, Clone)]
 pub struct NodeCodec<H>(PhantomData<H>);
 

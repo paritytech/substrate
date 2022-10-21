@@ -73,6 +73,6 @@ and its associated variants for documentation on each function.
 
 * [`System`](https://docs.rs/frame-system/latest/frame_system/)
 * [`Support`](https://docs.rs/frame-support/latest/frame_support/)
-* [`Assets`](https://docs.rs/pallet-assets/latest/pallet_assetss/)
+* [`Assets`](https://docs.rs/pallet-assets/latest/pallet_assets/)
 
 License: Apache-2.0

@@ -1,0 +1,57 @@
+[package]
+name = "pallet-state-trie-migration"
+version = "4.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.dev"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME pallet migration of trie"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
+log = { version = "0.4.14", default-features = false }
+
+sp-std = { default-features = false, path = "../../primitives/std" }
+sp-io = { default-features = false, path = "../../primitives/io" }
+sp-core = { default-features = false, path = "../../primitives/core" }
+sp-runtime = { default-features = false, path = "../../primitives/runtime" }
+
+frame-support = { default-features = false, path = "../support" }
+frame-system = { default-features = false, path = "../system" }
+frame-benchmarking = { default-features = false, path = "../benchmarking", optional = true }
+
+serde = { version = "1.0.133", optional = true }
+thousands = { version = "0.2.0", optional = true }
+remote-externalities = { path = "../../utils/frame/remote-externalities", optional = true }
+zstd = { version = "0.9.0", optional = true }
+
+[dev-dependencies]
+pallet-balances = { path = "../balances" }
+parking_lot = "0.12.0"
+sp-tracing = { path = "../../primitives/tracing" }
+tokio = { version = "1.10", features = ["macros"] }
+
+[features]
+default = ["std"]
+std = [
+	"log/std",
+	"scale-info/std",
+	"codec/std",
+	"frame-benchmarking/std",
+	"frame-support/std",
+	"frame-system/std",
+	"sp-core/std",
+	"sp-io/std",
+	"sp-runtime/std",
+	"sp-std/std"
+]
+runtime-benchmarks = ["frame-benchmarking"]
+try-runtime = ["frame-support/try-runtime"]
+
+remote-test = [ "std", "zstd", "serde", "thousands", "remote-externalities" ]

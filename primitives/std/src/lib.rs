@@ -28,9 +28,13 @@
 	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
 )]
 
+/// Initialize a key-value collection from array.
+///
+/// Creates a vector of given pairs and calls `collect` on the iterator from it.
+/// Can be used to create a `HashMap`.
 #[macro_export]
 macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
+	($( $name:expr => $value:expr ),* $(,)? ) => (
 		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
 	)
 }

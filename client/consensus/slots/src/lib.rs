@@ -32,15 +32,14 @@ pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 pub use slots::SlotInfo;
 use slots::Slots;
 
-use codec::{Decode, Encode};
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
-use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SlotData, SyncOracle};
-use sp_consensus_slots::Slot;
+use sp_consensus::{CanAuthorWith, Proposer, SelectChain, SyncOracle};
+use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::{
 	generic::BlockId,
@@ -402,15 +401,22 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	}
 }
 
+/// A type that implements [`SlotWorker`] for a type that implements [`SimpleSlotWorker`].
+///
+/// This is basically a workaround for Rust not supporting specialization. Otherwise we could
+/// implement [`SlotWorker`] for any `T` that implements [`SimpleSlotWorker`], but currently
+/// that would prevent downstream users to implement [`SlotWorker`] for their own types.
+pub struct SimpleSlotWorkerToSlotWorker<T>(pub T);
+
 #[async_trait::async_trait]
-impl<B: BlockT, T: SimpleSlotWorker<B> + Send + Sync>
-	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for T
+impl<T: SimpleSlotWorker<B> + Send + Sync, B: BlockT>
+	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for SimpleSlotWorkerToSlotWorker<T>
 {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
 	) -> Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>> {
-		SimpleSlotWorker::on_slot(self, slot_info).await
+		self.0.on_slot(slot_info).await
 	}
 }
 
@@ -459,8 +465,8 @@ impl_inherent_data_provider_ext_tuple!(T, S, A, B, C, D, E, F, G, H, I, J);
 ///
 /// Every time a new slot is triggered, `worker.on_slot` is called and the future it returns is
 /// polled until completion, unless we are major syncing.
-pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
-	slot_duration: SlotDuration<T>,
+pub async fn start_slot_worker<B, C, W, SO, CIDP, CAW, Proof>(
+	slot_duration: SlotDuration,
 	client: C,
 	mut worker: W,
 	mut sync_oracle: SO,
@@ -471,15 +477,11 @@ pub async fn start_slot_worker<B, C, W, T, SO, CIDP, CAW, Proof>(
 	C: SelectChain<B>,
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
-	T: SlotData + Clone,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	CAW: CanAuthorWith<B> + Send,
 {
-	let SlotDuration(slot_duration) = slot_duration;
-
-	let mut slots =
-		Slots::new(slot_duration.slot_duration(), create_inherent_data_providers, client);
+	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
 
 	loop {
 		let slot_info = match slots.next_slot().await {
@@ -521,45 +523,6 @@ pub enum CheckedHeader<H, S> {
 	///
 	/// Includes the digest item that encoded the seal.
 	Checked(H, S),
-}
-
-#[derive(Debug, thiserror::Error)]
-#[allow(missing_docs)]
-pub enum Error<T>
-where
-	T: Debug,
-{
-	#[error("Slot duration is invalid: {0:?}")]
-	SlotDurationInvalid(SlotDuration<T>),
-}
-
-/// A slot duration. Create with [`Self::new`].
-#[derive(Clone, Copy, Debug, Encode, Decode, Hash, PartialOrd, Ord, PartialEq, Eq)]
-pub struct SlotDuration<T>(T);
-
-impl<T> Deref for SlotDuration<T> {
-	type Target = T;
-	fn deref(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: SlotData> SlotData for SlotDuration<T> {
-	fn slot_duration(&self) -> std::time::Duration {
-		self.0.slot_duration()
-	}
-}
-
-impl<T: Clone + Send + Sync + 'static> SlotDuration<T> {
-	/// Create a new instance of `Self`.
-	pub fn new(val: T) -> Self {
-		Self(val)
-	}
-
-	/// Returns slot data value.
-	pub fn get(&self) -> T {
-		self.0.clone()
-	}
 }
 
 /// A unit type wrapper to express the proportion of a slot.
@@ -654,10 +617,10 @@ pub fn proposing_remaining_duration<Block: BlockT>(
 
 		debug!(
 			target: log_target,
-			"No block for {} slots. Applying {} lenience, total proposing duration: {}",
+			"No block for {} slots. Applying {} lenience, total proposing duration: {}ms",
 			slot_info.slot.saturating_sub(parent_slot + 1),
 			slot_lenience_type.as_str(),
-			lenient_proposing_duration.as_secs(),
+			lenient_proposing_duration.as_millis(),
 		);
 
 		lenient_proposing_duration
@@ -789,7 +752,9 @@ where
 			return false
 		}
 
-		let unfinalized_block_length = chain_head_number - finalized_number;
+		// There can be race between getting the finalized number and getting the best number.
+		// So, better be safe than sorry.
+		let unfinalized_block_length = chain_head_number.saturating_sub(finalized_number);
 		let interval =
 			unfinalized_block_length.saturating_sub(self.unfinalized_slack) / self.authoring_bias;
 		let interval = interval.min(self.max_interval);
