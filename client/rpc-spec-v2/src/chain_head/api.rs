@@ -18,7 +18,7 @@
 
 //! API trait of the chain head.
 use crate::chain_head::event::{ChainHeadEvent, FollowEvent};
-use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sc_client_api::{StorageData, StorageKey};
 use sp_core::Bytes;
 
@@ -73,4 +73,11 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 		call_parameters: Bytes,
 		network_config: Option<()>,
 	);
+
+	/// Unpin a block reported by the `follow` method.
+	///
+	/// Ongoing operations that require the provided block
+	/// will continue normally.
+	#[method(name = "chainHead_unstable_unpin", aliases = ["chainHead_unstable_unpinBlock"], blocking)]
+	fn chain_head_unstable_unpin(&self, follow_subscription: String, hash: Hash) -> RpcResult<()>;
 }

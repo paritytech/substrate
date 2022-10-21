@@ -96,10 +96,10 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 
 		match subs.get(subscription_id) {
 			Some(set) =>
-				if !set.contains(hash) {
-					return Err(SubscriptionError::InvalidBlock)
-				} else {
+				if set.contains(hash) {
 					Ok(())
+				} else {
+					return Err(SubscriptionError::InvalidBlock)
 				},
 			None => return Err(SubscriptionError::InvalidSubId),
 		}

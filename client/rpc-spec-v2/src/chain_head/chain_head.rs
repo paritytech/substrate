@@ -25,7 +25,7 @@ use crate::{
 			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
 			Initialized, NewBlock, RuntimeEvent, RuntimeVersionEvent,
 		},
-		subscription::SubscriptionManagement,
+		subscription::{SubscriptionError, SubscriptionManagement},
 	},
 	SubscriptionTaskExecutor,
 };
@@ -38,8 +38,11 @@ use futures::{
 	stream::{self, StreamExt},
 };
 use jsonrpsee::{
-	core::{async_trait, error::SubscriptionClosed},
-	types::{SubscriptionEmptyError, SubscriptionResult},
+	core::{async_trait, error::SubscriptionClosed, Error as RpcError, RpcResult},
+	types::{
+		error::{CallError, ErrorObject},
+		SubscriptionEmptyError, SubscriptionResult,
+	},
 	SubscriptionSink,
 };
 use sc_client_api::{
@@ -361,5 +364,18 @@ where
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
+	}
+
+	fn chain_head_unstable_unpin(
+		&self,
+		follow_subscription: String,
+		hash: Block::Hash,
+	) -> RpcResult<()> {
+		match self.subscriptions.unpin_block(&follow_subscription, &hash) {
+			Err(SubscriptionError::InvalidBlock) => Err(RpcError::Call(CallError::Custom(
+				ErrorObject::owned(10, format!("Invalid block hash"), None::<()>),
+			))),
+			_ => Ok(()),
+		}
 	}
 }
