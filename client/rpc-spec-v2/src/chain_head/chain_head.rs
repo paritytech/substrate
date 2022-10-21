@@ -408,9 +408,12 @@ where
 
 	fn chain_head_unstable_unpin(
 		&self,
-		_follow_subscription: String,
-		_hash: Block::Hash,
+		follow_subscription: String,
+		hash: Block::Hash,
 	) -> RpcResult<()> {
-		Ok(())
+		match self.subscriptions.unpin_block(&follow_subscription, &hash) {
+			Err(SubscriptionError::InvalidBlock) => Err(ChainHeadRpcError::InvalidBlock.into()),
+			_ => Ok(()),
+		}
 	}
 }
