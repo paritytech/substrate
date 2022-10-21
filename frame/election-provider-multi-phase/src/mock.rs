@@ -571,6 +571,12 @@ impl ExtBuilder {
 			balances: vec![
 				// bunch of account for submitting stuff only.
 				(99, 100),
+				(100, 100),
+				(101, 100),
+				(102, 100),
+				(103, 100),
+				(104, 100),
+				(105, 100),
 				(999, 100),
 				(9999, 100),
 			],

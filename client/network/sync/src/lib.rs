@@ -32,14 +32,18 @@ pub mod block_request_handler;
 pub mod blocks;
 pub mod mock;
 mod schema;
+pub mod service;
 pub mod state;
 pub mod state_request_handler;
+#[cfg(test)]
+mod tests;
 pub mod warp;
 pub mod warp_request_handler;
 
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
+	service::chain_sync::{ChainSyncInterfaceHandle, ToServiceCommand},
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
@@ -67,6 +71,7 @@ use sc_network_common::{
 		PollBlockAnnounceValidation, SyncMode, SyncState, SyncStatus,
 	},
 };
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{
@@ -264,6 +269,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	import_existing: bool,
 	/// Gap download process.
 	gap_sync: Option<GapSync<B>>,
+	/// Channel for receiving service commands
+	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -1437,8 +1444,7 @@ where
 		if let SyncMode::LightState { skip_proofs, .. } = &self.mode {
 			if self.state_sync.is_none() && !self.peers.is_empty() && self.queue_blocks.is_empty() {
 				// Finalized a recent block.
-				let mut heads: Vec<_> =
-					self.peers.iter().map(|(_, peer)| peer.best_number).collect();
+				let mut heads: Vec<_> = self.peers.values().map(|peer| peer.best_number).collect();
 				heads.sort();
 				let median = heads[heads.len() / 2];
 				if number + STATE_SYNC_FINALITY_THRESHOLD.saturated_into() >= median {
@@ -1725,6 +1731,21 @@ where
 
 		Ok(OpaqueStateResponse(Box::new(response)))
 	}
+
+	fn poll(
+		&mut self,
+		cx: &mut std::task::Context,
+	) -> Poll<PollBlockAnnounceValidation<B::Header>> {
+		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
+			match event {
+				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
+					self.set_sync_fork_request(peers, &hash, number);
+				},
+			}
+		}
+
+		self.poll_block_announce_validation(cx)
+	}
 }
 
 impl<B, Client> ChainSync<B, Client>
@@ -1746,7 +1767,9 @@ where
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
-	) -> Result<Self, ClientError> {
+	) -> Result<(Self, Box<ChainSyncInterfaceHandle<B>>), ClientError> {
+		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
+
 		let mut sync = Self {
 			client,
 			peers: HashMap::new(),
@@ -1768,9 +1791,10 @@ where
 			warp_sync_provider,
 			import_existing: false,
 			gap_sync: None,
+			service_rx,
 		};
 		sync.reset_sync_start_point()?;
-		Ok(sync)
+		Ok((sync, Box::new(ChainSyncInterfaceHandle::new(tx))))
 	}
 
 	/// Returns the best seen block number if we don't have that block yet, `None` otherwise.
@@ -2664,7 +2688,7 @@ mod test {
 		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 		let peer_id = PeerId::random();
 
-		let mut sync =
+		let (mut sync, _) =
 			ChainSync::new(SyncMode::Full, client.clone(), block_announce_validator, 1, None)
 				.unwrap();
 
@@ -2712,7 +2736,7 @@ mod test {
 	#[test]
 	fn restart_doesnt_affect_peers_downloading_finality_data() {
 		let mut client = Arc::new(TestClientBuilder::new().build());
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
@@ -2879,7 +2903,7 @@ mod test {
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
 
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
@@ -2994,7 +3018,7 @@ mod test {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let info = client.info();
 
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
@@ -3137,7 +3161,7 @@ mod test {
 
 		let info = client.info();
 
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
@@ -3148,9 +3172,7 @@ mod test {
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		let just = (*b"TEST", Vec::new());
-		client
-			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
-			.unwrap();
+		client.finalize_block(&finalized_block.hash(), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
 		let peer_id1 = PeerId::random();
@@ -3268,7 +3290,7 @@ mod test {
 
 		let info = client.info();
 
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
@@ -3279,9 +3301,7 @@ mod test {
 
 		let finalized_block = blocks[MAX_BLOCKS_TO_LOOK_BACKWARDS as usize * 2 - 1].clone();
 		let just = (*b"TEST", Vec::new());
-		client
-			.finalize_block(BlockId::Hash(finalized_block.hash()), Some(just))
-			.unwrap();
+		client.finalize_block(&finalized_block.hash(), Some(just)).unwrap();
 		sync.update_chain_info(&info.best_hash, info.best_number);
 
 		let peer_id1 = PeerId::random();
@@ -3399,7 +3419,7 @@ mod test {
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..3).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>();
 
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
@@ -3432,7 +3452,7 @@ mod test {
 
 		let empty_client = Arc::new(TestClientBuilder::new().build());
 
-		let mut sync = ChainSync::new(
+		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			empty_client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
