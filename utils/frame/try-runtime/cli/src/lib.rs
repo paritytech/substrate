@@ -496,7 +496,7 @@ pub struct LiveState {
 
 	/// The number of threads to use when downloading data, when possible.
 	#[arg(long, default_value_t = DEFAULT_THREADS)]
-	pub threads: usize,
+	threads: usize,
 }
 
 /// The source of runtime *state* to use.

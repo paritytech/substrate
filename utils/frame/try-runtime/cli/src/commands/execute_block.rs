@@ -31,10 +31,6 @@ use substrate_rpc_client::{ws_client, ChainApi};
 /// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
-	/// Overwrite the wasm code in state or not.
-	#[arg(long)]
-	overwrite_wasm_code: bool,
-
 	/// If set the state root check is disabled.
 	#[arg(long)]
 	no_state_root_check: bool,
