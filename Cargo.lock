@@ -5053,7 +5053,6 @@ dependencies = [
  "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
- "pallet-whitelist",
  "parity-scale-codec",
  "scale-info",
  "sp-api",
