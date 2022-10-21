@@ -57,7 +57,7 @@ where
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let executor = build_executor(&shared, &config);
-	let execution = shared.execution;
+	let execution = sc_cli::ExecutionStrategy::Wasm;
 
 	let ext = command
 		.state

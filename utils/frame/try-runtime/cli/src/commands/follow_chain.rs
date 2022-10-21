@@ -95,7 +95,7 @@ where
 	let (rpc, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
 
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
-	let execution = shared.execution;
+	let execution = sc_cli::ExecutionStrategy::Wasm;
 
 	let mut finalized_headers: FinalizedHeaders<Block, _, _> =
 		FinalizedHeaders::new(&rpc, subscription);

@@ -16,12 +16,21 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, full_extensions, hash_of, local_spec,
-	parse, state_machine_call, LiveState, SharedParams, State, LOG_TARGET,
+	build_executor, build_wasm_executor, ensure_matching_spec, extract_code, full_extensions,
+	hash_of, local_spec, parse, state_machine_call, LiveState, Runtime, SharedParams, State,
+	LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use sc_executor::NativeExecutionDispatch;
+use sc_cli::RuntimeVersion;
+use sc_executor::{
+	sp_wasm_interface::{HostFunctionRegistry, HostFunctions},
+	NativeExecutionDispatch, RuntimeVersionOf,
+};
 use sc_service::Configuration;
+use sp_core::{
+	storage::{well_known_keys, StorageKey},
+	traits::ReadRuntimeVersion,
+};
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi};
@@ -29,10 +38,6 @@ use substrate_rpc_client::{ws_client, ChainApi};
 /// Configurations of the [`Command::OffchainWorker`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
-	/// Overwrite the wasm code in state or not.
-	#[arg(long)]
-	overwrite_wasm_code: bool,
-
 	/// The block hash at which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
@@ -96,7 +101,7 @@ impl OffchainWorkerCmd {
 	}
 }
 
-pub(crate) async fn offchain_worker<Block, ExecDispatch>(
+pub(crate) async fn offchain_worker<Block, H: HostFunctions>(
 	shared: SharedParams,
 	command: OffchainWorkerCmd,
 	config: Configuration,
@@ -108,11 +113,8 @@ where
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
-	ExecDispatch: NativeExecutionDispatch + 'static,
 {
-	let executor = build_executor(&shared, &config);
-	let execution = shared.execution;
-
+	let executor = build_wasm_executor(&shared, &config);
 	let header_at = command.header_at::<Block>()?;
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
@@ -128,39 +130,52 @@ where
 		header.number()
 	);
 
-	let ext = command
+	// we first build the externalities with the remote code.
+	let mut ext = command
 		.state
 		.ext_builder::<Block>()?
 		.state_version(shared.state_version)
-		.inject_hashed_key_value(if command.overwrite_wasm_code {
-			log::info!(
-				target: LOG_TARGET,
-				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
-				config.chain_spec.name(),
-			);
-			let (code_key, code) = extract_code(&config.chain_spec)?;
-			vec![(code_key, code)]
-		} else {
-			Vec::new()
-		})
 		.build()
 		.await?;
 
-	let (expected_spec_name, expected_spec_version, expected_state_version) =
-		local_spec::<Block, ExecDispatch>(&ext, &executor);
-	ensure_matching_spec::<Block>(
-		header_ws_uri,
-		expected_spec_name,
-		expected_spec_version,
-		expected_state_version,
-		shared.no_spec_check_panic,
-	)
-	.await;
+	// then, we replace the code based on what the CLI wishes.
+	let maybe_code_to_overwrite = match shared.runtime {
+		Runtime::Local => Some(
+			config
+				.chain_spec
+				.build_storage()
+				.unwrap()
+				.top
+				.get(well_known_keys::CODE)
+				.unwrap()
+				.to_vec(),
+		),
+		Runtime::Path(_) => Some(todo!()),
+		Runtime::Remote => None,
+	};
+	log::info!(
+		target: LOG_TARGET,
+		"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
+		config.chain_spec.name(),
+	);
 
-	let _ = state_machine_call::<Block, ExecDispatch>(
+	if let Some(new_code) = maybe_code_to_overwrite {
+		let maybe_original_code = ext.execute_with(|| sp_io::storage::get(well_known_keys::CODE));
+		ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());
+		if let Some(old_code) = maybe_original_code {
+			use parity_scale_codec::Decode;
+			let old_version = <RuntimeVersion as Decode>::decode(
+				&mut &*executor.read_runtime_version(&old_code, &mut ext.ext()).unwrap(),
+			);
+			let new_version = <RuntimeVersion as Decode>::decode(
+				&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
+			);
+		}
+	}
+
+	let _ = state_machine_call::<Block, H>(
 		&ext,
 		&executor,
-		execution,
 		"OffchainWorkerApi_offchain_worker",
 		header.encode().as_ref(),
 		full_extensions(),

@@ -33,6 +33,7 @@ use sp_core::{
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_version::RuntimeVersion;
 use std::{
 	fs,
 	path::{Path, PathBuf},

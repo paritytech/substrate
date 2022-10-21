@@ -142,7 +142,7 @@ where
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
-	let execution = shared.execution;
+	let execution = sc_cli::ExecutionStrategy::Wasm;
 
 	let block_ws_uri = command.block_ws_uri::<Block>();
 	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
@@ -164,7 +164,7 @@ where
 		.state
 		.ext_builder::<Block>()?
 		.state_version(shared.state_version)
-		.inject_hashed_key_value(if command.overwrite_wasm_code {
+		.inject_hashed_key_value({
 			log::info!(
 				target: LOG_TARGET,
 				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
@@ -172,8 +172,6 @@ where
 			);
 			let (code_key, code) = extract_code(&config.chain_spec)?;
 			vec![(code_key, code)]
-		} else {
-			Vec::new()
 		})
 		.build()
 		.await?;

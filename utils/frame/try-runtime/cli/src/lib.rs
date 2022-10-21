@@ -280,7 +280,7 @@ use sc_cli::{
 	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 	DEFAULT_WASM_EXECUTION_METHOD,
 };
-use sc_executor::NativeElseWasmExecutor;
+use sc_executor::{sp_wasm_interface::HostFunctions, NativeElseWasmExecutor, WasmExecutor};
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::{
 	offchain::{
@@ -392,6 +392,33 @@ pub enum Command {
 	CreateSnapshot(commands::create_snapshot::CreateSnapshotCmd),
 }
 
+#[derive(Debug, Clone)]
+enum Runtime {
+	/// Use the runtime of the local repository, fetched from the chain spec.
+	Local,
+
+	/// Use the given path to the wasm binary file.
+	Path(PathBuf),
+
+	/// Use the code of the remote node.
+	///
+	/// In almost all cases, this is not what you want, because the code in the remote node does
+	/// not have any of the try-runtime custom runtime APIs.
+	Remote,
+}
+
+impl FromStr for Runtime {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(match s.to_lowercase().as_ref() {
+			"remote" => Runtime::Remote,
+			"local" => Runtime::Local,
+			x @ _ => Runtime::Path(x.into()),
+		})
+	}
+}
+
 /// Shared parameters of the `try-runtime` commands
 #[derive(Debug, Clone, clap::Parser)]
 #[group(skip)]
@@ -399,11 +426,11 @@ pub struct SharedParams {
 	/// Shared parameters of substrate cli.
 	#[allow(missing_docs)]
 	#[clap(flatten)]
-	pub shared_params: sc_cli::SharedParams,
+	shared_params: sc_cli::SharedParams,
 
-	/// The execution strategy that should be used.
-	#[arg(long, value_name = "STRATEGY", value_enum, ignore_case = true, default_value_t = ExecutionStrategy::Wasm)]
-	pub execution: ExecutionStrategy,
+	#[arg(long, default_value = "local")]
+	/// The runtime to use.
+	runtime: Runtime,
 
 	/// Type of wasm execution used.
 	#[arg(
@@ -413,7 +440,7 @@ pub struct SharedParams {
 		ignore_case = true,
 		default_value_t = DEFAULT_WASM_EXECUTION_METHOD,
 	)]
-	pub wasm_method: WasmExecutionMethod,
+	wasm_method: WasmExecutionMethod,
 
 	/// The WASM instantiation method to use.
 	///
@@ -424,23 +451,23 @@ pub struct SharedParams {
 		default_value_t = DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
 		value_enum,
 	)]
-	pub wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
+	wasmtime_instantiation_strategy: WasmtimeInstantiationStrategy,
 
 	/// The number of 64KB pages to allocate for Wasm execution. Defaults to
 	/// [`sc_service::Configuration.default_heap_pages`].
 	#[arg(long)]
-	pub heap_pages: Option<u64>,
+	heap_pages: Option<u64>,
 
 	/// When enabled, the spec check will not panic, and instead only show a warning.
 	#[arg(long)]
-	pub no_spec_check_panic: bool,
+	no_spec_check_panic: bool,
 
 	/// The final state version that is set in the created externalities for executing commands.
 	///
 	/// This is checked to match the one from the chain that you connect to, similar other fields
 	/// of the runtime specification.
 	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
-	pub state_version: StateVersion,
+	state_version: StateVersion,
 }
 
 /// Our `try-runtime` command.
@@ -542,7 +569,11 @@ impl State {
 					pallets: pallet.clone(),
 					child_trie: *child_tree,
 					hashed_keys: vec![
+						// we always download the code, but we almost always won't use it, based on
+						// `Runtime`.
 						well_known_keys::CODE.to_vec(),
+						// we will always download this key, since it helps detect if we should do
+						// runtime migration or not.
 						[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
 					],
 					hashed_prefixes: vec![],
@@ -581,7 +612,8 @@ impl TryRuntimeCmd {
 				)
 				.await,
 			Command::OffchainWorker(cmd) =>
-				commands::offchain_worker::offchain_worker::<Block, ExecDispatch>(
+				// TODO: host functions should probably be generic
+				commands::offchain_worker::offchain_worker::<Block, sp_io::SubstrateHostFunctions>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
@@ -756,12 +788,28 @@ pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
 	)
 }
 
+pub(crate) fn build_wasm_executor<H: HostFunctions>(
+	shared: &SharedParams,
+	config: &sc_service::Configuration,
+) -> WasmExecutor<H> {
+	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
+	let max_runtime_instances = config.max_runtime_instances;
+	let runtime_cache_size = config.runtime_cache_size;
+
+	WasmExecutor::new(
+		sc_executor::WasmExecutionMethod::Interpreted,
+		heap_pages,
+		max_runtime_instances,
+		None,
+		runtime_cache_size,
+	)
+}
+
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
 /// state `changes`.
-pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'static>(
+pub(crate) fn state_machine_call<Block: BlockT, H: HostFunctions>(
 	ext: &TestExternalities,
-	executor: &NativeElseWasmExecutor<D>,
-	execution: sc_cli::ExecutionStrategy,
+	executor: &WasmExecutor<H>,
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
@@ -777,7 +825,7 @@ pub(crate) fn state_machine_call<Block: BlockT, D: NativeExecutionDispatch + 'st
 		&sp_state_machine::backend::BackendRuntimeCode::new(&ext.backend).runtime_code()?,
 		sp_core::testing::TaskExecutor::new(),
 	)
-	.execute(execution.into())
+	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
 	.map_err(|e| format!("failed to execute '{}': {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
@@ -869,20 +917,15 @@ pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
 	ext: &TestExternalities,
 	executor: &NativeElseWasmExecutor<D>,
 ) -> (String, u32, sp_core::storage::StateVersion) {
-	let (_, encoded) = state_machine_call::<Block, D>(
-		ext,
-		executor,
-		sc_cli::ExecutionStrategy::NativeElseWasm,
-		"Core_version",
-		&[],
-		Default::default(),
-	)
-	.expect("all runtimes should have version; qed");
-	<sp_version::RuntimeVersion as Decode>::decode(&mut &*encoded)
-		.map_err(|e| format!("failed to decode output: {:?}", e))
-		.map(|v| {
-			let state_version = v.state_version();
-			(v.spec_name.into(), v.spec_version, state_version)
-		})
-		.expect("all runtimes should have version; qed")
+	todo!("won't need it anymore if all goes well")
+	// let (_, encoded) =
+	// 	state_machine_call::<Block, D>(ext, executor, "Core_version", &[], Default::default())
+	// 		.expect("all runtimes should have version; qed");
+	// <sp_version::RuntimeVersion as Decode>::decode(&mut &*encoded)
+	// 	.map_err(|e| format!("failed to decode output: {:?}", e))
+	// 	.map(|v| {
+	// 		let state_version = v.state_version();
+	// 		(v.spec_name.into(), v.spec_version, state_version)
+	// 	})
+	// 	.expect("all runtimes should have version; qed")
 }
