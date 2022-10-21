@@ -18,8 +18,22 @@
 
 //! API implementation for `chainHead`.
 
-use crate::{chain_head::subscription::SubscriptionManagement, SubscriptionTaskExecutor};
-use sp_runtime::traits::Block as BlockT;
+use crate::{
+	chain_head::{api::ChainHeadApiServer, subscription::SubscriptionManagement},
+	SubscriptionTaskExecutor,
+};
+use jsonrpsee::{
+	core::{async_trait, RpcResult},
+	types::SubscriptionResult,
+	SubscriptionSink,
+};
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageKey, StorageProvider,
+};
+use sp_api::CallApiAt;
+use sp_blockchain::HeaderBackend;
+use sp_core::Bytes;
+use sp_runtime::traits::{Block as BlockT, Header};
 use std::{marker::PhantomData, sync::Arc};
 
 /// An API for chain head RPC calls.
@@ -43,5 +57,78 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			_phantom: PhantomData,
 		}
+	}
+}
+
+#[async_trait]
+impl<BE, Block, Client> ChainHeadApiServer<Block::Hash> for ChainHead<BE, Block, Client>
+where
+	Block: BlockT + 'static,
+	Block::Header: Unpin,
+	BE: Backend<Block> + 'static,
+	Client: BlockBackend<Block>
+		+ ExecutorProvider<Block>
+		+ HeaderBackend<Block>
+		+ BlockchainEvents<Block>
+		+ CallApiAt<Block>
+		+ StorageProvider<Block, BE>
+		+ 'static,
+{
+	fn chain_head_unstable_follow(
+		&self,
+		mut _sink: SubscriptionSink,
+		_runtime_updates: bool,
+	) -> SubscriptionResult {
+		Ok(())
+	}
+
+	fn chain_head_unstable_body(
+		&self,
+		mut _sink: SubscriptionSink,
+		_follow_subscription: String,
+		_hash: Block::Hash,
+		_network_config: Option<()>,
+	) -> SubscriptionResult {
+		Ok(())
+	}
+
+	fn chain_head_unstable_header(
+		&self,
+		_follow_subscription: String,
+		_hash: Block::Hash,
+	) -> RpcResult<Option<String>> {
+		Ok(None)
+	}
+
+	fn chain_head_unstable_storage(
+		&self,
+		mut _sink: SubscriptionSink,
+		_follow_subscription: String,
+		_hash: Block::Hash,
+		_key: StorageKey,
+		_child_key: Option<StorageKey>,
+		_network_config: Option<()>,
+	) -> SubscriptionResult {
+		Ok(())
+	}
+
+	fn chain_head_unstable_call(
+		&self,
+		mut _sink: SubscriptionSink,
+		_follow_subscription: String,
+		_hash: Block::Hash,
+		_function: String,
+		_call_parameters: Bytes,
+		_network_config: Option<()>,
+	) -> SubscriptionResult {
+		Ok(())
+	}
+
+	fn chain_head_unstable_unpin(
+		&self,
+		_follow_subscription: String,
+		_hash: Block::Hash,
+	) -> RpcResult<()> {
+		Ok(())
 	}
 }
