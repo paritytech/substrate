@@ -325,13 +325,38 @@ where
 
 	fn chain_head_unstable_storage(
 		&self,
-		mut _sink: SubscriptionSink,
-		_follow_subscription: String,
-		_hash: Block::Hash,
-		_key: StorageKey,
+		mut sink: SubscriptionSink,
+		follow_subscription: String,
+		hash: Block::Hash,
+		key: StorageKey,
 		_child_key: Option<StorageKey>,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
+		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
+
+		let fut = async move {
+			let res = match subscriptions.contains(&follow_subscription, &hash) {
+				Err(SubscriptionError::InvalidBlock) => {
+					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+					return
+				},
+				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<Option<String>>::Disjoint,
+				Ok(()) => match client.storage(&hash, &key) {
+					Ok(result) => {
+						let result =
+							result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+						ChainHeadEvent::Done(ChainHeadResult { result })
+					},
+					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+				},
+			};
+
+			let stream = stream::once(async move { res });
+			sink.pipe_from_stream(stream.boxed()).await;
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 
