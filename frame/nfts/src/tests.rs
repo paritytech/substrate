@@ -380,6 +380,7 @@ fn transfer_owner_should_work() {
 		// Mint and set metadata now and make sure that deposit gets transferred back.
 		assert_ok!(Nfts::set_collection_metadata(RuntimeOrigin::signed(2), 0, bvec![0u8; 20]));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 42, None));
+		assert_eq!(Balances::reserved_balance(&1), 1);
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(2), 0, 42, bvec![0u8; 20]));
 		assert_ok!(Nfts::set_accept_ownership(RuntimeOrigin::signed(3), Some(0)));
 		assert_ok!(Nfts::transfer_ownership(RuntimeOrigin::signed(2), 0, 3));
@@ -388,6 +389,10 @@ fn transfer_owner_should_work() {
 		assert_eq!(Balances::total_balance(&3), 144);
 		assert_eq!(Balances::reserved_balance(&2), 0);
 		assert_eq!(Balances::reserved_balance(&3), 44);
+
+		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 42, 2));
+		assert_eq!(Balances::reserved_balance(&1), 0);
+		assert_eq!(Balances::reserved_balance(&2), 1);
 
 		// 2's acceptence from before is reset when it became owner, so it cannot be transfered
 		// without a fresh acceptance.

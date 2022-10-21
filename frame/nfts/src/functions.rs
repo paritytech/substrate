@@ -228,7 +228,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				T::Currency::reserve(&deposit_account, deposit_amount)?;
 
-				let deposit = ItemDeposit { amount: deposit_amount, account: deposit_account };
+				let deposit = ItemDeposit { account: deposit_account, amount: deposit_amount };
 				let details =
 					ItemDetails { owner, approvals: ApprovalsOf::<T, I>::default(), deposit };
 				Item::<T, I>::insert(&collection, &item, details);

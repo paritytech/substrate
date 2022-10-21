@@ -115,10 +115,10 @@ pub struct ItemDetails<AccountId, Deposit, Approvals> {
 /// Information about the reserved item deposit.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ItemDeposit<DepositBalance, AccountId> {
-	/// An amount that gets reserved.
-	pub(super) amount: DepositBalance,
 	/// A depositor account.
 	pub(super) account: AccountId,
+	/// An amount that gets reserved.
+	pub(super) amount: DepositBalance,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
