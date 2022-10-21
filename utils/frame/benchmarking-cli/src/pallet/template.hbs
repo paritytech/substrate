@@ -33,6 +33,7 @@ impl<T: frame_system::Config> {{pallet}}::WeightInfo for WeightInfo<T> {
 		{{~#each benchmark.components as |c| ~}}
 		{{~#if (not c.is_used)}}_{{/if}}{{c.name}}: u32, {{/each~}}
 	) -> Weight {
+		// Minimum execution time: {{underscore benchmark.min_execution_time}} nanoseconds.
 		Weight::from_ref_time({{underscore benchmark.base_weight}} as u64)
 			{{#each benchmark.component_weight as |cw|}}
 			// Standard Error: {{underscore cw.error}}

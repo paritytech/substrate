@@ -22,7 +22,6 @@ use sc_client_api::{Backend as _, BlockImportOperation, NewBlockState, StateBack
 use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sp_core::H256;
 use sp_runtime::{
-	generic::BlockId,
 	testing::{Block as RawBlock, ExtrinsicWrapper, Header},
 	StateVersion, Storage,
 };
@@ -67,7 +66,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 	for i in 0..10 {
 		let mut op = db.begin_operation().unwrap();
 
-		db.begin_state_operation(&mut op, BlockId::Hash(parent_hash)).unwrap();
+		db.begin_state_operation(&mut op, &parent_hash).unwrap();
 
 		let mut header = Header {
 			number,

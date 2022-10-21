@@ -1888,7 +1888,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_sha2_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1906,7 +1906,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_keccak_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1924,7 +1924,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1942,7 +1942,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_128 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1961,7 +1961,7 @@ benchmarks! {
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
@@ -2009,7 +2009,7 @@ benchmarks! {
 	// Only calling the function itself for the list of
 	// generated different ECDSA keys.
 	seal_ecdsa_to_eth_address {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|_| {

@@ -121,6 +121,7 @@ for PALLET in "${PALLETS[@]}"; do
     --wasm-execution=compiled \
     --heap-pages=4096 \
     --output="$WEIGHT_FILE" \
+    --header="./HEADER-APACHE2" \
     --template=./.maintain/frame-weight-template.hbs 2>&1
   )
   if [ $? -ne 0 ]; then
@@ -137,6 +138,7 @@ OUTPUT=$(
   --execution=wasm \
   --wasm-execution=compiled \
   --weight-path="./frame/support/src/weights/" \
+  --header="./HEADER-APACHE2" \
   --warmup=10 \
   --repeat=100 2>&1
 )

@@ -26,6 +26,7 @@ pub struct Analysis {
 	pub names: Vec<String>,
 	pub value_dists: Option<Vec<(Vec<u32>, u128, u128)>>,
 	pub errors: Option<Vec<u128>>,
+	pub minimum: u128,
 	selector: BenchmarkSelector,
 }
 
@@ -49,7 +50,10 @@ fn mul_1000_into_u128(value: f64) -> u128 {
 impl BenchmarkSelector {
 	fn scale_and_cast_weight(self, value: f64, round_up: bool) -> u128 {
 		if let BenchmarkSelector::ExtrinsicTime = self {
-			mul_1000_into_u128(value)
+			// We add a very slight bias here to counteract the numerical imprecision of the linear
+			// regression where due to rounding issues it can emit a number like `2999999.999999998`
+			// which we most certainly always want to round up instead of truncating.
+			mul_1000_into_u128(value + 0.000_000_005)
 		} else {
 			if round_up {
 				(value + 0.5) as u128
@@ -73,6 +77,24 @@ impl BenchmarkSelector {
 		} else {
 			value
 		}
+	}
+
+	fn get_value(self, result: &BenchmarkResult) -> u128 {
+		match self {
+			BenchmarkSelector::ExtrinsicTime => result.extrinsic_time,
+			BenchmarkSelector::StorageRootTime => result.storage_root_time,
+			BenchmarkSelector::Reads => result.reads.into(),
+			BenchmarkSelector::Writes => result.writes.into(),
+			BenchmarkSelector::ProofSize => result.proof_size.into(),
+		}
+	}
+
+	fn get_minimum(self, results: &[BenchmarkResult]) -> u128 {
+		results
+			.iter()
+			.map(|result| self.get_value(result))
+			.min()
+			.expect("results cannot be empty")
 	}
 }
 
@@ -109,8 +131,8 @@ impl TryFrom<Option<String>> for AnalysisChoice {
 }
 
 fn raw_linear_regression(
-	xs: Vec<f64>,
-	ys: Vec<f64>,
+	xs: &[f64],
+	ys: &[f64],
 	x_vars: usize,
 	with_intercept: bool,
 ) -> Option<(f64, Vec<f64>, Vec<f64>)> {
@@ -147,6 +169,14 @@ fn linear_regression(
 	mut ys: Vec<f64>,
 	x_vars: usize,
 ) -> Option<(f64, Vec<f64>, Vec<f64>)> {
+	let (intercept, params, errors) = raw_linear_regression(&xs, &ys, x_vars, true)?;
+	if intercept > 0.0 {
+		return Some((intercept, params, errors[1..].to_vec()))
+	}
+
+	// The intercept is negative.
+	// The weights must be always positive, so we can't have that.
+
 	let mut min = ys[0];
 	for &value in &ys {
 		if value < min {
@@ -158,8 +188,9 @@ fn linear_regression(
 		*value -= min;
 	}
 
-	let (intercept, params, errors) = raw_linear_regression(xs, ys, x_vars, false)?;
-	Some((intercept + min, params, errors[1..].to_vec()))
+	let (intercept, params, errors) = raw_linear_regression(&xs, &ys, x_vars, false)?;
+	assert!(intercept.abs() <= 0.0001);
+	Some((min, params, errors[1..].to_vec()))
 }
 
 impl Analysis {
@@ -190,6 +221,7 @@ impl Analysis {
 			names: Vec::new(),
 			value_dists: None,
 			errors: None,
+			minimum: selector.get_minimum(&r),
 			selector,
 		})
 	}
@@ -289,6 +321,7 @@ impl Analysis {
 			names: results.into_iter().map(|x| x.0).collect::<Vec<_>>(),
 			value_dists: None,
 			errors: None,
+			minimum: selector.get_minimum(&r),
 			selector,
 		})
 	}
@@ -361,6 +394,7 @@ impl Analysis {
 					.map(|value| selector.scale_and_cast_weight(value, false))
 					.collect(),
 			),
+			minimum: selector.get_minimum(&r),
 			selector,
 		})
 	}
@@ -392,8 +426,9 @@ impl Analysis {
 		let names = median_slopes.names;
 		let value_dists = min_squares.value_dists;
 		let errors = min_squares.errors;
+		let minimum = selector.get_minimum(&r);
 
-		Some(Self { base, slopes, names, value_dists, errors, selector })
+		Some(Self { base, slopes, names, value_dists, errors, selector, minimum })
 	}
 }
 
@@ -533,8 +568,7 @@ mod tests {
 			16.0, 17.0, 18.0, 19.0, 20.0,
 		];
 
-		let (intercept, params, errors) =
-			raw_linear_regression(xs.clone(), ys.clone(), 1, true).unwrap();
+		let (intercept, params, errors) = raw_linear_regression(&xs, &ys, 1, true).unwrap();
 		assert_eq!(intercept as i64, -2712997);
 		assert_eq!(params.len(), 1);
 		assert_eq!(params[0] as i64, 34444926);
@@ -688,15 +722,15 @@ mod tests {
 
 		let extrinsic_time =
 			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(extrinsic_time.base, 11_500_000_000);
-		assert_eq!(extrinsic_time.slopes, vec![630635838, 23699421]);
+		assert_eq!(extrinsic_time.base, 10_000_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![1000000000, 100000000]);
 
 		let reads = Analysis::min_squares_iqr(&data, BenchmarkSelector::Reads).unwrap();
-		assert_eq!(reads.base, 3);
+		assert_eq!(reads.base, 2);
 		assert_eq!(reads.slopes, vec![1, 0]);
 
 		let writes = Analysis::min_squares_iqr(&data, BenchmarkSelector::Writes).unwrap();
-		assert_eq!(writes.base, 2);
+		assert_eq!(writes.base, 0);
 		assert_eq!(writes.slopes, vec![0, 2]);
 	}
 
@@ -711,7 +745,7 @@ mod tests {
 
 		let extrinsic_time =
 			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
-		assert_eq!(extrinsic_time.base, 2_000_000_000);
-		assert_eq!(extrinsic_time.slopes, vec![4_000_000_000]);
+		assert_eq!(extrinsic_time.base, 3_000_000_000);
+		assert_eq!(extrinsic_time.slopes, vec![3_000_000_000]);
 	}
 }
