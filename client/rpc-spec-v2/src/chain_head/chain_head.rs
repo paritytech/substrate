@@ -30,8 +30,6 @@ use crate::{
 	},
 	SubscriptionTaskExecutor,
 };
-use std::{marker::PhantomData, sync::Arc};
-use sc_client_api::CallExecutor;
 use codec::Encode;
 use futures::{
 	future::FutureExt,
@@ -43,7 +41,8 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageKey, StorageProvider,
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, StorageKey,
+	StorageProvider,
 };
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
@@ -52,6 +51,7 @@ use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
+use std::{marker::PhantomData, sync::Arc};
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -169,9 +169,98 @@ where
 {
 	fn chain_head_unstable_follow(
 		&self,
-		mut _sink: SubscriptionSink,
-		_runtime_updates: bool,
+		mut sink: SubscriptionSink,
+		runtime_updates: bool,
 	) -> SubscriptionResult {
+		let sub_id = self.accept_subscription(&mut sink)?;
+		// Keep track of the subscription.
+		self.subscriptions.insert_subscription(sub_id.clone());
+
+		let client = self.client.clone();
+		let subscriptions = self.subscriptions.clone();
+
+		let sub_id_import = sub_id.clone();
+		let stream_import = self
+			.client
+			.import_notification_stream()
+			.map(move |notification| {
+				let new_runtime = generate_runtime_event(
+					&client,
+					runtime_updates,
+					&BlockId::Hash(notification.hash),
+					Some(&BlockId::Hash(*notification.header.parent_hash())),
+				);
+
+				let _ = subscriptions.pin_block(&sub_id_import, notification.hash.clone());
+
+				// Note: `Block::Hash` will serialize to hexadecimal encoded string.
+				let new_block = FollowEvent::NewBlock(NewBlock {
+					block_hash: notification.hash,
+					parent_block_hash: *notification.header.parent_hash(),
+					new_runtime,
+					runtime_updates,
+				});
+
+				if !notification.is_new_best {
+					return stream::iter(vec![new_block])
+				}
+
+				// If this is the new best block, then we need to generate two events.
+				let best_block = FollowEvent::BestBlockChanged(BestBlockChanged {
+					best_block_hash: notification.hash,
+				});
+				stream::iter(vec![new_block, best_block])
+			})
+			.flatten();
+
+		let subscriptions = self.subscriptions.clone();
+		let sub_id_finalized = sub_id.clone();
+
+		let stream_finalized =
+			self.client.finality_notification_stream().map(move |notification| {
+				// We might not receive all new blocks reports, also pin the block here.
+				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash.clone());
+
+				FollowEvent::Finalized(Finalized {
+					finalized_block_hashes: notification.tree_route.iter().cloned().collect(),
+					pruned_block_hashes: notification.stale_heads.iter().cloned().collect(),
+				})
+			});
+
+		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
+
+		// The initialized event is the first one sent.
+		let finalized_block_hash = self.client.info().finalized_hash;
+		let finalized_block_runtime = generate_runtime_event(
+			&self.client,
+			runtime_updates,
+			&BlockId::Hash(finalized_block_hash),
+			None,
+		);
+
+		let _ = self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone());
+
+		let stream = stream::once(async move {
+			FollowEvent::Initialized(Initialized {
+				finalized_block_hash,
+				finalized_block_runtime,
+				runtime_updates,
+			})
+		})
+		.chain(merged);
+
+		let subscriptions = self.subscriptions.clone();
+		let fut = async move {
+			if let SubscriptionClosed::Failed(_) = sink.pipe_from_stream(stream.boxed()).await {
+				// The subscription failed to pipe from the stream.
+				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
+			}
+
+			// The client disconnected or called the unsubscribe method.
+			subscriptions.remove_subscription(&sub_id);
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 
