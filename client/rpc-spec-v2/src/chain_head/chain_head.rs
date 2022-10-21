@@ -46,16 +46,18 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageData, StorageKey,
+	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
-use sp_core::Bytes;
+use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_runtime::{
-	generic::{BlockId, SignedBlock},
-	traits::{Block as BlockT, Header, NumberFor},
+	generic::{BlockId,},
+	traits::{Block as BlockT, Header},
 };
+
+use codec::Encode;
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -158,9 +160,7 @@ where
 }
 
 #[async_trait]
-impl<BE, Block, Client>
-	ChainHeadApiServer<NumberFor<Block>, Block::Hash, Block::Header, SignedBlock<Block>>
-	for ChainHead<BE, Block, Client>
+impl<BE, Block, Client> ChainHeadApiServer<Block::Hash> for ChainHead<BE, Block, Client>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
@@ -199,6 +199,7 @@ where
 
 				let _ = subscriptions.pin_block(&sub_id_import, notification.hash.clone());
 
+				// Note: `Block::Hash` will serialize to hexadecimal encoded string.
 				let new_block = FollowEvent::NewBlock(NewBlock {
 					block_hash: notification.hash,
 					parent_block_hash: *notification.header.parent_hash(),
@@ -277,17 +278,18 @@ where
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
-			ChainHeadEvent::<SignedBlock<Block>>::Disjoint
+			ChainHeadEvent::<String>::Disjoint
 		} else {
 			match self.client.block(&BlockId::Hash(hash)) {
-				Ok(Some(block)) => ChainHeadEvent::Done(ChainHeadResult { result: block }),
-				// TODO: Trigger event::stop for the follow subscription.
-				Ok(None) => ChainHeadEvent::<SignedBlock<Block>>::Inaccessible(ErrorEvent {
+				Ok(Some(block)) => {
+					let result = format!("0x{}", HexDisplay::from(&block.encode()));
+					ChainHeadEvent::Done(ChainHeadResult { result })
+				},
+				Ok(None) => ChainHeadEvent::<String>::Inaccessible(ErrorEvent {
 					error: format!("Block hash not available"),
 				}),
-				Err(error) => ChainHeadEvent::<SignedBlock<Block>>::Inaccessible(ErrorEvent {
-					error: error.to_string(),
-				}),
+				Err(error) =>
+					ChainHeadEvent::<String>::Inaccessible(ErrorEvent { error: error.to_string() }),
 			}
 		};
 
@@ -309,17 +311,18 @@ where
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
-			ChainHeadEvent::<StorageData>::Disjoint
+			ChainHeadEvent::<String>::Disjoint
 		} else {
 			match self.client.storage(&hash, &key) {
-				Ok(Some(storage)) => ChainHeadEvent::Done(ChainHeadResult { result: storage }),
-				// TODO: Trigger event::stop for the follow subscription.
-				Ok(None) => ChainHeadEvent::<StorageData>::Inaccessible(ErrorEvent {
+				Ok(Some(storage)) => {
+					let result = format!("0x{}", HexDisplay::from(&storage.0));
+					ChainHeadEvent::Done(ChainHeadResult { result })
+				},
+				Ok(None) => ChainHeadEvent::<String>::Inaccessible(ErrorEvent {
 					error: format!("Block hash not available"),
 				}),
-				Err(error) => ChainHeadEvent::<StorageData>::Inaccessible(ErrorEvent {
-					error: error.to_string(),
-				}),
+				Err(error) =>
+					ChainHeadEvent::<String>::Inaccessible(ErrorEvent { error: error.to_string() }),
 			}
 		};
 
@@ -342,7 +345,7 @@ where
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let res = if self.subscriptions.contains(&follow_subscription, &hash).is_err() {
-			ChainHeadEvent::<Vec<u8>>::Disjoint
+			ChainHeadEvent::<String>::Disjoint
 		} else {
 			match self.client.executor().call(
 				&BlockId::Hash(hash),
@@ -351,9 +354,12 @@ where
 				self.client.execution_extensions().strategies().other,
 				None,
 			) {
-				Ok(result) => ChainHeadEvent::Done(ChainHeadResult { result }),
+				Ok(result) => {
+					let result = format!("0x{}", HexDisplay::from(&result));
+					ChainHeadEvent::Done(ChainHeadResult { result })
+				},
 				Err(error) =>
-					ChainHeadEvent::<Vec<u8>>::Inaccessible(ErrorEvent { error: error.to_string() }),
+					ChainHeadEvent::<String>::Inaccessible(ErrorEvent { error: error.to_string() }),
 			}
 		};
 

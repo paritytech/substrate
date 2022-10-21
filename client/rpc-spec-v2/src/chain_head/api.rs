@@ -19,16 +19,16 @@
 //! API trait of the chain head.
 use crate::chain_head::event::{ChainHeadEvent, FollowEvent};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sc_client_api::{StorageData, StorageKey};
+use sc_client_api::{StorageKey};
 use sp_core::Bytes;
 
 #[rpc(client, server)]
-pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
+pub trait ChainHeadApi<Hash> {
 	/// Track the state of the head of the chain: the finalized, non-finalized, and best blocks.
 	#[subscription(
 		name = "chainHead_unstable_follow" => "chainHead_unstable_followBlock",
 		unsubscribe = "chainHead_unstable_unfollow",
-		item = FollowEvent<Header>,
+		item = FollowEvent<Hash>,
 	)]
 	fn chain_head_unstable_follow(&self, runtime_updates: bool);
 
@@ -36,7 +36,7 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chainHead_unstable_body" => "chainHead_unstable_getBody",
 		unsubscribe = "chainHead_unstable_stopBody",
-		item = ChainHeadEvent<SignedBlock>,
+		item = ChainHeadEvent<String>,
 	)]
 	fn chain_head_unstable_body(
 		&self,
@@ -49,7 +49,7 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chainHead_unstable_storage" => "chainHead_unstable_queryStorage",
 		unsubscribe = "chainHead_unstable_stopStorage",
-		item = ChainHeadEvent<StorageData>,
+		item = ChainHeadEvent<String>,
 	)]
 	fn chain_head_unstable_storage(
 		&self,
@@ -63,8 +63,9 @@ pub trait ChainHeadApi<Number, Hash, Header, SignedBlock> {
 	#[subscription(
 		name = "chainHead_unstable_call" => "chainHead_unstable_runtimeCall",
 		unsubscribe = "chainHead_unstable_stopCall",
-		item = ChainHeadEvent<Vec<u8>>,
+		item = ChainHeadEvent<String>,
 	)]
+
 	fn chain_head_unstable_call(
 		&self,
 		follow_subscription: String,
