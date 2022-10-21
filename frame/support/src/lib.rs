@@ -50,6 +50,8 @@ pub use paste;
 pub use scale_info;
 #[cfg(feature = "std")]
 pub use serde;
+#[doc(hidden)]
+pub use sp_arithmetic;
 pub use sp_core::Void;
 #[doc(hidden)]
 pub use sp_core_hashing_proc_macro;

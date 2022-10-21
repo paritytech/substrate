@@ -18,9 +18,10 @@
 use crate::{BlockHash, Config, Pallet};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
+use sp_arithmetic::traits::SaturatedConversion;
 use sp_runtime::{
 	generic::Era,
-	traits::{DispatchInfoOf, SaturatedConversion, SignedExtension},
+	traits::{DispatchInfoOf, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionValidity, TransactionValidityError, ValidTransaction,
 	},
