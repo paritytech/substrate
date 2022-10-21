@@ -125,3 +125,72 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use sp_core::H256;
+	use substrate_test_runtime_client::runtime::Block;
+
+	#[test]
+	fn subscription_check_id() {
+		let subs = SubscriptionManagement::<Block>::new();
+
+		let id = "abc".to_string();
+		let hash = H256::random();
+
+		let res = subs.contains(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+
+		subs.insert_subscription(id.clone());
+		let res = subs.contains(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+
+		subs.remove_subscription(&id);
+
+		let res = subs.contains(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+	}
+
+	#[test]
+	fn subscription_check_block() {
+		let subs = SubscriptionManagement::<Block>::new();
+
+		let id = "abc".to_string();
+		let hash = H256::random();
+
+		// Check without subscription.
+		let res = subs.pin_block(&id, hash.clone());
+		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+
+		let res = subs.unpin_block(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+
+		// Check with subscription.
+		subs.insert_subscription(id.clone());
+		// No block pinned.
+		let res = subs.contains(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+
+		let res = subs.unpin_block(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+
+		// Check with subscription and pinned block.
+		let res = subs.pin_block(&id, hash.clone());
+		assert!(matches!(res, Ok(())));
+
+		let res = subs.contains(&id, &hash);
+		assert!(matches!(res, Ok(())));
+
+		// Unpin an invalid block.
+		let res = subs.unpin_block(&id, &H256::random());
+		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+
+		let res = subs.unpin_block(&id, &hash);
+		assert!(matches!(res, Ok(())));
+
+		// No block pinned.
+		let res = subs.contains(&id, &hash);
+		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+	}
+}
