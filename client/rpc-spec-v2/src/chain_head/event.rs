@@ -214,3 +214,223 @@ pub enum ChainHeadEvent<T> {
 	/// The provided subscription ID is stale or invalid.
 	Disjoint,
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn follow_initialized_event_no_updates() {
+		// Runtime flag is false.
+		let event: FollowEvent<String> = FollowEvent::Initialized(Initialized {
+			finalized_block_hash: "0x1".into(),
+			finalized_block_runtime: None,
+			runtime_updates: false,
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"initialized","finalizedBlockHash":"0x1"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_initialized_event_with_updates() {
+		// Runtime flag is true, block runtime must always be reported for this event.
+		let runtime = RuntimeVersion {
+			spec_name: "ABC".into(),
+			impl_name: "Impl".into(),
+			spec_version: 1,
+			..Default::default()
+		};
+
+		let runtime_event = RuntimeEvent::Valid(RuntimeVersionEvent { spec: runtime });
+		let mut initialized = Initialized {
+			finalized_block_hash: "0x1".into(),
+			finalized_block_runtime: Some(runtime_event),
+			runtime_updates: true,
+		};
+		let event: FollowEvent<String> = FollowEvent::Initialized(initialized.clone());
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = concat!(
+			r#"{"event":"initialized","finalizedBlockHash":"0x1","#,
+			r#""finalizedBlockRuntime":{"type":"valid","spec":{"specName":"ABC","implName":"Impl","authoringVersion":0,"#,
+			r#""specVersion":1,"implVersion":0,"apis":[],"transactionVersion":0,"stateVersion":0}}}"#,
+		);
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		// The `runtime_updates` field is used for serialization purposes.
+		initialized.runtime_updates = false;
+		assert!(matches!(
+			event_dec, FollowEvent::Initialized(ref dec) if dec == &initialized
+		));
+	}
+
+	#[test]
+	fn follow_new_block_event_no_updates() {
+		// Runtime flag is false.
+		let event: FollowEvent<String> = FollowEvent::NewBlock(NewBlock {
+			block_hash: "0x1".into(),
+			parent_block_hash: "0x2".into(),
+			new_runtime: None,
+			runtime_updates: false,
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"newBlock","blockHash":"0x1","parentBlockHash":"0x2"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_new_block_event_with_updates() {
+		// Runtime flag is true, block runtime must always be reported for this event.
+		let runtime = RuntimeVersion {
+			spec_name: "ABC".into(),
+			impl_name: "Impl".into(),
+			spec_version: 1,
+			..Default::default()
+		};
+
+		let runtime_event = RuntimeEvent::Valid(RuntimeVersionEvent { spec: runtime });
+		let mut new_block = NewBlock {
+			block_hash: "0x1".into(),
+			parent_block_hash: "0x2".into(),
+			new_runtime: Some(runtime_event),
+			runtime_updates: true,
+		};
+
+		let event: FollowEvent<String> = FollowEvent::NewBlock(new_block.clone());
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = concat!(
+			r#"{"event":"newBlock","blockHash":"0x1","parentBlockHash":"0x2","#,
+			r#""newRuntime":{"type":"valid","spec":{"specName":"ABC","implName":"Impl","authoringVersion":0,"#,
+			r#""specVersion":1,"implVersion":0,"apis":[],"transactionVersion":0,"stateVersion":0}}}"#,
+		);
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		// The `runtime_updates` field is used for serialization purposes.
+		new_block.runtime_updates = false;
+		assert!(matches!(
+			event_dec, FollowEvent::NewBlock(ref dec) if dec == &new_block
+		));
+
+		// Runtime flag is true, runtime didn't change compared to parent.
+		let mut new_block = NewBlock {
+			block_hash: "0x1".into(),
+			parent_block_hash: "0x2".into(),
+			new_runtime: None,
+			runtime_updates: true,
+		};
+		let event: FollowEvent<String> = FollowEvent::NewBlock(new_block.clone());
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp =
+			r#"{"event":"newBlock","blockHash":"0x1","parentBlockHash":"0x2","newRuntime":null}"#;
+		assert_eq!(ser, exp);
+		new_block.runtime_updates = false;
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert!(matches!(
+			event_dec, FollowEvent::NewBlock(ref dec) if dec == &new_block
+		));
+	}
+
+	#[test]
+	fn follow_best_block_changed_event() {
+		let event: FollowEvent<String> =
+			FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash: "0x1".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"bestBlockChanged","bestBlockHash":"0x1"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_finalized_event() {
+		let event: FollowEvent<String> = FollowEvent::Finalized(Finalized {
+			finalized_block_hashes: vec!["0x1".into()],
+			pruned_block_hashes: vec!["0x2".into()],
+		});
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp =
+			r#"{"event":"finalized","finalizedBlockHashes":["0x1"],"prunedBlockHashes":["0x2"]}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn follow_stop_event() {
+		let event: FollowEvent<String> = FollowEvent::Stop;
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"stop"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: FollowEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_done_event() {
+		let event: ChainHeadEvent<String> =
+			ChainHeadEvent::Done(ChainHeadResult { result: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"done","result":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_inaccessible_event() {
+		let event: ChainHeadEvent<String> =
+			ChainHeadEvent::Inaccessible(ErrorEvent { error: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"inaccessible","error":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_error_event() {
+		let event: ChainHeadEvent<String> = ChainHeadEvent::Error(ErrorEvent { error: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"error","error":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_disjoint_event() {
+		let event: ChainHeadEvent<String> = ChainHeadEvent::Disjoint;
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"disjoint"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+}
