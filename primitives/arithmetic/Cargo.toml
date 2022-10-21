@@ -26,6 +26,7 @@ static_assertions = "1.1.0"
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
+
 [dev-dependencies]
 criterion = "0.3"
 primitive-types = "0.12.0"
@@ -41,6 +42,7 @@ std = [
 	"serde",
 	"sp-debug-derive/std",
 	"sp-std/std",
+
 ]
 
 [[bench]]
