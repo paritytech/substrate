@@ -216,13 +216,13 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Mark a block as finalized.
 	fn mark_finalized(
 		&mut self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
-	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
+	fn mark_head(&mut self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
 
 	/// Add a transaction index operation.
 	fn update_transaction_index(&mut self, index: Vec<IndexOperation>)
@@ -476,12 +476,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		transaction: Self::BlockImportOperation,
 	) -> sp_blockchain::Result<()>;
 
-	/// Finalize block with given Id.
+	/// Finalize block with given `hash`.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
 	fn finalize_block(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 

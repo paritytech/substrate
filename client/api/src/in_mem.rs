@@ -223,10 +223,10 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Set an existing block as head.
-	pub fn set_head(&self, id: BlockId<Block>) -> sp_blockchain::Result<()> {
+	pub fn set_head(&self, hash: Block::Hash) -> sp_blockchain::Result<()> {
 		let header = self
-			.header(id)?
-			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", id)))?;
+			.header(BlockId::Hash(hash))?
+			.ok_or_else(|| sp_blockchain::Error::UnknownBlock(format!("{}", hash)))?;
 
 		self.apply_head(&header)
 	}
@@ -271,21 +271,16 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	fn finalize_header(
 		&self,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		let hash = match self.header(id)? {
-			Some(h) => h.hash(),
-			None => return Err(sp_blockchain::Error::UnknownBlock(format!("{}", id))),
-		};
-
 		let mut storage = self.storage.write();
-		storage.finalized_hash = hash;
+		storage.finalized_hash = *block;
 
 		if justification.is_some() {
 			let block = storage
 				.blocks
-				.get_mut(&hash)
+				.get_mut(block)
 				.expect("hash was fetched from a block in the db; qed");
 
 			let block_justifications = match block {
@@ -500,8 +495,8 @@ pub struct BlockImportOperation<Block: BlockT> {
 	new_state:
 		Option<<InMemoryBackend<HashFor<Block>> as StateBackend<HashFor<Block>>>::Transaction>,
 	aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-	finalized_blocks: Vec<(BlockId<Block>, Option<Justification>)>,
-	set_head: Option<BlockId<Block>>,
+	finalized_blocks: Vec<(Block::Hash, Option<Justification>)>,
+	set_head: Option<Block::Hash>,
 }
 
 impl<Block: BlockT> BlockImportOperation<Block>
@@ -605,16 +600,16 @@ where
 
 	fn mark_finalized(
 		&mut self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		self.finalized_blocks.push((block, justification));
+		self.finalized_blocks.push((*hash, justification));
 		Ok(())
 	}
 
-	fn mark_head(&mut self, block: BlockId<Block>) -> sp_blockchain::Result<()> {
+	fn mark_head(&mut self, hash: &Block::Hash) -> sp_blockchain::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one set block per operation is allowed");
-		self.set_head = Some(block);
+		self.set_head = Some(*hash);
 		Ok(())
 	}
 
@@ -710,7 +705,7 @@ where
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> sp_blockchain::Result<()> {
 		if !operation.finalized_blocks.is_empty() {
 			for (block, justification) in operation.finalized_blocks {
-				self.blockchain.finalize_header(block, justification)?;
+				self.blockchain.finalize_header(&block, justification)?;
 			}
 		}
 
@@ -743,10 +738,10 @@ where
 
 	fn finalize_block(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
-		self.blockchain.finalize_header(block, justification)
+		self.blockchain.finalize_header(hash, justification)
 	}
 
 	fn append_justification(
