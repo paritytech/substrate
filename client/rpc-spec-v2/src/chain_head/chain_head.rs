@@ -24,7 +24,7 @@ use crate::{
 };
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
-	types::SubscriptionResult,
+	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
 use sc_client_api::{
@@ -57,6 +57,39 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			_phantom: PhantomData,
 		}
+	}
+
+	/// Accept the subscription and return the subscription ID on success.
+	///
+	/// Also keep track of the subscription ID internally.
+	fn accept_subscription(
+		&self,
+		sink: &mut SubscriptionSink,
+	) -> Result<String, SubscriptionEmptyError> {
+		// The subscription must be accepted before it can provide a valid subscription ID.
+		sink.accept()?;
+
+		// TODO: Jsonrpsee needs release + merge in substrate
+		// let sub_id = match sink.subscription_id() {
+		// 	Some(id) => id,
+		// 	// This can only happen if the subscription was not accepted.
+		// 	None => {
+		// 		let err = ErrorObject::owned(PARSE_ERROR_CODE, "invalid subscription ID", None);
+		// 		sink.close(err);
+		// 		return Err(SubscriptionEmptyError)
+		// 	}
+		// };
+		// // Get the string representation for the subscription.
+		// let sub_id = match serde_json::to_string(&sub_id) {
+		// 	Ok(sub_id) => sub_id,
+		// 	Err(err) => {
+		// 		sink.close(err);
+		// 		return Err(SubscriptionEmptyError)
+		// 	},
+		// };
+
+		let sub_id: String = "A".into();
+		Ok(sub_id)
 	}
 }
 
