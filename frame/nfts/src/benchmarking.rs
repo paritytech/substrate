@@ -130,11 +130,12 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	assert_eq!(event, &system_event);
 }
 
-fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<T, I>
-where
-	<T as Config<I>>::CollectionId: sp_std::default::Default,
-{
-	CollectionConfig::all_settings_enabled()
+fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<T, I> {
+	CollectionConfig {
+		settings: CollectionSettings::all_enabled(),
+		max_supply: None,
+		mint_settings: MintSettings::default(),
+	}
 }
 
 benchmarks_instance_pallet! {
@@ -243,12 +244,12 @@ benchmarks_instance_pallet! {
 
 	lock_collection {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
-		let lock_config = CollectionConfig(
+		let lock_settings = CollectionSettings::from_disabled(
 			CollectionSetting::TransferableItems |
 				CollectionSetting::UnlockedMetadata |
 				CollectionSetting::UnlockedAttributes,
 		);
-	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_config)
+	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_settings)
 	verify {
 		assert_last_event::<T, I>(Event::CollectionLocked { collection }.into());
 	}

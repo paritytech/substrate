@@ -995,7 +995,7 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Freezer of the `collection`.
 		///
 		/// - `collection`: The collection to be locked.
-		/// - `lock_config`: The config with the settings to be locked.
+		/// - `lock_settings`: The settings to be locked.
 		///
 		/// Note: it's possible to only lock(set) the setting, but not to unset it.
 		/// Emits `CollectionLocked`.
@@ -1005,10 +1005,10 @@ pub mod pallet {
 		pub fn lock_collection(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
-			lock_config: CollectionConfigFor<T, I>,
+			lock_settings: CollectionSettings,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_lock_collection(origin, collection, lock_config)
+			Self::do_lock_collection(origin, collection, lock_settings)
 		}
 
 		/// Change the Owner of a collection.

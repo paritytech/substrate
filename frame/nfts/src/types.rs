@@ -209,11 +209,17 @@ pub enum CollectionSetting {
 pub struct CollectionSettings(pub BitFlags<CollectionSetting>);
 
 impl CollectionSettings {
-	pub fn all_settings_enabled() -> Self {
+	pub fn all_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn values(&self) -> BitFlags<CollectionSetting> {
+	pub fn get_disabled(&self) -> BitFlags<CollectionSetting> {
 		self.0
+	}
+	pub fn is_disabled(&self, setting: CollectionSetting) -> bool {
+		self.0.contains(setting)
+	}
+	pub fn from_disabled(settings: BitFlags<CollectionSetting>) -> Self {
+		Self(settings)
 	}
 }
 
@@ -247,7 +253,7 @@ impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumb
 			price: None,
 			start_block: None,
 			end_block: None,
-			default_item_settings: ItemSettings::all_settings_enabled(),
+			default_item_settings: ItemSettings::all_enabled(),
 		}
 	}
 }
@@ -271,24 +277,11 @@ pub struct CollectionConfig<Price, BlockNumber, CollectionId> {
 }
 
 impl<Price, BlockNumber, CollectionId> CollectionConfig<Price, BlockNumber, CollectionId> {
-	pub fn all_settings_enabled() -> Self {
-		Self {
-			settings: CollectionSettings::all_settings_enabled(),
-			max_supply: None,
-			mint_settings: MintSettings::default(),
-		}
-	}
-	pub fn get_disabled_settings(&self) -> BitFlags<CollectionSetting> {
-		self.settings.values()
-	}
 	pub fn is_setting_enabled(&self, setting: CollectionSetting) -> bool {
-		!self.get_disabled_settings().contains(setting)
+		!self.settings.is_disabled(setting)
 	}
 	pub fn has_disabled_setting(&self, setting: CollectionSetting) -> bool {
-		self.get_disabled_settings().contains(setting)
-	}
-	pub fn disable_settings(settings: BitFlags<CollectionSetting>) -> Self {
-		Self { settings: CollectionSettings(settings), ..Self::all_settings_enabled() }
+		self.settings.is_disabled(setting)
 	}
 	pub fn enable_setting(&mut self, setting: CollectionSetting) {
 		self.settings.0.remove(setting);
@@ -316,13 +309,16 @@ pub enum ItemSetting {
 pub struct ItemSettings(pub BitFlags<ItemSetting>);
 
 impl ItemSettings {
-	pub fn all_settings_enabled() -> Self {
+	pub fn all_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn get_disabled_settings(&self) -> BitFlags<ItemSetting> {
+	pub fn get_disabled(&self) -> BitFlags<ItemSetting> {
 		self.0
 	}
-	pub fn disable_settings(settings: BitFlags<ItemSetting>) -> Self {
+	pub fn is_disabled(&self, setting: ItemSetting) -> bool {
+		self.0.contains(setting)
+	}
+	pub fn from_disabled(settings: BitFlags<ItemSetting>) -> Self {
 		Self(settings)
 	}
 }
@@ -338,23 +334,14 @@ pub struct ItemConfig {
 }
 
 impl ItemConfig {
-	pub fn all_settings_enabled() -> Self {
-		Self { ..Default::default() }
-	}
-	pub fn get_disabled_settings(&self) -> BitFlags<ItemSetting> {
-		self.settings.get_disabled_settings()
-	}
 	pub fn is_setting_enabled(&self, setting: ItemSetting) -> bool {
-		!self.get_disabled_settings().contains(setting)
+		!self.settings.is_disabled(setting)
 	}
 	pub fn has_disabled_setting(&self, setting: ItemSetting) -> bool {
-		self.get_disabled_settings().contains(setting)
+		self.settings.is_disabled(setting)
 	}
 	pub fn has_disabled_settings(&self) -> bool {
-		!self.get_disabled_settings().is_empty()
-	}
-	pub fn disable_settings(settings: BitFlags<ItemSetting>) -> Self {
-		Self { settings: ItemSettings(settings), ..Default::default() }
+		!self.settings.get_disabled().is_empty()
 	}
 	pub fn enable_setting(&mut self, setting: ItemSetting) {
 		self.settings.0.remove(setting);
@@ -387,7 +374,7 @@ impl PalletFeatures {
 	pub fn all_enabled() -> Self {
 		Self(BitFlags::EMPTY)
 	}
-	pub fn disable(features: BitFlags<PalletFeature>) -> Self {
+	pub fn from_disabled(features: BitFlags<PalletFeature>) -> Self {
 		Self(features)
 	}
 	pub fn is_enabled(&self, feature: PalletFeature) -> bool {

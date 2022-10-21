@@ -22,7 +22,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_lock_collection(
 		origin: T::AccountId,
 		collection: T::CollectionId,
-		lock_config: CollectionConfigFor<T, I>,
+		lock_settings: CollectionSettings,
 	) -> DispatchResult {
 		ensure!(
 			Self::has_role(&collection, &origin, CollectionRole::Freezer),
@@ -31,16 +31,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
 
-			if lock_config.has_disabled_setting(CollectionSetting::TransferableItems) {
+			if lock_settings.is_disabled(CollectionSetting::TransferableItems) {
 				config.disable_setting(CollectionSetting::TransferableItems);
 			}
-			if lock_config.has_disabled_setting(CollectionSetting::UnlockedMetadata) {
+			if lock_settings.is_disabled(CollectionSetting::UnlockedMetadata) {
 				config.disable_setting(CollectionSetting::UnlockedMetadata);
 			}
-			if lock_config.has_disabled_setting(CollectionSetting::UnlockedAttributes) {
+			if lock_settings.is_disabled(CollectionSetting::UnlockedAttributes) {
 				config.disable_setting(CollectionSetting::UnlockedAttributes);
 			}
-			if lock_config.has_disabled_setting(CollectionSetting::UnlockedMaxSupply) {
+			if lock_settings.is_disabled(CollectionSetting::UnlockedMaxSupply) {
 				config.disable_setting(CollectionSetting::UnlockedMaxSupply);
 			}
 
