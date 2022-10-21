@@ -77,6 +77,7 @@ pub trait ChainHeadApi<Hash> {
 		follow_subscription: String,
 		hash: Hash,
 		key: StorageKey,
+		child_key: Option<StorageKey>,
 		network_config: Option<()>,
 	);
 

@@ -46,8 +46,7 @@ impl From<Error> for ErrorObject<'static> {
 		let msg = e.to_string();
 
 		match e {
-			Error::InvalidBlock =>
-				ErrorObject::owned(INVALID_BLOCK_ERROR, msg, None::<()>),
+			Error::InvalidBlock => ErrorObject::owned(INVALID_BLOCK_ERROR, msg, None::<()>),
 			Error::FetchBlockHeader(_) =>
 				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
 		}
