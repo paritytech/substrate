@@ -27,6 +27,7 @@
 
 pub mod api;
 pub mod chain_head;
+pub mod error;
 pub mod event;
 
 mod subscription;

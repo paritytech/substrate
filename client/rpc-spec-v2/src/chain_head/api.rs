@@ -19,7 +19,7 @@
 //! API trait of the chain head.
 use crate::chain_head::event::{ChainHeadEvent, FollowEvent};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sc_client_api::{StorageKey};
+use sc_client_api::StorageKey;
 use sp_core::Bytes;
 
 #[rpc(client, server)]
@@ -32,7 +32,13 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_follow(&self, runtime_updates: bool);
 
-	/// Get the header, body and justifications of a relay chain block.
+	/// Retrieves the body (list of transactions) of a pinned block.
+	///
+	/// This method should be seen as a complement to `chainHead_unstable_follow`,
+	/// allowing the JSON-RPC client to retrieve more information about a block
+	/// that has been reported.
+	///
+	/// Use `archive_unstable_body` if instead you want to retrieve the body of an arbitrary block.
 	#[subscription(
 		name = "chainHead_unstable_body" => "chainHead_unstable_getBody",
 		unsubscribe = "chainHead_unstable_stopBody",
@@ -44,6 +50,21 @@ pub trait ChainHeadApi<Hash> {
 		hash: Hash,
 		network_config: Option<()>,
 	);
+
+	/// Retrieves the header of a pinned block.
+	///
+	/// This method should be seen as a complement to `chainHead_unstable_follow`,
+	/// allowing the JSON-RPC client to retrieve more information about a block
+	/// that has been reported.
+	///
+	/// Use `archive_unstable_header` if instead you want to retrieve the header of an arbitrary
+	/// block.
+	#[method(name = "chainHead_unstable_header", aliases = ["chainHead_unstable_getHeader"], blocking)]
+	fn chain_head_unstable_header(
+		&self,
+		follow_subscription: String,
+		hash: Hash,
+	) -> RpcResult<Option<String>>;
 
 	/// Return a storage entry at a specific block's state.
 	#[subscription(
@@ -65,7 +86,6 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_stopCall",
 		item = ChainHeadEvent<String>,
 	)]
-
 	fn chain_head_unstable_call(
 		&self,
 		follow_subscription: String,

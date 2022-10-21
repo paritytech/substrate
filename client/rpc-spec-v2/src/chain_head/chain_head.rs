@@ -21,6 +21,7 @@
 use crate::{
 	chain_head::{
 		api::ChainHeadApiServer,
+		error::Error as ChainHeadRpcError,
 		event::{
 			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
 			Initialized, NewBlock, RuntimeEvent, RuntimeVersionEvent,
@@ -33,31 +34,26 @@ use std::{marker::PhantomData, sync::Arc};
 
 use sc_client_api::CallExecutor;
 
+use codec::Encode;
 use futures::{
 	future::FutureExt,
 	stream::{self, StreamExt},
 };
 use jsonrpsee::{
-	core::{async_trait, error::SubscriptionClosed, Error as RpcError, RpcResult},
-	types::{
-		error::{CallError, ErrorObject},
-		SubscriptionEmptyError, SubscriptionResult,
-	},
+	core::{async_trait, error::SubscriptionClosed, RpcResult},
+	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageKey,
-	StorageProvider,
+	Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageKey, StorageProvider,
 };
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
 use sp_runtime::{
-	generic::{BlockId,},
+	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
-
-use codec::Encode;
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -358,8 +354,7 @@ where
 					let result = format!("0x{}", HexDisplay::from(&result));
 					ChainHeadEvent::Done(ChainHeadResult { result })
 				},
-				Err(error) =>
-					ChainHeadEvent::<String>::Inaccessible(ErrorEvent { error: error.to_string() }),
+				Err(error) => ChainHeadEvent::Inaccessible(ErrorEvent { error: error.to_string() }),
 			}
 		};
 
@@ -378,10 +373,27 @@ where
 		hash: Block::Hash,
 	) -> RpcResult<()> {
 		match self.subscriptions.unpin_block(&follow_subscription, &hash) {
-			Err(SubscriptionError::InvalidBlock) => Err(RpcError::Call(CallError::Custom(
-				ErrorObject::owned(10, format!("Invalid block hash"), None::<()>),
-			))),
+			Err(SubscriptionError::InvalidBlock) => Err(ChainHeadRpcError::InvalidBlock.into()),
 			_ => Ok(()),
 		}
+	}
+
+	fn chain_head_unstable_header(
+		&self,
+		follow_subscription: String,
+		hash: Block::Hash,
+	) -> RpcResult<Option<String>> {
+		match self.subscriptions.contains(&follow_subscription, &hash) {
+			Err(SubscriptionError::InvalidBlock) =>
+				return Err(ChainHeadRpcError::InvalidBlock.into()),
+			Err(SubscriptionError::InvalidSubId) => return Ok(None),
+			_ => (),
+		};
+
+		self.client
+			.header(BlockId::Hash(hash))
+			.map(|opt_header| opt_header.map(|h| format!("0x{}", HexDisplay::from(&h.encode()))))
+			.map_err(ChainHeadRpcError::FetchBlockHeader)
+			.map_err(Into::into)
 	}
 }
