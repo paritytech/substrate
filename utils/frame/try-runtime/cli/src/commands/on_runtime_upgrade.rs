@@ -18,13 +18,16 @@
 use std::{fmt::Debug, str::FromStr};
 
 use parity_scale_codec::{Decode, Encode};
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{
+	sp_wasm_interface::{HostFunctionRegistry, HostFunctions},
+	NativeExecutionDispatch,
+};
 use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_weights::Weight;
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, local_spec, state_machine_call_with_proof,
+	build_wasm_executor, ensure_matching_spec, extract_code, state_machine_call_with_proof,
 	SharedParams, State, LOG_TARGET,
 };
 
@@ -37,12 +40,13 @@ pub struct OnRuntimeUpgradeCmd {
 
 	/// Execute `try_state`, `pre_upgrade` and `post_upgrade` checks as well.
 	///
-	/// This will perform more checks, but it will also makes the reported PoV/Weight be inaccurate.
+	/// This will perform more checks, but it will also makes the reported PoV/Weight be
+	/// inaccurate.
 	#[clap(long)]
 	pub checks: bool,
 }
 
-pub(crate) async fn on_runtime_upgrade<Block, ExecDispatch>(
+pub(crate) async fn on_runtime_upgrade<Block, HostFns>(
 	shared: SharedParams,
 	command: OnRuntimeUpgradeCmd,
 	config: Configuration,
@@ -54,44 +58,17 @@ where
 	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
-	ExecDispatch: NativeExecutionDispatch + 'static,
+	HostFns: HostFunctions,
 {
-	let executor = build_executor(&shared, &config);
-	let execution = sc_cli::ExecutionStrategy::Wasm;
-
+	let executor = build_wasm_executor(&shared, &config);
 	let ext = command
 		.state
-		.into_ext::<Block>()?
-		.state_version(shared.state_version)
-		.inject_hashed_key_value({
-			log::info!(
-				target: LOG_TARGET,
-				"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
-				config.chain_spec.name(),
-			);
-			let (code_key, code) = extract_code(&config.chain_spec)?;
-			vec![(code_key, code)]
-		})
-		.build()
+		.into_ext_builder::<Block, HostFns>(&shared, &config, &executor)
 		.await?;
 
-	if let Some(uri) = command.state.live_uri() {
-		let (expected_spec_name, expected_spec_version, expected_state_version) =
-			local_spec::<Block, ExecDispatch>(&ext, &executor);
-		ensure_matching_spec::<Block>(
-			uri,
-			expected_spec_name,
-			expected_spec_version,
-			expected_state_version,
-			shared.no_spec_check_panic,
-		)
-		.await;
-	}
-
-	let (_, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
+	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,
 		&executor,
-		execution,
 		"TryRuntime_on_runtime_upgrade",
 		command.checks.encode().as_ref(),
 		Default::default(), // we don't really need any extensions here.
@@ -99,6 +76,7 @@ where
 
 	let (weight, total_weight) = <(Weight, Weight) as Decode>::decode(&mut &*encoded_result)
 		.map_err(|e| format!("failed to decode weight: {:?}", e))?;
+
 	log::info!(
 		target: LOG_TARGET,
 		"TryRuntime_on_runtime_upgrade executed without errors. Consumed weight = ({} ps, {} byte), total weight = ({} ps, {} byte) ({:.2} %, {:.2} %).",

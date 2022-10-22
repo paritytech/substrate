@@ -27,6 +27,11 @@ pub struct CreateSnapshotCmd {
 	/// The source of the snapshot. Must be a remove node.
 	#[clap(flatten)]
 	from: LiveState,
+
+	/// The snapshot path to write to.
+	///
+	/// If not provided `<spec-name>-<spec-version>@<block-hash>.snap` will be used.
+	snapshot_path: Option<String>,
 }
 
 /// inner command for `Command::CreateSnapshot`.
@@ -39,6 +44,7 @@ where
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 {
+	let snapshot_path = command.snapshot_path;
 	let command = command.from;
 
 	let at = match command.at {
@@ -46,7 +52,7 @@ where
 		None => None,
 	};
 
-	let path = match command.snapshot_path {
+	let path = match snapshot_path {
 		Some(path) => path,
 		None => {
 			let rpc = ws_client(&command.uri).await.unwrap();
@@ -57,7 +63,7 @@ where
 				remote_spec.spec_version,
 				command.at.clone().unwrap_or("latest".to_owned())
 			);
-			log::info!(target: LOG_TARGET, "snapshot path not created (-s), using '{}'", path_str);
+			log::info!(target: LOG_TARGET, "snapshot path not provided (-s), using '{}'", path_str);
 			path_str.into()
 		},
 	};

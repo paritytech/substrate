@@ -267,21 +267,18 @@
 
 #![cfg(feature = "try-runtime")]
 
-// CHANGELOG
-// 1. state_version can now be set, otherwise is fetched from the remoter version.
-
 use parity_scale_codec::Decode;
 use remote_externalities::{
-	Builder, Mode, OfflineConfig, OnlineConfig, SnapshotConfig, TestExternalities,
+	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
+	TestExternalities,
 };
 use sc_chain_spec::ChainSpec;
 use sc_cli::{
-	execution_method_from_cli, CliConfiguration, ExecutionStrategy, WasmExecutionMethod,
-	WasmtimeInstantiationStrategy, DEFAULT_WASMTIME_INSTANTIATION_STRATEGY,
-	DEFAULT_WASM_EXECUTION_METHOD,
+	CliConfiguration, RuntimeVersion, WasmExecutionMethod, WasmtimeInstantiationStrategy,
+	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 };
 use sc_executor::{sp_wasm_interface::HostFunctions, NativeElseWasmExecutor, WasmExecutor};
-use sc_service::{Configuration, NativeExecutionDispatch};
+use sc_service::{Configuration};
 use sp_core::{
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
@@ -289,7 +286,7 @@ use sp_core::{
 	},
 	storage::{well_known_keys, StorageData, StorageKey},
 	testing::TaskExecutor,
-	traits::TaskExecutorExt,
+	traits::{ReadRuntimeVersion, TaskExecutorExt},
 	twox_128, H256,
 };
 use sp_externalities::Extensions;
@@ -462,12 +459,11 @@ pub struct SharedParams {
 	#[arg(long)]
 	no_spec_check_panic: bool,
 
-	/// The final state version that is set in the created externalities for executing commands.
+	/// Overwrite the `state_version`.
 	///
-	/// This is checked to match the one from the chain that you connect to, similar other fields
-	/// of the runtime specification.
-	#[arg(long, default_value_t = StateVersion::V1, value_parser = parse::state_version)]
-	state_version: StateVersion,
+	/// Otherwise `remote-externalities` will automatically set the correct state version.
+	#[arg(long, value_parser = parse::state_version)]
+	overwrite_state_version: Option<StateVersion>,
 }
 
 /// Our `try-runtime` command.
@@ -503,10 +499,6 @@ pub struct LiveState {
 		value_parser = parse::hash,
 	)]
 	at: Option<String>,
-
-	/// An optional state snapshot file to WRITE to. Not written if set to `None`.
-	#[arg(short, long)]
-	snapshot_path: Option<PathBuf>,
 
 	/// A pallet to scrape. Can be provided multiple times. If empty, entire chain state will
 	/// be scraped.
@@ -546,11 +538,12 @@ impl State {
 	///
 	/// This will override the code as it sees fit based on [`SharedParams::Runtime`]. It will also
 	/// check the spec-version and name.
-	///
-	///
-	pub(crate) async fn into_ext<Block: BlockT + DeserializeOwned>(
+	pub(crate) async fn into_ext_builder<Block: BlockT + DeserializeOwned, HostFns: HostFunctions>(
 		&self,
-	) -> sc_cli::Result<Builder<Block>>
+		shared: &SharedParams,
+		config: &Configuration,
+		executor: &WasmExecutor<HostFns>,
+	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
 		Block::Hash: FromStr,
 		Block::Header: DeserializeOwned,
@@ -562,7 +555,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
 				})),
-			State::Live(LiveState { snapshot_path, pallet, uri, at, child_tree, threads }) => {
+			State::Live(LiveState { pallet, uri, at, child_tree, threads }) => {
 				let at = match at {
 					Some(at_str) => Some(hash_of::<Block>(at_str)?),
 					None => None,
@@ -570,7 +563,7 @@ impl State {
 				Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
 					at,
 					transport: uri.to_owned().into(),
-					state_snapshot: snapshot_path.as_ref().map(SnapshotConfig::new),
+					state_snapshot: None,
 					pallets: pallet.clone(),
 					child_trie: *child_tree,
 					hashed_keys: vec![
@@ -587,8 +580,22 @@ impl State {
 			},
 		};
 
+		// possibly overwrite the state version, should hardly be needed.
+		let builder = if let Some(state_version) = shared.overwrite_state_version {
+			log::warn!(
+				target: LOG_TARGET,
+				"overwriting state version to {:?}, you better know what you are doing.",
+				state_version
+			);
+			builder.overwrite_state_version(state_version)
+		} else {
+			builder
+		};
+
 		let mut ext = builder.build().await?;
-		let original_code = ext.execute_with(|| sp_io::storage::get(well_known_keys::CODE)).expect("':CODE:' is always downloaded in try-runtime-cli; qed");
+		let original_code = ext
+			.execute_with(|| sp_io::storage::get(well_known_keys::CODE))
+			.expect("':CODE:' is always downloaded in try-runtime-cli; qed");
 
 		// then, we replace the code based on what the CLI wishes.
 		let maybe_code_to_overwrite = match shared.runtime {
@@ -607,25 +614,23 @@ impl State {
 		};
 
 		if let Some(new_code) = maybe_code_to_overwrite {
+			// NOTE: see the impl notes of `read_runtime_version`, the ext is almost not used here,
+			// only as a backup.
 			ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());
-			if let Some(old_code) = maybe_original_code {
-				use parity_scale_codec::Decode;
-				let old_version = <RuntimeVersion as Decode>::decode(
-					&mut &*executor.read_runtime_version(&old_code, &mut ext.ext()).unwrap(),
-				).unwrap();
-				let new_version = <RuntimeVersion as Decode>::decode(
-					&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
-				).unwrap();
+			use parity_scale_codec::Decode;
+			let old_version = <RuntimeVersion as Decode>::decode(
+				&mut &*executor.read_runtime_version(&original_code, &mut ext.ext()).unwrap(),
+			)
+			.unwrap();
+			let new_version = <RuntimeVersion as Decode>::decode(
+				&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
+			)
+			.unwrap();
 
-				ensure_matching_runtime_version(&old_version, &new_version, shared.no_spec_check_panic);
-
-				log::info!(
-					target: LOG_TARGET,
-					"{:?} / {:?}",
-					old_version, new_version
-				);
-			}
+			ensure_matching_runtime_version(&old_version, &new_version, shared.no_spec_check_panic);
 		}
+
+		Ok(ext)
 	}
 
 	/// Get the uri, if self is `Live`.
@@ -638,41 +643,41 @@ impl State {
 }
 
 impl TryRuntimeCmd {
-	pub async fn run<Block, ExecDispatch>(&self, config: Configuration) -> sc_cli::Result<()>
+	pub async fn run<Block, HostFns>(&self, config: Configuration) -> sc_cli::Result<()>
 	where
 		Block: BlockT<Hash = H256> + DeserializeOwned,
 		Block::Header: DeserializeOwned,
 		Block::Hash: FromStr,
 		<Block::Hash as FromStr>::Err: Debug,
-		NumberFor<Block>: FromStr,
 		<NumberFor<Block> as FromStr>::Err: Debug,
-		ExecDispatch: NativeExecutionDispatch + 'static,
+		<NumberFor<Block> as TryInto<u64>>::Error: Debug,
+		NumberFor<Block>: FromStr,
+		HostFns: HostFunctions,
 	{
 		match &self.command {
 			Command::OnRuntimeUpgrade(ref cmd) =>
-				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, ExecDispatch>(
+				commands::on_runtime_upgrade::on_runtime_upgrade::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
 				.await,
 			Command::OffchainWorker(cmd) =>
-			// TODO: host functions should probably be generic
-				commands::offchain_worker::offchain_worker::<Block, sp_io::SubstrateHostFunctions>(
+				commands::offchain_worker::offchain_worker::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
 				.await,
 			Command::ExecuteBlock(cmd) =>
-				commands::execute_block::execute_block::<Block, ExecDispatch>(
+				commands::execute_block::execute_block::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
 				)
 				.await,
 			Command::FollowChain(cmd) =>
-				commands::follow_chain::follow_chain::<Block, ExecDispatch>(
+				commands::follow_chain::follow_chain::<Block, HostFns>(
 					self.shared.clone(),
 					cmd.clone(),
 					config,
@@ -816,23 +821,6 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions
 }
 
-/// Build a default execution that we typically use.
-pub(crate) fn build_executor<D: NativeExecutionDispatch + 'static>(
-	shared: &SharedParams,
-	config: &sc_service::Configuration,
-) -> NativeElseWasmExecutor<D> {
-	let heap_pages = shared.heap_pages.or(config.default_heap_pages);
-	let max_runtime_instances = config.max_runtime_instances;
-	let runtime_cache_size = config.runtime_cache_size;
-
-	NativeElseWasmExecutor::<D>::new(
-		execution_method_from_cli(shared.wasm_method, shared.wasmtime_instantiation_strategy),
-		heap_pages,
-		max_runtime_instances,
-		runtime_cache_size,
-	)
-}
-
 pub(crate) fn build_wasm_executor<H: HostFunctions>(
 	shared: &SharedParams,
 	config: &sc_service::Configuration,
@@ -852,9 +840,9 @@ pub(crate) fn build_wasm_executor<H: HostFunctions>(
 
 /// Execute the given `method` and `data` on top of `ext`, returning the results (encoded) and the
 /// state `changes`.
-pub(crate) fn state_machine_call<Block: BlockT, H: HostFunctions>(
+pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 	ext: &TestExternalities,
-	executor: &WasmExecutor<H>,
+	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
@@ -881,10 +869,9 @@ pub(crate) fn state_machine_call<Block: BlockT, H: HostFunctions>(
 /// size and formats.
 ///
 /// Make sure [`LOG_TARGET`] is enabled in logging.
-pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDispatch + 'static>(
+pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunctions>(
 	ext: &TestExternalities,
-	executor: &NativeElseWasmExecutor<D>,
-	execution: sc_cli::ExecutionStrategy,
+	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
 	extensions: Extensions,
@@ -910,7 +897,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		&runtime_code,
 		sp_core::testing::TaskExecutor::new(),
 	)
-	.execute(execution.into())
+	.execute(sp_state_machine::ExecutionStrategy::AlwaysWasm)
 	.map_err(|e| format!("failed to execute {}: {}", method, e))
 	.map_err::<sc_cli::Error, _>(Into::into)?;
 
@@ -957,20 +944,28 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	Ok((changes, encoded_results))
 }
 
-/// Get the spec `(name, version)` from the local runtime.
-pub(crate) fn local_spec<Block: BlockT, D: NativeExecutionDispatch + 'static>(
-	ext: &TestExternalities,
-	executor: &NativeElseWasmExecutor<D>,
-) -> (String, u32, sp_core::storage::StateVersion) {
-	todo!("won't need it anymore if all goes well")
-	// let (_, encoded) =
-	// 	state_machine_call::<Block, D>(ext, executor, "Core_version", &[], Default::default())
-	// 		.expect("all runtimes should have version; qed");
-	// <sp_version::RuntimeVersion as Decode>::decode(&mut &*encoded)
-	// 	.map_err(|e| format!("failed to decode output: {:?}", e))
-	// 	.map(|v| {
-	// 		let state_version = v.state_version();
-	// 		(v.spec_name.into(), v.spec_version, state_version)
-	// 	})
-	// 	.expect("all runtimes should have version; qed")
+fn ensure_matching_runtime_version(spec1: &RuntimeVersion, spec2: &RuntimeVersion, no_panic: bool) {
+	let log_or_panic = |err| {
+		if no_panic {
+			log::error!("{}", err);
+		} else {
+			panic!("{}", err);
+		}
+	};
+
+	if spec1.spec_name != spec2.spec_name {
+		let err = format!("incompatible spec-name: {:?} {:?}", spec1.spec_name, spec2.spec_name);
+		log_or_panic(err);
+	}
+
+	if spec1.spec_version != spec2.spec_version {
+		let err =
+			format!("incompatible spec-version: {:?} {:?}", spec1.spec_version, spec2.spec_version);
+		log_or_panic(err);
+	}
+}
+
+pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {
+	log::error!(target: LOG_TARGET, "rpc error: {:?}", error);
+	"rpc error."
 }

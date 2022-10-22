@@ -16,12 +16,12 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
-	state_machine_call_with_proof, SharedParams, LOG_TARGET,
+	build_wasm_executor, extract_code, full_extensions, parse, state_machine_call_with_proof,
+	SharedParams, LOG_TARGET,
 };
 use parity_scale_codec::{Decode, Encode};
 use remote_externalities::{Builder, Mode, OnlineConfig};
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{sp_wasm_interface::HostFunctions};
 use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
@@ -77,7 +77,7 @@ async fn start_subscribing<Header: DeserializeOwned + Serialize + Send + Sync + 
 	Ok((client, sub))
 }
 
-pub(crate) async fn follow_chain<Block, ExecDispatch>(
+pub(crate) async fn follow_chain<Block, HostFns>(
 	shared: SharedParams,
 	command: FollowChainCmd,
 	config: Configuration,
@@ -89,13 +89,12 @@ where
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
-	ExecDispatch: NativeExecutionDispatch + 'static,
+	HostFns: HostFunctions,
 {
 	let mut maybe_state_ext = None;
 	let (rpc, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
 
-	let executor = build_executor::<ExecDispatch>(&shared, &config);
-	let execution = sc_cli::ExecutionStrategy::Wasm;
+	let executor = build_wasm_executor::<HostFns>(&shared, &config);
 
 	let mut finalized_headers: FinalizedHeaders<Block, _, _> =
 		FinalizedHeaders::new(&rpc, subscription);
@@ -120,13 +119,11 @@ where
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
 			let (code_key, code) = extract_code(&config.chain_spec)?;
-			let builder = Builder::<Block>::new()
-				.mode(Mode::Online(OnlineConfig {
-					transport: command.uri.clone().into(),
-					at: Some(*header.parent_hash()),
-					..Default::default()
-				}))
-				.state_version(shared.state_version);
+			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
+				transport: command.uri.clone().into(),
+				at: Some(*header.parent_hash()),
+				..Default::default()
+			}));
 
 			let new_ext = builder
 				.inject_hashed_key_value(vec![(code_key.clone(), code.clone())])
@@ -139,27 +136,26 @@ where
 				new_ext.as_backend().root()
 			);
 
-			let (local_spec_name, local_spec_version, local_state_version) =
-				local_spec::<Block, ExecDispatch>(&new_ext, &executor);
-			ensure_matching_spec::<Block>(
-				command.uri.clone(),
-				local_spec_name,
-				local_spec_version,
-				local_state_version,
-				shared.no_spec_check_panic,
-			)
-			.await;
+			// let (local_spec_name, local_spec_version, local_state_version) =
+			// 	local_spec::<Block, ExecDispatch>(&new_ext, &executor);
+			// ensure_matching_spec::<Block>(
+			// 	command.uri.clone(),
+			// 	local_spec_name,
+			// 	local_spec_version,
+			// 	local_state_version,
+			// 	shared.no_spec_check_panic,
+			// )
+			// .await;
 
-			maybe_state_ext = Some((new_ext, local_state_version));
+			maybe_state_ext = Some((new_ext, todo!()));
 		}
 
 		let (state_ext, spec_state_version) =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, ExecDispatch>(
+		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 			state_ext,
 			&executor,
-			execution,
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
 			full_extensions(),

@@ -746,7 +746,14 @@ where
 					.at
 					.expect("set to `Some` in `init_remote_client`; must be called before; qed"),
 			};
-			std::fs::write(path, snapshot.encode()).map_err(|_| "fs::write failed")?;
+			let encoded = snapshot.encode();
+			log::info!(
+				target: LOG_TARGET,
+				"writing snapshot of {} bytes to {:?}",
+				encoded.len(),
+				path
+			);
+			std::fs::write(path, encoded).map_err(|_| "fs::write failed")?;
 		}
 
 		Ok((top_kv, child_kv, state_version))
