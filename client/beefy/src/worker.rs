@@ -1371,8 +1371,10 @@ pub(crate) mod tests {
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		net.peer(0).push_blocks(2, false);
 		// finalize 1 and 2 without justifications
-		backend.finalize_block(BlockId::number(1), None).unwrap();
-		backend.finalize_block(BlockId::number(2), None).unwrap();
+		let hashof1 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
+		let hashof2 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+		backend.finalize_block(&hashof1, None).unwrap();
+		backend.finalize_block(&hashof2, None).unwrap();
 
 		let justif = create_finality_proof(2);
 		// create new session at block #2
