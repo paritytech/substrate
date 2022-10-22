@@ -346,7 +346,6 @@ pub mod pallet {
 						accounts: 0,
 						sufficients: 0,
 						approvals: 0,
-						is_frozen: false,
 						status: AssetStatus::Live,
 					},
 				);
@@ -562,7 +561,6 @@ pub mod pallet {
 					accounts: 0,
 					sufficients: 0,
 					approvals: 0,
-					is_frozen: false,
 					status: AssetStatus::Live,
 				},
 			);
@@ -925,7 +923,7 @@ pub mod pallet {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
 
-				d.is_frozen = true;
+				d.status = AssetStatus::Frozen;
 
 				Self::deposit_event(Event::<T, I>::AssetFrozen { asset_id: id });
 				Ok(())
@@ -951,8 +949,9 @@ pub mod pallet {
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(origin == d.admin, Error::<T, I>::NoPermission);
+				ensure!(d.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
 
-				d.is_frozen = false;
+				d.status = AssetStatus::Live;
 
 				Self::deposit_event(Event::<T, I>::AssetThawed { asset_id: id });
 				Ok(())
@@ -1211,14 +1210,18 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(asset.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
+				ensure!(asset.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
 				asset.owner = T::Lookup::lookup(owner)?;
 				asset.issuer = T::Lookup::lookup(issuer)?;
 				asset.admin = T::Lookup::lookup(admin)?;
 				asset.freezer = T::Lookup::lookup(freezer)?;
 				asset.min_balance = min_balance;
 				asset.is_sufficient = is_sufficient;
-				asset.is_frozen = is_frozen;
+				if is_frozen {
+					asset.status = AssetStatus::Frozen;
+				} else {
+					asset.status = AssetStatus::Live;
+				}
 				*maybe_asset = Some(asset);
 
 				Self::deposit_event(Event::AssetStatusChanged { asset_id: id });
