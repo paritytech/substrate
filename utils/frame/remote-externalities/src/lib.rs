@@ -33,9 +33,9 @@ use sp_core::{
 };
 pub use sp_io::TestExternalities;
 use sp_runtime::{traits::Block as BlockT, StateVersion};
-use sp_version::RuntimeVersion;
 use std::{
 	fs,
+	ops::{Deref, DerefMut},
 	path::{Path, PathBuf},
 	sync::Arc,
 	thread,
@@ -54,11 +54,35 @@ const DEFAULT_VALUE_DOWNLOAD_BATCH: usize = 4096;
 // NOTE: increasing this value does not seem to impact speed all that much.
 const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
 
+/// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
+	state_version: StateVersion,
 	block_hash: B::Hash,
 	top: TopKeyValues,
 	child: ChildKeyValues,
+}
+
+/// An externalities that acts exactly the same as [`sp_io::TestExternalities`] but has a few extra
+/// bits and pieces to it, and can be loaded remotely.
+pub struct RemoteExternalities<B: BlockT> {
+	/// The inner externalities.
+	pub inner_ext: TestExternalities,
+	/// The block hash it which we created this externality env.
+	pub block_hash: B::Hash,
+}
+
+impl<B: BlockT> Deref for RemoteExternalities<B> {
+	type Target = TestExternalities;
+	fn deref(&self) -> &Self::Target {
+		&self.inner_ext
+	}
+}
+
+impl<B: BlockT> DerefMut for RemoteExternalities<B> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.inner_ext
+	}
 }
 
 /// The execution mode.
@@ -227,10 +251,13 @@ pub struct Builder<B: BlockT> {
 	hashed_key_values: Vec<KeyValue>,
 	/// The keys that will be excluded from the final externality. The *hashed* key must be given.
 	hashed_blacklist: Vec<Vec<u8>>,
-	/// connectivity mode, online or offline.
+	/// Connectivity mode, online or offline.
 	mode: Mode<B>,
-	/// The state version being used.
-	state_version: StateVersion,
+	/// If provided, overwrite the state version with this. Otherwise, the state_version of the
+	/// remote node is used. All cache files also store their state version.
+	///
+	/// Overwrite only with care.
+	overwrite_state_version: Option<StateVersion>,
 	/// the final hash of the block who's state is set in the externalities. This is always
 	/// `Some(_)` after calling `build`.
 	final_state_block_hash: Option<B::Hash>,
@@ -244,7 +271,7 @@ impl<B: BlockT> Default for Builder<B> {
 			mode: Default::default(),
 			hashed_key_values: Default::default(),
 			hashed_blacklist: Default::default(),
-			state_version: StateVersion::V1,
+			overwrite_state_version: None,
 			final_state_block_hash: None,
 		}
 	}
@@ -697,12 +724,21 @@ where
 
 	pub(crate) async fn load_remote_and_maybe_save(
 		&mut self,
-	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
+	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
 		let top_kv = self.load_top_remote().await?;
 		let child_kv = self.load_child_remote(top_kv.clone()).await?;
+		let state_version =
+			StateApi::<B::Hash>::runtime_version(self.as_online().rpc_client(), None)
+				.await
+				.map_err(|e| {
+					error!(target: LOG_TARGET, "Error = {:?}", e);
+					"rpc runtime_version failed."
+				})
+				.map(|v| v.state_version())?;
 
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
 			let snapshot = Snapshot::<B> {
+				state_version,
 				top: top_kv.clone(),
 				child: child_kv.clone(),
 				block_hash: self
@@ -713,7 +749,7 @@ where
 			std::fs::write(path, snapshot.encode()).map_err(|_| "fs::write failed")?;
 		}
 
-		Ok((top_kv, child_kv))
+		Ok((top_kv, child_kv, state_version))
 	}
 
 	pub(crate) fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
@@ -722,7 +758,9 @@ where
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
-	async fn do_load_online(&mut self) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
+	async fn do_load_online(
+		&mut self,
+	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
 		self.init_remote_client().await?;
 		self.final_state_block_hash = Some(self.as_online().at_expected());
 		Ok(self.load_remote_and_maybe_save().await?)
@@ -731,17 +769,17 @@ where
 	fn do_load_offline(
 		&mut self,
 		config: OfflineConfig,
-	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
-		let Snapshot { block_hash, top, child } =
+	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
+		let Snapshot { block_hash, top, child, state_version } =
 			self.load_snapshot(config.state_snapshot.path.clone())?;
 		self.final_state_block_hash = Some(block_hash);
-		Ok((top, child))
+		Ok((top, child, state_version))
 	}
 
 	pub(crate) async fn pre_build(
 		&mut self,
-	) -> Result<(TopKeyValues, ChildKeyValues), &'static str> {
-		let (mut top_kv, child_kv) = match self.mode.clone() {
+	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
+		let (mut top_kv, child_kv, state_version) = match self.mode.clone() {
 			Mode::Offline(config) => self.do_load_offline(config)?,
 			Mode::Online(_) => self.do_load_online().await?,
 			Mode::OfflineOrElseOnline(offline_config, _) => {
@@ -772,7 +810,7 @@ where
 			top_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
 		}
 
-		Ok((top_kv, child_kv))
+		Ok((top_kv, child_kv, state_version))
 	}
 }
 
@@ -809,19 +847,13 @@ where
 	}
 
 	/// The state version to use.
-	pub fn state_version(mut self, version: StateVersion) -> Self {
-		self.state_version = version;
+	pub fn overwrite_state_version(mut self, version: StateVersion) -> Self {
+		self.overwrite_state_version = Some(version);
 		self
 	}
 
-	/// Build the test externalities, and also return the final block hash to which the current
-	/// state corresponds to.
-	pub async fn build_with_block_hash(self) -> Result<(TestExternalities, B::Hash), &'static str> {
+	pub async fn build(self) -> Result<RemoteExternalities<B>, &'static str> {
 		self.do_build().await
-	}
-
-	pub async fn build(self) -> Result<TestExternalities, &'static str> {
-		self.do_build().await.map(|(e, _)| e)
 	}
 }
 
@@ -832,13 +864,12 @@ where
 	B::Header: DeserializeOwned,
 {
 	/// Build the test externalities.
-	async fn do_build(mut self) -> Result<(TestExternalities, B::Hash), &'static str> {
-		let state_version = self.state_version;
-		let (top_kv, child_kv) = self.pre_build().await?;
+	async fn do_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
+		let (top_kv, child_kv, state_version) = self.pre_build().await?;
 		let mut ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
 			Default::default(),
-			state_version,
+			self.overwrite_state_version.unwrap_or(state_version),
 		);
 
 		// OPTIMIZATION: we can do this while child keys are being fetched.
@@ -866,11 +897,12 @@ where
 		ext.commit_all().unwrap();
 		info!(
 			target: LOG_TARGET,
-			"initialized state externalities with storage root {:?}",
-			ext.as_backend().root()
+			"initialized state externalities with storage root {:?} and state_version {:?}",
+			ext.as_backend().root(),
+			ext.state_version
 		);
 
-		Ok((ext, self.final_state_block_hash.unwrap()))
+		Ok(RemoteExternalities { inner_ext: ext, block_hash: self.final_state_block_hash.unwrap() })
 	}
 }
 
@@ -894,7 +926,7 @@ mod test_prelude {
 mod tests {
 	use super::test_prelude::*;
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_load_state_snapshot() {
 		init_logger();
 		Builder::<Block>::new()
@@ -913,7 +945,7 @@ mod tests {
 			.execute_with(|| {});
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn can_exclude_from_snapshot() {
 		init_logger();
 
@@ -946,10 +978,50 @@ mod tests {
 
 #[cfg(all(test, feature = "remote-test"))]
 mod remote_tests {
-	use sp_core::storage::well_known_keys;
-
 	use super::test_prelude::*;
+	use sp_core::storage::well_known_keys;
 	use std::os::unix::fs::MetadataExt;
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn state_version_is_kept_and_can_be_altered() {
+		const CACHE: &'static str = "state_version_is_kept_and_can_be_altered";
+		init_logger();
+
+		// first, build a snapshot.
+		let ext = Builder::<Block>::new()
+			.mode(Mode::Online(OnlineConfig {
+				pallets: vec!["Proxy".to_owned()],
+				child_trie: false,
+				state_snapshot: Some(SnapshotConfig::new(CACHE)),
+				..Default::default()
+			}))
+			.build()
+			.await
+			.unwrap();
+
+		// now re-create the same snapshot.
+		let cached_ext = Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
+			.build()
+			.await
+			.unwrap();
+
+		assert_eq!(ext.state_version, cached_ext.state_version);
+
+		// now overwrite it
+		let other = match ext.state_version {
+			StateVersion::V0 => StateVersion::V1,
+			StateVersion::V1 => StateVersion::V0,
+		};
+		let cached_ext = Builder::<Block>::new()
+			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
+			.overwrite_state_version(other)
+			.build()
+			.await
+			.unwrap();
+
+		assert_eq!(cached_ext.state_version, other);
+	}
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn single_multi_thread_result_is_same() {
@@ -972,25 +1044,25 @@ mod remote_tests {
 		init_logger();
 
 		// first, build a snapshot.
-		let (_, block_hash) = Builder::<Block>::new()
+		let ext = Builder::<Block>::new()
 			.mode(Mode::Online(OnlineConfig {
 				pallets: vec!["Proxy".to_owned()],
 				child_trie: false,
 				state_snapshot: Some(SnapshotConfig::new(CACHE)),
 				..Default::default()
 			}))
-			.build_with_block_hash()
+			.build()
 			.await
 			.unwrap();
 
 		// now re-create the same snapshot.
-		let (_, cached_block_hash) = Builder::<Block>::new()
+		let cached_ext = Builder::<Block>::new()
 			.mode(Mode::Offline(OfflineConfig { state_snapshot: SnapshotConfig::new(CACHE) }))
-			.build_with_block_hash()
+			.build()
 			.await
 			.unwrap();
 
-		assert_eq!(block_hash, cached_block_hash);
+		assert_eq!(ext.block_hash, cached_ext.block_hash);
 	}
 
 	#[tokio::test(flavor = "multi_thread")]

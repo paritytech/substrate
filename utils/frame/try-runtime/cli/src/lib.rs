@@ -542,8 +542,13 @@ pub enum State {
 }
 
 impl State {
-	/// Create the [`remote_externalities::Builder`] from self.
-	pub(crate) fn ext_builder<Block: BlockT + DeserializeOwned>(
+	/// Create the [`sp_io::TestExternalities`] using [`remote-externalities`] from self.
+	///
+	/// This will override the code as it sees fit based on [`SharedParams::Runtime`]. It will also
+	/// check the spec-version and name.
+	///
+	///
+	pub(crate) async fn into_ext<Block: BlockT + DeserializeOwned>(
 		&self,
 	) -> sc_cli::Result<Builder<Block>>
 	where
@@ -552,7 +557,7 @@ impl State {
 		Block::Hash: DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
 	{
-		Ok(match self {
+		let builder = match self {
 			State::Snap { snapshot_path } =>
 				Builder::<Block>::new().mode(Mode::Offline(OfflineConfig {
 					state_snapshot: SnapshotConfig::new(snapshot_path),
@@ -580,7 +585,47 @@ impl State {
 					threads: *threads,
 				}))
 			},
-		})
+		};
+
+		let mut ext = builder.build().await?;
+		let original_code = ext.execute_with(|| sp_io::storage::get(well_known_keys::CODE)).expect("':CODE:' is always downloaded in try-runtime-cli; qed");
+
+		// then, we replace the code based on what the CLI wishes.
+		let maybe_code_to_overwrite = match shared.runtime {
+			Runtime::Local => Some(
+				config
+					.chain_spec
+					.build_storage()
+					.unwrap()
+					.top
+					.get(well_known_keys::CODE)
+					.unwrap()
+					.to_vec(),
+			),
+			Runtime::Path(_) => Some(todo!()),
+			Runtime::Remote => None,
+		};
+
+		if let Some(new_code) = maybe_code_to_overwrite {
+			ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());
+			if let Some(old_code) = maybe_original_code {
+				use parity_scale_codec::Decode;
+				let old_version = <RuntimeVersion as Decode>::decode(
+					&mut &*executor.read_runtime_version(&old_code, &mut ext.ext()).unwrap(),
+				).unwrap();
+				let new_version = <RuntimeVersion as Decode>::decode(
+					&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
+				).unwrap();
+
+				ensure_matching_runtime_version(&old_version, &new_version, shared.no_spec_check_panic);
+
+				log::info!(
+					target: LOG_TARGET,
+					"{:?} / {:?}",
+					old_version, new_version
+				);
+			}
+		}
 	}
 
 	/// Get the uri, if self is `Live`.
@@ -612,7 +657,7 @@ impl TryRuntimeCmd {
 				)
 				.await,
 			Command::OffchainWorker(cmd) =>
-				// TODO: host functions should probably be generic
+			// TODO: host functions should probably be generic
 				commands::offchain_worker::offchain_worker::<Block, sp_io::SubstrateHostFunctions>(
 					self.shared.clone(),
 					cmd.clone(),

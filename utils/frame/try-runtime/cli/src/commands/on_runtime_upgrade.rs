@@ -61,7 +61,7 @@ where
 
 	let ext = command
 		.state
-		.ext_builder::<Block>()?
+		.into_ext::<Block>()?
 		.state_version(shared.state_version)
 		.inject_hashed_key_value({
 			log::info!(

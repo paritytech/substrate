@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, build_wasm_executor, ensure_matching_spec, extract_code, full_extensions,
+	build_executor, build_wasm_executor, extract_code, full_extensions,
 	hash_of, local_spec, parse, state_machine_call, LiveState, Runtime, SharedParams, State,
 	LOG_TARGET,
 };
@@ -133,45 +133,10 @@ where
 	// we first build the externalities with the remote code.
 	let mut ext = command
 		.state
-		.ext_builder::<Block>()?
+		.into_ext::<Block>()?
 		.state_version(shared.state_version)
 		.build()
 		.await?;
-
-	// then, we replace the code based on what the CLI wishes.
-	let maybe_code_to_overwrite = match shared.runtime {
-		Runtime::Local => Some(
-			config
-				.chain_spec
-				.build_storage()
-				.unwrap()
-				.top
-				.get(well_known_keys::CODE)
-				.unwrap()
-				.to_vec(),
-		),
-		Runtime::Path(_) => Some(todo!()),
-		Runtime::Remote => None,
-	};
-	log::info!(
-		target: LOG_TARGET,
-		"replacing the in-storage :code: with the local code from {}'s chain_spec (your local repo)",
-		config.chain_spec.name(),
-	);
-
-	if let Some(new_code) = maybe_code_to_overwrite {
-		let maybe_original_code = ext.execute_with(|| sp_io::storage::get(well_known_keys::CODE));
-		ext.insert(well_known_keys::CODE.to_vec(), new_code.clone());
-		if let Some(old_code) = maybe_original_code {
-			use parity_scale_codec::Decode;
-			let old_version = <RuntimeVersion as Decode>::decode(
-				&mut &*executor.read_runtime_version(&old_code, &mut ext.ext()).unwrap(),
-			);
-			let new_version = <RuntimeVersion as Decode>::decode(
-				&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
-			);
-		}
-	}
 
 	let _ = state_machine_call::<Block, H>(
 		&ext,
@@ -184,4 +149,24 @@ where
 	log::info!(target: LOG_TARGET, "OffchainWorkerApi_offchain_worker executed without errors.");
 
 	Ok(())
+}
+
+fn ensure_matching_runtime_version(spec1: &RuntimeVersion, spec2: &RuntimeVersion, no_panic: bool) {
+	let log_or_panic = |err| {
+		if no_panic {
+			log::error!("{}", err);
+		} else {
+			panic!("{}", err);
+		}
+	};
+
+	if spec1.spec_name != spec2.spec_name {
+		let err = format!("incompatible spec-name: {:?} {:?}", spec1.spec_name, spec2.spec_name);
+		log_or_panic(err);
+	}
+
+	if spec1.spec_version != spec2.spec_version {
+		let err = format!("incompatible spec-version: {:?} {:?}", spec1.spec_version, spec2.spec_version);
+		log_or_panic(err);
+	}
 }
