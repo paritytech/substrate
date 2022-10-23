@@ -541,8 +541,8 @@ pub struct PoolRoles<AccountId> {
 /// Pool commission.
 ///
 /// The pool depositor can set a commission upon a pool creation, from which the pool owner can
-/// update thereafter. The `max` commission value can only be set once, as to prevent the commission
-/// from repeatedly increasing.
+/// update thereafter. The `max` commission value can only be decreased after the initial value is
+/// set, as to prevent the commission from repeatedly increasing.
 ///
 /// A commission throttle is also optional, allowing the pool to set strict limits to how much
 /// commission can change in each update, and how often updates can take place.
@@ -556,7 +556,7 @@ pub struct Commission<T: Config> {
 	/// cannot be updated.
 	max: Option<Perbill>,
 	/// The account commission is paid to.
-	receiver: Option<T::AccountId>,
+	payee: Option<T::AccountId>,
 	/// Configiration around how often the commission can be updated, and metadata around the
 	/// previous round of updates.
 	throttle: Option<CommissionThrottle<T>>,
@@ -564,7 +564,7 @@ pub struct Commission<T: Config> {
 
 impl<T: Config> Default for Commission<T> {
 	fn default() -> Self {
-		Self { current: Perbill::from_percent(0), max: None, receiver: None, throttle: None }
+		Self { current: Perbill::from_percent(0), max: None, payee: None, throttle: None }
 	}
 }
 
@@ -763,9 +763,9 @@ impl<T: Config> BondedPool<T> {
 		self
 	}
 
-	/// Set the pool's commission receiver.
-	fn set_commission_receiver(mut self, receiver: T::AccountId) -> Self {
-		self.commission.receiver = Some(receiver);
+	/// Set the pool's commission payee.
+	fn set_commission_payee(mut self, payee: T::AccountId) -> Self {
+		self.commission.payee = Some(payee);
 		self
 	}
 
@@ -1508,8 +1508,8 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
-		/// A pool's commission receiver has been changed.
-		PoolCommissionReceiverChanged { pool_id: PoolId, receiver: T::AccountId },
+		/// A pool's commission payee has been changed.
+		PoolCommissionPayeeChanged { pool_id: PoolId, payee: T::AccountId },
 		/// A pool's commission setting has been changed.
 		PoolCommissionUpdated { pool_id: PoolId, commission: Perbill },
 		/// A pool's maximum commission setting has been changed.
@@ -1570,7 +1570,7 @@ pub mod pallet {
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
 		/// No account has been set to receive commission.
-		NoCommissionReceiverSet,
+		NoCommissionPayeeSet,
 		/// The pool's max commission cannot be set higher than the existing value.
 		MaxCommissionRestricted,
 		/// The supplied commission exceeds the max allowed commission.
@@ -2154,22 +2154,22 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the commissionr receiver of a pool.
+		/// Set the commissionr payee of a pool.
 		///
 		/// The dispatch origin of this call must be signed by the root role of the pool.
 		#[pallet::weight(0)]
 		#[transactional]
-		pub fn set_commission_receiver(
+		pub fn set_commission_payee(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			receiver: T::AccountId,
+			payee: T::AccountId,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			bonded_pool.set_commission_receiver(receiver.clone()).put();
-			Self::deposit_event(Event::<T>::PoolCommissionReceiverChanged { pool_id, receiver });
+			bonded_pool.set_commission_payee(payee.clone()).put();
+			Self::deposit_event(Event::<T>::PoolCommissionPayeeChanged { pool_id, payee });
 			Ok(())
 		}
 
@@ -2181,7 +2181,7 @@ pub mod pallet {
 		///
 		/// If the max commission has _not yet_ been set, then the commission is not
 		/// restricted.
-		/// A `receiver` must already be present before commission can be set.
+		/// A `payee` must already be present before commission can be set.
 		#[pallet::weight(0)]
 		#[transactional]
 		pub fn set_commission(
@@ -2192,7 +2192,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-			ensure!(bonded_pool.commission.receiver.is_some(), Error::<T>::NoCommissionReceiverSet);
+			ensure!(bonded_pool.commission.payee.is_some(), Error::<T>::NoCommissionPayeeSet);
 
 			if let Some(throttle) = &bonded_pool.commission.throttle {
 				ensure!(
@@ -2600,16 +2600,16 @@ impl<T: Config> Pallet<T> {
 
 		// If a non-zero commission has been applied to the pool, deduct the share from
 		// `pending_rewards` and send that amount to the pool `depositor`.
-		// Defensive: The commission receiver is also checked for existence.
+		// Defensive: The commission payee is also checked for existence.
 		if bonded_pool.commission.current > Perbill::from_percent(0) {
-			if let Some(receiver) = &bonded_pool.commission.receiver {
+			if let Some(payee) = &bonded_pool.commission.payee {
 				let pool_commission = bonded_pool.commission.current * pending_rewards;
 				pending_rewards -= pool_commission;
 
-				// Transfer pool_commission to the `receiver` account.
+				// Transfer pool_commission to the `payee` account.
 				T::Currency::transfer(
 					&bonded_pool.reward_account(),
-					receiver,
+					payee,
 					pool_commission,
 					ExistenceRequirement::KeepAlive,
 				)?;
