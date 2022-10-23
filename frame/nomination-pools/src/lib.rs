@@ -760,8 +760,11 @@ impl<T: Config> BondedPool<T> {
 
 	/// Set the pool's commission.
 	fn set_commission(mut self, commission: &Perbill) -> Self {
-		self.commission.current = Some(*commission);
-
+		if commission > &Perbill::from_percent(0) {
+				self.commission.current = Some(*commission);
+		} else {
+			self.commission.current = None;
+		}
 		// if throttle is configured, record the current block as the previously
 		// updated commission.
 		if let Some(throttle) = &self.commission.throttle {
