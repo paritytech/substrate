@@ -94,11 +94,12 @@ pub enum CompatibilityMode<N> {
 	/// old chains this compatibility mode exists.
 	UseInitializeBlock {
 		/// The block number until this compatibility mode should be executed. The first runtime
-		/// call in the context (importing it/building it) of the `until` block should disable the
-		/// compatibility mode. This number should be of a block in the future! It should be a
-		/// block number on that all nodes have upgraded to a release that runs with the
-		/// compatibility mode. After this block there will be a hard fork when the authority set
-		/// changes, between the old nodes (running with `initialize_block`) and the new nodes.
+		/// call in the context of the `until` block (importing it/building it) will disable the compatibility 
+		/// mode (i.e. at `until` the default rules will apply). When enabling this compatibility mode the 
+		/// `until` block should be a future block on which all nodes will have upgraded to a release that 
+		/// includes the updated compatibility mode configuration. At `until` block there will be a hard 
+		/// fork when the authority set changes, between the old nodes (running with `initialize_block`, 
+		/// i.e. without the compatibility mode configuration) and the new nodes.
 		until: N,
 	},
 }
