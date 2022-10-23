@@ -18,7 +18,6 @@
 //! Utils for parsing user input
 
 use sp_version::StateVersion;
-use crate::Runtime;
 
 pub(crate) fn hash(block_hash: &str) -> Result<String, String> {
 	let (block_hash, offset) = if let Some(block_hash) = block_hash.strip_prefix("0x") {
@@ -51,8 +50,4 @@ pub(crate) fn state_version(s: &str) -> Result<StateVersion, &'static str> {
 		.map_err(|_| ())
 		.and_then(StateVersion::try_from)
 		.map_err(|_| "Invalid state version.")
-}
-
-pub(crate) fn runtime(s: &str) -> Result<Runtime, ()> {
-	todo!();
 }

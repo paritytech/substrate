@@ -16,12 +16,12 @@
 // limitations under the License.
 
 use crate::{
-	build_wasm_executor, full_extensions, rpc_err_handler,
-	state_machine_call_with_proof, LiveState, SharedParams, State, LOG_TARGET,
+	build_executor, full_extensions, rpc_err_handler, state_machine_call_with_proof, LiveState,
+	SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
 use sc_executor::sp_wasm_interface::HostFunctions;
-use sc_service::{Configuration};
+use sc_service::Configuration;
 use sp_rpc::{list::ListOrValue, number::NumberOrHex};
 use sp_runtime::{
 	generic::SignedBlock,
@@ -109,11 +109,8 @@ where
 	<NumberFor<Block> as TryInto<u64>>::Error: Debug,
 	HostFns: HostFunctions,
 {
-	let executor = build_wasm_executor::<HostFns>(&shared, &config);
-	let ext = command
-		.state
-		.into_ext_builder::<Block, HostFns>(&shared, &config, &executor)
-		.await?;
+	let executor = build_executor::<HostFns>(&shared, &config);
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
 
 	// get the block number associated with this block.
 	let block_ws_uri = command.block_ws_uri::<Block>();

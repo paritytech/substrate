@@ -267,24 +267,22 @@
 
 #![cfg(feature = "try-runtime")]
 
-use parity_scale_codec::Decode;
 use remote_externalities::{
 	Builder, Mode, OfflineConfig, OnlineConfig, RemoteExternalities, SnapshotConfig,
 	TestExternalities,
 };
-use sc_chain_spec::ChainSpec;
 use sc_cli::{
 	CliConfiguration, RuntimeVersion, WasmExecutionMethod, WasmtimeInstantiationStrategy,
 	DEFAULT_WASMTIME_INSTANTIATION_STRATEGY, DEFAULT_WASM_EXECUTION_METHOD,
 };
-use sc_executor::{sp_wasm_interface::HostFunctions, NativeElseWasmExecutor, WasmExecutor};
-use sc_service::{Configuration};
+use sc_executor::{sp_wasm_interface::HostFunctions, WasmExecutor};
+use sc_service::Configuration;
 use sp_core::{
 	offchain::{
 		testing::{TestOffchainExt, TestTransactionPoolExt},
 		OffchainDbExt, OffchainWorkerExt, TransactionPoolExt,
 	},
-	storage::{well_known_keys, StorageData, StorageKey},
+	storage::well_known_keys,
 	testing::TaskExecutor,
 	traits::{ReadRuntimeVersion, TaskExecutorExt},
 	twox_128, H256,
@@ -298,7 +296,6 @@ use sp_runtime::{
 use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
-use substrate_rpc_client::{ws_client, StateApi};
 
 mod commands;
 pub(crate) mod parse;
@@ -538,7 +535,7 @@ impl State {
 	///
 	/// This will override the code as it sees fit based on [`SharedParams::Runtime`]. It will also
 	/// check the spec-version and name.
-	pub(crate) async fn into_ext_builder<Block: BlockT + DeserializeOwned, HostFns: HostFunctions>(
+	pub(crate) async fn into_ext<Block: BlockT + DeserializeOwned, HostFns: HostFunctions>(
 		&self,
 		shared: &SharedParams,
 		config: &Configuration,
@@ -609,7 +606,7 @@ impl State {
 					.unwrap()
 					.to_vec(),
 			),
-			Runtime::Path(_) => Some(todo!()),
+			Runtime::Path(ref path) => Some(std::fs::read(path)?),
 			Runtime::Remote => None,
 		};
 
@@ -631,14 +628,6 @@ impl State {
 		}
 
 		Ok(ext)
-	}
-
-	/// Get the uri, if self is `Live`.
-	pub(crate) fn live_uri(&self) -> Option<String> {
-		match self {
-			State::Live(LiveState { uri, .. }) => Some(uri.clone()),
-			_ => None,
-		}
 	}
 }
 
@@ -702,22 +691,6 @@ impl CliConfiguration for TryRuntimeCmd {
 	}
 }
 
-/// Extract `:code` from the given chain spec and return as `StorageData` along with the
-/// corresponding `StorageKey`.
-pub(crate) fn extract_code(spec: &Box<dyn ChainSpec>) -> sc_cli::Result<(StorageKey, StorageData)> {
-	let genesis_storage = spec.build_storage()?;
-	let code = StorageData(
-		genesis_storage
-			.top
-			.get(well_known_keys::CODE)
-			.expect("code key must exist in genesis storage; qed")
-			.to_vec(),
-	);
-	let code_key = StorageKey(well_known_keys::CODE.to_vec());
-
-	Ok((code_key, code))
-}
-
 /// Get the hash type of the generic `Block` from a `hash_str`.
 pub(crate) fn hash_of<Block: BlockT>(hash_str: &str) -> sc_cli::Result<Block::Hash>
 where
@@ -727,84 +700,6 @@ where
 	hash_str
 		.parse::<<Block as BlockT>::Hash>()
 		.map_err(|e| format!("Could not parse block hash: {:?}", e).into())
-}
-
-/// Check the spec_name of an `ext`
-///
-/// If the spec names don't match, if `relaxed`, then it emits a warning, else it panics.
-/// If the spec versions don't match, it only ever emits a warning.
-pub(crate) async fn ensure_matching_spec<Block: BlockT + DeserializeOwned>(
-	uri: String,
-	expected_spec_name: String,
-	expected_spec_version: u32,
-	expected_state_version: StateVersion,
-	relaxed: bool,
-) {
-	let rpc = ws_client(&uri).await.unwrap();
-	match StateApi::<Block::Hash>::runtime_version(&rpc, None).await.map(|version| {
-		(
-			String::from(version.spec_name.clone()).to_lowercase(),
-			version.spec_version,
-			version.state_version(),
-		)
-	}) {
-		Ok((name, version, state_version)) => {
-			// first, deal with spec name
-			if expected_spec_name.to_lowercase() == name {
-				log::info!(target: LOG_TARGET, "found matching spec name: {:?}", name);
-			} else {
-				let msg = format!(
-					"version mismatch: remote spec name: '{}', expected (local chain spec, aka. `--chain`): '{}'",
-					name,
-					expected_spec_name
-				);
-				if relaxed {
-					log::warn!(target: LOG_TARGET, "{}", msg);
-				} else {
-					panic!("{}", msg);
-				}
-			}
-
-			if expected_spec_version == version {
-				log::info!(target: LOG_TARGET, "found matching spec version: {:?}", version);
-			} else {
-				let msg = format!(
-					"spec version mismatch (local {} != remote {}). This could cause some issues.",
-					expected_spec_version, version
-				);
-				if relaxed {
-					log::warn!(target: LOG_TARGET, "{}", msg);
-				} else {
-					panic!("{}", msg);
-				}
-			}
-
-			if expected_state_version == state_version {
-				log::info!(target: LOG_TARGET, "found matching state version: {:?}", state_version);
-			} else {
-				let msg = format!(
-					"state version mismatch (local {} != remote {}). This could cause some issues.",
-					expected_spec_version, version
-				);
-				if relaxed {
-					log::warn!(target: LOG_TARGET, "{}", msg);
-				} else {
-					panic!("{}", msg);
-				}
-			}
-		},
-		Err(why) => {
-			let msg = format!(
-				"failed to fetch runtime version from {}: {:?}. Skipping the check",
-				uri, why
-			);
-			if relaxed {
-				log::error!(target: LOG_TARGET, "{}", msg);
-			} else {
-				panic!("{}", msg);
-			}
-		},
-	}
 }
 
 /// Build all extensions that we typically use.
@@ -821,7 +716,7 @@ pub(crate) fn full_extensions() -> Extensions {
 	extensions
 }
 
-pub(crate) fn build_wasm_executor<H: HostFunctions>(
+pub(crate) fn build_executor<H: HostFunctions>(
 	shared: &SharedParams,
 	config: &sc_service::Configuration,
 ) -> WasmExecutor<H> {

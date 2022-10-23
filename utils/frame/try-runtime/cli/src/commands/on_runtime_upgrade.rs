@@ -15,21 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, str::FromStr};
-
+use crate::{build_executor, state_machine_call_with_proof, SharedParams, State, LOG_TARGET};
 use parity_scale_codec::{Decode, Encode};
-use sc_executor::{
-	sp_wasm_interface::{HostFunctionRegistry, HostFunctions},
-	NativeExecutionDispatch,
-};
+use sc_executor::sp_wasm_interface::HostFunctions;
 use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use sp_weights::Weight;
-
-use crate::{
-	build_wasm_executor, ensure_matching_spec, extract_code, state_machine_call_with_proof,
-	SharedParams, State, LOG_TARGET,
-};
+use std::{fmt::Debug, str::FromStr};
 
 /// Configurations of the [`Command::OnRuntimeUpgrade`].
 #[derive(Debug, Clone, clap::Parser)]
@@ -60,11 +52,8 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	HostFns: HostFunctions,
 {
-	let executor = build_wasm_executor(&shared, &config);
-	let ext = command
-		.state
-		.into_ext_builder::<Block, HostFns>(&shared, &config, &executor)
-		.await?;
+	let executor = build_executor(&shared, &config);
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
 
 	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
 		&ext,

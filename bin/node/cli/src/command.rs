@@ -27,7 +27,6 @@ use kitchensink_runtime::{ExistentialDeposit, RuntimeApi};
 use node_executor::ExecutorDispatch;
 use node_primitives::Block;
 use sc_cli::{ChainSpec, Result, RuntimeVersion, SubstrateCli};
-use sc_executor::{sp_wasm_interface::ExtendedHostFunctions, NativeExecutionDispatch};
 use sc_service::PartialComponents;
 use sp_keyring::Sr25519Keyring;
 
@@ -228,6 +227,7 @@ pub fn run() -> Result<()> {
 		},
 		#[cfg(feature = "try-runtime")]
 		Some(Subcommand::TryRuntime(cmd)) => {
+			use sc_executor::{sp_wasm_interface::ExtendedHostFunctions, NativeExecutionDispatch};
 			let runner = cli.create_runner(cmd)?;
 			runner.async_run(|config| {
 				// we don't need any of the components of new_partial, just a runtime, or a task

@@ -16,16 +16,18 @@
 // limitations under the License.
 
 use crate::{
-	build_wasm_executor, extract_code, full_extensions, parse, state_machine_call_with_proof,
-	SharedParams, LOG_TARGET,
+	build_executor, full_extensions, parse, rpc_err_handler, state_machine_call_with_proof,
+	LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::{Decode, Encode};
-use remote_externalities::{Builder, Mode, OnlineConfig};
-use sc_executor::{sp_wasm_interface::HostFunctions};
+use sc_executor::sp_wasm_interface::HostFunctions;
 use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::{
+	generic::SignedBlock,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+};
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, WsClient};
 
@@ -91,22 +93,23 @@ where
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	HostFns: HostFunctions,
 {
-	let mut maybe_state_ext = None;
 	let (rpc, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
-
-	let executor = build_wasm_executor::<HostFns>(&shared, &config);
-
 	let mut finalized_headers: FinalizedHeaders<Block, _, _> =
 		FinalizedHeaders::new(&rpc, subscription);
+
+	let mut maybe_state_ext = None;
+	let executor = build_executor::<HostFns>(&shared, &config);
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
 		let number = header.number();
 
-		let block: Block = ChainApi::<(), Block::Hash, Block::Header, _>::block(&rpc, Some(hash))
-			.await
-			.unwrap()
-			.unwrap();
+		let block =
+			ChainApi::<(), Block::Hash, Block::Header, SignedBlock<Block>>::block(&rpc, Some(hash))
+				.await
+				.map_err(rpc_err_handler)?
+				.expect("header exists, block should also exist; qed")
+				.block;
 
 		log::debug!(
 			target: LOG_TARGET,
@@ -118,39 +121,19 @@ where
 
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
-			let (code_key, code) = extract_code(&config.chain_spec)?;
-			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
-				transport: command.uri.clone().into(),
-				at: Some(*header.parent_hash()),
-				..Default::default()
-			}));
-
-			let new_ext = builder
-				.inject_hashed_key_value(vec![(code_key.clone(), code.clone())])
-				.build()
-				.await?;
-			log::info!(
-				target: LOG_TARGET,
-				"initialized state externalities at {:?}, storage root {:?}",
-				number,
-				new_ext.as_backend().root()
-			);
-
-			// let (local_spec_name, local_spec_version, local_state_version) =
-			// 	local_spec::<Block, ExecDispatch>(&new_ext, &executor);
-			// ensure_matching_spec::<Block>(
-			// 	command.uri.clone(),
-			// 	local_spec_name,
-			// 	local_spec_version,
-			// 	local_state_version,
-			// 	shared.no_spec_check_panic,
-			// )
-			// .await;
-
-			maybe_state_ext = Some((new_ext, todo!()));
+			let state = State::Live(LiveState {
+				uri: command.uri.clone(),
+				// a bit dodgy, we have to un-parse the has to a string again and re-parse it inside.
+				at: Some(hex::encode(header.parent_hash().encode())),
+				pallet: vec![],
+				child_tree: true,
+				threads: 8,
+			});
+			let ext = state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
+			maybe_state_ext = Some(ext);
 		}
 
-		let (state_ext, spec_state_version) =
+		let state_ext =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
 		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
@@ -171,9 +154,10 @@ where
 				// Note that in case a block contains a runtime upgrade, state version could
 				// potentially be incorrect here, this is very niche and would only result in
 				// unaligned roots, so this use case is ignored for now.
-				*spec_state_version,
+				state_ext.state_version,
 			)
 			.unwrap();
+
 		state_ext.backend.apply_transaction(
 			storage_changes.transaction_storage_root,
 			storage_changes.transaction,
