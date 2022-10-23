@@ -613,7 +613,7 @@ impl<T: Config> CommissionThrottle<T> {
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
 	/// The commission rate, if any, of the pool.
-	pub commission: Commission<T>,
+	pub commission: Option<Commission<T>>,
 	/// Count of members that belong to the pool.
 	pub member_counter: u32,
 	/// Total points of all the members in the pool who are actively bonded.
@@ -656,7 +656,7 @@ impl<T: Config> BondedPool<T> {
 		Self {
 			id,
 			inner: BondedPoolInner {
-				commission: Commission::default(),
+				commission: None,
 				member_counter: Zero::zero(),
 				points: Zero::zero(),
 				roles,
@@ -760,54 +760,91 @@ impl<T: Config> BondedPool<T> {
 
 	/// Set the pool's commission.
 	fn set_commission(mut self, commission: &Perbill) -> Self {
-		if commission > &Perbill::from_percent(0) {
-				self.commission.current = Some(*commission);
-		} else {
-			self.commission.current = None;
-		}
+		// force a commission of `None` if a 0% commission is provided.
+		let new_current =
+			if commission > &Perbill::from_percent(0) { Some(*commission) } else { None };
+		// update commission if `Some(commission)` is to be inserted, or `None` otherwise.
+		self.commission = match &self.commission {
+			Some(c) => Some(Commission { current: new_current, ..c.clone() }),
+			None => match new_current.is_some() {
+				true => Some(Commission { current: new_current, ..Commission::default() }),
+				false => None,
+			},
+		};
+
 		// if throttle is configured, record the current block as the previously
 		// updated commission.
-		if let Some(throttle) = &self.commission.throttle {
-			self.commission.throttle = Some(CommissionThrottle {
-				previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
-				..*throttle
-			});
+		if let Some(c) = &self.commission {
+			if let Some(throttle) = &c.throttle {
+				self.commission = Some(Commission {
+					throttle: Some(CommissionThrottle {
+						previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
+						..*throttle
+					}),
+					..c.clone()
+				});
+			}
 		}
 		self
 	}
 
 	/// Set the pool's commission payee.
 	fn set_commission_payee(mut self, payee: T::AccountId) -> Self {
-		self.commission.payee = Some(payee);
+		self.commission = match &self.commission {
+			Some(c) => Some(Commission { payee: Some(payee), ..c.clone() }),
+			None => Some(Commission { payee: Some(payee), ..Commission::default() }),
+		};
 		self
 	}
 
 	/// Set the pool's maximum commission.
 	fn set_max_commission(&mut self, max_commission: Perbill) -> (Perbill, Perbill) {
-		self.commission.max = Some(max_commission.clone());
-		// if the pool's current commission is higher than the updated maximum commission,
-		// decrease it to the new maximum commission.
-		if let Some(commission) = self.commission.current {
-			if commission > max_commission {
-				self.commission.current = Some(max_commission);
-			}
-		}
-		(self.commission.current.unwrap_or(Perbill::from_percent(0)), max_commission)
+		self.commission = match &self.commission {
+			Some(c) => {
+				Some(Commission {
+					max: Some(max_commission),
+					// if the pool's current commission is higher than the updated maximum
+					// commission, decrease it to the new maximum commission.
+					current: if c.current.unwrap_or(Perbill::from_percent(0)) > max_commission {
+						Some(max_commission)
+					} else {
+						c.current
+					},
+					..c.clone()
+				})
+			},
+			None => Some(Commission { max: Some(max_commission), ..Commission::default() }),
+		};
+		(
+			self.commission.clone()
+				.unwrap_or(Commission::default())
+				.current
+				.unwrap_or(Perbill::from_percent(0)),
+			max_commission,
+		)
 	}
 
 	/// Set the pool's commission throttle settings.
-	fn set_commission_throttle(mut self, max_increase: Perbill, min_delay: T::BlockNumber) -> Self {
-		if let Some(throttle) = &self.commission.throttle {
-			self.commission.throttle = Some(CommissionThrottle {
-				change_rate: CommissionThrottlePrefs { max_increase, min_delay },
-				..*throttle
-			});
-		} else {
-			self.commission.throttle = Some(CommissionThrottle {
-				change_rate: CommissionThrottlePrefs { max_increase, min_delay },
-				previous_set_at: None,
-			});
-		}
+	fn set_commission_throttle(
+		mut self,
+		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
+	) -> Self {
+		self.commission = match &self.commission {
+			Some(c) => match &c.throttle {
+				Some(t) => Some(Commission {
+					throttle: Some(CommissionThrottle { change_rate, ..t.clone() }),
+					..c.clone()
+				}),
+				None => Some(Commission {
+					throttle: Some(CommissionThrottle { change_rate, previous_set_at: None }),
+					..c.clone()
+				}),
+			},
+			None => Some(Commission {
+				throttle: Some(CommissionThrottle { change_rate, previous_set_at: None }),
+				..Commission::default()
+			}),
+		};
 		self
 	}
 
@@ -2209,20 +2246,24 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-			ensure!(bonded_pool.commission.payee.is_some(), Error::<T>::NoCommissionPayeeSet);
+			ensure!(bonded_pool.commission.is_some(), Error::<T>::NoCommissionPayeeSet);
 
-			if let Some(throttle) = &bonded_pool.commission.throttle {
-				ensure!(
-					!throttle.throttling(
-						&bonded_pool.commission.current.unwrap_or(Perbill::from_percent(0)),
-						&commission,
-						&<frame_system::Pallet<T>>::block_number()
-					),
-					Error::<T>::CommissionChangeThrottled
-				);
-			}
-			if let Some(max) = bonded_pool.commission.max {
-				ensure!(commission <= max, Error::<T>::CommissionExceedsMaximum);
+			if let Some(c) = &bonded_pool.commission {
+				ensure!(c.payee.is_some(), Error::<T>::NoCommissionPayeeSet);
+
+				if let Some(throttle) = &c.throttle {
+					ensure!(
+						!throttle.throttling(
+							&c.current.unwrap_or(Perbill::from_percent(0)),
+							&commission,
+							&<frame_system::Pallet<T>>::block_number()
+						),
+						Error::<T>::CommissionChangeThrottled
+					);
+				}
+				if let Some(max) = c.max {
+					ensure!(commission <= max, Error::<T>::CommissionExceedsMaximum);
+				}
 			}
 
 			bonded_pool.set_commission(&commission).put();
@@ -2249,8 +2290,10 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			if let Some(existing_max) = bonded_pool.commission.max {
-				ensure!(existing_max > max_commission, Error::<T>::MaxCommissionRestricted);
+			if let Some(c) = &bonded_pool.commission {
+				if let Some(existing_max) = c.max {
+					ensure!(existing_max > max_commission, Error::<T>::MaxCommissionRestricted);
+				}
 			}
 
 			let (commission, max) = bonded_pool.set_max_commission(max_commission);
@@ -2282,14 +2325,16 @@ pub mod pallet {
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			if let Some(throttle) = &bonded_pool.commission.throttle {
-				ensure!(
-					!(prefs.max_increase > throttle.change_rate.max_increase ||
-						prefs.min_delay < throttle.change_rate.min_delay),
-					Error::<T>::CommissionThrottleNotAllowed
-				);
+			if let Some(c) = &bonded_pool.commission {
+				if let Some(throttle) = &c.throttle {
+					ensure!(
+						!(prefs.max_increase > throttle.change_rate.max_increase ||
+							prefs.min_delay < throttle.change_rate.min_delay),
+						Error::<T>::CommissionThrottleNotAllowed
+					);
+				}
 			}
-			bonded_pool.set_commission_throttle(prefs.max_increase, prefs.min_delay).put();
+			bonded_pool.set_commission_throttle(prefs).put();
 			Ok(())
 		}
 
@@ -2617,19 +2662,21 @@ impl<T: Config> Pallet<T> {
 		// If a non-zero commission has been applied to the pool, deduct the share from
 		// `pending_rewards` and send that amount to the pool `depositor`.
 		// Defensive: The commission payee is also checked for existence.
-		if let Some(commission) = bonded_pool.commission.current {
-			if commission > Perbill::from_percent(0) {
-				if let Some(payee) = &bonded_pool.commission.payee {
-					let pool_commission = commission * pending_rewards;
-					pending_rewards -= pool_commission;
+		if let Some(c) = &bonded_pool.commission {
+			if let Some(commission) = c.current {
+				if commission > Perbill::from_percent(0) {
+					if let Some(payee) = &c.payee {
+						let pool_commission = commission * pending_rewards;
+						pending_rewards -= pool_commission;
 
-					// Transfer pool_commission to the `payee` account.
-					T::Currency::transfer(
-						&bonded_pool.reward_account(),
-						payee,
-						pool_commission,
-						ExistenceRequirement::KeepAlive,
-					)?;
+						// Transfer pool_commission to the `payee` account.
+						T::Currency::transfer(
+							&bonded_pool.reward_account(),
+							payee,
+							pool_commission,
+							ExistenceRequirement::KeepAlive,
+						)?;
+					}
 				}
 			}
 		}
