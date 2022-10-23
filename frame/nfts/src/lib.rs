@@ -48,7 +48,7 @@ use frame_support::{
 	traits::{
 		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 	},
-	transactional, BoundedBTreeMap,
+	BoundedBTreeMap,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -178,7 +178,6 @@ pub mod pallet {
 
 	/// Details of a collection.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "Class"]
 	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -208,7 +207,6 @@ pub mod pallet {
 	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "ClassAccount"]
 	pub(super) type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -234,7 +232,6 @@ pub mod pallet {
 
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "Asset"]
 	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -247,7 +244,6 @@ pub mod pallet {
 
 	/// Metadata of a collection.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "ClassMetadataOf"]
 	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -258,7 +254,6 @@ pub mod pallet {
 
 	/// Metadata of an item.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "InstanceMetadataOf"]
 	pub(super) type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -815,7 +810,7 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Admin of the `collection`.
 		///
 		/// - `collection`: The collection of the item to be burned.
-		/// - `item`: The item of the item to be burned.
+		/// - `item`: The item to be burned.
 		/// - `check_owner`: If `Some` then the operation will fail with `WrongOwner` unless the
 		///   item is owned by this value.
 		///
@@ -854,7 +849,7 @@ pub mod pallet {
 		///
 		/// Arguments:
 		/// - `collection`: The collection of the item to be transferred.
-		/// - `item`: The item of the item to be transferred.
+		/// - `item`: The item to be transferred.
 		/// - `dest`: The account to receive ownership of the item.
 		///
 		/// Emits `Transferred`.
@@ -1109,7 +1104,7 @@ pub mod pallet {
 		/// Origin must be Signed and must be the owner of the `item`.
 		///
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
-		/// - `item`: The item of the item to be approved for delegated transfer.
+		/// - `item`: The item to be approved for delegated transfer.
 		/// - `delegate`: The account to delegate permission to transfer the item.
 		/// - `maybe_deadline`: Optional deadline for the approval. Specified by providing the
 		/// 	number of blocks after which the approval will expire
@@ -1893,7 +1888,6 @@ pub mod pallet {
 		///
 		/// Emits `ItemBought` on success.
 		#[pallet::weight(T::WeightInfo::buy_item())]
-		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
@@ -1912,7 +1906,6 @@ pub mod pallet {
 		///
 		/// Emits `TipSent` on every tip transfer.
 		#[pallet::weight(T::WeightInfo::pay_tips(tips.len() as u32))]
-		#[transactional]
 		pub fn pay_tips(
 			origin: OriginFor<T>,
 			tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
