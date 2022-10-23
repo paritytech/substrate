@@ -593,10 +593,12 @@ impl<T: Config> CommissionThrottle<T> {
 	// A commission change will be throttled (disallowed) if:
 	// 1. not enough blocks have passed since the previous commission update took place, and
 	// 2. the new commission is larger than the maximum allowed increase.
-	fn throttling(&self, from: &Perbill, to: &Perbill, current_block: &T::BlockNumber) -> bool {
+	fn throttling(&self, from: &Perbill, to: &Perbill) -> bool {
 		// check enough blocks have passed since the previous commission update took place
 		if let Some(previous_set_at) = self.previous_set_at {
-			if current_block.saturating_sub(previous_set_at) < self.change_rate.min_delay {
+			if <frame_system::Pallet<T>>::block_number().saturating_sub(previous_set_at) <
+				self.change_rate.min_delay
+			{
 				return true
 			}
 		}
@@ -780,7 +782,8 @@ impl<T: Config> BondedPool<T> {
 
 	/// Set the pool's commission.
 	fn set_commission_current(mut self, commission: &Perbill, payee: T::AccountId) -> Self {
-		// force a commission of `None` if a 0% commission is provided.
+		// Force a commission of `None` if a 0% commission is provided.
+		// Note that a 0% commission will replace the whole tuple with None.
 		let new_current =
 			if commission > &Perbill::from_percent(0) { Some((*commission, payee)) } else { None };
 
@@ -839,22 +842,17 @@ impl<T: Config> BondedPool<T> {
 		mut self,
 		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
 	) -> Self {
-		self.commission = match &self.commission {
-			Some(c) => match &c.throttle {
-				Some(t) => Some(Commission {
-					throttle: Some(CommissionThrottle { change_rate, ..t.clone() }),
-					..c.clone()
-				}),
-				None => Some(Commission {
-					throttle: Some(CommissionThrottle { change_rate, previous_set_at: None }),
-					..c.clone()
-				}),
-			},
-			None => Some(Commission {
-				throttle: Some(CommissionThrottle { change_rate, previous_set_at: None }),
-				..Commission::default()
-			}),
-		};
+		self.commission =
+			self.commission
+				.clone()
+				.map_or(Some(Commission::default()), |c| Some(c))
+				.map(|c| Commission {
+					throttle: c.throttle.map_or(
+						Some(CommissionThrottle { change_rate, previous_set_at: None }),
+						|t| Some(CommissionThrottle { change_rate, ..t }),
+					),
+					..c
+				});
 		self
 	}
 
@@ -2238,10 +2236,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-
-			// fallback to the pool's current commission payee if `None` is provided,
-			// otherwise fail the call.
-			let new_payee = if let Some(p) = payee {
+			let final_payee = if let Some(p) = payee {
 				p
 			} else {
 				bonded_pool.commission_payee().ok_or(Error::<T>::NoCommissionPayeeSet)?
@@ -2251,11 +2246,7 @@ pub mod pallet {
 			if let Some(c) = &bonded_pool.commission {
 				if let Some(throttle) = &c.throttle {
 					ensure!(
-						!throttle.throttling(
-							&commission_percentage,
-							&commission,
-							&<frame_system::Pallet<T>>::block_number()
-						),
+						!throttle.throttling(&commission_percentage, &commission),
 						Error::<T>::CommissionChangeThrottled
 					);
 				}
@@ -2263,11 +2254,11 @@ pub mod pallet {
 					ensure!(commission <= max, Error::<T>::CommissionExceedsMaximum);
 				}
 			}
-			bonded_pool.set_commission_current(&commission, new_payee.clone()).put();
+			bonded_pool.set_commission_current(&commission, final_payee.clone()).put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
 				commission,
-				payee: new_payee,
+				payee: final_payee,
 			});
 			Ok(())
 		}
