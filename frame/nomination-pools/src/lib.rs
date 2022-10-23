@@ -2233,16 +2233,22 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			commission: Perbill,
-			payee: T::AccountId,
+			payee: Option<T::AccountId>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
+			// fallback to the pool's current commission payee if `None` is provided,
+			// otherwise fail the call.
+			let new_payee = if let Some(p) = payee {
+				p
+			} else {
+				bonded_pool.commission_payee().ok_or(Error::<T>::NoCommissionPayeeSet)?
+			};
+
 			let commission_percentage = bonded_pool.commission();
 			if let Some(c) = &bonded_pool.commission {
-				// TODO: enable this when payee becomes optional.
-				// ensure!(!(c.is_none() && payee.is_none()), Error::<T>::NoCommissionPayeeSet);
 				if let Some(throttle) = &c.throttle {
 					ensure!(
 						!throttle.throttling(
@@ -2257,8 +2263,12 @@ pub mod pallet {
 					ensure!(commission <= max, Error::<T>::CommissionExceedsMaximum);
 				}
 			}
-			bonded_pool.set_commission_current(&commission, payee.clone()).put();
-			Self::deposit_event(Event::<T>::PoolCommissionUpdated { pool_id, commission, payee });
+			bonded_pool.set_commission_current(&commission, new_payee.clone()).put();
+			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
+				pool_id,
+				commission,
+				payee: new_payee,
+			});
 			Ok(())
 		}
 

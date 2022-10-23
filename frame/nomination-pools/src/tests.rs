@@ -253,7 +253,7 @@ mod bonded_pool {
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(50),
-				900
+				Some(900)
 			));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission.unwrap().current.unwrap().0,
@@ -284,15 +284,31 @@ mod bonded_pool {
 					RuntimeOrigin::signed(900),
 					9999,
 					Perbill::from_percent(1),
-					900
+					Some(900)
 				),
 				Error::<Runtime>::PoolNotFound
 			);
 			// Sender does not have permission to set commission
 			assert_noop!(
-				Pools::set_commission(RuntimeOrigin::signed(1), 1, Perbill::from_percent(5), 900),
+				Pools::set_commission(
+					RuntimeOrigin::signed(1),
+					1,
+					Perbill::from_percent(5),
+					Some(900)
+				),
 				Error::<Runtime>::DoesNotHavePermission
 			);
+			// No payee has been provided, and none is present.
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(5),
+					None
+				),
+				Error::<Runtime>::NoCommissionPayeeSet
+			);
+
 			// Throttle test. We will throttle commission to be a +1% commission increase every 2
 			// blocks.
 			assert_ok!(Pools::set_commission_throttle(
@@ -320,17 +336,22 @@ mod bonded_pool {
 
 			// We now try to increase commission to 5% (5% increase): this should be throttled.
 			assert_noop!(
-				Pools::set_commission(RuntimeOrigin::signed(900), 1, Perbill::from_percent(5), 900),
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(5),
+					Some(900)
+				),
 				Error::<Runtime>::CommissionChangeThrottled
 			);
 
-			// We now try to increase commission by 1%. This should work, and set the
-			// `previous_set_at` field.
+			// We now try to increase commission by 1%, and provide an initial payee.
+			// This should work, and set the `previous_set_at` field.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(1),
-				900
+				Some(900)
 			));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
@@ -351,7 +372,12 @@ mod bonded_pool {
 			// this will fail as `previous_set_at` is now the current block, and at least 2
 			// blocks need to pass before we can set commission again.
 			assert_noop!(
-				Pools::set_commission(RuntimeOrigin::signed(900), 1, Perbill::from_percent(2), 900),
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(2),
+					Some(900)
+				),
 				Error::<Runtime>::CommissionChangeThrottled
 			);
 
@@ -359,11 +385,12 @@ mod bonded_pool {
 			run_blocks(2);
 
 			// We can now successfully increase the commission again, to 2%.
+			// We no longer need to provide the payee again.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(2),
-				900
+				None
 			));
 
 			// Run 2 blocks into the future, to block 5.
@@ -372,7 +399,12 @@ mod bonded_pool {
 			// We've now surpassed the `min_delay` threshold, but the `max_increase` threshold is
 			// still at play. An attempted commission change now to 4% (+2% increase) should fail.
 			assert_noop!(
-				Pools::set_commission(RuntimeOrigin::signed(900), 1, Perbill::from_percent(4), 900),
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(4),
+					None,
+				),
 				Error::<Runtime>::CommissionChangeThrottled
 			);
 
@@ -390,7 +422,12 @@ mod bonded_pool {
 			// change rate allowance, but the max_commission will now prevent us from going any
 			// higher.
 			assert_noop!(
-				Pools::set_commission(RuntimeOrigin::signed(900), 1, Perbill::from_percent(3), 900),
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(3),
+					None,
+				),
 				Error::<Runtime>::CommissionExceedsMaximum
 			);
 
@@ -464,7 +501,7 @@ mod bonded_pool {
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(75),
-				900,
+				Some(900),
 			));
 			assert_ok!(Pools::set_max_commission(
 				RuntimeOrigin::signed(900),
