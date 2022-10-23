@@ -178,7 +178,6 @@ pub mod pallet {
 
 	/// Details of a collection.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "Class"]
 	pub(super) type Collection<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -208,7 +207,6 @@ pub mod pallet {
 	/// The collections owned by any given account; set out this way so that collections owned by
 	/// a single account can be enumerated.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "ClassAccount"]
 	pub(super) type CollectionAccount<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -234,7 +232,6 @@ pub mod pallet {
 
 	/// The items in existence and their ownership details.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "Asset"]
 	pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
@@ -247,7 +244,6 @@ pub mod pallet {
 
 	/// Metadata of a collection.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "ClassMetadataOf"]
 	pub(super) type CollectionMetadataOf<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Blake2_128Concat,
@@ -258,7 +254,6 @@ pub mod pallet {
 
 	/// Metadata of an item.
 	#[pallet::storage]
-	#[pallet::storage_prefix = "InstanceMetadataOf"]
 	pub(super) type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
