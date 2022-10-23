@@ -89,9 +89,9 @@ pub enum CompatibilityMode<N> {
 	///
 	/// By calling `initialize_block` before fetching the authorities, on a block that
 	/// would enact a new validator set, the block would already be build/sealed by an
-	/// authority of the new set. A block that enacts a new set, should not be sealed/build
-	/// by an authority of the new set. This isn't done anymore. However, to make new nodes
-	/// being able to sync the old chain this compatibility mode exists.
+	/// authority of the new set. With this mode disabled (the default) a block that enacts a new set
+	/// isn't sealed/built by an authority of the new set, however to make new nodes be able to sync
+	/// old chains this compatibility mode exists.
 	UseInitializeBlock {
 		/// The block number until this compatibility mode should be executed. The first runtime
 		/// call in the context (importing it/building it) of the `until` block should disable the
