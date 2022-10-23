@@ -285,7 +285,7 @@ mod bonded_pool {
 				Perbill::from_percent(50)
 			));
 			assert_eq!(
-				BondedPool::<Runtime>::get(1).unwrap().commission.current,
+				BondedPool::<Runtime>::get(1).unwrap().commission.current.unwrap(),
 				Perbill::from_percent(50)
 			);
 			// Commission change events triggered successfully
@@ -337,7 +337,7 @@ mod bonded_pool {
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
-					current: Perbill::from_percent(0),
+					current: None,
 					max: None,
 					payee: Some(900),
 					throttle: Some(CommissionThrottle {
@@ -366,7 +366,7 @@ mod bonded_pool {
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
-					current: Perbill::from_percent(1),
+					current: Some(Perbill::from_percent(1)),
 					max: None,
 					payee: Some(900),
 					throttle: Some(CommissionThrottle {
@@ -507,7 +507,7 @@ mod bonded_pool {
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().commission,
 				Commission {
-					current: Perbill::from_percent(50),
+					current: Some(Perbill::from_percent(50)),
 					max: Some(Perbill::from_percent(50)),
 					payee: Some(900),
 					throttle: None
