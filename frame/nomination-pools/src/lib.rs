@@ -569,8 +569,8 @@ impl<T: Config> Default for Commission<T> {
 }
 
 /// Pool commission throttle preferences.
-/// 
-/// Throttle prefs need to be passed and configured together. This struct is used in 
+///
+/// Throttle prefs need to be passed and configured together. This struct is used in
 /// the `set_commission_throttle` call as well as in CommissionThrottle.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
 pub struct CommissionThrottlePrefs<BlockNumber> {
@@ -580,7 +580,7 @@ pub struct CommissionThrottlePrefs<BlockNumber> {
 	pub min_delay: BlockNumber,
 }
 
-/// The pool root is able to set a commission throttle for their pool. 
+/// The pool root is able to set a commission throttle for their pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
