@@ -48,7 +48,7 @@ use frame_support::{
 	traits::{
 		tokens::Locker, BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
 	},
-	transactional, BoundedBTreeMap,
+	BoundedBTreeMap,
 };
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
@@ -1766,7 +1766,6 @@ pub mod pallet {
 		///
 		/// Emits `ItemBought` on success.
 		#[pallet::weight(T::WeightInfo::buy_item())]
-		#[transactional]
 		pub fn buy_item(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
@@ -1785,7 +1784,6 @@ pub mod pallet {
 		///
 		/// Emits `TipSent` on every tip transfer.
 		#[pallet::weight(T::WeightInfo::pay_tips(tips.len() as u32))]
-		#[transactional]
 		pub fn pay_tips(
 			origin: OriginFor<T>,
 			tips: BoundedVec<ItemTipOf<T, I>, T::MaxTips>,
