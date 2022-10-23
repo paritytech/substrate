@@ -89,17 +89,18 @@ pub enum CompatibilityMode<N> {
 	///
 	/// By calling `initialize_block` before fetching the authorities, on a block that
 	/// would enact a new validator set, the block would already be build/sealed by an
-	/// authority of the new set. With this mode disabled (the default) a block that enacts a new set
-	/// isn't sealed/built by an authority of the new set, however to make new nodes be able to sync
-	/// old chains this compatibility mode exists.
+	/// authority of the new set. With this mode disabled (the default) a block that enacts a new
+	/// set isn't sealed/built by an authority of the new set, however to make new nodes be able to
+	/// sync old chains this compatibility mode exists.
 	UseInitializeBlock {
 		/// The block number until this compatibility mode should be executed. The first runtime
-		/// call in the context of the `until` block (importing it/building it) will disable the compatibility 
-		/// mode (i.e. at `until` the default rules will apply). When enabling this compatibility mode the 
-		/// `until` block should be a future block on which all nodes will have upgraded to a release that 
-		/// includes the updated compatibility mode configuration. At `until` block there will be a hard 
-		/// fork when the authority set changes, between the old nodes (running with `initialize_block`, 
-		/// i.e. without the compatibility mode configuration) and the new nodes.
+		/// call in the context of the `until` block (importing it/building it) will disable the
+		/// compatibility mode (i.e. at `until` the default rules will apply). When enabling this
+		/// compatibility mode the `until` block should be a future block on which all nodes will
+		/// have upgraded to a release that includes the updated compatibility mode configuration.
+		/// At `until` block there will be a hard fork when the authority set changes, between the
+		/// old nodes (running with `initialize_block`, i.e. without the compatibility mode
+		/// configuration) and the new nodes.
 		until: N,
 	},
 }
