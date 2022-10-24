@@ -132,7 +132,7 @@ pub fn run_benchmark(benchmark: Box<dyn BenchmarkDescription>, mode: Mode) -> Be
 		durations.push(duration.as_nanos());
 	}
 
-	durations.sort_unstable();
+	durations.sort();
 
 	let raw_average = (durations.iter().sum::<u128>() / (durations.len() as u128)) as u64;
 	let average = (durations.iter().skip(10).take(30).sum::<u128>() / 30) as u64;

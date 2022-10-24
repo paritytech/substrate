@@ -69,6 +69,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../primitives/transaction-storage-proof" }
 sc-rpc-server = { version = "4.0.0-dev", path = "../rpc-servers" }
 sc-rpc = { version = "4.0.0-dev", path = "../rpc" }
+sc-rpc-spec-v2 = { version = "0.10.0-dev", path = "../rpc-spec-v2" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sc-informant = { version = "0.10.0-dev", path = "../informant" }

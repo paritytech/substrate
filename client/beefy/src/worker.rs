@@ -252,7 +252,7 @@ where
 	C: Client<B, BE>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
-	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash>,
+	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
 {
 	/// Return a new BEEFY worker instance.
@@ -1371,8 +1371,10 @@ pub(crate) mod tests {
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		net.peer(0).push_blocks(2, false);
 		// finalize 1 and 2 without justifications
-		backend.finalize_block(BlockId::number(1), None).unwrap();
-		backend.finalize_block(BlockId::number(2), None).unwrap();
+		let hashof1 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
+		let hashof2 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+		backend.finalize_block(&hashof1, None).unwrap();
+		backend.finalize_block(&hashof2, None).unwrap();
 
 		let justif = create_finality_proof(2);
 		// create new session at block #2
@@ -1506,11 +1508,9 @@ pub(crate) mod tests {
 		// push 15 blocks with `AuthorityChange` digests every 10 blocks
 		net.generate_blocks_and_sync(15, 10, &validator_set, false);
 		// finalize 13 without justifications
-		net.peer(0)
-			.client()
-			.as_client()
-			.finalize_block(BlockId::number(13), None)
-			.unwrap();
+		let hashof13 =
+			backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
+		net.peer(0).client().as_client().finalize_block(&hashof13, None).unwrap();
 
 		// Test initialization at session boundary.
 		{
