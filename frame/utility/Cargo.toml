@@ -25,6 +25,7 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+pallet-root-testing = { version = "1.0.0-dev", path = "../root-testing" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 
 [features]

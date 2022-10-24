@@ -93,6 +93,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		RootTesting: pallet_root_testing::{Pallet, Call, Storage, Event<T>},
 		Utility: utility::{Pallet, Call, Event},
 		Example: example::{Pallet, Call},
 	}
@@ -140,6 +141,11 @@ impl pallet_balances::Config for Test {
 	type AccountStore = System;
 	type WeightInfo = ();
 }
+
+impl pallet_root_testing::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+}
+
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
@@ -175,6 +181,7 @@ type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
 use pallet_balances::{Call as BalancesCall, Error as BalancesError};
+use pallet_root_testing::Call as RootTestingCall;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -388,8 +395,9 @@ fn batch_early_exit_works() {
 fn batch_weight_calculation_doesnt_overflow() {
 	use sp_runtime::Perbill;
 	new_test_ext().execute_with(|| {
-		let big_call =
-			RuntimeCall::System(SystemCall::fill_block { ratio: Perbill::from_percent(50) });
+		let big_call = RuntimeCall::RootTesting(RootTestingCall::fill_block {
+			ratio: Perbill::from_percent(50),
+		});
 		assert_eq!(big_call.get_dispatch_info().weight, Weight::MAX / 2);
 
 		// 3 * 50% saturates to 100%

@@ -135,6 +135,7 @@ members = [
 	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/root-offences",
+	"frame/root-testing",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
