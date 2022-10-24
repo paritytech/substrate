@@ -114,10 +114,10 @@ use frame_support::{
 	BoundedVec,
 };
 use scale_info::TypeInfo;
-use sp_npos_elections::{ElectionResult, ExtendedBalance};
+use sp_npos_elections::ExtendedBalance;
 use sp_runtime::{
-	traits::{Saturating, StaticLookup, Zero},
-	DispatchError, Perbill, RuntimeDebug,
+	traits::{Saturating, StaticLookup, Zero, UniqueSaturatedInto},
+	DispatchError, RuntimeDebug,
 };
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -127,10 +127,6 @@ pub use weights::WeightInfo;
 
 /// All migrations.
 pub mod migrations;
-
-/// The election module, implementing an ElectionProvider and ElectionDataProvider that can
-/// be used by this pallet.
-pub mod election;
 
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: u32 = 16;
@@ -635,6 +631,8 @@ pub mod pallet {
 		InvalidRenouncing,
 		/// Prediction regarding replacement after member removal is wrong.
 		InvalidReplacement,
+		// Errors from the data provider.
+		DataProvider,
 	}
 
 	/// The current elected members.
@@ -914,8 +912,6 @@ impl<T: Config> Pallet<T> {
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	fn do_election() -> Weight {
 		let desired_seats = T::DesiredMembers::get() as usize;
-		let desired_runners_up = T::DesiredRunnersUp::get() as usize;
-		let num_to_elect = desired_runners_up + desired_seats;
 
 		let mut candidates_and_deposit = Self::candidates();
 		// add all the previous members and runners-up as candidates as well.
@@ -927,8 +923,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		// All of the new winners that come out of phragmen will thus have a deposit recorded.
-		let candidate_ids =
-			candidates_and_deposit.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
+		let _ = candidates_and_deposit.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
 
 		// helper closures to deal with balance/stake.
 		let total_issuance = T::Currency::total_issuance();
@@ -959,7 +954,7 @@ impl<T: Config> Pallet<T> {
 			},
 		}
 
-		// used for phragmen.
+		// used for phragmen. TODO(gpestana): Remove with ElectionProvider!
 		let voters_and_votes = voters_and_stakes
 			.iter()
 			.cloned()
@@ -973,8 +968,160 @@ impl<T: Config> Pallet<T> {
 		let weight_voters = voters_and_votes.len() as u32;
 		let weight_edges = num_edges;
 
+		
+		let _ = T::ElectionProvider::elect().map(|winners| {
+			// this is already sorted by id.
+			let old_members_ids_sorted = <Members<T>>::take()
+						.into_iter()
+						.map(|m| m.who)
+						.collect::<Vec<T::AccountId>>();
+					// this one needs a sort by id.
+					let mut old_runners_up_ids_sorted = <RunnersUp<T>>::take()
+						.into_iter()
+						.map(|r| r.who)
+						.collect::<Vec<T::AccountId>>();
+					old_runners_up_ids_sorted.sort();
+
+					// filter out those who end up with no backing stake.
+					let mut new_set_with_stake = winners
+						.into_iter()
+						.filter_map(
+							|(m, support)| if support.total.is_zero() { None } else { Some((m, to_balance(support.total))) },
+						)
+						.collect::<Vec<(T::AccountId, BalanceOf<T>)>>();
+
+					// OPTIMIZATION NOTE: we could bail out here if `new_set.len() == 0`. There
+					// isn't much left to do. Yet, re-arranging the code would require duplicating
+					// the slashing of exposed candidates, cleaning any previous members, and so on.
+					// For now, in favor of readability and veracity, we keep it simple.
+
+					// split new set into winners and runners up.
+					let split_point = desired_seats.min(new_set_with_stake.len());
+					let mut new_members_sorted_by_id =
+						new_set_with_stake.drain(..split_point).collect::<Vec<_>>();
+					new_members_sorted_by_id.sort_by(|i, j| i.0.cmp(&j.0));
+
+					// all the rest will be runners-up
+					new_set_with_stake.reverse();
+					let new_runners_up_sorted_by_rank = new_set_with_stake;
+					let mut new_runners_up_ids_sorted = new_runners_up_sorted_by_rank
+						.iter()
+						.map(|(r, _)| r.clone())
+						.collect::<Vec<_>>();
+					new_runners_up_ids_sorted.sort();
+
+					// Now we select a prime member using a [Borda
+					// count](https://en.wikipedia.org/wiki/Borda_count). We weigh everyone's vote for
+					// that new member by a multiplier based on the order of the votes. i.e. the
+					// first person a voter votes for gets a 16x multiplier, the next person gets a
+					// 15x multiplier, an so on... (assuming `MAXIMUM_VOTE` = 16)
+					let mut prime_votes = new_members_sorted_by_id
+						.iter()
+						.map(|c| (&c.0, BalanceOf::<T>::zero()))
+						.collect::<Vec<_>>();
+					for (_, stake, votes) in voters_and_stakes.into_iter() {
+						for (vote_multiplier, who) in
+							votes.iter().enumerate().map(|(vote_position, who)| {
+								(MAXIMUM_VOTE - (vote_position as u32), who)
+							}) {
+							if let Ok(i) = prime_votes.binary_search_by_key(&who, |k| k.0) {
+								prime_votes[i].1 = prime_votes[i]
+									.1
+									.saturating_add(stake.saturating_mul(vote_multiplier.into()));
+							}
+						}
+					}
+
+					// We then select the new member with the highest weighted stake. In the case of
+					// a tie, the last person in the list with the tied score is selected. This is
+					// the person with the "highest" account id based on the sort above.
+					let prime = prime_votes.into_iter().max_by_key(|x| x.1).map(|x| x.0.clone());
+
+					// new_members_sorted_by_id is sorted by account id.
+					let new_members_ids_sorted = new_members_sorted_by_id
+						.iter()
+						.map(|(m, _)| m.clone())
+						.collect::<Vec<T::AccountId>>();
+
+					// report member changes. We compute diff because we need the outgoing list.
+					let (incoming, outgoing) = T::ChangeMembers::compute_members_diff_sorted(
+						&new_members_ids_sorted,
+						&old_members_ids_sorted,
+					);
+					T::ChangeMembers::change_members_sorted(
+						&incoming,
+						&outgoing,
+						&new_members_ids_sorted,
+					);
+					T::ChangeMembers::set_prime(prime);
+
+					// All candidates/members/runners-up who are no longer retaining a position as a
+					// seat holder will lose their bond.
+					candidates_and_deposit.iter().for_each(|(c, d)| {
+						if new_members_ids_sorted.binary_search(c).is_err()
+							&& new_runners_up_ids_sorted.binary_search(c).is_err()
+						{
+							let (imbalance, _) = T::Currency::slash_reserved(c, *d);
+							T::LoserCandidate::on_unbalanced(imbalance);
+							Self::deposit_event(Event::CandidateSlashed {
+								candidate: c.clone(),
+								amount: *d,
+							});
+						}
+					});
+
+					// write final values to storage.
+					let deposit_of_candidate = |x: &T::AccountId| -> BalanceOf<T> {
+						// defensive-only. This closure is used against the new members and new
+						// runners-up, both of which are phragmen winners and thus must have
+						// deposit.
+						candidates_and_deposit
+							.iter()
+							.find_map(|(c, d)| if c == x { Some(*d) } else { None })
+							.defensive_unwrap_or_default()
+					};
+					// fetch deposits from the one recorded one. This will make sure that a
+					// candidate who submitted candidacy before a change to candidacy deposit will
+					// have the correct amount recorded.
+					<Members<T>>::put(
+						new_members_sorted_by_id
+							.iter()
+							.map(|(who, stake)| SeatHolder {
+								deposit: deposit_of_candidate(who),
+								who: who.clone(),
+								stake: *stake,
+							})
+							.collect::<Vec<_>>(),
+					);
+					<RunnersUp<T>>::put(
+						new_runners_up_sorted_by_rank
+							.into_iter()
+							.map(|(who, stake)| SeatHolder {
+								deposit: deposit_of_candidate(&who),
+								who,
+								stake,
+							})
+							.collect::<Vec<_>>(),
+					);
+
+					// clean candidates.
+					<Candidates<T>>::kill();
+	
+					Self::deposit_event(Event::NewTerm { new_members: new_members_sorted_by_id });
+					<ElectionRounds<T>>::mutate(|v| *v += 1);
+				})
+				.map_err(|e| {
+					log::error!(
+						target: "runtime::elections-phragmen",
+						"Failed to run election [{:?}].",
+						e,
+					);
+					Self::deposit_event(Event::ElectionError);
+
+		});
+
+		/* 
 		let _ =
-			//ElectionProvider >> T::Solver::solve(num_to_elect, candidate_ids, voters_and_votes)
 			sp_npos_elections::seq_phragmen(num_to_elect, candidate_ids, voters_and_votes, None)
 				.map(|ElectionResult::<T::AccountId, Perbill> { winners, assignments: _ }| {
 					// this is already sorted by id.
@@ -1124,6 +1271,7 @@ impl<T: Config> Pallet<T> {
 					);
 					Self::deposit_event(Event::ElectionError);
 				});
+		*/
 
 		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
 	}
@@ -1173,6 +1321,7 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 	}
 }
 
+
 impl<T: Config> ElectionDataProvider for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
@@ -1181,6 +1330,8 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	fn electable_targets(
 		maybe_max_len: Option<usize>,
 	) -> frame_election_provider_support::data_provider::Result<Vec<Self::AccountId>> {
+		// TODO(gpestana): this is a self-weighted function
+
 		let mut targets: Vec<_> =
 			Self::candidates().into_iter().map(|(target, _)| target).collect();
 
@@ -1188,9 +1339,14 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			// TODO(gpestana):: or should return Err instead?
 			targets.truncate(max_candidates);
 		}
-		// TODO(gpestana): this is a self-weighted function
+
+		println!(">> electable_targets");
+		println!("  {:?}", targets);
+		println!("---------------------");
+
 		Ok(targets)
 	}
+
 
 	fn electing_voters(
 		maybe_max_len: Option<usize>,
@@ -1199,7 +1355,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	> {
 		// TODO(gpestana): this is a self-weighted function
 
-		let max_votes_per_voter: u32 = Self::MaxVotesPerVoter::get();
+		//let max_votes_per_voter: u32 = Self::MaxVotesPerVoter::get();
 		let mut voters_and_stakes = Vec::new();
 
 		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
@@ -1211,19 +1367,27 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 			let bounded_votes: BoundedVec<_, Self::MaxVotesPerVoter> =
 				BoundedVec::try_from(votes).map_err(|_| ())?;
 
-			voters_and_stakes.push((voter, stake, bounded_votes));
+			voters_and_stakes.push((voter, stake.unique_saturated_into(), bounded_votes));
 			Ok(())
 		}) {
 			Ok(_) => (),
 			Err(_) => return Err(""), // TODO(gpestana): ref proper err
 		}
 
+		println!(">> electing_voters");
+		println!("  {:?}", voters_and_stakes);
+		println!("---------------------");
+
+
 		//Ok(voters_and_stakes) // expected u64, got AccountId::Balance
-		Ok(vec![])
+		Ok(voters_and_stakes)
+
 	}
 
 	fn desired_targets() -> frame_election_provider_support::data_provider::Result<u32> {
-		Ok(T::DesiredMembers::get())
+		let desired_seats = T::DesiredMembers::get() as usize;
+		let desired_runners_up = T::DesiredRunnersUp::get() as usize;
+		Ok((desired_runners_up + desired_seats) as u32)
 	}
 
 	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber {
@@ -1235,8 +1399,8 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{self as elections_phragmen, election::DataProvider};
-	use frame_election_provider_support::{SequentialPhragmen, onchain, ElectionProviderBase};
+	use crate::{self as elections_phragmen};
+	use frame_election_provider_support::{SequentialPhragmen, onchain};
 	use frame_support::{
 		assert_noop, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
@@ -1244,12 +1408,11 @@ mod tests {
 		traits::{ConstU32, ConstU64, OnInitialize},
 	};
 	use frame_system::ensure_signed;
-	use pallet_balances::Pallet;
-use sp_core::H256;
+	use sp_core::H256;
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		BuildStorage,
+		BuildStorage, Perbill,
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
@@ -1308,6 +1471,8 @@ use sp_core::H256;
 		pub static TermDuration: u64 = 5;
 		pub static Members: Vec<u64> = vec![];
 		pub static Prime: Option<u64> = None;
+		pub static MaxVoters: u32 = 100;
+		pub static MaxTargets: u32 = 100;
 	}
 
 	pub struct TestChangeMembers;
@@ -1379,32 +1544,10 @@ use sp_core::H256;
 		type WeightInfo = ();
 		type MaxVoters = PhragmenMaxVoters;
 		type MaxCandidates = PhragmenMaxCandidates;
-		//type ElectionProvider = onchain::UnboundedExecution::<SeqPhragmenProvider>;
-		type ElectionProvider = ElectionProviderMock<Test>;
+		type ElectionProvider = onchain::BoundedExecution::<SeqPhragmenProvider>;
 	}
 
-	pub struct ElectionProviderMock<T>(PhantomData<T>);
-
-	impl<T: Config> ElectionProviderBase for ElectionProviderMock<T> {
-		type AccountId = u64;
-		type BlockNumber = u64;
-		type Error = Error<T>;
-		type DataProvider = Elections;
-
-		fn ongoing() -> bool {
-			false
-		}
-	}
-
-	impl<T: Config> ElectionProvider for ElectionProviderMock<T> {
-		fn elect() -> Result<frame_election_provider_support::Supports<Self::AccountId>, Self::Error> {
-			Ok(vec![])
-		}
-	}
-
-	/*
 	pub struct SeqPhragmenProvider;
-
 	impl onchain::Config for SeqPhragmenProvider{
 		type System = Test;
 		type Solver = SequentialPhragmen<AccountId, Perbill>;
@@ -1413,16 +1556,14 @@ use sp_core::H256;
 	}
 
 	impl onchain::BoundedConfig for SeqPhragmenProvider{
-		type TargetsBound = ();
-		type VotersBound = ();
+		type TargetsBound = MaxTargets;
+		type VotersBound = MaxVoters;
 	}
- 	*/
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
 	pub type UncheckedExtrinsic =
 		sp_runtime::generic::UncheckedExtrinsic<u32, u64, RuntimeCall, ()>;
 	pub type AccountId = u64;
-	pub type BlockNumber = u64;
 
 	frame_support::construct_runtime!(
 		pub enum Test where
