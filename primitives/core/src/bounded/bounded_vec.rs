@@ -53,6 +53,16 @@ pub trait TruncateFrom<T> {
 	fn truncate_from(unbound: T) -> Self;
 }
 
+pub trait Min<T> {
+	fn min(unbound: T) -> Self;
+	fn strict_min(unbound: T) -> Self;
+}
+
+pub trait Max<T> {
+	fn max(unbound: T) -> Self;
+	fn strict_max(unbound: T) -> Self;
+}
+
 #[cfg(feature = "std")]
 impl<'de, T, S: Get<u32>> Deserialize<'de> for BoundedVec<T, S>
 where
@@ -717,6 +727,24 @@ impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 impl<T, S: Get<u32>> TruncateFrom<Vec<T>> for BoundedVec<T, S> {
 	fn truncate_from(unbound: Vec<T>) -> Self {
 		BoundedVec::<T, S>::truncate_from(unbound)
+	}
+}
+
+impl<T, S: Get<u32>> Min<Vec<T>> for BoundedVec<T, S> {
+	fn min(unbound: Vec<T>) -> Self {
+		todo!()
+	}
+	fn strict_min(unbound: Vec<T>) -> Self {
+		todo!()
+	}
+}
+
+impl<T, S: Get<u32>> Max<Vec<T>> for BoundedVec<T, S> {
+	fn max(unbound: Vec<T>) -> Self {
+		todo!()
+	}
+	fn strict_max(unbound: Vec<T>) -> Self {
+		todo!()
 	}
 }
 

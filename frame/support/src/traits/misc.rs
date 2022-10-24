@@ -22,7 +22,7 @@ use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncod
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
-use sp_core::bounded::bounded_vec::TruncateFrom;
+use sp_core::bounded::bounded_vec::{Min, Max, TruncateFrom};
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -401,6 +401,66 @@ where
 			|err| {
 				defensive!("DefensiveTruncateFrom truncating");
 				T::truncate_from(err)
+			},
+			|bound| bound,
+		)
+	}
+}
+
+pub trait DefensiveMin<T> {
+	fn defensive_min(unbound: T) -> Self;
+	fn defensive_strict_min(unbound: T) -> Self;
+}
+
+impl<T, U> DefensiveMin<U> for T
+where
+	T: Min<U> + TryFrom<U, Error = U>,
+{
+	fn defensive_min(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveMin minimize");
+				T::min(err)
+			},
+			|bound| bound,
+		)
+	}
+
+	fn defensive_strict_min(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveStrictMin minimize");
+				T::strict_min(err)
+			},
+			|bound| bound,
+		)
+	}
+}
+
+pub trait DefensiveMax<T> {
+	fn defensive_max(unbound: T) -> Self;
+	fn defensive_strict_max(unbound: T) -> Self;
+}
+
+impl<T, U> DefensiveMax<U> for T
+where
+	T: Max<U> + TryFrom<U, Error = U>,
+{
+	fn defensive_max(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveMax maximize");
+				T::max(err)
+			},
+			|bound| bound,
+		)
+	}
+
+	fn defensive_strict_max(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveStrictMax maximize");
+				T::strict_max(err)
 			},
 			|bound| bound,
 		)
