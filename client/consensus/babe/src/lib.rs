@@ -1549,9 +1549,8 @@ where
 					// which epoch it belongs to and we will re-use the same
 					// data for that epoch
 					let mut epoch_data = viable_epoch.as_mut();
-					let skipped_epochs = (*slot - *epoch_data.start_slot) / epoch_data.duration;
-
-					let original_epoch_index = epoch_data.epoch_index;
+					let skipped_epochs =
+						*slot.saturating_sub(epoch_data.start_slot) / epoch_data.duration;
 
 					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
 					// makes it so that when we insert the next epoch into `EpochChanges` below
@@ -1563,13 +1562,26 @@ where
 					// use for a given slot, we will search in-depth with the predicate
 					// `epoch.start_slot <= slot` which will still match correctly without updating
 					// `start_slot` to the correct value as below.
-					epoch_data.epoch_index += skipped_epochs;
-					epoch_data.start_slot =
-						Slot::from(*epoch_data.start_slot + skipped_epochs * epoch_data.duration);
+					let epoch_index = epoch_data.epoch_index.checked_add(skipped_epochs).expect(
+						"epoch number is u64; it should be strictly smaller than number of slots; \
+						slots relate in some way to wall clock time; \
+						if u64 is not enough we should crash for safety; qed.",
+					);
+
+					let start_slot = skipped_epochs
+						.checked_mul(epoch_data.duration)
+						.and_then(|skipped_slots| epoch_data.start_slot.checked_add(skipped_slots))
+						.expect(
+							"slot number is u64; it should relate in some way to wall clock time; \
+							 if u64 is not enough we should crash for safety; qed.",
+						);
 
 					warn!(target: "babe", "👶 Epoch(s) skipped: from {} to {}",
-						original_epoch_index, epoch_data.epoch_index,
+						epoch_data.epoch_index, epoch_index,
 					);
+
+					epoch_data.epoch_index = epoch_index;
+					epoch_data.start_slot = Slot::from(start_slot);
 				}
 
 				log!(target: "babe",
