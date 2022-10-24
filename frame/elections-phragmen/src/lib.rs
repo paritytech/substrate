@@ -98,7 +98,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	bounded_vec,
 	traits::{
@@ -145,10 +145,10 @@ pub enum Renouncing {
 }
 
 /// An active voter.
-#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo)]
-pub struct Voter<AccountId, Balance, MaxVoters> {
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo, MaxEncodedLen)]
+pub struct Voter<AccountId, Balance, MaxCandidates: Get<u32>> {
 	/// The members being backed.
-	pub votes: BoundedVec<AccountId, MaxVoters>,
+	pub votes: BoundedVec<AccountId, MaxCandidates>,
 	/// The amount of stake placed on this vote.
 	pub stake: Balance,
 	/// The amount of deposit reserved for this vote.
@@ -157,16 +157,20 @@ pub struct Voter<AccountId, Balance, MaxVoters> {
 	pub deposit: Balance,
 }
 
-impl<AccountId, Balance: Default, MaxVoters: Get<u32>> Default
-	for Voter<AccountId, Balance, MaxVoters>
+impl<AccountId, Balance: Default, MaxCandidates: Get<u32>> Default
+	for Voter<AccountId, Balance, MaxCandidates>
 {
 	fn default() -> Self {
-		Self { votes: bounded_vec![], stake: Default::default(), deposit: Default::default() }
+		Self {
+			votes: BoundedVec::default(),
+			stake: Default::default(),
+			deposit: Default::default(),
+		}
 	}
 }
 
 /// A holder of a seat as either a member or a runner-up.
-#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, Clone, Default, RuntimeDebug, PartialEq, TypeInfo, MaxEncodedLen)]
 pub struct SeatHolder<AccountId, Balance> {
 	/// The holder.
 	pub who: AccountId,
@@ -194,7 +198,6 @@ pub mod pallet {
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::storage_version(STORAGE_VERSION)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::config]
@@ -260,7 +263,7 @@ pub mod pallet {
 		/// the size of the election. When this limit is reached no more
 		/// candidates are accepted in the election.
 		#[pallet::constant]
-		type MaxCandidates: Get<u32>;
+		type MaxCandidates: Get<u32> + TypeInfo;
 
 		/// The maximum number of voters to allow in a phragmen election.
 		///
@@ -328,7 +331,7 @@ pub mod pallet {
 		)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			votes: Vec<T::AccountId>,
+			votes: BoundedVec<T::AccountId, T::MaxCandidates>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -682,7 +685,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::AccountId,
-		Voter<T::AccountId, BalanceOf<T>, T::MaxVoters>,
+		Voter<T::AccountId, BalanceOf<T>, T::MaxCandidates>,
 		ValueQuery,
 	>;
 
@@ -743,7 +746,11 @@ pub mod pallet {
 					// remove_lock is noop if lock is not there.
 					<Voting<T>>::insert(
 						&member,
-						Voter { votes: vec![member.clone()], stake: *stake, deposit: Zero::zero() },
+						Voter {
+							votes: bounded_vec![member.clone()],
+							stake: *stake,
+							deposit: Zero::zero(),
+						},
 					);
 
 					member.clone()
