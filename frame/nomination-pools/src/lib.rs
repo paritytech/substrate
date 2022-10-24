@@ -1568,8 +1568,6 @@ pub mod pallet {
 		PoolSlashed { pool_id: PoolId, balance: BalanceOf<T> },
 		/// The unbond pool at `era` of pool `pool_id` has been slashed to `balance`.
 		UnbondingPoolSlashed { pool_id: PoolId, era: EraIndex, balance: BalanceOf<T> },
-		/// A pool's commission payee has been changed.
-		PoolCommissionPayeeChanged { pool_id: PoolId, payee: T::AccountId },
 		/// A pool's commission setting has been changed.
 		PoolCommissionUpdated { pool_id: PoolId, commission: Perbill, payee: T::AccountId },
 		/// A pool's maximum commission setting has been changed.
