@@ -303,7 +303,6 @@ mod tests {
 	use sp_runtime::{testing::H256, traits::Block as BlockT};
 	use std::{
 		borrow::Cow,
-		convert::TryInto,
 		sync::{Arc, Mutex},
 	};
 	use substrate_test_runtime_client::runtime::Block;

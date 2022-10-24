@@ -73,7 +73,6 @@ use std::{
 	borrow::Cow,
 	cmp,
 	collections::{HashMap, HashSet},
-	convert::TryFrom as _,
 	fs, iter,
 	marker::PhantomData,
 	num::NonZeroUsize,

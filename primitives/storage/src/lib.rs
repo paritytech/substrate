@@ -423,7 +423,7 @@ impl From<StateVersion> for u8 {
 	}
 }
 
-impl sp_std::convert::TryFrom<u8> for StateVersion {
+impl TryFrom<u8> for StateVersion {
 	type Error = ();
 	fn try_from(val: u8) -> sp_std::result::Result<StateVersion, ()> {
 		match val {

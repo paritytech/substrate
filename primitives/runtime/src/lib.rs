@@ -50,13 +50,14 @@ use sp_core::{
 	hash::{H256, H512},
 	sr25519,
 };
-use sp_std::{convert::TryFrom, prelude::*};
+use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 pub mod curve;
 pub mod generic;
+pub mod legacy;
 mod multiaddress;
 pub mod offchain;
 pub mod runtime_logger;
@@ -96,6 +97,10 @@ pub use sp_arithmetic::{
 };
 
 pub use either::Either;
+
+/// The number of bytes of the module-specific `error` field defined in [`ModuleError`].
+/// In FRAME, this is the maximum encoded size of a pallet error type.
+pub const MAX_MODULE_ERROR_ENCODED_SIZE: usize = 4;
 
 /// An abstraction over justification for a block's validity under a consensus algorithm.
 ///
@@ -468,7 +473,7 @@ pub struct ModuleError {
 	/// Module index, matching the metadata module index.
 	pub index: u8,
 	/// Module specific error value.
-	pub error: u8,
+	pub error: [u8; MAX_MODULE_ERROR_ENCODED_SIZE],
 	/// Optional error message.
 	#[codec(skip)]
 	#[cfg_attr(feature = "std", serde(skip_deserializing))]
@@ -478,6 +483,31 @@ pub struct ModuleError {
 impl PartialEq for ModuleError {
 	fn eq(&self, other: &Self) -> bool {
 		(self.index == other.index) && (self.error == other.error)
+	}
+}
+
+/// Errors related to transactional storage layers.
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Decode, Debug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum TransactionalError {
+	/// Too many transactional layers have been spawned.
+	LimitReached,
+	/// A transactional layer was expected, but does not exist.
+	NoLayer,
+}
+
+impl From<TransactionalError> for &'static str {
+	fn from(e: TransactionalError) -> &'static str {
+		match e {
+			TransactionalError::LimitReached => "Too many transactional layers have been spawned",
+			TransactionalError::NoLayer => "A transactional layer was expected, but does not exist",
+		}
+	}
+}
+
+impl From<TransactionalError> for DispatchError {
+	fn from(e: TransactionalError) -> DispatchError {
+		Self::Transactional(e)
 	}
 }
 
@@ -507,6 +537,9 @@ pub enum DispatchError {
 	Token(TokenError),
 	/// An arithmetic error.
 	Arithmetic(ArithmeticError),
+	/// The number of transactional layers has been reached, or we are not in a transactional
+	/// layer.
+	Transactional(TransactionalError),
 }
 
 /// Result of a `Dispatchable` which contains the `DispatchResult` and additional information about
@@ -642,6 +675,7 @@ impl From<DispatchError> for &'static str {
 			DispatchError::TooManyConsumers => "Too many consumers",
 			DispatchError::Token(e) => e.into(),
 			DispatchError::Arithmetic(e) => e.into(),
+			DispatchError::Transactional(e) => e.into(),
 		}
 	}
 }
@@ -678,6 +712,10 @@ impl traits::Printable for DispatchError {
 			},
 			Self::Arithmetic(e) => {
 				"Arithmetic error: ".print();
+				<&'static str>::from(*e).print();
+			},
+			Self::Transactional(e) => {
+				"Transactional error: ".print();
 				<&'static str>::from(*e).print();
 			},
 		}
@@ -922,15 +960,15 @@ mod tests {
 	fn dispatch_error_encoding() {
 		let error = DispatchError::Module(ModuleError {
 			index: 1,
-			error: 2,
+			error: [2, 0, 0, 0],
 			message: Some("error message"),
 		});
 		let encoded = error.encode();
 		let decoded = DispatchError::decode(&mut &encoded[..]).unwrap();
-		assert_eq!(encoded, vec![3, 1, 2]);
+		assert_eq!(encoded, vec![3, 1, 2, 0, 0, 0]);
 		assert_eq!(
 			decoded,
-			DispatchError::Module(ModuleError { index: 1, error: 2, message: None })
+			DispatchError::Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None })
 		);
 	}
 
@@ -943,9 +981,9 @@ mod tests {
 			Other("bar"),
 			CannotLookup,
 			BadOrigin,
-			Module(ModuleError { index: 1, error: 1, message: None }),
-			Module(ModuleError { index: 1, error: 2, message: None }),
-			Module(ModuleError { index: 2, error: 1, message: None }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 1, error: [2, 0, 0, 0], message: None }),
+			Module(ModuleError { index: 2, error: [1, 0, 0, 0], message: None }),
 			ConsumerRemaining,
 			NoProviders,
 			Token(TokenError::NoFunds),
@@ -970,8 +1008,8 @@ mod tests {
 
 		// Ignores `message` field in `Module` variant.
 		assert_eq!(
-			Module(ModuleError { index: 1, error: 1, message: Some("foo") }),
-			Module(ModuleError { index: 1, error: 1, message: None }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: Some("foo") }),
+			Module(ModuleError { index: 1, error: [1, 0, 0, 0], message: None }),
 		);
 	}
 

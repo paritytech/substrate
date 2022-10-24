@@ -294,7 +294,7 @@ impl BasePath {
 	}
 }
 
-impl std::convert::From<PathBuf> for BasePath {
+impl From<PathBuf> for BasePath {
 	fn from(path: PathBuf) -> Self {
 		BasePath::new(path)
 	}

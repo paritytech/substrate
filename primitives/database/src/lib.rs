@@ -110,6 +110,11 @@ pub trait Database<H: Clone + AsRef<[u8]>>: Send + Sync {
 	fn supports_ref_counting(&self) -> bool {
 		false
 	}
+
+	/// Remove a possible path-prefix from the key.
+	///
+	/// Not all database implementations use a prefix for keys, so this function may be a noop.
+	fn sanitize_key(&self, _key: &mut Vec<u8>) {}
 }
 
 impl<H> std::fmt::Debug for dyn Database<H> {

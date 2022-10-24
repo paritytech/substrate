@@ -19,7 +19,7 @@
 
 use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{DispatchError, RuntimeDebug};
+use sp_runtime::{traits::Saturating, DispatchError, RuntimeDebug};
 use sp_std::{fmt::Debug, prelude::*, result::Result};
 
 /// Information relating to the period of a scheduled task. First item is the length of the
@@ -32,12 +32,21 @@ pub type Period<BlockNumber> = (BlockNumber, u32);
 pub type Priority = u8;
 
 /// The dispatch time of a scheduled task.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum DispatchTime<BlockNumber> {
 	/// At specified block.
 	At(BlockNumber),
 	/// After specified number of blocks.
 	After(BlockNumber),
+}
+
+impl<BlockNumber: Saturating + Copy> DispatchTime<BlockNumber> {
+	pub fn evaluate(&self, since: BlockNumber) -> BlockNumber {
+		match &self {
+			Self::At(m) => *m,
+			Self::After(m) => m.saturating_add(since),
+		}
+	}
 }
 
 /// The highest priority. We invert the value so that normal sorting will place the highest

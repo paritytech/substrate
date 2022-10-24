@@ -37,7 +37,7 @@ mod tests;
 pub mod weights;
 
 use sp_runtime::traits::{BadOrigin, Hash, Saturating};
-use sp_std::{convert::TryFrom, prelude::*};
+use sp_std::prelude::*;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{

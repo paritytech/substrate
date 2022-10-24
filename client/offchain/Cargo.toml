@@ -17,7 +17,7 @@ bytes = "1.1"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 hex = "0.4"
 fnv = "1.0.6"
-futures = "0.3.19"
+futures = "0.3.21"
 futures-timer = "3.0.2"
 num_cpus = "1.13"
 parking_lot = "0.12.0"
@@ -43,7 +43,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
-tokio = "1.15"
+tokio = "1.17.0"
 lazy_static = "1.4.0"
 
 [features]

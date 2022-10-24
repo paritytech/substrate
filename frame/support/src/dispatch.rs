@@ -2003,6 +2003,10 @@ macro_rules! decl_module {
 		pub type Pallet<$trait_instance $(, $instance $( = $module_default_instance)?)?>
 			= $mod_type<$trait_instance $(, $instance)?>;
 
+		$crate::__create_tt_macro! {
+			tt_error_token,
+		}
+
 		$crate::decl_module! {
 			@impl_on_initialize
 			{ $system }

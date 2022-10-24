@@ -619,7 +619,7 @@ pub(crate) async fn ensure_matching_spec<Block: BlockT + serde::de::DeserializeO
 	{
 		Ok((name, version)) => {
 			// first, deal with spec name
-			if expected_spec_name == name {
+			if expected_spec_name.to_lowercase() == name {
 				log::info!(target: LOG_TARGET, "found matching spec name: {:?}", name);
 			} else {
 				let msg = format!(

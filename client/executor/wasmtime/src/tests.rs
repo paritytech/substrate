@@ -24,12 +24,13 @@ use std::sync::Arc;
 type HostFunctions = sp_io::SubstrateHostFunctions;
 
 struct RuntimeBuilder {
-	code: Option<&'static str>,
+	code: Option<String>,
 	fast_instance_reuse: bool,
 	canonicalize_nans: bool,
 	deterministic_stack: bool,
-	heap_pages: u64,
+	extra_heap_pages: u64,
 	max_memory_size: Option<usize>,
+	precompile_runtime: bool,
 }
 
 impl RuntimeBuilder {
@@ -41,34 +42,44 @@ impl RuntimeBuilder {
 			fast_instance_reuse: false,
 			canonicalize_nans: false,
 			deterministic_stack: false,
-			heap_pages: 1024,
+			extra_heap_pages: 1024,
 			max_memory_size: None,
+			precompile_runtime: false,
 		}
 	}
 
-	fn use_wat(&mut self, code: &'static str) {
+	fn use_wat(&mut self, code: String) -> &mut Self {
 		self.code = Some(code);
+		self
 	}
 
-	fn canonicalize_nans(&mut self, canonicalize_nans: bool) {
+	fn canonicalize_nans(&mut self, canonicalize_nans: bool) -> &mut Self {
 		self.canonicalize_nans = canonicalize_nans;
+		self
 	}
 
-	fn deterministic_stack(&mut self, deterministic_stack: bool) {
+	fn deterministic_stack(&mut self, deterministic_stack: bool) -> &mut Self {
 		self.deterministic_stack = deterministic_stack;
+		self
 	}
 
-	fn max_memory_size(&mut self, max_memory_size: Option<usize>) {
+	fn precompile_runtime(&mut self, precompile_runtime: bool) -> &mut Self {
+		self.precompile_runtime = precompile_runtime;
+		self
+	}
+
+	fn max_memory_size(&mut self, max_memory_size: Option<usize>) -> &mut Self {
 		self.max_memory_size = max_memory_size;
+		self
 	}
 
-	fn build(self) -> Arc<dyn WasmModule> {
+	fn build(&mut self) -> Arc<dyn WasmModule> {
 		let blob = {
 			let wasm: Vec<u8>;
 
 			let wasm = match self.code {
 				None => wasm_binary_unwrap(),
-				Some(wat) => {
+				Some(ref wat) => {
 					wasm = wat::parse_str(wat).expect("wat parsing failed");
 					&wasm
 				},
@@ -78,27 +89,31 @@ impl RuntimeBuilder {
 				.expect("failed to create a runtime blob out of test runtime")
 		};
 
-		let rt = crate::create_runtime::<HostFunctions>(
-			blob,
-			crate::Config {
-				heap_pages: self.heap_pages,
-				max_memory_size: self.max_memory_size,
-				allow_missing_func_imports: true,
-				cache_path: None,
-				semantics: crate::Semantics {
-					fast_instance_reuse: self.fast_instance_reuse,
-					deterministic_stack_limit: match self.deterministic_stack {
-						true => Some(crate::DeterministicStackLimit {
-							logical_max: 65536,
-							native_stack_max: 256 * 1024 * 1024,
-						}),
-						false => None,
-					},
-					canonicalize_nans: self.canonicalize_nans,
-					parallel_compilation: true,
+		let config = crate::Config {
+			max_memory_size: self.max_memory_size,
+			allow_missing_func_imports: true,
+			cache_path: None,
+			semantics: crate::Semantics {
+				fast_instance_reuse: self.fast_instance_reuse,
+				deterministic_stack_limit: match self.deterministic_stack {
+					true => Some(crate::DeterministicStackLimit {
+						logical_max: 65536,
+						native_stack_max: 256 * 1024 * 1024,
+					}),
+					false => None,
 				},
+				canonicalize_nans: self.canonicalize_nans,
+				parallel_compilation: true,
+				extra_heap_pages: self.extra_heap_pages,
 			},
-		)
+		};
+
+		let rt = if self.precompile_runtime {
+			let artifact = crate::prepare_runtime_artifact(blob, &config.semantics).unwrap();
+			unsafe { crate::create_runtime_from_artifact::<HostFunctions>(&artifact, config) }
+		} else {
+			crate::create_runtime::<HostFunctions>(blob, config)
+		}
 		.expect("cannot create runtime");
 
 		Arc::new(rt) as Arc<dyn WasmModule>
@@ -107,11 +122,7 @@ impl RuntimeBuilder {
 
 #[test]
 fn test_nan_canonicalization() {
-	let runtime = {
-		let mut builder = RuntimeBuilder::new_on_demand();
-		builder.canonicalize_nans(true);
-		builder.build()
-	};
+	let runtime = RuntimeBuilder::new_on_demand().canonicalize_nans(true).build();
 
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
@@ -150,12 +161,10 @@ fn test_nan_canonicalization() {
 fn test_stack_depth_reaching() {
 	const TEST_GUARD_PAGE_SKIP: &str = include_str!("test-guard-page-skip.wat");
 
-	let runtime = {
-		let mut builder = RuntimeBuilder::new_on_demand();
-		builder.use_wat(TEST_GUARD_PAGE_SKIP);
-		builder.deterministic_stack(true);
-		builder.build()
-	};
+	let runtime = RuntimeBuilder::new_on_demand()
+		.use_wat(TEST_GUARD_PAGE_SKIP.to_string())
+		.deterministic_stack(true)
+		.build();
 	let mut instance = runtime.new_instance().expect("failed to instantiate a runtime");
 
 	match instance.call_export("test-many-locals", &[]).unwrap_err() {
@@ -168,20 +177,53 @@ fn test_stack_depth_reaching() {
 }
 
 #[test]
-fn test_max_memory_pages() {
+fn test_max_memory_pages_imported_memory_without_precompilation() {
+	test_max_memory_pages(true, false);
+}
+
+#[test]
+fn test_max_memory_pages_exported_memory_without_precompilation() {
+	test_max_memory_pages(false, false);
+}
+
+#[test]
+fn test_max_memory_pages_imported_memory_with_precompilation() {
+	test_max_memory_pages(true, true);
+}
+
+#[test]
+fn test_max_memory_pages_exported_memory_with_precompilation() {
+	test_max_memory_pages(false, true);
+}
+
+fn test_max_memory_pages(import_memory: bool, precompile_runtime: bool) {
 	fn try_instantiate(
 		max_memory_size: Option<usize>,
-		wat: &'static str,
+		wat: String,
+		precompile_runtime: bool,
 	) -> Result<(), Box<dyn std::error::Error>> {
-		let runtime = {
-			let mut builder = RuntimeBuilder::new_on_demand();
-			builder.use_wat(wat);
-			builder.max_memory_size(max_memory_size);
-			builder.build()
-		};
+		let runtime = RuntimeBuilder::new_on_demand()
+			.use_wat(wat)
+			.max_memory_size(max_memory_size)
+			.precompile_runtime(precompile_runtime)
+			.build();
 		let mut instance = runtime.new_instance()?;
 		let _ = instance.call_export("main", &[])?;
 		Ok(())
+	}
+
+	fn memory(initial: u32, maximum: Option<u32>, import: bool) -> String {
+		let memory = if let Some(maximum) = maximum {
+			format!("(memory $0 {} {})", initial, maximum)
+		} else {
+			format!("(memory $0 {})", initial)
+		};
+
+		if import {
+			format!("(import \"env\" \"memory\" {})", memory)
+		} else {
+			format!("{}\n(export \"memory\" (memory $0))", memory)
+		}
 	}
 
 	const WASM_PAGE_SIZE: usize = 65536;
@@ -189,26 +231,30 @@ fn test_max_memory_pages() {
 	// check the old behavior if preserved. That is, if no limit is set we allow 4 GiB of memory.
 	try_instantiate(
 		None,
-		r#"
-		(module
-			;; we want to allocate the maximum number of pages supported in wasm for this test.
-			;;
-			;; However, due to a bug in wasmtime (I think wasmi is also affected) it is only possible
-			;; to allocate 65536 - 1 pages.
-			;;
-			;; Then, during creation of the Substrate Runtime instance, 1024 (heap_pages) pages are
-			;; mounted.
-			;;
-			;; Thus 65535 = 64511 + 1024
-			(import "env" "memory" (memory 64511))
-
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-				(i64.const 0)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			/*
+				We want to allocate the maximum number of pages supported in wasm for this test.
+				However, due to a bug in wasmtime (I think wasmi is also affected) it is only possible
+				to allocate 65536 - 1 pages.
+
+				Then, during creation of the Substrate Runtime instance, 1024 (heap_pages) pages are
+				mounted.
+
+				Thus 65535 = 64511 + 1024
+			*/
+			memory(64511, None, import_memory)
+		),
+		precompile_runtime,
 	)
 	.unwrap();
 
@@ -217,94 +263,108 @@ fn test_max_memory_pages() {
 	// max_memory_size = (1 (initial) + 1024 (heap_pages)) * WASM_PAGE_SIZE
 	try_instantiate(
 		Some((1 + 1024) * WASM_PAGE_SIZE),
-		r#"
-		(module
-
-			(import "env" "memory" (memory 1)) ;; <- 1 initial, max is not specified
-
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-				(i64.const 0)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// 1 initial, max is not specified.
+			memory(1, None, import_memory)
+		),
+		precompile_runtime,
 	)
 	.unwrap();
 
 	// max is specified explicitly to 2048 pages.
 	try_instantiate(
 		Some((1 + 1024) * WASM_PAGE_SIZE),
-		r#"
-		(module
-
-			(import "env" "memory" (memory 1 2048)) ;; <- max is 2048
-
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-				(i64.const 0)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// Max is 2048.
+			memory(1, Some(2048), import_memory)
+		),
+		precompile_runtime,
 	)
 	.unwrap();
 
 	// memory grow should work as long as it doesn't exceed 1025 pages in total.
 	try_instantiate(
 		Some((0 + 1024 + 25) * WASM_PAGE_SIZE),
-		r#"
-		(module
-			(import "env" "memory" (memory 0)) ;; <- zero starting pages.
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
 
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
-
-				;; assert(memory.grow returns != -1)
-				(if
-					(i32.eq
-						(memory.grow
-							(i32.const 25)
+					;; assert(memory.grow returns != -1)
+					(if
+						(i32.eq
+							(memory.grow
+								(i32.const 25)
+							)
+							(i32.const -1)
 						)
-						(i32.const -1)
+						(unreachable)
 					)
-					(unreachable)
-				)
 
-				(i64.const 0)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// Zero starting pages.
+			memory(0, None, import_memory)
+		),
+		precompile_runtime,
 	)
 	.unwrap();
 
 	// We start with 1025 pages and try to grow at least one.
 	try_instantiate(
 		Some((1 + 1024) * WASM_PAGE_SIZE),
-		r#"
-		(module
-			(import "env" "memory" (memory 1))  ;; <- initial=1, meaning after heap pages mount the
-												;; total will be already 1025
-			(global (export "__heap_base") i32 (i32.const 0))
-			(func (export "main")
-				(param i32 i32) (result i64)
+		format!(
+			r#"
+			(module
+				{}
+				(global (export "__heap_base") i32 (i32.const 0))
+				(func (export "main")
+					(param i32 i32) (result i64)
 
-				;; assert(memory.grow returns == -1)
-				(if
-					(i32.ne
-						(memory.grow
-							(i32.const 1)
+					;; assert(memory.grow returns == -1)
+					(if
+						(i32.ne
+							(memory.grow
+								(i32.const 1)
+							)
+							(i32.const -1)
 						)
-						(i32.const -1)
+						(unreachable)
 					)
-					(unreachable)
-				)
 
-				(i64.const 0)
+					(i64.const 0)
+				)
 			)
-		)
-		"#,
+			"#,
+			// Initial=1, meaning after heap pages mount the total will be already 1025.
+			memory(1, None, import_memory)
+		),
+		precompile_runtime,
 	)
 	.unwrap();
 }
@@ -317,7 +377,6 @@ fn test_instances_without_reuse_are_not_leaked() {
 	let runtime = crate::create_runtime::<HostFunctions>(
 		RuntimeBlob::uncompress_if_needed(wasm_binary_unwrap()).unwrap(),
 		crate::Config {
-			heap_pages: 2048,
 			max_memory_size: None,
 			allow_missing_func_imports: true,
 			cache_path: None,
@@ -326,6 +385,7 @@ fn test_instances_without_reuse_are_not_leaked() {
 				deterministic_stack_limit: None,
 				canonicalize_nans: false,
 				parallel_compilation: true,
+				extra_heap_pages: 2048,
 			},
 		},
 	)

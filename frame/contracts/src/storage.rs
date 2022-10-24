@@ -290,10 +290,9 @@ where
 		weight_limit.saturating_sub(weight_per_key.saturating_mul(remaining_key_budget as Weight))
 	}
 
-	/// This generator uses inner counter for account id and applies the hash over `AccountId +
-	/// accountid_counter`.
-	pub fn generate_trie_id(account_id: &AccountIdOf<T>, seed: u64) -> TrieId {
-		let buf: Vec<_> = account_id.as_ref().iter().chain(&seed.to_le_bytes()).cloned().collect();
+	/// Generates a unique trie id by returning  `hash(account_id ++ nonce)`.
+	pub fn generate_trie_id(account_id: &AccountIdOf<T>, nonce: u64) -> TrieId {
+		let buf: Vec<_> = account_id.as_ref().iter().chain(&nonce.to_le_bytes()).cloned().collect();
 		T::Hashing::hash(&buf).as_ref().into()
 	}
 

@@ -19,7 +19,7 @@
 //! Db-based backend utility structures and functions, used by both
 //! full and light storages.
 
-use std::{convert::TryInto, fmt, fs, io, path::Path, sync::Arc};
+use std::{fmt, fs, io, path::Path, sync::Arc};
 
 use log::{debug, info};
 
@@ -275,6 +275,7 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 	match crate::parity_db::open(path, db_type, create, false) {
 		Ok(db) => Ok(db),
 		Err(parity_db::Error::InvalidConfiguration(_)) => {
+			log::warn!("Invalid parity db configuration, attempting database metadata update.");
 			// Try to update the database with the new config
 			Ok(crate::parity_db::open(path, db_type, create, true)?)
 		},

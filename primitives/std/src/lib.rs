@@ -99,10 +99,10 @@ impl Writer {
 /// This should include only things which are in the normal std prelude.
 pub mod prelude {
 	pub use crate::{
+		borrow::ToOwned,
 		boxed::Box,
 		clone::Clone,
 		cmp::{Eq, PartialEq, Reverse},
-		convert::{TryFrom, TryInto},
 		iter::IntoIterator,
 		vec::Vec,
 	};

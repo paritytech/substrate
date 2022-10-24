@@ -28,9 +28,11 @@ mod dummy_part_checker;
 mod key_prefix;
 mod match_and_insert;
 mod pallet;
+mod pallet_error;
 mod partial_eq_no_bound;
 mod storage;
 mod transactional;
+mod tt_macro;
 
 use proc_macro::TokenStream;
 use std::{cell::RefCell, str::FromStr};
@@ -41,9 +43,9 @@ thread_local! {
 	static COUNTER: RefCell<Counter> = RefCell::new(Counter(0));
 }
 
-/// Counter to generate a relatively unique identifier for macros querying for the existence of
-/// pallet parts. This is necessary because declarative macros gets hoisted to the crate root,
-/// which shares the namespace with other pallets containing the very same query macros.
+/// Counter to generate a relatively unique identifier for macros. This is necessary because
+/// declarative macros gets hoisted to the crate root, which shares the namespace with other pallets
+/// containing the very same macros.
 struct Counter(u64);
 
 impl Counter {
@@ -561,4 +563,15 @@ pub fn __generate_dummy_part_checker(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn match_and_insert(input: TokenStream) -> TokenStream {
 	match_and_insert::match_and_insert(input)
+}
+
+#[proc_macro_derive(PalletError, attributes(codec))]
+pub fn derive_pallet_error(input: TokenStream) -> TokenStream {
+	pallet_error::derive_pallet_error(input)
+}
+
+/// Internal macro used by `frame_support` to create tt-call-compliant macros
+#[proc_macro]
+pub fn __create_tt_macro(input: TokenStream) -> TokenStream {
+	tt_macro::create_tt_return_macro(input)
 }

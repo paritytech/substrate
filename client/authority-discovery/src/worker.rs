@@ -24,7 +24,6 @@ use crate::{
 
 use std::{
 	collections::{HashMap, HashSet},
-	convert::TryInto,
 	marker::PhantomData,
 	sync::Arc,
 	time::Duration,
@@ -581,14 +580,11 @@ where
 			.authorities(&id)
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
-			.map(std::convert::Into::into)
+			.map(Into::into)
 			.collect::<HashSet<_>>();
 
-		let intersection = local_pub_keys
-			.intersection(&authorities)
-			.cloned()
-			.map(std::convert::Into::into)
-			.collect();
+		let intersection =
+			local_pub_keys.intersection(&authorities).cloned().map(Into::into).collect();
 
 		Ok(intersection)
 	}

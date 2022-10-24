@@ -18,7 +18,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../../../client/api/" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
 sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
 serde = "1.0.136"
-serde_json = "1.0.74"
+serde_json = "1.0.79"
 derive_more = "0.99.16"
 kvdb = "0.11.0"
 kvdb-rocksdb = "0.15.1"
@@ -39,4 +39,4 @@ parity-util-mem = { version = "0.11.0", default-features = false, features = ["p
 parity-db = { version = "0.3" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../client/transaction-pool" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
-futures = { version = "0.3.19", features = ["thread-pool"] }
+futures = { version = "0.3.21", features = ["thread-pool"] }

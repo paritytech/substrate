@@ -48,7 +48,7 @@ fn create_referendum<T: Config>() -> (T::AccountId, ReferendumIndex) {
 		RawOrigin::Signed(caller.clone()).into(),
 		RawOrigin::Root.into(),
 		T::Hashing::hash_of(&0),
-		AtOrAfter::After(0u32.into())
+		DispatchTime::After(0u32.into())
 	));
 	let index = ReferendumCount::<T>::get() - 1;
 	(caller, index)
@@ -182,7 +182,7 @@ benchmarks! {
 		RawOrigin::Signed(caller),
 		RawOrigin::Root.into(),
 		T::Hashing::hash_of(&0),
-		AtOrAfter::After(0u32.into())
+		DispatchTime::After(0u32.into())
 	) verify {
 		let index = ReferendumCount::<T>::get().checked_sub(1).unwrap();
 		assert_matches!(ReferendumInfoFor::<T>::get(index), Some(ReferendumInfo::Ongoing(_)));

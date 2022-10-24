@@ -36,9 +36,5 @@ name = "phragmms_balancing"
 path = "src/phragmms_balancing.rs"
 
 [[bin]]
-name = "compact"
-path = "src/compact.rs"
-
-[[bin]]
 name = "phragmen_pjr"
 path = "src/phragmen_pjr.rs"

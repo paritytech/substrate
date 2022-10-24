@@ -1,0 +1,32 @@
+[package]
+name = "frame-election-solution-type-fuzzer"
+version = "2.0.0-alpha.5"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "Fuzzer for phragmén solution type implementation."
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+clap = { version = "3.0", features = ["derive"] }
+honggfuzz = "0.5"
+rand = { version = "0.8", features = ["std", "small_rng"] }
+
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.0.1", default-features = false, features = ["derive"] }
+frame-election-provider-solution-type = { version = "4.0.0-dev", path = ".." }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../.." }
+sp-arithmetic = { version = "5.0.0", path = "../../../../primitives/arithmetic" }
+sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
+# used by generate_solution_type:
+sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/npos-elections" }
+frame-support = { version = "4.0.0-dev", path = "../../../support" }
+
+[[bin]]
+name = "compact"
+path = "src/compact.rs"

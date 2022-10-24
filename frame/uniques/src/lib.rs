@@ -41,8 +41,10 @@ mod types;
 pub mod migration;
 pub mod weights;
 
-use codec::{Decode, Encode, HasCompact};
-use frame_support::traits::{BalanceStatus::Reserved, Currency, ReservableCurrency};
+use codec::{Decode, Encode};
+use frame_support::traits::{
+	BalanceStatus::Reserved, Currency, EnsureOriginWithArg, ReservableCurrency,
+};
 use frame_system::Config as SystemConfig;
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
@@ -64,6 +66,21 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(_);
 
+	#[cfg(feature = "runtime-benchmarks")]
+	pub trait BenchmarkHelper<ClassId, InstanceId> {
+		fn class(i: u16) -> ClassId;
+		fn instance(i: u16) -> InstanceId;
+	}
+	#[cfg(feature = "runtime-benchmarks")]
+	impl<ClassId: From<u16>, InstanceId: From<u16>> BenchmarkHelper<ClassId, InstanceId> for () {
+		fn class(i: u16) -> ClassId {
+			i.into()
+		}
+		fn instance(i: u16) -> InstanceId {
+			i.into()
+		}
+	}
+
 	#[pallet::config]
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
@@ -71,16 +88,10 @@ pub mod pallet {
 		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Identifier for the class of asset.
-		type ClassId: Member + Parameter + Default + Copy + HasCompact + MaxEncodedLen;
+		type ClassId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The type used to identify a unique asset within an asset class.
-		type InstanceId: Member
-			+ Parameter
-			+ Default
-			+ Copy
-			+ HasCompact
-			+ From<u16>
-			+ MaxEncodedLen;
+		type InstanceId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The currency mechanism, used for paying for reserves.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -88,6 +99,14 @@ pub mod pallet {
 		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
 		/// attributes.
 		type ForceOrigin: EnsureOrigin<Self::Origin>;
+
+		/// Standard class creation is only allowed if the origin attempting it and the class are
+		/// in this set.
+		type CreateOrigin: EnsureOriginWithArg<
+			Success = Self::AccountId,
+			Self::Origin,
+			Self::ClassId,
+		>;
 
 		/// The basic amount of funds that must be reserved for an asset class.
 		#[pallet::constant]
@@ -122,6 +141,10 @@ pub mod pallet {
 		#[pallet::constant]
 		type ValueLimit: Get<u32>;
 
+		#[cfg(feature = "runtime-benchmarks")]
+		/// A set of helper functions for benchmarking.
+		type Helper: BenchmarkHelper<Self::ClassId, Self::InstanceId>;
+
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -134,6 +157,11 @@ pub mod pallet {
 		T::ClassId,
 		ClassDetails<T::AccountId, DepositBalanceOf<T, I>>,
 	>;
+
+	#[pallet::storage]
+	/// The class, if any, of which an account is willing to take ownership.
+	pub(super) type OwnershipAcceptance<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::ClassId>;
 
 	#[pallet::storage]
 	/// The assets held by any given account; set out this way so that assets owned by a single
@@ -296,6 +324,8 @@ pub mod pallet {
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		},
+		/// Ownership acceptance has changed for an account.
+		OwnershipAcceptanceChanged { who: T::AccountId, maybe_class: Option<T::ClassId> },
 	}
 
 	#[pallet::error]
@@ -320,12 +350,19 @@ pub mod pallet {
 		NoDelegate,
 		/// No approval exists that would allow the transfer.
 		Unapproved,
+		/// The named owner has not signed ownership of the class is acceptable.
+		Unaccepted,
 	}
 
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Get the owner of the asset instance, if the asset exists.
 		pub fn owner(class: T::ClassId, instance: T::InstanceId) -> Option<T::AccountId> {
 			Asset::<T, I>::get(class, instance).map(|i| i.owner)
+		}
+
+		/// Get the owner of the asset instance, if the asset exists.
+		pub fn class_owner(class: T::ClassId) -> Option<T::AccountId> {
+			Class::<T, I>::get(class).map(|i| i.owner)
 		}
 	}
 
@@ -350,10 +387,10 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::create())]
 		pub fn create(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			admin: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
+			let owner = T::CreateOrigin::ensure_origin(origin, &class)?;
 			let admin = T::Lookup::lookup(admin)?;
 
 			Self::do_create_class(
@@ -385,7 +422,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_create())]
 		pub fn force_create(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			free_holding: bool,
 		) -> DispatchResult {
@@ -424,7 +461,7 @@ pub mod pallet {
  		))]
 		pub fn destroy(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
 			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
@@ -455,8 +492,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::mint())]
 		pub fn mint(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -484,8 +521,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::burn())]
 		pub fn burn(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			check_owner: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -520,8 +557,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			dest: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -556,7 +593,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::redeposit(instances.len() as u32))]
 		pub fn redeposit(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			instances: Vec<T::InstanceId>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -616,8 +653,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::freeze())]
 		pub fn freeze(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -646,8 +683,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -673,10 +710,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::freeze_class())]
-		pub fn freeze_class(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-		) -> DispatchResult {
+		pub fn freeze_class(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
@@ -700,10 +734,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::thaw_class())]
-		pub fn thaw_class(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-		) -> DispatchResult {
+		pub fn thaw_class(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
@@ -722,7 +753,8 @@ pub mod pallet {
 		/// Origin must be Signed and the sender should be the Owner of the asset `class`.
 		///
 		/// - `class`: The asset class whose owner should be changed.
-		/// - `owner`: The new Owner of this asset class.
+		/// - `owner`: The new Owner of this asset class. They must have called
+		///   `set_accept_ownership` with `class` in order for this operation to succeed.
 		///
 		/// Emits `OwnerChanged`.
 		///
@@ -730,11 +762,14 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer_ownership())]
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
+
+			let acceptable_class = OwnershipAcceptance::<T, I>::get(&owner);
+			ensure!(acceptable_class.as_ref() == Some(&class), Error::<T, I>::Unaccepted);
 
 			Class::<T, I>::try_mutate(class, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownClass)?;
@@ -753,6 +788,7 @@ pub mod pallet {
 				ClassAccount::<T, I>::remove(&details.owner, &class);
 				ClassAccount::<T, I>::insert(&owner, &class, ());
 				details.owner = owner.clone();
+				OwnershipAcceptance::<T, I>::remove(&owner);
 
 				Self::deposit_event(Event::OwnerChanged { class, new_owner: owner });
 				Ok(())
@@ -774,7 +810,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_team())]
 		pub fn set_team(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
 			freezer: <T::Lookup as StaticLookup>::Source,
@@ -811,8 +847,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::approve_transfer())]
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			delegate: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -863,8 +899,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::cancel_approval())]
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			maybe_check_delegate: Option<<T::Lookup as StaticLookup>::Source>,
 		) -> DispatchResult {
 			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
@@ -915,7 +951,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_asset_status())]
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			owner: <T::Lookup as StaticLookup>::Source,
 			issuer: <T::Lookup as StaticLookup>::Source,
 			admin: <T::Lookup as StaticLookup>::Source,
@@ -964,7 +1000,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_attribute())]
 		pub fn set_attribute(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
@@ -1027,7 +1063,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_attribute())]
 		pub fn clear_attribute(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			maybe_instance: Option<T::InstanceId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
@@ -1077,8 +1113,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1139,8 +1175,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub fn clear_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-			#[pallet::compact] instance: T::InstanceId,
+			class: T::ClassId,
+			instance: T::InstanceId,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
@@ -1188,7 +1224,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_class_metadata())]
 		pub fn set_class_metadata(
 			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
+			class: T::ClassId,
 			data: BoundedVec<u8, T::StringLimit>,
 			is_frozen: bool,
 		) -> DispatchResult {
@@ -1242,10 +1278,7 @@ pub mod pallet {
 		///
 		/// Weight: `O(1)`
 		#[pallet::weight(T::WeightInfo::clear_class_metadata())]
-		pub fn clear_class_metadata(
-			origin: OriginFor<T>,
-			#[pallet::compact] class: T::ClassId,
-		) -> DispatchResult {
+		pub fn clear_class_metadata(origin: OriginFor<T>, class: T::ClassId) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
@@ -1264,6 +1297,41 @@ pub mod pallet {
 				Self::deposit_event(Event::ClassMetadataCleared { class });
 				Ok(())
 			})
+		}
+
+		/// Set (or reset) the acceptance of ownership for a particular account.
+		///
+		/// Origin must be `Signed` and if `maybe_class` is `Some`, then the signer must have a
+		/// provider reference.
+		///
+		/// - `maybe_class`: The identifier of the asset class whose ownership the signer is willing
+		///   to accept, or if `None`, an indication that the signer is willing to accept no
+		///   ownership transferal.
+		///
+		/// Emits `OwnershipAcceptanceChanged`.
+		#[pallet::weight(T::WeightInfo::set_accept_ownership())]
+		pub fn set_accept_ownership(
+			origin: OriginFor<T>,
+			maybe_class: Option<T::ClassId>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let old = OwnershipAcceptance::<T, I>::get(&who);
+			match (old.is_some(), maybe_class.is_some()) {
+				(false, true) => {
+					frame_system::Pallet::<T>::inc_consumers(&who)?;
+				},
+				(true, false) => {
+					frame_system::Pallet::<T>::dec_consumers(&who);
+				},
+				_ => {},
+			}
+			if let Some(class) = maybe_class.as_ref() {
+				OwnershipAcceptance::<T, I>::insert(&who, class);
+			} else {
+				OwnershipAcceptance::<T, I>::remove(&who);
+			}
+			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_class });
+			Ok(())
 		}
 	}
 }

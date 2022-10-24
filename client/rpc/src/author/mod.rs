@@ -21,7 +21,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 use sp_blockchain::HeaderBackend;
 

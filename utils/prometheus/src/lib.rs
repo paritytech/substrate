@@ -122,7 +122,6 @@ async fn init_prometheus_with_listener(
 mod tests {
 	use super::*;
 	use hyper::{Client, Uri};
-	use std::convert::TryFrom;
 
 	#[test]
 	fn prometheus_works() {

@@ -81,6 +81,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		let error_ident = &error_def.error;
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
+				#[doc(hidden)]
 				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
 					Some(#frame_support::metadata::PalletErrorMetadata {
 						ty: #frame_support::scale_info::meta_type::<#error_ident<#type_use_gen>>()
@@ -91,6 +92,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	} else {
 		quote::quote_spanned!(def.pallet_struct.attr_span =>
 			impl<#type_impl_gen> #pallet_ident<#type_use_gen> #config_where_clause {
+				#[doc(hidden)]
 				pub fn error_metadata() -> Option<#frame_support::metadata::PalletErrorMetadata> {
 					None
 				}

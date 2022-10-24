@@ -31,7 +31,7 @@ use sp_core::{
 	Pair,
 };
 use sp_runtime::{traits::IdentifyAccount, MultiSigner};
-use std::{convert::TryFrom, io::Read, path::PathBuf};
+use std::{io::Read, path::PathBuf};
 
 /// Public key type for Runtime
 pub type PublicFor<P> = <P as sp_core::Pair>::Public;

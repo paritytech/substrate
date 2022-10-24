@@ -37,7 +37,6 @@ use once_cell::sync::Lazy;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_core::offchain::{HttpError, HttpRequestId, HttpRequestStatus, Timestamp};
 use std::{
-	convert::TryFrom,
 	fmt,
 	io::Read as _,
 	pin::Pin,

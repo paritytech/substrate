@@ -25,7 +25,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{collections::HashSet, convert::TryFrom, fmt, sync::Arc};
+use std::{collections::HashSet, fmt, sync::Arc};
 
 use crate::{blockchain::Info, notifications::StorageEventStream, FinalizeSummary, ImportSummary};
 

@@ -18,7 +18,7 @@ async-trait = "0.1.42"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
     "derive",
 ] }
-futures = { version = "0.3.19", features = ["thread-pool"] }
+futures = { version = "0.3.21", features = ["thread-pool"] }
 log = "0.4.8"
 sp-core = { path = "../../core", version = "6.0.0"}
 sp-inherents = { version = "4.0.0-dev", path = "../../inherents" }
@@ -30,7 +30,7 @@ sp-runtime = { version = "6.0.0", path = "../../runtime" }
 thiserror = "1.0.30"
 
 [dev-dependencies]
-futures = "0.3.19"
+futures = "0.3.21"
 sp-test-primitives = { version = "2.0.0", path = "../../test-primitives" }
 
 [features]

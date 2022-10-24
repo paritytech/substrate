@@ -23,12 +23,13 @@ use crate::{
 	SolutionOrSnapshotSize, Weight, WeightInfo,
 };
 use codec::{Decode, Encode, HasCompact};
+use frame_election_provider_support::NposSolution;
 use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
 };
 use sp_arithmetic::traits::SaturatedConversion;
-use sp_npos_elections::{ElectionScore, NposSolution};
+use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Saturating, Zero},
 	RuntimeDebug,
