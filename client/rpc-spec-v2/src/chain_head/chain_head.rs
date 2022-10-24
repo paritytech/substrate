@@ -199,7 +199,7 @@ where
 					Some(&BlockId::Hash(*notification.header.parent_hash())),
 				);
 
-				let _ = subscriptions.pin_block(&sub_id_import, notification.hash.clone());
+				let _ = subscriptions.pin_block(&sub_id_import, notification.hash);
 
 				// Note: `Block::Hash` will serialize to hexadecimal encoded string.
 				let new_block = FollowEvent::NewBlock(NewBlock {
@@ -227,7 +227,7 @@ where
 		let stream_finalized =
 			self.client.finality_notification_stream().map(move |notification| {
 				// We might not receive all new blocks reports, also pin the block here.
-				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash.clone());
+				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash);
 
 				FollowEvent::Finalized(Finalized {
 					finalized_block_hashes: notification.tree_route.iter().cloned().collect(),
@@ -246,7 +246,7 @@ where
 			None,
 		);
 
-		let _ = self.subscriptions.pin_block(&sub_id, finalized_block_hash.clone());
+		let _ = self.subscriptions.pin_block(&sub_id, finalized_block_hash);
 
 		let stream = stream::once(async move {
 			FollowEvent::Initialized(Initialized {

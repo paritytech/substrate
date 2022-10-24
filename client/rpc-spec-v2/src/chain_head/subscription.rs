@@ -160,7 +160,7 @@ mod tests {
 		let hash = H256::random();
 
 		// Check without subscription.
-		let res = subs.pin_block(&id, hash.clone());
+		let res = subs.pin_block(&id, hash);
 		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
 
 		let res = subs.unpin_block(&id, &hash);
@@ -176,7 +176,7 @@ mod tests {
 		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
 
 		// Check with subscription and pinned block.
-		let res = subs.pin_block(&id, hash.clone());
+		let res = subs.pin_block(&id, hash);
 		assert!(matches!(res, Ok(())));
 
 		let res = subs.contains(&id, &hash);
