@@ -41,7 +41,7 @@ use sp_finality_grandpa::{
 	AuthorityList, EquivocationProof, GrandpaApi, OpaqueKeyOwnershipProof, GRANDPA_ENGINE_ID,
 };
 use sp_keyring::Ed25519Keyring;
-use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
+use sp_keystore::{testing::KeyStore as TestKeyStore, SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
 	codec::Encode,
 	generic::{BlockId, DigestItem},
@@ -59,7 +59,6 @@ use authorities::AuthoritySet;
 use communication::grandpa_protocol_name;
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_consensus::LongestChain;
-use sc_keystore::LocalKeystore;
 use sp_application_crypto::key_types::GRANDPA;
 
 type TestLinkHalf =
@@ -213,14 +212,11 @@ fn make_ids(keys: &[Ed25519Keyring]) -> AuthorityList {
 	keys.iter().map(|&key| key.public().into()).map(|id| (id, 1)).collect()
 }
 
-fn create_keystore(authority: Ed25519Keyring) -> (SyncCryptoStorePtr, tempfile::TempDir) {
-	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore =
-		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+fn create_keystore(authority: Ed25519Keyring) -> SyncCryptoStorePtr {
+	let keystore = Arc::new(TestKeyStore::new());
 	SyncCryptoStore::ed25519_generate_new(&*keystore, GRANDPA, Some(&authority.to_seed()))
 		.expect("Creates authority key");
-
-	(keystore, keystore_path)
+	keystore
 }
 
 fn block_until_complete(
@@ -243,7 +239,7 @@ fn initialize_grandpa(
 	let voters = stream::FuturesUnordered::new();
 
 	for (peer_id, key) in peers.iter().enumerate() {
-		let (keystore, _) = create_keystore(*key);
+		let keystore = create_keystore(*key);
 
 		let (net_service, link) = {
 			// temporary needed for some reason
@@ -480,11 +476,9 @@ fn transition_3_voters_twice_1_full_observer() {
 
 	let mut runtime = Runtime::new().unwrap();
 
-	let mut keystore_paths = Vec::new();
 	let mut voters = Vec::new();
 	for (peer_id, local_key) in all_peers.clone().into_iter().enumerate() {
-		let (keystore, keystore_path) = create_keystore(local_key);
-		keystore_paths.push(keystore_path);
+		let keystore = create_keystore(local_key);
 
 		let (net_service, link) = {
 			let net = net.lock();
@@ -934,7 +928,6 @@ fn voter_persists_its_votes() {
 
 	sp_tracing::try_init_simple();
 	let mut runtime = Runtime::new().unwrap();
-	let mut keystore_paths = Vec::new();
 
 	// we have two authorities but we'll only be running the voter for alice
 	// we are going to be listening for the prevotes it casts
@@ -947,11 +940,7 @@ fn voter_persists_its_votes() {
 	// create the communication layer for bob, but don't start any
 	// voter. instead we'll listen for the prevote that alice casts
 	// and cast our own manually
-	let bob_keystore = {
-		let (keystore, keystore_path) = create_keystore(peers[1]);
-		keystore_paths.push(keystore_path);
-		keystore
-	};
+	let bob_keystore = create_keystore(peers[1]);
 	let bob_network = {
 		let config = Config {
 			gossip_duration: TEST_GOSSIP_DURATION,
@@ -984,7 +973,7 @@ fn voter_persists_its_votes() {
 	// spawn two voters for alice.
 	// half-way through the test, we stop one and start the other.
 	let (alice_voter1, abort) = future::abortable({
-		let (keystore, _) = create_keystore(peers[0]);
+		let keystore = create_keystore(peers[0]);
 
 		let (net_service, link) = {
 			// temporary needed for some reason
@@ -1018,7 +1007,7 @@ fn voter_persists_its_votes() {
 		peers: &[Ed25519Keyring],
 		net: Arc<Mutex<GrandpaTestNet>>,
 	) -> impl Future<Output = ()> + Send {
-		let (keystore, _) = create_keystore(peers[0]);
+		let keystore = create_keystore(peers[0]);
 		let mut net = net.lock();
 
 		// we add a new peer to the test network and we'll use
@@ -1266,8 +1255,6 @@ fn voter_catches_up_to_latest_round_when_behind() {
 		Box::pin(run_grandpa_voter(grandpa_params).expect("all in order with client and network"))
 	};
 
-	let mut keystore_paths = Vec::new();
-
 	// spawn authorities
 	for (peer_id, key) in peers.iter().enumerate() {
 		let (client, link) = {
@@ -1284,8 +1271,7 @@ fn voter_catches_up_to_latest_round_when_behind() {
 				.for_each(move |_| future::ready(())),
 		);
 
-		let (keystore, keystore_path) = create_keystore(*key);
-		keystore_paths.push(keystore_path);
+		let keystore = create_keystore(*key);
 
 		let voter = voter(Some(keystore), peer_id, link, net.clone());
 
@@ -1515,7 +1501,7 @@ fn grandpa_environment_never_overwrites_round_voter_state() {
 	let network_service = peer.network_service().clone();
 	let link = peer.data.lock().take().unwrap();
 
-	let (keystore, _keystore_path) = create_keystore(peers[0]);
+	let keystore = create_keystore(peers[0]);
 	let environment = test_environment(&link, Some(keystore), network_service.clone(), ());
 
 	let round_state = || finality_grandpa::round::State::genesis(Default::default());
@@ -1715,7 +1701,7 @@ fn grandpa_environment_doesnt_send_equivocation_reports_for_itself() {
 		let peer = net.peer(0);
 		let network_service = peer.network_service().clone();
 		let link = peer.data.lock().take().unwrap();
-		let (keystore, _keystore_path) = create_keystore(alice);
+		let keystore = create_keystore(alice);
 		test_environment(&link, Some(keystore), network_service.clone(), ())
 	};
 
