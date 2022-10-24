@@ -64,7 +64,7 @@ pub mod v1 {
 		fn on_runtime_upgrade() -> Weight {
 			let current_version = Pallet::<T>::current_storage_version();
 			let onchain_version = Pallet::<T>::on_chain_storage_version();
-			if onchain_version < 1 {
+			if onchain_version == 0 && current_version == 1 {
 				let mut translated = 0u64;
 				Asset::<T>::translate::<
 					OldAssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T>>,
