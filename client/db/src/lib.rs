@@ -1961,13 +1961,12 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: BlockId<Block>,
+		block: &Block::Hash,
 	) -> ClientResult<()> {
-		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
-		if block.is_pre_genesis() {
+		if *block == Default::default() {
 			operation.old_state = self.empty_state()?;
 		} else {
-			operation.old_state = self.state_at(&hash)?;
+			operation.old_state = self.state_at(block)?;
 		}
 
 		operation.commit_state = true;
@@ -2442,13 +2441,9 @@ pub(crate) mod tests {
 		};
 		let header_hash = header.hash();
 
-		let block_id = if number == 0 {
-			BlockId::Hash(Default::default())
-		} else {
-			BlockId::Number(number - 1)
-		};
+		let block_hash = if number == 0 { Default::default() } else { parent_hash };
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, block_id).unwrap();
+		backend.begin_state_operation(&mut op, &block_hash).unwrap();
 		op.set_block_data(header, Some(body), None, None, NewBlockState::Best).unwrap();
 		if let Some(index) = transaction_index {
 			op.update_transaction_index(index).unwrap();
@@ -2489,21 +2484,17 @@ pub(crate) mod tests {
 				assert!(db.blockchain().hash(i).unwrap().is_none());
 
 				{
-					let id = if i == 0 {
-						BlockId::Hash(Default::default())
+					let hash = if i == 0 {
+						Default::default()
 					} else {
-						BlockId::Number(i - 1)
+						db.blockchain.hash(i - 1).unwrap().unwrap()
 					};
 
 					let mut op = db.begin_operation().unwrap();
-					db.begin_state_operation(&mut op, id).unwrap();
+					db.begin_state_operation(&mut op, &hash).unwrap();
 					let header = Header {
 						number: i,
-						parent_hash: if i == 0 {
-							Default::default()
-						} else {
-							db.blockchain.hash(i - 1).unwrap().unwrap()
-						},
+						parent_hash: hash,
 						state_root: Default::default(),
 						digest: Default::default(),
 						extrinsics_root: Default::default(),
@@ -2585,7 +2576,7 @@ pub(crate) mod tests {
 
 		{
 			let mut op = db.begin_operation().unwrap();
-			db.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			db.begin_state_operation(&mut op, &hash).unwrap();
 			let mut header = Header {
 				number: 1,
 				parent_hash: hash,
@@ -2626,9 +2617,7 @@ pub(crate) mod tests {
 
 		let hash = {
 			let mut op = backend.begin_operation().unwrap();
-			backend
-				.begin_state_operation(&mut op, BlockId::Hash(Default::default()))
-				.unwrap();
+			backend.begin_state_operation(&mut op, &Default::default()).unwrap();
 			let mut header = Header {
 				number: 0,
 				parent_hash: Default::default(),
@@ -2665,7 +2654,7 @@ pub(crate) mod tests {
 
 		let hashof1 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			backend.begin_state_operation(&mut op, &hash).unwrap();
 			let mut header = Header {
 				number: 1,
 				parent_hash: hash,
@@ -2702,7 +2691,7 @@ pub(crate) mod tests {
 
 		let hashof2 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
+			backend.begin_state_operation(&mut op, &hashof1).unwrap();
 			let mut header = Header {
 				number: 2,
 				parent_hash: hashof1,
@@ -2736,7 +2725,7 @@ pub(crate) mod tests {
 
 		let hashof3 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(2)).unwrap();
+			backend.begin_state_operation(&mut op, &hashof2).unwrap();
 			let mut header = Header {
 				number: 3,
 				parent_hash: hashof2,
@@ -3070,14 +3059,14 @@ pub(crate) mod tests {
 		let block4 = insert_header(&backend, 4, block3, None, Default::default());
 		{
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
+			backend.begin_state_operation(&mut op, &block0).unwrap();
 			op.mark_finalized(&block1, None).unwrap();
 			op.mark_finalized(&block2, None).unwrap();
 			backend.commit_operation(op).unwrap();
 		}
 		{
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			backend.begin_state_operation(&mut op, &block2).unwrap();
 			op.mark_finalized(&block3, None).unwrap();
 			op.mark_finalized(&block4, None).unwrap();
 			backend.commit_operation(op).unwrap();
@@ -3091,9 +3080,7 @@ pub(crate) mod tests {
 
 		let hash0 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend
-				.begin_state_operation(&mut op, BlockId::Hash(Default::default()))
-				.unwrap();
+			backend.begin_state_operation(&mut op, &Default::default()).unwrap();
 			let mut header = Header {
 				number: 0,
 				parent_hash: Default::default(),
@@ -3131,7 +3118,7 @@ pub(crate) mod tests {
 
 		let hash1 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(0)).unwrap();
+			backend.begin_state_operation(&mut op, &hash0).unwrap();
 			let mut header = Header {
 				number: 1,
 				parent_hash: hash0,
@@ -3180,7 +3167,7 @@ pub(crate) mod tests {
 		let block2 = insert_header(&backend, 2, block1, None, Default::default());
 		{
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(block0)).unwrap();
+			backend.begin_state_operation(&mut op, &block0).unwrap();
 			op.mark_finalized(&block2, None).unwrap();
 			backend.commit_operation(op).unwrap_err();
 		}
@@ -3208,7 +3195,7 @@ pub(crate) mod tests {
 
 		{
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+			backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
 			for i in 1..5 {
 				op.mark_finalized(&blocks[i], None).unwrap();
 			}
@@ -3243,7 +3230,7 @@ pub(crate) mod tests {
 		}
 
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+		backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
 		for i in 1..3 {
 			op.mark_finalized(&blocks[i], None).unwrap();
 		}
@@ -3300,7 +3287,7 @@ pub(crate) mod tests {
 		.unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+		backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
 		op.mark_head(&blocks[4]).unwrap();
 		backend.commit_operation(op).unwrap();
 
@@ -3309,7 +3296,7 @@ pub(crate) mod tests {
 
 		for i in 1..5 {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(blocks[i])).unwrap();
+			backend.begin_state_operation(&mut op, &blocks[i]).unwrap();
 			op.mark_finalized(&blocks[i], None).unwrap();
 			backend.commit_operation(op).unwrap();
 		}
@@ -3369,13 +3356,13 @@ pub(crate) mod tests {
 		)
 		.unwrap();
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+		backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
 		op.mark_head(&blocks[4]).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		for i in 1..5 {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+			backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
 			op.mark_finalized(&blocks[i], None).unwrap();
 			backend.commit_operation(op).unwrap();
 		}
@@ -3501,7 +3488,7 @@ pub(crate) mod tests {
 
 		for i in 1..10 {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(blocks[4])).unwrap();
+			backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
 			op.mark_finalized(&blocks[i], None).unwrap();
 			backend.commit_operation(op).unwrap();
 			let bc = backend.blockchain();
@@ -3701,7 +3688,7 @@ pub(crate) mod tests {
 
 		let block3 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Number(1)).unwrap();
+			backend.begin_state_operation(&mut op, &block1).unwrap();
 			let header = Header {
 				number: 3,
 				parent_hash: block2,
@@ -3720,7 +3707,7 @@ pub(crate) mod tests {
 
 		let block4 = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			backend.begin_state_operation(&mut op, &block2).unwrap();
 			let header = Header {
 				number: 4,
 				parent_hash: block3,
@@ -3739,7 +3726,7 @@ pub(crate) mod tests {
 
 		let block3_fork = {
 			let mut op = backend.begin_operation().unwrap();
-			backend.begin_state_operation(&mut op, BlockId::Hash(block2)).unwrap();
+			backend.begin_state_operation(&mut op, &block2).unwrap();
 			let header = Header {
 				number: 3,
 				parent_hash: block2,

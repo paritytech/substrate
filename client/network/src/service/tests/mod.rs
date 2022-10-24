@@ -33,7 +33,9 @@ use sc_network_common::{
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	block_request_handler::BlockRequestHandler,
+	service::network::{NetworkServiceHandle, NetworkServiceProvider},
+	state_request_handler::StateRequestHandler,
 	ChainSync,
 };
 use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
@@ -93,6 +95,7 @@ struct TestNetworkBuilder {
 	listen_addresses: Vec<Multiaddr>,
 	set_config: Option<SetConfig>,
 	chain_sync: Option<(Box<dyn ChainSyncT<TestBlock>>, Box<dyn ChainSyncInterface<TestBlock>>)>,
+	chain_sync_network: Option<(NetworkServiceProvider, NetworkServiceHandle)>,
 	config: Option<config::NetworkConfiguration>,
 }
 
@@ -104,6 +107,7 @@ impl TestNetworkBuilder {
 			listen_addresses: Vec::new(),
 			set_config: None,
 			chain_sync: None,
+			chain_sync_network: None,
 			config: None,
 		}
 	}
@@ -133,6 +137,19 @@ impl TestNetworkBuilder {
 		chain_sync: (Box<dyn ChainSyncT<TestBlock>>, Box<dyn ChainSyncInterface<TestBlock>>),
 	) -> Self {
 		self.chain_sync = Some(chain_sync);
+		self
+	}
+
+	pub fn with_chain_sync_network(
+		mut self,
+		chain_sync_network: (NetworkServiceProvider, NetworkServiceHandle),
+	) -> Self {
+		self.chain_sync_network = Some(chain_sync_network);
+		self
+	}
+
+	pub fn with_import_queue(mut self, import_queue: Box<dyn ImportQueue<TestBlock>>) -> Self {
+		self.import_queue = Some(import_queue);
 		self
 	}
 
@@ -199,6 +216,9 @@ impl TestNetworkBuilder {
 			None,
 		)));
 
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+
 		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
 			let (chain_sync, chain_sync_service) = ChainSync::new(
 				match network_config.sync_mode {
@@ -214,6 +234,7 @@ impl TestNetworkBuilder {
 				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
 				network_config.max_parallel_downloads,
 				None,
+				chain_sync_network_handle,
 			)
 			.unwrap();
 
@@ -291,6 +312,11 @@ impl TestNetworkBuilder {
 			request_response_protocol_configs: Vec::new(),
 		})
 		.unwrap();
+
+		let service = worker.service().clone();
+		async_std::task::spawn(async move {
+			let _ = chain_sync_network_provider.run(service).await;
+		});
 
 		TestNetwork::new(worker)
 	}
