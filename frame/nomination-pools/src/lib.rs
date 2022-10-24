@@ -603,9 +603,10 @@ impl<T: Config> CommissionThrottle<T> {
 				<frame_system::Pallet<T>>::block_number().saturating_sub(*p) <
 					self.change_rate.min_delay
 			})
-			.unwrap_or(false) {
-				return true;
-			}
+			.unwrap_or(false)
+		{
+			return true
+		}
 		// check the commission change is larger than the maximum allowed increase.
 		(*to).saturating_sub(*from) > self.change_rate.max_increase
 	}
@@ -694,13 +695,9 @@ impl<T: Config> BondedPool<T> {
 
 	/// Get the current commission payee of this pool.
 	fn commission_payee(&self) -> Option<T::AccountId> {
-		match &self.commission {
-			Some(c) => match &c.current {
-				Some(cur) => Some(cur.1.clone()),
-				None => None,
-			},
-			None => None,
-		}
+		self.commission
+			.as_ref()
+			.map_or(None, |c| c.current.as_ref().map_or(None, |(_, p)| Some(p.clone())))
 	}
 
 	/// Consume self and put into storage.
