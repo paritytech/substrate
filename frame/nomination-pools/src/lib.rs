@@ -588,20 +588,6 @@ pub struct CommissionThrottle<T: Config> {
 	/// The block the previous commission update took place.
 	previous_set_at: Option<T::BlockNumber>,
 }
-/// The commission throttle defaults, used for readability and convenience.
-/// `change_rate` is not utilised in this code, but the provided values would
-/// be quite sensible for throttling.
-impl<T: Config> Default for CommissionThrottle<T> {
-	fn default() -> Self {
-		Self {
-			change_rate: CommissionThrottlePrefs {
-				max_increase: Perbill::from_percent(1),
-				min_delay: T::BlockNumber::from(1000_u32),
-			},
-			previous_set_at: None,
-		}
-	}
-}
 
 impl<T: Config> CommissionThrottle<T> {
 	// A commission change will be throttled (disallowed) if:
@@ -696,7 +682,10 @@ impl<T: Config> BondedPool<T> {
 
 	/// Get the current commission percentage of this pool.
 	fn commission(&self) -> Perbill {
-		self.commission.and_then(|c| c.current.map(|(x, _)| x)).unwrap_or(Zero::zero)
+		self.commission
+			.as_ref()
+			.and_then(|c| c.current.as_ref().map(|(x, _)| *x))
+			.unwrap_or(Perbill::zero())
 	}
 
 	/// Get the current commission payee of this pool.
@@ -850,17 +839,17 @@ impl<T: Config> BondedPool<T> {
 		mut self,
 		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
 	) -> Self {
-		self.commission = self
-			.commission
-			.take()
-			.map_or(Some(Commission::default()), |c| Some(c))
-			.map(|c| Commission {
-				throttle: c.throttle.map_or(
-					Some(CommissionThrottle { change_rate, ..CommissionThrottle::default() }),
-					|t| Some(CommissionThrottle { change_rate, ..t }),
-				),
-				..c
-			});
+		self.commission =
+			self.commission
+				.take()
+				.map_or(Some(Commission::default()), |c| Some(c))
+				.map(|c| Commission {
+					throttle: c.throttle.map_or(
+						Some(CommissionThrottle { change_rate, previous_set_at: None }),
+						|t| Some(CommissionThrottle { change_rate, ..t }),
+					),
+					..c
+				});
 		self
 	}
 
