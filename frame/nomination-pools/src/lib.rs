@@ -1879,12 +1879,14 @@ pub mod pallet {
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
 		) -> DispatchResult {
+			let depositor = ensure_signed(origin)?;
+
 			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
 				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
 				Ok(*id)
 			})?;
 
-			Self::do_create(origin, amount, root, nominator, state_toggler, pool_id)
+			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
 		}
 
 		/// Create a new delegation pool with a previously used pool id
@@ -1903,10 +1905,12 @@ pub mod pallet {
 			state_toggler: AccountIdLookupOf<T>,
 			pool_id: PoolId,
 		) -> DispatchResult {
+			let depositor = ensure_signed(origin)?;
+
 			ensure!(!BondedPools::<T>::contains_key(pool_id), Error::<T>::PoolIdInUse);
 			ensure!(pool_id < LastPoolId::<T>::get(), Error::<T>::InvalidPoolId);
 
-			Self::do_create(origin, amount, root, nominator, state_toggler, pool_id)
+			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
 		}
 
 		/// Nominate on behalf of the pool.
@@ -2331,14 +2335,13 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn do_create(
-		origin: T::RuntimeOrigin,
+		who: T::AccountId,
 		amount: BalanceOf<T>,
 		root: AccountIdLookupOf<T>,
 		nominator: AccountIdLookupOf<T>,
 		state_toggler: AccountIdLookupOf<T>,
 		pool_id: PoolId,
 	) -> DispatchResult {
-		let who = ensure_signed(origin)?;
 		let root = T::Lookup::lookup(root)?;
 		let nominator = T::Lookup::lookup(nominator)?;
 		let state_toggler = T::Lookup::lookup(state_toggler)?;
