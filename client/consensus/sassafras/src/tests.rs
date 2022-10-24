@@ -30,19 +30,18 @@ use sc_consensus::{BlockImport, BoxJustificationImport};
 use sc_keystore::LocalKeystore;
 use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
+use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::inherents::InherentDataProvider;
-use sp_runtime::{traits::HashFor, Digest, DigestItem};
+use sp_runtime::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
 
-use substrate_test_runtime_client::runtime::Block as TestBlock;
+use substrate_test_runtime_client::{runtime::Block as TestBlock, Backend as TestBackend};
 
 type TestHeader = <TestBlock as BlockT>::Header;
 
-type Error = sp_blockchain::Error;
-
 type TestClient = substrate_test_runtime_client::client::Client<
-	substrate_test_runtime_client::Backend,
+	TestBackend,
 	substrate_test_runtime_client::ExecutorDispatch,
 	TestBlock,
 	substrate_test_runtime_client::runtime::RuntimeApi,
@@ -94,10 +93,10 @@ impl DummyProposer {
 }
 
 impl Proposer<TestBlock> for DummyProposer {
-	type Error = Error;
+	type Error = TestError;
 	type Transaction =
 		sc_client_api::TransactionFor<substrate_test_runtime_client::Backend, TestBlock>;
-	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Error>>;
+	type Proposal = future::Ready<Result<Proposal<TestBlock, Self::Transaction, ()>, Self::Error>>;
 	type ProofRecording = DisableProofRecording;
 	type Proof = ();
 
@@ -163,13 +162,17 @@ type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 #[derive(Clone)]
 struct TestEnvironment {
 	client: Arc<TestClient>,
+	backend: Arc<TestBackend>,
 	block_import: SassafrasBlockImport,
 	link: SassafrasLink,
 	mutator: Option<Mutator>,
 }
 
 impl TestEnvironment {
-	fn new(client: Arc<TestClient>, mutator: Option<Mutator>) -> Self {
+	fn new(mutator: Option<Mutator>) -> Self {
+		let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
+		let client = Arc::new(client);
+
 		// Note: configuration is loaded using the `TestClient` instance as the runtime-api
 		// provider. In practice this will use the values defined within the test runtime
 		// defined in the `substrate_test_runtime` crate.
@@ -177,16 +180,17 @@ impl TestEnvironment {
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 
-		Self { client, block_import, link, mutator }
+		Self { client, backend, block_import, link, mutator }
 	}
 
 	fn new_with_pre_built_data(
 		client: Arc<TestClient>,
+		backend: Arc<TestBackend>,
 		block_import: SassafrasBlockImport,
 		link: SassafrasLink,
 		mutator: Option<Mutator>,
 	) -> Self {
-		Self { client, block_import, link, mutator }
+		Self { client, backend, block_import, link, mutator }
 	}
 
 	// Propose and import a new Sassafras block on top of the given parent.
@@ -281,9 +285,9 @@ impl TestEnvironment {
 }
 
 impl Environment<TestBlock> for TestEnvironment {
-	type CreateProposer = future::Ready<Result<DummyProposer, Error>>;
+	type CreateProposer = future::Ready<Result<DummyProposer, TestError>>;
 	type Proposer = DummyProposer;
-	type Error = Error;
+	type Error = TestError;
 
 	fn init(&mut self, parent_header: &<TestBlock as BlockT>::Header) -> Self::CreateProposer {
 		let parent_slot = crate::find_pre_digest::<TestBlock>(parent_header)
@@ -302,26 +306,20 @@ impl Environment<TestBlock> for TestEnvironment {
 #[test]
 #[should_panic(expected = "valid sassafras headers must contain a predigest")]
 fn rejects_block_without_pre_digest() {
-	let client = TestClientBuilder::with_default_backend().build();
-	let client = Arc::new(client);
-
 	let mutator = Arc::new(|header: &mut TestHeader, stage| {
 		if stage == Stage::PreSeal {
 			header.digest.logs.clear()
 		}
 	});
 
-	let mut env = TestEnvironment::new(client.clone(), Some(mutator));
+	let mut env = TestEnvironment::new(Some(mutator));
 
 	env.propose_and_import_block(BlockId::Number(0), Some(999.into()));
 }
 
 #[test]
 fn importing_block_one_sets_genesis_epoch() {
-	let client = TestClientBuilder::with_default_backend().build();
-	let client = Arc::new(client);
-
-	let mut env = TestEnvironment::new(client.clone(), None);
+	let mut env = TestEnvironment::new(None);
 
 	let block_hash = env.propose_and_import_block(BlockId::Number(0), Some(999.into()));
 
@@ -330,21 +328,31 @@ fn importing_block_one_sets_genesis_epoch() {
 	let epoch_changes = env.link.epoch_changes.shared_data();
 
 	let epoch_for_second_block = epoch_changes
-		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(&env.link.genesis_config, slot)
-		})
+		.epoch_data_for_child_of(
+			descendent_query(&*env.client),
+			&block_hash,
+			1,
+			1000.into(),
+			|slot| Epoch::genesis(&env.link.genesis_config, slot),
+		)
 		.unwrap()
 		.unwrap();
 
 	assert_eq!(epoch_for_second_block, genesis_epoch);
 }
 
+// TODO-SASS-P2: test import blocks with tickets aux data
+// TODO-SASS-P2: test finalization prunes tree
+
+#[test]
+fn import_block_with_ticket_proof() {}
+
+#[test]
+fn finalization_prunes_epoch_changes_tree() {}
+
 #[test]
 fn allows_to_skip_epochs() {
-	let (client, _backend) = TestClientBuilder::with_default_backend().build_with_backend();
-	let client = Arc::new(client);
-
-	let mut env = TestEnvironment::new(client.clone(), None);
+	let mut env = TestEnvironment::new(None);
 
 	let epoch_changes = env.link.epoch_changes.clone();
 
@@ -422,15 +430,9 @@ fn allows_to_skip_epochs() {
 	assert_eq!(data.start_slot, Slot::from(25));
 }
 
-// TODO-SASS-P2: test import blocks with tickets aux data
-// TODO-SASS-P2: test finalization prunes tree
-
 #[test]
 fn revert_prunes_epoch_changes_and_removes_weights() {
-	let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
-	let client = Arc::new(client);
-
-	let mut env = TestEnvironment::new(client.clone(), None);
+	let mut env = TestEnvironment::new(None);
 
 	// Test scenario.
 	// X(#y): a block (number y) announcing the next epoch data.
@@ -460,11 +462,11 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
 	// Revert canon chain to block #10 (best(21) - 11)
-	crate::revert(backend, 11).unwrap();
+	crate::revert(env.backend.clone(), 11).unwrap();
 
 	// Load and check epoch changes.
 
-	let actual_nodes = aux_schema::load_epoch_changes::<TestBlock, TestClient>(&*client)
+	let actual_nodes = aux_schema::load_epoch_changes::<TestBlock, TestClient>(&*env.client)
 		.unwrap()
 		.shared_data()
 		.tree()
@@ -483,7 +485,7 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 
 	let weight_data_check = |hashes: &[Hash], expected: bool| {
 		hashes.iter().all(|hash| {
-			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+			aux_schema::load_block_weight(&*env.client, hash).unwrap().is_some() == expected
 		})
 	};
 	assert!(weight_data_check(&canon[..10], true));
@@ -495,22 +497,19 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 
 #[test]
 fn revert_not_allowed_for_finalized() {
-	let (client, backend) = TestClientBuilder::with_default_backend().build_with_backend();
-	let client = Arc::new(client);
-
-	let mut env = TestEnvironment::new(client.clone(), None);
+	let mut env = TestEnvironment::new(None);
 
 	let canon = env.propose_and_import_blocks(BlockId::Number(0), 3);
 
 	// Finalize best block
-	client.finalize_block(BlockId::Hash(canon[2]), None, false).unwrap();
+	env.client.finalize_block(BlockId::Hash(canon[2]), None, false).unwrap();
 
 	// Revert canon chain to last finalized block
-	crate::revert(backend, 100).expect("revert should work for baked test scenario");
+	crate::revert(env.backend.clone(), 100).expect("revert should work for baked test scenario");
 
 	let weight_data_check = |hashes: &[Hash], expected: bool| {
 		hashes.iter().all(|hash| {
-			aux_schema::load_block_weight(&*client, hash).unwrap().is_some() == expected
+			aux_schema::load_block_weight(&*env.client, hash).unwrap().is_some() == expected
 		})
 	};
 	assert!(weight_data_check(&canon, true));
@@ -616,6 +615,7 @@ fn sassafras_network_progress() {
 		let mut net = net.lock();
 		let peer = net.peer(*peer_id);
 		let client = peer.client().as_client();
+		let backend = peer.client().as_backend();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
 		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
@@ -629,6 +629,7 @@ fn sassafras_network_progress() {
 
 		let env = TestEnvironment::new_with_pre_built_data(
 			client.clone(),
+			backend.clone(),
 			data.block_import.clone(),
 			data.link.clone(),
 			None,
