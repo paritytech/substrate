@@ -590,11 +590,12 @@ pub struct CommissionThrottle<T: Config> {
 }
 
 impl<T: Config> CommissionThrottle<T> {
-	// A commission change will be throttled (disallowed) if:
-	// 1. not enough blocks have passed since the previous commission update took place, and
-	// 2. the new commission is larger than the maximum allowed increase.
+	/// Returns true if this changing from `from` to `to` would exhaust the throttle limit. 
+	/// A commission change will be throttled (disallowed) if:
+	/// 1. not enough blocks have passed since the previous commission update took place, and
+	/// 2. the new commission is larger than the maximum allowed increase.
 	fn throttling(&self, from: &Perbill, to: &Perbill) -> bool {
-		// check enough blocks have passed since the previous commission update took place
+		// check enough blocks have passed since the previous commission update took place.
 		if let Some(previous_set_at) = self.previous_set_at {
 			if <frame_system::Pallet<T>>::block_number().saturating_sub(previous_set_at) <
 				self.change_rate.min_delay
