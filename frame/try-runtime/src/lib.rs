@@ -18,6 +18,7 @@
 //! Supporting types for try-runtime, testing and dry-running commands.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg(feature = "try-runtime")]
 
 pub use frame_support::traits::TryStateSelect;
 use frame_support::weights::Weight;

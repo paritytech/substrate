@@ -1031,6 +1031,11 @@ where
 		T::AddressGenerator::generate_address(deploying_address, code_hash, salt)
 	}
 
+	/// Returns the code hash of the contract specified by `account` ID.
+	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
+		Storage::<T>::code_hash(account)
+	}
+
 	/// Store code for benchmarks which does not check nor instrument the code.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn store_code_raw(

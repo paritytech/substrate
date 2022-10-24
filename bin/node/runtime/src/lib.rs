@@ -2016,11 +2016,15 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_mmr::primitives::MmrApi<Block, mmr::Hash> for Runtime {
-		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
+	impl pallet_mmr::primitives::MmrApi<
+		Block,
+		mmr::Hash,
+		BlockNumber,
+	> for Runtime {
+		fn generate_proof(block_number: BlockNumber)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
-			Mmr::generate_batch_proof(vec![leaf_index]).and_then(|(leaves, proof)|
+			Mmr::generate_batch_proof(vec![block_number]).and_then(|(leaves, proof)|
 				Ok((
 					mmr::EncodableOpaqueLeaf::from_leaf(&leaves[0]),
 					mmr::BatchProof::into_single_leaf_proof(proof)?
@@ -2052,9 +2056,9 @@ impl_runtime_apis! {
 		}
 
 		fn generate_batch_proof(
-			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
+			block_numbers: Vec<BlockNumber>,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_batch_proof(leaf_indices).map(|(leaves, proof)| {
+			Mmr::generate_batch_proof(block_numbers).map(|(leaves, proof)| {
 				(
 					leaves
 						.into_iter()
@@ -2066,10 +2070,10 @@ impl_runtime_apis! {
 		}
 
 		fn generate_historical_batch_proof(
-			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
-			leaves_count: pallet_mmr::primitives::LeafIndex,
+			block_numbers: Vec<BlockNumber>,
+			best_known_block_number: BlockNumber,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_historical_batch_proof(leaf_indices, leaves_count).map(
+			Mmr::generate_historical_batch_proof(block_numbers, best_known_block_number).map(
 				|(leaves, proof)| {
 					(
 						leaves
