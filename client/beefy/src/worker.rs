@@ -47,6 +47,7 @@ use beefy_primitives::{
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
+use sp_runtime::traits::{ConstU32, Get};
 
 use crate::{
 	communication::{
@@ -61,6 +62,8 @@ use crate::{
 	round::Rounds,
 	BeefyVoterLinks, Client, KnownPeers,
 };
+
+type MaxPendingVotes =  dyn Get<u32>;
 
 enum RoundAction {
 	Drop,
@@ -204,10 +207,12 @@ pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N> {
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
+	pub max_pending_votes: u32,
 }
 
+
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N, const U: u32> {
 	// utilities
 	client: Arc<C>,
 	backend: Arc<BE>,
@@ -234,14 +239,14 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	/// Best block a BEEFY voting round has been concluded for.
 	best_beefy_block: Option<NumberFor<B>>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BoundedBTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>, u32>,
+	pending_votes: BoundedBTreeMap<NumberFor<B>, Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>, ConstU32<U>>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
 }
 
-impl<B, BE, C, P, R, N> BeefyWorker<B, BE, C, P, R, N>
+impl<B, BE, C, P, R, N, const U: u32> BeefyWorker<B, BE, C, P, R, N, U>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
@@ -272,6 +277,7 @@ where
 			links,
 			metrics,
 			min_block_delta,
+			max_pending_votes
 		} = worker_params;
 
 		let last_finalized_header = backend
@@ -405,6 +411,7 @@ where
 			)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
+				//self.pending_votes.try_insert(*block_num, *vote).expect("");
 				self.pending_votes.entry(block_num).or_default().push(vote)
 			},
 			RoundAction::Drop => (),
@@ -539,6 +546,22 @@ where
 			// Return ones to process.
 			to_handle
 		}
+
+		fn to_process_for_bound<B: Block, T, const U: u32>(
+			pending: &mut BoundedBTreeMap<NumberFor<B>, T, ConstU32<U>>,
+			(start, end): (NumberFor<B>, NumberFor<B>),
+			_: PhantomData<B>,
+		) -> BTreeMap<NumberFor<B>, T> {
+			let mut pending_votes: BTreeMap<NumberFor<B>, T> = pending.into_iter().collect::<BTreeMap<NumberFor<B>, T>>();
+			// These are still pending.
+			let still_pending = pending_votes.split_off(&end.saturating_add(1u32.into()));
+			// These can be processed.
+			let to_handle = pending.split_off(&start);
+			// The rest can be dropped.
+			//*pending = still_pending.;
+			// Return ones to process.
+			to_handle
+		}
 		// Interval of blocks for which we can process justifications and votes right now.
 		let mut interval = self.voting_oracle.accepted_interval(best_grandpa)?;
 
@@ -557,7 +580,9 @@ where
 
 		// Process pending votes.
 		if !self.pending_votes.is_empty() {
-			let votes_to_handle = to_process_for(&mut self.pending_votes, interval, _ph);
+			let pending_votes_bounded_map = &mut self.pending_votes;
+			let mut pending_votes_map = pending_votes_bounded_map.into_inner();
+			let votes_to_handle = to_process_for_bound( pending_votes_bounded_map, interval, _ph);
 			for (num, votes) in votes_to_handle.into_iter() {
 				debug!(target: "beefy", "🥩 Handle buffered votes for: {:?}.", num);
 				for v in votes.into_iter() {
@@ -1007,6 +1032,7 @@ pub(crate) mod tests {
 		peer: &BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
+		max_pending_votes: u32
 	) -> BeefyWorker<
 		Block,
 		Backend,

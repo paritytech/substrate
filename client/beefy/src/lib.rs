@@ -29,7 +29,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::traits::Block;
+use sp_runtime::traits::{Block, Get};
 use std::{marker::PhantomData, sync::Arc};
 
 mod error;
@@ -62,6 +62,7 @@ use crate::{
 pub use communication::beefy_protocol_name::{
 	gossip_protocol_name, justifications_protocol_name as justifs_protocol_name,
 };
+use sp_arithmetic::traits::AtLeast32Bit;
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
@@ -167,7 +168,7 @@ pub struct BeefyNetworkParams<B: Block, N> {
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B: Block, BE, C, N, P, R> {
+pub struct BeefyParams<B: Block, BE, C, N, P, R,  const U: u32> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
@@ -188,12 +189,14 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	pub links: BeefyVoterLinks<B>,
 	/// Handler for incoming BEEFY justifications requests from a remote peer.
 	pub on_demand_justifications_handler: BeefyJustifsRequestHandler<B, C>,
+	/// The Bounded limit for pending votes
+	pub max_pending_votes: u32,
 }
 
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
+pub async fn start_beefy_gadget<B, BE, C, N, P, R, const U: u32>(beefy_params: BeefyParams<B, BE, C, N, P, R, U>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -201,7 +204,7 @@ where
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static
 {
 	let BeefyParams {
 		client,
@@ -214,6 +217,7 @@ where
 		prometheus_registry,
 		links,
 		on_demand_justifications_handler,
+		max_pending_votes
 	} = beefy_params;
 
 	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
@@ -264,9 +268,10 @@ where
 		links,
 		metrics,
 		min_block_delta,
+		max_pending_votes
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _, U>::new(worker_params);
 
 	futures::future::join(worker.run(), on_demand_justifications_handler.run()).await;
 }
