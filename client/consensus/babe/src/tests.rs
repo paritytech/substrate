@@ -1198,3 +1198,130 @@ fn allows_skipping_epochs() {
 	// we get epoch 4 as expected
 	assert_eq!(epoch4, epoch4_);
 }
+
+#[test]
+fn allows_skipping_epochs_on_some_forks() {
+	let mut net = BabeTestNet::new(1);
+
+	let peer = net.peer(0);
+	let data = peer.data.as_ref().expect("babe link set up during initialization");
+
+	let client = peer.client().as_client();
+	let mut block_import = data.block_import.lock().take().expect("import set up during init");
+
+	let mut proposer_factory = DummyFactory {
+		client: client.clone(),
+		config: data.link.config.clone(),
+		epoch_changes: data.link.epoch_changes.clone(),
+		mutator: Arc::new(|_, _| ()),
+	};
+
+	let epoch_changes = data.link.epoch_changes.clone();
+	let epoch_length = data.link.config.epoch_length;
+
+	// we create all of the blocks in epoch 0 as well as two blocks in epoch 1
+	let blocks = propose_and_import_blocks(
+		&client,
+		&mut proposer_factory,
+		&mut block_import,
+		BlockId::Number(0),
+		epoch_length as usize + 1,
+	);
+
+	// we now author a block that belongs to epoch 2, built on top of the last
+	// authored block in epoch 1.
+	let last_block = client.expect_header(BlockId::Hash(*blocks.last().unwrap())).unwrap();
+
+	let epoch2_block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 2 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	// if we try to get the epoch data for a slot in epoch 2, we get the data that
+	// was previously announced when epoch 1 started
+	let epoch2 = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch2_block,
+			epoch_length + 2,
+			(epoch_length * 2 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we now author a block that belongs to epoch 3, built on top of the last
+	// authored block in epoch 1. authoring this block means we're skipping epoch 2
+	// entirely on this fork
+	let epoch3_block = propose_and_import_block(
+		&last_block,
+		Some((epoch_length * 3 + 1).into()),
+		&mut proposer_factory,
+		&mut block_import,
+	);
+
+	// if we try to get the epoch data for a slot in epoch 3
+	let epoch3_ = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch3_block,
+			epoch_length + 2,
+			(epoch_length * 3 + 2).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	// we get back the data for epoch 2
+	assert_eq!(epoch3_, epoch2);
+
+	// if we try to get the epoch data for a slot in epoch 4 in the fork
+	// where we skipped epoch 2, we should get the epoch data for epoch 4
+	// that was announced at the beginning of epoch 3
+	let epoch_data = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch3_block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	assert!(epoch_data != epoch3_);
+
+	// if we try to get the epoch data for a slot in epoch 4 in the fork
+	// where we didn't skip epoch 2, we should get back the data for epoch 3,
+	// that was announced when epoch 2 started in that fork
+	let epoch_data = epoch_changes
+		.shared_data()
+		.epoch_data_for_child_of(
+			descendent_query(&*client),
+			&epoch2_block,
+			epoch_length + 2,
+			(epoch_length * 4 + 1).into(),
+			|slot| Epoch::genesis(&data.link.config, slot),
+		)
+		.unwrap()
+		.unwrap();
+
+	assert!(epoch_data != epoch3_);
+
+	let epoch3 = epoch_changes
+		.shared_data()
+		.epoch(&EpochIdentifier {
+			position: EpochIdentifierPosition::Regular,
+			hash: epoch2_block,
+			number: epoch_length + 2,
+		})
+		.unwrap()
+		.clone();
+
+	assert_eq!(epoch_data, epoch3);
+}
