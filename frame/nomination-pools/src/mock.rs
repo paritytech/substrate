@@ -230,44 +230,45 @@ impl Default for ExtBuilder {
 	}
 }
 
+#[cfg_attr(feature = "fuzzing", allow(dead_code))]
 impl ExtBuilder {
 	// Add members to pool 0.
-	pub(crate) fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
+	fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
 		self.members = members;
 		self
 	}
 
-	pub(crate) fn ed(self, ed: Balance) -> Self {
+	fn ed(self, ed: Balance) -> Self {
 		ExistentialDeposit::set(ed);
 		self
 	}
 
-	pub(crate) fn min_bond(self, min: Balance) -> Self {
+	fn min_bond(self, min: Balance) -> Self {
 		StakingMinBond::set(min);
 		self
 	}
 
-	pub(crate) fn min_join_bond(self, min: Balance) -> Self {
+	fn min_join_bond(self, min: Balance) -> Self {
 		MinJoinBondConfig::set(min);
 		self
 	}
 
-	pub(crate) fn with_check(self, level: u8) -> Self {
+	fn with_check(self, level: u8) -> Self {
 		CheckLevel::set(level);
 		self
 	}
 
-	pub(crate) fn max_members(mut self, max: Option<u32>) -> Self {
+	fn max_members(mut self, max: Option<u32>) -> Self {
 		self.max_members = max;
 		self
 	}
 
-	pub(crate) fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
+	fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
 		self.max_members_per_pool = max;
 		self
 	}
 
-	pub(crate) fn build(self) -> sp_io::TestExternalities {
+	fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -302,7 +303,7 @@ impl ExtBuilder {
 		ext
 	}
 
-	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
 			Pools::do_try_state(CheckLevel::get()).unwrap();
@@ -310,7 +311,7 @@ impl ExtBuilder {
 	}
 }
 
-pub(crate) fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
+pub fn unsafe_set_state(pool_id: PoolId, state: PoolState) {
 	BondedPools::<Runtime>::try_mutate(pool_id, |maybe_bonded_pool| {
 		maybe_bonded_pool.as_mut().ok_or(()).map(|bonded_pool| {
 			bonded_pool.state = state;
@@ -325,7 +326,7 @@ parameter_types! {
 }
 
 /// All events of this pallet.
-pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
+pub fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)
@@ -337,7 +338,7 @@ pub(crate) fn pool_events_since_last_call() -> Vec<super::Event<Runtime>> {
 }
 
 /// All events of the `Balances` pallet.
-pub(crate) fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>> {
+pub fn balances_events_since_last_call() -> Vec<pallet_balances::Event<Runtime>> {
 	let events = System::events()
 		.into_iter()
 		.map(|r| r.event)

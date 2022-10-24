@@ -299,14 +299,14 @@ pub const LOG_TARGET: &'static str = "runtime::nomination-pools";
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
-			target: crate::LOG_TARGET,
+			target: $crate::LOG_TARGET,
 			concat!("[{:?}] 🏊‍♂️ ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
 		)
 	};
 }
 
-#[cfg(test)]
-mod mock;
+#[cfg(any(test, feature = "fuzzing"))]
+pub mod mock;
 #[cfg(test)]
 mod tests;
 
@@ -594,7 +594,7 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Get [`Self`] from storage. Returns `None` if no entry for `pool_account` exists.
-	fn get(id: PoolId) -> Option<Self> {
+	pub fn get(id: PoolId) -> Option<Self> {
 		BondedPools::<T>::try_get(id).ok().map(|inner| Self { id, inner })
 	}
 
@@ -1487,7 +1487,6 @@ pub mod pallet {
 		///   `existential deposit + amount` in their account.
 		/// * Only a pool with [`PoolState::Open`] can be joined
 		#[pallet::weight(T::WeightInfo::join())]
-		#[transactional]
 		pub fn join(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
@@ -1548,7 +1547,6 @@ pub mod pallet {
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		#[transactional]
 		pub fn bond_extra(origin: OriginFor<T>, extra: BondExtra<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
@@ -1591,7 +1589,6 @@ pub mod pallet {
 		/// The member will earn rewards pro rata based on the members stake vs the sum of the
 		/// members in the pools stake. Rewards do not "expire".
 		#[pallet::weight(T::WeightInfo::claim_payout())]
-		#[transactional]
 		pub fn claim_payout(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let (mut member, mut bonded_pool, mut reward_pool) = Self::get_member_with_pools(&who)?;
@@ -2352,6 +2349,8 @@ impl<T: Config> Pallet<T> {
 			&bonded_pool.reward_account(),
 			&member_account,
 			pending_rewards,
+			// defensive: the depositor has put existential deposit into the pool and it stays
+			// untouched, reward account shall not die.
 			ExistenceRequirement::AllowDeath,
 		)?;
 
