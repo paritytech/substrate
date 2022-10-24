@@ -126,12 +126,10 @@ node-bench-regression-guard:
     CI_IMAGE:                      "paritytech/node-bench-regression-guard:latest"
   before_script: [""]
   script:
-    - |
-      export BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${CI_COMMIT_REF_NAME} | jq .base.ref)
     - echo "------- IMPORTANT -------"
     - echo "node-bench-regression-guard depends on the results of a cargo-check-benches job"
     - echo "In case of this job failure, check your pipeline's cargo-check-benches"
-    - 'node-bench-regression-guard --reference artifacts/benches/${BASE}-*
+    - 'node-bench-regression-guard --reference artifacts/benches/master-*
        --compare-with artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA'
   after_script: [""]
 
