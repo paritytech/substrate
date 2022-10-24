@@ -782,14 +782,14 @@ impl<T: Config> BondedPool<T> {
 	fn set_commission_current(mut self, commission: &Perbill, payee: T::AccountId) -> Self {
 		// Force a commission of `None` if a 0% commission is provided.
 		// Note that a 0% commission will replace the whole tuple with None.
-		let new_current =
+		let commission =
 			if commission > &Perbill::from_percent(0) { Some((*commission, payee)) } else { None };
 
 		// update commission if `Some(commission)` is to be inserted, or `None` otherwise.
 		self.commission = match &self.commission {
-			Some(c) => Some(Commission { current: new_current, ..c.clone() }),
-			None => match new_current.is_some() {
-				true => Some(Commission { current: new_current, ..Commission::default() }),
+			Some(c) => Some(Commission { current: commission, ..c.clone() }),
+			None => match commission.is_some() {
+				true => Some(Commission { current: commission, ..Commission::default() }),
 				false => None,
 			},
 		};
