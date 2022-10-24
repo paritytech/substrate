@@ -8364,7 +8364,6 @@ dependencies = [
  "sp-timestamp",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
- "tempfile",
  "thiserror",
 ]
 
