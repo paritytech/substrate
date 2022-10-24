@@ -112,7 +112,8 @@ pub struct OwnerInfo<T: Config> {
 	Clone, Copy, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen, RuntimeDebug, PartialEq, Eq,
 )]
 pub enum Determinism {
-	/// The execution should be deterministic and hence no indeterministic instructions are allowed.
+	/// The execution should be deterministic and hence no indeterministic instructions are
+	/// allowed.
 	///
 	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
 	Deterministic,
