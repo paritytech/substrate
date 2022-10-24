@@ -281,42 +281,42 @@ rusty-cachier-notify:
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails
-.cancel-pipeline-test-linux-stable1:
+cancel-pipeline-test-linux-stable1:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         "test-linux-stable 1/3"
 
-.cancel-pipeline-test-linux-stable2:
+cancel-pipeline-test-linux-stable2:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         "test-linux-stable 2/3"
 
-.cancel-pipeline-test-linux-stable3:
+cancel-pipeline-test-linux-stable3:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         "test-linux-stable 3/3"
 
-.cancel-pipeline-cargo-check-benches1:
+cancel-pipeline-cargo-check-benches1:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         "cargo-check-benches 1/2"
 
-.cancel-pipeline-cargo-check-benches2:
+cancel-pipeline-cargo-check-benches2:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         "cargo-check-benches 2/2"
 
-.cancel-pipeline-test-linux-stable-int:
+cancel-pipeline-test-linux-stable-int:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         test-linux-stable-int
 
-.cancel-pipeline-cargo-check-subkey:
+cancel-pipeline-cargo-check-subkey:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         cargo-check-subkey
 
-.cancel-pipeline-check-tracing:
+cancel-pipeline-check-tracing:
   extends:                         .cancel-pipeline-template
   needs:
     - job:                         check-tracing
