@@ -380,16 +380,15 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 	let net = BabeTestNet::new(3);
 
-	let peers =
-		&[(0, Sr25519Keyring::Alice), (1, Sr25519Keyring::Bob), (2, Sr25519Keyring::Charlie)];
+	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
 	let mut babe_futures = Vec::new();
 
-	for (peer_id, auth_id) in peers {
+	for (peer_id, auth_id) in peers.iter().enumerate() {
 		let mut net = net.lock();
-		let peer = net.peer(*peer_id);
+		let peer = net.peer(peer_id);
 		let client = peer.client().as_client();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
