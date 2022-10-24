@@ -696,13 +696,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Get the current commission percentage of this pool.
 	fn commission(&self) -> Perbill {
-		match &self.commission {
-			Some(c) => match &c.current {
-				Some(cur) => cur.0.clone(),
-				None => Perbill::from_percent(0),
-			},
-			None => Perbill::from_percent(0),
-		}
+		self.commission.and_then(|c| c.current.map(|(x, _)| x)).unwrap_or(Zero::zero)
 	}
 
 	/// Get the current commission payee of this pool.
