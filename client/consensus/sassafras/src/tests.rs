@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Sassafras testsuite
+//! Sassafras client tests
 
 #[allow(unused_imports)]
 use super::*;
@@ -27,12 +27,12 @@ use std::sync::Arc;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::Finalizer;
 use sc_consensus::{BlockImport, BoxJustificationImport};
-use sc_keystore::LocalKeystore;
 use sc_network_test::*;
 use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::inherents::InherentDataProvider;
+use sp_keystore::testing::KeyStore as TestKeyStore;
 use sp_runtime::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
 
@@ -345,17 +345,17 @@ fn importing_block_one_sets_genesis_epoch() {
 // TODO-SASS-P2: test finalization prunes tree
 
 #[test]
-fn import_block_with_ticket_proof() {}
+fn import_block_with_ticket_proof() {
+	let mut env = TestEnvironment::new(None);
+
+	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
+}
 
 #[test]
 fn finalization_prunes_epoch_changes_tree() {}
 
 #[test]
 fn allows_to_skip_epochs() {
-	let mut env = TestEnvironment::new(None);
-
-	let epoch_changes = env.link.epoch_changes.clone();
-
 	// Test scenario.
 	// Epoch lenght: 6 slots
 	//
@@ -365,6 +365,7 @@ fn allows_to_skip_epochs() {
 	//
 	// As a recovery strategy, a fallback epoch 3 is created by reusing part of the
 	// configuration created for epoch 2.
+	let mut env = TestEnvironment::new(None);
 
 	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
 
@@ -372,7 +373,7 @@ fn allows_to_skip_epochs() {
 	let block =
 		env.propose_and_import_block(BlockId::Hash(*blocks.last().unwrap()), Some(19.into()));
 
-	let epoch_changes = epoch_changes.shared_data();
+	let epoch_changes = env.link.epoch_changes.shared_data();
 	let epochs: Vec<_> = epoch_changes.tree().iter().collect();
 	assert_eq!(epochs.len(), 3);
 	assert_eq!(*epochs[0].0, blocks[0]);
@@ -603,13 +604,12 @@ impl TestNetFactory for SassafrasTestNet {
 #[test]
 fn sassafras_network_progress() {
 	let net = SassafrasTestNet::new(3);
+	let net = Arc::new(Mutex::new(net));
 
 	let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
 
-	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
-	let mut sassafras_futures = Vec::new();
-	let mut keystore_paths = Vec::new();
+	let mut sassafras_workers = Vec::new();
 
 	for (peer_id, seed) in peers {
 		let mut net = net.lock();
@@ -618,12 +618,9 @@ fn sassafras_network_progress() {
 		let backend = peer.client().as_backend();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
-		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStorePtr =
-			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+		let keystore = Arc::new(TestKeyStore::new());
 		SyncCryptoStore::sr25519_generate_new(&*keystore, SASSAFRAS, Some(seed))
 			.expect("Generates authority key");
-		keystore_paths.push(keystore_path);
 
 		let data = peer.data.as_ref().expect("sassafras link set up during initialization");
 
@@ -677,7 +674,7 @@ fn sassafras_network_progress() {
 			create_inherent_data_providers,
 		};
 		let sassafras_worker = start_sassafras(sassafras_params).unwrap();
-		sassafras_futures.push(sassafras_worker);
+		sassafras_workers.push(sassafras_worker);
 	}
 
 	block_on(future::select(
@@ -691,6 +688,6 @@ fn sassafras_network_progress() {
 			});
 			Poll::<()>::Pending
 		}),
-		future::select(future::join_all(import_notifications), future::join_all(sassafras_futures)),
+		future::select(future::join_all(import_notifications), future::join_all(sassafras_workers)),
 	));
 }
