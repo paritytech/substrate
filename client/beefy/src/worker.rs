@@ -518,7 +518,7 @@ where
 						.expect("forwards closure result; the closure always returns Ok; qed.");
 				},
 				Err(err) => {
-					error!(target: "beefy", "🥩 Error {:?} hash not know for given block_num: {:?}", err, finality_proof);
+					error!(target: "beefy", "🥩 Error {:?} hash not known for given proof: {:?}", err, finality_proof);
 				},
 			};
 
