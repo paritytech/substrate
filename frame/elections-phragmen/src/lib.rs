@@ -102,7 +102,7 @@ use core::marker::PhantomData;
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, ElectionProviderBase, NposSolver,
+	ElectionDataProvider, ElectionProvider,
 };
 use frame_support::{
 	traits::{
@@ -908,11 +908,11 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(_remainder.is_zero());
 	}
 
-	/// Run the phragmen election with all required side processes and state updates, if election
+	/// Run the election with all required side processes and state updates, if election
 	/// succeeds. Else, it will emit an `ElectionError` event.
 	///
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
-	fn do_phragmen() -> Weight {
+	fn do_election() -> Weight {
 		let desired_seats = T::DesiredMembers::get() as usize;
 		let desired_runners_up = T::DesiredRunnersUp::get() as usize;
 		let num_to_elect = desired_runners_up + desired_seats;
@@ -1127,24 +1127,6 @@ impl<T: Config> Pallet<T> {
 
 		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
 	}
-
-	/// Run the election with all required side processes and state updates, if election succeeds.
-	/// Else, it will emit an `ElectionError` event.
-	///
-	/// Calls the appropriate [`ChangeMembers`] function variant internally.
-	fn do_election() -> Weight {
-		T::ElectionProvider::elect().map_err(|e| {
-			log::error!(
-				target: "runtime::elections-generic",
-				"Failed to run election [{:?}].",
-				e,
-			);
-			Self::deposit_event(Event::ElectionError);
-		});
-
-		// TODO(gpestana): return correct election weight
-		Weight::zero()
-	}
 }
 
 impl<T: Config> Contains<T::AccountId> for Pallet<T> {
@@ -1254,7 +1236,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 mod tests {
 	use super::*;
 	use crate::{self as elections_phragmen, election::DataProvider};
-	use frame_election_provider_support::{SequentialPhragmen, onchain};
+	use frame_election_provider_support::{SequentialPhragmen, onchain, ElectionProviderBase};
 	use frame_support::{
 		assert_noop, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
@@ -1416,7 +1398,6 @@ use sp_core::H256;
 
 	impl<T: Config> ElectionProvider for ElectionProviderMock<T> {
 		fn elect() -> Result<frame_election_provider_support::Supports<Self::AccountId>, Self::Error> {
-			Elections::do_election();
 			Ok(vec![])
 		}
 	}
