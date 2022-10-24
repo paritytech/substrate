@@ -401,12 +401,15 @@ async fn start_tickets_worker<B, C, SC>(
 		};
 		let epoch_identifier = EpochIdentifier { position, hash: notification.hash, number };
 
-		let tickets = epoch_changes
-			.shared_data()
-			.epoch_mut(&epoch_identifier)
-			.map(|epoch| generate_epoch_tickets(epoch, &keystore))
-			.unwrap_or_default();
+		let mut epoch = match epoch_changes.shared_data().epoch(&epoch_identifier).cloned() {
+			Some(epoch) => epoch,
+			None => {
+				warn!(target: "🌳 sassafras", "Unexpected missing epoch data for {:?}",	epoch_identifier);
+				continue
+			},
+		};
 
+		let tickets = generate_epoch_tickets(&mut epoch, &keystore);
 		if tickets.is_empty() {
 			continue
 		}
@@ -425,13 +428,20 @@ async fn start_tickets_worker<B, C, SC>(
 			Ok(false) => Some("Unknown reason".to_string()),
 			_ => None,
 		};
-		if let Some(err) = err {
-			error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err);
-			// Remove tickets from epoch tree node.
-			epoch_changes
-				.shared_data()
-				.epoch_mut(&epoch_identifier)
-				.map(|epoch| epoch.tickets_aux.clear());
+
+		match err {
+			None => {
+				// Cache tickets in the epoch changes tree
+				epoch_changes
+					.shared_data()
+					.epoch_mut(&epoch_identifier)
+					.map(|target_epoch| target_epoch.tickets_aux = epoch.tickets_aux);
+				// TODO-SASS-P4: currently we don't persist the tickets proofs
+				// Thus on reboot/crash we are loosing them.
+			},
+			Some(err) => {
+				error!(target: "sassafras", "🌳 Unable to submit tickets: {}", err);
+			},
 		}
 	}
 }
