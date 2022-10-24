@@ -2,7 +2,7 @@
 name = "pallet-erc20"
 version = "2.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-edition = "2018"
+edition = "2021"
 license = "Unlicense"
 homepage = "https://substrate.dev"
 repository = "https://github.com/paritytech/substrate/"
