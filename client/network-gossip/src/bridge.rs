@@ -317,7 +317,7 @@ mod tests {
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network_common::{
 		config::MultiaddrWithPeerId,
-		protocol::event::ObservedRole,
+		protocol::role::ObservedRole,
 		service::{
 			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 			NotificationSender, NotificationSenderError,

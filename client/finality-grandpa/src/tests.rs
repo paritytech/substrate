@@ -1457,7 +1457,12 @@ fn grandpa_environment_respects_voting_rules() {
 	);
 
 	// we finalize block 19 with block 21 being the best block
-	peer.client().finalize_block(BlockId::Number(19), None, false).unwrap();
+	let hashof19 = peer
+		.client()
+		.as_client()
+		.expect_block_hash_from_id(&BlockId::Number(19))
+		.unwrap();
+	peer.client().finalize_block(&hashof19, None, false).unwrap();
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
@@ -1479,7 +1484,12 @@ fn grandpa_environment_respects_voting_rules() {
 	);
 
 	// we finalize block 21 with block 21 being the best block
-	peer.client().finalize_block(BlockId::Number(21), None, false).unwrap();
+	let hashof21 = peer
+		.client()
+		.as_client()
+		.expect_block_hash_from_id(&BlockId::Number(21))
+		.unwrap();
+	peer.client().finalize_block(&hashof21, None, false).unwrap();
 
 	// even though the default environment will always try to not vote on the
 	// best block, there's a hard rule that we can't cast any votes lower than

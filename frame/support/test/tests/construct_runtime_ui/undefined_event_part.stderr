@@ -13,7 +13,7 @@ error: `Pallet` does not have #[pallet::event] defined, perhaps you should remov
 58 | | }
    | |_- in this macro invocation
    |
-   = note: this error originates in the macro `pallet::__substrate_event_check::is_event_part_defined` (in Nightly builds, run with -Z macro-backtrace for more info)
+   = note: this error originates in the macro `pallet::__substrate_event_check::is_event_part_defined` which comes from the expansion of the macro `construct_runtime` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0412]: cannot find type `Event` in module `pallet`
   --> tests/construct_runtime_ui/undefined_event_part.rs:49:1
