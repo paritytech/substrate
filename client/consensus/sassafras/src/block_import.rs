@@ -180,7 +180,7 @@ where
 					let epoch_data = viable_epoch.as_mut();
 					let skipped_epochs =
 						(*slot - *epoch_data.start_slot) / epoch_data.config.epoch_duration;
-					let original_epoch_idx = epoch_data.epoch_index;
+					let original_epoch_idx = epoch_data.epoch_idx;
 
 					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
 					// makes it so that when we insert the next epoch into `EpochChanges` below
@@ -191,14 +191,14 @@ where
 					// which epoch to use for a given slot, we will search in-depth with the
 					// predicate `epoch.start_slot <= slot` which will still match correctly without
 					// requiring to update `start_slot` to the correct value.
-					epoch_data.epoch_index += skipped_epochs;
+					epoch_data.epoch_idx += skipped_epochs;
 					epoch_data.start_slot = Slot::from(
 						*epoch_data.start_slot + skipped_epochs * epoch_data.config.epoch_duration,
 					);
 					log::warn!(
 						target: "sassafras",
 						"🌳 Epoch(s) skipped from {} to {}",
-						 original_epoch_idx, epoch_data.epoch_index
+						 original_epoch_idx, epoch_data.epoch_idx
 					);
 				}
 
@@ -211,7 +211,7 @@ where
 				log!(target: "sassafras",
 					 log_level,
 					 "🌳 🍁 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					 viable_epoch.as_ref().epoch_index,
+					 viable_epoch.as_ref().epoch_idx,
 					 hash,
 					 slot,
 					 viable_epoch.as_ref().start_slot,

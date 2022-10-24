@@ -190,7 +190,7 @@ fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
 #[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
 	/// The epoch index.
-	pub epoch_index: u64,
+	pub epoch_idx: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
 	/// Epoch configuration
@@ -212,7 +212,7 @@ impl EpochT for Epoch {
 			threshold_params: descriptor.config.unwrap_or(self.config.threshold_params.clone()),
 		};
 		Epoch {
-			epoch_index: self.epoch_index + 1,
+			epoch_idx: self.epoch_idx + 1,
 			start_slot: self.start_slot + config.epoch_duration,
 			config,
 			tickets_aux: BTreeMap::new(),
@@ -233,7 +233,7 @@ impl Epoch {
 	/// the first block, so that has to be provided.
 	pub fn genesis(config: &SassafrasConfiguration, slot: Slot) -> Epoch {
 		Epoch {
-			epoch_index: 0,
+			epoch_idx: 0,
 			start_slot: slot,
 			config: config.clone(),
 			tickets_aux: BTreeMap::new(),

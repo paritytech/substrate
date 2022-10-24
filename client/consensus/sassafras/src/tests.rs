@@ -305,10 +305,87 @@ impl Environment<TestBlock> for TestEnvironment {
 }
 
 fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeystore::new());
+	let keystore = Arc::new(TestKeyStore::new());
 	SyncCryptoStore::sr25519_generate_new(&*keystore, SASSAFRAS, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore
+}
+
+#[test]
+fn genesis_configuration_sanity_check() {
+	let env = TestEnvironment::new(None);
+	let config = env.link.genesis_config;
+
+	// Check that genesis configuration read from test runtime has the expected values
+	assert_eq!(
+		config.authorities,
+		vec![
+			(Sr25519Keyring::Alice.public().into(), 1),
+			(Sr25519Keyring::Bob.public().into(), 1),
+			(Sr25519Keyring::Charlie.public().into(), 1),
+		]
+	);
+	assert_eq!(config.randomness, [0; 32]);
+}
+
+#[test]
+fn claim_secondary_slots_works() {
+	let env = TestEnvironment::new(None);
+	let mut config = env.link.genesis_config.clone();
+	config.randomness = [2; 32];
+
+	let authorities = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
+
+	let epoch = Epoch {
+		epoch_idx: 1,
+		start_slot: 6.into(),
+		config: config.clone(),
+		tickets_aux: Default::default(),
+	};
+
+	let mut assignments = vec![usize::MAX; config.epoch_duration as usize];
+
+	for (auth_idx, auth_id) in authorities.iter().enumerate() {
+		let keystore = create_keystore(*auth_id);
+
+		for slot in 0..config.epoch_duration {
+			if let Some((claim, auth_id2)) =
+				crate::authorship::claim_slot(slot.into(), &epoch, None, &keystore)
+			{
+				assert_eq!(claim.authority_idx as usize, auth_idx);
+				assert_eq!(claim.slot, Slot::from(slot));
+				assert_eq!(claim.ticket_aux, None);
+				assert_eq!(auth_id.public(), auth_id2.into());
+
+				// Check that this slot has not been assigned before
+				assert_eq!(assignments[slot as usize], usize::MAX);
+				assignments[slot as usize] = auth_idx;
+			}
+		}
+	}
+	// Check that every slot has been assigned
+	assert!(assignments.iter().all(|v| *v != usize::MAX));
+	println!("secondary slots assignments: {:?}", assignments);
+}
+
+#[test]
+fn claim_primary_slots_works() {
+	let env = TestEnvironment::new(None);
+	let mut config = env.link.genesis_config.clone();
+	config.randomness = [2; 32];
+
+	let authorities = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
+
+	let epoch = Epoch {
+		epoch_idx: 1,
+		start_slot: 6.into(),
+		config: config.clone(),
+		tickets_aux: Default::default(),
+	};
+
+	let mut assignments = vec![usize::MAX; config.epoch_duration as usize];
+
+	// TODO-SASS-P2
 }
 
 #[test]
@@ -350,15 +427,14 @@ fn importing_block_one_sets_genesis_epoch() {
 }
 
 // TODO-SASS-P2: test import blocks with tickets aux data
-// TODO-SASS-P2: test finalization prunes tree
-
 #[test]
 fn import_block_with_ticket_proof() {
-	let mut env = TestEnvironment::new(None);
+	//let mut env = TestEnvironment::new(None);
 
-	let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
+	//let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
 }
 
+// TODO-SASS-P2: test finalization prunes tree
 #[test]
 fn finalization_prunes_epoch_changes_tree() {}
 
@@ -399,7 +475,7 @@ fn allows_to_skip_epochs() {
 			number: 1,
 		})
 		.unwrap();
-	assert_eq!(data.epoch_index, 0);
+	assert_eq!(data.epoch_idx, 0);
 	assert_eq!(data.start_slot, Slot::from(1));
 
 	// First block in E0 (B1) also announces E1
@@ -410,7 +486,7 @@ fn allows_to_skip_epochs() {
 			number: 1,
 		})
 		.unwrap();
-	assert_eq!(data.epoch_index, 1);
+	assert_eq!(data.epoch_idx, 1);
 	assert_eq!(data.start_slot, Slot::from(7));
 
 	// First block in E1 (B7) announces E2
@@ -424,7 +500,7 @@ fn allows_to_skip_epochs() {
 			number: 7,
 		})
 		.unwrap();
-	assert_eq!(data.epoch_index, 2);
+	assert_eq!(data.epoch_idx, 2);
 	assert_eq!(data.start_slot, Slot::from(13));
 
 	// First block in E3 (B8) announced E4.
@@ -435,7 +511,7 @@ fn allows_to_skip_epochs() {
 			number: 8,
 		})
 		.unwrap();
-	assert_eq!(data.epoch_index, 4);
+	assert_eq!(data.epoch_idx, 4);
 	assert_eq!(data.start_slot, Slot::from(25));
 }
 
@@ -614,20 +690,19 @@ fn sassafras_network_progress() {
 	let net = SassafrasTestNet::new(3);
 	let net = Arc::new(Mutex::new(net));
 
-	let peers =
-		&[(0, Sr25519Keyring2::Alice), (1, Sr25519Keyring::Bob), (2, Sr25519Keyring::Charlie)];
+	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
 
 	let mut import_notifications = Vec::new();
 	let mut sassafras_workers = Vec::new();
 
-	for (peer_id, auth_id) in peers {
+	for (peer_id, auth_id) in peers.iter().enumerate() {
 		let mut net = net.lock();
-		let peer = net.peer(*peer_id);
+		let peer = net.peer(peer_id);
 		let client = peer.client().as_client();
 		let backend = peer.client().as_backend();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
-		let keystore = create_keystore(auth_id);
+		let keystore = create_keystore(*auth_id);
 
 		let data = peer.data.as_ref().expect("sassafras link set up during initialization");
 

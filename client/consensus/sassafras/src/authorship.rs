@@ -40,17 +40,18 @@ pub(crate) fn secondary_authority_index(
 
 /// Try to claim an epoch slot.
 /// If ticket is `None`, then the slot should be claimed using the fallback mechanism.
-fn claim_slot(
+pub(crate) fn claim_slot(
 	slot: Slot,
 	epoch: &Epoch,
 	ticket: Option<Ticket>,
 	keystore: &SyncCryptoStorePtr,
 ) -> Option<(PreDigest, AuthorityId)> {
 	let config = &epoch.config;
-	// TODO-SASS-P2
-	// if epoch.config.authorities.is_empty() {
-	//     return None
-	// }
+
+	if config.authorities.is_empty() {
+		return None
+	}
+
 	let (authority_idx, ticket_aux) = match ticket {
 		Some(ticket) => {
 			log::debug!(target: "sassafras", "🌳 [TRY PRIMARY]");
@@ -67,7 +68,7 @@ fn claim_slot(
 
 	let authority_id = config.authorities.get(authority_idx as usize).map(|auth| &auth.0)?;
 
-	let transcript_data = make_slot_transcript_data(&config.randomness, slot, epoch.epoch_index);
+	let transcript_data = make_slot_transcript_data(&config.randomness, slot, epoch.epoch_idx);
 	let signature = SyncCryptoStore::sr25519_vrf_sign(
 		&**keystore,
 		AuthorityId::ID,
@@ -115,7 +116,7 @@ fn generate_epoch_tickets(epoch: &mut Epoch, keystore: &SyncCryptoStorePtr) -> V
 
 		let make_ticket = |attempt| {
 			let transcript_data =
-				make_ticket_transcript_data(&config.randomness, attempt, epoch.epoch_index);
+				make_ticket_transcript_data(&config.randomness, attempt, epoch.epoch_idx);
 
 			// TODO-SASS-P4: can be a good idea to replace `vrf_sign` with `vrf_sign_after_check`,
 			// But we need to modify the CryptoStore interface first.

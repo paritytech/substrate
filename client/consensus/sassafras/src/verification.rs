@@ -90,7 +90,7 @@ pub fn check_header<B: BlockT + Sized>(
 		(Some(ticket), Some(ticket_aux)) => {
 			log::debug!(target: "sassafras", "🌳 checking primary");
 			let transcript =
-				make_ticket_transcript(&config.randomness, ticket_aux.attempt, epoch.epoch_index);
+				make_ticket_transcript(&config.randomness, ticket_aux.attempt, epoch.epoch_idx);
 			schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
 				.and_then(|p| p.vrf_verify(transcript, &ticket, &ticket_aux.proof))
 				.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
@@ -115,7 +115,7 @@ pub fn check_header<B: BlockT + Sized>(
 
 	// Check slot-vrf proof
 
-	let transcript = make_slot_transcript(&config.randomness, pre_digest.slot, epoch.epoch_index);
+	let transcript = make_slot_transcript(&config.randomness, pre_digest.slot, epoch.epoch_idx);
 	schnorrkel::PublicKey::from_bytes(authority_id.as_slice())
 		.and_then(|p| p.vrf_verify(transcript, &pre_digest.vrf_output, &pre_digest.vrf_proof))
 		.map_err(|s| sassafras_err(Error::VRFVerificationFailed(s)))?;
