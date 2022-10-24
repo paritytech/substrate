@@ -29,12 +29,12 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_keystore::LocalKeystore;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
+use sp_keystore::testing::KeyStore as TestKeystore;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
@@ -333,7 +333,7 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(LocalKeystore::in_memory());
+	let keystore = Arc::new(TestKeystore::new());
 	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore
