@@ -61,17 +61,25 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	executor: SubscriptionTaskExecutor,
 	/// Keep track of the pinned blocks for each subscription.
 	subscriptions: Arc<SubscriptionManagement<Block>>,
+	/// The hexadecimal encoded hash of the genesis block.
+	genesis_hash: String,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<(Block, BE)>,
 }
-
 impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Create a new [`ChainHead`].
-	pub fn new(client: Arc<Client>, executor: SubscriptionTaskExecutor) -> Self {
+	pub fn new(
+		client: Arc<Client>,
+		executor: SubscriptionTaskExecutor,
+		genesis_hash: String,
+	) -> Self {
+		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
+
 		Self {
 			client,
 			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new()),
+			genesis_hash,
 			_phantom: PhantomData,
 		}
 	}
@@ -321,6 +329,10 @@ where
 			.map(|opt_header| opt_header.map(|h| format!("0x{}", HexDisplay::from(&h.encode()))))
 			.map_err(ChainHeadRpcError::FetchBlockHeader)
 			.map_err(Into::into)
+	}
+
+	fn chain_head_unstable_genesis_hash(&self) -> RpcResult<String> {
+		Ok(self.genesis_hash.clone())
 	}
 
 	fn chain_head_unstable_storage(
