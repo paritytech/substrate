@@ -660,7 +660,7 @@ fn sassafras_network_progress() {
 			);
 			Ok((slot,))
 		});
-		let sassafras_params = SassafrasParams {
+		let sassafras_params = SassafrasWorkerParams {
 			client: client.clone(),
 			keystore,
 			select_chain,

@@ -95,7 +95,7 @@ mod tests;
 mod verification;
 
 // Export core components.
-pub use authorship::{authoring_worker, SassafrasParams, SassafrasWorker};
+pub use authorship::{start_sassafras, SassafrasWorker, SassafrasWorkerParams};
 pub use aux_schema::revert;
 pub use block_import::{block_import, SassafrasBlockImport};
 pub use verification::SassafrasVerifier;

@@ -86,7 +86,7 @@ pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, Authori
 pub struct SassafrasConfiguration {
 	/// The slot duration in milliseconds.
 	pub slot_duration: u64,
-	/// The duration of epochs in slots.
+	/// The duration of epoch in slots.
 	pub epoch_duration: u64,
 	/// The authorities for the epoch.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,

@@ -173,11 +173,21 @@ where
 					})?;
 
 				if viable_epoch.as_ref().end_slot() <= slot {
-					// Some epochs were skipped, reuse part of the configuration from the first
-					// skipped epoch.
+					// Some epochs must have been skipped as our current slot fits outside the
+					// current epoch. We will figure out which is the first skipped epoch and we
+					// will partially re-use its data for this "recovery" epoch.
 					let epoch_data = viable_epoch.as_mut();
 					let slot_idx = u64::from(slot) - u64::from(epoch_data.start_slot);
 					let skipped_epochs = slot_idx / self.genesis_config.epoch_duration;
+					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
+					// makes it so that when we insert the next epoch into `EpochChanges` below
+					// (after incrementing it), it will use the correct epoch index and start slot.
+					// We do not update the original epoch that may be reused because there may be
+					// some other forks where the epoch isn't skipped.
+					// Not updating the original epoch works because when we search the tree for
+					// which epoch to use for a given slot, we will search in-depth with the
+					// predicate `epoch.start_slot <= slot` which will still match correctly without
+					// requiring to update `start_slot` to the correct value.
 					epoch_data.epoch_index += skipped_epochs;
 					epoch_data.start_slot = Slot::from(
 						u64::from(epoch_data.start_slot) +
