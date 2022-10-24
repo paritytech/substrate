@@ -33,6 +33,9 @@ pub enum Error {
 	/// Fetch block header error.
 	#[error("Could not fetch block header {0}")]
 	FetchBlockHeader(BlockchainError),
+	/// Invalid parameter provided to the RPC method.
+	#[error("Invalid parameter {0}")]
+	InvalidParam(String),
 }
 
 // Base code for all `chainHead` errors.
@@ -41,6 +44,8 @@ const BASE_ERROR: i32 = 2000;
 const INVALID_BLOCK_ERROR: i32 = BASE_ERROR + 1;
 /// Fetch block header error.
 const FETCH_BLOCK_HEADER_ERROR: i32 = BASE_ERROR + 2;
+/// Invalid parameter error.
+const INVALID_PARAM_ERROR: i32 = BASE_ERROR + 3;
 
 impl From<Error> for ErrorObject<'static> {
 	fn from(e: Error) -> Self {
@@ -50,6 +55,7 @@ impl From<Error> for ErrorObject<'static> {
 			Error::InvalidBlock => ErrorObject::owned(INVALID_BLOCK_ERROR, msg, None::<()>),
 			Error::FetchBlockHeader(_) =>
 				ErrorObject::owned(FETCH_BLOCK_HEADER_ERROR, msg, None::<()>),
+			Error::InvalidParam(_) => ErrorObject::owned(INVALID_PARAM_ERROR, msg, None::<()>),
 		}
 		.into()
 	}

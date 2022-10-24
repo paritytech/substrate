@@ -118,6 +118,19 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	}
 }
 
+fn parse_hex_param(
+	sink: &mut SubscriptionSink,
+	param: String,
+) -> Result<Vec<u8>, SubscriptionEmptyError> {
+	match array_bytes::hex2bytes(&param) {
+		Ok(bytes) => Ok(bytes),
+		Err(_) => {
+			let _ = sink.reject(ChainHeadRpcError::InvalidParam(param));
+			Err(SubscriptionEmptyError)
+		},
+	}
+}
+
 fn generate_runtime_event<Client, Block>(
 	client: &Arc<Client>,
 	runtime_updates: bool,
@@ -340,10 +353,12 @@ where
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		key: StorageKey,
-		_child_key: Option<StorageKey>,
+		key: String,
+		_child_key: Option<String>,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
+		let key = StorageKey(parse_hex_param(&mut sink, key)?);
+
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 
@@ -378,9 +393,11 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 		function: String,
-		call_parameters: Bytes,
+		call_parameters: String,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
+		let call_parameters = Bytes::from(parse_hex_param(&mut sink, call_parameters)?);
+
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 

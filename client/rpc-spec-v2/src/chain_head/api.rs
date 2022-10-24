@@ -19,8 +19,6 @@
 //! API trait of the chain head.
 use crate::chain_head::event::{ChainHeadEvent, FollowEvent};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sc_client_api::StorageKey;
-use sp_core::Bytes;
 
 #[rpc(client, server)]
 pub trait ChainHeadApi<Hash> {
@@ -100,8 +98,8 @@ pub trait ChainHeadApi<Hash> {
 		&self,
 		follow_subscription: String,
 		hash: Hash,
-		key: StorageKey,
-		child_key: Option<StorageKey>,
+		key: String,
+		child_key: Option<String>,
 		network_config: Option<()>,
 	);
 
@@ -120,7 +118,7 @@ pub trait ChainHeadApi<Hash> {
 		follow_subscription: String,
 		hash: Hash,
 		function: String,
-		call_parameters: Bytes,
+		call_parameters: String,
 		network_config: Option<()>,
 	);
 
