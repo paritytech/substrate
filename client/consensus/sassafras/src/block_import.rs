@@ -165,20 +165,23 @@ where
 				old_epoch_changes = Some((*epoch_changes).clone());
 
 				let mut viable_epoch = epoch_changes
-					.viable_epoch_mut(&epoch_descriptor, |slot| {
+					.viable_epoch(&epoch_descriptor, |slot| {
 						Epoch::genesis(&self.genesis_config, slot)
 					})
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
-					})?;
+					})?
+					.into_cloned();
 
 				if viable_epoch.as_ref().end_slot() <= slot {
 					// Some epochs must have been skipped as our current slot fits outside the
 					// current epoch. We will figure out which is the first skipped epoch and we
 					// will partially re-use its data for this "recovery" epoch.
 					let epoch_data = viable_epoch.as_mut();
-					let slot_idx = u64::from(slot) - u64::from(epoch_data.start_slot);
-					let skipped_epochs = slot_idx / self.genesis_config.epoch_duration;
+					let skipped_epochs =
+						(*slot - *epoch_data.start_slot) / epoch_data.config.epoch_duration;
+					let original_epoch_idx = epoch_data.epoch_index;
+
 					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
 					// makes it so that when we insert the next epoch into `EpochChanges` below
 					// (after incrementing it), it will use the correct epoch index and start slot.
@@ -190,13 +193,12 @@ where
 					// requiring to update `start_slot` to the correct value.
 					epoch_data.epoch_index += skipped_epochs;
 					epoch_data.start_slot = Slot::from(
-						u64::from(epoch_data.start_slot) +
-							skipped_epochs * self.genesis_config.epoch_duration,
+						*epoch_data.start_slot + skipped_epochs * epoch_data.config.epoch_duration,
 					);
 					log::warn!(
 						target: "sassafras",
-						"🌳 Detected {} skipped epochs, starting recovery epoch {}",
-						skipped_epochs, epoch_data.epoch_index
+						"🌳 Epoch(s) skipped from {} to {}",
+						 original_epoch_idx, epoch_data.epoch_index
 					);
 				}
 

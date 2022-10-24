@@ -396,7 +396,10 @@ fn allows_to_skip_epochs() {
 	assert_eq!(data.epoch_index, 1);
 	assert_eq!(data.start_slot, Slot::from(7));
 
-	// First block in E1 (B7) announces E2 (config then stolen by E3)
+	// First block in E1 (B7) announces E2
+	// NOTE: config has been "magically" used by E3 without altering epoch node values.
+	// This will break as soon as our assumptions about how fork-tree works are not met anymore
+	// (and this is a good thing)
 	let data = epoch_changes
 		.epoch(&EpochIdentifier {
 			position: EpochIdentifierPosition::Regular,
@@ -404,8 +407,8 @@ fn allows_to_skip_epochs() {
 			number: 7,
 		})
 		.unwrap();
-	assert_eq!(data.epoch_index, 3);
-	assert_eq!(data.start_slot, Slot::from(19));
+	assert_eq!(data.epoch_index, 2);
+	assert_eq!(data.start_slot, Slot::from(13));
 
 	// First block in E3 (B8) announced E4.
 	let data = epoch_changes
