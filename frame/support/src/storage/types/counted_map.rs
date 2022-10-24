@@ -147,10 +147,7 @@ where
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(
-		key: KeyArg,
-		val: ValArg,
-	) {
+	pub fn insert<KeyArg: EncodeLike<Key>, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
 		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}

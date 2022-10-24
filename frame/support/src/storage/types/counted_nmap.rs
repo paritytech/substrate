@@ -30,7 +30,7 @@ use crate::{
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
 	Never,
 };
-use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen, Ref};
 use sp_runtime::traits::Saturating;
 use sp_std::prelude::*;
 
@@ -209,7 +209,7 @@ where
 		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter + Clone,
 		VArg: EncodeLike<Value>,
 	{
-		if !<Self as MapWrapper>::Map::contains_key(key.clone()) {
+		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
 		<Self as MapWrapper>::Map::insert(key, val)
@@ -246,7 +246,7 @@ where
 	/// passed once (in the initial call) for any given storage map and `partial_key`. Subsequent
 	/// calls operating on the same map/`partial_key` should always pass `Some`, and this should be
 	/// equal to the previous call result's `maybe_cursor` field.
-	pub fn clear_prefix<KP: Clone>(
+	pub fn clear_prefix<KP>(
 		partial_key: KP,
 		limit: u32,
 		maybe_cursor: Option<&[u8]>,
