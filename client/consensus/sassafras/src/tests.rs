@@ -32,6 +32,7 @@ use sp_application_crypto::key_types::SASSAFRAS;
 use sp_blockchain::Error as TestError;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_sassafras::inherents::InherentDataProvider;
+use sp_keyring::Sr25519Keyring;
 use sp_keystore::testing::KeyStore as TestKeyStore;
 use sp_runtime::{Digest, DigestItem};
 use sp_timestamp::Timestamp;
@@ -301,6 +302,13 @@ impl Environment<TestBlock> for TestEnvironment {
 			parent_slot,
 		}))
 	}
+}
+
+fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
+	let keystore = Arc::new(TestKeystore::new());
+	SyncCryptoStore::sr25519_generate_new(&*keystore, SASSAFRAS, Some(&authority.to_seed()))
+		.expect("Creates authority key");
+	keystore
 }
 
 #[test]
@@ -606,21 +614,20 @@ fn sassafras_network_progress() {
 	let net = SassafrasTestNet::new(3);
 	let net = Arc::new(Mutex::new(net));
 
-	let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
+	let peers =
+		&[(0, Sr25519Keyring2::Alice), (1, Sr25519Keyring::Bob), (2, Sr25519Keyring::Charlie)];
 
 	let mut import_notifications = Vec::new();
 	let mut sassafras_workers = Vec::new();
 
-	for (peer_id, seed) in peers {
+	for (peer_id, auth_id) in peers {
 		let mut net = net.lock();
 		let peer = net.peer(*peer_id);
 		let client = peer.client().as_client();
 		let backend = peer.client().as_backend();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
-		let keystore = Arc::new(TestKeyStore::new());
-		SyncCryptoStore::sr25519_generate_new(&*keystore, SASSAFRAS, Some(seed))
-			.expect("Generates authority key");
+		let keystore = create_keystore(auth_id);
 
 		let data = peer.data.as_ref().expect("sassafras link set up during initialization");
 
