@@ -196,7 +196,7 @@ pub struct InstructionWeights<T: Config> {
 	/// Weight to be used for instructions which don't have benchmarks assigned.
 	///
 	/// This weight is used whenever a code is uploaded with [`Determinism::AllowIndeterminism`]
-	/// and a instruction (usually a float instruction) is encountered. This weight is **not** used
+	/// and an instruction (usually a float instruction) is encountered. This weight is **not** used
 	/// if a contract is uploaded with [`Determinism::Deterministic`]. If this field is set to
 	/// `0` (the default) only deterministic codes are allowed to be uploaded.
 	pub fallback: u32,
