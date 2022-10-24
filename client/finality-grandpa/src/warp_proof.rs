@@ -327,7 +327,7 @@ mod tests {
 	use sp_consensus::BlockOrigin;
 	use sp_finality_grandpa::GRANDPA_ENGINE_ID;
 	use sp_keyring::Ed25519Keyring;
-	use sp_runtime::{generic::BlockId, traits::Header as _};
+	use sp_runtime::traits::Header as _;
 	use std::sync::Arc;
 	use substrate_test_runtime_client::{
 		ClientBlockImportExt, ClientExt, DefaultTestClientBuilderExt, TestClientBuilder,
@@ -412,10 +412,7 @@ mod tests {
 				let justification = GrandpaJustification::from_commit(&client, 42, commit).unwrap();
 
 				client
-					.finalize_block(
-						BlockId::Hash(target_hash),
-						Some((GRANDPA_ENGINE_ID, justification.encode())),
-					)
+					.finalize_block(&target_hash, Some((GRANDPA_ENGINE_ID, justification.encode())))
 					.unwrap();
 
 				authority_set_changes.push((current_set_id, n));

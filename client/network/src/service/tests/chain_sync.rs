@@ -16,177 +16,35 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config, ChainSyncInterface, NetworkWorker};
+use crate::{
+	config,
+	service::tests::{TestNetworkBuilder, BLOCK_ANNOUNCE_PROTO_NAME},
+};
 
 use futures::prelude::*;
 use libp2p::PeerId;
 use sc_block_builder::BlockBuilderProvider;
-use sc_client_api::{BlockBackend, HeaderBackend};
+use sc_client_api::HeaderBackend;
 use sc_consensus::JustificationSyncLink;
 use sc_network_common::{
-	config::{
-		NonDefaultSetConfig, NonReservedPeerMode, NotificationHandshake, ProtocolId, SetConfig,
-		TransportConfig,
-	},
-	protocol::role::Roles,
+	config::{MultiaddrWithPeerId, SetConfig},
+	protocol::event::Event,
 	service::NetworkSyncForkRequest,
-	sync::{message::BlockAnnouncesHandshake, ChainSync as ChainSyncT, SyncState, SyncStatus},
+	sync::{SyncState, SyncStatus},
 };
-use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
-use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, mock::MockChainSync,
-	service::mock::MockChainSyncInterface, state_request_handler::StateRequestHandler,
-};
+use sc_network_sync::{mock::MockChainSync, service::mock::MockChainSyncInterface, ChainSync};
 use sp_core::H256;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as _, Zero},
+	traits::{Block as BlockT, Header as _},
 };
-use std::{iter, sync::Arc, task::Poll};
+use std::{
+	iter,
+	sync::{Arc, RwLock},
+	task::Poll,
+	time::Duration,
+};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
-
-type TestNetworkWorker = NetworkWorker<
-	substrate_test_runtime_client::runtime::Block,
-	substrate_test_runtime_client::runtime::Hash,
-	substrate_test_runtime_client::TestClient,
->;
-
-const BLOCK_ANNOUNCE_PROTO_NAME: &str = "/block-announces";
-const PROTOCOL_NAME: &str = "/foo";
-
-fn make_network(
-	chain_sync: Box<dyn ChainSyncT<substrate_test_runtime_client::runtime::Block>>,
-	chain_sync_service: Box<dyn ChainSyncInterface<substrate_test_runtime_client::runtime::Block>>,
-	client: Arc<substrate_test_runtime_client::TestClient>,
-) -> (TestNetworkWorker, Arc<substrate_test_runtime_client::TestClient>) {
-	let network_config = config::NetworkConfiguration {
-		extra_sets: vec![NonDefaultSetConfig {
-			notifications_protocol: PROTOCOL_NAME.into(),
-			fallback_names: Vec::new(),
-			max_notification_size: 1024 * 1024,
-			handshake: None,
-			set_config: Default::default(),
-		}],
-		listen_addresses: vec![config::build_multiaddr![Memory(rand::random::<u64>())]],
-		transport: TransportConfig::MemoryOnly,
-		..config::NetworkConfiguration::new_local()
-	};
-
-	#[derive(Clone)]
-	struct PassThroughVerifier(bool);
-
-	#[async_trait::async_trait]
-	impl<B: BlockT> sc_consensus::Verifier<B> for PassThroughVerifier {
-		async fn verify(
-			&mut self,
-			mut block: sc_consensus::BlockImportParams<B, ()>,
-		) -> Result<
-			(
-				sc_consensus::BlockImportParams<B, ()>,
-				Option<Vec<(sp_blockchain::well_known_cache_keys::Id, Vec<u8>)>>,
-			),
-			String,
-		> {
-			let maybe_keys = block
-				.header
-				.digest()
-				.log(|l| {
-					l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(b"aura"))
-						.or_else(|| {
-							l.try_as_raw(sp_runtime::generic::OpaqueDigestItemId::Consensus(
-								b"babe",
-							))
-						})
-				})
-				.map(|blob| {
-					vec![(sp_blockchain::well_known_cache_keys::AUTHORITIES, blob.to_vec())]
-				});
-
-			block.finalized = self.0;
-			block.fork_choice = Some(sc_consensus::ForkChoiceStrategy::LongestChain);
-			Ok((block, maybe_keys))
-		}
-	}
-
-	let import_queue = Box::new(sc_consensus::BasicQueue::new(
-		PassThroughVerifier(false),
-		Box::new(client.clone()),
-		None,
-		&sp_core::testing::TaskExecutor::new(),
-		None,
-	));
-
-	let protocol_id = ProtocolId::from("/test-protocol-name");
-
-	let fork_id = Some(String::from("test-fork-id"));
-
-	let block_request_protocol_config = {
-		let (handler, protocol_config) =
-			BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
-		async_std::task::spawn(handler.run().boxed());
-		protocol_config
-	};
-
-	let state_request_protocol_config = {
-		let (handler, protocol_config) =
-			StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
-		async_std::task::spawn(handler.run().boxed());
-		protocol_config
-	};
-
-	let light_client_request_protocol_config = {
-		let (handler, protocol_config) =
-			LightClientRequestHandler::new(&protocol_id, None, client.clone());
-		async_std::task::spawn(handler.run().boxed());
-		protocol_config
-	};
-
-	let block_announce_config = NonDefaultSetConfig {
-		notifications_protocol: BLOCK_ANNOUNCE_PROTO_NAME.into(),
-		fallback_names: vec![],
-		max_notification_size: 1024 * 1024,
-		handshake: Some(NotificationHandshake::new(BlockAnnouncesHandshake::<
-			substrate_test_runtime_client::runtime::Block,
-		>::build(
-			Roles::from(&config::Role::Full),
-			client.info().best_number,
-			client.info().best_hash,
-			client
-				.block_hash(Zero::zero())
-				.ok()
-				.flatten()
-				.expect("Genesis block exists; qed"),
-		))),
-		set_config: SetConfig {
-			in_peers: 0,
-			out_peers: 0,
-			reserved_nodes: Vec::new(),
-			non_reserved_mode: NonReservedPeerMode::Deny,
-		},
-	};
-
-	let worker = NetworkWorker::new(config::Params {
-		block_announce_config,
-		role: config::Role::Full,
-		executor: None,
-		network_config,
-		chain: client.clone(),
-		protocol_id,
-		fork_id,
-		import_queue,
-		chain_sync,
-		chain_sync_service,
-		metrics_registry: None,
-		block_request_protocol_config,
-		state_request_protocol_config,
-		light_client_request_protocol_config,
-		warp_sync_protocol_config: None,
-		request_response_protocol_configs: Vec::new(),
-	})
-	.unwrap();
-
-	(worker, client)
-}
 
 fn set_default_expecations_no_peers(
 	chain_sync: &mut MockChainSync<substrate_test_runtime_client::runtime::Block>,
@@ -208,8 +66,6 @@ fn set_default_expecations_no_peers(
 
 #[async_std::test]
 async fn normal_network_poll_no_peers() {
-	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
-
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
@@ -220,11 +76,13 @@ async fn normal_network_poll_no_peers() {
 	let chain_sync_service =
 		Box::new(MockChainSyncInterface::<substrate_test_runtime_client::runtime::Block>::new());
 
-	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
+	let mut network = TestNetworkBuilder::new()
+		.with_chain_sync((chain_sync, chain_sync_service))
+		.build();
 
 	// poll the network once
 	futures::future::poll_fn(|cx| {
-		let _ = network.poll_unpin(cx);
+		let _ = network.network().poll_unpin(cx);
 		Poll::Ready(())
 	})
 	.await;
@@ -232,8 +90,6 @@ async fn normal_network_poll_no_peers() {
 
 #[async_std::test]
 async fn request_justification() {
-	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
-
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
 	let chain_sync_service =
@@ -253,22 +109,22 @@ async fn request_justification() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
+	let mut network = TestNetworkBuilder::new()
+		.with_chain_sync((chain_sync, chain_sync_service))
+		.build();
 
 	// send "request justifiction" message and poll the network
 	network.service().request_justification(&hash, number);
 
 	futures::future::poll_fn(|cx| {
-		let _ = network.poll_unpin(cx);
+		let _ = network.network().poll_unpin(cx);
 		Poll::Ready(())
 	})
 	.await;
 }
 
 #[async_std::test]
-async fn clear_justification_requests(&mut self) {
-	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
-
+async fn clear_justification_requests() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
 	let chain_sync_service =
@@ -281,13 +137,15 @@ async fn clear_justification_requests(&mut self) {
 	chain_sync.expect_clear_justification_requests().once().returning(|| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
+	let mut network = TestNetworkBuilder::new()
+		.with_chain_sync((chain_sync, chain_sync_service))
+		.build();
 
 	// send "request justifiction" message and poll the network
 	network.service().clear_justification_requests();
 
 	futures::future::poll_fn(|cx| {
-		let _ = network.poll_unpin(cx);
+		let _ = network.network().poll_unpin(cx);
 		Poll::Ready(())
 	})
 	.await;
@@ -295,8 +153,6 @@ async fn clear_justification_requests(&mut self) {
 
 #[async_std::test]
 async fn set_sync_fork_request() {
-	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
-
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
 		Box::new(MockChainSync::<substrate_test_runtime_client::runtime::Block>::new());
@@ -320,13 +176,15 @@ async fn set_sync_fork_request() {
 		.once()
 		.returning(|_, _, _| ());
 
-	let (mut network, _) = make_network(chain_sync, Box::new(chain_sync_service), client);
+	let mut network = TestNetworkBuilder::new()
+		.with_chain_sync((chain_sync, Box::new(chain_sync_service)))
+		.build();
 
 	// send "set sync fork request" message and poll the network
 	network.service().set_sync_fork_request(copy_peers, hash, number);
 
 	futures::future::poll_fn(|cx| {
-		let _ = network.poll_unpin(cx);
+		let _ = network.network().poll_unpin(cx);
 		Poll::Ready(())
 	})
 	.await;
@@ -362,14 +220,183 @@ async fn on_block_finalized() {
 		.returning(|_, _| ());
 
 	set_default_expecations_no_peers(&mut chain_sync);
-	let (mut network, _) = make_network(chain_sync, chain_sync_service, client);
+	let mut network = TestNetworkBuilder::new()
+		.with_client(client)
+		.with_chain_sync((chain_sync, chain_sync_service))
+		.build();
 
 	// send "set sync fork request" message and poll the network
-	network.on_block_finalized(hash, header);
+	network.network().on_block_finalized(hash, header);
 
 	futures::future::poll_fn(|cx| {
-		let _ = network.poll_unpin(cx);
+		let _ = network.network().poll_unpin(cx);
 		Poll::Ready(())
 	})
 	.await;
+}
+
+// report from mock import queue that importing a justification was not successful
+// and verify that connection to the peer is closed
+#[async_std::test]
+async fn invalid_justification_imported() {
+	struct DummyImportQueue(
+		Arc<
+			RwLock<
+				Option<(
+					PeerId,
+					substrate_test_runtime_client::runtime::Hash,
+					sp_runtime::traits::NumberFor<substrate_test_runtime_client::runtime::Block>,
+				)>,
+			>,
+		>,
+	);
+
+	impl sc_consensus::ImportQueue<substrate_test_runtime_client::runtime::Block> for DummyImportQueue {
+		fn import_blocks(
+			&mut self,
+			_origin: sp_consensus::BlockOrigin,
+			_blocks: Vec<
+				sc_consensus::IncomingBlock<substrate_test_runtime_client::runtime::Block>,
+			>,
+		) {
+		}
+
+		fn import_justifications(
+			&mut self,
+			_who: sc_consensus::import_queue::RuntimeOrigin,
+			_hash: substrate_test_runtime_client::runtime::Hash,
+			_number: sp_runtime::traits::NumberFor<substrate_test_runtime_client::runtime::Block>,
+			_justifications: sp_runtime::Justifications,
+		) {
+		}
+
+		fn poll_actions(
+			&mut self,
+			_cx: &mut futures::task::Context,
+			link: &mut dyn sc_consensus::Link<substrate_test_runtime_client::runtime::Block>,
+		) {
+			if let Some((peer, hash, number)) = *self.0.read().unwrap() {
+				link.justification_imported(peer, &hash, number, false);
+			}
+		}
+	}
+
+	let justification_info = Arc::new(RwLock::new(None));
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let (service1, mut event_stream1) = TestNetworkBuilder::new()
+		.with_import_queue(Box::new(DummyImportQueue(justification_info.clone())))
+		.with_listen_addresses(vec![listen_addr.clone()])
+		.build()
+		.start_network();
+
+	let (service2, mut event_stream2) = TestNetworkBuilder::new()
+		.with_set_config(SetConfig {
+			reserved_nodes: vec![MultiaddrWithPeerId {
+				multiaddr: listen_addr,
+				peer_id: service1.local_peer_id,
+			}],
+			..Default::default()
+		})
+		.build()
+		.start_network();
+
+	async fn wait_for_events(stream: &mut (impl Stream<Item = Event> + std::marker::Unpin)) {
+		let mut notif_received = false;
+		let mut sync_received = false;
+		while !notif_received || !sync_received {
+			match stream.next().await.unwrap() {
+				Event::NotificationStreamOpened { .. } => notif_received = true,
+				Event::SyncConnected { .. } => sync_received = true,
+				_ => {},
+			};
+		}
+	}
+
+	wait_for_events(&mut event_stream1).await;
+	wait_for_events(&mut event_stream2).await;
+
+	{
+		let mut info = justification_info.write().unwrap();
+		*info = Some((service2.local_peer_id, H256::random(), 1337u64));
+	}
+
+	let wait_disconnection = async {
+		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
+	};
+
+	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
+		.await
+		.is_err()
+	{
+		panic!("did not receive disconnection event in time");
+	}
+}
+
+#[async_std::test]
+async fn disconnect_peer_using_chain_sync_handle() {
+	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
+	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
+
+	let (chain_sync_network_provider, chain_sync_network_handle) =
+		sc_network_sync::service::network::NetworkServiceProvider::new();
+	let handle_clone = chain_sync_network_handle.clone();
+
+	let (chain_sync, chain_sync_service) = ChainSync::new(
+		sc_network_common::sync::SyncMode::Full,
+		client.clone(),
+		Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
+		1u32,
+		None,
+		chain_sync_network_handle.clone(),
+	)
+	.unwrap();
+
+	let (node1, mut event_stream1) = TestNetworkBuilder::new()
+		.with_listen_addresses(vec![listen_addr.clone()])
+		.with_chain_sync((Box::new(chain_sync), chain_sync_service))
+		.with_chain_sync_network((chain_sync_network_provider, chain_sync_network_handle))
+		.with_client(client.clone())
+		.build()
+		.start_network();
+
+	let (node2, mut event_stream2) = TestNetworkBuilder::new()
+		.with_set_config(SetConfig {
+			reserved_nodes: vec![MultiaddrWithPeerId {
+				multiaddr: listen_addr,
+				peer_id: node1.local_peer_id,
+			}],
+			..Default::default()
+		})
+		.with_client(client.clone())
+		.build()
+		.start_network();
+
+	async fn wait_for_events(stream: &mut (impl Stream<Item = Event> + std::marker::Unpin)) {
+		let mut notif_received = false;
+		let mut sync_received = false;
+		while !notif_received || !sync_received {
+			match stream.next().await.unwrap() {
+				Event::NotificationStreamOpened { .. } => notif_received = true,
+				Event::SyncConnected { .. } => sync_received = true,
+				_ => {},
+			};
+		}
+	}
+
+	wait_for_events(&mut event_stream1).await;
+	wait_for_events(&mut event_stream2).await;
+
+	handle_clone.disconnect_peer(node2.local_peer_id, BLOCK_ANNOUNCE_PROTO_NAME.into());
+
+	let wait_disconnection = async {
+		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
+	};
+
+	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
+		.await
+		.is_err()
+	{
+		panic!("did not receive disconnection event in time");
+	}
 }
