@@ -346,7 +346,7 @@ where
 			.and_then(|block| {
 				self.client
 					.read_proof(&block, &mut keys.iter().map(|key| key.0.as_ref()))
-					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
 			.map_err(client_err)
@@ -498,7 +498,7 @@ where
 						&child_info,
 						&mut keys.iter().map(|key| key.0.as_ref()),
 					)
-					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
 			.map_err(client_err)
