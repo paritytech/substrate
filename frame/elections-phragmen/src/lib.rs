@@ -1320,7 +1320,16 @@ mod tests {
 	parameter_types! {
 		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 		pub const PhragmenMaxVoters: u32 = 1000;
+		#[derive(PartialEq, Debug)]
 		pub const PhragmenMaxCandidates: u32 = 100;
+	}
+
+	impl TypeInfo for PhragmenMaxCandidates {
+		type Identity = Self;
+
+		fn type_info() -> scale_info::Type {
+			u32::type_info()
+		}
 	}
 
 	impl Config for Test {
@@ -1543,10 +1552,10 @@ mod tests {
 		// call was changing. Currently it is a wrapper for the original call and does not do much.
 		// Nonetheless, totally harmless.
 		ensure_signed(origin.clone()).expect("vote origin must be signed");
-		Elections::vote(origin, votes, stake)
+		Elections::vote(origin, votes.try_into().unwrap(), stake)
 	}
 
-	fn votes_of(who: &u64) -> Vec<u64> {
+	fn votes_of(who: &u64) -> BoundedVec<u64, <Test as Config>::MaxCandidates> {
 		Voting::<Test>::get(who).votes
 	}
 
@@ -1589,11 +1598,11 @@ mod tests {
 
 				assert_eq!(
 					Elections::voting(1),
-					Voter { stake: 10u64, votes: vec![1], deposit: 0 }
+					Voter { stake: 10u64, votes: vec![1].try_into().unwrap(), deposit: 0 }
 				);
 				assert_eq!(
 					Elections::voting(2),
-					Voter { stake: 20u64, votes: vec![2], deposit: 0 }
+					Voter { stake: 20u64, votes: vec![2].try_into().unwrap(), deposit: 0 }
 				);
 
 				// they will persist since they have self vote.
@@ -1613,11 +1622,11 @@ mod tests {
 
 				assert_eq!(
 					Elections::voting(1),
-					Voter { stake: 10u64, votes: vec![1], deposit: 0 }
+					Voter { stake: 10u64, votes: vec![1].try_into().unwrap(), deposit: 0 }
 				);
 				assert_eq!(
 					Elections::voting(2),
-					Voter { stake: 20u64, votes: vec![2], deposit: 0 }
+					Voter { stake: 20u64, votes: vec![2].try_into().unwrap(), deposit: 0 }
 				);
 
 				assert_ok!(Elections::remove_voter(RuntimeOrigin::signed(1)));
@@ -1644,11 +1653,11 @@ mod tests {
 
 				assert_eq!(
 					Elections::voting(1),
-					Voter { stake: 10u64, votes: vec![1], deposit: 0 }
+					Voter { stake: 10u64, votes: vec![1].try_into().unwrap(), deposit: 0 }
 				);
 				assert_eq!(
 					Elections::voting(2),
-					Voter { stake: 20u64, votes: vec![2], deposit: 0 }
+					Voter { stake: 20u64, votes: vec![2].try_into().unwrap(), deposit: 0 }
 				);
 
 				// they will persist since they have self vote.
