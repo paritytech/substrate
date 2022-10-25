@@ -49,19 +49,7 @@ pub mod pallet {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
 		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			match ensure_root(origin) {
-				Ok(_) => Ok(().into()),
-				Err(_) => {
-					// roughly same as a 4 byte remark since perbill is u32.
-					Err(DispatchErrorWithPostInfo {
-						post_info: Some(<T as frame_system::Config>::SystemWeightInfo::remark(
-							4u32,
-						))
-						.into(),
-						error: DispatchError::BadOrigin,
-					})
-				},
-			}
+			ensure_root(origin)
 		}
 	}
 }
