@@ -114,7 +114,7 @@ pub mod pallet {
 			+ TryInto<Event<Self>>;
 
 		/// The currency used for deposits.
-		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
+		type Currency: ReservableCurrency<Self::AccountId>;
 
 		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
 		/// the costs of resources on unsuccessful unstake.
@@ -122,18 +122,6 @@ pub mod pallet {
 
 		/// The origin that can control this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
-
-		/// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
-		/// `From<u64>`.
-		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ Default
-			+ From<u64>
-			+ TypeInfo
-			+ MaxEncodedLen;
 
 		/// The access to staking functionality.
 		type Staking: StakingInterface<Balance = BalanceOf<Self>, AccountId = Self::AccountId>;
@@ -234,23 +222,25 @@ pub mod pallet {
 			let ctrl = ensure_signed(origin)?;
 
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
-			let stash = T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
-			ensure!(!Queue::<T>::contains_key(&stash), Error::<T>::AlreadyQueued);
+			let stash_account =
+				T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
+			ensure!(!Queue::<T>::contains_key(&stash_account), Error::<T>::AlreadyQueued);
 			ensure!(
-				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
+				Head::<T>::get()
+					.map_or(true, |UnstakeRequest { stash, .. }| stash_account != stash),
 				Error::<T>::AlreadyHead
 			);
 
-			ensure!(!T::Staking::is_unbonding(&stash)?, Error::<T>::NotFullyBonded);
+			ensure!(!T::Staking::is_unbonding(&stash_account)?, Error::<T>::NotFullyBonded);
 
 			// chill and fully unstake.
-			T::Staking::chill(&stash)?;
-			T::Staking::fully_unbond(&stash)?;
+			T::Staking::chill(&stash_account)?;
+			T::Staking::fully_unbond(&stash_account)?;
 
-			T::Currency::reserve(&stash, T::Deposit::get())?;
+			T::Currency::reserve(&stash_account, T::Deposit::get())?;
 
 			// enqueue them.
-			Queue::<T>::insert(stash, T::Deposit::get());
+			Queue::<T>::insert(stash_account, T::Deposit::get());
 			Ok(())
 		}
 
@@ -267,16 +257,18 @@ pub mod pallet {
 
 			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
 
-			let stash = T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
-			ensure!(Queue::<T>::contains_key(&stash), Error::<T>::NotQueued);
+			let stash_account =
+				T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
+			ensure!(Queue::<T>::contains_key(&stash_account), Error::<T>::NotQueued);
 			ensure!(
-				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
+				Head::<T>::get()
+					.map_or(true, |UnstakeRequest { stash, .. }| stash_account != stash),
 				Error::<T>::AlreadyHead
 			);
-			let deposit = Queue::<T>::take(stash.clone());
+			let deposit = Queue::<T>::take(stash_account.clone());
 
 			if let Some(deposit) = deposit.defensive() {
-				let remaining = T::Currency::unreserve(&stash, deposit);
+				let remaining = T::Currency::unreserve(&stash_account, deposit);
 				if !remaining.is_zero() {
 					frame_support::defensive!("`not enough balance to unreserve`");
 					ErasToCheckPerBlock::<T>::put(0);

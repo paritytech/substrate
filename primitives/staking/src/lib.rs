@@ -114,7 +114,7 @@ pub trait StakingInterface {
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
 
 	fn is_unbonding(who: &Self::AccountId) -> Result<bool, DispatchError> {
-		Self::stake(who).map(|s| stake.active != stake.total)
+		Self::stake(who).map(|s| s.active != s.total)
 	}
 
 	fn fully_unbond(who: &Self::AccountId) -> DispatchResult {

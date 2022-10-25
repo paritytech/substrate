@@ -586,7 +586,6 @@ impl pallet_fast_unstake::Config for Runtime {
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deposit = ConstU128<{ DOLLARS }>;
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
 	type Staking = Staking;
 	type WeightInfo = ();
 }
