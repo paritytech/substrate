@@ -275,7 +275,7 @@ impl ExtBuilder {
 		let _ = crate::GenesisConfig::<Runtime> {
 			min_join_bond: MinJoinBondConfig::get(),
 			min_create_bond: 2,
-			max_pools: Some(3),
+			max_pools: Some(2),
 			max_members_per_pool: self.max_members_per_pool,
 			max_members: self.max_members,
 		}

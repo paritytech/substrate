@@ -4170,20 +4170,8 @@ mod create {
 				},
 			}
 			.put();
-			assert_eq!(MaxPools::<Runtime>::get(), Some(3));
+			assert_eq!(MaxPools::<Runtime>::get(), Some(2));
 			assert_eq!(BondedPools::<Runtime>::count(), 2);
-
-			BondedPool::<Runtime> {
-				id: 3,
-				inner: BondedPoolInner {
-					state: PoolState::Open,
-					points: 10,
-					member_counter: 1,
-					roles: DEFAULT_ROLES,
-				},
-			}
-			.put();
-			assert_eq!(BondedPools::<Runtime>::count(), 3);
 
 			// Then
 			assert_noop!(
@@ -4193,7 +4181,7 @@ mod create {
 
 			// Given
 			assert_eq!(PoolMembers::<Runtime>::count(), 1);
-			MaxPools::<Runtime>::put(4);
+			MaxPools::<Runtime>::put(3);
 			MaxPoolMembers::<Runtime>::put(1);
 			Balances::make_free_balance_be(&11, 5 + 20);
 
@@ -4215,7 +4203,7 @@ mod create {
 	fn create_with_pool_id_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
-
+			
 			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
@@ -4227,6 +4215,8 @@ mod create {
 
 			assert_eq!(Balances::free_balance(&11), 0);
 			// delete the initial pool created, then pool_Id `1` will be free
+
+			
 
 			assert_noop!(
 				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 1),
