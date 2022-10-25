@@ -431,10 +431,11 @@ pub mod pallet {
 			T::Currency::reserve(&who, T::CandidacyBond::get())
 				.map_err(|_| Error::<T>::InsufficientCandidateFunds)?;
 
-			<Candidates<T>>::mutate(|c| {
+			<Candidates<T>>::mutate(|c| -> Result<(), DispatchError> {
 				c.try_insert(index, (who, T::CandidacyBond::get()))
-					.expect("Too many candidates!")
-			});
+					.map_err(|_| Error::<T>::TooManyCandidates)?;
+				Ok(())
+			})?;
 			Ok(())
 		}
 
