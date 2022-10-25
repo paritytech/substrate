@@ -68,10 +68,10 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 }
 impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Create a new [`ChainHead`].
-	pub fn new(
+	pub fn new<GenesisHash: AsRef<[u8]>>(
 		client: Arc<Client>,
 		executor: SubscriptionTaskExecutor,
-		genesis_hash: String,
+		genesis_hash: GenesisHash,
 	) -> Self {
 		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
 
