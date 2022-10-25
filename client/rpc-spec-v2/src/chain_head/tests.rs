@@ -65,3 +65,50 @@ async fn setup_api() -> (
 
 	(client, api, sub, sub_id, block)
 }
+
+#[tokio::test]
+async fn follow_subscription_produces_blocks() {
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let api =
+		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+
+	let finalized_hash = client.info().finalized_hash;
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+
+	// Initialized must always be reported first.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Initialized(Initialized {
+		finalized_block_hash: format!("{:?}", finalized_hash),
+		finalized_block_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let best_hash = block.header.hash();
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", best_hash),
+		parent_block_hash: format!("{:?}", finalized_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", best_hash),
+	});
+	assert_eq!(event, expected);
+
+	client.finalize_block(&best_hash, None).unwrap();
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes: vec![format!("{:?}", best_hash)],
+		pruned_block_hashes: vec![],
+	});
+	assert_eq!(event, expected);
+}
