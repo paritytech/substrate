@@ -5996,7 +5996,6 @@ version = "1.0.0-dev"
 dependencies = [
  "frame-support",
  "frame-system",
- "parity-scale-codec",
  "scale-info",
  "sp-runtime",
 ]

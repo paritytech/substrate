@@ -19,12 +19,12 @@
 //!
 //! Pallet that contains extrinsics that can be usefull in testing.
 //!
-//! NOTE: This pallet should only be used for testing purposes and should not be used in production runtimes!
+//! NOTE: This pallet should only be used for testing purposes and should not be used in production
+//! runtimes!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::dispatch::DispatchErrorWithPostInfo;
-use frame_system::WeightInfo;
+use frame_support::dispatch::DispatchResult;
 use sp_runtime::Perbill;
 
 pub use pallet::*;
@@ -46,8 +46,9 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// A dispatch that will fill the block weight up to the given ratio.
 		#[pallet::weight(*_ratio * T::BlockWeights::get().max_block)]
-		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResultWithPostInfo {
-			ensure_root(origin)
+		pub fn fill_block(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
+			ensure_root(origin)?;
+			Ok(())
 		}
 	}
 }
