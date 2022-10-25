@@ -16,6 +16,7 @@
 // limitations under the License.
 
 pub mod v1 {
+	use sp_std::prelude::*;
 	use crate::{types::BalanceOf, *};
 	use frame_support::{
 		storage::unhashed,
@@ -62,13 +63,15 @@ pub mod v1 {
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 0);
+			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			Ok(())
 		}
 	}
 }
