@@ -124,7 +124,7 @@ parameter_types! {
 }
 impl system::Config for Test {
 	type BaseCallFilter = BaseFilter;
-	type BlockWeights = ();
+	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = RocksDbWeight;
 	type RuntimeOrigin = RuntimeOrigin;
@@ -151,10 +151,6 @@ impl system::Config for Test {
 impl logger::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 }
-parameter_types! {
-	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) * BlockWeights::get().max_block;
-	pub const NoPreimagePostponement: Option<u64> = Some(2);
-}
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
@@ -164,9 +160,52 @@ impl pallet_preimage::Config for Test {
 	type WeightInfo = ();
 	type Currency = ();
 	type ManagerOrigin = EnsureRoot<u64>;
-	type MaxSize = ConstU32<1024>;
 	type BaseDeposit = ();
 	type ByteDeposit = ();
+}
+
+pub struct TestWeightInfo;
+impl WeightInfo for TestWeightInfo {
+	fn service_agendas_base() -> Weight {
+		Weight::from_ref_time(0b0000_0001)
+	}
+	fn service_agenda_base(i: u32) -> Weight {
+		Weight::from_ref_time((i << 8) as u64 + 0b0000_0010)
+	}
+	fn service_task_base() -> Weight {
+		Weight::from_ref_time(0b0000_0100)
+	}
+	fn service_task_periodic() -> Weight {
+		Weight::from_ref_time(0b0000_1100)
+	}
+	fn service_task_named() -> Weight {
+		Weight::from_ref_time(0b0001_0100)
+	}
+	fn service_task_fetched(s: u32) -> Weight {
+		Weight::from_ref_time((s << 8) as u64 + 0b0010_0100)
+	}
+	fn execute_dispatch_signed() -> Weight {
+		Weight::from_ref_time(0b0100_0000)
+	}
+	fn execute_dispatch_unsigned() -> Weight {
+		Weight::from_ref_time(0b1000_0000)
+	}
+	fn schedule(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+	fn cancel(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+	fn schedule_named(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+	fn cancel_named(_s: u32) -> Weight {
+		Weight::from_ref_time(50)
+	}
+}
+parameter_types! {
+	pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
+		BlockWeights::get().max_block;
 }
 
 impl Config for Test {
@@ -177,10 +216,9 @@ impl Config for Test {
 	type MaximumWeight = MaximumSchedulerWeight;
 	type ScheduleOrigin = EitherOfDiverse<EnsureRoot<u64>, EnsureSignedBy<One, u64>>;
 	type MaxScheduledPerBlock = ConstU32<10>;
-	type WeightInfo = ();
+	type WeightInfo = TestWeightInfo;
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = Preimage;
-	type NoPreimagePostponement = NoPreimagePostponement;
+	type Preimages = Preimage;
 }
 
 pub type LoggerCall = logger::Call<Test>;

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use sc_network::PeerId;
 use sc_network_gossip::{MessageIntent, ValidationResult, Validator, ValidatorContext};
@@ -28,12 +28,11 @@ use log::{debug, trace};
 use parking_lot::{Mutex, RwLock};
 use wasm_timer::Instant;
 
+use crate::{communication::peers::KnownPeers, keystore::BeefyKeystore};
 use beefy_primitives::{
 	crypto::{Public, Signature},
 	VoteMessage,
 };
-
-use crate::keystore::BeefyKeystore;
 
 // Timeout for rebroadcasting messages.
 const REBROADCAST_AFTER: Duration = Duration::from_secs(60 * 5);
@@ -103,17 +102,19 @@ where
 	topic: B::Hash,
 	known_votes: RwLock<KnownVotes<B>>,
 	next_rebroadcast: Mutex<Instant>,
+	known_peers: Arc<Mutex<KnownPeers<B>>>,
 }
 
 impl<B> GossipValidator<B>
 where
 	B: Block,
 {
-	pub fn new() -> GossipValidator<B> {
+	pub fn new(known_peers: Arc<Mutex<KnownPeers<B>>>) -> GossipValidator<B> {
 		GossipValidator {
 			topic: topic::<B>(),
 			known_votes: RwLock::new(KnownVotes::new()),
 			next_rebroadcast: Mutex::new(Instant::now() + REBROADCAST_AFTER),
+			known_peers,
 		}
 	}
 
@@ -165,6 +166,7 @@ where
 
 			if BeefyKeystore::verify(&msg.id, &msg.signature, &msg.commitment.encode()) {
 				self.known_votes.write().add_known(&round, msg_hash);
+				self.known_peers.lock().note_vote_for(*sender, round);
 				return ValidationResult::ProcessAndKeep(self.topic)
 			} else {
 				// TODO: report peer
@@ -235,8 +237,7 @@ mod tests {
 
 	use crate::keystore::{tests::Keyring, BeefyKeystore};
 	use beefy_primitives::{
-		crypto::Signature, known_payload_ids, Commitment, MmrRootHash, Payload, VoteMessage,
-		KEY_TYPE,
+		crypto::Signature, known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
 	};
 
 	use super::*;
@@ -271,7 +272,7 @@ mod tests {
 
 	#[test]
 	fn note_and_drop_round_works() {
-		let gv = GossipValidator::<Block>::new();
+		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
 
 		gv.note_round(1u64);
 
@@ -298,7 +299,7 @@ mod tests {
 
 	#[test]
 	fn note_same_round_twice() {
-		let gv = GossipValidator::<Block>::new();
+		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
 
 		gv.note_round(3u64);
 		gv.note_round(7u64);
@@ -346,7 +347,10 @@ mod tests {
 	}
 
 	fn dummy_vote(block_number: u64) -> VoteMessage<u64, Public, Signature> {
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default().encode());
+		let payload = Payload::from_single_entry(
+			known_payloads::MMR_ROOT_ID,
+			MmrRootHash::default().encode(),
+		);
 		let commitment = Commitment { payload, block_number, validator_set_id: 0 };
 		let signature = sign_commitment(&Keyring::Alice, &commitment);
 
@@ -355,7 +359,7 @@ mod tests {
 
 	#[test]
 	fn should_avoid_verifying_signatures_twice() {
-		let gv = GossipValidator::<Block>::new();
+		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
 		let sender = sc_network::PeerId::random();
 		let mut context = TestContext;
 
@@ -391,7 +395,7 @@ mod tests {
 
 	#[test]
 	fn messages_allowed_and_expired() {
-		let gv = GossipValidator::<Block>::new();
+		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
 		let intent = MessageIntent::Broadcast;
@@ -434,7 +438,7 @@ mod tests {
 
 	#[test]
 	fn messages_rebroadcast() {
-		let gv = GossipValidator::<Block>::new();
+		let gv = GossipValidator::<Block>::new(Arc::new(Mutex::new(KnownPeers::new())));
 		let sender = sc_network::PeerId::random();
 		let topic = Default::default();
 

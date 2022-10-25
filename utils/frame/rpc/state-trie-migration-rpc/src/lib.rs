@@ -24,7 +24,7 @@ use jsonrpsee::{
 };
 use sc_rpc_api::DenyUnsafe;
 use serde::{Deserialize, Serialize};
-use sp_runtime::{generic::BlockId, traits::Block as BlockT};
+use sp_runtime::traits::Block as BlockT;
 use std::sync::Arc;
 
 use sp_core::{
@@ -144,8 +144,8 @@ where
 	fn call(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<MigrationStatusResult> {
 		self.deny_unsafe.check_if_safe()?;
 
-		let block_id = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
-		let state = self.backend.state_at(block_id).map_err(error_into_rpc_err)?;
+		let hash = at.unwrap_or_else(|| self.client.info().best_hash);
+		let state = self.backend.state_at(&hash).map_err(error_into_rpc_err)?;
 		let (top, child) = migration_status(&state).map_err(error_into_rpc_err)?;
 
 		Ok(MigrationStatusResult {

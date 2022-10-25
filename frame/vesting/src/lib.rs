@@ -24,7 +24,8 @@
 //!
 //! A simple pallet providing a means of placing a linear curve on an account's locked balance. This
 //! pallet ensures that there is a lock in place preventing the balance to drop below the *unvested*
-//! amount for any reason other than transaction fee payment.
+//! amount for any reason other than the ones specified in `UnvestedFundsAllowedWithdrawReasons`
+//! configuration value.
 //!
 //! As the amount vested increases over time, the amount unvested reduces. However, locks remain in
 //! place and explicit action is needed on behalf of the user to ensure that the amount locked is
@@ -170,6 +171,10 @@ pub mod pallet {
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 
+		/// Reasons that determine under which conditions the balance may drop below
+		/// the unvested amount.
+		type UnvestedFundsAllowedWithdrawReasons: Get<WithdrawReasons>;
+
 		/// Maximum number of vesting schedules an account may have at a given moment.
 		const MAX_VESTING_SCHEDULES: u32;
 	}
@@ -249,7 +254,9 @@ pub mod pallet {
 				Vesting::<T>::try_append(who, vesting_info)
 					.expect("Too many vesting schedules at genesis.");
 
-				let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
+				let reasons =
+					WithdrawReasons::except(T::UnvestedFundsAllowedWithdrawReasons::get());
+
 				T::Currency::set_lock(VESTING_ID, who, locked, reasons);
 			}
 		}
@@ -569,7 +576,7 @@ impl<T: Config> Pallet<T> {
 			T::Currency::remove_lock(VESTING_ID, who);
 			Self::deposit_event(Event::<T>::VestingCompleted { account: who.clone() });
 		} else {
-			let reasons = WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE;
+			let reasons = WithdrawReasons::except(T::UnvestedFundsAllowedWithdrawReasons::get());
 			T::Currency::set_lock(VESTING_ID, who, total_locked_now, reasons);
 			Self::deposit_event(Event::<T>::VestingUpdated {
 				account: who.clone(),
