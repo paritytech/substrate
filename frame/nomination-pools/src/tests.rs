@@ -3097,16 +3097,16 @@ mod pool_withdraw_unbonded {
 			// Given 10 unbond'ed directly against the pool account
 			assert_ok!(StakingMock::unbond(&default_bonded_account(), 5));
 			// and the pool account only has 10 balance
-			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active), Ok(5));
-			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.total), Ok(10));
+			assert_eq!(StakingMock::active_balance(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_balance(&default_bonded_account()), Ok(10));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 
 			// When
 			assert_ok!(Pools::pool_withdraw_unbonded(RuntimeOrigin::signed(10), 1, 0));
 
 			// Then there unbonding balance is no longer locked
-			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active), Ok(5));
-			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.total), Ok(5));
+			assert_eq!(StakingMock::active_balance(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_balance(&default_bonded_account()), Ok(5));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 		});
 	}
@@ -3283,7 +3283,7 @@ mod withdraw_unbonded {
 				// current bond is 600, we slash it all to 300.
 				StakingMock::set_bonded_balance(default_bonded_account(), 300);
 				Balances::make_free_balance_be(&default_bonded_account(), 300);
-				assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.total), Ok(300));
+				assert_eq!(StakingMock::total_balance(&default_bonded_account()), Ok(300));
 
 				assert_ok!(fully_unbond_permissioned(40));
 				assert_ok!(fully_unbond_permissioned(550));
