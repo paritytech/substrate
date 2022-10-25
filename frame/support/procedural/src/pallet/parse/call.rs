@@ -218,7 +218,7 @@ impl CallDef {
 					// inject a default O(1) weight when dev mode is enabled and no weight has
 					// been specified on the call
 					let empty_weight: syn::Expr =
-						syn::parse(quote::quote!(T::WeightInfo::create()).into())
+						syn::parse(quote::quote!(0).into())
 							.expect("we are parsing a quoted string; qed");
 					weight_attrs.push(FunctionAttr::Weight(empty_weight));
 				}
