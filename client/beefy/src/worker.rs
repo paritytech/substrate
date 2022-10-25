@@ -20,7 +20,6 @@ use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
 	fmt::Debug,
 	marker::PhantomData,
-	ops::Deref,
 	sync::Arc,
 };
 
@@ -36,14 +35,14 @@ use sc_network_common::{
 };
 use sc_network_gossip::GossipEngine;
 
-use sp_api::{BlockId, BlockT, HeaderT, ProvideRuntimeApi};
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
+use sp_api::{BlockId, HeaderT, ProvideRuntimeApi};
+use sp_arithmetic::traits::AtLeast32Bit;
 use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor},
+	traits::{Block, NumberFor},
 	BoundedBTreeMap, SaturatedConversion,
 };
 
@@ -52,7 +51,7 @@ use beefy_primitives::{
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
 	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
 };
-use sp_runtime::traits::{CheckedConversion, ConstU32, Get};
+use sp_runtime::traits::{CheckedConversion, ConstU32};
 
 use crate::{
 	communication::{
@@ -68,8 +67,8 @@ use crate::{
 	BeefyVoterLinks, Client, KnownPeers,
 };
 
-const MaxPendingVotes: u32 = 10;
-const MaxJustifications: u32 = 10;
+const MAX_PENDING_VOTES: u32 = 10;
+const MAX_JUSTIFICATIONS: u32 = 10;
 
 enum RoundAction {
 	Drop,
@@ -213,7 +212,6 @@ pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N> {
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
 	pub min_block_delta: u32,
-	pub max_pending_votes: u32,
 }
 
 /// A BEEFY worker plays the BEEFY protocol
@@ -247,11 +245,11 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	pending_votes: BoundedBTreeMap<
 		NumberFor<B>,
 		Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>,
-		ConstU32<MaxPendingVotes>,
+		ConstU32<MAX_PENDING_VOTES>,
 	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications:
-		BoundedBTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>, ConstU32<MaxJustifications>>,
+		BoundedBTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>, ConstU32<MAX_JUSTIFICATIONS>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
 }
@@ -288,7 +286,6 @@ where
 			links,
 			metrics,
 			min_block_delta,
-			max_pending_votes,
 		} = worker_params;
 
 		let last_finalized_header = backend
@@ -424,7 +421,9 @@ where
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
 				let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
 				vec_of_votes.push(vote);
-				self.pending_votes.try_insert(block_num, vec_of_votes);
+				if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+					warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -450,7 +449,9 @@ where
 			},
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer justification for round: {:?}.", block_num);
-				self.pending_justifications.try_insert(block_num, justification);
+				if self.pending_justifications.try_insert(block_num, justification).is_err() {
+					error!(target: "beefy", "🥩 Buffer justification dropped for round: {:?}.", block_num);
+				}
 			},
 			RoundAction::Drop => (),
 		};
@@ -565,7 +566,7 @@ where
 				still_pending.insert(i.into(), pending.remove(&i.into()).expect("Should exist"));
 			}
 
-			let to_handle_range = (start..=end);
+			let to_handle_range = start..=end;
 
 			for i in to_handle_range {
 				to_handle.insert(i.into(), pending.remove(&i.into()).expect("Should exist"));

@@ -30,7 +30,7 @@ use sp_blockchain::HeaderBackend;
 use sp_consensus::{Error as ConsensusError, SyncOracle};
 use sp_keystore::SyncCryptoStorePtr;
 use sp_mmr_primitives::MmrApi;
-use sp_runtime::traits::{Block, Get};
+use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
 mod error;
@@ -63,7 +63,6 @@ use crate::{
 pub use communication::beefy_protocol_name::{
 	gossip_protocol_name, justifications_protocol_name as justifs_protocol_name,
 };
-use sp_arithmetic::traits::AtLeast32Bit;
 
 /// A convenience BEEFY client trait that defines all the type bounds a BEEFY client
 /// has to satisfy. Ideally that should actually be a trait alias. Unfortunately as
@@ -190,8 +189,6 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	pub links: BeefyVoterLinks<B>,
 	/// Handler for incoming BEEFY justifications requests from a remote peer.
 	pub on_demand_justifications_handler: BeefyJustifsRequestHandler<B, C>,
-	/// The Bounded limit for pending votes
-	pub max_pending_votes: u32,
 }
 
 /// Start the BEEFY gadget.
@@ -219,7 +216,6 @@ where
 		prometheus_registry,
 		links,
 		on_demand_justifications_handler,
-		max_pending_votes,
 	} = beefy_params;
 
 	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
@@ -270,7 +266,6 @@ where
 		links,
 		metrics,
 		min_block_delta,
-		max_pending_votes,
 	};
 
 	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
