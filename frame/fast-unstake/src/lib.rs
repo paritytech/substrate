@@ -205,30 +205,6 @@ pub mod pallet {
 				return Weight::from_ref_time(0)
 			}
 
-			// Temporary for migration.
-			if Head::<T>::exists() && Head::<T>::get().is_none() {
-				// Migrate head.
-				let key = Head::<T>::hashed_key();
-				let (stash, deposit) = match frame_support::storage::unhashed::get::<(
-					T::AccountId,
-					Vec<EraIndex>,
-					BalanceOf<T>,
-				)>(&key)
-				.defensive()
-				{
-					Some((stash, _, deposit)) => (stash, deposit),
-					None => {
-						Head::<T>::kill();
-						return T::DbWeight::get().reads_writes(1, 1)
-					},
-				};
-
-				// insert them back into the queue.
-				Queue::<T>::insert(stash, deposit);
-				Head::<T>::kill();
-				return T::DbWeight::get().reads_writes(1, 2)
-			}
-
 			Self::do_on_idle(remaining_weight)
 		}
 	}

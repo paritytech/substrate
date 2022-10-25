@@ -56,7 +56,7 @@ pub mod v1 {
 					T::DbWeight::get().reads(2)
 				}
 			} else {
-				log!(info, "Migration did not executed. This probably should be removed");
+				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
 			}
 		}
