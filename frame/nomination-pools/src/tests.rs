@@ -4203,7 +4203,7 @@ mod create {
 	fn create_with_pool_id_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
-			
+
 			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
@@ -4215,8 +4215,6 @@ mod create {
 
 			assert_eq!(Balances::free_balance(&11), 0);
 			// delete the initial pool created, then pool_Id `1` will be free
-
-			
 
 			assert_noop!(
 				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 1),
