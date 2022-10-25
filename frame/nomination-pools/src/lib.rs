@@ -780,20 +780,26 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Set the pool's commission.
+	///
+	/// update commission accordingly based on `commission` and `payee`. If Commission does not yet
+	/// exist, it is bootstrapped with default() and populated with the supplied `commission` and
+	/// `payee` values. Otherwise, the existing commission is updated.
+	///
+	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
 	fn set_commission_current(mut self, commission: &Perbill, payee: T::AccountId) -> Self {
-		// Force a commission of `None` if a 0% commission is provided.
-		// Note that a 0% commission will replace the whole tuple with None.
-		let commission =
-			if commission > &Perbill::from_percent(0) { Some((*commission, payee)) } else { None };
-
-		// update commission if `Some(commission)` is to be inserted, or `None` otherwise.
-		self.commission = match &self.commission {
-			Some(c) => Some(Commission { current: commission, ..c.clone() }),
-			None => match commission.is_some() {
-				true => Some(Commission { current: commission, ..Commission::default() }),
-				false => None,
-			},
-		};
+		self.commission = self
+			.commission
+			.take()
+			.map_or(Some(Commission::default()), |c| Some(c))
+			.map(|c| Commission {
+				current: if commission > &Perbill::from_percent(0) {
+					Some((*commission, payee))
+				} else {
+					None
+				},
+				..c
+			})
+			.or(None);
 
 		// if throttle is present, record the current block as the previously
 		// updated commission.
