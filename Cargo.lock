@@ -8557,11 +8557,13 @@ name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
+ "assert_matches",
  "futures",
  "hex",
  "jsonrpsee",
  "parity-scale-codec",
  "parking_lot 0.12.1",
+ "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
  "sc-transaction-pool-api",
@@ -8569,6 +8571,7 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-runtime",
  "sp-version",
