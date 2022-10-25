@@ -1,3 +1,4 @@
+#![feature(map_try_insert)]
 // This file is part of Substrate.
 
 // Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
@@ -168,7 +169,7 @@ pub struct BeefyNetworkParams<B: Block, N> {
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B: Block, BE, C, N, P, R,  const U: u32> {
+pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
@@ -196,7 +197,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R,  const U: u32> {
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R, const U: u32>(beefy_params: BeefyParams<B, BE, C, N, P, R, U>)
+pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -204,7 +205,8 @@ where
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static
+	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
+	u32: From<NumberFor<B>>,
 {
 	let BeefyParams {
 		client,
@@ -217,7 +219,7 @@ where
 		prometheus_registry,
 		links,
 		on_demand_justifications_handler,
-		max_pending_votes
+		max_pending_votes,
 	} = beefy_params;
 
 	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
@@ -268,10 +270,10 @@ where
 		links,
 		metrics,
 		min_block_delta,
-		max_pending_votes
+		max_pending_votes,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _, _, U>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
 
 	futures::future::join(worker.run(), on_demand_justifications_handler.run()).await;
 }
