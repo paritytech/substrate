@@ -1779,7 +1779,6 @@ mod benches {
 		[pallet_referenda, Referenda]
 		[pallet_recovery, Recovery]
 		[pallet_remark, Remark]
-		[pallet_root_testing, RootTesting]
 		[pallet_scheduler, Scheduler]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_staking, Staking]
