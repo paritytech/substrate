@@ -44,12 +44,6 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::event]
-	pub enum Event<T: Config> {}
-
-	#[pallet::error]
-	pub enum Error<T> {}
-
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// A dispatch that will fill the block weight up to the given ratio.
