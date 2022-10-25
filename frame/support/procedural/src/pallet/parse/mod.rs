@@ -63,7 +63,7 @@ pub struct Def {
 }
 
 impl Def {
-	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemMod, dev_mode: bool) -> syn::Result<Self> {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
@@ -107,7 +107,7 @@ impl Def {
 					hooks = Some(m);
 				},
 				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item)?),
+					call = Some(call::CallDef::try_from(span, index, item, dev_mode)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
 				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
@@ -174,7 +174,7 @@ impl Def {
 			type_values,
 			frame_system,
 			frame_support,
-			dev_mode: false,
+			dev_mode,
 		};
 
 		def.check_instance_usage()?;
