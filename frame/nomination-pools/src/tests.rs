@@ -2368,7 +2368,7 @@ mod unbond {
 				}
 			);
 
-			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(), 0);
+			assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 0);
 		});
 	}
 
@@ -2415,10 +2415,7 @@ mod unbond {
 					]
 				);
 
-				assert_eq!(
-					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
-					94
-				);
+				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(40).unwrap().unbonding_eras,
 					member_unbonding_eras!(0 + 3 => 6)
@@ -2446,10 +2443,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(
-					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
-					2
-				);
+				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(550).unwrap().unbonding_eras,
 					member_unbonding_eras!(0 + 3 => 92)
@@ -2492,10 +2486,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(
-					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
-					0
-				);
+				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 0);
 
 				assert_eq!(Balances::free_balance(&550), 550 + 550 + 92);
 				assert_eq!(
@@ -2623,10 +2614,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(
-					StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(),
-					10
-				);
+				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 10);
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2736,7 +2724,7 @@ mod unbond {
 					}
 				}
 			);
-			assert_eq!(StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap(), 0);
+			assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 0);
 			assert_eq!(*UnbondingBalanceMap::get().get(&default_bonded_account()).unwrap(), 10);
 		});
 	}
@@ -3153,8 +3141,7 @@ mod withdraw_unbonded {
 					);
 					StakingMock::set_bonded_balance(
 						default_bonded_account(),
-						StakingMock::stake(&default_bonded_account()).map(|l| l.active).unwrap() /
-							2,
+						StakingMock::active_balance(&default_bonded_account()).unwrap() / 2,
 					);
 				};
 
