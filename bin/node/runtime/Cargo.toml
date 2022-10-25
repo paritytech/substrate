@@ -89,7 +89,6 @@ pallet-ranked-collective = { version = "4.0.0-dev", default-features = false, pa
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
 pallet-referenda = { version = "4.0.0-dev", default-features = false, path = "../../../frame/referenda" }
 pallet-remark = { version = "4.0.0-dev", default-features = false, path = "../../../frame/remark" }
-pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../../frame/root-testing" }
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
@@ -112,6 +111,9 @@ pallet-whitelist = { version = "4.0.0-dev", default-features = false, path = "..
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+
+[dev-dependencies]
+pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../../frame/root-testing" }
 
 [features]
 default = ["std"]
