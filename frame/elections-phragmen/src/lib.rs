@@ -951,6 +951,10 @@ impl<T: Config> Pallet<T> {
 			},
 		}
 
+		let weight_candidates = candidates_and_deposit.len() as u32;
+		let weight_voters = voters_and_stakes.len() as u32;
+		let weight_edges = 0; // TODO(gpestana): generalize for elections
+
 		let _ = T::ElectionProvider::elect().map(|mut winners| {
 			// sort winners by stake
 			 winners.sort_by(|i, j| j.1.total.cmp(&i.1.total));
@@ -1107,10 +1111,7 @@ impl<T: Config> Pallet<T> {
 
 		});
 
-		//  TODO(gpestana): return weight for general election, not phragmen 
-		Weight::zero()
-		
-
+		T::WeightInfo::election(weight_candidates, weight_voters, weight_edges)
 	}
 
 	/// Register some amount of weight directly with the system pallet.
@@ -1237,8 +1238,13 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	}
 
 	fn next_election_prediction(now: Self::BlockNumber) -> Self::BlockNumber {
-		// TODO(gpestana): verify
-		now + (now % T::TermDuration::get())
+		let term_duration = T::TermDuration::get();
+		let blocks_to_next_election = now % term_duration;
+
+		if blocks_to_next_election == Self::BlockNumber::zero() {
+			return now;
+		}
+		now + term_duration - (blocks_to_next_election)
 	}
 }
 
@@ -3326,6 +3332,16 @@ mod tests {
 			));
 
 			assert_ok!(Elections::clean_defunct_voters(RuntimeOrigin::root(), 4, 2));
+		})
+	}
+
+	#[test]
+	fn election_data_provider_next_election_prediction() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(<Elections as ElectionDataProvider>::next_election_prediction(1), 5);
+			assert_eq!(<Elections as ElectionDataProvider>::next_election_prediction(5), 5);
+			assert_eq!(<Elections as ElectionDataProvider>::next_election_prediction(7), 10);
+			assert_eq!(<Elections as ElectionDataProvider>::next_election_prediction(11), 15);
 		})
 	}
 }
