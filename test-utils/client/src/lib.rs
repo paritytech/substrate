@@ -26,7 +26,7 @@ pub use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
 	BadBlocks, ForkBlocks,
 };
-pub use sc_client_db::{self, Backend};
+pub use sc_client_db::{self, Backend, BlocksPruning};
 pub use sc_executor::{self, NativeElseWasmExecutor, WasmExecutionMethod};
 pub use sc_service::{client, RpcHandlers};
 pub use sp_consensus;
@@ -102,7 +102,8 @@ impl<Block: BlockT, ExecutorDispatch, G: GenesisInit>
 
 	/// Create new `TestClientBuilder` with default backend and storage chain mode
 	pub fn with_tx_storage(blocks_pruning: u32) -> Self {
-		let backend = Arc::new(Backend::new_test_with_tx_storage(blocks_pruning, 0));
+		let backend =
+			Arc::new(Backend::new_test_with_tx_storage(BlocksPruning::Some(blocks_pruning), 0));
 		Self::with_backend(backend)
 	}
 }

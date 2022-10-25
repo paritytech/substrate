@@ -400,7 +400,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						Err(i) => {
 							votes
 								.try_insert(i, (poll_index, vote))
-								.map_err(|()| Error::<T, I>::MaxVotesReached)?;
+								.map_err(|_| Error::<T, I>::MaxVotesReached)?;
 						},
 					}
 					// Shouldn't be possible to fail, but we handle it gracefully.

@@ -36,9 +36,18 @@ pub mod v12 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
-				T::HistoryDepth::get() == HistoryDepth::<T>::get(),
-				"Provided value of HistoryDepth should be same as the existing storage value"
+				StorageVersion::<T>::get() == Releases::V11_0_0,
+				"Expected v11 before upgrading to v12"
 			);
+
+			if HistoryDepth::<T>::exists() {
+				frame_support::ensure!(
+					T::HistoryDepth::get() == HistoryDepth::<T>::get(),
+					"Provided value of HistoryDepth should be same as the existing storage value"
+				);
+			} else {
+				log::info!("No HistoryDepth in storage; nothing to remove");
+			}
 
 			Ok(Default::default())
 		}
@@ -129,6 +138,11 @@ pub mod v11 {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+			frame_support::ensure!(
+				StorageVersion::<T>::get() == crate::Releases::V11_0_0,
+				"wrong version after the upgrade"
+			);
+
 			let old_pallet_name = N::get();
 			let new_pallet_name = <P as PalletInfoAccess>::name();
 

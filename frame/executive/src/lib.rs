@@ -287,15 +287,7 @@ where
 	///
 	/// This should only be used for testing.
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		// ensure both `pre_upgrade` and `post_upgrade` won't change the storage root
-		let state = {
-			let _guard = frame_support::StorageNoopGuard::default();
-			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap()
-		};
 		let weight = Self::execute_on_runtime_upgrade();
-		let _guard = frame_support::StorageNoopGuard::default();
-		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade(state)
-			.unwrap();
 		Ok(weight)
 	}
 }
@@ -775,7 +767,7 @@ mod tests {
 			frame_system::limits::BlockWeights::builder()
 				.base_block(Weight::from_ref_time(10))
 				.for_class(DispatchClass::all(), |weights| weights.base_extrinsic = Weight::from_ref_time(5))
-				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_ref_time(1024).into())
+				.for_class(DispatchClass::non_mandatory(), |weights| weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into())
 				.build_or_panic();
 		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
 			read: 10,
@@ -946,13 +938,13 @@ mod tests {
 		block_import_works_inner(
 			new_test_ext_v0(1),
 			array_bytes::hex_n_into_unchecked(
-				"1039e1a4bd0cf5deefe65f313577e70169c41c7773d6acf31ca8d671397559f5",
+				"0d786e24c1f9e6ce237806a22c005bbbc7dee4edd6692b6c5442843d164392de",
 			),
 		);
 		block_import_works_inner(
 			new_test_ext(1),
 			array_bytes::hex_n_into_unchecked(
-				"75e7d8f360d375bbe91bcf8019c01ab6362448b4a89e3b329717eb9d910340e5",
+				"348485a4ab856467b440167e45f99b491385e8528e09b0e51f85f814a3021c93",
 			),
 		);
 	}

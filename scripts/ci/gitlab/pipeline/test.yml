@@ -394,6 +394,10 @@ test-wasmer-sandbox:
     - .docker-env
     - .test-refs-wasmer-sandbox
   variables:
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                1
+    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     CI_JOB_NAME:                   "test-wasmer-sandbox"
   parallel: 3
   script:
