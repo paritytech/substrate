@@ -25,6 +25,10 @@ use tempfile::tempdir;
 
 pub mod common;
 
+// This test is flaky https://github.com/paritytech/polkadot/issues/5788
+// Todo: enable when v0.9.27 is merged
+#[ignore]
+
 /// `benchmark block` works for the dev runtime using the wasm executor.
 #[tokio::test]
 async fn benchmark_block_works() {
