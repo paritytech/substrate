@@ -7858,6 +7858,7 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
+ "sp-keyring",
  "sp-keystore",
  "sp-runtime",
  "sp-timestamp",
@@ -7865,7 +7866,6 @@ dependencies = [
  "sp-version",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
- "tempfile",
  "thiserror",
 ]
 
@@ -8142,7 +8142,6 @@ dependencies = [
  "sp-tracing",
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
- "tempfile",
  "thiserror",
  "tokio",
 ]

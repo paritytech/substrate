@@ -149,7 +149,7 @@ impl pallet_root_testing::Config for Test {
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
-	pub const MaxSignatories: u16 = 3;
+	pub const MaxSignatories: u32 = 3;
 }
 
 impl example::Config for Test {}
