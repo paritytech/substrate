@@ -279,7 +279,6 @@ use frame_support::{
 	},
 	transactional, CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
-use frame_system::ensure_signed;
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
