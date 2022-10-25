@@ -123,3 +123,32 @@ async fn get_genesis() {
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
 	assert_eq!(genesis, format!("0x{}", HexDisplay::from(&CHAIN_GENESIS)));
 }
+
+#[tokio::test]
+async fn get_header() {
+	let (_client, api, _sub, sub_id, block) = setup_api().await;
+	let block_hash = format!("{:?}", block.header.hash());
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+
+	// Invalid subscription ID must produce no results.
+	let res: Option<String> = api
+		.call("chainHead_unstable_header", ["invalid_sub_id", &invalid_hash])
+		.await
+		.unwrap();
+	assert!(res.is_none());
+
+	// Valid subscription with invalid block hash will error.
+	let err = api
+		.call::<_, serde_json::Value>("chainHead_unstable_header", [&sub_id, &invalid_hash])
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+	);
+
+	// Obtain the valid header.
+	let res: String = api.call("chainHead_unstable_header", [&sub_id, &block_hash]).await.unwrap();
+	let bytes = array_bytes::hex2bytes(&res).unwrap();
+	let header: Header = Decode::decode(&mut &bytes[..]).unwrap();
+	assert_eq!(header, block.header);
+}
