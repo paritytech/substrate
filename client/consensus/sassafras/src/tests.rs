@@ -434,10 +434,6 @@ fn import_block_with_ticket_proof() {
 	//let blocks = env.propose_and_import_blocks(BlockId::Number(0), 7);
 }
 
-// TODO-SASS-P2: test finalization prunes tree
-#[test]
-fn finalization_prunes_epoch_changes_tree() {}
-
 #[test]
 fn allows_to_skip_epochs() {
 	// Test scenario.
@@ -516,23 +512,60 @@ fn allows_to_skip_epochs() {
 }
 
 #[test]
-fn revert_prunes_epoch_changes_and_removes_weights() {
+fn finalization_prunes_epoch_changes_and_removes_weights() {
 	let mut env = TestEnvironment::new(None);
 
-	// Test scenario.
+	let canon = env.propose_and_import_blocks(BlockId::Number(0), 21);
+
+    let _fork1 = env.propose_and_import_blocks(BlockId::Hash(canon[0]), 10);
+	let _fork2 = env.propose_and_import_blocks(BlockId::Hash(canon[7]), 10);
+	let _fork3 = env.propose_and_import_blocks(BlockId::Hash(canon[11]), 8);
+
+	let epoch_changes = env.link.epoch_changes.clone();
+
+	// We should be tracking a total of 9 epochs in the fork tree
+	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 8);
+	// And only one root
+	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
+
+	// Pre-finalize scenario.
+	//
 	// X(#y): a block (number y) announcing the next epoch data.
 	// Information for epoch starting at block #19 is produced on three different forks
 	// at block #13.
-	// One branch starts before the revert point (epoch data should be maintained).
-	// One branch starts after the revert point (epoch data should be removed).
+    //
+    // Finalize block #14
 	//
-	//                        *----------------- F(#13) --#18                  < fork #2
+	//                        *---------------- F(#13) --#18                  < fork #2
 	//                       /
-	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19) ------#21  < canon
-	//   \                        ^       \
-	//    \                    revert      *---- G(#13) ---- H(#19) ---#20     < fork #3
-	//     \                   to #10
-	//      *-----E(#7)---#11                                          < fork #1
+	// A(#1) ---- B(#7) ----#8----------#12---- C(#13) ---- D(#19) ------#21  < canon
+	//   \                                \
+	//    \                               *---- G(#13) ---- H(#19) ---#20     < fork #3
+	//     \
+	//      *-----E(#7)---#11                                          		  < fork #1
+
+	// Finalize block #10 so that on next epoch change the tree is pruned
+	env.client.finalize_block(BlockId::Hash(canon[13]), None, true).unwrap();
+	let canon_cont = env.propose_and_import_blocks(BlockId::Hash(*canon.last().unwrap()), 4);
+
+	// Post-finalize scenario.
+	//
+	// B(#7)------ C(#13) ---- D(#19) ------Z(#25)
+
+	let epoch_changes = epoch_changes.shared_data();
+	let epoch_changes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| *h).collect();
+    assert_eq!(
+        epoch_changes,
+        vec![ canon[6], canon[12], canon[18], canon_cont[3]]
+    );
+
+	// TODO-SASS-P2
+	//todo!("Requires aux_storage_cleanup");
+}
+
+#[test]
+fn revert_prunes_epoch_changes_and_removes_weights() {
+	let mut env = TestEnvironment::new(None);
 
 	let canon = env.propose_and_import_blocks(BlockId::Number(0), 21);
 	let fork1 = env.propose_and_import_blocks(BlockId::Hash(canon[0]), 10);
@@ -546,8 +579,33 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 	// And only one root
 	assert_eq!(epoch_changes.shared_data().tree().roots().count(), 1);
 
+	// Pre-revert scenario.
+	//
+	// X(#y): a block (number y) announcing the next epoch data.
+	// Information for epoch starting at block #19 is produced on three different forks
+	// at block #13.
+	// One branch starts before the revert point (epoch data should be maintained).
+	// One branch starts after the revert point (epoch data should be removed).
+	//
+	//                        *----------------- F(#13) --#18                  < fork #2
+	//                       /
+	// A(#1) ---- B(#7) ----#8----+-----#12----- C(#13) ---- D(#19) ------#21  < canon
+	//   \                        ^       \
+	//    \                    revert      *---- G(#13) ---- H(#19) ---#20     < fork #3
+	//     \                   to #10
+	//      *-----E(#7)---#11                                          		   < fork #1
+
 	// Revert canon chain to block #10 (best(21) - 11)
 	crate::revert(env.backend.clone(), 11).unwrap();
+
+	// Post-revert expected scenario.
+	//
+	//
+	//                        *----------------- F(#13) --#18
+	//                       /
+	// A(#1) ---- B(#7) ----#8----#10
+	//   \
+	//    *------ E(#7)---#11
 
 	// Load and check epoch changes.
 

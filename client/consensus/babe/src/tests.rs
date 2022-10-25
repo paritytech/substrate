@@ -1003,7 +1003,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
 	let client = peer.client().as_client();
 
-	// Register the handler (as done by `babe_start`)
+	// Register the handler (as done by Babe's `block_import` method)
 	let client_clone = client.clone();
 	let on_finality = move |summary: &FinalityNotification<TestBlock>| {
 		aux_storage_cleanup(client_clone.as_ref(), summary)

@@ -526,7 +526,6 @@ where
 	C: ProvideRuntimeApi<B>
 		+ ProvideUncles<B>
 		+ BlockchainEvents<B>
-		+ PreCommitActions<B>
 		+ HeaderBackend<B>
 		+ HeaderMetadata<B, Error = ClientError>
 		+ Send

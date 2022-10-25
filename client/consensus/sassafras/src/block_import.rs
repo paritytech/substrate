@@ -19,6 +19,7 @@
 //! Types and functions related to block import.
 
 use super::*;
+use sc_client_api::{AuxDataOperations, FinalityNotification, PreCommitActions};
 
 /// A block-import handler for Sassafras.
 ///
@@ -45,7 +46,26 @@ impl<Block: BlockT, I: Clone, Client> Clone for SassafrasBlockImport<Block, Clie
 	}
 }
 
-impl<B: BlockT, C, I> SassafrasBlockImport<B, C, I> {
+fn aux_storage_cleanup<B, C>(
+	_client: &C,
+	_notification: &FinalityNotification<B>,
+) -> AuxDataOperations
+where
+	B: BlockT,
+	C: HeaderMetadata<B> + HeaderBackend<B>,
+{
+	// TODO-SASS-P3
+	Default::default()
+}
+
+impl<B: BlockT, C, I> SassafrasBlockImport<B, C, I>
+where
+	C: AuxStore
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ PreCommitActions<B>
+		+ 'static,
+{
 	/// Constructor.
 	pub fn new(
 		inner: I,
@@ -53,6 +73,16 @@ impl<B: BlockT, C, I> SassafrasBlockImport<B, C, I> {
 		epoch_changes: SharedEpochChanges<B, Epoch>,
 		genesis_config: SassafrasConfiguration,
 	) -> Self {
+		let client_weak = Arc::downgrade(&client);
+		let on_finality = move |notification: &FinalityNotification<B>| {
+			if let Some(client) = client_weak.upgrade() {
+				aux_storage_cleanup(client.as_ref(), notification)
+			} else {
+				Default::default()
+			}
+		};
+		client.register_finality_action(Box::new(on_finality));
+
 		SassafrasBlockImport { inner, client, epoch_changes, genesis_config }
 	}
 }
@@ -338,12 +368,10 @@ where
 		let finalized_header = client
 			.header(BlockId::Hash(info.finalized_hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-			.expect(
-				"best finalized hash was given by client; finalized headers must exist in db; qed",
-			);
+			.expect("finalized headers must exist in db; qed");
 
 		find_pre_digest::<B>(&finalized_header)
-			.expect("finalized header must be valid; valid blocks have a pre-digest; qed")
+			.expect("valid blocks have a pre-digest; qed")
 			.slot
 	};
 
@@ -370,7 +398,11 @@ pub fn block_import<C, B: BlockT, I>(
 	client: Arc<C>,
 ) -> ClientResult<(SassafrasBlockImport<B, C, I>, SassafrasLink<B>)>
 where
-	C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + 'static,
+	C: AuxStore
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ PreCommitActions<B>
+		+ 'static,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<B, _>(&*client)?;
 

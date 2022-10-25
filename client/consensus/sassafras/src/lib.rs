@@ -42,9 +42,7 @@ use prometheus_endpoint::Registry;
 use scale_codec::{Decode, Encode};
 use schnorrkel::SignatureError;
 
-use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, PreCommitActions, ProvideUncles, UsageProvider,
-};
+use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
 use sc_consensus::{
 	block_import::{
 		BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
