@@ -494,7 +494,7 @@ pub mod pallet {
 					})
 					.collect::<Vec<_>>()
 					.try_into()
-					.expect("filter can only lesson the length; still in bound; qed");
+					.expect("filter can only lessen the length; still in bound; qed");
 				let post_length = stashes.len();
 
 				log!(
