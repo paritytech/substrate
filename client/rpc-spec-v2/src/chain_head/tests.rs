@@ -10,6 +10,7 @@ use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{hexdisplay::HexDisplay, testing::TaskExecutor};
+use sp_version::RuntimeVersion;
 use std::{future::Future, sync::Arc};
 use substrate_test_runtime_client::{
 	prelude::*, runtime, Backend, BlockBuilderExt, Client, ClientBlockImportExt,
@@ -80,6 +81,64 @@ async fn follow_subscription_produces_blocks() {
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
 		finalized_block_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let best_hash = block.header.hash();
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", best_hash),
+		parent_block_hash: format!("{:?}", finalized_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", best_hash),
+	});
+	assert_eq!(event, expected);
+
+	client.finalize_block(&best_hash, None).unwrap();
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes: vec![format!("{:?}", best_hash)],
+		pruned_block_hashes: vec![],
+	});
+	assert_eq!(event, expected);
+}
+
+#[tokio::test]
+async fn follow_with_runtime() {
+	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let api =
+		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+
+	let finalized_hash = client.info().finalized_hash;
+	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
+
+	// Initialized must always be reported first.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+
+	let runtime_str = "{\"specName\":\"test\",\"implName\":\"parity-test\",\"authoringVersion\":1,\
+		\"specVersion\":2,\"implVersion\":2,\"apis\":[[\"0xdf6acb689907609b\",4],\
+		[\"0x37e397fc7c91f5e4\",1],[\"0xd2bc9897eed08f15\",3],[\"0x40fe3ad401f8959a\",6],\
+		[\"0xc6e9a76309f39b09\",1],[\"0xdd718d5cc53262d4\",1],[\"0xcbca25e39f142387\",2],\
+		[\"0xf78b278be53f454c\",2],[\"0xab3c0572291feb8b\",1],[\"0xbc9d89904f5b923f\",1]],\
+		\"transactionVersion\":1,\"stateVersion\":1}";
+	let runtime: RuntimeVersion = serde_json::from_str(runtime_str).unwrap();
+
+	let finalized_block_runtime = Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: runtime }));
+	// Runtime must always be reported with the first event.
+	let expected = FollowEvent::Initialized(Initialized {
+		finalized_block_hash: format!("{:?}", finalized_hash),
+		finalized_block_runtime,
 		runtime_updates: false,
 	});
 	assert_eq!(event, expected);

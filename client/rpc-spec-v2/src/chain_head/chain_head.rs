@@ -142,7 +142,7 @@ where
 	Client: CallApiAt<Block> + 'static,
 {
 	// No runtime versions should be reported.
-	if runtime_updates {
+	if !runtime_updates {
 		return None
 	}
 
@@ -317,7 +317,6 @@ where
 					},
 					Ok(None) => {
 						// The block's body was pruned. This subscription ID has become invalid.
-						// TODO: Stop the `follow` method.
 						ChainHeadEvent::<String>::Disjoint
 					},
 					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
