@@ -3590,7 +3590,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-swarm",
  "log",
- "lru 0.8.1",
+ "lru",
  "prost",
  "prost-build",
  "prost-codec",
@@ -3991,15 +3991,6 @@ checksum = "c0fbfc88337168279f2e9ae06e157cfed4efd3316e14dc96ed074d4f2e6c5952"
 dependencies = [
  "quote",
  "syn",
-]
-
-[[package]]
-name = "lru"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
-dependencies = [
- "hashbrown 0.11.2",
 ]
 
 [[package]]
@@ -7976,7 +7967,7 @@ dependencies = [
  "criterion",
  "env_logger",
  "lazy_static",
- "lru 0.7.5",
+ "lru",
  "num_cpus",
  "parity-scale-codec",
  "parking_lot 0.12.1",
@@ -8188,7 +8179,7 @@ dependencies = [
  "linked-hash-map",
  "linked_hash_set",
  "log",
- "lru 0.7.5",
+ "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "pin-project",
@@ -8282,7 +8273,7 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
- "lru 0.7.5",
+ "lru",
  "quickcheck",
  "sc-network-common",
  "sc-peerset",
@@ -8322,7 +8313,7 @@ dependencies = [
  "futures",
  "libp2p",
  "log",
- "lru 0.7.5",
+ "lru",
  "mockall",
  "parity-scale-codec",
  "prost",
@@ -9405,7 +9396,7 @@ version = "4.0.0-dev"
 dependencies = [
  "futures",
  "log",
- "lru 0.7.5",
+ "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
  "sp-api",
@@ -9413,6 +9404,7 @@ dependencies = [
  "sp-database",
  "sp-runtime",
  "sp-state-machine",
+ "sp-std",
  "thiserror",
 ]
 
@@ -10046,7 +10038,7 @@ dependencies = [
  "hash-db",
  "hashbrown 0.12.3",
  "lazy_static",
- "lru 0.7.5",
+ "lru",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",

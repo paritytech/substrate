@@ -356,10 +356,12 @@ where
 			)
 		};
 
-		let block_announce_data_cache = lru::LruCache::new(
+		let cache_capacity = NonZeroUsize::new(
 			network_config.default_peers_set.in_peers as usize +
 				network_config.default_peers_set.out_peers as usize,
-		);
+		)
+		.expect("cache capacity is not zero");
+		let block_announce_data_cache = lru::LruCache::new(cache_capacity);
 
 		let protocol = Self {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
