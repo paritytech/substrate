@@ -67,8 +67,10 @@ use crate::{
 	BeefyVoterLinks, Client, KnownPeers,
 };
 
+/// Depicts the bound for the number of pending votes
 const MAX_PENDING_VOTES: u32 = 10;
-const MAX_JUSTIFICATIONS: u32 = 10;
+/// Depicts the bound for the number of pending justifications
+const MAX_PENDING_JUSTIFICATIONS: u32 = 10;
 
 enum RoundAction {
 	Drop,
@@ -249,7 +251,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications:
-		BoundedBTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>, ConstU32<MAX_JUSTIFICATIONS>>,
+		BoundedBTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>, ConstU32<MAX_PENDING_JUSTIFICATIONS>>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
 }
@@ -1044,7 +1046,6 @@ pub(crate) mod tests {
 		peer: &BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
-		max_pending_votes: u32,
 	) -> BeefyWorker<
 		Block,
 		Backend,
