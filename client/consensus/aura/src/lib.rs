@@ -769,7 +769,7 @@ mod tests {
 
 		assert_eq!(client.chain_info().best_number, 0);
 		assert_eq!(
-			authorities(&client, &BlockId::Number(0)).unwrap(),
+			authorities(&client, &BlockId::Hash(client.chain_info().best_hash)).unwrap(),
 			vec![
 				Keyring::Alice.public().into(),
 				Keyring::Bob.public().into(),

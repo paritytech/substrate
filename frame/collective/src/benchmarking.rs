@@ -36,68 +36,69 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 
 benchmarks_instance_pallet! {
 	set_members {
-		let m in 1 .. T::MaxMembers::get();
-		let n in 1 .. T::MaxMembers::get();
-		let p in 1 .. T::MaxProposals::get();
+		let m in 0 .. T::MaxMembers::get();
+		let n in 0 .. T::MaxMembers::get();
+		let p in 0 .. T::MaxProposals::get();
 
 		// Set old members.
 		// We compute the difference of old and new members, so it should influence timing.
 		let mut old_members = vec![];
-		let mut last_old_member = account::<T::AccountId>("old member", 0, SEED);
 		for i in 0 .. m {
-			last_old_member = account::<T::AccountId>("old member", i, SEED);
-			old_members.push(last_old_member.clone());
+			let old_member = account::<T::AccountId>("old member", i, SEED);
+			old_members.push(old_member);
 		}
 		let old_members_count = old_members.len() as u32;
 
 		Collective::<T, I>::set_members(
 			SystemOrigin::Root.into(),
 			old_members.clone(),
-			Some(last_old_member.clone()),
+			old_members.last().cloned(),
 			T::MaxMembers::get(),
 		)?;
 
-		// Set a high threshold for proposals passing so that they stay around.
-		let threshold = m.max(2);
-		// Length of the proposals should be irrelevant to `set_members`.
-		let length = 100;
-		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark {
-				remark: vec![i as u8; length]
-			}.into();
-			Collective::<T, I>::propose(
-				SystemOrigin::Signed(last_old_member.clone()).into(),
-				threshold,
-				Box::new(proposal.clone()),
-				MAX_BYTES,
-			)?;
-			let hash = T::Hashing::hash_of(&proposal);
-			// Vote on the proposal to increase state relevant for `set_members`.
-			// Not voting for `last_old_member` because they proposed and not voting for the first member
-			// to keep the proposal from passing.
-			for j in 2 .. m - 1 {
-				let voter = &old_members[j as usize];
-				let approve = true;
-				Collective::<T, I>::vote(
-					SystemOrigin::Signed(voter.clone()).into(),
-					hash,
-					i,
-					approve,
+		// If there were any old members generate a bunch of proposals.
+		if m > 0 {
+			// Set a high threshold for proposals passing so that they stay around.
+			let threshold = m.max(2);
+			// Length of the proposals should be irrelevant to `set_members`.
+			let length = 100;
+			for i in 0 .. p {
+				// Proposals should be different so that different proposal hashes are generated
+				let proposal: T::Proposal = SystemCall::<T>::remark {
+					remark: vec![i as u8; length]
+				}.into();
+				Collective::<T, I>::propose(
+					SystemOrigin::Signed(old_members.last().unwrap().clone()).into(),
+					threshold,
+					Box::new(proposal.clone()),
+					MAX_BYTES,
 				)?;
+				let hash = T::Hashing::hash_of(&proposal);
+				// Vote on the proposal to increase state relevant for `set_members`.
+				// Not voting for last old member because they proposed and not voting for the first member
+				// to keep the proposal from passing.
+				for j in 2 .. m - 1 {
+					let voter = &old_members[j as usize];
+					let approve = true;
+					Collective::<T, I>::vote(
+						SystemOrigin::Signed(voter.clone()).into(),
+						hash,
+						i,
+						approve,
+					)?;
+				}
 			}
 		}
 
 		// Construct `new_members`.
 		// It should influence timing since it will sort this vector.
 		let mut new_members = vec![];
-		let mut last_member = account::<T::AccountId>("member", 0, SEED);
 		for i in 0 .. n {
-			last_member = account::<T::AccountId>("member", i, SEED);
-			new_members.push(last_member.clone());
+			let member = account::<T::AccountId>("member", i, SEED);
+			new_members.push(member);
 		}
 
-	}: _(SystemOrigin::Root, new_members.clone(), Some(last_member), T::MaxMembers::get())
+	}: _(SystemOrigin::Root, new_members.clone(), new_members.last().cloned(), T::MaxMembers::get())
 	verify {
 		new_members.sort();
 		assert_eq!(Collective::<T, I>::members(), new_members);

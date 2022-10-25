@@ -832,8 +832,8 @@ benchmarks_instance_pallet! {
 	}
 
 	add_unscrupulous_items {
-		let n in 1 .. T::MaxUnscrupulousItems::get();
-		let l in 1 .. T::MaxWebsiteUrlLength::get();
+		let n in 0 .. T::MaxUnscrupulousItems::get();
+		let l in 0 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
@@ -856,8 +856,8 @@ benchmarks_instance_pallet! {
 	}
 
 	remove_unscrupulous_items {
-		let n in 1 .. T::MaxUnscrupulousItems::get();
-		let l in 1 .. T::MaxWebsiteUrlLength::get();
+		let n in 0 .. T::MaxUnscrupulousItems::get();
+		let l in 0 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
