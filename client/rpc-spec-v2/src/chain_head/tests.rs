@@ -215,3 +215,75 @@ async fn get_body() {
 		ChainHeadEvent::Done(done) if done.result == expected
 	);
 }
+
+#[tokio::test]
+async fn call_runtime() {
+	let (_client, api, _sub, sub_id, block) = setup_api().await;
+	let block_hash = format!("{:?}", block.header.hash());
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+
+	// Subscription ID is stale the disjoint event is emitted.
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_call",
+			["invalid_sub_id", &block_hash, "BabeApi_current_epoch", "0x00"],
+		)
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadEvent::<String>::Disjoint);
+
+	// Valid subscription ID with invalid block hash will error.
+	let err = api
+		.subscribe(
+			"chainHead_unstable_call",
+			[&sub_id, &invalid_hash, "BabeApi_current_epoch", "0x00"],
+		)
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+	);
+
+	// Pass an invalid parameters that cannot be decode.
+	let err = api
+		.subscribe(
+			"chainHead_unstable_call",
+			[&sub_id, &block_hash, "BabeApi_current_epoch", "0x0"],
+		)
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("Invalid parameter")
+	);
+
+	let alice_id = AccountKeyring::Alice.to_account_id();
+	// Hex encoded scale encoded bytes representing the call parameters.
+	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_call",
+			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
+		)
+		.await
+		.unwrap();
+
+	assert_matches!(
+			get_next_event::<ChainHeadEvent<String>>(&mut sub).await,
+			ChainHeadEvent::Done(done) if done.result == "0x0000000000000000"
+	);
+
+	// The `current_epoch` takes no parameters and not draining the input buffer
+	// will cause the execution to fail.
+	let mut sub = api
+		.subscribe(
+			"chainHead_unstable_call",
+			[&sub_id, &block_hash, "BabeApi_current_epoch", "0x00"],
+		)
+		.await
+		.unwrap();
+	assert_matches!(
+			get_next_event::<ChainHeadEvent<String>>(&mut sub).await,
+			ChainHeadEvent::Error(event) if event.error.contains("Execution failed")
+	);
+}
