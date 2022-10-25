@@ -152,3 +152,66 @@ async fn get_header() {
 	let header: Header = Decode::decode(&mut &bytes[..]).unwrap();
 	assert_eq!(header, block.header);
 }
+
+#[tokio::test]
+async fn get_body() {
+	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
+	let block_hash = format!("{:?}", block.header.hash());
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+
+	// Subscription ID is stale the disjoint event is emitted.
+	let mut sub = api
+		.subscribe("chainHead_unstable_body", ["invalid_sub_id", &invalid_hash])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadEvent::<String>::Disjoint);
+
+	// Valid subscription ID with invalid block hash will error.
+	let err = api
+		.subscribe("chainHead_unstable_body", [&sub_id, &invalid_hash])
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+	);
+
+	// Obtain valid the body (list of extrinsics).
+	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
+	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
+	// Block contains no extrinsics.
+	assert_matches!(event,
+		ChainHeadEvent::Done(done) if done.result == "0x00"
+	);
+
+	// Import a block with extrinsics.
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder
+		.push_transfer(runtime::Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 42,
+			nonce: 0,
+		})
+		.unwrap();
+	let block = builder.build().unwrap().block;
+	let block_hash = format!("{:?}", block.header.hash());
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	let mut sub = api.subscribe("chainHead_unstable_body", [&sub_id, &block_hash]).await.unwrap();
+	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
+	// Hex encoded scale encoded string for the vector of extrinsics.
+	let expected = format!("0x{:?}", HexDisplay::from(&block.extrinsics.encode()));
+	assert_matches!(event,
+		ChainHeadEvent::Done(done) if done.result == expected
+	);
+}
