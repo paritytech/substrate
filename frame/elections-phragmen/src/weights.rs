@@ -57,7 +57,9 @@ pub trait WeightInfo {
 	fn remove_member_without_replacement() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
 	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
-	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight;
+	fn election(c: u32, v: u32, e: u32, ) -> Weight;
+	fn electable_candidates(c: u32) -> Weight;
+	fn electing_voters(v: u32) -> Weight;
 }
 
 /// Weights for pallet_elections_phragmen using the Substrate node and recommended hardware.
@@ -188,17 +190,28 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `c` is `[1, 1000]`.
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
+	fn election(c: u32, v: u32, e: u32, ) -> Weight {
 		Weight::from_ref_time(0 as u64)
 			// Standard Error: 773_000
 			.saturating_add(Weight::from_ref_time(81_534_000 as u64).saturating_mul(v as u64))
 			// Standard Error: 51_000
 			.saturating_add(Weight::from_ref_time(4_453_000 as u64).saturating_mul(e as u64))
 			.saturating_add(T::DbWeight::get().reads(280 as u64))
-			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(c as u64)))
-			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(v as u64)))
 			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(c as u64)))
 	}
+
+	// Storage: Elections Candidates (r:1 w:0)
+	fn electable_candidates(c: u32) -> Weight {
+		Weight::from_ref_time(0 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64).saturating_mul(c as u64))
+	}
+
+	// Storage: Elections Voting (r:1 w:0)
+	fn electing_voters(v: u32) -> Weight {
+		Weight::from_ref_time(0 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64).saturating_mul(v as u64))
+	}
+
 }
 
 // For backwards compatibility and tests
@@ -316,7 +329,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((3 as u64).saturating_mul(v as u64)))
 			.saturating_add(RocksDbWeight::get().writes((3 as u64).saturating_mul(v as u64)))
 	}
-	// Storage: Elections Candidates (r:1 w:1)
+	// Storage: Elections Candidates (r:0 w:1)
 	// Storage: Elections Members (r:1 w:1)
 	// Storage: Elections RunnersUp (r:1 w:1)
 	// Storage: Elections Voting (r:10001 w:0)
@@ -328,15 +341,26 @@ impl WeightInfo for () {
 	/// The range of component `c` is `[1, 1000]`.
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn election_phragmen(c: u32, v: u32, e: u32, ) -> Weight {
+	fn election(c: u32, v: u32, e: u32, ) -> Weight {
 		Weight::from_ref_time(0 as u64)
 			// Standard Error: 773_000
 			.saturating_add(Weight::from_ref_time(81_534_000 as u64).saturating_mul(v as u64))
 			// Standard Error: 51_000
 			.saturating_add(Weight::from_ref_time(4_453_000 as u64).saturating_mul(e as u64))
 			.saturating_add(RocksDbWeight::get().reads(280 as u64))
-			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(c as u64)))
-			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(v as u64)))
 			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(c as u64)))
 	}
+
+	// Storage: Elections Candidates (r:1 w:0)
+	fn electable_candidates(c: u32) -> Weight {
+		Weight::from_ref_time(0 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64).saturating_mul(c as u64))
+	}
+
+	// Storage: Elections Voting (r:1 w:0)
+	fn electing_voters(v: u32) -> Weight {
+		Weight::from_ref_time(0 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64).saturating_mul(v as u64))
+	}
+
 }
