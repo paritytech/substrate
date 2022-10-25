@@ -242,8 +242,15 @@ where
 				// We might not receive all new blocks reports, also pin the block here.
 				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash);
 
+				// The tree route contains the exclusive path from the latest finalized block
+				// to the block reported by the notification. Ensure the finalized block is
+				// properly reported to that path.
+				let mut finalized_block_hashes =
+					notification.tree_route.iter().cloned().collect::<Vec<_>>();
+				finalized_block_hashes.push(notification.hash);
+
 				FollowEvent::Finalized(Finalized {
-					finalized_block_hashes: notification.tree_route.iter().cloned().collect(),
+					finalized_block_hashes,
 					pruned_block_hashes: notification.stale_heads.iter().cloned().collect(),
 				})
 			});
