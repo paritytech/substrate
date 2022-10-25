@@ -518,8 +518,8 @@ where
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
 		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
-			PersistedEpochHeader::Genesis(_, ref epoch_1) => slot >= epoch_1.end_slot,
-			PersistedEpochHeader::Regular(ref epoch_n) => slot >= epoch_n.end_slot,
+			PersistedEpochHeader::Genesis(ref epoch_0, _) => epoch_0.start_slot <= slot,
+			PersistedEpochHeader::Regular(ref epoch_n) => epoch_n.start_slot <= slot,
 		};
 
 		// prune any epochs which could not be _live_ as of the children of the
@@ -777,11 +777,6 @@ where
 		}
 	}
 
-	/// Return the inner fork tree.
-	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
-		&self.inner
-	}
-
 	/// Reset to a specified pair of epochs, as if they were announced at blocks `parent_hash` and
 	/// `hash`.
 	pub fn reset(&mut self, parent_hash: Hash, hash: Hash, number: Number, current: E, next: E) {
@@ -831,6 +826,11 @@ where
 		self.inner.drain_filter(filter).for_each(|(h, n, _)| {
 			self.epochs.remove(&(h, n));
 		});
+	}
+
+	/// Return the inner fork tree (mostly useful for testing)
+	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
+		&self.inner
 	}
 }
 
