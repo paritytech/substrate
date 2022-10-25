@@ -112,3 +112,14 @@ async fn follow_subscription_produces_blocks() {
 	});
 	assert_eq!(event, expected);
 }
+
+#[tokio::test]
+async fn get_genesis() {
+	let client = Arc::new(substrate_test_runtime_client::new());
+	let api =
+		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+
+	let genesis: String =
+		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
+	assert_eq!(genesis, format!("0x{}", HexDisplay::from(&CHAIN_GENESIS)));
+}
