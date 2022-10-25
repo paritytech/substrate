@@ -19,7 +19,6 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
-extern crate core;
 
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
