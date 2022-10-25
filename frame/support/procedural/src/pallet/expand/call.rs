@@ -16,7 +16,6 @@
 // limitations under the License.
 
 use crate::{pallet::Def, COUNTER};
-use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::spanned::Spanned;
 
@@ -24,7 +23,7 @@ use syn::spanned::Spanned;
 /// * Generate enum call and implement various trait on it.
 /// * Implement Callable and call_function on `Pallet`
 pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
-	let (span, where_clause, mut methods, docs) = match def.call.as_ref() {
+	let (span, where_clause, methods, docs) = match def.call.as_ref() {
 		Some(call) => {
 			let span = call.attr_span;
 			let where_clause = call.where_clause.clone();
@@ -42,24 +41,6 @@ pub fn expand_call(def: &mut Def) -> proc_macro2::TokenStream {
 	let type_use_gen = &def.type_use_generics(span);
 	let call_ident = syn::Ident::new("Call", span);
 	let pallet_ident = &def.pallet_struct.pallet;
-
-	if def.dev_mode || true {
-		let empty_weight: TokenStream = quote::quote!(#[pallet::weight(T::WeightInfo::create())]);
-		methods = methods.into_iter().map(|method| {
-			if method.attrs.iter().filter(|attr| {
-				println!("{}", attr.path.to_token_stream().to_string());
-				if let Some(seg) = attr.path.segments.last() {
-					if seg.ident.to_string() != "doc" {
-						println!("|{}|", seg.ident.to_string());
-					}
-				}
-				false
-			}).count() == 0 {
-
-			}
-			method
-		}).collect();
-	}
 
 	let fn_name = methods.iter().map(|method| &method.name).collect::<Vec<_>>();
 	let call_index = methods.iter().map(|method| method.call_index).collect::<Vec<_>>();
