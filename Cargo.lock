@@ -8573,6 +8573,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-core",
+ "sp-maybe-compressed-blob",
  "sp-runtime",
  "sp-version",
  "substrate-test-runtime-client",

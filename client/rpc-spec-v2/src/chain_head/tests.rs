@@ -9,9 +9,9 @@ use jsonrpsee::{
 use sc_block_builder::BlockBuilderProvider;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
-use sp_core::{hexdisplay::HexDisplay, testing::TaskExecutor};
+use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys::CODE, testing::TaskExecutor};
 use sp_version::RuntimeVersion;
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 use substrate_test_runtime_client::{
 	prelude::*, runtime, Backend, BlockBuilderExt, Client, ClientBlockImportExt,
 };
@@ -86,6 +86,7 @@ async fn follow_subscription_produces_blocks() {
 	assert_eq!(event, expected);
 
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+
 	let best_hash = block.header.hash();
 	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
 
@@ -134,7 +135,8 @@ async fn follow_with_runtime() {
 		\"transactionVersion\":1,\"stateVersion\":1}";
 	let runtime: RuntimeVersion = serde_json::from_str(runtime_str).unwrap();
 
-	let finalized_block_runtime = Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: runtime }));
+	let finalized_block_runtime =
+		Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: runtime.clone() }));
 	// Runtime must always be reported with the first event.
 	let expected = FollowEvent::Initialized(Initialized {
 		finalized_block_hash: format!("{:?}", finalized_hash),
@@ -143,6 +145,8 @@ async fn follow_with_runtime() {
 	});
 	assert_eq!(event, expected);
 
+	// Import a new block without runtime changes.
+	// The runtime field must be None in this case.
 	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
 	let best_hash = block.header.hash();
 	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
@@ -168,6 +172,41 @@ async fn follow_with_runtime() {
 	let expected = FollowEvent::Finalized(Finalized {
 		finalized_block_hashes: vec![format!("{:?}", best_hash)],
 		pruned_block_hashes: vec![],
+	});
+	assert_eq!(event, expected);
+
+	let finalized_hash = best_hash;
+	// The `RuntimeVersion` is embedded into the WASM blob at the `runtime_version`
+	// section. Modify the `RuntimeVersion` and commit the changes to a new block.
+	// The RPC must notify the runtime event change.
+	let wasm = sp_maybe_compressed_blob::decompress(
+		runtime::wasm_binary_unwrap(),
+		sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
+	)
+	.unwrap();
+	// Update the runtime spec version.
+	let mut runtime = runtime;
+	runtime.spec_version += 1;
+	let embedded = sp_version::embed::embed_runtime_version(&wasm, runtime.clone()).unwrap();
+	let wasm = sp_maybe_compressed_blob::compress(
+		&embedded,
+		sp_maybe_compressed_blob::CODE_BLOB_BOMB_LIMIT,
+	)
+	.unwrap();
+
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder.push_storage_change(CODE.to_vec(), Some(wasm)).unwrap();
+	let block = builder.build().unwrap().block;
+	let best_hash = block.header.hash();
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	let new_runtime = Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: runtime.clone() }));
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", best_hash),
+		parent_block_hash: format!("{:?}", finalized_hash),
+		new_runtime,
+		runtime_updates: false,
 	});
 	assert_eq!(event, expected);
 }
