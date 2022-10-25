@@ -678,6 +678,7 @@ impl StorageDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		dev_mode: bool,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Type(item) = item {
 			item
@@ -686,8 +687,13 @@ impl StorageDef {
 		};
 
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
-		let PalletStorageAttrInfo { getter, rename_as, unbounded, whitelisted } =
+		let PalletStorageAttrInfo { getter, rename_as, mut unbounded, whitelisted } =
 			PalletStorageAttrInfo::from_attrs(attrs)?;
+
+		if dev_mode {
+			// set all storages to be unbounded if dev_mode is enabled
+			unbounded = true;
+		}
 
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 

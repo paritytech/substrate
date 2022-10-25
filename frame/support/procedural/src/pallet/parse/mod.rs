@@ -125,7 +125,7 @@ impl Def {
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
 				Some(PalletAttr::Storage(span)) =>
-					storages.push(storage::StorageDef::try_from(span, index, item)?),
+					storages.push(storage::StorageDef::try_from(span, index, item, dev_mode)?),
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
