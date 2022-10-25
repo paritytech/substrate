@@ -992,6 +992,8 @@ parameter_types! {
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const MaxVoters: u32 = 10 * 1000;
 	pub const MaxCandidates: u32 = 1000;
+	pub const MaxMembers: u32 = 20;
+	pub const MaxRunnersUp: u32 = 15;
 	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 }
 
@@ -1017,6 +1019,8 @@ impl pallet_elections_phragmen::Config for Runtime {
 	type TermDuration = TermDuration;
 	type MaxVoters = MaxVoters;
 	type MaxCandidates = MaxCandidates;
+	type MaxMembers = MaxMembers;
+	type MaxRunnersUp = MaxRunnersUp;
 	type WeightInfo = pallet_elections_phragmen::weights::SubstrateWeight<Runtime>;
 }
 
