@@ -693,11 +693,12 @@ impl<T: Config> BondedPool<T> {
 			.unwrap_or(Perbill::zero())
 	}
 
-	/// Get the current commission payee of this pool.
-	fn commission_payee(&self) -> Option<T::AccountId> {
+	/// Gets the current commission payee of this pool as a reference.
+	fn commission_payee(&self) -> Option<&T::AccountId> {
 		self.commission
 			.as_ref()
-			.map_or(None, |c| c.current.as_ref().map_or(None, |(_, p)| Some(p.clone())))
+			.and_then(|c| c.current.as_ref().map(|(_, p)| p))
+			.or(None)
 	}
 
 	/// Consume self and put into storage.
@@ -2235,7 +2236,10 @@ pub mod pallet {
 			let final_payee = if let Some(p) = payee {
 				p
 			} else {
-				bonded_pool.commission_payee().ok_or(Error::<T>::NoCommissionPayeeSet)?
+				bonded_pool
+					.commission_payee()
+					.map(|p| p.clone())
+					.ok_or(Error::<T>::NoCommissionPayeeSet)?
 			};
 
 			let commission_percentage = bonded_pool.commission();
@@ -2653,7 +2657,7 @@ impl<T: Config> Pallet<T> {
 				// Transfer pool_commission to the `payee` account.
 				T::Currency::transfer(
 					&bonded_pool.reward_account(),
-					payee,
+					payee.clone(),
 					pool_commission,
 					ExistenceRequirement::KeepAlive,
 				)?;
