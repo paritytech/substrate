@@ -317,6 +317,7 @@ impl ExtBuilder {
 			// because we read this value as a measure of how many validators we have.
 			pallet_staking::ValidatorCount::<Runtime>::put(VALIDATORS_PER_ERA as u32);
 		});
+
 		ext
 	}
 

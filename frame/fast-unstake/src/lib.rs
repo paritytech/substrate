@@ -60,6 +60,7 @@ mod tests;
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migrations;
 pub mod types;
 pub mod weights;
 
@@ -83,7 +84,7 @@ pub mod pallet {
 	use frame_election_provider_support::ElectionProviderBase;
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Defensive, ReservableCurrency},
+		traits::{Defensive, ReservableCurrency, StorageVersion},
 	};
 	use frame_system::{pallet_prelude::*, RawOrigin};
 	use pallet_staking::Pallet as Staking;
@@ -105,7 +106,10 @@ pub mod pallet {
 		}
 	}
 
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
@@ -167,12 +171,12 @@ pub mod pallet {
 		/// An internal error happened. Operations will be paused now.
 		InternalError,
 		/// A batch was partially checked for the given eras, but the process did not finish.
-		Checking { eras: Vec<EraIndex> },
+		BatchChecked { eras: Vec<EraIndex> },
 		/// A batch was terminated.
 		///
 		/// This is always follows by a number of `Unstaked` or `Slashed` events, marking the end
 		/// of the batch. A new batch will be created upon next block.
-		Terminated,
+		BatchFinished,
 	}
 
 	#[pallet::error]
@@ -218,6 +222,7 @@ pub mod pallet {
 						return T::DbWeight::get().reads_writes(1, 1)
 					},
 				};
+
 				// insert them back into the queue.
 				Queue::<T>::insert(stash, deposit);
 				Head::<T>::kill();
@@ -401,8 +406,8 @@ pub mod pallet {
 
 			log!(
 				debug,
-				"checking {:?}, eras_to_check_per_block = {:?}, remaining_weight = {:?}",
-				stashes,
+				"checking {:?} stashes, eras_to_check_per_block = {:?}, remaining_weight = {:?}",
+				stashes.len(),
 				eras_to_check_per_block,
 				remaining_weight
 			);
@@ -480,7 +485,7 @@ pub mod pallet {
 			if unchecked_eras_to_check.is_empty() {
 				// `stash` is not exposed in any era now -- we can let go of them now.
 				stashes.into_iter().for_each(|(stash, deposit)| unstake_stash(stash, deposit));
-				Self::deposit_event(Event::<T>::Terminated);
+				Self::deposit_event(Event::<T>::BatchFinished);
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras checked so far.
@@ -508,10 +513,10 @@ pub mod pallet {
 				match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
 					Ok(_) =>
 						if stashes.is_empty() {
-							Self::deposit_event(Event::<T>::Terminated);
+							Self::deposit_event(Event::<T>::BatchFinished);
 						} else {
 							Head::<T>::put(UnstakeRequest { stashes, checked });
-							Self::deposit_event(Event::<T>::Checking {
+							Self::deposit_event(Event::<T>::BatchChecked {
 								eras: unchecked_eras_to_check,
 							});
 						},

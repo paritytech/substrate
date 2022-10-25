@@ -112,7 +112,7 @@ fn on_idle_full_block<T: Config>() {
 }
 
 benchmarks! {
-	// on_idle, we we don't check anyone, but fully unbond them.
+	// on_idle, we don't check anyone, but fully unbond them.
 	on_idle_unstake {
 		ErasToCheckPerBlock::<T>::put(1);
 		for who in create_unexposed_nominators::<T>() {
@@ -140,7 +140,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::Terminated)
+			Some(Event::BatchFinished)
 		));
 	}
 
@@ -178,7 +178,7 @@ benchmarks! {
 		assert!(stashes.iter().all(|(s, _)| request.stashes.iter().find(|(ss, _)| ss == s).is_some()));
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
-			Some(Event::Checking { .. })
+			Some(Event::BatchChecked { .. })
 		));
 	}
 
