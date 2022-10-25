@@ -79,8 +79,8 @@ fn test_setup_works() {
 		let reward_account = Pools::create_reward_account(last_pool);
 
 		// the bonded_account should be bonded by the depositor's funds.
-		assert_eq!(StakingMock::stake(&bonded_account).map(|s| s.active).unwrap(), 10);
-		assert_eq!(StakingMock::stake(&bonded_account).map(|l| l.total).unwrap(), 10);
+		assert_eq!(StakingMock::active_balance(&bonded_account).unwrap(), 10);
+		assert_eq!(StakingMock::total_balance(&bonded_account).unwrap(), 10);
 
 		// but not nominating yet.
 		assert!(Nominations::get().is_none());
@@ -4088,7 +4088,7 @@ mod create {
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!PoolMembers::<Runtime>::contains_key(11));
 			assert_err!(
-				StakingMock::stake(&next_pool_stash).map(|s| s.active),
+				StakingMock::active_balance(&next_pool_stash),
 				DispatchError::Other("balance not found")
 			);
 
@@ -4128,7 +4128,7 @@ mod create {
 				}
 			);
 			assert_eq!(
-				StakingMock::stake(&next_pool_stash).map(|s| s.active).unwrap(),
+				StakingMock::active_balance(&next_pool_stash).unwrap(),
 				StakingMock::minimum_nominator_bond()
 			);
 			assert_eq!(
