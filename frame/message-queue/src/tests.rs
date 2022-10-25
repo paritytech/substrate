@@ -79,6 +79,7 @@ impl frame_system::Config for Test {
 
 parameter_types! {
 	pub const HeapSize: u32 = 131072;
+	pub const MaxReady: u32 = 3;
 }
 
 impl Config for Test {
@@ -87,19 +88,14 @@ impl Config for Test {
 	type MessageProcessor = TestMessageProcessor;
 	type Size = u32;
 	type HeapSize = HeapSize;
+	type MaxReady = MaxReady;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
 pub enum MessageOrigin {
 	Here,
-	Parent,
-	Peer(u8),
-}
-// NOTE: Would be nice to have a derive for this.
-impl Arity for MessageOrigin {
-	fn arity() -> usize {
-		u8::arity() + 2
-	}
+	There,
+	Everywhere(u8),
 }
 
 parameter_types! {
@@ -173,24 +169,37 @@ fn enqueue_within_one_page_works() {
 				BoundedSlice::truncate_from(&b"kah"[..]),
 			]
 			.into_iter(),
-			Parent,
+			There,
 		);
 
 		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"boo".to_vec(), Parent), (b"yah".to_vec(), Parent),]
+			vec![(b"boo".to_vec(), There), (b"yah".to_vec(), There),]
 		);
 
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Peer(1));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Everywhere(1));
 
 		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"kah".to_vec(), Parent), (b"sha".to_vec(), Peer(1)),]
+			vec![(b"kah".to_vec(), There), (b"sha".to_vec(), Everywhere(1)),]
 		);
+	});
+}
+
+#[test]
+fn overflowing_ready_origins_works() {
+	new_test_ext().execute_with(|| {
+		use MessageOrigin::*;
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Here);
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), There);
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"foo"[..]), Everywhere(1));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"bar"[..]), Everywhere(2));
+		println!("{:?}", frame_system::Pallet::<Test>::events());
+		assert!(false);
 	});
 }
