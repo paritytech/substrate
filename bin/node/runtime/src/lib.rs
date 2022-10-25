@@ -587,7 +587,7 @@ impl pallet_fast_unstake::Config for Runtime {
 	type Deposit = ConstU128<{ DOLLARS }>;
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
-	type Staking = pallet_staking::Pallet<Self>;
+	type Staking = Staking;
 	type WeightInfo = ();
 }
 
@@ -779,7 +779,7 @@ impl pallet_nomination_pools::Config for Runtime {
 	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type Staking = pallet_staking::Pallet<Self>;
+	type Staking = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
