@@ -286,7 +286,7 @@ use sp_runtime::{
 		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
 		Zero,
 	},
-	FixedPointNumber, FixedPointOperand,
+	FixedPointNumber,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -1133,7 +1133,6 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::traits::CheckedAdd;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
@@ -1152,20 +1151,7 @@ pub mod pallet {
 		type WeightInfo: weights::WeightInfo;
 
 		/// The nominating balance.
-		type Currency: Currency<Self::AccountId, Balance = Self::CurrencyBalance>;
-
-		/// Sadly needed to bound it to `FixedPointOperand`.
-		// The only alternative is to sprinkle a `where BalanceOf<T>: FixedPointOperand` in roughly
-		// a million places, so we prefer doing this.
-		type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
-			+ codec::FullCodec
-			+ MaybeSerializeDeserialize
-			+ sp_std::fmt::Debug
-			+ Default
-			+ FixedPointOperand
-			+ CheckedAdd
-			+ TypeInfo
-			+ MaxEncodedLen;
+		type Currency: Currency<Self::AccountId>;
 
 		/// The type that is used for reward counter.
 		///
