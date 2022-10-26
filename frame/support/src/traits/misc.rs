@@ -407,8 +407,22 @@ where
 	}
 }
 
+/// Defensively checks the minimum between two values
 pub trait DefensiveMin<T> {
+	/// Defensively checks the minimum between two values
+	/// or if the two values are the same
+	///
+	/// # Example
+	///
+	/// assert_eq!(10, 10_u32.defensive_min(10_u32));
+	/// ```
 	fn defensive_min(&self, t: T) -> Self;
+	/// Strictly defensively checks the minimum between two values
+	///
+	/// # Example
+	///
+	/// assert_eq!(10, 10_u32.defensive_strict_min(11_u32));
+	/// ```
 	fn defensive_strict_min(&self, t: T) -> Self;
 }
 
@@ -432,15 +446,29 @@ where
 	}
 }
 
+/// Defensively checks the maximum between two values
 pub trait DefensiveMax<T> {
+	/// Defensively checks the maximum between two values
+	/// or if the two values are the same
+	///
+	/// # Example
+	///
+	/// assert_eq!(10, 10_u32.defensive_max(10_u32));
+	/// ```
 	fn defensive_max(&self, t: T) -> Self;
+	/// Strictly defensively checks the minimum between two values
+	///
+	/// # Example
+	///
+	/// assert_eq!(11, 11_u32.defensive_strict_max(10_u32));
+	/// ```
 	fn defensive_strict_max(&self, t: T) -> Self;
 }
 
 impl<T, U> DefensiveMax<U> for T
-	where
-		T: Max<U> + Clone,
-		U: Copy + std::fmt::Debug,
+where
+	T: Max<U> + Clone,
+	U: Copy + std::fmt::Debug,
 {
 	fn defensive_max(&self, u: U) -> Self {
 		T::max(&self, u).unwrap_or_else(|_err| {
@@ -456,7 +484,6 @@ impl<T, U> DefensiveMax<U> for T
 		})
 	}
 }
-
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -1210,7 +1237,7 @@ mod test {
 
 	#[test]
 	#[should_panic(
-	expected = "Defensive failure has been triggered!: \"DefensiveStrictMax maximize\""
+		expected = "Defensive failure has been triggered!: \"DefensiveStrictMax maximize\""
 	)]
 	fn defensive_strict_max_panics() {
 		assert_eq!(9, 9_u32.defensive_strict_max(9_u32));

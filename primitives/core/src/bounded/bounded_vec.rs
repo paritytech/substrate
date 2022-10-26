@@ -53,22 +53,30 @@ pub trait TruncateFrom<T> {
 	fn truncate_from(unbound: T) -> Self;
 }
 
+/// A trait that checks for the minimum between two values
 pub trait Min<T> {
+	/// Checks the minimum between two values
+	/// or/and if the two values are equal
 	fn min(&self, t: T) -> Result<Self, T>
 	where
 		Self: Sized;
+	/// Checks the minimum between two values
 	fn strict_min(&self, t: T) -> Result<Self, T>
 	where
 		Self: Sized;
 }
 
+/// A trait that checks for the maximum between two values
 pub trait Max<T> {
+	/// Checks the maximum between two values
+	/// or/and if the two values are equal
 	fn max(&self, t: T) -> Result<Self, T>
-		where
-			Self: Sized;
+	where
+		Self: Sized;
+	/// checks the minimum between two values
 	fn strict_max(&self, t: T) -> Result<Self, T>
-		where
-			Self: Sized;
+	where
+		Self: Sized;
 }
 
 #[cfg(feature = "std")]
