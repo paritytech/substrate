@@ -121,8 +121,8 @@ benchmarks! {
 		// number of eras multiplied by validators in that era.
 		let x in (T::Staking::bonding_duration() * 1) .. (T::Staking::bonding_duration() * MAX_VALIDATORS);
 
-		let v = x / T::Staking::bonding_duration();
 		let u = T::Staking::bonding_duration();
+		let v = x / u;
 
 		ErasToCheckPerBlock::<T>::put(u);
 		T::Staking::set_current_era(u);
