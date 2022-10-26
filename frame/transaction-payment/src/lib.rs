@@ -658,7 +658,7 @@ where
 		Self(fee)
 	}
 
-	/// Returns the tip as being choosen by the transaction sender.
+	/// Returns the tip as being chosen by the transaction sender.
 	pub fn tip(&self) -> BalanceOf<T> {
 		self.0
 	}
