@@ -385,3 +385,66 @@ async fn call_runtime() {
 			ChainHeadEvent::Error(event) if event.error.contains("Execution failed")
 	);
 }
+
+#[tokio::test]
+async fn get_storage() {
+	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
+	let block_hash = format!("{:?}", block.header.hash());
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+
+	const KEY: &[u8] = b":mock";
+	const VALUE: &[u8] = b"hello world";
+
+	let key = format!("0x{:?}", HexDisplay::from(&KEY));
+
+	// Subscription ID is stale the disjoint event is emitted.
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", ["invalid_sub_id", &invalid_hash, &key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<String> = get_next_event(&mut sub).await;
+	assert_eq!(event, ChainHeadEvent::<String>::Disjoint);
+
+	// Valid subscription ID with invalid block hash will error.
+	let err = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &invalid_hash, &key])
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+	);
+
+	// Valid call without storage at the key.
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+
+	// Import a new block with storage changes.
+	let mut builder = client.new_block(Default::default()).unwrap();
+	builder.push_storage_change(KEY.to_vec(), Some(VALUE.to_vec())).unwrap();
+	let block = builder.build().unwrap().block;
+	let block_hash = format!("{:?}", block.header.hash());
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut block_sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Valid call with storage at the key.
+	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&VALUE)));
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result == expected_value);
+}
