@@ -23,7 +23,7 @@ use crate::{
 };
 use clap::Parser;
 use log::info;
-use sc_client_api::{StorageProvider, UsageProvider};
+use sc_client_api::{HeaderBackend, StorageProvider, UsageProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::{fmt::Debug, io::Write, str::FromStr, sync::Arc};
 
@@ -57,7 +57,7 @@ impl ExportStateCmd {
 	) -> error::Result<()>
 	where
 		B: BlockT,
-		C: UsageProvider<B> + StorageProvider<B, BA>,
+		C: UsageProvider<B> + StorageProvider<B, BA> + HeaderBackend<B>,
 		BA: sc_client_api::backend::Backend<B>,
 		B::Hash: FromStr,
 		<B::Hash as FromStr>::Err: Debug,
@@ -65,7 +65,11 @@ impl ExportStateCmd {
 	{
 		info!("Exporting raw state...");
 		let block_id = self.input.as_ref().map(|b| b.parse()).transpose()?;
-		let raw_state = sc_service::chain_ops::export_raw_state(client, block_id)?;
+		let hash = match block_id {
+			Some(id) => client.expect_block_hash_from_id(&id)?,
+			None => client.usage_info().chain.best_hash,
+		};
+		let raw_state = sc_service::chain_ops::export_raw_state(client, &hash)?;
 		input_spec.set_storage(raw_state);
 
 		info!("Generating new chain spec...");

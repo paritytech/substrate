@@ -22,6 +22,7 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::{Backend as ClientBackend, BlockBackend, StorageProvider, UsageProvider};
 use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
 
 use clap::Parser;
@@ -87,7 +88,8 @@ impl BlockCmd {
 			+ BlockBackend<Block>
 			+ ProvideRuntimeApi<Block>
 			+ StorageProvider<Block, BA>
-			+ UsageProvider<Block>,
+			+ UsageProvider<Block>
+			+ HeaderBackend<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
 		// Put everything in the benchmark type to have the generic types handy.

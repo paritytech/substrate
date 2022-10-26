@@ -132,6 +132,7 @@ pub use crate::{
 	migration::Migration,
 	pallet::*,
 	schedule::{HostFnWeights, InstructionWeights, Limits, Schedule},
+	wasm::Determinism,
 };
 
 type CodeHash<T> = <T as frame_system::Config>::Hash;
@@ -206,7 +207,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(8);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(9);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -456,6 +457,10 @@ pub mod pallet {
 		/// the in storage version to the current
 		/// [`InstructionWeights::version`](InstructionWeights).
 		///
+		/// - `determinism`: If this is set to any other value but [`Determinism::Deterministic`]
+		///   then the only way to use this code is to delegate call into it from an offchain
+		///   execution. Set to [`Determinism::Deterministic`] if in doubt.
+		///
 		/// # Note
 		///
 		/// Anyone can instantiate a contract from any uploaded code and thus prevent its removal.
@@ -467,9 +472,11 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<<BalanceOf<T> as codec::HasCompact>::Type>,
+			determinism: Determinism,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into)).map(|_| ())
+			Self::bare_upload_code(origin, code, storage_deposit_limit.map(Into::into), determinism)
+				.map(|_| ())
 		}
 
 		/// Remove the code stored under `code_hash` and refund the deposit to its owner.
@@ -562,6 +569,7 @@ pub mod pallet {
 				storage_deposit_limit.map(Into::into),
 				data,
 				None,
+				Determinism::Deterministic,
 			);
 			if let Ok(retval) = &output.result {
 				if retval.did_revert() {
@@ -825,6 +833,8 @@ pub mod pallet {
 		/// A more detailed error can be found on the node console if debug messages are enabled
 		/// or in the debug buffer which is returned to RPC clients.
 		CodeRejected,
+		/// An indetermistic code was used in a context where this is not permitted.
+		Indeterministic,
 	}
 
 	/// A mapping from an original code hash to the original code, untouched by instrumentation.
@@ -921,6 +931,7 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug: bool,
+		determinism: Determinism,
 	) -> ContractExecResult<BalanceOf<T>> {
 		let mut debug_message = if debug { Some(Vec::new()) } else { None };
 		let output = Self::internal_call(
@@ -931,6 +942,7 @@ where
 			storage_deposit_limit,
 			data,
 			debug_message.as_mut(),
+			determinism,
 		);
 		ContractExecResult {
 			result: output.result.map_err(|r| r.error),
@@ -994,10 +1006,11 @@ where
 		origin: T::AccountId,
 		code: Vec<u8>,
 		storage_deposit_limit: Option<BalanceOf<T>>,
+		determinism: Determinism,
 	) -> CodeUploadResult<CodeHash<T>, BalanceOf<T>> {
 		let schedule = T::Schedule::get();
-		let module =
-			PrefabWasmModule::from_code(code, &schedule, origin).map_err(|(err, _)| err)?;
+		let module = PrefabWasmModule::from_code(code, &schedule, origin, determinism)
+			.map_err(|(err, _)| err)?;
 		let deposit = module.open_deposit();
 		if let Some(storage_deposit_limit) = storage_deposit_limit {
 			ensure!(storage_deposit_limit >= deposit, <Error<T>>::StorageDepositLimitExhausted);
@@ -1067,6 +1080,7 @@ where
 		storage_deposit_limit: Option<BalanceOf<T>>,
 		data: Vec<u8>,
 		debug_message: Option<&mut Vec<u8>>,
+		determinism: Determinism,
 	) -> InternalCallOutput<T> {
 		let mut gas_meter = GasMeter::new(gas_limit);
 		let mut storage_meter = match StorageMeter::new(&origin, storage_deposit_limit, value) {
@@ -1088,6 +1102,7 @@ where
 			value,
 			data,
 			debug_message,
+			determinism,
 		);
 		InternalCallOutput {
 			result,
@@ -1115,11 +1130,16 @@ where
 			let schedule = T::Schedule::get();
 			let (extra_deposit, executable) = match code {
 				Code::Upload(binary) => {
-					let executable = PrefabWasmModule::from_code(binary, &schedule, origin.clone())
-						.map_err(|(err, msg)| {
-							debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
-							err
-						})?;
+					let executable = PrefabWasmModule::from_code(
+						binary,
+						&schedule,
+						origin.clone(),
+						Determinism::Deterministic,
+					)
+					.map_err(|(err, msg)| {
+						debug_message.as_mut().map(|buffer| buffer.extend(msg.as_bytes()));
+						err
+					})?;
 					// The open deposit will be charged during execution when the
 					// uploaded module does not already exist. This deposit is not part of the
 					// storage meter because it is not transferred to the contract but
@@ -1218,6 +1238,7 @@ sp_api::decl_runtime_apis! {
 			origin: AccountId,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<Balance>,
+			determinism: Determinism,
 		) -> CodeUploadResult<Hash, Balance>;
 
 		/// Query a given storage key in a given contract.
