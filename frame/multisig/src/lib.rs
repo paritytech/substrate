@@ -370,7 +370,6 @@ pub mod pallet {
 			let z = call.using_encoded(|d| d.len()) as u32;
 
 			T::WeightInfo::as_multi_create(s, z)
-			.max(T::WeightInfo::as_multi_create_store(s, z))
 			.max(T::WeightInfo::as_multi_approve(s, z))
 			.max(T::WeightInfo::as_multi_complete(s, z))
 			.saturating_add(*max_weight)
@@ -434,7 +433,6 @@ pub mod pallet {
 
 			T::WeightInfo::approve_as_multi_create(s)
 				.max(T::WeightInfo::approve_as_multi_approve(s))
-				.max(T::WeightInfo::approve_as_multi_complete(s))
 				.saturating_add(*max_weight)
 		})]
 		pub fn approve_as_multi(
