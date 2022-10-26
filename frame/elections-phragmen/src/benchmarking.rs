@@ -84,9 +84,9 @@ fn submit_candidates_with_self_vote<T: Config>(
 ) -> Result<Vec<T::AccountId>, &'static str> {
 	let candidates = submit_candidates::<T>(c, prefix)?;
 	let stake = default_stake::<T>(c);
-	let _ = candidates
-		.iter()
-		.try_for_each(|c| submit_voter::<T>(c.clone(), vec![c.clone()], stake).map(|_| ()))?;
+	let _ = candidates.iter().try_for_each(|c| {
+		submit_voter::<T>(c.clone(), vec![c.clone()].try_into().unwrap(), stake).map(|_| ())
+	})?;
 	Ok(candidates)
 }
 
@@ -96,7 +96,7 @@ fn submit_voter<T: Config>(
 	votes: Vec<T::AccountId>,
 	stake: BalanceOf<T>,
 ) -> DispatchResultWithPostInfo {
-	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes, stake)
+	<Elections<T>>::vote(RawOrigin::Signed(caller).into(), votes.try_into().unwrap(), stake)
 }
 
 /// create `num_voter` voters who randomly vote for at most `votes` of `all_candidates` if
@@ -110,7 +110,13 @@ fn distribute_voters<T: Config>(
 	for i in 0..num_voters {
 		// to ensure that votes are different
 		all_candidates.rotate_left(1);
-		let votes = all_candidates.iter().cloned().take(votes).collect::<Vec<_>>();
+		let votes = all_candidates
+			.iter()
+			.cloned()
+			.take(votes)
+			.collect::<Vec<_>>()
+			.try_into()
+			.unwrap();
 		let voter = endowed_account::<T>("voter", i);
 		submit_voter::<T>(voter, votes, stake)?;
 	}
@@ -165,7 +171,7 @@ benchmarks! {
 		votes.rotate_left(1);
 
 		whitelist!(caller);
-	}: vote(RawOrigin::Signed(caller), votes, stake)
+	}: vote(RawOrigin::Signed(caller), votes.try_into().unwrap(), stake)
 
 	vote_more {
 		let v in 2 .. (MAXIMUM_VOTE as u32);
@@ -187,7 +193,7 @@ benchmarks! {
 		assert!(votes.len() > <Voting<T>>::get(caller.clone()).votes.len());
 
 		whitelist!(caller);
-	}: vote(RawOrigin::Signed(caller), votes, stake / <BalanceOf<T>>::from(10u32))
+	}: vote(RawOrigin::Signed(caller), votes.try_into().unwrap(), stake / <BalanceOf<T>>::from(10u32))
 
 	vote_less {
 		let v in 2 .. (MAXIMUM_VOTE as u32);
@@ -208,7 +214,7 @@ benchmarks! {
 		assert!(votes.len() < <Voting<T>>::get(caller.clone()).votes.len());
 
 		whitelist!(caller);
-	}: vote(RawOrigin::Signed(caller), votes, stake)
+	}: vote(RawOrigin::Signed(caller), votes.try_into().unwrap(), stake)
 
 	remove_voter {
 		// we fix the number of voted candidates to max
@@ -228,7 +234,7 @@ benchmarks! {
 
 	submit_candidacy {
 		// number of already existing candidates.
-		let c in 1 .. T::MaxCandidates::get();
+		let c in 1 .. T::MaxCandidates::get()-1;
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
