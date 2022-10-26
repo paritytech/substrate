@@ -41,7 +41,7 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, CallExecutor, ExecutorProvider, StorageKey,
+	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
 use sp_api::CallApiAt;
@@ -360,10 +360,15 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 		key: String,
-		_child_key: Option<String>,
+		child_key: Option<String>,
 		_network_config: Option<()>,
 	) -> SubscriptionResult {
 		let key = StorageKey(parse_hex_param(&mut sink, key)?);
+
+		let child_key = child_key
+			.map(|child_key| parse_hex_param(&mut sink, child_key))
+			.transpose()?
+			.map(ChildInfo::new_default_from_vec);
 
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
@@ -375,13 +380,31 @@ where
 					return
 				},
 				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<Option<String>>::Disjoint,
-				Ok(()) => match client.storage(&hash, &key) {
-					Ok(result) => {
-						let result =
-							result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
-						ChainHeadEvent::Done(ChainHeadResult { result })
-					},
-					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+				Ok(()) => {
+					if let Some(child_key) = child_key {
+						// The child key is provided, use the key to query the child trie.
+						client
+							.child_storage(&hash, &child_key, &key)
+							.map(|result| {
+								let result = result
+									.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+								ChainHeadEvent::Done(ChainHeadResult { result })
+							})
+							.unwrap_or_else(|error| {
+								ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
+							})
+					} else {
+						client
+							.storage(&hash, &key)
+							.map(|result| {
+								let result = result
+									.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+								ChainHeadEvent::Done(ChainHeadResult { result })
+							})
+							.unwrap_or_else(|error| {
+								ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
+							})
+					}
 				},
 			};
 
