@@ -33,7 +33,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	DispatchResult, Perbill,
+	DispatchResult, Perbill, RuntimeDebug,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -59,6 +59,14 @@ impl Contains<RuntimeCall> for BaseFilter {
 	fn contains(call: &RuntimeCall) -> bool {
 		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
 	}
+}
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum MetadataSchema {
+	IpfsJsonV1,
+	IpfsJsonV2,
+	BinJsonV1,
+	BinJsonV2,
 }
 
 parameter_types! {
@@ -228,6 +236,7 @@ impl Config for Test {
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TestTracksInfo;
 	type Preimages = Preimage;
+	type MetadataSchema = MetadataSchema;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {

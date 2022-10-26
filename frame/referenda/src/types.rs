@@ -20,7 +20,7 @@
 use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{
-	traits::{schedule::v3::Anon, Bounded},
+	traits::{schedule::v3::Anon, Bounded, Hash as PreimageHash},
 	Parameter,
 };
 use scale_info::TypeInfo;
@@ -71,6 +71,8 @@ pub type ScheduleAddressOf<T, I> = <<T as Config<I>>::Scheduler as Anon<
 	CallOf<T, I>,
 	PalletsOriginOf<T>,
 >>::Address;
+
+pub type MetadataOf<T, I> = Metadata<<T as Config<I>>::MetadataSchema>;
 
 /// A referendum index.
 pub type ReferendumIndex = u32;
@@ -510,6 +512,18 @@ impl Debug for Curve {
 			},
 		}
 	}
+}
+
+/// General information about the item referring to the metadata.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct Metadata<Schema: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone> {
+	/// The schema/s descriptor of the data the preimage `hash` referring to.
+	/// e.g. enum of `IpfsJsonV1` (the hash of an off-chain IPFS json file),
+	/// `BinJsonV2` (on-chain json dump).
+	pub(super) schema: Schema,
+
+	/// The hash of the preimage holding the data of the `schema`.
+	pub(super) hash: PreimageHash,
 }
 
 #[cfg(test)]

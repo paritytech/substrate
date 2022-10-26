@@ -93,9 +93,9 @@ pub use self::{
 	pallet::*,
 	types::{
 		BalanceOf, BoundedCallOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit,
-		InsertSorted, NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo,
-		ReferendumInfoOf, ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf,
-		TrackIdOf, TrackInfo, TrackInfoOf, TracksInfo, VotesOf,
+		InsertSorted, MetadataOf, NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex,
+		ReferendumInfo, ReferendumInfoOf, ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf,
+		TallyOf, TrackIdOf, TrackInfo, TrackInfoOf, TracksInfo, VotesOf,
 	},
 	weights::WeightInfo,
 };
@@ -217,6 +217,11 @@ pub mod pallet {
 
 		/// The preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
+
+		/// The schema type of the referendum [`MetadataOf`].
+		/// e.g. enum of `IpfsJsonV1` (the hash of an off-chain IPFS json file),
+		/// `BinJsonV2` (on-chain json dump).
+		type MetadataSchema: Clone + Codec + Eq + Debug + TypeInfo + MaxEncodedLen;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
@@ -245,6 +250,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type DecidingCount<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TrackIdOf<T, I>, u32, ValueQuery>;
+
+	/// The metadata of the referendum.
+	#[pallet::storage]
+	pub type MetadataFor<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, ReferendumIndex, MetadataOf<T, I>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -342,6 +352,16 @@ pub mod pallet {
 			/// The final tally of votes in this referendum.
 			tally: T::Tally,
 		},
+		/// Metadata for a referendum has been set.
+		MetadataSet {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+		},
+		/// Metadata for a referendum has been cleared.
+		MetadataCleared {
+			/// Index of the referendum.
+			index: ReferendumIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -368,6 +388,8 @@ pub mod pallet {
 		NoPermission,
 		/// The deposit cannot be refunded since none was made.
 		NoDeposit,
+		/// The metadata preimage for a given hash does not exist.
+		BadMetadata,
 	}
 
 	#[pallet::call]
@@ -519,6 +541,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Killed { index, tally: status.tally });
 			Self::slash_deposit(Some(status.submission_deposit.clone()));
 			Self::slash_deposit(status.decision_deposit.clone());
+			Self::do_clear_metadata(index);
 			let info = ReferendumInfo::Killed(frame_system::Pallet::<T>::block_number());
 			ReferendumInfoFor::<T, I>::insert(index, info);
 			Ok(())
@@ -578,6 +601,46 @@ pub mod pallet {
 					OneFewerDecidingBranch::QueueEmpty
 				};
 			Ok(Some(branch.weight::<T, I>()).into())
+		}
+
+		/// Set the metadata to an ongoing referendum.
+		///
+		/// - `origin`: Must be `Signed`, and the creator of the referendum.
+		/// - `index`: The index of the referendum to add metadata for.
+		/// - `metadata`: The metadata of the referendum.
+		// TODO replace the weight function
+		#[pallet::weight(1)]
+		pub fn set_metadata(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+			metadata: MetadataOf<T, I>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let status = Self::ensure_ongoing(index)?;
+			ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+			ensure!(T::Preimages::len(&metadata.hash).is_some(), Error::<T, I>::BadMetadata);
+
+			T::Preimages::request(&metadata.hash);
+			MetadataFor::<T, I>::insert(index, metadata);
+
+			Self::deposit_event(Event::<T, I>::MetadataSet { index });
+			Ok(())
+		}
+
+		/// Clear the ongoing referendum metadata.
+		///
+		/// - `origin`: Must be `Signed`. If the referendum is ongoing, it must also be the creator
+		///   of the referendum.
+		/// - `index`: The index of the ongoing referendum to clear metadata for.
+		// TODO replace the weight function
+		#[pallet::weight(1)]
+		pub fn clear_metadata(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			if let Some(status) = Self::ensure_ongoing(index).ok() {
+				ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+			}
+			Self::do_clear_metadata(index);
+			Ok(())
 		}
 	}
 }
@@ -1136,5 +1199,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let x = Perbill::from_rational(elapsed.min(period), period);
 		support_needed.passing(x, tally.support(id)) &&
 			approval_needed.passing(x, tally.approval(id))
+	}
+
+	/// Clear metadata, if `Some` and unrequest associated preimage.
+	fn do_clear_metadata(index: ReferendumIndex) {
+		if let Some(metadata) = MetadataFor::<T, I>::take(index) {
+			if T::Preimages::is_requested(&metadata.hash) {
+				T::Preimages::unrequest(&metadata.hash);
+			}
+			Self::deposit_event(Event::<T, I>::MetadataCleared { index });
+		}
 	}
 }

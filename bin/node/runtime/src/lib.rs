@@ -847,6 +847,14 @@ impl pallet_referenda::TracksInfo<Balance, BlockNumber> for TracksInfo {
 }
 pallet_referenda::impl_tracksinfo_get!(TracksInfo, Balance, BlockNumber);
 
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen)]
+pub enum MetadataSchema {
+	IpfsJsonV1,
+	IpfsJsonV2,
+	BinJsonV1,
+	BinJsonV2,
+}
+
 impl pallet_referenda::Config for Runtime {
 	type WeightInfo = pallet_referenda::weights::SubstrateWeight<Self>;
 	type RuntimeCall = RuntimeCall;
@@ -865,6 +873,7 @@ impl pallet_referenda::Config for Runtime {
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TracksInfo;
 	type Preimages = Preimage;
+	type MetadataSchema = MetadataSchema;
 }
 
 impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
@@ -885,6 +894,7 @@ impl pallet_referenda::Config<pallet_referenda::Instance2> for Runtime {
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TracksInfo;
 	type Preimages = Preimage;
+	type MetadataSchema = MetadataSchema;
 }
 
 impl pallet_ranked_collective::Config for Runtime {
