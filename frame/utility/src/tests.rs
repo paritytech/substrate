@@ -142,9 +142,7 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-impl pallet_root_testing::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-}
+impl pallet_root_testing::Config for Test {}
 
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;

@@ -902,9 +902,7 @@ impl pallet_remark::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }
 
-impl pallet_root_testing::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-}
+impl pallet_root_testing::Config for Runtime {}
 
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
