@@ -548,6 +548,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok((amount, None))
 		}
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(details.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 		// Figure out the debit and credit, together with side-effects.
