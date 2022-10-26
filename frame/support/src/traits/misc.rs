@@ -418,19 +418,45 @@ where
 	U: Copy + std::fmt::Debug,
 {
 	fn defensive_min(&self, u: U) -> Self {
-		T::min(&self, u).unwrap_or_else(|err| {
+		T::min(&self, u).unwrap_or_else(|_err| {
 			defensive!("DefensiveMin minimize");
 			self.clone()
 		})
 	}
 
 	fn defensive_strict_min(&self, u: U) -> Self {
-		T::strict_min(&self, u).unwrap_or_else(|err| {
+		T::strict_min(&self, u).unwrap_or_else(|_err| {
 			defensive!("DefensiveStrictMin minimize");
 			self.clone()
 		})
 	}
 }
+
+pub trait DefensiveMax<T> {
+	fn defensive_max(&self, t: T) -> Self;
+	fn defensive_strict_max(&self, t: T) -> Self;
+}
+
+impl<T, U> DefensiveMax<U> for T
+	where
+		T: Max<U> + Clone,
+		U: Copy + std::fmt::Debug,
+{
+	fn defensive_max(&self, u: U) -> Self {
+		T::max(&self, u).unwrap_or_else(|_err| {
+			defensive!("DefensiveMax maximize");
+			self.clone()
+		})
+	}
+
+	fn defensive_strict_max(&self, u: U) -> Self {
+		T::strict_max(&self, u).unwrap_or_else(|_err| {
+			defensive!("DefensiveStrictMax maximize");
+			self.clone()
+		})
+	}
+}
+
 
 /// Anything that can have a `::len()` method.
 pub trait Len {
@@ -1021,7 +1047,6 @@ mod test {
 	fn defensive_truncating_from_vec_defensive_works() {
 		let unbound = vec![1u32, 2];
 		let bound = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
-		//assert_eq!(10, 10_u32.defensive_min(11_u32));
 		assert_eq!(bound, vec![1u32]);
 	}
 
@@ -1162,5 +1187,33 @@ mod test {
 	fn defensive_strict_min_panics() {
 		assert_eq!(9, 9_u32.defensive_strict_min(9_u32));
 		assert_eq!(10, 11_u32.defensive_strict_min(10_u32));
+	}
+
+	#[test]
+	fn defensive_max_works() {
+		assert_eq!(11, 11_u32.defensive_max(10_u32));
+		assert_eq!(10, 10_u32.defensive_max(10_u32));
+	}
+
+	#[test]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax maximize\"")]
+	fn defensive_max_panics() {
+		assert_eq!(12, 9_u32.defensive_max(12_u32));
+		assert_eq!(11, 10_u32.defensive_max(11_u32));
+	}
+
+	#[test]
+	fn defensive_strict_max_works() {
+		assert_eq!(11, 11_u32.defensive_strict_max(10_u32));
+		assert_eq!(10, 10_u32.defensive_strict_max(9_u32));
+	}
+
+	#[test]
+	#[should_panic(
+	expected = "Defensive failure has been triggered!: \"DefensiveStrictMax maximize\""
+	)]
+	fn defensive_strict_max_panics() {
+		assert_eq!(9, 9_u32.defensive_strict_max(9_u32));
+		assert_eq!(11, 10_u32.defensive_strict_max(11_u32));
 	}
 }

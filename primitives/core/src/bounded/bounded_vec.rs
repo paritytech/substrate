@@ -63,8 +63,12 @@ pub trait Min<T> {
 }
 
 pub trait Max<T> {
-	fn max(&self, t: T) -> Self;
-	fn strict_max(&self, t: T) -> Self;
+	fn max(&self, t: T) -> Result<Self, T>
+		where
+			Self: Sized;
+	fn strict_max(&self, t: T) -> Result<Self, T>
+		where
+			Self: Sized;
 }
 
 #[cfg(feature = "std")]
@@ -752,18 +756,23 @@ impl<T, S: std::cmp::PartialOrd<T> + std::clone::Clone> Min<T> for S {
 	}
 }
 
-/*impl<T, S> Max<T> for S {
-	fn max(&self, t: T) -> Self {
-		if &self >= &t {
-			self
+impl<T, S: std::cmp::PartialOrd<T> + std::clone::Clone> Max<T> for S {
+	fn max(&self, t: T) -> Result<Self, T> {
+		if self >= &t {
+			Ok(self.clone())
+		} else {
+			Err(t)
 		}
 	}
-	fn strict_max(&self, t: T) -> Self {
-		if &self > &t {
-			self
+
+	fn strict_max(&self, t: T) -> Result<Self, T> {
+		if self > &t {
+			Ok(self.clone())
+		} else {
+			Err(t)
 		}
 	}
-}*/
+}
 
 // It is okay to give a non-mutable reference of the inner vec to anyone.
 impl<T, S> AsRef<Vec<T>> for BoundedVec<T, S> {
