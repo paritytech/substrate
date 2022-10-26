@@ -985,4 +985,19 @@ mod tests {
 
 		assert_eq!(first_storage_root, second_storage_root);
 	}
+
+	#[test]
+	fn big_key() {
+		let check = |keysize: usize| {
+			let mut memdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+			let mut root = Default::default();
+			let mut t = TrieDBMutBuilder::<LayoutV1>::new(&mut memdb, &mut root).build();
+			t.insert(&vec![0x01u8; keysize][..], &[0x01u8, 0x23]).unwrap();
+			std::mem::drop(t);
+			let t = TrieDBBuilder::<LayoutV1>::new(&memdb, &root).build();
+			assert_eq!(t.get(&vec![0x01u8; keysize][..]).unwrap(), Some(vec![0x01u8, 0x23]));
+		};
+		check(u16::MAX as usize / 2); // old limit
+		check(u16::MAX as usize / 2 + 1); // value over old limit still works
+	}
 }
