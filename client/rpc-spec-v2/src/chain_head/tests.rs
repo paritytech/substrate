@@ -7,6 +7,7 @@ use jsonrpsee::{
 	RpcModule,
 };
 use sc_block_builder::BlockBuilderProvider;
+use sc_client_api::ChildInfo;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys::CODE, testing::TaskExecutor};
@@ -20,6 +21,10 @@ type Header = substrate_test_runtime_client::runtime::Header;
 type Block = substrate_test_runtime_client::runtime::Block;
 const CHAIN_GENESIS: [u8; 32] = [0; 32];
 const INVALID_HASH: [u8; 32] = [1; 32];
+const KEY: &[u8] = b":mock";
+const VALUE: &[u8] = b"hello world";
+const CHILD_STORAGE_KEY: &[u8] = b"child";
+const CHILD_VALUE: &[u8] = b"child value";
 
 async fn get_next_event<T: serde::de::DeserializeOwned>(sub: &mut RpcSubscription) -> T {
 	let (event, _sub_id) = tokio::time::timeout(std::time::Duration::from_secs(1), sub.next())
@@ -37,7 +42,12 @@ async fn setup_api() -> (
 	String,
 	Block,
 ) {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let child_info = ChildInfo::new_default(CHILD_STORAGE_KEY);
+	let client = TestClientBuilder::new()
+		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
+		.build();
+	let mut client = Arc::new(client);
+
 	let api =
 		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
 
@@ -391,10 +401,6 @@ async fn get_storage() {
 	let (mut client, api, mut block_sub, sub_id, block) = setup_api().await;
 	let block_hash = format!("{:?}", block.header.hash());
 	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
-
-	const KEY: &[u8] = b":mock";
-	const VALUE: &[u8] = b"hello world";
-
 	let key = format!("0x{:?}", HexDisplay::from(&KEY));
 
 	// Subscription ID is stale the disjoint event is emitted.
@@ -443,6 +449,17 @@ async fn get_storage() {
 	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&VALUE)));
 	let mut sub = api
 		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result == expected_value);
+
+	// Child value set in `setup_api`.
+	let child_info = format!("0x{:?}", HexDisplay::from(b"child"));
+	let genesis_hash = format!("{:?}", client.genesis_hash());
+	let expected_value = Some(format!("0x{:?}", HexDisplay::from(&CHILD_VALUE)));
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &genesis_hash, &key, &child_info])
 		.await
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
