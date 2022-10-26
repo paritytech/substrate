@@ -535,7 +535,7 @@ impl<'a> Fold for ToClientSideDecl<'a> {
 
 		if is_core_trait {
 			// Add all the supertraits we want to have for `Core`.
-			input.supertraits = parse_quote!('static + Send + Sync);
+			input.supertraits = parse_quote!('static + Send);
 		} else {
 			// Add the `Core` runtime api as super trait.
 			let crate_ = &self.crate_;

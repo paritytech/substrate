@@ -309,13 +309,13 @@ benchmarks! {
 		let reward_amount = slash_amount.saturating_mul(1 + n) / 2;
 		let reward = reward_amount / r;
 		let slash = |id| core::iter::once(
-			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed(id, BalanceOf::<T>::from(slash_amount)))
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Slashed{staker: id, amount: BalanceOf::<T>::from(slash_amount)})
 		);
 		let balance_slash = |id| core::iter::once(
 			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Slashed{who: id, amount: slash_amount.into()})
 		);
 		let chill = |id| core::iter::once(
-			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled(id))
+			<T as StakingConfig>::RuntimeEvent::from(StakingEvent::<T>::Chilled{stash: id})
 		);
 		let balance_deposit = |id, amount: u32|
 			<T as BalancesConfig>::RuntimeEvent::from(pallet_balances::Event::<T>::Deposit{who: id, amount: amount.into()});

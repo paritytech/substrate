@@ -169,6 +169,10 @@ pub fn expand_outer_origin(
 				&self.caller
 			}
 
+			fn into_caller(self) -> Self::PalletsOrigin {
+				self.caller
+			}
+
 			fn try_with_caller<R>(
 				mut self,
 				f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
@@ -190,13 +194,6 @@ pub fn expand_outer_origin(
 			fn signed(by: Self::AccountId) -> Self {
 				#system_path::RawOrigin::Signed(by).into()
 			}
-
-			fn as_signed(self) -> Option<Self::AccountId> {
-				match self.caller {
-					OriginCaller::system(#system_path::RawOrigin::Signed(by)) => Some(by),
-					_ => None,
-				}
-			}
 		}
 
 		#[derive(
@@ -215,7 +212,6 @@ pub fn expand_outer_origin(
 		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
 		impl RuntimeOrigin {
-
 			#[doc = #doc_string_none_origin]
 			pub fn none() -> Self {
 				<RuntimeOrigin as #scrate::traits::OriginTrait>::none()
@@ -235,6 +231,21 @@ pub fn expand_outer_origin(
 		impl From<#system_path::Origin<#runtime>> for OriginCaller {
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
 				OriginCaller::system(x)
+			}
+		}
+
+		impl #scrate::traits::CallerTrait<<#runtime as #system_path::Config>::AccountId> for OriginCaller {
+			fn into_system(self) -> Option<#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
+				match self {
+					OriginCaller::system(x) => Some(x),
+					_ => None,
+				}
+			}
+			fn as_system_ref(&self) -> Option<&#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
+				match &self {
+					OriginCaller::system(o) => Some(o),
+					_ => None,
+				}
 			}
 		}
 
