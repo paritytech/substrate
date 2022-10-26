@@ -497,6 +497,8 @@ pub mod pallet {
 				amount: deposit.amount,
 			};
 			Self::deposit_event(e);
+			// TODO schedule (e.g. in 30 days) the preimage unregister to remove the preimage from
+			// the chain
 			Ok(())
 		}
 
