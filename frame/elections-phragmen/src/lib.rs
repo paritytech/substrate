@@ -100,7 +100,6 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	bounded_vec,
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
@@ -748,7 +747,7 @@ pub mod pallet {
 					<Voting<T>>::insert(
 						&member,
 						Voter {
-							votes: bounded_vec![member.clone()],
+							votes: vec![member.clone()].try_into().expect("Too many votes."),
 							stake: *stake,
 							deposit: Zero::zero(),
 						},

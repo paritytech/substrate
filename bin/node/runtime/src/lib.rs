@@ -997,6 +997,14 @@ parameter_types! {
 	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 }
 
+impl scale_info::TypeInfo for MaxCandidates {
+	type Identity = Self;
+
+	fn type_info() -> scale_info::Type {
+		u32::type_info()
+	}
+}
+
 // Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.
 const_assert!(DesiredMembers::get() <= CouncilMaxMembers::get());
 
