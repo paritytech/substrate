@@ -558,10 +558,6 @@ impl Pair {
 		})
 	}
 
-	pub fn signed_message(&mut self, message: &[u8]) -> bls_like::SignedMessage<BLS377> {
-		
-		self.0.signed_message(Message::new(b"", message))
-	}
 }
 impl CryptoType for Public {
 	#[cfg(feature = "full_crypto")]
