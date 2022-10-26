@@ -135,7 +135,7 @@ impl<Hash: Serialize> Serialize for NewBlock<Hash> {
 			state.serialize_field("newRuntime", &self.new_runtime)?;
 			state.end()
 		} else {
-			let mut state = serializer.serialize_struct("Initialized", 2)?;
+			let mut state = serializer.serialize_struct("NewBlock", 2)?;
 			state.serialize_field("blockHash", &self.block_hash)?;
 			state.serialize_field("parentBlockHash", &self.parent_block_hash)?;
 			state.end()
