@@ -67,7 +67,8 @@ pub struct Stake<T: StakingInterface + ?Sized> {
 	/// # Note
 	///
 	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
-	/// non-staking locks on the bonded pair's balance this may not be accurate.
+	/// non-staking locks on the bonded pair's balance this amount is going to be larger in
+	/// reality.
 	pub total: T::Balance,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
