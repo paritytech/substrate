@@ -157,7 +157,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if details.supply.checked_sub(&amount).is_none() {
 			return Underflow
 		}
-		if details.is_frozen {
+		if details.status == AssetStatus::Frozen {
 			return Frozen
 		}
 		if amount.is_zero() {
@@ -205,8 +205,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keep_alive: bool,
 	) -> Result<T::Balance, DispatchError> {
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(details.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
+		ensure!(details.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
 
 		let account = Account::<T, I>::get(id, who).ok_or(Error::<T, I>::NoAccount)?;
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
@@ -325,7 +325,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 
 		ensure!(account.balance.is_zero() || allow_burn, Error::<T, I>::WouldBurn);
-		ensure!(!details.is_frozen, Error::<T, I>::Frozen);
+		ensure!(details.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
 
 		T::Currency::unreserve(&who, deposit);
@@ -392,7 +392,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::can_increase(id, beneficiary, amount, true).into_result()?;
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
+			ensure!(details.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
 			check(details)?;
 
 			Account::<T, I>::try_mutate(id, beneficiary, |maybe_account| -> DispatchResult {
@@ -433,7 +433,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		f: DebitFlags,
 	) -> Result<T::Balance, DispatchError> {
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
+		ensure!(details.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
 
 		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
 			// Check admin rights.
@@ -660,7 +660,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				accounts: 0,
 				sufficients: 0,
 				approvals: 0,
-				is_frozen: false,
 				status: AssetStatus::Live,
 			},
 		);
@@ -679,7 +678,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if let Some(check_owner) = maybe_check_owner {
 				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
 			}
-			ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 			details.status = AssetStatus::Destroying;
 
 			Self::deposit_event(Event::DestructionStarted { asset_id: id });
@@ -700,8 +698,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let _ =
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-				// Should only destroy accounts while the asset is being destroyed
+				// Should only destroy accounts while the asset is in a destroying state
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 
 				for (who, v) in Account::<T, I>::drain_prefix(id) {
@@ -740,8 +737,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
-				ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
-				// Should only destroy accounts while the asset is being destroyed
+				// Should only destroy accounts while the asset is in a destroying state.
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 
 				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
@@ -768,7 +764,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn do_finish_destroy(id: T::AssetId) -> DispatchResult {
 		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 			let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.is_frozen, Error::<T, I>::NotFrozen);
 			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
 			ensure!(details.accounts == 0, Error::<T, I>::InUse);
 			ensure!(details.approvals == 0, Error::<T, I>::InUse);
@@ -795,8 +790,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 	) -> DispatchResult {
 		let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(!d.is_frozen, Error::<T, I>::Frozen);
+		ensure!(d.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
+		ensure!(d.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
 		Approvals::<T, I>::try_mutate(
 			(id, &owner, &delegate),
 			|maybe_approved| -> DispatchResult {

@@ -35,6 +35,8 @@ pub(super) type AssetAccountOf<T, I> =
 pub(super) enum AssetStatus {
 	/// The asset is active and able to be used.
 	Live,
+	/// Whether the asset is frozen for non-admin transfers.
+	Frozen,
 	/// The asset is currently being destroyed, and all actions are no longer permitted on the
 	/// asset. Once set to `Destroying`, the asset can never transition back to a `Live` state.
 	Destroying,
@@ -65,8 +67,6 @@ pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	pub(super) sufficients: u32,
 	/// The total number of approvals.
 	pub(super) approvals: u32,
-	/// Whether the asset is frozen for non-admin transfers.
-	pub(super) is_frozen: bool,
 	/// The status of the asset
 	pub(super) status: AssetStatus,
 }

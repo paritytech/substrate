@@ -41,6 +41,8 @@ pub mod v1 {
 
 	impl<Balance, AccountId, DepositBalance> OldAssetDetails<Balance, AccountId, DepositBalance> {
 		fn migrate_to_v1(self) -> AssetDetails<Balance, AccountId, DepositBalance> {
+			let status = if self.is_frozen { AssetStatus::Frozen } else { AssetStatus::Live };
+
 			AssetDetails {
 				owner: self.owner,
 				issuer: self.issuer,
@@ -53,8 +55,7 @@ pub mod v1 {
 				accounts: self.accounts,
 				sufficients: self.sufficients,
 				approvals: self.approvals,
-				is_frozen: self.is_frozen,
-				status: AssetStatus::Live,
+				status,
 			}
 		}
 	}
