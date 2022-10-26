@@ -16,7 +16,6 @@
 // limitations under the License.
 
 pub mod v1 {
-	use sp_std::prelude::*;
 	use crate::{types::BalanceOf, *};
 	use frame_support::{
 		storage::unhashed,
@@ -24,6 +23,7 @@ pub mod v1 {
 		weights::Weight,
 	};
 	use sp_staking::EraIndex;
+	use sp_std::prelude::*;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
