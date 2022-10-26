@@ -1114,6 +1114,88 @@ mod tests {
 		}
 	}
 
+	#[test]
+	fn prune_removes_stale_nodes() {
+		//     +---D       +-------F
+		//     |           |
+		// 0---A---B--(x)--C--(y)--G
+		//         |
+		//         +-------E
+		//
+		//  Test parameters:
+		//  - epoch duration: 100
+		//
+		//  We are going to prune the tree at:
+		//  - 'x', a node between B and C
+		//  - 'y', a node between C and G
+
+		let is_descendent_of = |base: &Hash, block: &Hash| -> Result<bool, TestError> {
+			match (base, block) {
+				(b"0", _) => Ok(true),
+				(b"A", b) => Ok(b != b"0"),
+				(b"B", b) => Ok(b != b"0" && b != b"A" && b != b"D"),
+				(b"C", b) => Ok(b == b"F" || b == b"G" || b == b"y"),
+				(b"x", b) => Ok(b == b"C" || b == b"F" || b == b"G" || b == b"y"),
+				(b"y", b) => Ok(b == b"G"),
+				_ => Ok(false),
+			}
+		};
+
+		let mut epoch_changes = EpochChanges::new();
+
+		let mut import_at = |slot, hash: &Hash, number, parent_hash, parent_number| {
+			let make_genesis = |slot| Epoch { start_slot: slot, duration: 100 };
+			// Get epoch descriptor valid for 'slot'
+			let epoch_descriptor = epoch_changes
+				.epoch_descriptor_for_child_of(&is_descendent_of, parent_hash, parent_number, slot)
+				.unwrap()
+				.unwrap();
+			// Increment it
+			let next_epoch_desc = epoch_changes
+				.viable_epoch(&epoch_descriptor, &make_genesis)
+				.unwrap()
+				.increment(());
+			// Assign it to hash/number
+			epoch_changes
+				.import(&is_descendent_of, *hash, number, *parent_hash, next_epoch_desc)
+				.unwrap();
+		};
+
+		import_at(100, b"A", 10, b"0", 0);
+		import_at(200, b"B", 20, b"A", 10);
+		import_at(300, b"C", 30, b"B", 20);
+		import_at(200, b"D", 20, b"A", 10);
+		import_at(300, b"E", 30, b"B", 20);
+		import_at(400, b"F", 40, b"C", 30);
+		import_at(400, b"G", 40, b"C", 30);
+
+		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
+		nodes.sort();
+		assert_eq!(nodes, vec![b"A", b"B", b"C", b"D", b"E", b"F", b"G"]);
+
+		// Finalize block 'x' @ number 25, slot 230
+		// This should prune all nodes imported by blocks with a number < 25 that are not
+		// ancestors of 'x' and all nodes before the one holding the epoch information
+		// to which 'x' belongs to.
+
+		epoch_changes.prune_finalized(&is_descendent_of, b"x", 25, 230).unwrap();
+
+		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
+		nodes.sort();
+		assert_eq!(nodes, vec![b"A", b"B", b"C", b"E", b"F", b"G"]);
+
+		// Finalize block x @ number 35, slot 330
+		// This should prune all nodes imported by blocks with a number < 35 that are not
+		// ancestors of 'y' and all nodes before the one holding the epoch information
+		// to which 'y' belongs to.
+
+		epoch_changes.prune_finalized(&is_descendent_of, b"y", 35, 330).unwrap();
+
+		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
+		nodes.sort();
+		assert_eq!(nodes, vec![b"B", b"C", b"F", b"G"]);
+	}
+
 	/// Test that ensures that the gap is not enabled when we import multiple genesis blocks.
 	#[test]
 	fn gap_is_not_enabled_when_multiple_genesis_epochs_are_imported() {
