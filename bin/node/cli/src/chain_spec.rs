@@ -327,7 +327,9 @@ pub fn testnet_genesis(
 				.take((num_endowed_accounts + 1) / 2)
 				.cloned()
 				.map(|member| (member, STASH))
-				.collect(),
+				.collect()
+				.try_into()
+				.expect("Too many members."),
 		},
 		council: CouncilConfig::default(),
 		technical_committee: TechnicalCommitteeConfig {
