@@ -46,6 +46,7 @@
 //! active mechanism that asks nodes for the addresses they are listening on. Whenever we learn
 //! of a node's address, you must call `add_self_reported_address`.
 
+use array_bytes::bytes2hex;
 use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
@@ -101,7 +102,7 @@ pub struct DiscoveryConfig {
 	discovery_only_if_under_num: u64,
 	enable_mdns: bool,
 	kademlia_disjoint_query_paths: bool,
-	kademlia_protocol_id: Option<ProtocolId>,
+	kademlia_protocols: Vec<Vec<u8>>,
 }
 
 impl DiscoveryConfig {
@@ -116,7 +117,7 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num: std::u64::MAX,
 			enable_mdns: false,
 			kademlia_disjoint_query_paths: false,
-			kademlia_protocol_id: None,
+			kademlia_protocols: Vec::new(),
 		}
 	}
 
@@ -161,9 +162,18 @@ impl DiscoveryConfig {
 	}
 
 	/// Add discovery via Kademlia for the given protocol.
-	pub fn with_kademlia(&mut self, id: ProtocolId) -> &mut Self {
-		self.kademlia_protocol_id = Some(id);
-
+	///
+	/// Currently accepts `protocol_id`. This should be removed once all the nodes
+	/// are upgraded to genesis hash- and fork ID-based Kademlia protocol name.
+	pub fn with_kademlia<Hash: AsRef<[u8]>>(
+		&mut self,
+		genesis_hash: Hash,
+		fork_id: Option<&str>,
+		protocol_id: &ProtocolId,
+	) -> &mut Self {
+		self.kademlia_protocols = Vec::new();
+		self.kademlia_protocols.push(kademlia_protocol_name(genesis_hash, fork_id));
+		self.kademlia_protocols.push(legacy_kademlia_protocol_name(protocol_id));
 		self
 	}
 
@@ -185,14 +195,12 @@ impl DiscoveryConfig {
 			discovery_only_if_under_num,
 			enable_mdns,
 			kademlia_disjoint_query_paths,
-			kademlia_protocol_id,
+			kademlia_protocols,
 		} = self;
 
-		let kademlia = kademlia_protocol_id.map(|protocol_id| {
-			let proto_name = protocol_name_from_protocol_id(&protocol_id);
-
+		let kademlia = if !kademlia_protocols.is_empty() {
 			let mut config = KademliaConfig::default();
-			config.set_protocol_names(std::iter::once(proto_name.into()).collect());
+			config.set_protocol_names(kademlia_protocols.into_iter().map(Into::into).collect());
 			// By default Kademlia attempts to insert all peers into its routing table once a
 			// dialing attempt succeeds. In order to control which peer is added, disable the
 			// auto-insertion and instead add peers manually.
@@ -206,8 +214,10 @@ impl DiscoveryConfig {
 				kad.add_address(peer_id, addr.clone());
 			}
 
-			kad
-		});
+			Some(kad)
+		} else {
+			None
+		};
 
 		DiscoveryBehaviour {
 			permanent_addresses,
@@ -866,35 +876,50 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 	}
 }
 
-// NB: If this protocol name derivation is changed, check if
-// `DiscoveryBehaviour::new_handler` is still correct.
-fn protocol_name_from_protocol_id(id: &ProtocolId) -> Vec<u8> {
+/// Legacy (fallback) Kademlia protocol name based on `protocol_id`.
+fn legacy_kademlia_protocol_name(id: &ProtocolId) -> Vec<u8> {
 	let mut v = vec![b'/'];
 	v.extend_from_slice(id.as_ref().as_bytes());
 	v.extend_from_slice(b"/kad");
 	v
 }
 
+/// Kademlia protocol name based on `genesis_hash` and `fork_id`.
+fn kademlia_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> Vec<u8> {
+	let genesis_hash_hex = bytes2hex("", genesis_hash.as_ref());
+	if let Some(fork_id) = fork_id {
+		format!("/{}/{}/kad", genesis_hash_hex, fork_id).as_bytes().into()
+	} else {
+		format!("/{}/kad", genesis_hash_hex).as_bytes().into()
+	}
+}
+
 #[cfg(test)]
 mod tests {
-	use super::{protocol_name_from_protocol_id, DiscoveryConfig, DiscoveryOut};
+	use super::{
+		kademlia_protocol_name, legacy_kademlia_protocol_name, DiscoveryConfig, DiscoveryOut,
+	};
 	use futures::prelude::*;
 	use libp2p::{
 		core::{
 			transport::{MemoryTransport, Transport},
 			upgrade,
 		},
-		identity::Keypair,
+		identity::{ed25519, Keypair},
 		noise,
 		swarm::{Swarm, SwarmEvent},
-		yamux, Multiaddr, PeerId,
+		yamux, Multiaddr,
 	};
 	use sc_network_common::config::ProtocolId;
+	use sp_core::hash::H256;
 	use std::{collections::HashSet, task::Poll};
 
 	#[test]
 	fn discovery_working() {
 		let mut first_swarm_peer_id_and_addr = None;
+
+		let genesis_hash = H256::from_low_u64_be(1);
+		let fork_id = Some("test-fork-id");
 		let protocol_id = ProtocolId::from("dot");
 
 		// Build swarms whose behaviour is `DiscoveryBehaviour`, each aware of
@@ -919,7 +944,7 @@ mod tests {
 						.allow_private_ipv4(true)
 						.allow_non_globals_in_dht(true)
 						.discovery_limit(50)
-						.with_kademlia(protocol_id.clone());
+						.with_kademlia(genesis_hash, fork_id, &protocol_id);
 
 					config.finish()
 				};
@@ -972,12 +997,19 @@ mod tests {
 													}
 												})
 												.unwrap();
+											// Test both genesis hash-based and legacy
+											// protocol names.
+											let protocol_name = if swarm_n % 2 == 0 {
+												kademlia_protocol_name(genesis_hash, fork_id)
+											} else {
+												legacy_kademlia_protocol_name(&protocol_id)
+											};
 											swarms[swarm_n]
 												.0
 												.behaviour_mut()
 												.add_self_reported_address(
 													&other,
-													&[protocol_name_from_protocol_id(&protocol_id)],
+													&[protocol_name],
 													addr,
 												);
 
@@ -1012,6 +1044,8 @@ mod tests {
 
 	#[test]
 	fn discovery_ignores_peers_with_unknown_protocols() {
+		let supported_genesis_hash = H256::from_low_u64_be(1);
+		let unsupported_genesis_hash = H256::from_low_u64_be(2);
 		let supported_protocol_id = ProtocolId::from("a");
 		let unsupported_protocol_id = ProtocolId::from("b");
 
@@ -1022,18 +1056,33 @@ mod tests {
 				.allow_private_ipv4(true)
 				.allow_non_globals_in_dht(true)
 				.discovery_limit(50)
-				.with_kademlia(supported_protocol_id.clone());
+				.with_kademlia(supported_genesis_hash, None, &supported_protocol_id);
 			config.finish()
 		};
 
-		let remote_peer_id = PeerId::random();
-		let remote_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
+		let predictable_peer_id = |bytes: &[u8; 32]| {
+			Keypair::Ed25519(ed25519::Keypair::from(
+				ed25519::SecretKey::from_bytes(bytes.to_owned()).unwrap(),
+			))
+			.public()
+			.to_peer_id()
+		};
 
-		// Add remote peer with unsupported protocol.
+		let remote_peer_id = predictable_peer_id(b"00000000000000000000000000000001");
+		let remote_addr: Multiaddr = "/memory/1".parse().unwrap();
+		let another_peer_id = predictable_peer_id(b"00000000000000000000000000000002");
+		let another_addr: Multiaddr = "/memory/2".parse().unwrap();
+
+		// Try adding remote peers with unsupported protocols.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			&[protocol_name_from_protocol_id(&unsupported_protocol_id)],
+			&[kademlia_protocol_name(unsupported_genesis_hash, None)],
 			remote_addr.clone(),
+		);
+		discovery.add_self_reported_address(
+			&another_peer_id,
+			&[legacy_kademlia_protocol_name(&unsupported_protocol_id)],
+			another_addr.clone(),
 		);
 
 		{
@@ -1045,23 +1094,34 @@ mod tests {
 					.is_empty(),
 				"Expect peer with unsupported protocol not to be added."
 			);
+			assert!(
+				kademlia
+					.kbucket(another_peer_id)
+					.expect("Remote peer id not to be equal to local peer id.")
+					.is_empty(),
+				"Expect peer with unsupported protocol not to be added."
+			);
 		}
 
-		// Add remote peer with supported protocol.
+		// Add remote peers with supported protocols.
 		discovery.add_self_reported_address(
 			&remote_peer_id,
-			&[protocol_name_from_protocol_id(&supported_protocol_id)],
+			&[kademlia_protocol_name(supported_genesis_hash, None)],
 			remote_addr.clone(),
 		);
-
-		let kademlia = discovery.kademlia.as_mut().unwrap();
-		assert_eq!(
-			1,
-			kademlia
-				.kbucket(remote_peer_id)
-				.expect("Remote peer id not to be equal to local peer id.")
-				.num_entries(),
-			"Expect peer with supported protocol to be added."
+		discovery.add_self_reported_address(
+			&another_peer_id,
+			&[legacy_kademlia_protocol_name(&supported_protocol_id)],
+			another_addr.clone(),
 		);
+
+		{
+			let kademlia = discovery.kademlia.as_mut().unwrap();
+			assert_eq!(
+				2,
+				kademlia.kbuckets().fold(0, |acc, bucket| acc + bucket.num_entries()),
+				"Expect peers with supported protocol to be added."
+			);
+		}
 	}
 }

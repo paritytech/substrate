@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{ChainSync, ForkTarget};
+use crate::{service::network::NetworkServiceProvider, ChainSync, ForkTarget};
 
 use libp2p::PeerId;
 use sc_network_common::{service::NetworkSyncForkRequest, sync::ChainSync as ChainSyncT};
@@ -29,12 +29,14 @@ use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _
 // poll `ChainSync` and verify that a new sync fork request has been registered
 #[async_std::test]
 async fn delegate_to_chainsync() {
+	let (_chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (mut chain_sync, chain_sync_service) = ChainSync::new(
 		sc_network_common::sync::SyncMode::Full,
 		Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0),
 		Box::new(DefaultBlockAnnounceValidator),
 		1u32,
 		None,
+		chain_sync_network_handle,
 	)
 	.unwrap();
 
