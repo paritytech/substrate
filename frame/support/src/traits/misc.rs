@@ -22,7 +22,7 @@ use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncod
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
-use sp_core::bounded::bounded_vec::{Min, Max, TruncateFrom};
+use sp_core::bounded::bounded_vec::{Max, Min, TruncateFrom};
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -408,62 +408,27 @@ where
 }
 
 pub trait DefensiveMin<T> {
-	fn defensive_min(unbound: T) -> Self;
-	fn defensive_strict_min(unbound: T) -> Self;
+	fn defensive_min(&self, t: T) -> Self;
+	fn defensive_strict_min(&self, t: T) -> Self;
 }
 
 impl<T, U> DefensiveMin<U> for T
 where
-	T: Min<U> + TryFrom<U, Error = U>,
+	T: Min<U> + Clone,
+	U: Copy + std::fmt::Debug,
 {
-	fn defensive_min(unbound: U) -> Self {
-		unbound.try_into().map_or_else(
-			|err| {
-				defensive!("DefensiveMin minimize");
-				T::min(err)
-			},
-			|bound| bound,
-		)
+	fn defensive_min(&self, u: U) -> Self {
+		T::min(&self, u).unwrap_or_else(|err| {
+			defensive!("DefensiveMin minimize");
+			self.clone()
+		})
 	}
 
-	fn defensive_strict_min(unbound: U) -> Self {
-		unbound.try_into().map_or_else(
-			|err| {
-				defensive!("DefensiveStrictMin minimize");
-				T::strict_min(err)
-			},
-			|bound| bound,
-		)
-	}
-}
-
-pub trait DefensiveMax<T> {
-	fn defensive_max(unbound: T) -> Self;
-	fn defensive_strict_max(unbound: T) -> Self;
-}
-
-impl<T, U> DefensiveMax<U> for T
-where
-	T: Max<U> + TryFrom<U, Error = U>,
-{
-	fn defensive_max(unbound: U) -> Self {
-		unbound.try_into().map_or_else(
-			|err| {
-				defensive!("DefensiveMax maximize");
-				T::max(err)
-			},
-			|bound| bound,
-		)
-	}
-
-	fn defensive_strict_max(unbound: U) -> Self {
-		unbound.try_into().map_or_else(
-			|err| {
-				defensive!("DefensiveStrictMax maximize");
-				T::strict_max(err)
-			},
-			|bound| bound,
-		)
+	fn defensive_strict_min(&self, u: U) -> Self {
+		T::strict_min(&self, u).unwrap_or_else(|err| {
+			defensive!("DefensiveStrictMin minimize");
+			self.clone()
+		})
 	}
 }
 
@@ -1056,6 +1021,7 @@ mod test {
 	fn defensive_truncating_from_vec_defensive_works() {
 		let unbound = vec![1u32, 2];
 		let bound = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		//assert_eq!(10, 10_u32.defensive_min(11_u32));
 		assert_eq!(bound, vec![1u32]);
 	}
 
@@ -1168,5 +1134,33 @@ mod test {
 		let decoded = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
 		let data = decoded.encode();
 		WrapperOpaque::<u32>::decode(&mut &data[..]).unwrap();
+	}
+
+	#[test]
+	fn defensive_min_works() {
+		assert_eq!(10, 10_u32.defensive_min(11_u32));
+		assert_eq!(10, 10_u32.defensive_min(10_u32));
+	}
+
+	#[test]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin minimize\"")]
+	fn defensive_min_panics() {
+		assert_eq!(9, 12_u32.defensive_min(9_u32));
+		assert_eq!(10, 11_u32.defensive_min(10_u32));
+	}
+
+	#[test]
+	fn defensive_strict_min_works() {
+		assert_eq!(10, 10_u32.defensive_strict_min(11_u32));
+		assert_eq!(9, 9_u32.defensive_strict_min(10_u32));
+	}
+
+	#[test]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveStrictMin minimize\""
+	)]
+	fn defensive_strict_min_panics() {
+		assert_eq!(9, 9_u32.defensive_strict_min(9_u32));
+		assert_eq!(10, 11_u32.defensive_strict_min(10_u32));
 	}
 }

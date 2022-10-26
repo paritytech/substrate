@@ -54,13 +54,17 @@ pub trait TruncateFrom<T> {
 }
 
 pub trait Min<T> {
-	fn min(unbound: T) -> Self;
-	fn strict_min(unbound: T) -> Self;
+	fn min(&self, t: T) -> Result<Self, T>
+	where
+		Self: Sized;
+	fn strict_min(&self, t: T) -> Result<Self, T>
+	where
+		Self: Sized;
 }
 
 pub trait Max<T> {
-	fn max(unbound: T) -> Self;
-	fn strict_max(unbound: T) -> Self;
+	fn max(&self, t: T) -> Self;
+	fn strict_max(&self, t: T) -> Self;
 }
 
 #[cfg(feature = "std")]
@@ -730,23 +734,36 @@ impl<T, S: Get<u32>> TruncateFrom<Vec<T>> for BoundedVec<T, S> {
 	}
 }
 
-impl<T, S: Get<u32>> Min<Vec<T>> for BoundedVec<T, S> {
-	fn min(unbound: Vec<T>) -> Self {
-		todo!()
+impl<T, S: std::cmp::PartialOrd<T> + std::clone::Clone> Min<T> for S {
+	fn min(&self, t: T) -> Result<Self, T> {
+		if self <= &t {
+			Ok(self.clone())
+		} else {
+			Err(t)
+		}
 	}
-	fn strict_min(unbound: Vec<T>) -> Self {
-		todo!()
+
+	fn strict_min(&self, t: T) -> Result<Self, T> {
+		if self < &t {
+			Ok(self.clone())
+		} else {
+			Err(t)
+		}
 	}
 }
 
-impl<T, S: Get<u32>> Max<Vec<T>> for BoundedVec<T, S> {
-	fn max(unbound: Vec<T>) -> Self {
-		todo!()
+/*impl<T, S> Max<T> for S {
+	fn max(&self, t: T) -> Self {
+		if &self >= &t {
+			self
+		}
 	}
-	fn strict_max(unbound: Vec<T>) -> Self {
-		todo!()
+	fn strict_max(&self, t: T) -> Self {
+		if &self > &t {
+			self
+		}
 	}
-}
+}*/
 
 // It is okay to give a non-mutable reference of the inner vec to anyone.
 impl<T, S> AsRef<Vec<T>> for BoundedVec<T, S> {
