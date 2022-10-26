@@ -327,7 +327,7 @@ pub fn testnet_genesis(
 				.take((num_endowed_accounts + 1) / 2)
 				.cloned()
 				.map(|member| (member, STASH))
-				.collect()
+				.collect::<Vec<(AccountId, Balance)>>()
 				.try_into()
 				.expect("Too many members."),
 		},
