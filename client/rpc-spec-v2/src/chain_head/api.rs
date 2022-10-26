@@ -24,7 +24,7 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 pub trait ChainHeadApi<Hash> {
 	/// Track the state of the head of the chain: the finalized, non-finalized, and best blocks.
 	///
-	///  # Unstable
+	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
@@ -42,7 +42,7 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// Use `archive_unstable_body` if instead you want to retrieve the body of an arbitrary block.
 	///
-	///  # Unstable
+	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
@@ -66,7 +66,7 @@ pub trait ChainHeadApi<Hash> {
 	/// Use `archive_unstable_header` if instead you want to retrieve the header of an arbitrary
 	/// block.
 	///
-	///  # Unstable
+	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_header", blocking)]
@@ -86,7 +86,7 @@ pub trait ChainHeadApi<Hash> {
 
 	/// Return a storage entry at a specific block's state.
 	///
-	///  # Unstable
+	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
@@ -105,7 +105,7 @@ pub trait ChainHeadApi<Hash> {
 
 	/// Call into the Runtime API at a specified block's state.
 	///
-	///  # Unstable
+	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
@@ -127,7 +127,7 @@ pub trait ChainHeadApi<Hash> {
 	/// Ongoing operations that require the provided block
 	/// will continue normally.
 	///
-	///  # Unstable
+	/// # Unstable
 	///
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_unpin", blocking)]
