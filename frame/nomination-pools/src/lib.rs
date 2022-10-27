@@ -781,10 +781,12 @@ impl<T: Config> BondedPool<T> {
 
 	/// Set the pool's commission.
 	///
-	/// update commission accordingly based on `commission` and `payee`. If Commission does not yet
+	/// Update commission accordingly based on `commission` and `payee`. If Commission does not yet
 	/// exist, it is bootstrapped with default() and populated with the supplied `commission` and
 	/// `payee` values. Otherwise, the existing commission is updated.
 	///
+	/// If throttle is present, record the current block as the previously updated commission.
+	/// 
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
 	fn set_commission_current(mut self, commission: &Perbill, payee: T::AccountId) -> Self {
 		self.commission = self
@@ -797,23 +799,13 @@ impl<T: Config> BondedPool<T> {
 				} else {
 					None
 				},
+				throttle: c.throttle.map(|t| CommissionThrottle {
+					previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
+					..t
+				}).or(None),
 				..c
 			})
 			.or(None);
-
-		// if throttle is present, record the current block as the previously
-		// updated commission.
-		if let Some(c) = &self.commission {
-			if let Some(throttle) = &c.throttle {
-				self.commission = Some(Commission {
-					throttle: Some(CommissionThrottle {
-						previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
-						..*throttle
-					}),
-					..c.clone()
-				});
-			}
-		}
 		self
 	}
 
