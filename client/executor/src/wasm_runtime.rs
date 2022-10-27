@@ -180,7 +180,7 @@ impl RuntimeCache {
 	/// for caching.
 	///
 	/// `runtime_cache_size` specifies the number of different runtimes versions preserved in an
-	/// in-memory cache.
+	/// in-memory cache, must always be at least 1.
 	pub fn new(
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,

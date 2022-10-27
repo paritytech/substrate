@@ -240,9 +240,8 @@ pub struct HeaderMetadataCache<Block: BlockT> {
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
 	/// Creates a new LRU header metadata cache with `capacity`.
-	pub fn new(capacity: usize) -> Self {
-		let non_zero_cap = NonZeroUsize::new(capacity).expect("capacity is not zero");
-		HeaderMetadataCache { cache: RwLock::new(LruCache::new(non_zero_cap)) }
+	pub fn new(capacity: NonZeroUsize) -> Self {
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(capacity)) }
 	}
 }
 
