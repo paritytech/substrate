@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +15,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod approvals;
-pub mod atomic_swap;
-pub mod buy_sell;
-pub mod lock;
-pub mod metadata;
-pub mod roles;
-pub mod settings;
+//! Various pieces of common functionality.
+
+use super::*;
+
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	pub fn set_next_id(id: T::CollectionId) {
+		NextCollectionId::<T, I>::set(Some(id));
+	}
+
+	#[cfg(test)]
+	pub fn get_next_id() -> T::CollectionId {
+		NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value())
+	}
+}
