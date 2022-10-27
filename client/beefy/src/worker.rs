@@ -250,8 +250,11 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 		ConstU32<MAX_PENDING_VOTES>,
 	>,
 	/// Buffer holding justifications for future processing.
-	pending_justifications:
-		BoundedBTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>, ConstU32<MAX_PENDING_JUSTIFICATIONS>>,
+	pending_justifications: BoundedBTreeMap<
+		NumberFor<B>,
+		BeefyVersionedFinalityProof<B>,
+		ConstU32<MAX_PENDING_JUSTIFICATIONS>,
+	>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
 }
@@ -265,7 +268,8 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
-	u64: From<NumberFor<B>>,  <<B as BlockT>::Header as HeaderT>::Number: From<u64>
+	u64: From<NumberFor<B>>,
+	<<B as BlockT>::Header as HeaderT>::Number: From<u64>,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -434,7 +438,6 @@ where
 						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
 					}
 				}
-
 			},
 			RoundAction::Drop => (),
 		};
@@ -562,7 +565,8 @@ where
 			_: PhantomData<B>,
 		) -> BTreeMap<NumberFor<B>, T>
 		where
-			u64: From<NumberFor<B>>, <<B as BlockT>::Header as HeaderT>::Number: From<u64>
+			u64: From<NumberFor<B>>,
+			<<B as BlockT>::Header as HeaderT>::Number: From<u64>,
 		{
 			let mut to_handle = BTreeMap::new();
 
@@ -570,13 +574,9 @@ where
 
 			let end: u64 = end.into();
 			let start: u64 = start.into();
-
 			let still_pending_range = end.saturating_add(1u32.into())..U.into();
 
-			//dbg!("still pending range {:?}", still_pending_range.clone() );
-
 			for i in still_pending_range {
-				//dbg!("i in to pending range {:?}", i );
 				let value_to_be_removed = pending.remove(&i.into());
 				if value_to_be_removed.is_some() {
 					still_pending.insert(i.into(), value_to_be_removed.unwrap());
@@ -585,15 +585,11 @@ where
 
 			let to_handle_range = start..=end;
 
-			//dbg!("start {:?} and end {:?}", start, end);
-			//dbg!("pending size {:?}", pending.len());
 			for i in to_handle_range {
-				//dbg!("i in to handle range {:?}", i );
 				let value_to_be_removed = pending.remove(&i.into());
 				if value_to_be_removed.is_some() {
 					to_handle.insert(i.into(), value_to_be_removed.unwrap());
 				}
-
 			}
 
 			*pending = BoundedBTreeMap::checked_from(still_pending).expect("Should not fail");
@@ -1536,7 +1532,6 @@ pub(crate) mod tests {
 
 		// vote for 10 should have been handled, while the rest buffered for later processing
 		let mut votes = worker.pending_votes.values();
-		//dbg!(votes.clone());
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 11);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 12);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 20);

@@ -203,7 +203,8 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
-	u64: From<NumberFor<B>>, <<B as BlockT>::Header as HeaderT>::Number: From<u64>
+	u64: From<NumberFor<B>>,
+	<<B as BlockT>::Header as HeaderT>::Number: From<u64>,
 {
 	let BeefyParams {
 		client,
