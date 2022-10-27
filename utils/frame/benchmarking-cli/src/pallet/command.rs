@@ -39,7 +39,6 @@ use sp_keystore::{testing::KeyStore, KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
-use log;
 
 /// Logging target
 const LOG_TARGET:&'static str = "frame::benchmark::pallet";
@@ -247,7 +246,8 @@ impl PalletCmd {
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
 
-			log::info!(target:LOG_TARGET,
+			log::info!(
+				target: LOG_TARGET,
 
 			println!(
 
@@ -411,7 +411,8 @@ impl PalletCmd {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
 
-							log::info!(target:LOG_TARGET,
+							log::info!(
+								target: LOG_TARGET,
 
 							println!(
 
@@ -504,7 +505,7 @@ impl PalletCmd {
 			if let Some(path) = &self.json_file {
 				fs::write(path, json)?;
 			} else {
-				log::info!(target:LOG_TARGET,"{}", json);
+				print!("{json}");
 				return Ok(true)
 			}
 		}
