@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+#![allow(non_snake_case)]
+
 //! API trait of the chain head.
 use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
@@ -32,7 +34,7 @@ pub trait ChainHeadApi<Hash> {
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
-	fn chain_head_unstable_follow(&self, runtime_updates: bool);
+	fn chain_head_unstable_follow(&self, runtimeUpdates: bool);
 
 	/// Retrieves the body (list of transactions) of a pinned block.
 	///
@@ -52,9 +54,9 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_body(
 		&self,
-		follow_subscription: String,
+		followSubscription: String,
 		hash: Hash,
-		network_config: Option<NetworkConfig>,
+		networkConfig: Option<NetworkConfig>,
 	);
 
 	/// Retrieves the header of a pinned block.
@@ -72,7 +74,7 @@ pub trait ChainHeadApi<Hash> {
 	#[method(name = "chainHead_unstable_header", blocking)]
 	fn chain_head_unstable_header(
 		&self,
-		follow_subscription: String,
+		followSubscription: String,
 		hash: Hash,
 	) -> RpcResult<Option<String>>;
 
@@ -96,11 +98,11 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_storage(
 		&self,
-		follow_subscription: String,
+		followSubscription: String,
 		hash: Hash,
 		key: String,
-		child_key: Option<String>,
-		network_config: Option<NetworkConfig>,
+		childKey: Option<String>,
+		networkConfig: Option<NetworkConfig>,
 	);
 
 	/// Call into the Runtime API at a specified block's state.
@@ -115,11 +117,11 @@ pub trait ChainHeadApi<Hash> {
 	)]
 	fn chain_head_unstable_call(
 		&self,
-		follow_subscription: String,
+		followSubscription: String,
 		hash: Hash,
 		function: String,
-		call_parameters: String,
-		network_config: Option<NetworkConfig>,
+		callParameters: String,
+		networkConfig: Option<NetworkConfig>,
 	);
 
 	/// Unpin a block reported by the `follow` method.
@@ -131,5 +133,5 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[method(name = "chainHead_unstable_unpin", blocking)]
-	fn chain_head_unstable_unpin(&self, follow_subscription: String, hash: Hash) -> RpcResult<()>;
+	fn chain_head_unstable_unpin(&self, followSubscription: String, hash: Hash) -> RpcResult<()>;
 }
