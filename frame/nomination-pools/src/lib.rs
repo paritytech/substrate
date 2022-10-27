@@ -567,13 +567,17 @@ impl<T: Config> Default for Commission<T> {
 }
 
 impl<T: Config> Commission<T> {
-	/// TODO: fine-tune documentation
-	///
-	/// Returns true if this changing from `from` to `to` would exhaust the throttle limit.
-	/// A commission change will be throttled (disallowed) if:
+	/// Get the current commission percentage of this pool.
+	/// Returns zero if commission has not yet been configured.
+	fn percentage(&self) -> Perbill {
+		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
+	}
+
+	/// Returns true if a commission percentage updating to `to` would exhaust the throttle limit.
+	/// A commission update will be throttled (disallowed) if:
 	/// 1. not enough blocks have passed since the previous commission update took place, and
 	/// 2. the new commission is larger than the maximum allowed increase.
-	fn throttling(&self, from: &Perbill, to: &Perbill) -> bool {
+	fn throttling(&self, to: &Perbill) -> bool {
 		let throttle = self.throttle.as_ref().map(|t| t).or(None);
 		if let Some(t) = throttle {
 			// check for `min_delay` throttling
@@ -584,17 +588,10 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			(*to).saturating_sub(*from) > t.change_rate.max_increase
+			(*to).saturating_sub(self.percentage()) > t.change_rate.max_increase
 		} else {
 			return false
 		}
-	}
-
-	/// TODO: fine-tune documentation
-	/// Get the current commission percentage of this pool. Returns zero if commission has not yet
-	/// been configured.
-	fn percentage(&self) -> Perbill {
-		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 }
 
@@ -800,7 +797,7 @@ impl<T: Config> BondedPool<T> {
 			.take()
 			.map_or(Some(Commission::default()), |c| Some(c))
 			.map(|c| Commission {
-				current: if commission > &Perbill::from_percent(0) {
+				current: if commission > &Perbill::zero() {
 					Some((*commission, payee))
 				} else {
 					None
@@ -2242,10 +2239,7 @@ pub mod pallet {
 			let commission = &bonded_pool.commission();
 
 			ensure!(
-				commission
-					.as_ref()
-					.map(|c| !c.throttling(&c.percentage(), &new_commission))
-					.unwrap_or(true),
+				commission.as_ref().map(|c| !c.throttling(&new_commission)).unwrap_or(true),
 				Error::<T>::CommissionChangeThrottled
 			);
 			ensure!(
@@ -2652,7 +2646,7 @@ impl<T: Config> Pallet<T> {
 		let _ = &bonded_pool.commission().map(|c| -> DispatchResult {
 			let commission_percent = c.percentage();
 
-			if commission_percent > Perbill::from_percent(0) {
+			if commission_percent > Perbill::zero() {
 				if let Some(payee) = &bonded_pool.commission_payee() {
 					let pool_commission = commission_percent * pending_rewards;
 					pending_rewards -= pool_commission;
