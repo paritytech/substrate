@@ -205,8 +205,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keep_alive: bool,
 	) -> Result<T::Balance, DispatchError> {
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(details.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
-		ensure!(details.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 		let account = Account::<T, I>::get(id, who).ok_or(Error::<T, I>::NoAccount)?;
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
