@@ -116,7 +116,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::PostDispatchInfo,
@@ -186,15 +185,26 @@ impl<
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
-		+ Checkable<Context>
-		+ Codec
-		+ GetDispatchInfo,
+	+ Checkable<Context>
+	+ Codec
+	+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
+	fn execute_block_ver(block: Block, public: Vec<u8>) {
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPalletsWithSystem,
+			COnRuntimeUpgrade,
+		>::execute_block_ver_impl(block, public);
+	}
+
 	// for backward compatibility
 	fn execute_block(block: Block) {
 		Executive::<
@@ -205,17 +215,6 @@ where
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
 		>::execute_block(block);
-	}
-
-	fn execute_block_ver(block: Block, public: Vec<u8>) {
-		Executive::<
-			System,
-			Block,
-			Context,
-			UnsignedValidator,
-			AllPalletsWithSystem,
-			COnRuntimeUpgrade,
-		>::execute_block_ver_impl(block, public);
 	}
 }
 
@@ -234,7 +233,10 @@ impl<
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
-	Block::Extrinsic: Checkable<Context> + Codec,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+	+ Checkable<Context>
+	+ Codec
+	+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -313,28 +315,27 @@ where
 }
 
 impl<
-		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-		Context: Default,
-		UnsignedValidator,
-		AllPalletsWithSystem: OnRuntimeUpgrade
-			+ OnInitialize<System::BlockNumber>
-			+ OnIdle<System::BlockNumber>
-			+ OnFinalize<System::BlockNumber>
-			+ OffchainWorker<System::BlockNumber>,
-		COnRuntimeUpgrade: OnRuntimeUpgrade,
-	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-where
-	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+	Context: Default,
+	UnsignedValidator,
+	AllPalletsWithSystem: OnRuntimeUpgrade
+	+ OnInitialize<System::BlockNumber>
+	+ OnIdle<System::BlockNumber>
+	+ OnFinalize<System::BlockNumber>
+	+ OffchainWorker<System::BlockNumber>,
+	COnRuntimeUpgrade: OnRuntimeUpgrade,
+> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+	where
+		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-	CallOf<Block::Extrinsic, Context>:
+		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+		CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -475,7 +476,7 @@ where
 	}
 
 	/// Actually execute all transitions for `block`.
-	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
+	fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
@@ -502,7 +503,7 @@ where
 			let max = System::BlockWeights::get();
 			let mut all: frame_system::ConsumedWeight = Default::default();
 			for tx in curr_block_txs.clone() {
-				let info = tx.clone().get_dispatch_info();
+				let info = tx.get_dispatch_info();
 				all = frame_system::calculate_consumed_weight::<CallOf<Block::Extrinsic, Context>>(max.clone(), all, &info)
 					.expect("sum of extrinsics should fit into single block");
 			}
@@ -907,10 +908,9 @@ mod tests {
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockWeights = BlockWeights;
 		type BlockLength = ();
-		type DbWeight = ();
 		type Origin = Origin;
-		type Index = u64;
 		type Call = Call;
+		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
 		type Hashing = BlakeTwo256;
@@ -919,6 +919,7 @@ mod tests {
 		type Header = Header;
 		type Event = Event;
 		type BlockHashCount = ConstU64<250>;
+		type DbWeight = ();
 		type Version = RuntimeVersion;
 		type PalletInfo = PalletInfo;
 		type AccountData = pallet_balances::AccountData<Balance>;
