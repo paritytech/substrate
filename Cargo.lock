@@ -5597,7 +5597,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-cere-ddc"
-version = "7.0.2"
+version = "7.2.0"
 dependencies = [
  "frame-support",
  "frame-system",
