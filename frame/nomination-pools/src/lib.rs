@@ -791,7 +791,7 @@ impl<T: Config> BondedPool<T> {
 	/// If throttle is present, record the current block as the previously updated commission.
 	///
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
-	fn set_commission_current(mut self, commission: &Perbill, payee: T::AccountId) -> Self {
+	fn set_commission_current(&mut self, commission: &Perbill, payee: T::AccountId) {
 		self.commission = self
 			.commission
 			.take()
@@ -811,11 +811,10 @@ impl<T: Config> BondedPool<T> {
 					.or(None),
 				..c
 			});
-		self
 	}
 
 	/// Set the pool's maximum commission.
-	fn set_max_commission(mut self, max_commission: Perbill) -> Self {
+	fn set_max_commission(&mut self, max_commission: Perbill) {
 		self.commission = self
 			.commission
 			.take()
@@ -830,14 +829,10 @@ impl<T: Config> BondedPool<T> {
 					.or(None),
 				..c
 			});
-		self
 	}
 
 	/// Set the pool's commission throttle settings.
-	fn set_commission_throttle(
-		mut self,
-		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
-	) -> Self {
+	fn set_commission_throttle(&mut self, change_rate: CommissionThrottlePrefs<T::BlockNumber>) {
 		self.commission =
 			self.commission
 				.take()
@@ -849,7 +844,6 @@ impl<T: Config> BondedPool<T> {
 					),
 					..c
 				});
-		self
 	}
 
 	fn is_root(&self, who: &T::AccountId) -> bool {
@@ -2228,7 +2222,7 @@ pub mod pallet {
 			payee: Option<T::AccountId>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			let final_payee = payee
@@ -2250,7 +2244,8 @@ pub mod pallet {
 				Error::<T>::CommissionExceedsMaximum
 			);
 
-			bonded_pool.set_commission_current(&new_commission, final_payee.clone()).put();
+			bonded_pool.set_commission_current(&new_commission, final_payee.clone());
+			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
 				commission: new_commission,
@@ -2275,7 +2270,7 @@ pub mod pallet {
 			max_commission: Perbill,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			if let Some(c) = &bonded_pool.commission {
@@ -2283,7 +2278,8 @@ pub mod pallet {
 					ensure!(existing_max > max_commission, Error::<T>::MaxCommissionRestricted);
 				}
 			}
-			bonded_pool.set_max_commission(max_commission.clone()).put();
+			bonded_pool.set_max_commission(max_commission.clone());
+			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
 			Ok(())
 		}
@@ -2303,7 +2299,7 @@ pub mod pallet {
 			prefs: CommissionThrottlePrefs<T::BlockNumber>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
+			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			if let Some(c) = &bonded_pool.commission {
@@ -2315,7 +2311,8 @@ pub mod pallet {
 					);
 				}
 			}
-			bonded_pool.set_commission_throttle(prefs).put();
+			bonded_pool.set_commission_throttle(prefs);
+			bonded_pool.put();
 			Ok(())
 		}
 
