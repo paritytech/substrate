@@ -248,9 +248,6 @@ impl PalletCmd {
 
 			log::info!(
 				target: LOG_TARGET,
-
-			println!(
-
 				"Starting benchmark: {}::{}",
 				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
 				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
@@ -413,8 +410,6 @@ impl PalletCmd {
 
 							log::info!(
 								target: LOG_TARGET,
-
-							println!(
 								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
