@@ -820,6 +820,7 @@ dependencies = [
 [[package]]
 name = "bls-like"
 version = "0.1.0"
+source = "git+https://github.com/w3f/bls?branch=skalman-hash-to-curve-wb#ebaea7eb2af1658e9b959c5216bc096f85adf557"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-381",
@@ -1182,9 +1183,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "6.1.1"
+version = "6.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3d16bb3da60be2f7c7acfc438f2ae6f3496897ce68c291d0509bb67b4e248e"
+checksum = "1090f39f45786ec6dc6286f8ea9c75d0a7ef0a0d3cda674cef0c3af7b307fbc2"
 dependencies = [
  "strum",
  "strum_macros",
@@ -1689,9 +1690,9 @@ dependencies = [
 
 [[package]]
 name = "darling"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4529658bdda7fd6769b8614be250cdcfc3aeb0ee72fe66f9e41e5e5eb73eac02"
+checksum = "b0dd3cd20dc6b5a876612a6e5accfe7f3dd883db6d07acfbf14c128f61550dfa"
 dependencies = [
  "darling_core",
  "darling_macro",
@@ -1699,9 +1700,9 @@ dependencies = [
 
 [[package]]
 name = "darling_core"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "649c91bc01e8b1eac09fb91e8dbc7d517684ca6be8ebc75bb9cafc894f9fdb6f"
+checksum = "a784d2ccaf7c98501746bf0be29b2022ba41fd62a2e622af997a03e9f972859f"
 dependencies = [
  "fnv",
  "ident_case",
@@ -1712,9 +1713,9 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddfc69c5bfcbd2fc09a0f38451d2daf0e372e367986a83906d1b0dbc88134fb5"
+checksum = "7618812407e9402654622dd402b0a89dff9ba93badd6540781526117b92aab7e"
 dependencies = [
  "darling_core",
  "quote",
@@ -1990,15 +1991,15 @@ dependencies = [
 
 [[package]]
 name = "ed25519-zebra"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "403ef3e961ab98f0ba902771d29f842058578bb1ce7e3c59dad5a6a93e784c69"
+checksum = "7c24f403d068ad0b359e577a77f92392118be3f3c927538f2bb544a5ecd828c6"
 dependencies = [
  "curve25519-dalek 3.2.0",
+ "hashbrown 0.12.3",
  "hex",
  "rand_core 0.6.4",
  "sha2 0.9.9",
- "thiserror",
  "zeroize",
 ]
 
@@ -2236,7 +2237,8 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.8.0"
-source = "git+https://github.com/drskalman/parity-common#e3292b14b947881b98743c4ecbde433998891eea"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835c052cb0c08c1acf6ffd71c022172e18723949c8282f2b9f27efbc51e64534"
 dependencies = [
  "byteorder",
  "rand 0.8.5",
@@ -3235,7 +3237,8 @@ dependencies = [
 [[package]]
 name = "impl-codec"
 version = "0.6.0"
-source = "git+https://github.com/drskalman/parity-common#e3292b14b947881b98743c4ecbde433998891eea"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba6a270039626615617f3f36d15fc827041df3b78c439da2cadfa47455a77f2f"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -3245,14 +3248,6 @@ name = "impl-serde"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc88fc67028ae3db0c853baa36269d398d5f45b6982f95549ff5def78c935cd"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "impl-serde"
-version = "0.4.0"
-source = "git+https://github.com/drskalman/parity-common#e3292b14b947881b98743c4ecbde433998891eea"
 dependencies = [
  "serde",
 ]
@@ -3856,7 +3851,7 @@ dependencies = [
  "sha2 0.10.6",
  "smallvec",
  "thiserror",
- "uint 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint",
  "unsigned-varint",
  "void",
 ]
@@ -7011,14 +7006,15 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.12.0"
-source = "git+https://github.com/drskalman/parity-common#e3292b14b947881b98743c4ecbde433998891eea"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f3486ccba82358b11a77516035647c34ba167dfa53312630de83b12bd4f3d66"
 dependencies = [
  "fixed-hash",
  "impl-codec",
- "impl-serde 0.4.0 (git+https://github.com/drskalman/parity-common)",
+ "impl-serde",
  "scale-info",
- "uint 0.9.4 (git+https://github.com/drskalman/parity-common)",
+ "uint",
 ]
 
 [[package]]
@@ -9764,7 +9760,7 @@ dependencies = [
  "hash256-std-hasher",
  "hex",
  "hex-literal",
- "impl-serde 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-serde",
  "lazy_static",
  "libsecp256k1",
  "log",
@@ -10194,7 +10190,7 @@ version = "4.0.0"
 name = "sp-storage"
 version = "6.0.0"
 dependencies = [
- "impl-serde 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-serde",
  "parity-scale-codec",
  "ref-cast",
  "serde",
@@ -10307,7 +10303,7 @@ dependencies = [
 name = "sp-version"
 version = "5.0.0"
 dependencies = [
- "impl-serde 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "impl-serde",
  "parity-scale-codec",
  "parity-wasm 0.45.0",
  "scale-info",
@@ -11321,17 +11317,6 @@ name = "uint"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a45526d29728d135c2900b0d30573fe3ee79fceb12ef534c7bb30e810a91b601"
-dependencies = [
- "byteorder",
- "crunchy",
- "hex",
- "static_assertions",
-]
-
-[[package]]
-name = "uint"
-version = "0.9.4"
-source = "git+https://github.com/drskalman/parity-common#e3292b14b947881b98743c4ecbde433998891eea"
 dependencies = [
  "byteorder",
  "crunchy",

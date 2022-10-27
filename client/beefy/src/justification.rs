@@ -26,7 +26,7 @@ use sp_consensus::Error as ConsensusError;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// A finality proof with matching BEEFY authorities' signatures.
-pub type BeefyVersionedFinalityProof<Block, TSignature: Encode + Decode + Debug + Clone + Sync + Send,> =
+pub type BeefyVersionedFinalityProof<Block, TSignature> =
 	beefy_primitives::VersionedFinalityProof<NumberFor<Block>, TSignature>;
 
 /// Decode and verify a Beefy FinalityProof.
