@@ -68,9 +68,9 @@ use crate::{
 };
 
 /// Depicts the bound for the number of pending votes
-const MAX_PENDING_VOTES: u32 = 10;
+const MAX_PENDING_VOTES: u32 = 50;
 /// Depicts the bound for the number of pending justifications
-const MAX_PENDING_JUSTIFICATIONS: u32 = 10;
+const MAX_PENDING_JUSTIFICATIONS: u32 = 50;
 
 enum RoundAction {
 	Drop,
@@ -573,20 +573,27 @@ where
 
 			let still_pending_range = end.saturating_add(1u32.into())..U.into();
 
-			dbg!("still pending range {:?}", still_pending_range.clone() );
+			//dbg!("still pending range {:?}", still_pending_range.clone() );
 
 			for i in still_pending_range {
-				dbg!("i in to pending range {:?}", i );
-				still_pending.insert(i.into(), pending.remove(&i.into()).expect("Should exist"));
+				//dbg!("i in to pending range {:?}", i );
+				let value_to_be_removed = pending.remove(&i.into());
+				if value_to_be_removed.is_some() {
+					still_pending.insert(i.into(), value_to_be_removed.unwrap());
+				}
 			}
 
 			let to_handle_range = start..=end;
 
-			dbg!("start {:?} and end {:?}", start, end);
+			//dbg!("start {:?} and end {:?}", start, end);
+			//dbg!("pending size {:?}", pending.len());
 			for i in to_handle_range {
-				dbg!("i in to handle range {:?}", i );
-				let value_to_be_removed = pending.remove(&i.into()).expect("Should exist");
-				to_handle.insert(i.into(), value_to_be_removed);
+				//dbg!("i in to handle range {:?}", i );
+				let value_to_be_removed = pending.remove(&i.into());
+				if value_to_be_removed.is_some() {
+					to_handle.insert(i.into(), value_to_be_removed.unwrap());
+				}
+
 			}
 
 			*pending = BoundedBTreeMap::checked_from(still_pending).expect("Should not fail");
