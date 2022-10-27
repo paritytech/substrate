@@ -255,10 +255,11 @@ mod bonded_pool {
 				Perbill::from_percent(50),
 				Some(900)
 			));
-			assert_eq!(
-				BondedPool::<Runtime>::get(1).unwrap().commission.unwrap().current.unwrap().0,
-				Perbill::from_percent(50)
-			);
+
+			let commission = BondedPool::<Runtime>::get(1).unwrap().commission.unwrap();
+
+			assert_eq!(commission.percentage(), Perbill::from_percent(50));
+		
 			// Commission change events triggered successfully
 			assert_eq!(
 				pool_events_since_last_call(),
@@ -1298,6 +1299,49 @@ mod claim_payout {
 				]
 			);
 		});
+	}
+
+	#[test]
+	fn do_reward_payout_with_33_percent_commission() {
+		let del = |last_recorded_reward_counter| del_float(10, last_recorded_reward_counter);
+
+		ExtBuilder::default().build_and_execute(|| {
+			let (mut member, mut bonded_pool, mut reward_pool) =
+				Pools::get_member_with_pools(&10).unwrap();
+			let ed = Balances::minimum_balance();
+
+			// Set a commission pool 1 to 50%, with a payee set to `2`
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				bonded_pool.id,
+				Perbill::from_percent(33),
+				Some(2)
+			));
+
+			// fetch bonded pool again with upated commission
+			bonded_pool = BondedPool::<Runtime>::get(1).unwrap();
+
+			// Given the pool has earned some rewards for the first time
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10));
+
+			assert_ok!(Pools::do_reward_payout(
+				&10,
+				&mut member,
+				&mut bonded_pool,
+				&mut reward_pool
+			));
+
+			// Then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
+					Event::PoolCommissionUpdated { pool_id: 1, commission: Perbill::from_percent(33), payee: 2 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 7 },
+				]
+			);
+		})
 	}
 
 	#[test]

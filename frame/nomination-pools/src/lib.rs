@@ -691,11 +691,6 @@ impl<T: Config> BondedPool<T> {
 		Pallet::<T>::create_reward_account(self.id)
 	}
 
-	/// Get the current commission of this pool.
-	fn commission(&self) -> Option<&Commission<T>> {
-		self.commission.as_ref().map(|c| c).or(None)
-	}
-
 	/// Gets the current commission payee of this pool as a reference.
 	fn commission_payee(&self) -> Option<&T::AccountId> {
 		self.commission
@@ -2230,7 +2225,7 @@ pub mod pallet {
 				.or(bonded_pool.commission_payee().map(|p| p.clone()))
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
-			let commission = &bonded_pool.commission();
+			let commission = &bonded_pool.commission;
 
 			ensure!(
 				commission.as_ref().map(|c| !c.throttling(&new_commission)).unwrap_or(true),
@@ -2640,25 +2635,33 @@ impl<T: Config> Pallet<T> {
 		// If a non-zero commission has been applied to the pool, deduct the share from
 		// `pending_rewards` and send that amount to the pool `depositor`.
 		// Defensive: The commission payee is also checked for existence.
-		let _ = &bonded_pool.commission().map(|c| -> DispatchResult {
-			let commission_percent = c.percentage();
-
-			if commission_percent > Perbill::zero() {
-				if let Some(payee) = &bonded_pool.commission_payee() {
-					let pool_commission = commission_percent * pending_rewards;
-					pending_rewards -= pool_commission;
-
-					// Transfer pool_commission to the `payee` account.
-					T::Currency::transfer(
-						&bonded_pool.reward_account(),
-						payee.clone(),
-						pool_commission,
-						ExistenceRequirement::KeepAlive,
-					)?;
+		let get_commission = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
+			if let Some(c) = &b.commission {
+				let commission_percent = c.percentage();
+				if commission_percent > Perbill::zero() {
+					let payee = b.commission_payee().map(|p| p.clone()).or(None);
+					if payee.is_some() {
+						return (commission_percent * pending_rewards, None)
+					}
 				}
 			}
-			Ok(())
-		});
+			(Zero::zero(), None)
+		};
+
+		let (pool_commission, payee) = get_commission(&bonded_pool);
+		pending_rewards = pending_rewards.saturating_sub(pool_commission);
+
+		if pool_commission != BalanceOf::<T>::zero() {
+			if let Some(p) = payee {
+				// Transfer pool_commission to the `payee` account.
+				T::Currency::transfer(
+					&bonded_pool.reward_account(),
+					&p,
+					pool_commission,
+					ExistenceRequirement::KeepAlive,
+				)?;
+			}
+		}
 
 		// Transfer remaining payout to the member.
 		T::Currency::transfer(
