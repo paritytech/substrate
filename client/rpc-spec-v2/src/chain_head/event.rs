@@ -21,6 +21,26 @@
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use sp_version::RuntimeVersion;
 
+/// The network config parameter is used when a function
+/// needs to request the information from its peers.
+///
+/// These values can be tweaked depending on the urgency of the JSON-RPC function call.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkConfig {
+	/// The total number of peers from which the information is requested.
+	total_attempts: u64,
+	/// The maximum number of requests to perform in parallel.
+	///
+	/// # Note
+	///
+	/// A zero value is illegal.
+	max_parallel: u64,
+	/// The time, in milliseconds, after which a single requests towards one peer
+	/// is considered unsuccessful.
+	timeout_ms: u64,
+}
+
 /// The operation could not be processed due to an error.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -432,5 +452,17 @@ mod tests {
 
 		let event_dec: ChainHeadEvent<String> = serde_json::from_str(exp).unwrap();
 		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn chain_head_network_config() {
+		let conf = NetworkConfig { total_attempts: 1, max_parallel: 2, timeout_ms: 3 };
+
+		let ser = serde_json::to_string(&conf).unwrap();
+		let exp = r#"{"totalAttempts":1,"maxParallel":2,"timeoutMs":3}"#;
+		assert_eq!(ser, exp);
+
+		let conf_dec: NetworkConfig = serde_json::from_str(exp).unwrap();
+		assert_eq!(conf_dec, conf);
 	}
 }

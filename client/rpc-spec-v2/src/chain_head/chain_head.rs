@@ -24,7 +24,7 @@ use crate::{
 		error::Error as ChainHeadRpcError,
 		event::{
 			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
-			Initialized, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+			Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
 		},
 		subscription::{SubscriptionError, SubscriptionManagement},
 	},
@@ -297,7 +297,7 @@ where
 		mut sink: SubscriptionSink,
 		follow_subscription: String,
 		hash: Block::Hash,
-		_network_config: Option<()>,
+		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
@@ -361,7 +361,7 @@ where
 		hash: Block::Hash,
 		key: String,
 		child_key: Option<String>,
-		_network_config: Option<()>,
+		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		let key = StorageKey(parse_hex_param(&mut sink, key)?);
 
@@ -423,7 +423,7 @@ where
 		hash: Block::Hash,
 		function: String,
 		call_parameters: String,
-		_network_config: Option<()>,
+		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
 		let call_parameters = Bytes::from(parse_hex_param(&mut sink, call_parameters)?);
 

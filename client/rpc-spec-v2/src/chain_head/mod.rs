@@ -36,5 +36,5 @@ pub use api::ChainHeadApiServer;
 pub use chain_head::ChainHead;
 pub use event::{
 	BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
-	Initialized, NewBlock, RuntimeEvent, RuntimeVersionEvent,
+	Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
 };

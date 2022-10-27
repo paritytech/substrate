@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! API trait of the chain head.
-use crate::chain_head::event::{ChainHeadEvent, FollowEvent};
+use crate::chain_head::event::{ChainHeadEvent, FollowEvent, NetworkConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server)]
@@ -54,7 +54,7 @@ pub trait ChainHeadApi<Hash> {
 		&self,
 		follow_subscription: String,
 		hash: Hash,
-		network_config: Option<()>,
+		network_config: Option<NetworkConfig>,
 	);
 
 	/// Retrieves the header of a pinned block.
@@ -100,7 +100,7 @@ pub trait ChainHeadApi<Hash> {
 		hash: Hash,
 		key: String,
 		child_key: Option<String>,
-		network_config: Option<()>,
+		network_config: Option<NetworkConfig>,
 	);
 
 	/// Call into the Runtime API at a specified block's state.
@@ -119,7 +119,7 @@ pub trait ChainHeadApi<Hash> {
 		hash: Hash,
 		function: String,
 		call_parameters: String,
-		network_config: Option<()>,
+		network_config: Option<NetworkConfig>,
 	);
 
 	/// Unpin a block reported by the `follow` method.
