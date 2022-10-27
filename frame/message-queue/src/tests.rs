@@ -186,19 +186,89 @@ fn enqueue_within_one_page_works() {
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"kah".to_vec(), There), (b"sha".to_vec(), Everywhere(1)),]
+			vec![(b"kah".to_vec(), There), (b"sha".to_vec(), Everywhere(1))]
 		);
 	});
 }
 
+fn msg<N: Get<u32>>(x: &'static str) -> BoundedSlice<u8, N> {
+	BoundedSlice::truncate_from(x.as_bytes())
+}
+
+fn vmsg(x: &'static str) -> Vec<u8> {
+	x.as_bytes().to_vec()
+}
+
 #[test]
-fn overflowing_ready_origins_works() {
+fn queue_priority_retains() {
 	new_test_ext().execute_with(|| {
 		use MessageOrigin::*;
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Here);
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), There);
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"foo"[..]), Everywhere(1));
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"bar"[..]), Everywhere(2));
-		println!("{:?}", frame_system::Pallet::<Test>::events());
+		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![]);
+		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
+		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![Everywhere(1)]);
+		MessageQueue::enqueue_message(msg(&"b"), Everywhere(2));
+		assert_eq!(
+			ReadyRing::<Test>::new().collect::<Vec<_>>(),
+			vec![Everywhere(1), Everywhere(2)]
+		);
+		MessageQueue::enqueue_message(msg(&"c"), Everywhere(3));
+		assert_eq!(
+			ReadyRing::<Test>::new().collect::<Vec<_>>(),
+			vec![Everywhere(1), Everywhere(2), Everywhere(3)]
+		);
+		MessageQueue::enqueue_message(msg(&"d"), Everywhere(2));
+		assert_eq!(
+			ReadyRing::<Test>::new().collect::<Vec<_>>(),
+			vec![Everywhere(1), Everywhere(2), Everywhere(3)]
+		);
+		// service head is 1, it will process a, leaving service head at 2. it also processes b but
+		// doees not empty queue 2, so service head will end at 2.
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(
+			MessagesProcessed::get(),
+			vec![(vmsg(&"a"), Everywhere(1)), (vmsg(&"b"), Everywhere(2)),]
+		);
+		assert_eq!(
+			ReadyRing::<Test>::new().collect::<Vec<_>>(),
+			vec![Everywhere(2), Everywhere(3)]
+		);
+		// service head is 2, so will process d first, then c.
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(
+			MessagesProcessed::get(),
+			vec![
+				(vmsg(&"a"), Everywhere(1)),
+				(vmsg(&"b"), Everywhere(2)),
+				(vmsg(&"d"), Everywhere(2)),
+				(vmsg(&"c"), Everywhere(3)),
+			]
+		);
+		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![]);
+	});
+}
+
+#[test]
+fn queue_priority_reset_once_serviced() {
+	new_test_ext().execute_with(|| {
+		use MessageOrigin::*;
+		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
+		MessageQueue::enqueue_message(msg(&"b"), Everywhere(2));
+		MessageQueue::enqueue_message(msg(&"c"), Everywhere(3));
+		// service head is 1, it will process a, leaving service head at 2. it also processes b and
+		// empties queue 2, so service head will end at 3.
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		MessageQueue::enqueue_message(msg(&"d"), Everywhere(2));
+		// service head is 3, so will process c first, then d.
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+
+		assert_eq!(
+			MessagesProcessed::get(),
+			vec![
+				(vmsg(&"a"), Everywhere(1)),
+				(vmsg(&"b"), Everywhere(2)),
+				(vmsg(&"c"), Everywhere(3)),
+				(vmsg(&"d"), Everywhere(2)),
+			]
+		);
 	});
 }

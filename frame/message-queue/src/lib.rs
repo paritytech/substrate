@@ -173,13 +173,13 @@ pub trait ProcessMessage {
 	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Neighbours<MessageOrigin> {
 	prev: MessageOrigin,
 	next: MessageOrigin,
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct BookState<MessageOrigin> {
 	/// The first page with some items to be processed in it. If this is `>= end`, then there are
 	/// no pages with items to be processing in them.
@@ -331,6 +331,31 @@ pub mod pallet {
 	}
 }
 
+pub struct ReadyRing<T: Config> {
+	first: Option<MessageOriginOf<T>>,
+	next: Option<MessageOriginOf<T>>,
+}
+impl<T: Config> ReadyRing<T> {
+	fn new() -> Self {
+		Self { first: ServiceHead::<T>::get(), next: ServiceHead::<T>::get() }
+	}
+}
+impl<T: Config> Iterator for ReadyRing<T> {
+	type Item = MessageOriginOf<T>;
+	fn next(&mut self) -> Option<Self::Item> {
+		match self.next.take() {
+			None => None,
+			Some(last) => {
+				self.next = BookStateOf::<T>::get(&last)
+					.ready_neighbours
+					.map(|n| n.next)
+					.filter(|n| Some(n) != self.first.as_ref());
+				Some(last)
+			},
+		}
+	}
+}
+
 impl<T: Config> Pallet<T> {
 	/// Knit `origin` into the ready ring right at the end.
 	///
@@ -340,16 +365,14 @@ impl<T: Config> Pallet<T> {
 			let mut head_book_state = BookStateOf::<T>::get(&head);
 			let mut head_neighbours = head_book_state.ready_neighbours.take().ok_or(())?;
 			let tail = head_neighbours.prev;
-			let mut tail_book_state = BookStateOf::<T>::get(&tail);
-			let mut tail_neighbours = tail_book_state.ready_neighbours.take().ok_or(())?;
-
 			head_neighbours.prev = origin.clone();
 			head_book_state.ready_neighbours = Some(head_neighbours);
+			BookStateOf::<T>::insert(&head, head_book_state);
 
+			let mut tail_book_state = BookStateOf::<T>::get(&tail);
+			let mut tail_neighbours = tail_book_state.ready_neighbours.take().ok_or(())?;
 			tail_neighbours.next = origin.clone();
 			tail_book_state.ready_neighbours = Some(tail_neighbours);
-
-			BookStateOf::<T>::insert(&head, head_book_state);
 			BookStateOf::<T>::insert(&tail, tail_book_state);
 
 			Ok(Neighbours { next: head, prev: tail })
@@ -360,7 +383,11 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn ready_ring_unknit(origin: &MessageOriginOf<T>, neighbours: Neighbours<MessageOriginOf<T>>) {
-		if neighbours.next == neighbours.prev {
+		if origin == &neighbours.next {
+			debug_assert!(
+				origin == &neighbours.prev,
+				"unknitting from single item ring; outgoing must be only item"
+			);
 			// Service queue empty.
 			ServiceHead::<T>::kill();
 		} else {
@@ -487,9 +514,9 @@ impl<T: Config> Pallet<T> {
 	fn service_queue(
 		origin: MessageOriginOf<T>,
 		weight_limit: Weight,
+		max_weight: Weight,
 	) -> (Weight, Option<MessageOriginOf<T>>) {
 		let mut processed = 0;
-		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight_left = weight_limit;
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		while book_state.end > book_state.begin {
@@ -592,6 +619,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
+		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight_used = Weight::zero();
 		// TODO: impl bump_service_head
 		let mut next = match Self::bump_service_head() {
@@ -605,7 +633,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 				break
 			}
 			// Before servicing, bump `ServiceHead` onto the next item.
-			let (used, n) = Self::service_queue(next, left);
+			let (used, n) = Self::service_queue(next, left, max_weight);
 			weight_used.saturating_accrue(used);
 			next = match n {
 				Some(n) => n,
