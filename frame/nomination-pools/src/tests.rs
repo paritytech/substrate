@@ -4075,7 +4075,7 @@ mod create {
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!PoolMembers::<Runtime>::contains_key(11));
 			assert_err!(
-				StakingMock::active_balance(&next_pool_stash),
+				StakingMock::active_stake(&next_pool_stash),
 				DispatchError::Other("balance not found")
 			);
 
