@@ -35,7 +35,7 @@ use sc_network_common::{
 };
 use sc_network_gossip::GossipEngine;
 
-use sp_api::{BlockId, HeaderT, ProvideRuntimeApi};
+use sp_api::{BlockId, BlockT, HeaderT, ProvideRuntimeApi};
 use sp_arithmetic::traits::AtLeast32Bit;
 use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
@@ -265,7 +265,7 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
-	u32: From<NumberFor<B>>,
+	u64: From<NumberFor<B>>,  <<B as BlockT>::Header as HeaderT>::Number: From<u64>
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -421,11 +421,20 @@ where
 			)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
-				let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
-				vec_of_votes.push(vote);
-				if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
-					warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
+				if self.pending_votes.remove(&block_num).is_some() {
+					let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
+					vec_of_votes.push(vote);
+					if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
+					}
+				} else {
+					let mut vec_of_votes = vec![];
+					vec_of_votes.push(vote);
+					if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
+					}
 				}
+
 			},
 			RoundAction::Drop => (),
 		};
@@ -553,25 +562,31 @@ where
 			_: PhantomData<B>,
 		) -> BTreeMap<NumberFor<B>, T>
 		where
-			u32: From<NumberFor<B>>,
+			u64: From<NumberFor<B>>, <<B as BlockT>::Header as HeaderT>::Number: From<u64>
 		{
 			let mut to_handle = BTreeMap::new();
 
 			let mut still_pending = BTreeMap::new();
 
-			let end: u32 = end.into();
-			let start: u32 = start.into();
+			let end: u64 = end.into();
+			let start: u64 = start.into();
 
 			let still_pending_range = end.saturating_add(1u32.into())..U.into();
 
+			dbg!("still pending range {:?}", still_pending_range.clone() );
+
 			for i in still_pending_range {
+				dbg!("i in to pending range {:?}", i );
 				still_pending.insert(i.into(), pending.remove(&i.into()).expect("Should exist"));
 			}
 
 			let to_handle_range = start..=end;
 
+			dbg!("start {:?} and end {:?}", start, end);
 			for i in to_handle_range {
-				to_handle.insert(i.into(), pending.remove(&i.into()).expect("Should exist"));
+				dbg!("i in to handle range {:?}", i );
+				let value_to_be_removed = pending.remove(&i.into()).expect("Should exist");
+				to_handle.insert(i.into(), value_to_be_removed);
 			}
 
 			*pending = BoundedBTreeMap::checked_from(still_pending).expect("Should not fail");
@@ -1476,7 +1491,6 @@ pub(crate) mod tests {
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
-
 		fn new_vote(
 			block_number: NumberFor<Block>,
 		) -> VoteMessage<NumberFor<Block>, AuthorityId, Signature> {
@@ -1515,6 +1529,7 @@ pub(crate) mod tests {
 
 		// vote for 10 should have been handled, while the rest buffered for later processing
 		let mut votes = worker.pending_votes.values();
+		//dbg!(votes.clone());
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 11);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 12);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 20);
