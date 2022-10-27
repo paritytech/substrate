@@ -586,8 +586,7 @@ where
 			Some(storage_changes) => {
 				let storage_changes = match storage_changes {
 					sc_consensus::StorageChanges::Changes(storage_changes) => {
-						self.backend
-							.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+						self.backend.begin_state_operation(&mut operation.op, &parent_hash)?;
 						let (main_sc, child_sc, offchain_sc, tx, _, tx_index) =
 							storage_changes.into_inner();
 
@@ -1191,8 +1190,8 @@ where
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		// This is read proof only, we can use either LayoutV0 or LayoutV1.
-		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
+		let proof = proof
+			.into_compact_proof::<HashFor<Block>>(root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}

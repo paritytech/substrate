@@ -467,7 +467,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: BlockId<Block>,
+		block: &Block::Hash,
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.

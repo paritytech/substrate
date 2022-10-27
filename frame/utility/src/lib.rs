@@ -124,7 +124,7 @@ pub mod pallet {
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
 	// the `size_of` of the `Call` can be different. To ensure that this don't leads to
 	// mismatches between native/wasm or to different metadata for the same runtime, we
-	// algin the call size. The value is choosen big enough to hopefully never reach it.
+	// algin the call size. The value is chosen big enough to hopefully never reach it.
 	const CALL_ALIGN: u32 = 1024;
 
 	#[pallet::extra_constants]

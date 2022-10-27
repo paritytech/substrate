@@ -194,22 +194,7 @@ const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
-	pub const MaxSignatories: u16 = 3;
-	pub const MotionDuration: BlockNumber = MOTION_DURATION_IN_BLOCKS;
-	pub const MaxProposals: u32 = 100;
-	pub const MaxMembers: u32 = 100;
-}
-
-type CouncilCollective = pallet_collective::Instance1;
-impl pallet_collective::Config<CouncilCollective> for Test {
-	type RuntimeOrigin = RuntimeOrigin;
-	type Proposal = RuntimeCall;
-	type RuntimeEvent = RuntimeEvent;
-	type MotionDuration = MotionDuration;
-	type MaxProposals = MaxProposals;
-	type MaxMembers = MaxMembers;
-	type DefaultVote = pallet_collective::PrimeDefaultVote;
-	type WeightInfo = ();
+	pub const MaxSignatories: u32 = 3;
 }
 
 impl example::Config for Test {}

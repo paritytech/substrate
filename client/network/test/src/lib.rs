@@ -61,8 +61,8 @@ use sc_network_common::{
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
-	warp_request_handler, ChainSync,
+	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
+	state_request_handler::StateRequestHandler, warp_request_handler, ChainSync,
 };
 use sc_service::client::Client;
 use sp_blockchain::{
@@ -864,6 +864,8 @@ where
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 		let (chain_sync, chain_sync_service) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
@@ -878,6 +880,7 @@ where
 			block_announce_validator,
 			network_config.max_parallel_downloads,
 			Some(warp_sync),
+			chain_sync_network_handle,
 		)
 		.unwrap();
 		let block_announce_config = chain_sync.get_block_announce_proto_config(
@@ -914,6 +917,11 @@ where
 		.unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
+
+		let service = network.service().clone();
+		async_std::task::spawn(async move {
+			chain_sync_network_provider.run(service).await;
+		});
 
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
