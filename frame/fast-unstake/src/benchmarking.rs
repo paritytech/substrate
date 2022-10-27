@@ -46,7 +46,7 @@ fn l<T: Config>(
 fn create_unexposed_nominators<T: Config>() -> Vec<T::AccountId> {
 	(0..T::BatchSize::get())
 		.map(|i| {
-			let account = frame_benchmarking::account::<T::AccountId>("nominator", i, USER_SEED);
+			let account = frame_benchmarking::account::<T::AccountId>("unexposed_nominator", i, USER_SEED);
 			fund_and_bond_account::<T>(&account);
 			account
 		})
@@ -175,11 +175,11 @@ benchmarks! {
 		let checked = (1..=u).rev().collect::<Vec<EraIndex>>();
 		let request = Head::<T>::get().unwrap();
 		assert_eq!(checked, request.checked.into_inner());
-		assert!(stashes.iter().all(|(s, _)| request.stashes.iter().find(|(ss, _)| ss == s).is_some()));
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
 			Some(Event::BatchChecked { .. })
 		));
+		assert!(stashes.iter().all(|(s, _)| request.stashes.iter().find(|(ss, _)| ss == s).is_some()));
 	}
 
 	register_fast_unstake {
