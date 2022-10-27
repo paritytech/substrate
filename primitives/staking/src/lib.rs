@@ -114,11 +114,11 @@ pub trait StakingInterface {
 	/// Returns the stake of `who`.
 	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
 
-	fn total_balance(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
+	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)
 	}
 
-	fn active_balance(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
+	fn active_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.active)
 	}
 

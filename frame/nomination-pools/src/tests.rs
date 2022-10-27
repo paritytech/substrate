@@ -79,8 +79,8 @@ fn test_setup_works() {
 		let reward_account = Pools::create_reward_account(last_pool);
 
 		// the bonded_account should be bonded by the depositor's funds.
-		assert_eq!(StakingMock::active_balance(&bonded_account).unwrap(), 10);
-		assert_eq!(StakingMock::total_balance(&bonded_account).unwrap(), 10);
+		assert_eq!(StakingMock::active_stake(&bonded_account).unwrap(), 10);
+		assert_eq!(StakingMock::total_stake(&bonded_account).unwrap(), 10);
 
 		// but not nominating yet.
 		assert!(Nominations::get().is_none());
@@ -2368,7 +2368,7 @@ mod unbond {
 				}
 			);
 
-			assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 0);
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 		});
 	}
 
@@ -2415,7 +2415,7 @@ mod unbond {
 					]
 				);
 
-				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 94);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 94);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(40).unwrap().unbonding_eras,
 					member_unbonding_eras!(0 + 3 => 6)
@@ -2443,7 +2443,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 2);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 2);
 				assert_eq!(
 					PoolMembers::<Runtime>::get(550).unwrap().unbonding_eras,
 					member_unbonding_eras!(0 + 3 => 92)
@@ -2486,7 +2486,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 0);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 
 				assert_eq!(Balances::free_balance(&550), 550 + 550 + 92);
 				assert_eq!(
@@ -2614,7 +2614,7 @@ mod unbond {
 						}
 					}
 				);
-				assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 10);
+				assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 10);
 				assert_eq!(
 					SubPoolsStorage::<Runtime>::get(1).unwrap(),
 					SubPools {
@@ -2724,7 +2724,7 @@ mod unbond {
 					}
 				}
 			);
-			assert_eq!(StakingMock::active_balance(&default_bonded_account()).unwrap(), 0);
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()).unwrap(), 0);
 			assert_eq!(*UnbondingBalanceMap::get().get(&default_bonded_account()).unwrap(), 10);
 		});
 	}
@@ -3085,16 +3085,16 @@ mod pool_withdraw_unbonded {
 			// Given 10 unbond'ed directly against the pool account
 			assert_ok!(StakingMock::unbond(&default_bonded_account(), 5));
 			// and the pool account only has 10 balance
-			assert_eq!(StakingMock::active_balance(&default_bonded_account()), Ok(5));
-			assert_eq!(StakingMock::total_balance(&default_bonded_account()), Ok(10));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(10));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 
 			// When
 			assert_ok!(Pools::pool_withdraw_unbonded(RuntimeOrigin::signed(10), 1, 0));
 
 			// Then there unbonding balance is no longer locked
-			assert_eq!(StakingMock::active_balance(&default_bonded_account()), Ok(5));
-			assert_eq!(StakingMock::total_balance(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(5));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 		});
 	}
@@ -3141,7 +3141,7 @@ mod withdraw_unbonded {
 					);
 					StakingMock::set_bonded_balance(
 						default_bonded_account(),
-						StakingMock::active_balance(&default_bonded_account()).unwrap() / 2,
+						StakingMock::active_stake(&default_bonded_account()).unwrap() / 2,
 					);
 				};
 
@@ -3270,7 +3270,7 @@ mod withdraw_unbonded {
 				// current bond is 600, we slash it all to 300.
 				StakingMock::set_bonded_balance(default_bonded_account(), 300);
 				Balances::make_free_balance_be(&default_bonded_account(), 300);
-				assert_eq!(StakingMock::total_balance(&default_bonded_account()), Ok(300));
+				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(300));
 
 				assert_ok!(fully_unbond_permissioned(40));
 				assert_ok!(fully_unbond_permissioned(550));
