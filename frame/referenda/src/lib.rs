@@ -627,17 +627,19 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Clear the ongoing referendum metadata.
+		/// Clear the referendum metadata.
 		///
-		/// - `origin`: Must be `Signed`. If the referendum is ongoing, it must also be the creator
-		///   of the referendum.
+		/// - `origin`: Must be `Signed` or `Root`. If the referendum is ongoing, it must also be
+		///   the creator of the referendum.
 		/// - `index`: The index of the ongoing referendum to clear metadata for.
 		// TODO replace the weight function
 		#[pallet::weight(1)]
 		pub fn clear_metadata(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			if let Some(status) = Self::ensure_ongoing(index).ok() {
-				ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+			let maybe_who = ensure_signed_or_root(origin)?;
+			if let Some(who) = maybe_who {
+				if let Some(status) = Self::ensure_ongoing(index).ok() {
+					ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+				}
 			}
 			Self::do_clear_metadata(index);
 			Ok(())
