@@ -570,7 +570,10 @@ fn transferring_frozen_asset_should_not_work() {
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(1), 0, 1, 100));
 		assert_eq!(Assets::balance(0, 1), 100);
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
-		assert_noop!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50), Error::<Test>::Frozen);
+		assert_noop!(
+			Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50),
+			Error::<Test>::AssetNotLive
+		);
 		assert_ok!(Assets::thaw_asset(RuntimeOrigin::signed(1), 0));
 		assert_ok!(Assets::transfer(RuntimeOrigin::signed(1), 0, 2, 50));
 	});
@@ -586,7 +589,7 @@ fn approve_transfer_frozen_asset_should_not_work() {
 		assert_ok!(Assets::freeze_asset(RuntimeOrigin::signed(1), 0));
 		assert_noop!(
 			Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50),
-			Error::<Test>::Frozen
+			Error::<Test>::AssetNotLive
 		);
 		assert_ok!(Assets::thaw_asset(RuntimeOrigin::signed(1), 0));
 		assert_ok!(Assets::approve_transfer(RuntimeOrigin::signed(1), 0, 2, 50));
