@@ -417,7 +417,7 @@ impl<T: Config> PoolMember<T> {
 	///
 	/// This is derived from the ratio of points in the pool to which the member belongs to.
 	/// Might return different values based on the pool state for the same member and points.
-	fn active_balance(&self) -> BalanceOf<T> {
+	fn active_stake(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
 			pool.points_to_balance(self.points)
 		} else {
@@ -791,7 +791,7 @@ impl<T: Config> BondedPool<T> {
 				target_member.active_points().saturating_sub(unbonding_points);
 			let mut target_member_after_unbond = (*target_member).clone();
 			target_member_after_unbond.points = new_depositor_points;
-			target_member_after_unbond.active_balance()
+			target_member_after_unbond.active_stake()
 		};
 
 		// any partial unbonding is only ever allowed if this unbond is permissioned.

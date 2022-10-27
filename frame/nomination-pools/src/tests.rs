@@ -4115,7 +4115,7 @@ mod create {
 				}
 			);
 			assert_eq!(
-				StakingMock::active_balance(&next_pool_stash).unwrap(),
+				StakingMock::active_stake(&next_pool_stash).unwrap(),
 				StakingMock::minimum_nominator_bond()
 			);
 			assert_eq!(
