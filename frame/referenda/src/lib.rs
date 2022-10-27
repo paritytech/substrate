@@ -221,6 +221,8 @@ pub mod pallet {
 		/// The schema type of the referendum [`MetadataOf`].
 		/// e.g. enum of `IpfsJsonV1` (the hash of an off-chain IPFS json file),
 		/// `BinJsonV2` (on-chain json dump).
+		/// Consider a garbage collection for [`MetadataFor`] of finished referendums
+		/// to `unrequest` large preimages.
 		type MetadataSchema: Clone + Codec + Eq + Debug + TypeInfo + MaxEncodedLen;
 	}
 
@@ -497,8 +499,6 @@ pub mod pallet {
 				amount: deposit.amount,
 			};
 			Self::deposit_event(e);
-			// TODO schedule (e.g. in 30 days) the preimage unregister to remove the preimage from
-			// the chain
 			Ok(())
 		}
 
@@ -621,10 +621,8 @@ pub mod pallet {
 			let status = Self::ensure_ongoing(index)?;
 			ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
 			ensure!(T::Preimages::len(&metadata.hash).is_some(), Error::<T, I>::BadMetadata);
-
 			T::Preimages::request(&metadata.hash);
 			MetadataFor::<T, I>::insert(index, metadata);
-
 			Self::deposit_event(Event::<T, I>::MetadataSet { index });
 			Ok(())
 		}
