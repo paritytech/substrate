@@ -519,3 +519,82 @@ fn curve_handles_all_inputs() {
 	let threshold = test_curve.threshold(Perbill::one());
 	assert_eq!(threshold, Perbill::zero());
 }
+
+#[test]
+fn set_metadata_works() {
+	new_test_ext().execute_with(|| {
+		use sp_std::borrow::Cow;
+
+		let invalid_metadata =
+			MetadataOf::<Test, ()> { schema: MetadataSchema::IpfsJsonV1, hash: [1u8; 32].into() };
+		let metadata = MetadataOf::<Test, ()> {
+			schema: MetadataSchema::IpfsJsonV1,
+			hash: Preimage::note(Cow::from(vec![1])).unwrap(),
+		};
+
+		// fails to set metadata for a finished referendum.
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::kill(RuntimeOrigin::root(), index));
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, invalid_metadata.clone(),),
+			Error::<Test>::NotOngoing,
+		);
+		// no permission to set metadata
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, invalid_metadata.clone(),),
+			Error::<Test>::NoPermission,
+		);
+		// preimage does not exist
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_noop!(
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, invalid_metadata,),
+			Error::<Test>::BadMetadata,
+		);
+		// metadata set
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, metadata.clone(),));
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet { index }));
+		assert!(Preimage::is_requested(&metadata.hash));
+	});
+}
+
+#[test]
+fn clear_metadata_works() {
+	new_test_ext().execute_with(|| {
+		use sp_std::borrow::Cow;
+
+		let metadata = MetadataOf::<Test, ()> {
+			schema: MetadataSchema::IpfsJsonV1,
+			hash: Preimage::note(Cow::from(vec![1, 2])).unwrap(),
+		};
+
+		assert_ok!(Referenda::submit(
+			RuntimeOrigin::signed(1),
+			Box::new(RawOrigin::Root.into()),
+			set_balance_proposal_bounded(1),
+			DispatchTime::At(1),
+		));
+		let index = ReferendumCount::<Test>::get() - 1;
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, metadata.clone(),));
+		assert!(Preimage::is_requested(&metadata.hash));
+		assert_noop!(
+			Referenda::clear_metadata(RuntimeOrigin::signed(2), index,),
+			Error::<Test>::NoPermission,
+		);
+		assert_ok!(Referenda::clear_metadata(RuntimeOrigin::signed(1), index,),);
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataCleared { index }));
+	});
+}
