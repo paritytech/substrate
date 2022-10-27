@@ -98,7 +98,7 @@ benchmarks! {
 		let a in 0 .. T::MaxPending::get() - 1;
 		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		// In this case the caller is the "target" proxy
-		let caller: T::AccountId = account("anonymous", 0, SEED);
+		let caller: T::AccountId = account("pure", 0, SEED);
 		let delegate: T::AccountId = account("target", p - 1, SEED);
 		let delegate_lookup = T::Lookup::unlookup(delegate.clone());
 		T::Currency::make_free_balance_be(&delegate, BalanceOf::<T>::max_value() / 2u32.into());
@@ -218,7 +218,7 @@ benchmarks! {
 		assert_eq!(proxies.len() as u32, 0);
 	}
 
-	anonymous {
+	create_pure {
 		let p in 1 .. (T::MaxProxies::get() - 1) => add_proxies::<T>(p, None)?;
 		let caller: T::AccountId = whitelisted_caller();
 	}: _(
@@ -228,22 +228,22 @@ benchmarks! {
 		0
 	)
 	verify {
-		let anon_account = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
-		assert_last_event::<T>(Event::AnonymousCreated {
-			anonymous: anon_account,
+		let pure_account = Pallet::<T>::pure_account(&caller, &T::ProxyType::default(), 0, None);
+		assert_last_event::<T>(Event::PureCreated {
+			pure: pure_account,
 			who: caller,
 			proxy_type: T::ProxyType::default(),
 			disambiguation_index: 0,
 		}.into());
 	}
 
-	kill_anonymous {
+	kill_pure {
 		let p in 0 .. (T::MaxProxies::get() - 2);
 
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
-		Pallet::<T>::anonymous(
+		Pallet::<T>::create_pure(
 			RawOrigin::Signed(whitelisted_caller()).into(),
 			T::ProxyType::default(),
 			T::BlockNumber::zero(),
@@ -251,13 +251,13 @@ benchmarks! {
 		)?;
 		let height = system::Pallet::<T>::block_number();
 		let ext_index = system::Pallet::<T>::extrinsic_index().unwrap_or(0);
-		let anon = Pallet::<T>::anonymous_account(&caller, &T::ProxyType::default(), 0, None);
+		let pure_account = Pallet::<T>::pure_account(&caller, &T::ProxyType::default(), 0, None);
 
-		add_proxies::<T>(p, Some(anon.clone()))?;
-		ensure!(Proxies::<T>::contains_key(&anon), "anon proxy not created");
-	}: _(RawOrigin::Signed(anon.clone()), caller_lookup, T::ProxyType::default(), 0, height, ext_index)
+		add_proxies::<T>(p, Some(pure_account.clone()))?;
+		ensure!(Proxies::<T>::contains_key(&pure_account), "pure proxy not created");
+	}: _(RawOrigin::Signed(pure_account.clone()), caller_lookup, T::ProxyType::default(), 0, height, ext_index)
 	verify {
-		assert!(!Proxies::<T>::contains_key(&anon));
+		assert!(!Proxies::<T>::contains_key(&pure_account));
 	}
 
 	impl_benchmark_test_suite!(Proxy, crate::tests::new_test_ext(), crate::tests::Test);

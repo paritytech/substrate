@@ -52,12 +52,6 @@ pub trait Config:
 
 pub struct Pallet<T: Config>(Pools<T>);
 
-fn min_create_bond<T: Config>() -> BalanceOf<T> {
-	MinCreateBond::<T>::get()
-		.max(T::StakingInterface::minimum_bond())
-		.max(CurrencyOf::<T>::minimum_balance())
-}
-
 fn create_funded_user_with_balance<T: pallet_nomination_pools::Config>(
 	string: &'static str,
 	n: u32,
@@ -220,7 +214,7 @@ impl<T: Config> ListScenario<T> {
 
 frame_benchmarking::benchmarks! {
 	join {
-		let origin_weight = min_create_bond::<T>() * 2u32.into();
+		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 
 		// setup the worst case list scenario.
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
@@ -246,7 +240,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	bond_extra_transfer {
-		let origin_weight = min_create_bond::<T>() * 2u32.into();
+		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let extra = scenario.dest_weight - origin_weight;
 
@@ -261,7 +255,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	bond_extra_reward {
-		let origin_weight = min_create_bond::<T>() * 2u32.into();
+		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
 		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
 
@@ -279,7 +273,7 @@ frame_benchmarking::benchmarks! {
 	}
 
 	claim_payout {
-		let origin_weight = min_create_bond::<T>() * 2u32.into();
+		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let ed = CurrencyOf::<T>::minimum_balance();
 		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
 		let reward_account = Pools::<T>::create_reward_account(1);
@@ -309,7 +303,7 @@ frame_benchmarking::benchmarks! {
 	unbond {
 		// The weight the nominator will start at. The value used here is expected to be
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
-		let origin_weight = min_create_bond::<T>() * 200u32.into();
+		let origin_weight = Pools::<T>::depositor_min_bond() * 200u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
 		let amount = origin_weight - scenario.dest_weight;
 
@@ -340,7 +334,7 @@ frame_benchmarking::benchmarks! {
 	pool_withdraw_unbonded {
 		let s in 0 .. MAX_SPANS;
 
-		let min_create_bond = min_create_bond::<T>();
+		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Add a new member
@@ -382,7 +376,7 @@ frame_benchmarking::benchmarks! {
 	withdraw_unbonded_update {
 		let s in 0 .. MAX_SPANS;
 
-		let min_create_bond = min_create_bond::<T>();
+		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Add a new member
@@ -428,7 +422,7 @@ frame_benchmarking::benchmarks! {
 	withdraw_unbonded_kill {
 		let s in 0 .. MAX_SPANS;
 
-		let min_create_bond = min_create_bond::<T>();
+		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
@@ -493,14 +487,14 @@ frame_benchmarking::benchmarks! {
 	}
 
 	create {
-		let min_create_bond = min_create_bond::<T>();
+		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
 		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
 		// Give the depositor some balance to bond
 		CurrencyOf::<T>::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
 
-		// Make sure no pools exist as a pre-condition for our verify checks
+		// Make sure no Pools exist at a pre-condition for our verify checks
 		assert_eq!(RewardPools::<T>::count(), 0);
 		assert_eq!(BondedPools::<T>::count(), 0);
 
@@ -540,7 +534,7 @@ frame_benchmarking::benchmarks! {
 		let n in 1 .. T::MaxNominations::get();
 
 		// Create a pool
-		let min_create_bond = min_create_bond::<T>() * 2u32.into();
+		let min_create_bond = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
@@ -577,7 +571,7 @@ frame_benchmarking::benchmarks! {
 
 	set_state {
 		// Create a pool
-		let min_create_bond = min_create_bond::<T>();
+		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
 		BondedPools::<T>::mutate(&1, |maybe_pool| {
 			// Force the pool into an invalid state
@@ -595,7 +589,7 @@ frame_benchmarking::benchmarks! {
 		let n in 1 .. <T as pallet_nomination_pools::Config>::MaxMetadataLen::get();
 
 		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond::<T>() * 2u32.into());
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 
 		// Create metadata of the max possible size
 		let metadata: Vec<u8> = (0..n).map(|_| 42).collect();
@@ -624,7 +618,7 @@ frame_benchmarking::benchmarks! {
 
 	update_roles {
 		let first_id = pallet_nomination_pools::LastPoolId::<T>::get() + 1;
-		let (root, _) = create_pool_account::<T>(0, min_create_bond::<T>() * 2u32.into());
+		let (root, _) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 		let random: T::AccountId = account("but is anything really random in computers..?", 0, USER_SEED);
 	}:_(
 		RuntimeOrigin::Signed(root.clone()),
@@ -646,7 +640,7 @@ frame_benchmarking::benchmarks! {
 
 	chill {
 		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond::<T>() * 2u32.into());
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 
 		// Nominate with the pool.
 		 let validators: Vec<_> = (0..T::MaxNominations::get())

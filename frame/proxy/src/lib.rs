@@ -191,10 +191,6 @@ pub mod pallet {
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
 		/// - `call`: The call to be made by the `real` account.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy(T::MaxProxies::get())
@@ -228,10 +224,6 @@ pub mod pallet {
 		/// - `proxy_type`: The permissions allowed for this proxy account.
 		/// - `delay`: The announcement period required of the initial proxy. Will generally be
 		/// zero.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::add_proxy(T::MaxProxies::get()))]
 		pub fn add_proxy(
 			origin: OriginFor<T>,
@@ -251,10 +243,6 @@ pub mod pallet {
 		/// Parameters:
 		/// - `proxy`: The account that the `caller` would like to remove as a proxy.
 		/// - `proxy_type`: The permissions currently enabled for the removed proxy account.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::remove_proxy(T::MaxProxies::get()))]
 		pub fn remove_proxy(
 			origin: OriginFor<T>,
@@ -271,12 +259,8 @@ pub mod pallet {
 		///
 		/// The dispatch origin for this call must be _Signed_.
 		///
-		/// WARNING: This may be called on accounts created by `anonymous`, however if done, then
+		/// WARNING: This may be called on accounts created by `pure`, however if done, then
 		/// the unreserved fees will be inaccessible. **All access to this account will be lost.**
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::remove_proxies(T::MaxProxies::get()))]
 		pub fn remove_proxies(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -304,13 +288,8 @@ pub mod pallet {
 		/// same sender, with the same parameters.
 		///
 		/// Fails if there are insufficient funds to pay for deposit.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
-		/// TODO: Might be over counting 1 read
-		#[pallet::weight(T::WeightInfo::anonymous(T::MaxProxies::get()))]
-		pub fn anonymous(
+		#[pallet::weight(T::WeightInfo::create_pure(T::MaxProxies::get()))]
+		pub fn create_pure(
 			origin: OriginFor<T>,
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
@@ -318,8 +297,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
-			let anonymous = Self::anonymous_account(&who, &proxy_type, index, None);
-			ensure!(!Proxies::<T>::contains_key(&anonymous), Error::<T>::Duplicate);
+			let pure = Self::pure_account(&who, &proxy_type, index, None);
+			ensure!(!Proxies::<T>::contains_key(&pure), Error::<T>::Duplicate);
 
 			let proxy_def =
 				ProxyDefinition { delegate: who.clone(), proxy_type: proxy_type.clone(), delay };
@@ -329,9 +308,9 @@ pub mod pallet {
 			let deposit = T::ProxyDepositBase::get() + T::ProxyDepositFactor::get();
 			T::Currency::reserve(&who, deposit)?;
 
-			Proxies::<T>::insert(&anonymous, (bounded_proxies, deposit));
-			Self::deposit_event(Event::AnonymousCreated {
-				anonymous,
+			Proxies::<T>::insert(&pure, (bounded_proxies, deposit));
+			Self::deposit_event(Event::PureCreated {
+				pure,
 				who,
 				proxy_type,
 				disambiguation_index: index,
@@ -340,28 +319,24 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Removes a previously spawned anonymous proxy.
+		/// Removes a previously spawned pure proxy.
 		///
 		/// WARNING: **All access to this account will be lost.** Any funds held in it will be
 		/// inaccessible.
 		///
 		/// Requires a `Signed` origin, and the sender account must have been created by a call to
-		/// `anonymous` with corresponding parameters.
+		/// `pure` with corresponding parameters.
 		///
-		/// - `spawner`: The account that originally called `anonymous` to create this account.
-		/// - `index`: The disambiguation index originally passed to `anonymous`. Probably `0`.
-		/// - `proxy_type`: The proxy type originally passed to `anonymous`.
-		/// - `height`: The height of the chain when the call to `anonymous` was processed.
-		/// - `ext_index`: The extrinsic index in which the call to `anonymous` was processed.
+		/// - `spawner`: The account that originally called `pure` to create this account.
+		/// - `index`: The disambiguation index originally passed to `pure`. Probably `0`.
+		/// - `proxy_type`: The proxy type originally passed to `pure`.
+		/// - `height`: The height of the chain when the call to `pure` was processed.
+		/// - `ext_index`: The extrinsic index in which the call to `pure` was processed.
 		///
-		/// Fails with `NoPermission` in case the caller is not a previously created anonymous
-		/// account whose `anonymous` call has corresponding parameters.
-		///
-		/// # <weight>
-		/// Weight is a function of the number of proxies the user has (P).
-		/// # </weight>
-		#[pallet::weight(T::WeightInfo::kill_anonymous(T::MaxProxies::get()))]
-		pub fn kill_anonymous(
+		/// Fails with `NoPermission` in case the caller is not a previously created pure
+		/// account whose `pure` call has corresponding parameters.
+		#[pallet::weight(T::WeightInfo::kill_pure(T::MaxProxies::get()))]
+		pub fn kill_pure(
 			origin: OriginFor<T>,
 			spawner: AccountIdLookupOf<T>,
 			proxy_type: T::ProxyType,
@@ -373,7 +348,7 @@ pub mod pallet {
 			let spawner = T::Lookup::lookup(spawner)?;
 
 			let when = (height, ext_index);
-			let proxy = Self::anonymous_account(&spawner, &proxy_type, index, Some(when));
+			let proxy = Self::pure_account(&spawner, &proxy_type, index, Some(when));
 			ensure!(proxy == who, Error::<T>::NoPermission);
 
 			let (_, deposit) = Proxies::<T>::take(&who);
@@ -397,12 +372,6 @@ pub mod pallet {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		///
-		/// # <weight>
-		/// Weight is a function of:
-		/// - A: the number of announcements made.
-		/// - P: the number of proxies the user has.
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::announce(T::MaxPending::get(), T::MaxProxies::get()))]
 		pub fn announce(
 			origin: OriginFor<T>,
@@ -452,12 +421,6 @@ pub mod pallet {
 		/// Parameters:
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `call_hash`: The hash of the call to be made by the `real` account.
-		///
-		/// # <weight>
-		/// Weight is a function of:
-		/// - A: the number of announcements made.
-		/// - P: the number of proxies the user has.
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::remove_announcement(
 			T::MaxPending::get(),
 			T::MaxProxies::get()
@@ -484,12 +447,6 @@ pub mod pallet {
 		/// Parameters:
 		/// - `delegate`: The account that previously announced the call.
 		/// - `call_hash`: The hash of the call to be made.
-		///
-		/// # <weight>
-		/// Weight is a function of:
-		/// - A: the number of announcements made.
-		/// - P: the number of proxies the user has.
-		/// # </weight>
 		#[pallet::weight(T::WeightInfo::reject_announcement(
 			T::MaxPending::get(),
 			T::MaxProxies::get()
@@ -519,12 +476,6 @@ pub mod pallet {
 		/// - `real`: The account that the proxy will make a call on behalf of.
 		/// - `force_proxy_type`: Specify the exact proxy type to be used and checked for this call.
 		/// - `call`: The call to be made by the `real` account.
-		///
-		/// # <weight>
-		/// Weight is a function of:
-		/// - A: the number of announcements made.
-		/// - P: the number of proxies the user has.
-		/// # </weight>
 		#[pallet::weight({
 			let di = call.get_dispatch_info();
 			(T::WeightInfo::proxy_announced(T::MaxPending::get(), T::MaxProxies::get())
@@ -565,10 +516,10 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A proxy was executed correctly, with the given.
 		ProxyExecuted { result: DispatchResult },
-		/// Anonymous account has been created by new proxy with given
+		/// A pure account has been created by new proxy with given
 		/// disambiguation index and proxy type.
-		AnonymousCreated {
-			anonymous: T::AccountId,
+		PureCreated {
+			pure: T::AccountId,
 			who: T::AccountId,
 			proxy_type: T::ProxyType,
 			disambiguation_index: u16,
@@ -642,7 +593,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Calculate the address of an anonymous account.
+	/// Calculate the address of an pure account.
 	///
 	/// - `who`: The spawner account.
 	/// - `proxy_type`: The type of the proxy that the sender will be registered as over the
@@ -651,9 +602,9 @@ impl<T: Config> Pallet<T> {
 	/// - `index`: A disambiguation index, in case this is called multiple times in the same
 	/// transaction (e.g. with `utility::batch`). Unless you're using `batch` you probably just
 	/// want to use `0`.
-	/// - `maybe_when`: The block height and extrinsic index of when the anonymous account was
+	/// - `maybe_when`: The block height and extrinsic index of when the pure account was
 	/// created. None to use current block height and extrinsic index.
-	pub fn anonymous_account(
+	pub fn pure_account(
 		who: &T::AccountId,
 		proxy_type: &T::ProxyType,
 		index: u16,
@@ -830,9 +781,9 @@ impl<T: Config> Pallet<T> {
 				Some(Call::remove_proxy { ref proxy_type, .. })
 					if !def.proxy_type.is_superset(proxy_type) =>
 					false,
-				// Proxy call cannot remove all proxies or kill anonymous proxies unless it has full
+				// Proxy call cannot remove all proxies or kill pure proxies unless it has full
 				// permissions.
-				Some(Call::remove_proxies { .. }) | Some(Call::kill_anonymous { .. })
+				Some(Call::remove_proxies { .. }) | Some(Call::kill_pure { .. })
 					if def.proxy_type != T::ProxyType::default() =>
 					false,
 				_ => def.proxy_type.filter(c),

@@ -20,7 +20,7 @@ use futures::executor::block_on;
 use parity_scale_codec::{Decode, Encode, Joiner};
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
-	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, StorageProvider,
+	in_mem, BlockBackend, BlockchainEvents, FinalityNotifications, HeaderBackend, StorageProvider,
 };
 use sc_client_db::{Backend, BlocksPruning, DatabaseSettings, DatabaseSource, PruningMode};
 use sc_consensus::{
@@ -338,11 +338,15 @@ fn block_builder_works_with_transactions() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+	let hash0 = client
+		.expect_block_hash_from_id(&BlockId::Number(0))
+		.expect("block 0 was just imported. qed");
+	let hash1 = client
+		.expect_block_hash_from_id(&BlockId::Number(1))
+		.expect("block 1 was just imported. qed");
+
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
-	);
+	assert_ne!(client.state_at(&hash1).unwrap().pairs(), client.state_at(&hash0).unwrap().pairs());
 	assert_eq!(
 		client
 			.runtime_api()
@@ -392,11 +396,15 @@ fn block_builder_does_not_include_invalid() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
+	let hash0 = client
+		.expect_block_hash_from_id(&BlockId::Number(0))
+		.expect("block 0 was just imported. qed");
+	let hash1 = client
+		.expect_block_hash_from_id(&BlockId::Number(1))
+		.expect("block 1 was just imported. qed");
+
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(
-		client.state_at(&BlockId::Number(1)).unwrap().pairs(),
-		client.state_at(&BlockId::Number(0)).unwrap().pairs()
-	);
+	assert_ne!(client.state_at(&hash1).unwrap().pairs(), client.state_at(&hash0).unwrap().pairs());
 	assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 }
 
@@ -859,7 +867,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
-	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
+	client.finalize_block(&a2.hash(), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -988,7 +996,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	// we finalize block B1 which is on a different branch from current best
 	// which should trigger a re-org.
-	ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &b1.hash(), None).unwrap();
 
 	// B1 should now be the latest finalized
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
@@ -1012,7 +1020,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	assert_eq!(client.chain_info().best_hash, b3.hash());
 
-	ClientExt::finalize_block(&client, BlockId::Hash(b3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &b3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
@@ -1110,7 +1118,7 @@ fn finality_notifications_content() {
 
 	// Postpone import to test behavior of import of finalized block.
 
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a2.hash(), None).unwrap();
 
 	// Import and finalize D4
 	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
@@ -1200,7 +1208,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 			DatabaseSettings {
 				trie_cache_maximum_size: Some(1 << 20),
 				state_pruning: Some(PruningMode::ArchiveAll),
-				blocks_pruning: BlocksPruning::All,
+				blocks_pruning: BlocksPruning::KeepAll,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
@@ -1266,7 +1274,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	// we will finalize A2 which should make it impossible to import a new
 	// B3 at the same height but that doesn't include it
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a2.hash(), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
 	let expected_err =
@@ -1301,7 +1309,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
-	ClientExt::finalize_block(&client, BlockId::Hash(a3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 
@@ -1426,7 +1434,7 @@ fn returns_status_for_pruned_blocks() {
 			DatabaseSettings {
 				trie_cache_maximum_size: Some(1 << 20),
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
-				blocks_pruning: BlocksPruning::All,
+				blocks_pruning: BlocksPruning::KeepFinalized,
 				source: DatabaseSource::RocksDb { path: tmp.path().into(), cache_size: 1024 },
 			},
 			u64::MAX,
@@ -1594,12 +1602,14 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.add_extra_child_storage(&child_info, b"third".to_vec(), vec![0u8; 32])
 		.build();
 
+	let block_hash = client.info().best_hash;
+
 	let child_root = b":child_storage:default:child".to_vec();
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
-		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+		.storage_keys_iter(&block_hash, Some(&prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1614,7 +1624,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
@@ -1625,7 +1635,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
 		)
@@ -1635,7 +1645,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, Vec::<Vec<u8>>::new());
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(&BlockId::Number(0), child_info.clone(), Some(&child_prefix), None)
+		.child_storage_keys_iter(&block_hash, child_info.clone(), Some(&child_prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1643,7 +1653,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.child_storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			child_info,
 			None,
 			Some(&StorageKey(b"second".to_vec())),
@@ -1658,12 +1668,14 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 fn storage_keys_iter_works() {
 	let client = substrate_test_runtime_client::new();
 
+	let block_hash = client.info().best_hash;
+
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
-		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+		.storage_keys_iter(&block_hash, Some(&prefix), None)
 		.unwrap()
-		.take(8)
+		.take(9)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
 		.collect();
 	assert_eq!(
@@ -1675,6 +1687,7 @@ fn storage_keys_iter_works() {
 			"1a560ecfd2a62c2b8521ef149d0804eb621050e3988ed97dca55f0d7c3e6aa34",
 			"1d66850d32002979d67dd29dc583af5b2ae2a1f71c1f35ad90fff122be7a3824",
 			"237498b98d8803334286e9f0483ef513098dd3c1c22ca21c4dc155b4ef6cc204",
+			"26aa394eea5630e07c48ae0c9558cef75e0621c4869aa60c02be9adcc98a0d1d",
 			"29b9db10ec5bf7907d8f74b5e60aa8140c4fbdd8127a1ee5600cb98e5ec01729",
 			"3a636f6465",
 		]
@@ -1682,7 +1695,7 @@ fn storage_keys_iter_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
@@ -1699,16 +1712,16 @@ fn storage_keys_iter_works() {
 			"5c2d5fda66373dabf970e4fb13d277ce91c5233473321129d32b5a8085fa8133",
 			"6644b9b8bc315888ac8e41a7968dc2b4141a5403c58acdf70b7e8f7e07bf5081",
 			"66484000ed3f75c95fc7b03f39c20ca1e1011e5999278247d3b2f5e3c3273808",
-			"79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d",
+			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
 		]
 	);
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
-				"79c07e2b1d2e2abfd4855b936617eeff5e0621c4869aa60c02be9adcc98a0d1d",
+				"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
 			))),
 		)
 		.unwrap()
@@ -1718,11 +1731,11 @@ fn storage_keys_iter_works() {
 	assert_eq!(
 		res,
 		[
-			"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",
 			"811ecfaadcf5f2ee1d67393247e2f71a1662d433e8ce7ff89fb0d4aa9561820b",
 			"a93d74caa7ec34ea1b04ce1e5c090245f867d333f0f88278a451e45299654dc5",
 			"a9ee1403384afbfc13f13be91ff70bfac057436212e53b9733914382ac942892",
 			"cf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f",
+			"e3b47b6c84c0493481f97c5197d2554f",
 		]
 	);
 }

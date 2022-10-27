@@ -231,7 +231,8 @@
 
 use codec::{Decode, Encode};
 use frame_election_provider_support::{
-	ElectionDataProvider, ElectionProvider, InstantElectionProvider, NposSolution,
+	ElectionDataProvider, ElectionProvider, ElectionProviderBase, InstantElectionProvider,
+	NposSolution,
 };
 use frame_support::{
 	dispatch::DispatchClass,
@@ -266,6 +267,7 @@ pub mod helpers;
 
 const LOG_TARGET: &str = "runtime::election-provider";
 
+pub mod migrations;
 pub mod signed;
 pub mod unsigned;
 pub mod weights;
@@ -289,7 +291,7 @@ pub type SolutionTargetIndexOf<T> = <SolutionOf<T> as NposSolution>::TargetIndex
 pub type SolutionAccuracyOf<T> =
 	<SolutionOf<<T as crate::Config>::MinerConfig> as NposSolution>::Accuracy;
 /// The fallback election type.
-pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProvider>::Error;
+pub type FallbackErrorOf<T> = <<T as crate::Config>::Fallback as ElectionProviderBase>::Error;
 
 /// Configuration for the benchmarks of the pallet.
 pub trait BenchmarkingConfig {
@@ -312,12 +314,18 @@ pub trait BenchmarkingConfig {
 /// A fallback implementation that transitions the pallet to the emergency phase.
 pub struct NoFallback<T>(sp_std::marker::PhantomData<T>);
 
-impl<T: Config> ElectionProvider for NoFallback<T> {
+impl<T: Config> ElectionProviderBase for NoFallback<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type DataProvider = T::DataProvider;
 	type Error = &'static str;
 
+	fn ongoing() -> bool {
+		false
+	}
+}
+
+impl<T: Config> ElectionProvider for NoFallback<T> {
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		// Do nothing, this will enable the emergency phase.
 		Err("NoFallback.")
@@ -1258,8 +1266,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SignedSubmissionNextIndex<T: Config> = StorageValue<_, u32, ValueQuery>;
 
-	/// A sorted, bounded set of `(score, index)`, where each `index` points to a value in
-	/// `SignedSubmissions`.
+	/// A sorted, bounded vector of `(score, block_number, index)`, where each `index` points to a
+	/// value in `SignedSubmissions`.
 	///
 	/// We never need to process more than a single signed submission at a time. Signed submissions
 	/// can be quite large, so we're willing to pay the cost of multiple database accesses to access
@@ -1289,9 +1297,14 @@ pub mod pallet {
 	#[pallet::getter(fn minimum_untrusted_score)]
 	pub type MinimumUntrustedScore<T: Config> = StorageValue<_, ElectionScore>;
 
+	/// The current storage version.
+	///
+	/// v1: https://github.com/paritytech/substrate/pull/12237/
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
 	#[pallet::without_storage_info]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(PhantomData<T>);
 }
 
@@ -1557,7 +1570,7 @@ impl<T: Config> Pallet<T> {
 		<QueuedSolution<T>>::take()
 			.ok_or(ElectionError::<T>::NothingQueued)
 			.or_else(|_| {
-				T::Fallback::elect()
+				<T::Fallback as ElectionProvider>::elect()
 					.map(|supports| ReadySolution {
 						supports,
 						score: Default::default(),
@@ -1592,12 +1605,21 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> ElectionProvider for Pallet<T> {
+impl<T: Config> ElectionProviderBase for Pallet<T> {
 	type AccountId = T::AccountId;
 	type BlockNumber = T::BlockNumber;
 	type Error = ElectionError<T>;
 	type DataProvider = T::DataProvider;
 
+	fn ongoing() -> bool {
+		match Self::current_phase() {
+			Phase::Off => false,
+			_ => true,
+		}
+	}
+}
+
+impl<T: Config> ElectionProvider for Pallet<T> {
 	fn elect() -> Result<Supports<T::AccountId>, Self::Error> {
 		match Self::do_elect() {
 			Ok(supports) => {
@@ -1614,7 +1636,6 @@ impl<T: Config> ElectionProvider for Pallet<T> {
 		}
 	}
 }
-
 /// convert a DispatchError to a custom InvalidTransaction with the inner code being the error
 /// number.
 pub fn dispatch_error_to_invalid(error: DispatchError) -> InvalidTransaction {
@@ -1827,9 +1848,9 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{
-			multi_phase_events, raw_solution, roll_to, AccountId, ExtBuilder, MockWeightInfo,
-			MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin, SignedMaxSubmissions, System,
-			TargetIndex, Targets,
+			multi_phase_events, raw_solution, roll_to, roll_to_signed, roll_to_unsigned, AccountId,
+			ExtBuilder, MockWeightInfo, MockedWeightInfo, MultiPhase, Runtime, RuntimeOrigin,
+			SignedMaxSubmissions, System, TargetIndex, Targets,
 		},
 		Phase,
 	};
@@ -1853,7 +1874,7 @@ mod tests {
 			assert!(MultiPhase::snapshot().is_none());
 			assert_eq!(MultiPhase::round(), 1);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert!(MultiPhase::snapshot().is_some());
@@ -1864,7 +1885,7 @@ mod tests {
 			assert!(MultiPhase::snapshot().is_some());
 			assert_eq!(MultiPhase::round(), 1);
 
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 			assert_eq!(
 				multi_phase_events(),
@@ -1897,11 +1918,29 @@ mod tests {
 			roll_to(44);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(45);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			roll_to(55);
 			assert!(MultiPhase::current_phase().is_unsigned_open_at(55));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					},
+					Event::SignedPhaseStarted { round: 2 },
+					Event::UnsignedPhaseStarted { round: 2 }
+				]
+			);
 		})
 	}
 
@@ -1925,6 +1964,21 @@ mod tests {
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		});
 	}
 
@@ -1937,7 +1991,7 @@ mod tests {
 			roll_to(19);
 			assert!(MultiPhase::current_phase().is_off());
 
-			roll_to(20);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 			assert!(MultiPhase::snapshot().is_some());
 
@@ -1948,6 +2002,21 @@ mod tests {
 
 			assert!(MultiPhase::current_phase().is_off());
 			assert!(MultiPhase::snapshot().is_none());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			)
 		});
 	}
 
@@ -1970,6 +2039,14 @@ mod tests {
 			assert_ok!(MultiPhase::elect());
 
 			assert!(MultiPhase::current_phase().is_off());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::ElectionFinalized {
+					compute: ElectionCompute::Fallback,
+					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
+				}]
+			);
 		});
 	}
 
@@ -1978,16 +2055,13 @@ mod tests {
 		// An early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
 			// Signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
 
 			// An unexpected call to elect.
-			roll_to(20);
 			assert_ok!(MultiPhase::elect());
 
 			// We surely can't have any feasible solutions. This will cause an on-chain election.
@@ -2016,10 +2090,8 @@ mod tests {
 		// an early termination in the signed phase, with no queued solution.
 		ExtBuilder::default().build_and_execute(|| {
 			// signed phase started at block 15 and will end at 25.
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(multi_phase_events(), vec![Event::SignedPhaseStarted { round: 1 }]);
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 			assert_eq!(MultiPhase::round(), 1);
@@ -2037,7 +2109,6 @@ mod tests {
 			}
 
 			// an unexpected call to elect.
-			roll_to(20);
 			assert_ok!(MultiPhase::elect());
 
 			// all storage items must be cleared.
@@ -2047,16 +2118,38 @@ mod tests {
 			assert!(MultiPhase::desired_targets().is_none());
 			assert!(MultiPhase::queued_solution().is_none());
 			assert!(MultiPhase::signed_submissions().is_empty());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::Slashed { account: 99, value: 5 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn check_events_with_compute_signed() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(14);
-			assert_eq!(MultiPhase::current_phase(), Phase::Off);
-
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -2091,7 +2184,7 @@ mod tests {
 	#[test]
 	fn check_events_with_compute_unsigned() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert!(MultiPhase::current_phase().is_unsigned());
 
 			// ensure we have snapshots in place.
@@ -2110,7 +2203,6 @@ mod tests {
 			));
 			assert!(MultiPhase::queued_solution().is_some());
 
-			roll_to(30);
 			assert_ok!(MultiPhase::elect());
 
 			assert_eq!(
@@ -2138,7 +2230,7 @@ mod tests {
 	#[test]
 	fn fallback_strategy_works() {
 		ExtBuilder::default().onchain_fallback(true).build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far, but we get a result.
@@ -2151,11 +2243,27 @@ mod tests {
 					(30, Support { total: 40, voters: vec![(2, 5), (4, 5), (30, 30)] }),
 					(40, Support { total: 60, voters: vec![(2, 5), (3, 10), (4, 5), (40, 40)] })
 				]
-			)
+			);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Fallback,
+						score: ElectionScore {
+							minimal_stake: 0,
+							sum_stake: 0,
+							sum_stake_squared: 0
+						}
+					}
+				]
+			);
 		});
 
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.
@@ -2163,13 +2271,22 @@ mod tests {
 			assert_eq!(MultiPhase::elect().unwrap_err(), ElectionError::Fallback("NoFallback."));
 			// phase is now emergency.
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::UnsignedPhaseStarted { round: 1 },
+					Event::ElectionFailed
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn governance_fallback_works() {
 		ExtBuilder::default().onchain_fallback(false).build_and_execute(|| {
-			roll_to(25);
+			roll_to_unsigned();
 			assert_eq!(MultiPhase::current_phase(), Phase::Unsigned((true, 25)));
 
 			// Zilch solutions thus far.
@@ -2228,9 +2345,16 @@ mod tests {
 			assert_eq!(MultiPhase::current_phase(), Phase::Off);
 
 			// On-chain backup works though.
-			roll_to(29);
 			let supports = MultiPhase::elect().unwrap();
 			assert!(supports.len() > 0);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![Event::ElectionFinalized {
+					compute: ElectionCompute::Fallback,
+					score: ElectionScore { minimal_stake: 0, sum_stake: 0, sum_stake_squared: 0 }
+				}]
+			);
 		});
 	}
 
@@ -2254,6 +2378,8 @@ mod tests {
 			let err = MultiPhase::elect().unwrap_err();
 			assert_eq!(err, ElectionError::Fallback("NoFallback."));
 			assert_eq!(MultiPhase::current_phase(), Phase::Emergency);
+
+			assert_eq!(multi_phase_events(), vec![Event::ElectionFailed]);
 		});
 	}
 
@@ -2267,7 +2393,7 @@ mod tests {
 			crate::mock::MaxElectingVoters::set(2);
 
 			// Signed phase opens just fine.
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			assert_eq!(
@@ -2280,7 +2406,7 @@ mod tests {
 	#[test]
 	fn untrusted_score_verification_is_respected() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert_eq!(MultiPhase::current_phase(), Phase::Signed);
 
 			// set the solution balancing to get the desired score.

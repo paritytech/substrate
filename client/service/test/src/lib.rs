@@ -22,12 +22,9 @@ use futures::{task::Poll, Future, TryFutureExt as _};
 use log::{debug, info};
 use parking_lot::Mutex;
 use sc_client_api::{Backend, CallExecutor};
-use sc_network::{
-	config::{NetworkConfiguration, TransportConfig},
-	multiaddr,
-};
+use sc_network::{config::NetworkConfiguration, multiaddr};
 use sc_network_common::{
-	config::MultiaddrWithPeerId,
+	config::{MultiaddrWithPeerId, TransportConfig},
 	service::{NetworkBlock, NetworkPeers, NetworkStateInfo},
 };
 use sc_service::{
@@ -237,7 +234,7 @@ fn node_config<
 		database: DatabaseSource::RocksDb { path: root.join("db"), cache_size: 128 },
 		trie_cache_maximum_size: Some(16 * 1024 * 1024),
 		state_pruning: Default::default(),
-		blocks_pruning: BlocksPruning::All,
+		blocks_pruning: BlocksPruning::KeepFinalized,
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),

@@ -147,16 +147,13 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let state = self.backend.state_at(&at_hash)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
 		let runtime_code = self.check_override(runtime_code, at)?;
-
-		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
-			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
-		})?;
 
 		let mut sm = StateMachine::new(
 			&state,
@@ -195,13 +192,10 @@ where
 	{
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let state = self.backend.state_at(&at_hash)?;
 
 		let changes = &mut *changes.borrow_mut();
-
-		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
-			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
-		})?;
 
 		// It is important to extract the runtime code here before we create the proof
 		// recorder to not record it. We also need to fetch the runtime code from `state` to
@@ -255,7 +249,9 @@ where
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
-		let state = self.backend.state_at(*id)?;
+
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+		let state = self.backend.state_at(&at_hash)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -272,7 +268,8 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let state = self.backend.state_at(&at_hash)?;
 
 		let trie_backend = state.as_trie_backend();
 

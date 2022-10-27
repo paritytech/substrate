@@ -61,13 +61,13 @@ pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../../frame/contracts/common/" }
-pallet-contracts-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
+pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../../frame/contracts/primitives/" }
 pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/conviction-voting" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-election-provider-support-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support/benchmarking", optional = true }
 pallet-elections-phragmen = { version = "5.0.0-dev", default-features = false, path = "../../../frame/elections-phragmen" }
+pallet-fast-unstake = { version = "4.0.0-dev", default-features = false, path = "../../../frame/fast-unstake" }
 pallet-gilt = { version = "4.0.0-dev", default-features = false, path = "../../../frame/gilt" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../frame/grandpa" }
 pallet-im-online = { version = "4.0.0-dev", default-features = false, path = "../../../frame/im-online" }
@@ -138,10 +138,10 @@ std = [
 	"pallet-collective/std",
 	"pallet-contracts/std",
 	"pallet-contracts-primitives/std",
-	"pallet-contracts-rpc-runtime-api/std",
 	"pallet-conviction-voting/std",
 	"pallet-democracy/std",
 	"pallet-elections-phragmen/std",
+	"pallet-fast-unstake/std",
 	"frame-executive/std",
 	"pallet-gilt/std",
 	"pallet-grandpa/std",
@@ -220,6 +220,7 @@ runtime-benchmarks = [
 	"pallet-election-provider-multi-phase/runtime-benchmarks",
 	"pallet-election-provider-support-benchmarking/runtime-benchmarks",
 	"pallet-elections-phragmen/runtime-benchmarks",
+	"pallet-fast-unstake/runtime-benchmarks",
 	"pallet-gilt/runtime-benchmarks",
 	"pallet-grandpa/runtime-benchmarks",
 	"pallet-identity/runtime-benchmarks",
@@ -253,7 +254,7 @@ runtime-benchmarks = [
 	"frame-system-benchmarking/runtime-benchmarks",
 ]
 try-runtime = [
-	"frame-try-runtime",
+	"frame-try-runtime/try-runtime",
 	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",
@@ -272,6 +273,7 @@ try-runtime = [
 	"pallet-democracy/try-runtime",
 	"pallet-election-provider-multi-phase/try-runtime",
 	"pallet-elections-phragmen/try-runtime",
+	"pallet-fast-unstake/try-runtime",
 	"pallet-gilt/try-runtime",
 	"pallet-grandpa/try-runtime",
 	"pallet-im-online/try-runtime",

@@ -550,13 +550,13 @@ fn proxying_works() {
 }
 
 #[test]
-fn anonymous_works() {
+fn pure_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Proxy::anonymous(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
-		let anon = Proxy::anonymous_account(&1, &ProxyType::Any, 0, None);
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		let anon = Proxy::pure_account(&1, &ProxyType::Any, 0, None);
 		System::assert_last_event(
-			ProxyEvent::AnonymousCreated {
-				anonymous: anon,
+			ProxyEvent::PureCreated {
+				pure: anon,
 				who: 1,
 				proxy_type: ProxyType::Any,
 				disambiguation_index: 0,
@@ -564,20 +564,20 @@ fn anonymous_works() {
 			.into(),
 		);
 
-		// other calls to anonymous allowed as long as they're not exactly the same.
-		assert_ok!(Proxy::anonymous(RuntimeOrigin::signed(1), ProxyType::JustTransfer, 0, 0));
-		assert_ok!(Proxy::anonymous(RuntimeOrigin::signed(1), ProxyType::Any, 0, 1));
-		let anon2 = Proxy::anonymous_account(&2, &ProxyType::Any, 0, None);
-		assert_ok!(Proxy::anonymous(RuntimeOrigin::signed(2), ProxyType::Any, 0, 0));
+		// other calls to pure allowed as long as they're not exactly the same.
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::JustTransfer, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 1));
+		let anon2 = Proxy::pure_account(&2, &ProxyType::Any, 0, None);
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(2), ProxyType::Any, 0, 0));
 		assert_noop!(
-			Proxy::anonymous(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0),
+			Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0),
 			Error::<Test>::Duplicate
 		);
 		System::set_extrinsic_index(1);
-		assert_ok!(Proxy::anonymous(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 		System::set_extrinsic_index(0);
 		System::set_block_number(2);
-		assert_ok!(Proxy::anonymous(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
+		assert_ok!(Proxy::create_pure(RuntimeOrigin::signed(1), ProxyType::Any, 0, 0));
 
 		let call = Box::new(call_transfer(6, 1));
 		assert_ok!(Balances::transfer(RuntimeOrigin::signed(3), anon, 5));
@@ -585,7 +585,7 @@ fn anonymous_works() {
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Ok(()) }.into());
 		assert_eq!(Balances::free_balance(6), 1);
 
-		let call = Box::new(RuntimeCall::Proxy(ProxyCall::new_call_variant_kill_anonymous(
+		let call = Box::new(RuntimeCall::Proxy(ProxyCall::new_call_variant_kill_pure(
 			1,
 			ProxyType::Any,
 			0,
@@ -596,7 +596,7 @@ fn anonymous_works() {
 		let de = DispatchError::from(Error::<Test>::NoPermission).stripped();
 		System::assert_last_event(ProxyEvent::ProxyExecuted { result: Err(de) }.into());
 		assert_noop!(
-			Proxy::kill_anonymous(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, 1, 0),
+			Proxy::kill_pure(RuntimeOrigin::signed(1), 1, ProxyType::Any, 0, 1, 0),
 			Error::<Test>::NoPermission
 		);
 		assert_eq!(Balances::free_balance(1), 0);

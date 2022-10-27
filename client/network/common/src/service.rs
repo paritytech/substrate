@@ -98,7 +98,7 @@ where
 #[derive(Clone)]
 pub struct NetworkStatus<B: BlockT> {
 	/// Current global sync state.
-	pub sync_state: SyncState,
+	pub sync_state: SyncState<NumberFor<B>>,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
 	/// Number of peers participating in syncing.
@@ -601,35 +601,6 @@ where
 		connect: IfDisconnected,
 	) {
 		T::start_request(self, target, protocol, request, tx, connect)
-	}
-}
-
-/// Provides ability to propagate transactions over the network.
-pub trait NetworkTransaction<H> {
-	/// You may call this when new transactions are imported by the transaction pool.
-	///
-	/// All transactions will be fetched from the `TransactionPool` that was passed at
-	/// initialization as part of the configuration and propagated to peers.
-	fn trigger_repropagate(&self);
-
-	/// You must call when new transaction is imported by the transaction pool.
-	///
-	/// This transaction will be fetched from the `TransactionPool` that was passed at
-	/// initialization as part of the configuration and propagated to peers.
-	fn propagate_transaction(&self, hash: H);
-}
-
-impl<T, H> NetworkTransaction<H> for Arc<T>
-where
-	T: ?Sized,
-	T: NetworkTransaction<H>,
-{
-	fn trigger_repropagate(&self) {
-		T::trigger_repropagate(self)
-	}
-
-	fn propagate_transaction(&self, hash: H) {
-		T::propagate_transaction(self, hash)
 	}
 }
 

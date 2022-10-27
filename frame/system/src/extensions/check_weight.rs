@@ -310,7 +310,7 @@ mod tests {
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(max, len));
 			assert_eq!(System::block_weight().total(), Weight::MAX);
-			assert!(System::block_weight().total().all_gt(block_weight_limit()));
+			assert!(System::block_weight().total().ref_time() > block_weight_limit().ref_time());
 		});
 		check(|max, len| {
 			assert_ok!(CheckWeight::<Test>::do_validate(max, len));
@@ -342,7 +342,7 @@ mod tests {
 				.get(DispatchClass::Operational)
 				.max_total
 				.unwrap_or_else(|| weights.max_block);
-			let base_weight = weights.get(DispatchClass::Normal).base_extrinsic;
+			let base_weight = weights.get(DispatchClass::Operational).base_extrinsic;
 
 			let weight = operational_limit - base_weight;
 			let okay =
@@ -367,7 +367,7 @@ mod tests {
 		new_test_ext().execute_with(|| {
 			System::register_extra_weight_unchecked(Weight::MAX, DispatchClass::Normal);
 			assert_eq!(System::block_weight().total(), Weight::MAX);
-			assert!(System::block_weight().total().all_gt(block_weight_limit()));
+			assert!(System::block_weight().total().ref_time() > block_weight_limit().ref_time());
 		});
 	}
 
@@ -378,11 +378,11 @@ mod tests {
 			// Max normal is 768 (75%)
 			// 10 is taken for block execution weight
 			// So normal extrinsic can be 758 weight (-5 for base extrinsic weight)
-			// And Operational can be 256 to produce a full block (-5 for base)
+			// And Operational can be 246 to produce a full block (-10 for base)
 			let max_normal =
 				DispatchInfo { weight: Weight::from_ref_time(753), ..Default::default() };
 			let rest_operational = DispatchInfo {
-				weight: Weight::from_ref_time(251),
+				weight: Weight::from_ref_time(246),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
@@ -392,8 +392,8 @@ mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(768));
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024));
-			assert_eq!(System::block_weight().total(), block_weight_limit());
+			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024).set_proof_size(u64::MAX));
+			assert_eq!(System::block_weight().total(), block_weight_limit().set_proof_size(0));
 			// Checking single extrinsic should not take current block weight into account.
 			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&rest_operational), Ok(()));
 		});
@@ -406,7 +406,7 @@ mod tests {
 			let max_normal =
 				DispatchInfo { weight: Weight::from_ref_time(753), ..Default::default() };
 			let rest_operational = DispatchInfo {
-				weight: Weight::from_ref_time(251),
+				weight: Weight::from_ref_time(246),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
@@ -414,11 +414,11 @@ mod tests {
 			let len = 0_usize;
 
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&rest_operational, len));
-			// Extra 15 here from block execution + base extrinsic weight
+			// Extra 20 here from block execution + base extrinsic weight
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(266));
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
-			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024));
-			assert_eq!(System::block_weight().total(), block_weight_limit());
+			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024).set_proof_size(u64::MAX));
+			assert_eq!(System::block_weight().total(), block_weight_limit().set_proof_size(0));
 		});
 	}
 
@@ -433,7 +433,7 @@ mod tests {
 				..Default::default()
 			};
 			let dispatch_operational = DispatchInfo {
-				weight: Weight::from_ref_time(251),
+				weight: Weight::from_ref_time(246),
 				class: DispatchClass::Operational,
 				..Default::default()
 			};
@@ -669,7 +669,7 @@ mod tests {
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&max_normal, len));
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(768));
 			assert_ok!(CheckWeight::<Test>::do_pre_dispatch(&mandatory, len));
-			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024));
+			assert_eq!(block_weight_limit(), Weight::from_ref_time(1024).set_proof_size(u64::MAX));
 			assert_eq!(System::block_weight().total(), Weight::from_ref_time(1024 + 768));
 			assert_eq!(CheckWeight::<Test>::check_extrinsic_weight(&mandatory), Ok(()));
 		});
@@ -682,11 +682,11 @@ mod tests {
 			.base_block(Weight::zero())
 			.for_class(DispatchClass::non_mandatory(), |w| {
 				w.base_extrinsic = Weight::zero();
-				w.max_total = Some(Weight::from_ref_time(20));
+				w.max_total = Some(Weight::from_ref_time(20).set_proof_size(u64::MAX));
 			})
 			.for_class(DispatchClass::Mandatory, |w| {
 				w.base_extrinsic = Weight::zero();
-				w.reserved = Some(Weight::from_ref_time(5));
+				w.reserved = Some(Weight::from_ref_time(5).set_proof_size(u64::MAX));
 				w.max_total = None;
 			})
 			.build_or_panic();
@@ -695,7 +695,7 @@ mod tests {
 			DispatchClass::Operational => Weight::from_ref_time(10),
 			DispatchClass::Mandatory => Weight::zero(),
 		});
-		assert_eq!(maximum_weight.max_block, all_weight.total());
+		assert_eq!(maximum_weight.max_block, all_weight.total().set_proof_size(u64::MAX));
 
 		// fits into reserved
 		let mandatory1 = DispatchInfo {

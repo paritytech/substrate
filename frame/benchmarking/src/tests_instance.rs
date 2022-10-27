@@ -28,47 +28,51 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
+#[frame_support::pallet]
 mod pallet_test {
-	use frame_support::pallet_prelude::Get;
+	use frame_support::pallet_prelude::*;
+	use frame_system::pallet_prelude::*;
 
-	frame_support::decl_storage! {
-		trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as Test where
-			<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>
-		{
-			pub Value get(fn value): Option<u32>;
-		}
-	}
-
-	frame_support::decl_module! {
-		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where
-			origin: T::RuntimeOrigin, <T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>
-		{
-			#[weight = 0]
-			fn set_value(origin, n: u32) -> frame_support::dispatch::DispatchResult {
-				let _sender = frame_system::ensure_signed(origin)?;
-				Value::<I>::put(n);
-				Ok(())
-			}
-
-			#[weight = 0]
-			fn dummy(origin, _n: u32) -> frame_support::dispatch::DispatchResult {
-				let _sender = frame_system::ensure_none(origin)?;
-				Ok(())
-			}
-		}
-	}
+	#[pallet::pallet]
+	#[pallet::generate_store(pub(super) trait Store)]
+	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	pub trait OtherConfig {
 		type OtherEvent;
 	}
 
-	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config + OtherConfig
-	where
-		Self::OtherEvent: Into<<Self as Config<I>>::RuntimeEvent>,
-	{
-		type RuntimeEvent;
+	#[pallet::config]
+	pub trait Config<I: 'static = ()>: frame_system::Config + OtherConfig {
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type LowerBound: Get<u32>;
 		type UpperBound: Get<u32>;
+	}
+
+	#[pallet::storage]
+	#[pallet::getter(fn value)]
+	pub(crate) type Value<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, OptionQuery>;
+
+	#[pallet::event]
+	pub enum Event<T: Config<I>, I: 'static = ()> {}
+
+	#[pallet::call]
+	impl<T: Config<I>, I: 'static> Pallet<T, I>
+	where
+		<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>,
+	{
+		#[pallet::weight(0)]
+		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
+			let _sender = ensure_signed(origin)?;
+			Value::<T, I>::put(n);
+			Ok(())
+		}
+
+		#[pallet::weight(0)]
+		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
+			let _sender = ensure_none(origin)?;
+			Ok(())
+		}
 	}
 }
 
@@ -82,7 +86,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		TestPallet: pallet_test::{Pallet, Call, Storage},
+		TestPallet: pallet_test::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -90,18 +94,18 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type DbWeight = ();
 	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = RuntimeCall;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type RuntimeCall = RuntimeCall;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
 	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
+	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -110,7 +114,7 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = frame_support::traits::ConstU32<16>;
+	type MaxConsumers = ConstU32<16>;
 }
 
 impl pallet_test::Config for Test {
@@ -130,15 +134,14 @@ fn new_test_ext() -> sp_io::TestExternalities {
 mod benchmarks {
 	use super::pallet_test::{self, Value};
 	use crate::account;
-	use frame_support::{ensure, StorageValue};
+	use frame_support::ensure;
 	use frame_system::RawOrigin;
 	use sp_std::prelude::*;
 
 	// Additional used internally by the benchmark macro.
 	use super::pallet_test::{Call, Config, Pallet};
-	use frame_support::traits::Instance;
 
-	crate::benchmarks_instance! {
+	crate::benchmarks_instance_pallet! {
 		where_clause {
 			where
 				<T as pallet_test::OtherConfig>::OtherEvent: Clone
@@ -151,7 +154,7 @@ mod benchmarks {
 			let caller = account::<T::AccountId>("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 		verify {
-			assert_eq!(Value::<pallet_test::DefaultInstance>::get(), Some(b));
+			assert_eq!(Value::<T, I>::get(), Some(b));
 		}
 
 		other_name {

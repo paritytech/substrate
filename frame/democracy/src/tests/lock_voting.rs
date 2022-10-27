@@ -43,7 +43,7 @@ fn lock_voting_should_work() {
 		System::set_block_number(0);
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
@@ -59,7 +59,7 @@ fn lock_voting_should_work() {
 			assert_eq!(Balances::locks(i), vec![the_lock(i * 10)]);
 		}
 
-		fast_forward_to(2);
+		fast_forward_to(3);
 
 		// Referendum passed; 1 and 5 didn't get their way and can now reap and unlock.
 		assert_ok!(Democracy::remove_vote(RuntimeOrigin::signed(1), r));
@@ -126,13 +126,13 @@ fn no_locks_without_conviction_should_work() {
 		System::set_block_number(0);
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
 		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), r, aye(0, 10)));
 
-		fast_forward_to(2);
+		fast_forward_to(3);
 
 		assert_eq!(Balances::free_balance(42), 2);
 		assert_ok!(Democracy::remove_other_vote(RuntimeOrigin::signed(2), 1, r));
@@ -146,7 +146,7 @@ fn lock_voting_should_work_with_delegation() {
 	new_test_ext().execute_with(|| {
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SuperMajorityApprove,
 			0,
 		);
@@ -167,28 +167,16 @@ fn lock_voting_should_work_with_delegation() {
 
 fn setup_three_referenda() -> (u32, u32, u32) {
 	System::set_block_number(0);
-	let r1 = Democracy::inject_referendum(
-		2,
-		set_balance_proposal_hash_and_note(2),
-		VoteThreshold::SimpleMajority,
-		0,
-	);
+	let r1 =
+		Democracy::inject_referendum(2, set_balance_proposal(2), VoteThreshold::SimpleMajority, 0);
 	assert_ok!(Democracy::vote(RuntimeOrigin::signed(5), r1, aye(4, 10)));
 
-	let r2 = Democracy::inject_referendum(
-		2,
-		set_balance_proposal_hash_and_note(2),
-		VoteThreshold::SimpleMajority,
-		0,
-	);
+	let r2 =
+		Democracy::inject_referendum(2, set_balance_proposal(2), VoteThreshold::SimpleMajority, 0);
 	assert_ok!(Democracy::vote(RuntimeOrigin::signed(5), r2, aye(3, 20)));
 
-	let r3 = Democracy::inject_referendum(
-		2,
-		set_balance_proposal_hash_and_note(2),
-		VoteThreshold::SimpleMajority,
-		0,
-	);
+	let r3 =
+		Democracy::inject_referendum(2, set_balance_proposal(2), VoteThreshold::SimpleMajority, 0);
 	assert_ok!(Democracy::vote(RuntimeOrigin::signed(5), r3, aye(2, 50)));
 
 	fast_forward_to(2);
@@ -306,7 +294,7 @@ fn locks_should_persist_from_voting_to_delegation() {
 		System::set_block_number(0);
 		let r = Democracy::inject_referendum(
 			2,
-			set_balance_proposal_hash_and_note(2),
+			set_balance_proposal(2),
 			VoteThreshold::SimpleMajority,
 			0,
 		);
