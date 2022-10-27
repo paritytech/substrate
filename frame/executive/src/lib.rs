@@ -476,7 +476,7 @@ impl<
 	}
 
 	/// Actually execute all transitions for `block`.
-	fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
+	pub fn execute_block_ver_impl(block: Block, public: Vec<u8>) {
 		sp_io::init_tracing();
 		sp_tracing::within_span! {
 			sp_tracing::info_span!("execute_block", ?block);
