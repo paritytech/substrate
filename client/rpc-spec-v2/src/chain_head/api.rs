@@ -28,7 +28,7 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
-		name = "chainHead_unstable_follow" => "chainHead_unstable_followBlock",
+		name = "chainHead_unstable_follow",
 		unsubscribe = "chainHead_unstable_unfollow",
 		item = FollowEvent<Hash>,
 	)]
@@ -46,7 +46,7 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
-		name = "chainHead_unstable_body" => "chainHead_unstable_getBody",
+		name = "chainHead_unstable_body",
 		unsubscribe = "chainHead_unstable_stopBody",
 		item = ChainHeadEvent<String>,
 	)]
@@ -90,7 +90,7 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
-		name = "chainHead_unstable_storage" => "chainHead_unstable_queryStorage",
+		name = "chainHead_unstable_storage",
 		unsubscribe = "chainHead_unstable_stopStorage",
 		item = ChainHeadEvent<String>,
 	)]
@@ -109,7 +109,7 @@ pub trait ChainHeadApi<Hash> {
 	///
 	/// This method is unstable and subject to change in the future.
 	#[subscription(
-		name = "chainHead_unstable_call" => "chainHead_unstable_runtimeCall",
+		name = "chainHead_unstable_call",
 		unsubscribe = "chainHead_unstable_stopCall",
 		item = ChainHeadEvent<String>,
 	)]
