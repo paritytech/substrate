@@ -589,6 +589,13 @@ impl<T: Config> Commission<T> {
 			return false
 		}
 	}
+
+	/// TODO: fine-tune documentation
+	/// Get the current commission percentage of this pool. Returns zero if commission has not yet
+	/// been configured.
+	fn percentage(&self) -> Perbill {
+		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
+	}
 }
 
 /// Pool commission throttle preferences.
@@ -687,12 +694,9 @@ impl<T: Config> BondedPool<T> {
 		Pallet::<T>::create_reward_account(self.id)
 	}
 
-	/// Get the current commission percentage of this pool.
-	fn commission(&self) -> Perbill {
-		self.commission
-			.as_ref()
-			.and_then(|c| c.current.as_ref().map(|(x, _)| *x))
-			.unwrap_or(Perbill::zero())
+	/// Get the current commission of this pool.
+	fn commission(&self) -> Option<&Commission<T>> {
+		self.commission.as_ref().map(|c| c).or(None)
 	}
 
 	/// Gets the current commission payee of this pool as a reference.
@@ -2223,7 +2227,7 @@ pub mod pallet {
 		pub fn set_commission(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
-			commission: Perbill,
+			new_commission: Perbill,
 			payee: Option<T::AccountId>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -2235,29 +2239,27 @@ pub mod pallet {
 				.or(bonded_pool.commission_payee().map(|p| p.clone()))
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
-			let commission_percentage = bonded_pool.commission();
+			let commission = &bonded_pool.commission();
 
 			ensure!(
-				&bonded_pool
-					.commission
+				commission
 					.as_ref()
-					.map(|c| !c.throttling(&commission_percentage, &commission))
+					.map(|c| !c.throttling(&c.percentage(), &new_commission))
 					.unwrap_or(true),
 				Error::<T>::CommissionChangeThrottled
 			);
 			ensure!(
-				&bonded_pool
-					.commission
+				commission
 					.as_ref()
-					.map(|c| c.max.map(|m| commission <= m).unwrap_or(true))
+					.map(|c| c.max.map(|m| new_commission <= m).unwrap_or(true))
 					.unwrap_or(true),
 				Error::<T>::CommissionExceedsMaximum
 			);
 
-			bonded_pool.set_commission_current(&commission, final_payee.clone()).put();
+			bonded_pool.set_commission_current(&new_commission, final_payee.clone()).put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
-				commission,
+				commission: new_commission,
 				payee: final_payee,
 			});
 			Ok(())
@@ -2647,21 +2649,25 @@ impl<T: Config> Pallet<T> {
 		// If a non-zero commission has been applied to the pool, deduct the share from
 		// `pending_rewards` and send that amount to the pool `depositor`.
 		// Defensive: The commission payee is also checked for existence.
-		let commission = &bonded_pool.commission();
-		if commission > &Perbill::from_percent(0) {
-			if let Some(payee) = &bonded_pool.commission_payee() {
-				let pool_commission = *commission * pending_rewards;
-				pending_rewards -= pool_commission;
+		let _ = &bonded_pool.commission().map(|c| -> DispatchResult {
+			let commission_percent = c.percentage();
 
-				// Transfer pool_commission to the `payee` account.
-				T::Currency::transfer(
-					&bonded_pool.reward_account(),
-					payee.clone(),
-					pool_commission,
-					ExistenceRequirement::KeepAlive,
-				)?;
+			if commission_percent > Perbill::from_percent(0) {
+				if let Some(payee) = &bonded_pool.commission_payee() {
+					let pool_commission = commission_percent * pending_rewards;
+					pending_rewards -= pool_commission;
+
+					// Transfer pool_commission to the `payee` account.
+					T::Currency::transfer(
+						&bonded_pool.reward_account(),
+						payee.clone(),
+						pool_commission,
+						ExistenceRequirement::KeepAlive,
+					)?;
+				}
 			}
-		}
+			Ok(())
+		});
 
 		// Transfer remaining payout to the member.
 		T::Currency::transfer(
