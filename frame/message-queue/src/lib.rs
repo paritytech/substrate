@@ -173,8 +173,14 @@ pub trait ProcessMessage {
 	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Default)]
-pub struct BookState {
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct Neighbours<MessageOrigin> {
+	prev: MessageOrigin,
+	next: MessageOrigin,
+}
+
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct BookState<MessageOrigin> {
 	/// The first page with some items to be processed in it. If this is `>= end`, then there are
 	/// no pages with items to be processing in them.
 	begin: PageIndex,
@@ -191,6 +197,15 @@ pub struct BookState {
 	/// "manually" by having a transaction to bump it. However, it probably doesn't actually matter
 	/// anyway since reaping can happen perfectly well without it.
 	earliest: PageIndex,
+	/// If this book has any ready pages, then this will be `Some` with the previous and next
+	/// neighbours. This wraps around.
+	ready_neighbours: Option<Neighbours<MessageOrigin>>,
+}
+
+impl<MessageOrigin> Default for BookState<MessageOrigin> {
+	fn default() -> Self {
+		Self { begin: 0, end: 0, count: 0, earliest: 0, ready_neighbours: None }
+	}
 }
 
 #[frame_support::pallet]
@@ -246,10 +261,6 @@ pub mod pallet {
 		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		Overweight { hash: T::Hash, origin: MessageOriginOf<T>, index: OverweightIndex },
-		/// A queue has become non-empty.
-		Readied { origin: MessageOriginOf<T>, will_service: bool },
-		/// Queue is processed.
-		QueueProcessed { origin: MessageOriginOf<T>, ready_slot_free: bool },
 	}
 
 	#[pallet::error]
@@ -261,11 +272,11 @@ pub mod pallet {
 	/// The index of the first and last (non-empty) pages.
 	#[pallet::storage]
 	pub(super) type BookStateOf<T: Config> =
-		StorageMap<_, Twox64Concat, MessageOriginOf<T>, BookState, ValueQuery>;
+		StorageMap<_, Twox64Concat, MessageOriginOf<T>, BookState<MessageOriginOf<T>>, ValueQuery>;
 
+	/// The origin at which we should begin servicing.
 	#[pallet::storage]
-	pub(super) type ReadyBooks<T: Config> =
-		StorageValue<_, BoundedVec<MessageOriginOf<T>, T::MaxReady>, ValueQuery>;
+	pub(super) type ServiceHead<T: Config> = StorageValue<_, MessageOriginOf<T>, OptionQuery>;
 
 	/// The map of page indices to pages.
 	#[pallet::storage]
@@ -321,13 +332,80 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+	/// Knit `origin` into the ready ring right at the end.
+	///
+	/// Return the two ready ring neighbours of `origin`.
+	fn ready_ring_knit(origin: &MessageOriginOf<T>) -> Result<Neighbours<MessageOriginOf<T>>, ()> {
+		if let Some(head) = ServiceHead::<T>::get() {
+			let mut head_book_state = BookStateOf::<T>::get(&head);
+			let mut head_neighbours = head_book_state.ready_neighbours.take().ok_or(())?;
+			let tail = head_neighbours.prev;
+			let mut tail_book_state = BookStateOf::<T>::get(&tail);
+			let mut tail_neighbours = tail_book_state.ready_neighbours.take().ok_or(())?;
+
+			head_neighbours.prev = origin.clone();
+			head_book_state.ready_neighbours = Some(head_neighbours);
+
+			tail_neighbours.next = origin.clone();
+			tail_book_state.ready_neighbours = Some(tail_neighbours);
+
+			BookStateOf::<T>::insert(&head, head_book_state);
+			BookStateOf::<T>::insert(&tail, tail_book_state);
+
+			Ok(Neighbours { next: head, prev: tail })
+		} else {
+			ServiceHead::<T>::put(origin);
+			Ok(Neighbours { next: origin.clone(), prev: origin.clone() })
+		}
+	}
+
+	fn ready_ring_unknit(origin: &MessageOriginOf<T>, neighbours: Neighbours<MessageOriginOf<T>>) {
+		if neighbours.next == neighbours.prev {
+			// Service queue empty.
+			ServiceHead::<T>::kill();
+		} else {
+			BookStateOf::<T>::mutate(&neighbours.next, |book_state| {
+				if let Some(ref mut n) = book_state.ready_neighbours {
+					n.prev = neighbours.prev.clone()
+				}
+			});
+			BookStateOf::<T>::mutate(&neighbours.prev, |book_state| {
+				if let Some(ref mut n) = book_state.ready_neighbours {
+					n.next = neighbours.next.clone()
+				}
+			});
+			if let Some(mut head) = ServiceHead::<T>::get() {
+				if &head == origin {
+					ServiceHead::<T>::put(neighbours.next);
+				}
+			} else {
+				debug_assert!(false, "`ServiceHead` must be some if there was a ready queue");
+			}
+		}
+	}
+
+	fn bump_service_head() -> Option<MessageOriginOf<T>> {
+		if let Some(mut head) = ServiceHead::<T>::get() {
+			let mut head_book_state = BookStateOf::<T>::get(&head);
+			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
+				ServiceHead::<T>::put(&head_neighbours.next);
+				Some(head)
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	}
+
 	fn do_enqueue_message(
 		origin: &MessageOriginOf<T>,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
 		origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
 		let mut book_state = BookStateOf::<T>::get(origin);
-		if book_state.end > book_state.begin {
+		let was_ready = if book_state.end > book_state.begin {
+			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
 			let last = book_state.end - 1;
 			let mut page = match Pages::<T>::get(origin, last) {
@@ -341,7 +419,19 @@ impl<T: Config> Pallet<T> {
 				Pages::<T>::insert(origin, last, &page);
 				return
 			}
-		}
+			true
+		} else {
+			debug_assert!(
+				book_state.ready_neighbours.is_none(),
+				"Must not be in ready ring if not ready"
+			);
+			// insert into ready queue.
+			match Self::ready_ring_knit(origin) {
+				Ok(neighbours) => book_state.ready_neighbours = Some(neighbours),
+				Err(()) => debug_assert!(false, "Ring state invalid when knitting"),
+			}
+			false
+		};
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
 		Pages::<T>::insert(
@@ -350,17 +440,6 @@ impl<T: Config> Pallet<T> {
 			Page::from_message(&message[..], &origin_data[..]),
 		);
 		BookStateOf::<T>::insert(&origin, book_state);
-		let mut ready_books = ReadyBooks::<T>::get();
-		if !ready_books.iter().any(|x| x == origin) {
-			let is_ok = ready_books.try_push(origin.clone()).is_ok();
-			if is_ok {
-				ReadyBooks::<T>::put(ready_books);
-			}
-			Self::deposit_event(Event::<T>::Readied {
-				origin: origin.clone(),
-				will_service: is_ok,
-			});
-		}
 	}
 }
 
@@ -397,15 +476,6 @@ impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
 	}
 }
 
-pub trait ServiceQueue<Origin> {
-	/// Service the given message queue.
-	///
-	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
-	///
-	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
-	fn service_queue(origin: Origin, weight_limit: Weight) -> Weight;
-}
-
 pub trait ServiceQueues {
 	/// Service all message queues in some fair manner.
 	///
@@ -415,8 +485,11 @@ pub trait ServiceQueues {
 	fn service_queues(weight_limit: Weight) -> Weight;
 }
 
-impl<T: Config> ServiceQueue<MessageOriginOf<T>> for Pallet<T> {
-	fn service_queue(origin: MessageOriginOf<T>, weight_limit: Weight) -> Weight {
+impl<T: Config> Pallet<T> {
+	fn service_queue(
+		origin: MessageOriginOf<T>,
+		weight_limit: Weight,
+	) -> (Weight, Option<MessageOriginOf<T>>) {
 		let mut processed = 0;
 		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight_left = weight_limit;
@@ -505,38 +578,41 @@ impl<T: Config> ServiceQueue<MessageOriginOf<T>> for Pallet<T> {
 			}
 			book_state.begin.saturating_inc();
 		}
+		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
 		if book_state.begin >= book_state.end && processed > 0 {
-			// empty now having processed at least one.
-			let mut removed = false;
-			ReadyBooks::<T>::mutate(|b| {
-				b.retain(|b| {
-					let keep = b != &origin;
-					removed = removed || !keep;
-					keep
-				});
-			});
-			Self::deposit_event(Event::<T>::QueueProcessed {
-				origin: origin.clone(),
-				ready_slot_free: removed,
-			});
+			// No longer ready - unknit.
+			if let Some(neighbours) = book_state.ready_neighbours.take() {
+				Self::ready_ring_unknit(&origin, neighbours);
+			} else {
+				debug_assert!(false, "Freshly processed queue must have been ready");
+			}
 		}
-		BookStateOf::<T>::insert(&origin, book_state);
-		weight_limit.saturating_sub(weight_left)
+		BookStateOf::<T>::insert(&origin, &book_state);
+		(weight_limit.saturating_sub(weight_left), next_ready)
 	}
 }
 
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
-		let queues = ReadyBooks::<T>::get();
-		// TODO: take a random number and shuffle the queues rather than the next stuff.
 		let mut weight_used = Weight::zero();
-		for origin in queues.into_iter() {
+		// TODO: impl bump_service_head
+		let mut next = match Self::bump_service_head() {
+			Some(h) => h,
+			None => return weight_used,
+		};
+
+		loop {
 			let left = weight_limit - weight_used;
 			if left.any_lte(Weight::zero()) {
 				break
 			}
-			let used = Self::service_queue(origin, left);
+			// Before servicing, bump `ServiceHead` onto the next item.
+			let (used, n) = Self::service_queue(next, left);
 			weight_used.saturating_accrue(used);
+			next = match n {
+				Some(n) => n,
+				None => break,
+			}
 		}
 		weight_used
 	}

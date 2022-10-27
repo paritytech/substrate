@@ -200,6 +200,5 @@ fn overflowing_ready_origins_works() {
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"foo"[..]), Everywhere(1));
 		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"bar"[..]), Everywhere(2));
 		println!("{:?}", frame_system::Pallet::<Test>::events());
-		assert!(false);
 	});
 }
