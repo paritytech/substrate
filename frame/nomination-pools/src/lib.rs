@@ -786,7 +786,7 @@ impl<T: Config> BondedPool<T> {
 	/// `payee` values. Otherwise, the existing commission is updated.
 	///
 	/// If throttle is present, record the current block as the previously updated commission.
-	/// 
+	///
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
 	fn set_commission_current(mut self, commission: &Perbill, payee: T::AccountId) -> Self {
 		self.commission = self
@@ -799,38 +799,34 @@ impl<T: Config> BondedPool<T> {
 				} else {
 					None
 				},
-				throttle: c.throttle.map(|t| CommissionThrottle {
-					previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
-					..t
-				}).or(None),
+				throttle: c
+					.throttle
+					.map(|t| CommissionThrottle {
+						previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
+						..t
+					})
+					.or(None),
 				..c
-			})
-			.or(None);
+			});
 		self
 	}
 
 	/// Set the pool's maximum commission.
 	fn set_max_commission(mut self, max_commission: Perbill) -> Self {
-		self.commission = match &self.commission {
-			Some(c) => {
-				Some(Commission {
-					max: Some(max_commission),
-					// if the pool's current commission is higher than the updated maximum
-					// commission, decrease it to the new maximum commission.
-					current: if let Some(cur) = &c.current {
-						if cur.0 > max_commission {
-							Some((max_commission, cur.1.clone()))
-						} else {
-							Some((cur.0, cur.1.clone()))
-						}
-					} else {
-						c.current.clone()
-					},
-					..c.clone()
-				})
-			},
-			None => Some(Commission { max: Some(max_commission), ..Commission::default() }),
-		};
+		self.commission = self
+			.commission
+			.take()
+			.map_or(Some(Commission::default()), |c| Some(c))
+			.map(|c| Commission {
+				max: Some(max_commission),
+				// if the pool's current commission is higher than the updated maximum
+				// commission, decrease it to the new maximum commission.
+				current: c
+					.current
+					.map(|x| if x.0 > max_commission { (max_commission, x.1) } else { x })
+					.or(None),
+				..c
+			});
 		self
 	}
 
@@ -2231,16 +2227,15 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-			let final_payee = if let Some(p) = payee {
-				p
-			} else {
-				bonded_pool
-					.commission_payee()
-					.map(|p| p.clone())
-					.ok_or(Error::<T>::NoCommissionPayeeSet)?
-			};
+
+			let final_payee = payee
+				.map(|p| p)
+				.or(bonded_pool.commission_payee().map(|p| p.clone()))
+				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
 			let commission_percentage = bonded_pool.commission();
+
+			// TODO: probably a better way to write this, with self.commission_throttled.
 			if let Some(c) = &bonded_pool.commission {
 				if let Some(throttle) = &c.throttle {
 					ensure!(
@@ -2285,7 +2280,6 @@ pub mod pallet {
 					ensure!(existing_max > max_commission, Error::<T>::MaxCommissionRestricted);
 				}
 			}
-
 			bonded_pool.set_max_commission(max_commission.clone()).put();
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
 			Ok(())
