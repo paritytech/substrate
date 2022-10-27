@@ -42,7 +42,6 @@ pub fn pallet(
 	let mut dev_mode = false;
 	if !attr.is_empty() {
 		if let Ok(_) = syn::parse::<keyword::dev_mode>(attr.clone()) {
-			println!("dev mode detected!");
 			dev_mode = true;
 		} else {
 			let msg = "Invalid pallet macro call: unexpected attribute. Macro call must be \
