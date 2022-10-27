@@ -374,7 +374,7 @@ impl<T: Config> Pallet<T> {
 					n.next = neighbours.next.clone()
 				}
 			});
-			if let Some(mut head) = ServiceHead::<T>::get() {
+			if let Some(head) = ServiceHead::<T>::get() {
 				if &head == origin {
 					ServiceHead::<T>::put(neighbours.next);
 				}
@@ -385,7 +385,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn bump_service_head() -> Option<MessageOriginOf<T>> {
-		if let Some(mut head) = ServiceHead::<T>::get() {
+		if let Some(head) = ServiceHead::<T>::get() {
 			let mut head_book_state = BookStateOf::<T>::get(&head);
 			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
 				ServiceHead::<T>::put(&head_neighbours.next);
@@ -404,7 +404,7 @@ impl<T: Config> Pallet<T> {
 		origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
 		let mut book_state = BookStateOf::<T>::get(origin);
-		let was_ready = if book_state.end > book_state.begin {
+		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
 			let last = book_state.end - 1;
@@ -419,7 +419,6 @@ impl<T: Config> Pallet<T> {
 				Pages::<T>::insert(origin, last, &page);
 				return
 			}
-			true
 		} else {
 			debug_assert!(
 				book_state.ready_neighbours.is_none(),
@@ -430,8 +429,7 @@ impl<T: Config> Pallet<T> {
 				Ok(neighbours) => book_state.ready_neighbours = Some(neighbours),
 				Err(()) => debug_assert!(false, "Ring state invalid when knitting"),
 			}
-			false
-		};
+		}
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
 		Pages::<T>::insert(
