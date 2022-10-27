@@ -323,9 +323,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut account = Account::<T, I>::get(id, &who).ok_or(Error::<T, I>::NoDeposit)?;
 		let deposit = account.reason.take_deposit().ok_or(Error::<T, I>::NoDeposit)?;
 		let mut details = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
-
+		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		ensure!(account.balance.is_zero() || allow_burn, Error::<T, I>::WouldBurn);
-		ensure!(details.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
 		ensure!(!account.is_frozen, Error::<T, I>::Frozen);
 
 		T::Currency::unreserve(&who, deposit);
@@ -392,7 +391,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::can_increase(id, beneficiary, amount, true).into_result()?;
 		Asset::<T, I>::try_mutate(id, |maybe_details| -> DispatchResult {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
+			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			check(details)?;
 
 			Account::<T, I>::try_mutate(id, beneficiary, |maybe_account| -> DispatchResult {
@@ -432,8 +431,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_admin: Option<T::AccountId>,
 		f: DebitFlags,
 	) -> Result<T::Balance, DispatchError> {
-		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(details.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
+		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(
+			d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
+			Error::<T, I>::AssetNotLive
+		);
 
 		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
 			// Check admin rights.
@@ -548,7 +550,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			return Ok((amount, None))
 		}
 		let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(details.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
 		ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 		// Figure out the debit and credit, together with side-effects.
@@ -791,8 +792,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 	) -> DispatchResult {
 		let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(d.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
-		ensure!(d.status != AssetStatus::Frozen, Error::<T, I>::Frozen);
+		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 		Approvals::<T, I>::try_mutate(
 			(id, &owner, &delegate),
 			|maybe_approved| -> DispatchResult {
@@ -841,6 +841,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: T::Balance,
 	) -> DispatchResult {
 		let mut owner_died: Option<DeadConsequence> = None;
+
+		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
+		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 
 		Approvals::<T, I>::try_mutate_exists(
 			(id, &owner, delegate),
