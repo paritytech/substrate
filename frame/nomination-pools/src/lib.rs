@@ -566,6 +566,31 @@ impl<T: Config> Default for Commission<T> {
 	}
 }
 
+impl<T: Config> Commission<T> {
+	/// TODO: fine-tune documentation
+	///
+	/// Returns true if this changing from `from` to `to` would exhaust the throttle limit.
+	/// A commission change will be throttled (disallowed) if:
+	/// 1. not enough blocks have passed since the previous commission update took place, and
+	/// 2. the new commission is larger than the maximum allowed increase.
+	fn throttling(&self, from: &Perbill, to: &Perbill) -> bool {
+		let throttle = self.throttle.as_ref().map(|t| t).or(None);
+		if let Some(t) = throttle {
+			// check for `min_delay` throttling
+			if t.previous_set_at.map_or(false, |p| {
+				<frame_system::Pallet<T>>::block_number().saturating_sub(p) <
+					t.change_rate.min_delay
+			}) {
+				return true
+			}
+			// check for `max_increase` throttling
+			(*to).saturating_sub(*from) > t.change_rate.max_increase
+		} else {
+			return false
+		}
+	}
+}
+
 /// Pool commission throttle preferences.
 ///
 /// Throttle prefs need to be passed and configured together. This struct is used in
@@ -587,29 +612,6 @@ pub struct CommissionThrottle<T: Config> {
 	pub change_rate: CommissionThrottlePrefs<T::BlockNumber>,
 	/// The block the previous commission update took place.
 	previous_set_at: Option<T::BlockNumber>,
-}
-
-impl<T: Config> CommissionThrottle<T> {
-	/// Returns true if this changing from `from` to `to` would exhaust the throttle limit.
-	/// A commission change will be throttled (disallowed) if:
-	/// 1. not enough blocks have passed since the previous commission update took place, and
-	/// 2. the new commission is larger than the maximum allowed increase.
-	fn throttling(&self, from: &Perbill, to: &Perbill) -> bool {
-		// check enough blocks have passed since the previous commission update took place.
-		if self
-			.previous_set_at
-			.as_ref()
-			.map(|p| {
-				<frame_system::Pallet<T>>::block_number().saturating_sub(*p) <
-					self.change_rate.min_delay
-			})
-			.unwrap_or(false)
-		{
-			return true
-		}
-		// check the commission change is larger than the maximum allowed increase.
-		(*to).saturating_sub(*from) > self.change_rate.max_increase
-	}
 }
 
 /// Pool permissions and state
@@ -2235,18 +2237,23 @@ pub mod pallet {
 
 			let commission_percentage = bonded_pool.commission();
 
-			// TODO: probably a better way to write this, with self.commission_throttled.
-			if let Some(c) = &bonded_pool.commission {
-				if let Some(throttle) = &c.throttle {
-					ensure!(
-						!throttle.throttling(&commission_percentage, &commission),
-						Error::<T>::CommissionChangeThrottled
-					);
-				}
-				if let Some(max) = c.max {
-					ensure!(commission <= max, Error::<T>::CommissionExceedsMaximum);
-				}
-			}
+			ensure!(
+				&bonded_pool
+					.commission
+					.as_ref()
+					.map(|c| !c.throttling(&commission_percentage, &commission))
+					.unwrap_or(true),
+				Error::<T>::CommissionChangeThrottled
+			);
+			ensure!(
+				&bonded_pool
+					.commission
+					.as_ref()
+					.map(|c| c.max.map(|m| commission <= m).unwrap_or(true))
+					.unwrap_or(true),
+				Error::<T>::CommissionExceedsMaximum
+			);
+
 			bonded_pool.set_commission_current(&commission, final_payee.clone()).put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
