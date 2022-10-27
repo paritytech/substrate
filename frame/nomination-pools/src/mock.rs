@@ -79,7 +79,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		*x.get_mut(who).unwrap() = x.get_mut(who).unwrap().saturating_sub(amount);
 		BondedBalanceMap::set(&x);
 		let mut y = UnbondingBalanceMap::get();
-		*y.entry(who).or_insert(Self::Balance::zero()) += amount;
+		*y.entry(*who).or_insert(Self::Balance::zero()) += amount;
 		UnbondingBalanceMap::set(&y);
 		Ok(())
 	}
@@ -98,7 +98,7 @@ impl sp_staking::StakingInterface for StakingMock {
 	}
 
 	fn bond(stash: &Self::AccountId, value: Self::Balance, _: &Self::AccountId) -> DispatchResult {
-		StakingMock::set_bonded_balance(stash, value);
+		StakingMock::set_bonded_balance(*stash, value);
 		Ok(())
 	}
 
@@ -122,9 +122,9 @@ impl sp_staking::StakingInterface for StakingMock {
 			BondedBalanceMap::get().get(who).map(|v| *v),
 		) {
 			(None, None) => Err(DispatchError::Other("balance not found")),
-			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: who }),
-			(None, Some(v)) => Ok(Stake { total: v, active: v, stash: who }),
-			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b, stash: who }),
+			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
+			(None, Some(v)) => Ok(Stake { total: v, active: v, stash: *who }),
+			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b, stash: *who }),
 		}
 	}
 
