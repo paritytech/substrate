@@ -415,7 +415,6 @@ impl PalletCmd {
 								target: LOG_TARGET,
 
 							println!(
-
 								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
