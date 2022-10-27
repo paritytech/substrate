@@ -20,6 +20,34 @@ use frame_support::pallet_prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub(crate) fn do_set_team(
+		origin: T::AccountId,
+		collection: T::CollectionId,
+		issuer: T::AccountId,
+		admin: T::AccountId,
+		freezer: T::AccountId,
+	) -> DispatchResult {
+		Collection::<T, I>::try_mutate(collection, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+
+			// delete previous values
+			Self::clear_roles(&collection)?;
+
+			let account_to_role = Self::group_roles_by_account(vec![
+				(issuer.clone(), CollectionRole::Issuer),
+				(admin.clone(), CollectionRole::Admin),
+				(freezer.clone(), CollectionRole::Freezer),
+			]);
+			for (account, roles) in account_to_role {
+				CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
+			}
+
+			Self::deposit_event(Event::TeamChanged { collection, issuer, admin, freezer });
+			Ok(())
+		})
+	}
+
 	/// Clears all the roles in a specified collection.
 	///
 	/// - `collection_id`: A collection to clear the roles in.
