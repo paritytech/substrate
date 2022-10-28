@@ -268,18 +268,18 @@ impl<T: Config<I>, I: 'static> fungibles::roles::Inspect<<T as SystemConfig>::Ac
 	for Pallet<T, I>
 {
 	fn owner(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.owner)
+		Asset::<T, I>::get(asset).map(|x| x.owner.unwrap())
 	}
 
 	fn issuer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.issuer)
+		Asset::<T, I>::get(asset).map(|x| x.issuer.unwrap())
 	}
 
 	fn admin(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.admin)
+		Asset::<T, I>::get(asset).map(|x| x.admin.unwrap())
 	}
 
 	fn freezer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.freezer)
+		Asset::<T, I>::get(asset).map(|x| x.freezer.unwrap())
 	}
 }

@@ -351,9 +351,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_issuer: Option<T::AccountId>,
 	) -> DispatchResult {
 		Self::increase_balance(id, beneficiary, amount, |details| -> DispatchResult {
-			if let Some(check_issuer) = maybe_check_issuer {
-				ensure!(check_issuer == details.issuer, Error::<T, I>::NoPermission);
-			}
+			ensure!(maybe_check_issuer == details.issuer, Error::<T, I>::NoPermission);
 			debug_assert!(
 				T::Balance::max_value() - details.supply >= amount,
 				"checked in prep; qed"
@@ -432,9 +430,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<T::Balance, DispatchError> {
 		let actual = Self::decrease_balance(id, target, amount, f, |actual, details| {
 			// Check admin rights.
-			if let Some(check_admin) = maybe_check_admin {
-				ensure!(check_admin == details.admin, Error::<T, I>::NoPermission);
-			}
+			ensure!(maybe_check_admin == details.admin, Error::<T, I>::NoPermission);
 
 			debug_assert!(details.supply >= actual, "checked in prep; qed");
 			details.supply = details.supply.saturating_sub(actual);
@@ -553,9 +549,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 			// Check admin rights.
-			if let Some(need_admin) = maybe_need_admin {
-				ensure!(need_admin == details.admin, Error::<T, I>::NoPermission);
-			}
+			ensure!(maybe_need_admin == details.admin, Error::<T, I>::NoPermission);
 
 			// Skip if source == dest
 			if source == dest {
@@ -640,10 +634,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::insert(
 			id,
 			AssetDetails {
-				owner: owner.clone(),
-				issuer: owner.clone(),
-				admin: owner.clone(),
-				freezer: owner.clone(),
+				owner: Some(owner.clone()),
+				issuer: Some(owner.clone()),
+				admin: Some(owner.clone()),
+				freezer: Some(owner.clone()),
 				supply: Zero::zero(),
 				deposit: Zero::zero(),
 				min_balance,
@@ -676,9 +670,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			id,
 			|maybe_details| -> Result<DestroyWitness, DispatchError> {
 				let mut details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-				if let Some(check_owner) = maybe_check_owner {
-					ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
-				}
+				ensure!(details.owner == maybe_check_owner, Error::<T, I>::NoPermission);
+
 				ensure!(details.accounts <= witness.accounts, Error::<T, I>::BadWitness);
 				ensure!(details.sufficients <= witness.sufficients, Error::<T, I>::BadWitness);
 				ensure!(details.approvals <= witness.approvals, Error::<T, I>::BadWitness);
@@ -695,7 +688,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 				let metadata = Metadata::<T, I>::take(&id);
 				T::Currency::unreserve(
-					&details.owner,
+					&details.owner.unwrap(),
 					details.deposit.saturating_add(metadata.deposit),
 				);
 
@@ -826,7 +819,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			symbol.clone().try_into().map_err(|_| Error::<T, I>::BadMetadata)?;
 
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-		ensure!(from == &d.owner, Error::<T, I>::NoPermission);
+		ensure!(Some(from) == d.owner.as_ref(), Error::<T, I>::NoPermission);
 
 		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);

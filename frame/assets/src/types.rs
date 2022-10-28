@@ -32,13 +32,13 @@ pub(super) type AssetAccountOf<T, I> =
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
 pub struct AssetDetails<Balance, AccountId, DepositBalance> {
 	/// Can change `owner`, `issuer`, `freezer` and `admin` accounts.
-	pub(super) owner: AccountId,
+	pub(super) owner: Option<AccountId>,
 	/// Can mint tokens.
-	pub(super) issuer: AccountId,
+	pub(super) issuer: Option<AccountId>,
 	/// Can thaw tokens, force transfers and burn tokens from any account.
-	pub(super) admin: AccountId,
+	pub(super) admin: Option<AccountId>,
 	/// Can freeze tokens.
-	pub(super) freezer: AccountId,
+	pub(super) freezer: Option<AccountId>,
 	/// The total supply across all accounts.
 	pub(super) supply: Balance,
 	/// The balance deposited for this asset. This pays for the data stored here.

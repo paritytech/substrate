@@ -321,10 +321,10 @@ pub mod pallet {
 				Asset::<T, I>::insert(
 					id,
 					AssetDetails {
-						owner: owner.clone(),
-						issuer: owner.clone(),
-						admin: owner.clone(),
-						freezer: owner.clone(),
+						owner: Some(owner.clone()),
+						issuer: Some(owner.clone()),
+						admin: Some(owner.clone()),
+						freezer: Some(owner.clone()),
 						supply: Zero::zero(),
 						deposit: Zero::zero(),
 						min_balance: *min_balance,
@@ -519,10 +519,10 @@ pub mod pallet {
 			Asset::<T, I>::insert(
 				id,
 				AssetDetails {
-					owner: owner.clone(),
-					issuer: admin.clone(),
-					admin: admin.clone(),
-					freezer: admin.clone(),
+					owner: Some(owner.clone()),
+					issuer: Some(admin.clone()),
+					admin: Some(admin.clone()),
+					freezer: Some(admin.clone()),
 					supply: Zero::zero(),
 					deposit,
 					min_balance,
@@ -783,7 +783,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			ensure!(Some(origin) == d.freezer, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
@@ -814,7 +814,7 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let details = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == details.admin, Error::<T, I>::NoPermission);
+			ensure!(Some(origin) == details.admin, Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
@@ -844,7 +844,7 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+				ensure!(Some(origin) == d.freezer, Error::<T, I>::NoPermission);
 
 				d.is_frozen = true;
 
@@ -871,7 +871,7 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == d.admin, Error::<T, I>::NoPermission);
+				ensure!(Some(origin) == d.admin, Error::<T, I>::NoPermission);
 
 				d.is_frozen = false;
 
@@ -901,8 +901,8 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-				if details.owner == owner {
+				ensure!(Some(origin) == details.owner, Error::<T, I>::NoPermission);
+				if details.owner == Some(owner.clone()) {
 					return Ok(())
 				}
 
@@ -910,9 +910,14 @@ pub mod pallet {
 				let deposit = details.deposit + metadata_deposit;
 
 				// Move the deposit to the new owner.
-				T::Currency::repatriate_reserved(&details.owner, &owner, deposit, Reserved)?;
+				T::Currency::repatriate_reserved(
+					&details.owner.as_ref().unwrap(),
+					&owner,
+					deposit,
+					Reserved,
+				)?;
 
-				details.owner = owner.clone();
+				details.owner = Some(owner.clone());
 
 				Self::deposit_event(Event::OwnerChanged { asset_id: id, owner });
 				Ok(())
@@ -946,11 +951,11 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+				ensure!(Some(origin) == details.owner, Error::<T, I>::NoPermission);
 
-				details.issuer = issuer.clone();
-				details.admin = admin.clone();
-				details.freezer = freezer.clone();
+				details.issuer = Some(issuer.clone());
+				details.admin = Some(admin.clone());
+				details.freezer = Some(freezer.clone());
 
 				Self::deposit_event(Event::TeamChanged { asset_id: id, issuer, admin, freezer });
 				Ok(())
@@ -1004,11 +1009,11 @@ pub mod pallet {
 			let origin = ensure_signed(origin)?;
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
-			ensure!(origin == d.owner, Error::<T, I>::NoPermission);
+			ensure!(Some(origin) == d.owner, Error::<T, I>::NoPermission);
 
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
-				T::Currency::unreserve(&d.owner, deposit);
+				T::Currency::unreserve(&d.owner.unwrap(), deposit);
 				Self::deposit_event(Event::MetadataCleared { asset_id: id });
 				Ok(())
 			})
@@ -1088,7 +1093,7 @@ pub mod pallet {
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
-				T::Currency::unreserve(&d.owner, deposit);
+				T::Currency::unreserve(&d.owner.unwrap(), deposit);
 				Self::deposit_event(Event::MetadataCleared { asset_id: id });
 				Ok(())
 			})
@@ -1132,10 +1137,10 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
-				asset.owner = T::Lookup::lookup(owner)?;
-				asset.issuer = T::Lookup::lookup(issuer)?;
-				asset.admin = T::Lookup::lookup(admin)?;
-				asset.freezer = T::Lookup::lookup(freezer)?;
+				asset.owner = Some(T::Lookup::lookup(owner)?);
+				asset.issuer = Some(T::Lookup::lookup(issuer)?);
+				asset.admin = Some(T::Lookup::lookup(admin)?);
+				asset.freezer = Some(T::Lookup::lookup(freezer)?);
 				asset.min_balance = min_balance;
 				asset.is_sufficient = is_sufficient;
 				asset.is_frozen = is_frozen;
@@ -1236,7 +1241,7 @@ pub mod pallet {
 				.map(|_| ())
 				.or_else(|origin| -> DispatchResult {
 					let origin = ensure_signed(origin)?;
-					ensure!(origin == d.admin, Error::<T, I>::NoPermission);
+					ensure!(Some(origin) == d.admin, Error::<T, I>::NoPermission);
 					Ok(())
 				})?;
 
