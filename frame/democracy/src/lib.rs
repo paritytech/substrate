@@ -158,8 +158,8 @@ use frame_support::{
 	traits::{
 		defensive_prelude::*,
 		schedule::{v3::Named as ScheduleNamed, DispatchTime},
-		Bounded, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
-		ReservableCurrency, StorePreimage, WithdrawReasons,
+		Bounded, Currency, Get, Hash as PreimageHash, LockIdentifier, LockableCurrency,
+		OnUnbalanced, QueryPreimage, ReservableCurrency, StorePreimage, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -176,7 +176,10 @@ mod vote_threshold;
 pub mod weights;
 pub use conviction::Conviction;
 pub use pallet::*;
-pub use types::{Delegations, ReferendumInfo, ReferendumStatus, Tally, UnvoteScope};
+pub use types::{
+	Delegations, MetadataOwner, PropIndex, ReferendumIndex, ReferendumInfo, ReferendumStatus,
+	Tally, UnvoteScope,
+};
 pub use vote::{AccountVote, Vote, Voting};
 pub use vote_threshold::{Approved, VoteThreshold};
 pub use weights::WeightInfo;
@@ -190,12 +193,6 @@ pub mod benchmarking;
 pub mod migrations;
 
 const DEMOCRACY_ID: LockIdentifier = *b"democrac";
-
-/// A proposal index.
-pub type PropIndex = u32;
-
-/// A referendum index.
-pub type ReferendumIndex = u32;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -425,6 +422,15 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Cancellations<T: Config> = StorageMap<_, Identity, H256, bool, ValueQuery>;
 
+	/// General information concerning any proposal or referendum.
+	/// The `PreimageHash` refers to the preimage of the `Preimages` provider which can be a JSON
+	/// dump or IPFS hash of a JSON file.
+	///
+	/// Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)
+	/// large preimages.
+	#[pallet::storage]
+	pub type MetadataOf<T: Config> = StorageMap<_, Blake2_128Concat, MetadataOwner, PreimageHash>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		_phantom: sp_std::marker::PhantomData<T>,
@@ -477,6 +483,29 @@ pub mod pallet {
 		Seconded { seconder: T::AccountId, prop_index: PropIndex },
 		/// A proposal got canceled.
 		ProposalCanceled { prop_index: PropIndex },
+		/// Metadata for a proposal or a referendum has been set.
+		MetadataSet {
+			/// Metadata owner.
+			owner: MetadataOwner,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
+		/// Metadata for a proposal or a referendum has been cleared.
+		MetadataCleared {
+			/// Metadata owner.
+			owner: MetadataOwner,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
+		/// Metadata has been reset to new referendum.
+		MetadataReset {
+			/// Previous metadata owner.
+			prev_owner: MetadataOwner,
+			/// New metadata owner.
+			owner: MetadataOwner,
+			/// Preimage hash.
+			hash: PreimageHash,
+		},
 	}
 
 	#[pallet::error]
@@ -528,6 +557,8 @@ pub mod pallet {
 		TooMany,
 		/// Voting period too low
 		VotingPeriodLow,
+		/// The metadata preimage for a given hash does not exist.
+		BadMetadata,
 	}
 
 	#[pallet::hooks]
@@ -647,6 +678,7 @@ pub mod pallet {
 
 			<Cancellations<T>>::insert(h, true);
 			Self::internal_cancel_referendum(ref_index);
+			Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -765,12 +797,13 @@ pub mod pallet {
 
 			<NextExternal<T>>::kill();
 			let now = <frame_system::Pallet<T>>::block_number();
-			Self::inject_referendum(
+			let ref_index = Self::inject_referendum(
 				now.saturating_add(voting_period),
 				ext_proposal,
 				threshold,
 				delay,
 			);
+			Self::reset_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -807,6 +840,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::Vetoed { who, proposal_hash, until });
 			<NextExternal<T>>::kill();
+			Self::clear_metadata(MetadataOwner::External);
 			Ok(())
 		}
 
@@ -824,6 +858,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
+			Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -1008,12 +1043,14 @@ pub mod pallet {
 							T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 						}
 					}
+					Self::clear_metadata(MetadataOwner::Proposal(prop_index));
 				}
 			});
 
 			// Remove the external queued referendum, if it's there.
 			if matches!(NextExternal::<T>::get(), Some((p, ..)) if p.hash() == proposal_hash) {
 				NextExternal::<T>::kill();
+				Self::clear_metadata(MetadataOwner::External);
 			}
 
 			// Remove the referendum, if it's there.
@@ -1021,6 +1058,7 @@ pub mod pallet {
 				if let Ok(status) = Self::referendum_status(ref_index) {
 					if status.proposal.hash() == proposal_hash {
 						Self::internal_cancel_referendum(ref_index);
+						Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 					}
 				}
 			}
@@ -1049,8 +1087,87 @@ pub mod pallet {
 					T::Slash::on_unbalanced(T::Currency::slash_reserved(&who, amount).0);
 				}
 			}
+			Self::clear_metadata(MetadataOwner::Proposal(prop_index));
 
 			Self::deposit_event(Event::<T>::ProposalCanceled { prop_index });
+			Ok(())
+		}
+
+		/// Set the metadata to the external proposal.
+		///
+		/// - `origin`: Must be `ExternalOrigin`.
+		/// - `hash`: The preimage hash of an on-chain stored preimage.
+		// TODO replace the weight function
+		#[pallet::weight(1)]
+		pub fn set_external_metadata(origin: OriginFor<T>, hash: PreimageHash) -> DispatchResult {
+			T::ExternalOrigin::ensure_origin(origin)?;
+			ensure!(<NextExternal<T>>::exists(), Error::<T>::NoProposal);
+			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::BadMetadata);
+			T::Preimages::request(&hash);
+			MetadataOf::<T>::insert(MetadataOwner::External, hash);
+			Self::deposit_event(Event::<T>::MetadataSet { owner: MetadataOwner::External, hash });
+			Ok(())
+		}
+
+		/// Set the metadata to the public proposal.
+		///
+		/// - `origin`: Must be `Signed`, and the creator of the referendum.
+		/// - `index`: The index of the proposal.
+		/// - `hash`: The preimage hash of an on-chain stored preimage.
+		// TODO replace the weight function
+		#[pallet::weight(1)]
+		pub fn set_proposal_metadata(
+			origin: OriginFor<T>,
+			index: PropIndex,
+			hash: PreimageHash,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let (_, _, proposer) = Self::proposal(index)?;
+			ensure!(proposer == who, Error::<T>::NoPermission);
+			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::BadMetadata);
+			T::Preimages::request(&hash);
+			let owner = MetadataOwner::Proposal(index);
+			MetadataOf::<T>::insert(owner.clone(), hash);
+			Self::deposit_event(Event::<T>::MetadataSet { owner, hash });
+			Ok(())
+		}
+
+		/// Clear the external proposal metadata.
+		///
+		/// - `origin`: Must be `ExternalOrigin`.
+		// TODO replace the weight function
+		#[pallet::weight(1)]
+		pub fn clear_external_metadata(origin: OriginFor<T>) -> DispatchResult {
+			T::ExternalOrigin::ensure_origin(origin)?;
+			Self::clear_metadata(MetadataOwner::External);
+			Ok(())
+		}
+
+		/// Clear the public proposal metadata.
+		///
+		/// - `origin`: Must be `Signed`, and the creator of the referendum.
+		/// - `index`: The index of the proposal.
+		// TODO replace the weight function
+		#[pallet::weight(1)]
+		pub fn clear_proposal_metadata(origin: OriginFor<T>, index: PropIndex) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let (_, _, proposer) = Self::proposal(index)?;
+			ensure!(proposer == who, Error::<T>::NoPermission);
+			Self::clear_metadata(MetadataOwner::Proposal(index));
+			Ok(())
+		}
+
+		/// Clear the referendum metadata.
+		///
+		/// - `origin`: Must be `Root`.
+		/// - `index`: The index of the referendum.
+		#[pallet::weight(1)]
+		pub fn clear_referendum_metadata(
+			origin: OriginFor<T>,
+			index: ReferendumIndex,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+			Self::clear_metadata(MetadataOwner::Referendum(index));
 			Ok(())
 		}
 	}
@@ -1414,12 +1531,13 @@ impl<T: Config> Pallet<T> {
 		if let Some((proposal, threshold)) = <NextExternal<T>>::take() {
 			LastTabledWasExternal::<T>::put(true);
 			Self::deposit_event(Event::<T>::ExternalTabled);
-			Self::inject_referendum(
+			let ref_index = Self::inject_referendum(
 				now.saturating_add(T::VotingPeriod::get()),
 				proposal,
 				threshold,
 				T::EnactmentPeriod::get(),
 			);
+			Self::reset_metadata(MetadataOwner::External, MetadataOwner::Referendum(ref_index));
 			Ok(())
 		} else {
 			return Err(Error::<T>::NoneWaiting.into())
@@ -1442,12 +1560,16 @@ impl<T: Config> Pallet<T> {
 					T::Currency::unreserve(d, deposit);
 				}
 				Self::deposit_event(Event::<T>::Tabled { proposal_index: prop_index, deposit });
-				Self::inject_referendum(
+				let ref_index = Self::inject_referendum(
 					now.saturating_add(T::VotingPeriod::get()),
 					proposal,
 					VoteThreshold::SuperMajorityApprove,
 					T::EnactmentPeriod::get(),
 				);
+				Self::reset_metadata(
+					MetadataOwner::Proposal(prop_index),
+					MetadataOwner::Referendum(ref_index),
+				)
 			}
 			Ok(())
 		} else {
@@ -1559,6 +1681,36 @@ impl<T: Config> Pallet<T> {
 		// DepositOf first tuple element is a vec, decoding its len is equivalent to decode a
 		// `Compact<u32>`.
 		decode_compact_u32_at(&<DepositOf<T>>::hashed_key_for(proposal))
+	}
+
+	// Return a proposal of an index.
+	fn proposal(index: PropIndex) -> Result<(PropIndex, BoundedCallOf<T>, T::AccountId), Error<T>> {
+		PublicProps::<T>::get()
+			.into_iter()
+			.find(|(prop_index, _, _)| prop_index == &index)
+			.ok_or(Error::<T>::ProposalMissing)
+	}
+
+	/// Clear metadata, if `Some` and unrequest associated preimage.
+	fn clear_metadata(owner: MetadataOwner) {
+		if let Some(hash) = MetadataOf::<T>::take(owner.clone()) {
+			if T::Preimages::is_requested(&hash) {
+				T::Preimages::unrequest(&hash);
+			}
+			Self::deposit_event(Event::<T>::MetadataCleared { owner, hash });
+		}
+	}
+
+	/// Reset the metadata of an `owner` to a `new_owner`.
+	fn reset_metadata(owner: MetadataOwner, new_owner: MetadataOwner) {
+		if let Some(hash) = MetadataOf::<T>::take(owner.clone()) {
+			MetadataOf::<T>::insert(new_owner.clone(), hash);
+			Self::deposit_event(Event::<T>::MetadataReset {
+				prev_owner: owner,
+				owner: new_owner,
+				hash,
+			});
+		}
 	}
 }
 

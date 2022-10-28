@@ -274,3 +274,60 @@ fn external_and_public_interleaving_works() {
 		);
 	});
 }
+
+#[test]
+fn set_external_metadata_works() {
+	new_test_ext().execute_with(|| {
+		use frame_support::traits::Hash as PreimageHash;
+		// invalid preimage hash.
+		let invalid_hash: PreimageHash = [1u8; 32].into();
+		// fails to set metadata with non external origin.
+		assert_noop!(
+			Democracy::set_external_metadata(RuntimeOrigin::signed(1), invalid_hash.clone(),),
+			BadOrigin,
+		);
+		// fails to set metadata if an external proposal does not exist.
+		assert_noop!(
+			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash.clone(),),
+			Error::<Test>::NoProposal,
+		);
+		// create an external proposal.
+		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),));
+		assert!(<NextExternal<Test>>::exists());
+		// fails to set non-existing preimage.
+		assert_noop!(
+			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash.clone(),),
+			Error::<Test>::BadMetadata,
+		);
+		// set metadata successful.
+		let hash = note_random_preimage(1);
+		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash.clone(),),);
+		System::assert_last_event(RuntimeEvent::Democracy(crate::Event::MetadataSet {
+			owner: MetadataOwner::External,
+			hash,
+		}));
+		assert!(Preimage::is_requested(&hash));
+	});
+}
+
+#[test]
+fn clear_metadata_works() {
+	new_test_ext().execute_with(|| {
+		// create an external proposal.
+		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),));
+		assert!(<NextExternal<Test>>::exists());
+		// set metadata.
+		let hash = note_random_preimage(1);
+		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash.clone(),));
+		assert!(Preimage::is_requested(&hash));
+		// fails to clear metadata with a wrong origin.
+		assert_noop!(Democracy::clear_external_metadata(RuntimeOrigin::signed(1)), BadOrigin,);
+		// clear metadata successful.
+		assert_ok!(Democracy::clear_external_metadata(RuntimeOrigin::signed(2)));
+		System::assert_last_event(RuntimeEvent::Democracy(crate::Event::MetadataCleared {
+			owner: MetadataOwner::External,
+			hash,
+		}));
+		assert!(!Preimage::is_requested(&hash));
+	});
+}

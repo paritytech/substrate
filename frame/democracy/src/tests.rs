@@ -32,7 +32,7 @@ use pallet_balances::{BalanceLock, Error as BalancesError};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BadOrigin, BlakeTwo256, IdentityLookup},
+	traits::{BadOrigin, BlakeTwo256, IdentityLookup, Hash},
 	Perbill,
 };
 mod cancellation;
@@ -273,4 +273,16 @@ fn big_nay(who: u64) -> AccountVote<u64> {
 
 fn tally(r: ReferendumIndex) -> Tally<u64> {
 	Democracy::referendum_status(r).unwrap().tally
+}
+
+/// note preimage without registering.
+/// randomize the data to make sure the preimage was not noted/registered before.
+fn note_random_preimage(who: u64) -> PreimageHash {
+	use rand::Rng;
+	let mut rng = rand::thread_rng();
+    let data: Vec<u8> = (0..100).map(|_| rng.gen_range(0..20)).collect();
+	assert_ok!(Preimage::note_preimage(RuntimeOrigin::signed(who), data.clone()));
+	let hash = BlakeTwo256::hash(&data);
+	assert!(!Preimage::is_requested(&hash));
+	hash
 }

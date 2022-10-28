@@ -611,9 +611,8 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be `Signed`, and the creator of the referendum.
 		/// - `index`: The index of the referendum to add metadata for.
-		/// - `hash`: The preimage hash of an existing preimage.
-		// TODO replace the weight function
-		#[pallet::weight(1)]
+		/// - `hash`: The preimage hash of an on-chain stored preimage.
+		#[pallet::weight(T::WeightInfo::set_metadata())]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
@@ -634,8 +633,7 @@ pub mod pallet {
 		/// - `origin`: Must be `Signed` or `Root`. If the referendum is ongoing, it must also be
 		///   the creator of the referendum.
 		/// - `index`: The index of the ongoing referendum to clear metadata for.
-		// TODO replace the weight function
-		#[pallet::weight(1)]
+		#[pallet::weight(T::WeightInfo::clear_metadata())]
 		pub fn clear_metadata(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
 			let maybe_who = ensure_signed_or_root(origin)?;
 			if let Some(who) = maybe_who {

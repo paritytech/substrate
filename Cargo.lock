@@ -5373,6 +5373,7 @@ dependencies = [
  "pallet-preimage",
  "pallet-scheduler",
  "parity-scale-codec",
+ "rand 0.8.5",
  "scale-info",
  "serde",
  "sp-core",
