@@ -42,18 +42,6 @@ pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 /// Default sub directory to store network config.
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
-/// Delay the pruning of blocks by a given number of finalizations.
-///
-/// This value should be set to a sensible amount to accommodate the RPC
-/// Spec V2 requirements of block pinning.
-///
-/// The user derives no benefits from controlling this, as the RPC API
-/// should be uniform across the nodes.
-///
-/// This ensures that users have roughly 32 * 6 seconds (block finalization)
-/// ~ 3 minutes to fetch the details of blocks.
-pub(crate) const DELAYED_PRUNING: u32 = 32;
-
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
@@ -267,7 +255,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	fn blocks_pruning(&self) -> Result<BlocksPruning> {
 		self.pruning_params()
 			.map(|x| x.blocks_pruning())
-			.unwrap_or_else(|| Ok(BlocksPruning::Delayed(DELAYED_PRUNING)))
+			.unwrap_or_else(|| Ok(BlocksPruning::KeepFinalized))
 	}
 
 	/// Get the chain ID (string).
