@@ -6327,6 +6327,8 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-collective",
+ "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
