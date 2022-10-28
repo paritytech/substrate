@@ -512,18 +512,6 @@ impl Debug for Curve {
 	}
 }
 
-/// General information about the item referring to the metadata.
-#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-pub struct Metadata<Schema: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone> {
-	/// The schema/s descriptor of the data the preimage `hash` referring to.
-	/// e.g. enum of `IpfsJsonV1` (the hash of an off-chain IPFS json file),
-	/// `BinJsonV2` (on-chain json dump).
-	pub(super) schema: Schema,
-
-	/// The hash of the preimage holding the data of the `schema`.
-	pub(super) hash: PreimageHash,
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
