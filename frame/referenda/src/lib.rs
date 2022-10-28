@@ -72,8 +72,8 @@ use frame_support::{
 			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
 			DispatchTime,
 		},
-		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
-		ReservableCurrency, StorePreimage, VoteTally,
+		Currency, Hash as PreimageHash, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus,
+		Polling, QueryPreimage, ReservableCurrency, StorePreimage, VoteTally,
 	},
 	BoundedVec,
 };
@@ -93,9 +93,9 @@ pub use self::{
 	pallet::*,
 	types::{
 		BalanceOf, BoundedCallOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit,
-		InsertSorted, MetadataOf, NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex,
-		ReferendumInfo, ReferendumInfoOf, ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf,
-		TallyOf, TrackIdOf, TrackInfo, TrackInfoOf, TracksInfo, VotesOf,
+		InsertSorted, NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo,
+		ReferendumInfoOf, ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf,
+		TrackIdOf, TrackInfo, TrackInfoOf, TracksInfo, VotesOf,
 	},
 	weights::WeightInfo,
 };
@@ -217,13 +217,6 @@ pub mod pallet {
 
 		/// The preimage provider.
 		type Preimages: QueryPreimage + StorePreimage;
-
-		/// The schema type of the referendum [`MetadataOf`].
-		/// e.g. enum of `IpfsJsonV1` (the hash of an off-chain IPFS json file),
-		/// `BinJsonV2` (on-chain json dump).
-		/// Consider a garbage collection for [`MetadataFor`] of finished referendums
-		/// to `unrequest` large preimages.
-		type MetadataSchema: Clone + Codec + Eq + Debug + TypeInfo + MaxEncodedLen;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
@@ -253,10 +246,15 @@ pub mod pallet {
 	pub type DecidingCount<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TrackIdOf<T, I>, u32, ValueQuery>;
 
-	/// The metadata of the referendum.
+	/// The metadata is a general information concerning the referendum.
+	/// The `PreimageHash` refers to the preimage of the `Preimages` provider which can be a JSON
+	/// dump or IPFS hash of a JSON file.
+	///
+	/// Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)
+	/// large preimages.
 	#[pallet::storage]
-	pub type MetadataFor<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, ReferendumIndex, MetadataOf<T, I>>;
+	pub type MetadataOf<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, ReferendumIndex, PreimageHash>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -609,20 +607,20 @@ pub mod pallet {
 		///
 		/// - `origin`: Must be `Signed`, and the creator of the referendum.
 		/// - `index`: The index of the referendum to add metadata for.
-		/// - `metadata`: The metadata of the referendum.
+		/// - `hash`: The preimage hash of an existing preimage.
 		// TODO replace the weight function
 		#[pallet::weight(1)]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
-			metadata: MetadataOf<T, I>,
+			hash: PreimageHash,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
-			ensure!(T::Preimages::len(&metadata.hash).is_some(), Error::<T, I>::BadMetadata);
-			T::Preimages::request(&metadata.hash);
-			MetadataFor::<T, I>::insert(index, metadata);
+			ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::BadMetadata);
+			T::Preimages::request(&hash);
+			MetadataOf::<T, I>::insert(index, hash);
 			Self::deposit_event(Event::<T, I>::MetadataSet { index });
 			Ok(())
 		}
@@ -1205,9 +1203,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Clear metadata, if `Some` and unrequest associated preimage.
 	fn do_clear_metadata(index: ReferendumIndex) {
-		if let Some(metadata) = MetadataFor::<T, I>::take(index) {
-			if T::Preimages::is_requested(&metadata.hash) {
-				T::Preimages::unrequest(&metadata.hash);
+		if let Some(hash) = MetadataOf::<T, I>::take(index) {
+			if T::Preimages::is_requested(&hash) {
+				T::Preimages::unrequest(&hash);
 			}
 			Self::deposit_event(Event::<T, I>::MetadataCleared { index });
 		}

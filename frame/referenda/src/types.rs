@@ -20,7 +20,7 @@
 use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
 use frame_support::{
-	traits::{schedule::v3::Anon, Bounded, Hash as PreimageHash},
+	traits::{schedule::v3::Anon, Bounded},
 	Parameter,
 };
 use scale_info::TypeInfo;
@@ -71,8 +71,6 @@ pub type ScheduleAddressOf<T, I> = <<T as Config<I>>::Scheduler as Anon<
 	CallOf<T, I>,
 	PalletsOriginOf<T>,
 >>::Address;
-
-pub type MetadataOf<T, I> = Metadata<<T as Config<I>>::MetadataSchema>;
 
 /// A referendum index.
 pub type ReferendumIndex = u32;
