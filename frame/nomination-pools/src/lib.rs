@@ -2637,10 +2637,7 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		// If a non-zero commission has been applied to the pool, deduct the share from
-		// `pending_rewards` and send that amount to the pool `depositor`.
-		// Defensive: The commission payee is also checked for existence.
-		let get_commission = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
+		let get_commission_and_payee = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
 			if let Some(c) = &b.commission {
 				let commission_percent = c.percentage();
 				if commission_percent > Perbill::zero() {
@@ -2653,9 +2650,12 @@ impl<T: Config> Pallet<T> {
 			(Zero::zero(), None)
 		};
 
-		let (pool_commission, payee) = get_commission(&bonded_pool);
+		let (pool_commission, payee) = get_commission_and_payee(&bonded_pool);
 		pending_rewards = pending_rewards.saturating_sub(pool_commission);
 
+		// If a non-zero commission has been applied to the pool, deduct the share from
+		// `reward_pool` and send the amount to the commission `payee`.
+		// Defensive: The commission payee is also checked for existence.
 		if pool_commission != BalanceOf::<T>::zero() {
 			if let Some(p) = payee {
 				T::Currency::withdraw(
