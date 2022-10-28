@@ -1782,15 +1782,15 @@ dependencies = [
 
 [[package]]
 name = "ed25519-zebra"
-version = "3.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "403ef3e961ab98f0ba902771d29f842058578bb1ce7e3c59dad5a6a93e784c69"
+checksum = "7c24f403d068ad0b359e577a77f92392118be3f3c927538f2bb544a5ecd828c6"
 dependencies = [
  "curve25519-dalek 3.0.2",
+ "hashbrown 0.12.3",
  "hex",
  "rand_core 0.6.2",
  "sha2 0.9.8",
- "thiserror",
  "zeroize",
 ]
 
