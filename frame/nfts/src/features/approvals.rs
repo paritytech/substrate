@@ -39,12 +39,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Error::<T, I>::ItemsNonTransferable
 		);
 
-		let collection_config = Self::get_collection_config(&collection)?;
-		ensure!(
-			collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-			Error::<T, I>::ItemsNonTransferable
-		);
-
 		if let Some(check_origin) = maybe_check_origin {
 			let is_admin = Self::has_role(&collection, &check_origin, CollectionRole::Admin);
 			let permitted = is_admin || check_origin == details.owner;
