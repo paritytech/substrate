@@ -1487,6 +1487,21 @@ pub mod pallet_prelude {
 /// non-instantiable pallets. For an example of an instantiable pallet, see [this
 /// example](#example-of-an-instantiable-pallet).
 ///
+/// # Dev Mode (`#[pallet::pallet(dev_mode)]`)
+///
+/// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim
+/// of dev mode is to loosen some of the restrictions and requirements placed on production
+/// pallets for easy tinkering and development. Dev mode pallets should not be used in
+/// production. Enabling dev mode has the following effects:
+///
+/// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By
+///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
+///   specified. This is equivalent to specifying `#[weight(0)]` on all calls that do not
+///   specify a weight.
+/// * All storages are marked as unbounded, meaning you do not need to implement
+///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
+///   on all storage type definitions.
+///
 /// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
 ///
 /// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify

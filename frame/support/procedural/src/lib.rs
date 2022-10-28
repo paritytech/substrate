@@ -445,6 +445,20 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// pallet. Otherwise it implements `StorageInfoTrait` for the pallet using the
 /// `PartialStorageInfoTrait` implementation of storages.
 ///
+/// ## Dev Mode (`#[pallet::pallet(dev_mode)]`)
+///
+/// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim
+/// of dev mode is to loosen some of the restrictions and requirements placed on production
+/// pallets for easy tinkering and development. Dev mode pallets should not be used in
+/// production. Enabling dev mode has the following effects:
+///
+/// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By default, dev
+///   mode pallets will assume a weight of zero (`0`) if a weight is not specified. This is
+///   equivalent to specifying `#[weight(0)]` on all calls that do not specify a weight.
+/// * All storages are marked as unbounded, meaning you do not need to implement `MaxEncodedLen` on
+///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
+///   definitions.
+///
 /// See `frame_support::pallet` docs for more info.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
