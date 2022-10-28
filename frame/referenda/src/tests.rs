@@ -562,7 +562,7 @@ fn set_metadata_works() {
 		let index = ReferendumCount::<Test>::get() - 1;
 		let hash = Preimage::note(Cow::from(vec![1])).unwrap();
 		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, hash.clone(),));
-		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet { index }));
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet { index, hash }));
 		assert!(Preimage::is_requested(&hash));
 	});
 }
@@ -571,7 +571,7 @@ fn set_metadata_works() {
 fn clear_metadata_works() {
 	new_test_ext().execute_with(|| {
 		use sp_std::borrow::Cow;
-		let preimage_hash = Preimage::note(Cow::from(vec![1, 2])).unwrap();
+		let hash = Preimage::note(Cow::from(vec![1, 2])).unwrap();
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
 			Box::new(RawOrigin::Root.into()),
@@ -580,14 +580,14 @@ fn clear_metadata_works() {
 		));
 		let index = ReferendumCount::<Test>::get() - 1;
 		assert_ok!(
-			Referenda::set_metadata(RuntimeOrigin::signed(1), index, preimage_hash.clone(),)
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, hash.clone(),)
 		);
-		assert!(Preimage::is_requested(&preimage_hash));
+		assert!(Preimage::is_requested(&hash));
 		assert_noop!(
 			Referenda::clear_metadata(RuntimeOrigin::signed(2), index,),
 			Error::<Test>::NoPermission,
 		);
 		assert_ok!(Referenda::clear_metadata(RuntimeOrigin::signed(1), index,),);
-		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataCleared { index }));
+		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataCleared { index, hash }));
 	});
 }

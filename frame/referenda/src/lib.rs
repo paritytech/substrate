@@ -356,11 +356,15 @@ pub mod pallet {
 		MetadataSet {
 			/// Index of the referendum.
 			index: ReferendumIndex,
+			/// Preimage hash.
+			hash: PreimageHash,
 		},
 		/// Metadata for a referendum has been cleared.
 		MetadataCleared {
 			/// Index of the referendum.
 			index: ReferendumIndex,
+			/// Preimage hash.
+			hash: PreimageHash,
 		},
 	}
 
@@ -621,7 +625,7 @@ pub mod pallet {
 			ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::BadMetadata);
 			T::Preimages::request(&hash);
 			MetadataOf::<T, I>::insert(index, hash);
-			Self::deposit_event(Event::<T, I>::MetadataSet { index });
+			Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });
 			Ok(())
 		}
 
@@ -1207,7 +1211,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if T::Preimages::is_requested(&hash) {
 				T::Preimages::unrequest(&hash);
 			}
-			Self::deposit_event(Event::<T, I>::MetadataCleared { index });
+			Self::deposit_event(Event::<T, I>::MetadataCleared { index, hash });
 		}
 	}
 }

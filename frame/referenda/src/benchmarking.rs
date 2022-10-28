@@ -31,7 +31,6 @@ use sp_runtime::traits::Bounded as ArithBounded;
 
 const SEED: u32 = 0;
 
-#[allow(dead_code)]
 fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
@@ -534,6 +533,28 @@ benchmarks_instance_pallet! {
 	verify {
 		let info = ReferendumInfoFor::<T, I>::get(index).unwrap();
 		assert_matches!(info, ReferendumInfo::Rejected(..));
+	}
+
+	set_metadata {
+		use sp_std::borrow::Cow;
+		let (origin, index) = create_referendum::<T, I>();
+		let hash = T::Preimages::note(Cow::from(vec![1, 2])).unwrap();
+	}: _<T::RuntimeOrigin>(origin, index, hash)
+	verify {
+		assert_last_event::<T, I>(Event::MetadataSet { index, hash }.into());
+	}
+
+	clear_metadata {
+		use sp_std::borrow::Cow;
+		let (origin, index) = create_referendum::<T, I>();
+		let hash = T::Preimages::note(Cow::from(vec![1, 2])).unwrap();
+		assert_ok!(
+			Referenda::<T, I>::set_metadata(origin.clone(), index, hash.clone(),)
+		);
+		assert!(T::Preimages::is_requested(&hash));
+	}: _<T::RuntimeOrigin>(origin, index)
+	verify {
+		assert_last_event::<T, I>(Event::MetadataCleared { index, hash }.into());
 	}
 
 	impl_benchmark_test_suite!(
