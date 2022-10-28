@@ -277,7 +277,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Price of an asset instance.
+	/// A price of an item.
 	#[pallet::storage]
 	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
