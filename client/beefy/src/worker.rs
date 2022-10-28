@@ -500,27 +500,22 @@ where
 
 			self.on_demand_justifications.cancel_requests_older_than(block_num);
 
-			let maybe_block_hash =
-				self.backend.blockchain().expect_block_hash_from_id(&BlockId::Number(block_num));
-
-			match maybe_block_hash {
-				Ok(hash) => {
-					if let Err(err) = self
-						.backend
-						.append_justification(&hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
-					{
-						error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", err, finality_proof);
-					};
-
+			if let Err(e) = self
+				.backend
+				.blockchain()
+				.expect_block_hash_from_id(&BlockId::Number(block_num))
+				.and_then(|hash| {
+					println!("{block_num:?} {hash:?}");
 					self.links
 						.to_rpc_best_block_sender
 						.notify(|| Ok::<_, ()>(hash))
 						.expect("forwards closure result; the closure always returns Ok; qed.");
-				},
-				Err(err) => {
-					error!(target: "beefy", "🥩 Error {:?} hash not known for given proof: {:?}", err, finality_proof);
-				},
-			};
+
+					self.backend
+						.append_justification(&hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
+				}) {
+				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
+			}
 
 			self.links
 				.to_rpc_justif_sender
