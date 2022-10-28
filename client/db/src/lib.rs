@@ -63,7 +63,7 @@ use sc_client_api::{
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
 };
-use sc_state_db::{IsPruned, StateDb};
+use sc_state_db::{IsPruned, StateDb, LAST_CANONICAL};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{
 	well_known_cache_keys, Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend,
@@ -1128,6 +1128,84 @@ impl<Block: BlockT> Backend<Block> {
 		self.storage.clone()
 	}
 
+	/// Ensure that the gap between the canonicalized and
+	/// finalized block is filled by canonicalizing all the blocks
+	/// up to the finalized block.
+	///
+	/// The canonicalized block could be behind the finalized block
+	/// in the case of delayed pruning. This inconsistency could
+	/// cause the database to miss-behave if started without this
+	/// option.
+	fn startup_canonicalization_gap(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+	) -> ClientResult<()> {
+		// Read the finalized block from the database.
+		let finalized_num =
+			match self.storage.db.get(columns::META, meta_keys::FINALIZED_BLOCK).and_then(
+				|block_key| {
+					self.storage
+						.db
+						.get(columns::HEADER, &block_key)
+						.map(|bytes| Block::Header::decode(&mut &bytes[..]).ok())
+				},
+			) {
+				Some(Some(header)) => (*header.number()).saturated_into::<u64>(),
+				_ => return Ok(()),
+			};
+
+		// The last canonicalized block is stored in the state-db meta section.
+		let canonicalized_num = match self
+			.storage
+			.db
+			.get(columns::STATE_META, LAST_CANONICAL)
+			.and_then(|bytes| <(Block::Hash, u64)>::decode(&mut &bytes[..]).ok())
+		{
+			Some((_hash, num)) => num,
+			_ => return Ok(()),
+		};
+		trace!(target: "db", "Last canonicalized block #{} and last finalized #{}", canonicalized_num, finalized_num);
+
+		// Canonicalized every block from the last canonicalized
+		// to the finalized block.
+		for num in canonicalized_num..=finalized_num {
+			self.startup_canonicalize_block(transaction, num)?;
+		}
+
+		Ok(())
+	}
+
+	/// Canonicalize the given block number.
+	fn startup_canonicalize_block(
+		&self,
+		transaction: &mut Transaction<DbHash>,
+		number: u64,
+	) -> ClientResult<()> {
+		let hash = sc_client_api::blockchain::HeaderBackend::hash(
+			&self.blockchain,
+			number.saturated_into(),
+		)?
+		.ok_or_else(|| {
+			sp_blockchain::Error::Backend(format!(
+				"Can't canonicalize missing block number #{} on startup",
+				number,
+			))
+		})?;
+
+		if !sc_client_api::Backend::have_state_at(self, &hash, number.saturated_into()) {
+			return Ok(())
+		}
+
+		trace!(target: "db", "Canonicalize block #{} ({:?}) on startup ", number, hash);
+		let commit = self.storage.state_db.canonicalize_block(&hash).map_err(
+			sp_blockchain::Error::from_state_db::<
+				sc_state_db::Error<sp_database::error::DatabaseError>,
+			>,
+		)?;
+		apply_state_commit(transaction, commit);
+		Ok(())
+	}
+
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
@@ -1198,6 +1276,8 @@ impl<Block: BlockT> Backend<Block> {
 				with_state: true,
 			});
 		}
+
+		backend.startup_canonicalization_gap(&mut db_init_transaction)?;
 
 		db.commit(db_init_transaction)?;
 
