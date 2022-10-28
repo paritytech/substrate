@@ -867,7 +867,7 @@ fn import_with_justification() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a2.clone())).unwrap();
-	client.finalize_block(BlockId::hash(a2.hash()), None).unwrap();
+	client.finalize_block(&a2.hash(), None).unwrap();
 
 	// A2 -> A3
 	let justification = Justifications::from((TEST_ENGINE_ID, vec![1, 2, 3]));
@@ -996,7 +996,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	// we finalize block B1 which is on a different branch from current best
 	// which should trigger a re-org.
-	ClientExt::finalize_block(&client, BlockId::Hash(b1.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &b1.hash(), None).unwrap();
 
 	// B1 should now be the latest finalized
 	assert_eq!(client.chain_info().finalized_hash, b1.hash());
@@ -1020,7 +1020,7 @@ fn finalizing_diverged_block_should_trigger_reorg() {
 
 	assert_eq!(client.chain_info().best_hash, b3.hash());
 
-	ClientExt::finalize_block(&client, BlockId::Hash(b3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &b3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[b1.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[b2.hash(), b3.hash()], &[a2.hash()]);
@@ -1118,7 +1118,7 @@ fn finality_notifications_content() {
 
 	// Postpone import to test behavior of import of finalized block.
 
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a2.hash(), None).unwrap();
 
 	// Import and finalize D4
 	block_on(client.import_as_final(BlockOrigin::Own, d4.clone())).unwrap();
@@ -1274,7 +1274,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 
 	// we will finalize A2 which should make it impossible to import a new
 	// B3 at the same height but that doesn't include it
-	ClientExt::finalize_block(&client, BlockId::Hash(a2.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a2.hash(), None).unwrap();
 
 	let import_err = block_on(client.import(BlockOrigin::Own, b3)).err().unwrap();
 	let expected_err =
@@ -1309,7 +1309,7 @@ fn doesnt_import_blocks_that_revert_finality() {
 		.unwrap()
 		.block;
 	block_on(client.import(BlockOrigin::Own, a3.clone())).unwrap();
-	ClientExt::finalize_block(&client, BlockId::Hash(a3.hash()), None).unwrap();
+	ClientExt::finalize_block(&client, &a3.hash(), None).unwrap();
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 
@@ -1602,12 +1602,14 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 		.add_extra_child_storage(&child_info, b"third".to_vec(), vec![0u8; 32])
 		.build();
 
+	let block_hash = client.info().best_hash;
+
 	let child_root = b":child_storage:default:child".to_vec();
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked("3a"));
 	let child_prefix = StorageKey(b"sec".to_vec());
 
 	let res: Vec<_> = client
-		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+		.storage_keys_iter(&block_hash, Some(&prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1622,7 +1624,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
@@ -1633,7 +1635,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a686561707061676573"))),
 		)
@@ -1643,7 +1645,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 	assert_eq!(res, Vec::<Vec<u8>>::new());
 
 	let res: Vec<_> = client
-		.child_storage_keys_iter(&BlockId::Number(0), child_info.clone(), Some(&child_prefix), None)
+		.child_storage_keys_iter(&block_hash, child_info.clone(), Some(&child_prefix), None)
 		.unwrap()
 		.map(|x| x.0)
 		.collect();
@@ -1651,7 +1653,7 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 
 	let res: Vec<_> = client
 		.child_storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			child_info,
 			None,
 			Some(&StorageKey(b"second".to_vec())),
@@ -1666,10 +1668,12 @@ fn storage_keys_iter_prefix_and_start_key_works() {
 fn storage_keys_iter_works() {
 	let client = substrate_test_runtime_client::new();
 
+	let block_hash = client.info().best_hash;
+
 	let prefix = StorageKey(array_bytes::hex2bytes_unchecked(""));
 
 	let res: Vec<_> = client
-		.storage_keys_iter(&BlockId::Number(0), Some(&prefix), None)
+		.storage_keys_iter(&block_hash, Some(&prefix), None)
 		.unwrap()
 		.take(9)
 		.map(|x| array_bytes::bytes2hex("", &x.0))
@@ -1691,7 +1695,7 @@ fn storage_keys_iter_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked("3a636f6465"))),
 		)
@@ -1714,7 +1718,7 @@ fn storage_keys_iter_works() {
 
 	let res: Vec<_> = client
 		.storage_keys_iter(
-			&BlockId::Number(0),
+			&block_hash,
 			Some(&prefix),
 			Some(&StorageKey(array_bytes::hex2bytes_unchecked(
 				"7d5007603a7f5dd729d51d93cf695d6465789443bb967c0d1fe270e388c96eaa",

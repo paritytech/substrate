@@ -23,8 +23,11 @@ use libp2p::{
 		connection::ConnectionId, either::EitherOutput, transport::ListenerId, ConnectedPoint,
 		PeerId, PublicKey,
 	},
-	identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo},
-	ping::{Ping, PingConfig, PingEvent, PingSuccess},
+	identify::{
+		Behaviour as Identify, Config as IdentifyConfig, Event as IdentifyEvent,
+		Info as IdentifyInfo,
+	},
+	ping::{Behaviour as Ping, Config as PingConfig, Event as PingEvent, Success as PingSuccess},
 	swarm::{
 		ConnectionHandler, IntoConnectionHandler, IntoConnectionHandlerSelect, NetworkBehaviour,
 		NetworkBehaviourAction, PollParameters,

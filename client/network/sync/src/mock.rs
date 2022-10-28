@@ -114,5 +114,9 @@ mockall::mock! {
 		) -> Result<Vec<BlockData<Block>>, String>;
 		fn encode_state_request(&self, request: &OpaqueStateRequest) -> Result<Vec<u8>, String>;
 		fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
+		fn poll<'a>(
+			&mut self,
+			cx: &mut std::task::Context<'a>,
+		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 	}
 }
