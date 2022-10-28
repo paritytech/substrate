@@ -1695,7 +1695,7 @@ type Migrations = (
 	pallet_alliance::migration::Migration<Runtime>,
 );
 
-/// MMR helper types.
+/// MMR helper types
 mod mmr {
 	use super::Runtime;
 	pub use pallet_mmr::primitives::*;

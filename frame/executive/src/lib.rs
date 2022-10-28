@@ -52,6 +52,7 @@
 //! `Executive` type declaration from the node template.
 //!
 //! ```
+//!
 //! # use sp_runtime::generic;
 //! # use frame_executive as executive;
 //! # pub struct UncheckedExtrinsic {};
@@ -116,6 +117,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Encode};
 use frame_support::{
 	dispatch::PostDispatchInfo,
@@ -233,13 +235,14 @@ impl<
 		COnRuntimeUpgrade: OnRuntimeUpgrade,
 	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
+	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 	+ Checkable<Context>
 	+ Codec
 	+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
-		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
