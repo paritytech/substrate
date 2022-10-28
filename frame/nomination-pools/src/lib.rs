@@ -2641,7 +2641,7 @@ impl<T: Config> Pallet<T> {
 				if commission_percent > Perbill::zero() {
 					let payee = b.commission_payee().map(|p| p.clone()).or(None);
 					if payee.is_some() {
-						return (commission_percent * pending_rewards, None)
+						return (commission_percent * pending_rewards, payee)
 					}
 				}
 			}
@@ -2651,24 +2651,12 @@ impl<T: Config> Pallet<T> {
 		let (pool_commission, payee) = get_commission(&bonded_pool);
 		pending_rewards = pending_rewards.saturating_sub(pool_commission);
 
-		if pool_commission != BalanceOf::<T>::zero() {
-			if let Some(p) = payee {
-				// Transfer pool_commission to the `payee` account.
-				T::Currency::transfer(
-					&bonded_pool.reward_account(),
-					&p,
-					pool_commission,
-					ExistenceRequirement::KeepAlive,
-				)?;
-			}
-		}
-
 		// Transfer remaining payout to the member.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&member_account,
 			pending_rewards,
-			ExistenceRequirement::AllowDeath,
+			ExistenceRequirement::KeepAlive,
 		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
@@ -2676,6 +2664,18 @@ impl<T: Config> Pallet<T> {
 			pool_id: member.pool_id,
 			payout: pending_rewards,
 		});
+
+		if pool_commission != BalanceOf::<T>::zero() {
+			if let Some(p) = payee {
+				// Transfer pool_commission to the `payee` account.
+				T::Currency::transfer(
+					&bonded_pool.reward_account(),
+					&p,
+					pool_commission,
+					ExistenceRequirement::AllowDeath,
+				)?;
+			}
+		}
 
 		Ok(pending_rewards)
 	}
