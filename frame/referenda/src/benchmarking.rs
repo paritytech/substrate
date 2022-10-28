@@ -538,7 +538,7 @@ benchmarks_instance_pallet! {
 	set_metadata {
 		use sp_std::borrow::Cow;
 		let (origin, index) = create_referendum::<T, I>();
-		let hash = T::Preimages::note(Cow::from(vec![1, 2])).unwrap();
+		let hash = T::Preimages::note(Cow::from(vec![5, 6])).unwrap();
 	}: _<T::RuntimeOrigin>(origin, index, hash)
 	verify {
 		assert_last_event::<T, I>(Event::MetadataSet { index, hash }.into());
@@ -547,7 +547,7 @@ benchmarks_instance_pallet! {
 	clear_metadata {
 		use sp_std::borrow::Cow;
 		let (origin, index) = create_referendum::<T, I>();
-		let hash = T::Preimages::note(Cow::from(vec![1, 2])).unwrap();
+		let hash = T::Preimages::note(Cow::from(vec![6, 7, 8])).unwrap();
 		assert_ok!(
 			Referenda::<T, I>::set_metadata(origin.clone(), index, hash.clone(),)
 		);
