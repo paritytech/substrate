@@ -170,7 +170,7 @@ fn linear_regression(
 	x_vars: usize,
 ) -> Option<(f64, Vec<f64>, Vec<f64>)> {
 	let (intercept, params, errors) = raw_linear_regression(&xs, &ys, x_vars, true)?;
-	if intercept > 0.0 || intercept.abs() <= 0.0001 {
+	if intercept >= -0.0001 {
 		// The intercept is positive, or is effectively zero.
 		return Some((intercept, params, errors[1..].to_vec()))
 	}
