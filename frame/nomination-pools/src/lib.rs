@@ -275,7 +275,7 @@ use frame_support::{
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
-		ExistenceRequirement, Get,
+		ExistenceRequirement, Get, tokens::WithdrawReasons,
 	},
 	transactional, CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
@@ -1505,7 +1505,7 @@ pub mod pallet {
 		/// A member has became bonded in a pool.
 		Bonded { member: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T>, joined: bool },
 		/// A payout has been made to a member.
-		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T> },
+		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T>, commission: BalanceOf<T> },
 		/// A member has unbonded from their pool.
 		///
 		/// - `balance` is the corresponding balance of the number of points that has been
@@ -2651,31 +2651,33 @@ impl<T: Config> Pallet<T> {
 		let (pool_commission, payee) = get_commission(&bonded_pool);
 		pending_rewards = pending_rewards.saturating_sub(pool_commission);
 
+		if pool_commission != BalanceOf::<T>::zero() {
+			if let Some(p) = payee {
+
+				T::Currency::withdraw(
+					&bonded_pool.reward_account(),
+					pool_commission,
+					WithdrawReasons::FEE,
+					ExistenceRequirement::KeepAlive,
+				)?;
+				T::Currency::deposit_creating(&p, pool_commission);
+			}
+		}
+
 		// Transfer remaining payout to the member.
 		T::Currency::transfer(
 			&bonded_pool.reward_account(),
 			&member_account,
 			pending_rewards,
-			ExistenceRequirement::KeepAlive,
+			ExistenceRequirement::AllowDeath,
 		)?;
 
 		Self::deposit_event(Event::<T>::PaidOut {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
+			commission: pool_commission,
 		});
-
-		if pool_commission != BalanceOf::<T>::zero() {
-			if let Some(p) = payee {
-				// Transfer pool_commission to the `payee` account.
-				T::Currency::transfer(
-					&bonded_pool.reward_account(),
-					&p,
-					pool_commission,
-					ExistenceRequirement::AllowDeath,
-				)?;
-			}
-		}
 
 		Ok(pending_rewards)
 	}

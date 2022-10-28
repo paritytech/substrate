@@ -284,6 +284,7 @@ pub mod v2 {
 								member: who.clone(),
 								pool_id: id,
 								payout: last_claim,
+								commission: Zero::zero(),
 							});
 						});
 
