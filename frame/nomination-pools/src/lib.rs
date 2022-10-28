@@ -274,8 +274,8 @@ use frame_support::{
 	pallet_prelude::{MaxEncodedLen, *},
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{
-		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
-		ExistenceRequirement, Get, tokens::WithdrawReasons,
+		tokens::WithdrawReasons, Currency, Defensive, DefensiveOption, DefensiveResult,
+		DefensiveSaturating, ExistenceRequirement, Get,
 	},
 	transactional, CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
@@ -1505,7 +1505,12 @@ pub mod pallet {
 		/// A member has became bonded in a pool.
 		Bonded { member: T::AccountId, pool_id: PoolId, bonded: BalanceOf<T>, joined: bool },
 		/// A payout has been made to a member.
-		PaidOut { member: T::AccountId, pool_id: PoolId, payout: BalanceOf<T>, commission: BalanceOf<T> },
+		PaidOut {
+			member: T::AccountId,
+			pool_id: PoolId,
+			payout: BalanceOf<T>,
+			commission: BalanceOf<T>,
+		},
 		/// A member has unbonded from their pool.
 		///
 		/// - `balance` is the corresponding balance of the number of points that has been
@@ -2653,7 +2658,6 @@ impl<T: Config> Pallet<T> {
 
 		if pool_commission != BalanceOf::<T>::zero() {
 			if let Some(p) = payee {
-
 				T::Currency::withdraw(
 					&bonded_pool.reward_account(),
 					pool_commission,

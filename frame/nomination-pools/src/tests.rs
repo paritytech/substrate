@@ -1355,9 +1355,7 @@ mod claim_payout {
 			// Then
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![
-					Event::PaidOut { member: 10, pool_id: 1, payout: 34, commission: 16 },
-				]
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 34, commission: 16 },]
 			);
 		})
 	}
@@ -1748,8 +1746,18 @@ mod claim_payout {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 20, pool_id: 1, bonded: 10, joined: true },
 					Event::Bonded { member: 30, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: 30 + 100 / 2 + 60 / 3, commission: 0 },
-					Event::PaidOut { member: 20, pool_id: 1, payout: 100 / 2 + 60 / 3, commission: 0  },
+					Event::PaidOut {
+						member: 10,
+						pool_id: 1,
+						payout: 30 + 100 / 2 + 60 / 3,
+						commission: 0
+					},
+					Event::PaidOut {
+						member: 20,
+						pool_id: 1,
+						payout: 100 / 2 + 60 / 3,
+						commission: 0
+					},
 					Event::PaidOut { member: 30, pool_id: 1, payout: 60 / 3, commission: 0 },
 				]
 			);
@@ -1986,7 +1994,12 @@ mod claim_payout {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 30, pool_id: 1, payout: 10 + 20 + 20, commission: 0 }]
+				vec![Event::PaidOut {
+					member: 30,
+					pool_id: 1,
+					payout: 10 + 20 + 20,
+					commission: 0
+				}]
 			);
 		});
 	}
@@ -4961,7 +4974,12 @@ mod bond_extra {
 				vec![
 					Event::Created { depositor: 10, pool_id: 1 },
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: claimable_reward, commission: 0 },
+					Event::PaidOut {
+						member: 10,
+						pool_id: 1,
+						payout: claimable_reward,
+						commission: 0
+					},
 					Event::Bonded {
 						member: 10,
 						pool_id: 1,
@@ -5316,7 +5334,12 @@ mod reward_counter_precision {
 
 			assert_eq!(
 				pool_events_since_last_call(),
-				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 15937424600999999996, commission: 0 }]
+				vec![Event::PaidOut {
+					member: 10,
+					pool_id: 1,
+					payout: 15937424600999999996,
+					commission: 0
+				}]
 			);
 
 			// now let a small member join with 10 DOTs.
@@ -5425,7 +5448,12 @@ mod reward_counter_precision {
 				assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
 				assert_eq!(
 					pool_events_since_last_call(),
-					vec![Event::PaidOut { member: 10, pool_id: 1, payout: 10000000, commission: 0 }]
+					vec![Event::PaidOut {
+						member: 10,
+						pool_id: 1,
+						payout: 10000000,
+						commission: 0
+					}]
 				);
 
 				// earn some more rewards, this time 20 can also claim.
