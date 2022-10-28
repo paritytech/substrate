@@ -41,7 +41,7 @@ use sp_state_machine::StateMachine;
 use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
 
 /// Logging target
-const LOG_TARGET:&'static str = "frame::benchmark::pallet";
+const LOG_TARGET: &'static str = "frame::benchmark::pallet";
 
 /// The inclusive range of a component.
 #[derive(Serialize, Debug, Clone, Eq, PartialEq)]
@@ -245,7 +245,6 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
-
 			log::info!(
 				target: LOG_TARGET,
 				"Starting benchmark: {}::{}",
