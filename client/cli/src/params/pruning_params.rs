@@ -37,7 +37,7 @@ pub struct PruningParams {
 	///                        satisfy the RPC Spec V2.
 	///   'archive'            Keep all blocks.
 	///   'archive-canonical'  Keep all finalized (canonical) blocks.
-	///    number              Keep the last N finalized (canonical) blocks.
+	///   [number]             Keep the last N finalized (canonical) blocks.
 	///
 	/// Default is the 'delayed' option.
 	///
