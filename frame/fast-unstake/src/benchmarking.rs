@@ -26,23 +26,15 @@ use frame_support::{
 	traits::{Currency, EnsureOrigin, Get, Hooks},
 };
 use frame_system::RawOrigin;
-use pallet_nomination_pools::{Pallet as Pools, PoolId};
-use pallet_staking::Pallet as Staking;
-use sp_runtime::traits::{StaticLookup, Zero};
-use sp_staking::EraIndex;
+use sp_runtime::traits::Zero;
+use sp_staking::{EraIndex, StakingInterface};
 use sp_std::prelude::*;
 
 const USER_SEED: u32 = 0;
 const DEFAULT_BACKER_PER_VALIDATOR: u32 = 128;
 const MAX_VALIDATORS: u32 = 128;
 
-type CurrencyOf<T> = <T as pallet_staking::Config>::Currency;
-
-fn l<T: Config>(
-	who: T::AccountId,
-) -> <<T as frame_system::Config>::Lookup as StaticLookup>::Source {
-	T::Lookup::unlookup(who)
-}
+type CurrencyOf<T> = <T as Config>::Currency;
 
 fn create_unexposed_nominator<T: Config>() -> T::AccountId {
 	let account = frame_benchmarking::account::<T::AccountId>("nominator_42", 0, USER_SEED);
@@ -54,18 +46,9 @@ fn fund_and_bond_account<T: Config>(account: &T::AccountId) {
 	let stake = CurrencyOf::<T>::minimum_balance() * 100u32.into();
 	CurrencyOf::<T>::make_free_balance_be(&account, stake * 10u32.into());
 
-	let account_lookup = l::<T>(account.clone());
 	// bond and nominate ourselves, this will guarantee that we are not backing anyone.
-	assert_ok!(Staking::<T>::bond(
-		RawOrigin::Signed(account.clone()).into(),
-		account_lookup.clone(),
-		stake,
-		pallet_staking::RewardDestination::Controller,
-	));
-	assert_ok!(Staking::<T>::nominate(
-		RawOrigin::Signed(account.clone()).into(),
-		vec![account_lookup]
-	));
+	assert_ok!(T::Staking::bond(account, stake, account));
+	assert_ok!(T::Staking::nominate(account, vec![account.clone()]));
 }
 
 pub(crate) fn fast_unstake_events<T: Config>() -> Vec<crate::Event<T>> {
@@ -74,25 +57,6 @@ pub(crate) fn fast_unstake_events<T: Config>() -> Vec<crate::Event<T>> {
 		.map(|r| r.event)
 		.filter_map(|e| <T as Config>::RuntimeEvent::from(e).try_into().ok())
 		.collect::<Vec<_>>()
-}
-
-fn setup_pool<T: Config>() -> PoolId {
-	let depositor = frame_benchmarking::account::<T::AccountId>("depositor_42", 0, USER_SEED);
-	let depositor_lookup = l::<T>(depositor.clone());
-
-	let stake = Pools::<T>::depositor_min_bond();
-	CurrencyOf::<T>::make_free_balance_be(&depositor, stake * 10u32.into());
-
-	Pools::<T>::create(
-		RawOrigin::Signed(depositor.clone()).into(),
-		stake,
-		depositor_lookup.clone(),
-		depositor_lookup.clone(),
-		depositor_lookup,
-	)
-	.unwrap();
-
-	pallet_nomination_pools::LastPoolId::<T>::get()
 }
 
 fn setup_staking<T: Config>(v: u32, until: EraIndex) {
@@ -111,13 +75,11 @@ fn setup_staking<T: Config>(v: u32, until: EraIndex) {
 			.map(|s| {
 				let who = frame_benchmarking::account::<T::AccountId>("nominator", era, s);
 				let value = ed;
-				pallet_staking::IndividualExposure { who, value }
+				(who, value)
 			})
 			.collect::<Vec<_>>();
-		let exposure =
-			pallet_staking::Exposure { total: Default::default(), own: Default::default(), others };
 		validators.iter().for_each(|v| {
-			Staking::<T>::add_era_stakers(era, v.clone(), exposure.clone());
+			T::Staking::add_era_stakers(&era, &v, others.clone());
 		});
 	}
 }
@@ -130,20 +92,18 @@ fn on_idle_full_block<T: Config>() {
 benchmarks! {
 	// on_idle, we we don't check anyone, but fully unbond and move them to another pool.
 	on_idle_unstake {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
-		let pool_id = setup_pool::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
-			Some(pool_id)
 		));
-		ErasToCheckPerBlock::<T>::put(1);
 
 		// run on_idle once. This will check era 0.
 		assert_eq!(Head::<T>::get(), None);
 		on_idle_full_block::<T>();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap(), maybe_pool_id: Some(pool_id) })
+			Some(UnstakeRequest { stash: who.clone(), checked: vec![0].try_into().unwrap(), deposit: T::Deposit::get() })
 		);
 	}
 	: {
@@ -159,20 +119,19 @@ benchmarks! {
 	// on_idle, when we check some number of eras,
 	on_idle_check {
 		// number of eras multiplied by validators in that era.
-		let x in (<T as pallet_staking::Config>::BondingDuration::get() * 1) .. (<T as pallet_staking::Config>::BondingDuration::get() * MAX_VALIDATORS);
+		let x in (T::Staking::bonding_duration() * 1) .. (T::Staking::bonding_duration() * MAX_VALIDATORS);
 
-		let v = x / <T as pallet_staking::Config>::BondingDuration::get();
-		let u = <T as pallet_staking::Config>::BondingDuration::get();
+		let u = T::Staking::bonding_duration();
+		let v = x / u;
 
 		ErasToCheckPerBlock::<T>::put(u);
-		pallet_staking::CurrentEra::<T>::put(u);
+		T::Staking::set_current_era(u);
 
 		// setup staking with v validators and u eras of data (0..=u)
 		setup_staking::<T>(v, u);
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
-			None,
 		));
 
 		// no one is queued thus far.
@@ -185,7 +144,7 @@ benchmarks! {
 		let checked: frame_support::BoundedVec<_, _> = (1..=u).rev().collect::<Vec<EraIndex>>().try_into().unwrap();
 		assert_eq!(
 			Head::<T>::get(),
-			Some(UnstakeRequest { stash: who.clone(), checked, maybe_pool_id: None })
+			Some(UnstakeRequest { stash: who.clone(), checked, deposit: T::Deposit::get() })
 		);
 		assert!(matches!(
 			fast_unstake_events::<T>().last(),
@@ -194,21 +153,22 @@ benchmarks! {
 	}
 
 	register_fast_unstake {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		whitelist_account!(who);
 		assert_eq!(Queue::<T>::count(), 0);
 
 	}
-	:_(RawOrigin::Signed(who.clone()), None)
+	:_(RawOrigin::Signed(who.clone()))
 	verify {
 		assert_eq!(Queue::<T>::count(), 1);
 	}
 
 	deregister {
+		ErasToCheckPerBlock::<T>::put(1);
 		let who = create_unexposed_nominator::<T>();
 		assert_ok!(FastUnstake::<T>::register_fast_unstake(
 			RawOrigin::Signed(who.clone()).into(),
-			None
 		));
 		assert_eq!(Queue::<T>::count(), 1);
 		whitelist_account!(who);

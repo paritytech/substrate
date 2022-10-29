@@ -22,7 +22,7 @@ sp-runtime-interface-proc-macro = { version = "5.0.0", path = "proc-macro" }
 sp-externalities = { version = "0.12.0", default-features = false, path = "../externalities" }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["bytes"] }
 static_assertions = "1.0.0"
-primitive-types = { version = "0.11.1", default-features = false }
+primitive-types = { version = "0.12.0", default-features = false }
 sp-storage = { version = "6.0.0", default-features = false, path = "../storage" }
 impl-trait-for-tuples = "0.2.2"
 

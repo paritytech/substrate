@@ -104,13 +104,18 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	/// Transaction was pruned from the pool.
 	pub fn pruned(&mut self, block_hash: BlockHash<C>, tx: &H) {
 		debug!(target: "txpool", "[{:?}] Pruned at {:?}", tx, block_hash);
-		self.fire(tx, |s| s.in_block(block_hash));
-		self.finality_watchers.entry(block_hash).or_insert(vec![]).push(tx.clone());
+		// Get the transactions included in the given block hash.
+		let txs = self.finality_watchers.entry(block_hash).or_insert(vec![]);
+		txs.push(tx.clone());
+		// Current transaction is the last one included.
+		let tx_index = txs.len() - 1;
+
+		self.fire(tx, |watcher| watcher.in_block(block_hash, tx_index));
 
 		while self.finality_watchers.len() > MAX_FINALITY_WATCHERS {
 			if let Some((hash, txs)) = self.finality_watchers.pop_front() {
 				for tx in txs {
-					self.fire(&tx, |s| s.finality_timeout(hash));
+					self.fire(&tx, |watcher| watcher.finality_timeout(hash));
 				}
 			}
 		}
@@ -120,7 +125,7 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	pub fn retracted(&mut self, block_hash: BlockHash<C>) {
 		if let Some(hashes) = self.finality_watchers.remove(&block_hash) {
 			for hash in hashes {
-				self.fire(&hash, |s| s.retracted(block_hash))
+				self.fire(&hash, |watcher| watcher.retracted(block_hash))
 			}
 		}
 	}
@@ -128,9 +133,9 @@ impl<H: hash::Hash + traits::Member + Serialize, C: ChainApi> Listener<H, C> {
 	/// Notify all watchers that transactions have been finalized
 	pub fn finalized(&mut self, block_hash: BlockHash<C>) {
 		if let Some(hashes) = self.finality_watchers.remove(&block_hash) {
-			for hash in hashes {
+			for (tx_index, hash) in hashes.into_iter().enumerate() {
 				log::debug!(target: "txpool", "[{:?}] Sent finalization event (block {:?})", hash, block_hash);
-				self.fire(&hash, |s| s.finalized(block_hash))
+				self.fire(&hash, |watcher| watcher.finalized(block_hash, tx_index))
 			}
 		}
 	}

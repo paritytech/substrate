@@ -216,13 +216,13 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Mark a block as finalized.
 	fn mark_finalized(
 		&mut self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
-	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
+	fn mark_head(&mut self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
 
 	/// Add a transaction index operation.
 	fn update_transaction_index(&mut self, index: Vec<IndexOperation>)
@@ -252,7 +252,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -272,7 +272,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	/// while performing major synchronization work.
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -357,77 +357,77 @@ where
 
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
-	/// Given a `BlockId` and a key, return the value under the key in that block.
+	/// Given a block's `Hash` and a key, return the value under the key in that block.
 	fn storage(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
+	/// Given a block's `Hash` and a key prefix, return the matching storage keys in that block.
 	fn storage_keys(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a `BlockId` and a key, return the value under the hash in that block.
+	/// Given a block's `Hash` and a key, return the value under the hash in that block.
 	fn storage_hash(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in
-	/// that block.
+	/// Given a block's `Hash` and a key prefix, return the matching child storage keys and values
+	/// in that block.
 	fn storage_pairs(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
 
-	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in
-	/// that block.
+	/// Given a block's `Hash` and a key prefix, return a `KeyIterator` iterates matching storage
+	/// keys in that block.
 	fn storage_keys_iter<'a>(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that
-	/// block.
+	/// Given a block's `Hash`, a key and a child storage key, return the value under the key in
+	/// that block.
 	fn child_storage(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage
-	/// keys.
+	/// Given a block's `Hash`, a key prefix, and a child storage key, return the matching child
+	/// storage keys.
 	fn child_storage_keys(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a `BlockId` and a key `prefix` and a child storage key,
+	/// Given a block's `Hash` and a key `prefix` and a child storage key,
 	/// return a `KeyIterator` that iterates matching storage keys in that block.
 	fn child_storage_keys_iter<'a>(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that
+	/// Given a block's `Hash`, a key and a child storage key, return the hash under the key in that
 	/// block.
 	fn child_storage_hash(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
@@ -467,7 +467,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: BlockId<Block>,
+		block: &Block::Hash,
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
@@ -476,12 +476,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		transaction: Self::BlockImportOperation,
 	) -> sp_blockchain::Result<()>;
 
-	/// Finalize block with given Id.
+	/// Finalize block with given `hash`.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
 	fn finalize_block(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
@@ -505,11 +505,11 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 
 	/// Returns true if state for given block is available.
 	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(BlockId::Hash(*hash)).is_ok()
+		self.state_at(hash).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
+	fn state_at(&self, hash: &Block::Hash) -> sp_blockchain::Result<Self::State>;
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
