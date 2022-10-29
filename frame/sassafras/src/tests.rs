@@ -334,9 +334,92 @@ fn produce_epoch_change_digest_with_config() {
 	})
 }
 
-// TODO-SASS-P2
 #[test]
-fn incremental_sortition_works() {}
+fn segments_incremental_sortition_works() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+	let pair = &pairs[0];
+	let segments_num = 14;
+
+	ext.execute_with(|| {
+		let start_slot = Slot::from(100);
+		let start_block = 1;
+		let max_tickets: u32 = <Test as Config>::MaxTickets::get();
+
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
+
+		// Submit authoring tickets in three different batches.
+		// We can ignore the threshold since we are not passing through the unsigned extrinsic
+		// validation.
+		let mut tickets: Vec<Ticket> =
+			make_tickets(start_slot + 1, segments_num * max_tickets, pair)
+				.into_iter()
+				.map(|(output, _)| output)
+				.collect();
+		let segment_len = tickets.len() / segments_num as usize;
+		for i in 0..segments_num as usize {
+			let segment =
+				tickets[i * segment_len..(i + 1) * segment_len].to_vec().try_into().unwrap();
+			Sassafras::submit_tickets(RuntimeOrigin::none(), segment).unwrap();
+		}
+
+		tickets.sort();
+		tickets.truncate(max_tickets as usize);
+		let _expected_tickets = tickets;
+
+		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+
+		// Proceed to half of the epoch (sortition should not have been started yet)
+		let half_epoch_block = start_block + epoch_duration / 2;
+		progress_to_block(half_epoch_block, pair);
+
+		// Check that next epoch tickets sortition is not started yet
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, segments_num);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		// Monitor incremental sortition
+
+		progress_to_block(half_epoch_block + 1, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 12);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		progress_to_block(half_epoch_block + 2, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 9);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		progress_to_block(half_epoch_block + 3, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 6);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		progress_to_block(half_epoch_block + 4, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 3);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		Sassafras::on_finalize(half_epoch_block + 4);
+		let header = System::finalize();
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 0);
+		assert_eq!(meta.tickets_count, [0, 6]);
+		assert_eq!(header.digest.logs.len(), 1);
+
+		// The next block will be the first produced on the new epoch,
+		// At this point the tickets were found to be sorted and ready to be used.
+		let slot = Sassafras::current_slot() + 1;
+		let digest = make_wrapped_pre_digest(0, slot, pair);
+		let number = System::block_number() + 1;
+		System::initialize(&number, &header.hash(), &digest);
+		Sassafras::on_initialize(number);
+		Sassafras::on_finalize(half_epoch_block + 5);
+		let header = System::finalize();
+		assert_eq!(header.digest.logs.len(), 2);
+	});
+}
 
 #[test]
 fn submit_enact_claim_tickets() {
