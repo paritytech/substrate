@@ -307,7 +307,7 @@ pub mod pallet {
 							epoch_key,
 							&mut metadata,
 						);
-                        TicketsMeta::<T>::set(metadata);
+						TicketsMeta::<T>::set(metadata);
 					}
 				}
 			}
@@ -345,7 +345,7 @@ pub mod pallet {
 		/// Multiple calls to this method will replace any existing planned config change that had
 		/// not been enacted yet.
 		///
-		/// TODO: TODO-SASS-P4: proper weight
+		/// TODO-SASS-P4: proper weight
 		#[pallet::weight(10_000)]
 		pub fn plan_config_change(
 			origin: OriginFor<T>,
@@ -370,7 +370,7 @@ pub mod pallet {
 		/// call it (validated in `ValidateUnsigned`), as such if the block author is defined it
 		/// will be defined as the equivocation reporter.
 		///
-		/// TODO: TODO-SASS-P4: proper weight
+		/// TODO-SASS-P4: proper weight
 		#[pallet::weight(10_000)]
 		pub fn report_equivocation_unsigned(
 			origin: OriginFor<T>,
@@ -423,7 +423,8 @@ pub mod pallet {
 				// Current slot should be less than half of epoch duration.
 				let epoch_duration = T::EpochDuration::get();
 
-				if Self::current_slot_index() >= epoch_duration / 2 {
+				let current_slot_idx = Self::current_slot_index();
+				if current_slot_idx >= epoch_duration / 2 {
 					log::warn!(
 						target: "sassafras::runtime",
 						"🌳 Timeout to propose tickets, bailing out.",
@@ -447,14 +448,17 @@ pub mod pallet {
 					return InvalidTransaction::Custom(0).into()
 				}
 
+				// This should be set such that it is discarded after the first epoch half
+				// TODO-SASS-P3: double check this. Should we then check again in the extrinsic
+				// itself? Is this run also just before the extrinsic execution or only on tx queue
+				// insertion?
+				let tickets_longevity = epoch_duration / 2 - current_slot_idx;
 				let tickets_tag = tickets.using_encoded(|bytes| hashing::blake2_256(bytes));
-				// TODO-SASS-P2: this should be set such that it is discarded after the first half
-				let tickets_longevity = 3_u64;
 
 				ValidTransaction::with_tag_prefix("Sassafras")
 					.priority(TransactionPriority::max_value())
-					.and_provides(tickets_tag)
 					.longevity(tickets_longevity)
+					.and_provides(tickets_tag)
 					.propagate(true)
 					.build()
 			} else {
