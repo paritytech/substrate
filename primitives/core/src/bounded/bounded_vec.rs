@@ -53,32 +53,6 @@ pub trait TruncateFrom<T> {
 	fn truncate_from(unbound: T) -> Self;
 }
 
-/// A trait that checks for the minimum between two values
-pub trait Min<T> {
-	/// Checks the minimum between two values
-	/// or/and if the two values are equal
-	fn min(&self, t: T) -> Result<Self, T>
-	where
-		Self: Sized;
-	/// Checks the minimum between two values
-	fn strict_min(&self, t: T) -> Result<Self, T>
-	where
-		Self: Sized;
-}
-
-/// A trait that checks for the maximum between two values
-pub trait Max<T> {
-	/// Checks the maximum between two values
-	/// or/and if the two values are equal
-	fn max(&self, t: T) -> Result<Self, T>
-	where
-		Self: Sized;
-	/// checks the minimum between two values
-	fn strict_max(&self, t: T) -> Result<Self, T>
-	where
-		Self: Sized;
-}
-
 #[cfg(feature = "std")]
 impl<'de, T, S: Get<u32>> Deserialize<'de> for BoundedVec<T, S>
 where
@@ -743,42 +717,6 @@ impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
 impl<T, S: Get<u32>> TruncateFrom<Vec<T>> for BoundedVec<T, S> {
 	fn truncate_from(unbound: Vec<T>) -> Self {
 		BoundedVec::<T, S>::truncate_from(unbound)
-	}
-}
-
-impl<T, S: std::cmp::PartialOrd<T> + std::clone::Clone> Min<T> for S {
-	fn min(&self, t: T) -> Result<Self, T> {
-		if self <= &t {
-			Ok(self.clone())
-		} else {
-			Err(t)
-		}
-	}
-
-	fn strict_min(&self, t: T) -> Result<Self, T> {
-		if self < &t {
-			Ok(self.clone())
-		} else {
-			Err(t)
-		}
-	}
-}
-
-impl<T, S: std::cmp::PartialOrd<T> + std::clone::Clone> Max<T> for S {
-	fn max(&self, t: T) -> Result<Self, T> {
-		if self >= &t {
-			Ok(self.clone())
-		} else {
-			Err(t)
-		}
-	}
-
-	fn strict_max(&self, t: T) -> Result<Self, T> {
-		if self > &t {
-			Ok(self.clone())
-		} else {
-			Err(t)
-		}
 	}
 }
 

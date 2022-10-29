@@ -22,7 +22,7 @@ use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncod
 use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
-use sp_core::bounded::bounded_vec::{Max, Min, TruncateFrom};
+use sp_core::bounded::bounded_vec::TruncateFrom;
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -407,17 +407,17 @@ where
 	}
 }
 
-/// Defensively checks the minimum between two values
+/// Defensively checks the minimum between two values.
 pub trait DefensiveMin<T> {
 	/// Defensively checks the minimum between two values
-	/// or if the two values are the same
+	/// or if the two values are the same.
 	///
 	/// # Example
 	///
 	/// assert_eq!(10, 10_u32.defensive_min(10_u32));
 	/// ```
 	fn defensive_min(&self, t: T) -> Self;
-	/// Strictly defensively checks the minimum between two values
+	/// Strictly defensively checks the minimum between two values.
 	///
 	/// # Example
 	///
@@ -428,35 +428,39 @@ pub trait DefensiveMin<T> {
 
 impl<T, U> DefensiveMin<U> for T
 where
-	T: Min<U> + Clone,
+	T: Clone + sp_std::cmp::PartialOrd<U>,
 	U: Copy + std::fmt::Debug,
 {
 	fn defensive_min(&self, u: U) -> Self {
-		T::min(&self, u).unwrap_or_else(|_err| {
+		if self <= &u {
+			self.clone()
+		} else {
 			defensive!("DefensiveMin minimize");
 			self.clone()
-		})
+		}
 	}
 
 	fn defensive_strict_min(&self, u: U) -> Self {
-		T::strict_min(&self, u).unwrap_or_else(|_err| {
+		if self < &u {
+			self.clone()
+		} else {
 			defensive!("DefensiveStrictMin minimize");
 			self.clone()
-		})
+		}
 	}
 }
 
-/// Defensively checks the maximum between two values
+/// Defensively checks the maximum between two values.
 pub trait DefensiveMax<T> {
 	/// Defensively checks the maximum between two values
-	/// or if the two values are the same
+	/// or if the two values are the same.
 	///
 	/// # Example
 	///
 	/// assert_eq!(10, 10_u32.defensive_max(10_u32));
 	/// ```
 	fn defensive_max(&self, t: T) -> Self;
-	/// Strictly defensively checks the minimum between two values
+	/// Strictly defensively checks the minimum between two values.
 	///
 	/// # Example
 	///
@@ -467,21 +471,25 @@ pub trait DefensiveMax<T> {
 
 impl<T, U> DefensiveMax<U> for T
 where
-	T: Max<U> + Clone,
+	T: Clone + sp_std::cmp::PartialOrd<U>,
 	U: Copy + std::fmt::Debug,
 {
 	fn defensive_max(&self, u: U) -> Self {
-		T::max(&self, u).unwrap_or_else(|_err| {
+		if self >= &u {
+			self.clone()
+		} else {
 			defensive!("DefensiveMax maximize");
 			self.clone()
-		})
+		}
 	}
 
 	fn defensive_strict_max(&self, u: U) -> Self {
-		T::strict_max(&self, u).unwrap_or_else(|_err| {
+		if self > &u {
+			self.clone()
+		} else {
 			defensive!("DefensiveStrictMax maximize");
 			self.clone()
-		})
+		}
 	}
 }
 
