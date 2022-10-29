@@ -72,17 +72,21 @@ mod mock;
 #[cfg(all(feature = "std", test))]
 mod tests;
 
+// To manage epoch changes via session pallet instead of the built-in method
+// method (`SameAuthoritiesForever`).
 pub mod session;
 
+// Re-export pallet symbols.
 pub use pallet::*;
 
 /// Tickets related metadata that is commonly used together.
 #[derive(Debug, Default, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen, Clone, Copy)]
 pub struct TicketsMetadata {
-	/// Number of tickets available for even and odd sessions, respectivelly.
-	/// I.e. the index is computed as session-index modulo 2.
+	/// Number of tickets available into the tickets buffers.
+	/// The array index is computed as epoch index modulo 2.
 	pub tickets_count: [u32; 2],
-	/// Number of tickets segments
+	/// Number of outstanding tickets segments requiring to be sorted and stored
+	/// in one of the epochs tickets buffer
 	pub segments_count: u32,
 }
 
@@ -145,7 +149,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Next session authorities.
+	/// Next epoch authorities.
 	#[pallet::storage]
 	pub type NextAuthorities<T: Config> = StorageValue<
 		_,
@@ -153,7 +157,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The slot at which the first session started.
+	/// The slot at which the first epoch started.
 	/// This is `None` until the first block is imported on chain.
 	#[pallet::storage]
 	#[pallet::getter(fn genesis_slot)]
@@ -164,12 +168,12 @@ pub mod pallet {
 	#[pallet::getter(fn current_slot)]
 	pub type CurrentSlot<T> = StorageValue<_, Slot, ValueQuery>;
 
-	/// Current session randomness.
+	/// Current epoch randomness.
 	#[pallet::storage]
 	#[pallet::getter(fn randomness)]
 	pub type CurrentRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
-	/// Next session randomness.
+	/// Next epoch randomness.
 	#[pallet::storage]
 	pub type NextRandomness<T> = StorageValue<_, Randomness, ValueQuery>;
 
@@ -194,9 +198,9 @@ pub mod pallet {
 
 	/// Pending epoch configuration change that will be set as `NextEpochConfig` when the next
 	/// epoch is enacted.
-	/// In other words, a config change submitted during session N will be enacted on session N+2.
+	/// In other words, a config change submitted during epoch N will be enacted on epoch N+2.
 	/// This is to maintain coherence for already submitted tickets for epoch N+1 that where
-	/// computed using configuration parameters stored for session N+1.
+	/// computed using configuration parameters stored for epoch N+1.
 	#[pallet::storage]
 	pub(super) type PendingEpochConfigChange<T> = StorageValue<_, SassafrasEpochConfiguration>;
 
@@ -204,14 +208,14 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type TicketsMeta<T> = StorageValue<_, TicketsMetadata, ValueQuery>;
 
-	/// Tickets to be used for current and next session.
-	/// The key consists of a
-	/// - `u8` equal to session-index mod 2
+	/// Tickets to be used for current and next epoch.
+	/// The key is a tuple composed by:
+	/// - `u8` equal to epoch-index mod 2
 	/// - `u32` equal to the slot-index.
 	#[pallet::storage]
 	pub type Tickets<T> = StorageMap<_, Identity, (u8, u32), Ticket>;
 
-	/// Next session tickets temporary accumulator.
+	/// Next epoch tickets temporary accumulator.
 	/// Special `u32::MAX` key is reserved for partially sorted segment.
 	#[pallet::storage]
 	pub type NextTicketsSegments<T: Config> =
@@ -271,9 +275,7 @@ pub mod pallet {
 
 			Initialized::<T>::put(pre_digest);
 
-			// TODO-SASS-P3: incremental partial ordering for Next epoch tickets.
-
-			// Enact session change, if necessary.
+			// Enact epoch change, if necessary.
 			T::EpochChangeTrigger::trigger::<T>(now);
 
 			Weight::zero()
@@ -288,6 +290,27 @@ pub mod pallet {
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
 			Self::deposit_randomness(pre_digest.vrf_output.as_bytes());
+
+			// If we are in the second half of the epoch, we can start sorting the next epoch
+			// tickets.
+			let epoch_duration = T::EpochDuration::get();
+			let current_slot_idx = Self::slot_index(pre_digest.slot);
+			if current_slot_idx >= epoch_duration / 2 {
+				let mut metadata = TicketsMeta::<T>::get();
+				if metadata.segments_count != 0 {
+					let epoch_idx = EpochIndex::<T>::get() + 1;
+					let epoch_key = (epoch_idx & 1) as u8;
+					if metadata.segments_count != 0 {
+						let slots_left = epoch_duration.checked_sub(current_slot_idx).unwrap_or(1);
+						Self::sort_tickets(
+							u32::max(1, metadata.segments_count / slots_left as u32),
+							epoch_key,
+							&mut metadata,
+						);
+                        TicketsMeta::<T>::set(metadata);
+					}
+				}
+			}
 		}
 	}
 
@@ -295,7 +318,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Submit next epoch tickets.
 		///
-		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remov ethe weight?
+		/// TODO-SASS-P3: this is an unsigned extrinsic. Can we remove the weight?
 		#[pallet::weight(10_000)]
 		pub fn submit_tickets(
 			origin: OriginFor<T>,
@@ -316,11 +339,11 @@ pub mod pallet {
 
 		/// Plan an epoch config change.
 		///
-		/// The epoch config change is recorded and will be enacted on the next call to
-		/// `enact_session_change`.
-		///
-		/// The config will be activated one epoch after. Multiple calls to this method will
-		/// replace any existing planned config change that had not been enacted yet.
+		/// The epoch config change is recorded and will be announced at the begin of the
+		/// next epoch together with next epoch authorities information.
+		/// In other words the configuration will be activated one epoch after.
+		/// Multiple calls to this method will replace any existing planned config change that had
+		/// not been enacted yet.
 		///
 		/// TODO: TODO-SASS-P4: proper weight
 		#[pallet::weight(10_000)]
@@ -443,17 +466,9 @@ pub mod pallet {
 
 // Inherent methods
 impl<T: Config> Pallet<T> {
-	// 	// TODO-SASS-P2: I don't think this is really required
-	// /// Determine the Sassafras slot duration based on the Timestamp module configuration.
-	// pub fn slot_duration() -> T::Moment {
-	// 	// We double the minimum block-period so each author can always propose within
-	// 	// the majority of their slot.
-	// 	<T as pallet_timestamp::Config>::MinimumPeriod::get().saturating_mul(2u32.into())
-	// }
-
 	/// Determine whether an epoch change should take place at this block.
 	/// Assumes that initialization has already taken place.
-	pub fn should_end_session(now: T::BlockNumber) -> bool {
+	pub fn should_end_epoch(now: T::BlockNumber) -> bool {
 		// The epoch has technically ended during the passage of time between this block and the
 		// last, but we have to "end" the epoch now, since there is no earlier possible block we
 		// could have done it.
@@ -477,15 +492,15 @@ impl<T: Config> Pallet<T> {
 		slot.checked_sub(Self::current_epoch_start().into()).unwrap_or(u64::MAX)
 	}
 
-	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_end_session`
+	/// DANGEROUS: Enact an epoch change. Should be done on every block where `should_end_epoch`
 	/// has returned `true`, and the caller is the only caller of this function.
 	///
-	/// Typically, this is not handled directly by the user, but by higher-level validator-set
-	/// manager logic like `pallet-session`.
+	/// Typically, this is not handled directly, but by a higher-level validator-set
+	/// manager like `pallet-session`.
 	///
 	/// If we detect one or more skipped epochs the policy is to use the authorities and values
 	/// from the first skipped epoch. The tickets are invalidated.
-	pub(crate) fn enact_session_change(
+	pub(crate) fn enact_epoch_change(
 		authorities: WeakBoundedVec<(AuthorityId, SassafrasAuthorityWeight), T::MaxAuthorities>,
 		next_authorities: WeakBoundedVec<
 			(AuthorityId, SassafrasAuthorityWeight),
@@ -693,7 +708,7 @@ impl<T: Config> Pallet<T> {
 	// Lexicographically sort the tickets who belongs to the next epoch.
 	// The tickets are fetched from at most `max_iter` segments received via the `submit_tickets`
 	// extrinsic. The resulting sorted vector is truncated and if all the segments where sorted
-	// it is saved to be as the next session tickets.
+	// it is saved to be as the next epoch tickets.
 	// Else the result is saved to be used by next calls.
 	fn sort_tickets(max_iter: u32, epoch_key: u8, metadata: &mut TicketsMetadata) {
 		let mut segments_count = metadata.segments_count;
@@ -807,11 +822,11 @@ pub struct SameAuthoritiesForever;
 
 impl EpochChangeTrigger for SameAuthoritiesForever {
 	fn trigger<T: Config>(now: T::BlockNumber) {
-		if <Pallet<T>>::should_end_session(now) {
+		if <Pallet<T>>::should_end_epoch(now) {
 			let authorities = <Pallet<T>>::authorities();
 			let next_authorities = authorities.clone();
 
-			<Pallet<T>>::enact_session_change(authorities, next_authorities);
+			<Pallet<T>>::enact_epoch_change(authorities, next_authorities);
 		}
 	}
 }
