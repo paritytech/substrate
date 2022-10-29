@@ -21,6 +21,9 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
+[dev-dependencies]
+sp-tracing = { version = "5.0.0", default-features = false, path = "../../primitives/tracing" }
+
 [features]
 default = ["std"]
 std = [
@@ -32,6 +35,7 @@ std = [
 	"sp-std/std",
 	"sp-arithmetic/std",
 	"sp-weights/std",
+	"sp-tracing/std",
 	"frame-benchmarking?/std",
 	"frame-support/std",
 	"frame-system/std",

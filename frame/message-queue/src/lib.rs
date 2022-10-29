@@ -18,12 +18,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
 #[cfg(test)]
 mod tests;
-mod weights;
+pub mod weights;
 
 use codec::{Codec, Decode, Encode, FullCodec, MaxEncodedLen};
-use frame_support::{pallet_prelude::*, BoundedSlice};
+use frame_support::{
+	defensive, pallet_prelude::*, traits::DefensiveTruncateFrom, BoundedSlice, CloneNoBound,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use scale_info::TypeInfo;
@@ -41,6 +44,8 @@ type OverweightIndex = u64;
 /// Type for identifying a page.
 type PageIndex = u32;
 
+const LOG_TARGET: &'static str = "runtime::message-queue";
+
 /// Data encoded and prefixed to the encoded `MessageItem`.
 #[derive(Encode, Decode, MaxEncodedLen)]
 pub struct ItemHeader<Size> {
@@ -52,10 +57,10 @@ pub struct ItemHeader<Size> {
 }
 
 /// A page of messages. Pages always contain at least one item.
-#[derive(Clone, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo, MaxEncodedLen)]
+#[derive(CloneNoBound, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(HeapSize))]
 #[codec(mel_bound(Size: MaxEncodedLen))]
-pub struct Page<Size: Into<u32> + Debug, HeapSize: Get<Size>> {
+pub struct Page<Size: Into<u32> + Debug + Clone, HeapSize: Get<Size>> {
 	/// Messages remaining to be processed; this includes overweight messages which have been
 	/// skipped.
 	remaining: Size,
@@ -111,26 +116,30 @@ impl<
 		Ok(())
 	}
 
+	/// Returns the first message in the page without removing it.
+	///
+	/// SAFETY: Does not panic even on corrupted storage.
 	fn peek_first(&self) -> Option<BoundedSlice<u8, IntoU32<HeapSize, Size>>> {
 		if self.first > self.last {
 			return None
 		}
-		let mut item_slice = &self.heap[(self.first.into() as usize)..];
+		let f = (self.first.into() as usize).min(self.heap.len());
+		let mut item_slice = &self.heap[f..];
 		if let Ok(h) = ItemHeader::<Size>::decode(&mut item_slice) {
-			let payload_len = h.payload_len.into();
-			if payload_len <= item_slice.len() as u32 {
+			let payload_len = h.payload_len.into() as usize;
+			if payload_len <= item_slice.len() {
 				// impossible to truncate since is sliced up from `self.heap: BoundedVec<u8,
 				// HeapSize>`
-				return Some(BoundedSlice::truncate_from(&item_slice[..(payload_len as usize)]))
+				return Some(BoundedSlice::defensive_truncate_from(&item_slice[..payload_len]))
 			}
 		}
-		debug_assert!(false, "message-queue: heap corruption");
+		defensive!("message-queue: heap corruption");
 		None
 	}
 
 	/// Point `first` at the next message, marking the first as processed if `is_processed` is true.
 	fn skip_first(&mut self, is_processed: bool) {
-		let f = self.first.into() as usize;
+		let f = (self.first.into() as usize).min(self.heap.len());
 		if let Ok(mut h) = ItemHeader::decode(&mut &self.heap[f..]) {
 			if is_processed && !h.is_processed {
 				h.is_processed = true;
@@ -292,6 +301,15 @@ pub mod pallet {
 			let weight_used = Weight::zero();
 			weight_used
 		}
+
+		fn integrity_test() {
+			// TODO currently disabled since it fails.
+			// None of the weight functions can be zero.
+			// Otherwise we risk getting stuck in a no-progress situation (= infinite loop).
+			/*weights::WeightMetaInfo::<<T as Config>::WeightInfo>::visit_weight_functions(
+				|name, w| assert!(!w.is_zero(), "Weight function is zero: {}", name),
+			);*/
+		}
 	}
 
 	#[pallet::call]
@@ -402,7 +420,7 @@ impl<T: Config> Pallet<T> {
 					ServiceHead::<T>::put(neighbours.next);
 				}
 			} else {
-				debug_assert!(false, "`ServiceHead` must be some if there was a ready queue");
+				defensive!("`ServiceHead` must be some if there was a ready queue");
 			}
 		}
 	}
@@ -417,6 +435,11 @@ impl<T: Config> Pallet<T> {
 			let mut head_book_state = BookStateOf::<T>::get(&head);
 			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
 				ServiceHead::<T>::put(&head_neighbours.next);
+				log::debug!(
+					target: LOG_TARGET,
+					"bump_service_head: next head `{:?}`",
+					head_neighbours.next
+				);
 				Some(head)
 			} else {
 				None
@@ -439,7 +462,7 @@ impl<T: Config> Pallet<T> {
 			let mut page = match Pages::<T>::get(origin, last) {
 				Some(p) => p,
 				None => {
-					debug_assert!(false, "Corruption: referenced page doesn't exist.");
+					defensive!("Corruption: referenced page doesn't exist.");
 					return
 				},
 			};
@@ -641,6 +664,7 @@ pub type MaxMessageLenOf<T> =
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
 pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
+pub type PageOf<T> = Page<<T as Config>::Size, <T as Config>::HeapSize>;
 
 pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
 impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
@@ -663,6 +687,13 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		/// The maximum weight that processing a single message may take.
 		let max_per_msg = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight = WeightCounter::from_limit(weight_limit);
+		log::debug!(
+			target: LOG_TARGET,
+			"ServiceQueues::service_queues with weight {} and max_per_msg {}",
+			weight_limit,
+			max_per_msg
+		);
+
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
 			None => return weight.consumed,

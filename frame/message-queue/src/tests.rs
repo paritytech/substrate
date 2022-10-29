@@ -186,6 +186,7 @@ impl ProcessMessage for TestMessageProcessor {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
+	sp_tracing::try_init_simple();
 	WeightForCall::set(Default::default());
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
