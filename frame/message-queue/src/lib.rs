@@ -33,6 +33,7 @@ use sp_runtime::{
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, prelude::*, vec};
+use sp_weights::WeightCounter;
 pub use weights::WeightInfo;
 
 /// Type for identifying an overweight message.
@@ -406,7 +407,12 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	fn bump_service_head() -> Option<MessageOriginOf<T>> {
+	fn bump_service_head(weight: &mut WeightCounter) -> Option<MessageOriginOf<T>> {
+		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
+			log::debug!(target: LOG_TARGET, "bump_service_head: weight limit reached");
+			return None
+		}
+
 		if let Some(head) = ServiceHead::<T>::get() {
 			let mut head_book_state = BookStateOf::<T>::get(&head);
 			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
@@ -504,11 +510,10 @@ impl<T: Config> Pallet<T> {
 	/// execute are deemed overweight and ignored.
 	fn service_queue(
 		origin: MessageOriginOf<T>,
-		weight_limit: Weight,
+		weight: &mut WeightCounter,
 		overweight_limit: Weight,
-	) -> (Weight, Option<MessageOriginOf<T>>) {
+	) -> Option<MessageOriginOf<T>> {
 		let mut processed = 0;
-		let mut weight_left = weight_limit;
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		while book_state.end > book_state.begin {
 			let page_index = book_state.begin;
@@ -527,7 +532,7 @@ impl<T: Config> Pallet<T> {
 					None => break false,
 				}[..];
 
-				if weight_left.any_lte(Weight::zero()) {
+				if weight.remaining().any_lte(Weight::zero()) {
 					break true
 				}
 
@@ -538,7 +543,7 @@ impl<T: Config> Pallet<T> {
 						match T::MessageProcessor::process_message(
 							message,
 							origin.clone(),
-							weight_left,
+							weight.remaining(),
 						) {
 							Err(Overweight(w)) if processed == 0 || w.any_gt(overweight_limit) => {
 								// Permanently overweight.
@@ -566,7 +571,7 @@ impl<T: Config> Pallet<T> {
 							Ok((success, weight_used)) => {
 								// Success
 								processed.saturating_inc();
-								weight_left = weight_left.saturating_sub(weight_used);
+								weight.defensive_saturating_accrue(weight_used);
 								let event =
 									Event::<T>::Processed { hash, origin, weight_used, success };
 								Self::deposit_event(event);
@@ -607,7 +612,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		BookStateOf::<T>::insert(&origin, &book_state);
-		(weight_limit.saturating_sub(weight_left), next_ready)
+		next_ready
 	}
 }
 
@@ -655,27 +660,28 @@ pub trait ServiceQueues {
 
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
-		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
-		let mut weight_used = Weight::zero();
-		let mut next = match Self::bump_service_head() {
+		/// The maximum weight that processing a single message may take.
+		let max_per_msg = weight_limit.saturating_mul(3).saturating_div(4);
+		let mut weight = WeightCounter::from_limit(weight_limit);
+		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
-			None => return weight_used,
+			None => return weight.consumed,
 		};
 
 		loop {
-			let left = weight_limit - weight_used;
-			if left.any_lte(Weight::zero()) {
+			// TODO should not be needed. Instead add a no-progress check and stop rotating
+			// the ring in that case. This is only needed since tests declares the base weights
+			// as zero, so it produces an infinite loop.
+			if weight.remaining().any_lte(Zero::zero()) {
 				break
 			}
-			// Before servicing, bump `ServiceHead` onto the next item.
-			let (used, n) = Self::service_queue(next, left, max_weight);
-			weight_used.saturating_accrue(used);
+			let n = Self::service_queue(next, &mut weight, max_per_msg);
 			next = match n {
 				Some(n) => n,
 				None => break,
 			}
 		}
-		weight_used
+		weight.consumed
 	}
 }
 
