@@ -19,6 +19,7 @@
 //! Types and functions related to block import.
 
 use super::*;
+use sc_client_api::{AuxDataOperations, FinalityNotification, PreCommitActions};
 
 /// A block-import handler for Sassafras.
 ///
@@ -45,7 +46,26 @@ impl<Block: BlockT, I: Clone, Client> Clone for SassafrasBlockImport<Block, Clie
 	}
 }
 
-impl<B: BlockT, C, I> SassafrasBlockImport<B, C, I> {
+fn aux_storage_cleanup<B, C>(
+	_client: &C,
+	_notification: &FinalityNotification<B>,
+) -> AuxDataOperations
+where
+	B: BlockT,
+	C: HeaderMetadata<B> + HeaderBackend<B>,
+{
+	// TODO-SASS-P3
+	Default::default()
+}
+
+impl<B: BlockT, C, I> SassafrasBlockImport<B, C, I>
+where
+	C: AuxStore
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ PreCommitActions<B>
+		+ 'static,
+{
 	/// Constructor.
 	pub fn new(
 		inner: I,
@@ -53,6 +73,16 @@ impl<B: BlockT, C, I> SassafrasBlockImport<B, C, I> {
 		epoch_changes: SharedEpochChanges<B, Epoch>,
 		genesis_config: SassafrasConfiguration,
 	) -> Self {
+		let client_weak = Arc::downgrade(&client);
+		let on_finality = move |notification: &FinalityNotification<B>| {
+			if let Some(client) = client_weak.upgrade() {
+				aux_storage_cleanup(client.as_ref(), notification)
+			} else {
+				Default::default()
+			}
+		};
+		client.register_finality_action(Box::new(on_finality));
+
 		SassafrasBlockImport { inner, client, epoch_changes, genesis_config }
 	}
 }
@@ -82,9 +112,8 @@ where
 		let hash = block.post_hash();
 		let number = *block.header.number();
 
-		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
-			"valid sassafras headers must contain a predigest; header has been already verified; qed",
-		);
+		let pre_digest = find_pre_digest::<Block>(&block.header)
+			.expect("valid headers contain a pre-digest; header has been already verified; qed");
 		let slot = pre_digest.slot;
 
 		let parent_hash = *block.header.parent_hash();
@@ -98,10 +127,9 @@ where
 				)
 			})?;
 
-		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot).expect(
-			"parent is non-genesis; valid Sassafras headers contain a pre-digest; \
-             header has already been verified; qed",
-		);
+		let parent_slot = find_pre_digest::<Block>(&parent_header)
+			.map(|d| d.slot)
+			.expect("parent is non-genesis; valid headers contain a pre-digest; header has been already verified; qed");
 
 		// Make sure that slot number is strictly increasing
 		if slot <= parent_slot {
@@ -161,30 +189,57 @@ where
 				_ => (),
 			}
 
-			let info = self.client.info();
-
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
-				let viable_epoch = epoch_changes
+				let mut viable_epoch = epoch_changes
 					.viable_epoch(&epoch_descriptor, |slot| {
 						Epoch::genesis(&self.genesis_config, slot)
 					})
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
-					})?;
+					})?
+					.into_cloned();
 
-				// restrict info logging during initial sync to avoid spam
-				let log_level = if block.origin == BlockOrigin::NetworkInitialSync {
-					log::Level::Debug
-				} else {
-					log::Level::Info
+				if viable_epoch.as_ref().end_slot() <= slot {
+					// Some epochs must have been skipped as our current slot fits outside the
+					// current epoch. We will figure out which is the first skipped epoch and we
+					// will partially re-use its data for this "recovery" epoch.
+					let epoch_data = viable_epoch.as_mut();
+					let skipped_epochs =
+						(*slot - *epoch_data.start_slot) / epoch_data.config.epoch_duration;
+					let original_epoch_idx = epoch_data.epoch_idx;
+
+					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
+					// makes it so that when we insert the next epoch into `EpochChanges` below
+					// (after incrementing it), it will use the correct epoch index and start slot.
+					// We do not update the original epoch that may be reused because there may be
+					// some other forks where the epoch isn't skipped.
+					// Not updating the original epoch works because when we search the tree for
+					// which epoch to use for a given slot, we will search in-depth with the
+					// predicate `epoch.start_slot <= slot` which will still match correctly without
+					// requiring to update `start_slot` to the correct value.
+					epoch_data.epoch_idx += skipped_epochs;
+					epoch_data.start_slot = Slot::from(
+						*epoch_data.start_slot + skipped_epochs * epoch_data.config.epoch_duration,
+					);
+					log::warn!(
+						target: "sassafras",
+						"🌳 Epoch(s) skipped from {} to {}",
+						 original_epoch_idx, epoch_data.epoch_idx
+					);
+				}
+
+				// Restrict info logging during initial sync to avoid spam
+				let log_level = match block.origin {
+					BlockOrigin::NetworkInitialSync => log::Level::Debug,
+					_ => log::Level::Info,
 				};
 
 				log!(target: "sassafras",
 					 log_level,
 					 "🌳 🍁 New epoch {} launching at block {} (block slot {} >= start slot {}).",
-					 viable_epoch.as_ref().epoch_index,
+					 viable_epoch.as_ref().epoch_idx,
 					 hash,
 					 slot,
 					 viable_epoch.as_ref().start_slot,
@@ -246,18 +301,16 @@ where
 					.extend(values.iter().map(|(k, v)| (k.to_vec(), Some(v.to_vec()))))
 			});
 
-			// The fork choice rule is that we pick the heaviest chain (i.e.
-			// more primary blocks), if there's a tie we go with the longest
-			// chain.
+			// The fork choice rule is that we pick the heaviest chain (i.e. more blocks built
+			// using primary mechanism), if there's a tie we go with the longest chain.
 			block.fork_choice = {
-				let (last_best, last_best_number) = (info.best_hash, info.best_number);
-
-				let last_best_weight = if &last_best == block.header.parent_hash() {
+				let info = self.client.info();
+				let best_weight = if &info.best_hash == block.header.parent_hash() {
 					// the parent=genesis case is already covered for loading parent weight,
 					// so we don't need to cover again here.
 					parent_weight
 				} else {
-					aux_schema::load_block_weight(&*self.client, last_best)
+					aux_schema::load_block_weight(&*self.client, &info.best_hash)
 						.map_err(|e| ConsensusError::ChainLookup(e.to_string()))?
 						.ok_or_else(|| {
 							ConsensusError::ChainLookup(
@@ -266,13 +319,9 @@ where
 						})?
 				};
 
-				Some(ForkChoiceStrategy::Custom(if total_weight > last_best_weight {
-					true
-				} else if total_weight == last_best_weight {
-					number > last_best_number
-				} else {
-					false
-				}))
+				let is_new_best = total_weight > best_weight ||
+					(total_weight == best_weight && number > info.best_number);
+				Some(ForkChoiceStrategy::Custom(is_new_best))
 			};
 			// Release the mutex, but it stays locked
 			epoch_changes.release_mutex()
@@ -317,12 +366,10 @@ where
 		let finalized_header = client
 			.header(BlockId::Hash(info.finalized_hash))
 			.map_err(|e| ConsensusError::ClientImport(e.to_string()))?
-			.expect(
-				"best finalized hash was given by client; finalized headers must exist in db; qed",
-			);
+			.expect("finalized headers must exist in db; qed");
 
 		find_pre_digest::<B>(&finalized_header)
-			.expect("finalized header must be valid; valid blocks have a pre-digest; qed")
+			.expect("valid blocks have a pre-digest; qed")
 			.slot
 	};
 
@@ -342,14 +389,18 @@ where
 /// an import-queue.
 ///
 /// Also returns a link object used to correctly instantiate the import queue
-/// and background worker.
+/// and authoring worker.
 pub fn block_import<C, B: BlockT, I>(
 	genesis_config: SassafrasConfiguration,
 	inner_block_import: I,
 	client: Arc<C>,
 ) -> ClientResult<(SassafrasBlockImport<B, C, I>, SassafrasLink<B>)>
 where
-	C: AuxStore + HeaderBackend<B> + HeaderMetadata<B, Error = sp_blockchain::Error> + 'static,
+	C: AuxStore
+		+ HeaderBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ PreCommitActions<B>
+		+ 'static,
 {
 	let epoch_changes = aux_schema::load_epoch_changes::<B, _>(&*client)?;
 

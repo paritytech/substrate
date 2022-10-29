@@ -78,12 +78,15 @@ pub type SassafrasAuthorityWeight = u64;
 /// Primary blocks have a weight of 1 whereas secondary blocks have a weight of 0.
 pub type SassafrasBlockWeight = u32;
 
+/// An equivocation proof for multiple block authorships on the same slot (i.e. double vote).
+pub type EquivocationProof<H> = sp_consensus_slots::EquivocationProof<H, AuthorityId>;
+
 /// Configuration data used by the Sassafras consensus engine.
 #[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, Eq)]
 pub struct SassafrasConfiguration {
 	/// The slot duration in milliseconds.
 	pub slot_duration: u64,
-	/// The duration of epochs in slots.
+	/// The duration of epoch in slots.
 	pub epoch_duration: u64,
 	/// The authorities for the epoch.
 	pub authorities: Vec<(AuthorityId, SassafrasAuthorityWeight)>,
@@ -130,7 +133,6 @@ pub struct TicketAux {
 /// The parameters should be chosen such that T <= 1.
 /// If `attempts * validators` is zero then we fallback to T = 0
 // TODO-SASS-P3: this formula must be double-checked...
-#[inline]
 pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators: u32) -> U256 {
 	let den = attempts as u64 * validators as u64;
 	let num = redundancy as u64 * slots as u64;
@@ -141,9 +143,29 @@ pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators:
 }
 
 /// Returns true if the given VRF output is lower than the given threshold, false otherwise.
-#[inline]
 pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
 	U256::from(ticket.as_bytes()) < threshold
+}
+
+/// An opaque type used to represent the key ownership proof at the runtime API boundary.
+/// The inner value is an encoded representation of the actual key ownership proof which will be
+/// parameterized when defining the runtime. At the runtime API boundary this type is unknown and
+/// as such we keep this opaque representation, implementors of the runtime API will have to make
+/// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
+#[derive(Decode, Encode, PartialEq)]
+pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+
+impl OpaqueKeyOwnershipProof {
+	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded representation.
+	pub fn new(inner: Vec<u8>) -> OpaqueKeyOwnershipProof {
+		OpaqueKeyOwnershipProof(inner)
+	}
+
+	/// Try to decode this `OpaqueKeyOwnershipProof` into the given concrete key
+	/// ownership proof type.
+	pub fn decode<T: Decode>(self) -> Option<T> {
+		Decode::decode(&mut &self.0[..]).ok()
+	}
 }
 
 // Runtime API.
@@ -159,5 +181,34 @@ sp_api::decl_runtime_apis! {
 
 		/// Get expected ticket for the given slot.
 		fn slot_ticket(slot: Slot) -> Option<Ticket>;
+
+		/// Generates a proof of key ownership for the given authority in the current epoch.
+		///
+		/// An example usage of this module is coupled with the session historical module to prove
+		/// that a given authority key is tied to a given staking identity during a specific
+		/// session. Proofs of key ownership are necessary for submitting equivocation reports.
+		///
+		/// NOTE: even though the API takes a `slot` as parameter the current implementations
+		/// ignores this parameter and instead relies on this method being called at the correct
+		/// block height, i.e. any point at which the epoch for the given slot is live on-chain.
+		/// Future implementations will instead use indexed data through an offchain worker, not
+		/// requiring older states to be available.
+		fn generate_key_ownership_proof(
+			slot: Slot,
+			authority_id: AuthorityId,
+		) -> Option<OpaqueKeyOwnershipProof>;
+
+		/// Submits an unsigned extrinsic to report an equivocation.
+		///
+		/// The caller must provide the equivocation proof and a key ownership proof (should be
+		/// obtained using `generate_key_ownership_proof`). The extrinsic will be unsigned and
+		/// should only be accepted for local authorship (not to be broadcast to the network). This
+		/// method returns `None` when creation of the extrinsic fails, e.g. if equivocation
+		/// reporting is disabled for the given runtime (i.e. this method is hardcoded to return
+		/// `None`). Only useful in an offchain context.
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: EquivocationProof<Block::Header>,
+			key_owner_proof: OpaqueKeyOwnershipProof,
+		) -> bool;
 	}
 }

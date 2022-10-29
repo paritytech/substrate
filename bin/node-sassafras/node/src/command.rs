@@ -10,7 +10,7 @@ use sc_service::PartialComponents;
 
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
-		"Substrate Node".into()
+		"Sassafras Node".into()
 	}
 
 	fn impl_version() -> String {
@@ -30,7 +30,7 @@ impl SubstrateCli for Cli {
 	}
 
 	fn copyright_start_year() -> i32 {
-		2017
+		2022
 	}
 
 	fn load_spec(&self, id: &str) -> Result<Box<dyn sc_service::ChainSpec>, String> {
@@ -96,7 +96,8 @@ pub fn run() -> sc_cli::Result<()> {
 			runner.async_run(|config| {
 				let PartialComponents { client, task_manager, backend, .. } =
 					service::new_partial(&config)?;
-				let aux_revert = Box::new(|client, _, blocks| {
+				let aux_revert = Box::new(|client, backend, blocks| {
+					sc_consensus_sassafras::revert(backend, blocks)?;
 					sc_finality_grandpa::revert(client, blocks)?;
 					Ok(())
 				});

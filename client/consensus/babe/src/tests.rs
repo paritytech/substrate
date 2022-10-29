@@ -36,7 +36,6 @@ use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
 };
-use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
 use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
@@ -67,8 +66,6 @@ type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 
 type BabeBlockImport =
 	PanickingBlockImport<crate::BabeBlockImport<TestBlock, TestClient, Arc<TestClient>>>;
-
-const SLOT_DURATION_MS: u64 = 1000;
 
 #[derive(Clone)]
 struct DummyFactory {
@@ -318,14 +315,15 @@ impl TestNetFactory for BabeTestNet {
 
 		let (_, longest_chain) = TestClientBuilder::new().build_with_longest_chain();
 
+		let slot_duration = data.link.config.slot_duration();
 		TestVerifier {
 			inner: BabeVerifier {
 				client: client.clone(),
 				select_chain: longest_chain,
-				create_inherent_data_providers: Box::new(|_, _| async {
+				create_inherent_data_providers: Box::new(move |_, _| async move {
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						Timestamp::current(),
-						SlotDuration::from_millis(SLOT_DURATION_MS),
+						slot_duration,
 					);
 					Ok((slot,))
 				}),
@@ -425,6 +423,7 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				.for_each(|_| future::ready(())),
 		);
 
+		let slot_duration = data.link.config.slot_duration();
 		babe_futures.push(
 			start_babe(BabeParams {
 				block_import: data.block_import.lock().take().expect("import set up during init"),
@@ -432,10 +431,10 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				client,
 				env: environ,
 				sync_oracle: DummyOracle,
-				create_inherent_data_providers: Box::new(|_, _| async {
+				create_inherent_data_providers: Box::new(move |_, _| async move {
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
 						Timestamp::current(),
-						SlotDuration::from_millis(SLOT_DURATION_MS),
+						slot_duration,
 					);
 					Ok((slot,))
 				}),
@@ -1004,7 +1003,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	let data = peer.data.as_ref().expect("babe link set up during initialization");
 	let client = peer.client().as_client();
 
-	// Register the handler (as done by `babe_start`)
+	// Register the handler (as done by Babe's `block_import` method)
 	let client_clone = client.clone();
 	let on_finality = move |summary: &FinalityNotification<TestBlock>| {
 		aux_storage_cleanup(client_clone.as_ref(), summary)

@@ -20,7 +20,8 @@
 //!
 //! TODO-SASS-P2: documentation
 
-#![deny(warnings)]
+// TODO-SASS-P2: remove this
+//#![deny(warnings)]
 #![forbid(unsafe_code, missing_docs)]
 
 use std::{
@@ -41,9 +42,7 @@ use prometheus_endpoint::Registry;
 use scale_codec::{Decode, Encode};
 use schnorrkel::SignatureError;
 
-use sc_client_api::{
-	backend::AuxStore, BlockchainEvents, PreCommitActions, ProvideUncles, UsageProvider,
-};
+use sc_client_api::{backend::AuxStore, BlockchainEvents, ProvideUncles, UsageProvider};
 use sc_consensus::{
 	block_import::{
 		BlockCheckParams, BlockImport, BlockImportParams, ForkChoiceStrategy, ImportResult,
@@ -56,9 +55,7 @@ use sc_consensus_epochs::{
 	descendent_query, Epoch as EpochT, EpochChangesFor, EpochIdentifier, EpochIdentifierPosition,
 	SharedEpochChanges, ViableEpochDescriptor,
 };
-use sc_consensus_slots::{
-	check_equivocation, CheckedHeader, InherentDataProviderExt, SlotInfo, StorageChanges,
-};
+use sc_consensus_slots::{CheckedHeader, InherentDataProviderExt, SlotInfo, StorageChanges};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_TRACE};
 use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_application_crypto::AppKey;
@@ -91,9 +88,13 @@ pub use sp_consensus_sassafras::{
 mod authorship;
 mod aux_schema;
 mod block_import;
+#[cfg(test)]
+mod tests;
 mod verification;
 
-pub use authorship::{start_sassafras, SassafrasParams, SassafrasWorker};
+// Export core components.
+pub use authorship::{start_sassafras, SassafrasWorker, SassafrasWorkerParams};
+pub use aux_schema::revert;
 pub use block_import::{block_import, SassafrasBlockImport};
 pub use verification::SassafrasVerifier;
 
@@ -187,7 +188,7 @@ fn sassafras_err<B: BlockT>(error: Error<B>) -> Error<B> {
 #[derive(Encode, Decode, PartialEq, Eq, Clone, Debug)]
 pub struct Epoch {
 	/// The epoch index.
-	pub epoch_index: u64,
+	pub epoch_idx: u64,
 	/// The starting slot of the epoch.
 	pub start_slot: Slot,
 	/// Epoch configuration
@@ -209,7 +210,7 @@ impl EpochT for Epoch {
 			threshold_params: descriptor.config.unwrap_or(self.config.threshold_params.clone()),
 		};
 		Epoch {
-			epoch_index: self.epoch_index + 1,
+			epoch_idx: self.epoch_idx + 1,
 			start_slot: self.start_slot + config.epoch_duration,
 			config,
 			tickets_aux: BTreeMap::new(),
@@ -221,7 +222,7 @@ impl EpochT for Epoch {
 	}
 
 	fn end_slot(&self) -> Slot {
-		self.start_slot + self.config.slot_duration
+		self.start_slot + self.config.epoch_duration
 	}
 }
 
@@ -230,7 +231,7 @@ impl Epoch {
 	/// the first block, so that has to be provided.
 	pub fn genesis(config: &SassafrasConfiguration, slot: Slot) -> Epoch {
 		Epoch {
-			epoch_index: 0,
+			epoch_idx: 0,
 			start_slot: slot,
 			config: config.clone(),
 			tickets_aux: BTreeMap::new(),

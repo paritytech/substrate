@@ -63,10 +63,10 @@ use sp_runtime::{
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-// Ensure Babe and Aura use the same crypto to simplify things a bit.
+// Ensure Babe, Sassafras and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
-
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
+pub type SassafrasId = sp_consensus_sassafras::AuthorityId;
 
 // Include the WASM binary
 #[cfg(feature = "std")]
@@ -163,6 +163,22 @@ pub enum Extrinsic {
 	OffchainIndexSet(Vec<u8>, Vec<u8>),
 	OffchainIndexClear(Vec<u8>),
 	Store(Vec<u8>),
+	Sassafras,
+}
+
+impl From<pallet_sassafras::Call<Runtime>> for Extrinsic {
+	fn from(call: pallet_sassafras::Call<Runtime>) -> Self {
+		use pallet_sassafras::Call;
+		match call {
+			Call::submit_tickets { tickets: _ } => Extrinsic::Sassafras,
+			Call::plan_config_change { config: _ } => Extrinsic::Sassafras,
+			Call::report_equivocation_unsigned { equivocation_proof: _ } => Extrinsic::Sassafras,
+			_ => panic!(
+				"Unexpected Sassafras call type: {:?}, unable to converto to Extrinsic",
+				call
+			),
+		}
+	}
 }
 
 parity_util_mem::malloc_size_of_is_0!(Extrinsic); // non-opaque extrinsic does not need this
@@ -211,6 +227,8 @@ impl BlindCheckable for Extrinsic {
 			Extrinsic::OffchainIndexSet(key, value) => Ok(Extrinsic::OffchainIndexSet(key, value)),
 			Extrinsic::OffchainIndexClear(key) => Ok(Extrinsic::OffchainIndexClear(key)),
 			Extrinsic::Store(data) => Ok(Extrinsic::Store(data)),
+			// TODO-SASS-P2
+			Extrinsic::Sassafras => Ok(Extrinsic::Sassafras),
 		}
 	}
 }
@@ -524,6 +542,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(2)
 		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some(3)
+		}
 
 		None
 	}
@@ -537,6 +558,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("Babe")
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some("Sassafras")
 		}
 
 		None
@@ -552,6 +576,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some("pallet_babe")
 		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some("pallet_sassafras")
+		}
 
 		None
 	}
@@ -566,6 +593,9 @@ impl frame_support::traits::PalletInfo for Runtime {
 		}
 		if type_id == sp_std::any::TypeId::of::<pallet_babe::Pallet<Runtime>>() {
 			return Some(pallet_babe::Pallet::<Runtime>::crate_version())
+		}
+		if type_id == sp_std::any::TypeId::of::<pallet_sassafras::Pallet<Runtime>>() {
+			return Some(pallet_sassafras::Pallet::<Runtime>::crate_version())
 		}
 
 		None
@@ -621,6 +651,7 @@ impl pallet_timestamp::Config for Runtime {
 }
 
 parameter_types! {
+	pub const SlotDuration: u64 = 1000;
 	pub const EpochDuration: u64 = 6;
 }
 
@@ -647,6 +678,23 @@ impl pallet_babe::Config for Runtime {
 	type WeightInfo = ();
 
 	type MaxAuthorities = ConstU32<10>;
+}
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+where
+	Extrinsic: From<C>,
+{
+	type Extrinsic = Extrinsic;
+	type OverarchingCall = Extrinsic;
+}
+
+impl pallet_sassafras::Config for Runtime {
+	type SlotDuration = SlotDuration;
+	type EpochDuration = EpochDuration;
+	//type EpochChangeTrigger = pallet_sassafras::ExternalTrigger;
+	type EpochChangeTrigger = pallet_sassafras::SameAuthoritiesForever;
+	type MaxAuthorities = ConstU32<10>;
+	type MaxTickets = ConstU32<10>;
 }
 
 /// Adds one to the given input and returns the final result.
@@ -892,6 +940,48 @@ cfg_if! {
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None
+				}
+			}
+
+			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
+				fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
+					let authorities = system::authorities().into_iter().map(|x| {
+						let authority: sr25519::Public = x.into();
+						(SassafrasId::from(authority), 1)
+					}).collect();
+					sp_consensus_sassafras::SassafrasConfiguration {
+						slot_duration: SlotDuration::get(),
+						epoch_duration: EpochDuration::get(),
+						authorities,
+						randomness: <pallet_sassafras::Pallet<Runtime>>::randomness(),
+						threshold_params: <pallet_sassafras::Pallet<Runtime>>::config(),
+					}
+				}
+
+				fn submit_tickets_unsigned_extrinsic(
+					tickets: Vec<sp_consensus_sassafras::Ticket>
+				) -> bool {
+					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
+				}
+
+				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
+					<pallet_sassafras::Pallet<Runtime>>::slot_ticket(slot)
+				}
+
+				fn generate_key_ownership_proof(
+					_slot: sp_consensus_sassafras::Slot,
+					_authority_id: sp_consensus_sassafras::AuthorityId,
+				) -> Option<sp_consensus_sassafras::OpaqueKeyOwnershipProof> {
+					// TODO-SASS-P2
+					None
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_sassafras::EquivocationProof<<Block as BlockT>::Header>,
+					_key_owner_proof: sp_consensus_sassafras::OpaqueKeyOwnershipProof,
+				) -> bool {
+					// TODO-SASS-P2
+					false
 				}
 			}
 
@@ -1166,6 +1256,44 @@ cfg_if! {
 					_authority_id: sp_consensus_babe::AuthorityId,
 				) -> Option<sp_consensus_babe::OpaqueKeyOwnershipProof> {
 					None
+				}
+			}
+
+			impl sp_consensus_sassafras::SassafrasApi<Block> for Runtime {
+				fn configuration() -> sp_consensus_sassafras::SassafrasConfiguration {
+					sp_consensus_sassafras::SassafrasConfiguration {
+						slot_duration: SlotDuration::get(),
+						epoch_duration: EpochDuration::get(),
+						authorities: <pallet_sassafras::Pallet<Runtime>>::authorities().to_vec(),
+						randomness: <pallet_sassafras::Pallet<Runtime>>::randomness(),
+						threshold_params: <pallet_sassafras::Pallet<Runtime>>::config(),
+					}
+				}
+
+				fn submit_tickets_unsigned_extrinsic(
+					tickets: Vec<sp_consensus_sassafras::Ticket>
+				) -> bool {
+					<pallet_sassafras::Pallet<Runtime>>::submit_tickets_unsigned_extrinsic(tickets)
+				}
+
+				fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
+					<pallet_sassafras::Pallet<Runtime>>::slot_ticket(slot)
+				}
+
+				fn generate_key_ownership_proof(
+					slot: sp_consensus_sassafras::Slot,
+					authority_id: sp_consensus_sassafras::AuthorityId,
+				) -> Option<sp_consensus_sassafras::OpaqueKeyOwnershipProof> {
+					// TODO-SASS-P2
+					None
+				}
+
+				fn submit_report_equivocation_unsigned_extrinsic(
+					_equivocation_proof: sp_consensus_sassafras::EquivocationProof<<Block as BlockT>::Header>,
+					_key_owner_proof: sp_consensus_sassafras::OpaqueKeyOwnershipProof,
+				) -> bool {
+					// TODO-SASS-P2
+					false
 				}
 			}
 

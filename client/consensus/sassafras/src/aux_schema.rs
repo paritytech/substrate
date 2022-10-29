@@ -17,14 +17,20 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 //! Schema for auxiliary data persistence.
+//!
+//! TODO-SASS-P2 : RENAME FROM aux_schema.rs => aux_data.rs
+
+use std::{collections::HashSet, sync::Arc};
 
 use scale_codec::{Decode, Encode};
 
 use sc_client_api::backend::AuxStore;
 use sc_consensus_epochs::{EpochChangesFor, SharedEpochChanges};
-use sp_blockchain::{Error as ClientError, Result as ClientResult};
+
+use sc_client_api::{blockchain::Backend as _, Backend as BackendT};
+use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata, Result as ClientResult};
 use sp_consensus_sassafras::SassafrasBlockWeight;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, NumberFor, SaturatedConversion, Zero};
 
 use crate::Epoch;
 
@@ -98,4 +104,69 @@ pub fn load_block_weight<H: Encode, B: AuxStore>(
 	block_hash: H,
 ) -> ClientResult<Option<SassafrasBlockWeight>> {
 	load_decode(backend, block_weight_key(block_hash).as_slice())
+}
+
+/// Reverts protocol aux data from the best block to at most the last finalized block.
+///
+/// Epoch-changes and block weights announced after the revert point are removed.
+pub fn revert<Block, Backend>(backend: Arc<Backend>, blocks: NumberFor<Block>) -> ClientResult<()>
+where
+	Block: BlockT,
+	Backend: BackendT<Block>,
+{
+	let blockchain = backend.blockchain();
+	let best_number = blockchain.info().best_number;
+	let finalized = blockchain.info().finalized_number;
+
+	let revertible = blocks.min(best_number - finalized);
+	if revertible == Zero::zero() {
+		return Ok(())
+	}
+
+	let revert_up_to_number = best_number - revertible;
+	let revert_up_to_hash = blockchain.hash(revert_up_to_number)?.ok_or(ClientError::Backend(
+		format!("Unexpected hash lookup failure for block number: {}", revert_up_to_number),
+	))?;
+
+	// Revert epoch changes tree.
+
+	// This config is only used on-genesis.
+	let epoch_changes = load_epoch_changes::<Block, _>(&*backend)?;
+	let mut epoch_changes = epoch_changes.shared_data();
+
+	if revert_up_to_number == Zero::zero() {
+		// Special case, no epoch changes data were present on genesis.
+		*epoch_changes = EpochChangesFor::<Block, Epoch>::new();
+	} else {
+		let descendent_query = sc_consensus_epochs::descendent_query(blockchain);
+		epoch_changes.revert(descendent_query, revert_up_to_hash, revert_up_to_number);
+	}
+
+	// Remove block weights added after the revert point.
+
+	let mut weight_keys = HashSet::with_capacity(revertible.saturated_into());
+
+	let leaves = backend.blockchain().leaves()?.into_iter().filter(|&leaf| {
+		sp_blockchain::tree_route(blockchain, revert_up_to_hash, leaf)
+			.map(|route| route.retracted().is_empty())
+			.unwrap_or_default()
+	});
+
+	for mut hash in leaves {
+		loop {
+			let meta = blockchain.header_metadata(hash)?;
+			if meta.number <= revert_up_to_number || !weight_keys.insert(block_weight_key(hash)) {
+				// We've reached the revert point or an already processed branch, stop here.
+				break
+			}
+			hash = meta.parent;
+		}
+	}
+
+	let weight_keys: Vec<_> = weight_keys.iter().map(|val| val.as_slice()).collect();
+
+	// Write epoch changes and remove weights in one shot.
+	write_epoch_changes::<Block, _, _>(&epoch_changes, |values| {
+		AuxStore::insert_aux(&*backend, values, weight_keys.iter())
+	})
 }

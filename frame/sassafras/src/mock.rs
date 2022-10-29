@@ -107,10 +107,13 @@ frame_support::construct_runtime!(
 	}
 );
 
+/// Build and returns test storage externalities
 pub fn new_test_ext(authorities_len: usize) -> sp_io::TestExternalities {
 	new_test_ext_with_pairs(authorities_len).1
 }
 
+/// Build and returns test storage externalities and authority set pairs used
+/// by Sassafras genesis configuration.
 pub fn new_test_ext_with_pairs(
 	authorities_len: usize,
 ) -> (Vec<AuthorityPair>, sp_io::TestExternalities) {
@@ -120,13 +123,16 @@ pub fn new_test_ext_with_pairs(
 
 	let authorities = pairs.iter().map(|p| (p.public(), 1)).collect();
 
-	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+	let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 
 	let config = pallet_sassafras::GenesisConfig { authorities, epoch_config: Default::default() };
-	<pallet_sassafras::GenesisConfig as GenesisBuild<Test>>::assimilate_storage(&config, &mut t)
-		.unwrap();
+	<pallet_sassafras::GenesisConfig as GenesisBuild<Test>>::assimilate_storage(
+		&config,
+		&mut storage,
+	)
+	.unwrap();
 
-	(pairs, t.into())
+	(pairs, storage.into())
 }
 
 fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
@@ -150,6 +156,8 @@ fn make_ticket_vrf(slot: Slot, attempt: u32, pair: &AuthorityPair) -> (VRFOutput
 	(output, proof)
 }
 
+/// Construct at most `attempts` tickets for the given `slot`.
+/// TODO-SASS-P3: filter out invalid tickets according to test threshold.
 pub fn make_tickets(slot: Slot, attempts: u32, pair: &AuthorityPair) -> Vec<(VRFOutput, VRFProof)> {
 	(0..attempts)
 		.into_iter()
@@ -163,7 +171,7 @@ fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 	let mut epoch = Sassafras::epoch_index();
 	let mut randomness = Sassafras::randomness();
 
-	// Check if epoch is going to change on initialization
+	// Check if epoch is going to change on initialization.
 	let epoch_start = Sassafras::current_epoch_start();
 	if epoch_start != 0_u64 && slot >= epoch_start + EPOCH_DURATION {
 		epoch += slot.saturating_sub(epoch_start).saturating_div(EPOCH_DURATION);
@@ -178,6 +186,7 @@ fn make_slot_vrf(slot: Slot, pair: &AuthorityPair) -> (VRFOutput, VRFProof) {
 	(output, proof)
 }
 
+/// Produce a `PreDigest` instance for the given parameters.
 pub fn make_pre_digest(
 	authority_idx: AuthorityIndex,
 	slot: Slot,
@@ -187,6 +196,8 @@ pub fn make_pre_digest(
 	PreDigest { authority_idx, slot, vrf_output, vrf_proof, ticket_aux: None }
 }
 
+/// Produce a `PreDigest` instance for the given parameters and wrap the result into a `Digest`
+/// instance.
 pub fn make_wrapped_pre_digest(
 	authority_idx: AuthorityIndex,
 	slot: Slot,
@@ -198,6 +209,7 @@ pub fn make_wrapped_pre_digest(
 	Digest { logs: vec![log] }
 }
 
+/// Progress the pallet state up to the given block `number` and `slot`.
 pub fn go_to_block(number: u64, slot: Slot, pair: &AuthorityPair) -> Digest {
 	Sassafras::on_finalize(System::block_number());
 	let parent_hash = System::finalize().hash();
@@ -211,7 +223,8 @@ pub fn go_to_block(number: u64, slot: Slot, pair: &AuthorityPair) -> Digest {
 	digest
 }
 
-/// Slots will grow accordingly to blocks
+/// Progress the pallet state up to the given block `number`.
+/// Slots will grow linearly accordingly to blocks.
 pub fn progress_to_block(number: u64, pair: &AuthorityPair) -> Option<Digest> {
 	let mut slot = Sassafras::current_slot() + 1;
 	let mut digest = None;

@@ -395,6 +395,21 @@ impl_runtime_apis! {
 		fn slot_ticket(slot: sp_consensus_sassafras::Slot) -> Option<sp_consensus_sassafras::Ticket> {
 			Sassafras::slot_ticket(slot)
 		}
+
+		fn generate_key_ownership_proof(
+			_slot: sp_consensus_sassafras::Slot,
+			_authority_id: sp_consensus_sassafras::AuthorityId,
+		) -> Option<sp_consensus_sassafras::OpaqueKeyOwnershipProof> {
+			None
+		}
+
+		fn submit_report_equivocation_unsigned_extrinsic(
+			equivocation_proof: sp_consensus_sassafras::EquivocationProof<<Block as BlockT>::Header>,
+			_key_owner_proof: sp_consensus_sassafras::OpaqueKeyOwnershipProof,
+		) -> bool {
+			//let key_owner_proof = key_owner_proof.decode()?;
+			Sassafras::submit_unsigned_equivocation_report(equivocation_proof)
+		}
 	}
 
 	impl sp_session::SessionKeys<Block> for Runtime {

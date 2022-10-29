@@ -264,7 +264,7 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 
 		let slot_duration = sassafras_link.genesis_config().slot_duration();
 
-		let sassafras_params = sc_consensus_sassafras::SassafrasParams {
+		let sassafras_params = sc_consensus_sassafras::SassafrasWorkerParams {
 			client: client.clone(),
 			keystore: keystore_container.sync_keystore(),
 			select_chain,
@@ -303,7 +303,6 @@ pub fn new_full(mut config: Configuration) -> Result<TaskManager, ServiceError> 
 		if role.is_authority() { Some(keystore_container.sync_keystore()) } else { None };
 
 	let grandpa_config = sc_finality_grandpa::Config {
-		// FIXME #1578 make this available through chainspec
 		gossip_duration: Duration::from_millis(333),
 		justification_period: 512,
 		name: Some(name),

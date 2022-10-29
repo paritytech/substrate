@@ -40,3 +40,11 @@ sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-keystore = { version = "0.12.0", path = "../../../primitives/keystore" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+
+[dev-dependencies]
+sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
+sc-keystore = { version = "4.0.0-dev", path = "../../keystore" }
+sc-network-test = { version = "0.8.0", path = "../../network/test" }
+sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
+substrate-test-runtime-client = { version = "2.0.0", path = "../../../test-utils/runtime/client" }

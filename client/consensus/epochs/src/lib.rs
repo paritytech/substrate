@@ -777,11 +777,6 @@ where
 		}
 	}
 
-	/// Return the inner fork tree.
-	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
-		&self.inner
-	}
-
 	/// Reset to a specified pair of epochs, as if they were announced at blocks `parent_hash` and
 	/// `hash`.
 	pub fn reset(&mut self, parent_hash: Hash, hash: Hash, number: Number, current: E, next: E) {
@@ -831,6 +826,11 @@ where
 		self.inner.drain_filter(filter).for_each(|(h, n, _)| {
 			self.epochs.remove(&(h, n));
 		});
+	}
+
+	/// Return the inner fork tree (mostly useful for testing)
+	pub fn tree(&self) -> &ForkTree<Hash, Number, PersistedEpochHeader<E>> {
+		&self.inner
 	}
 }
 

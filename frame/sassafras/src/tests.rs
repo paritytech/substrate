@@ -26,6 +26,14 @@ use sp_consensus_sassafras::Slot;
 use sp_runtime::traits::Get;
 
 #[test]
+fn genesis_values_sanity_check() {
+	new_test_ext(4).execute_with(|| {
+		assert_eq!(Sassafras::authorities().len(), 4);
+		assert_eq!(EpochConfig::<Test>::get(), Default::default());
+	});
+}
+
+#[test]
 fn slot_ticket_fetch() {
 	let genesis_slot = Slot::from(100);
 	let max_tickets: u32 = <Test as crate::Config>::MaxTickets::get();
@@ -49,21 +57,22 @@ fn slot_ticket_fetch() {
 			Tickets::<Test>::insert((1, i as u32), ticket);
 		});
 		TicketsMeta::<Test>::set(TicketsMetadata {
-			tickets_count: [max_tickets, max_tickets - 1],
+			tickets_count: [curr_tickets.len() as u32, next_tickets.len() as u32],
 			segments_count: 0,
 		});
 
-		// Before initializing `GenesisSlot` value (should return first element of current session)
-		// This is due to special case hardcoded value.
+		// Before initializing `GenesisSlot` value the pallet always return the first slot
+		// This is a kind of special case hardcoded policy that should never happen in practice
+		// (i.e. the first thing the pallet does is to initialize the genesis slot).
 		assert_eq!(Sassafras::slot_ticket(0.into()), Some(curr_tickets[1]));
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 0), Some(curr_tickets[1]));
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 1), Some(curr_tickets[1]));
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 100), Some(curr_tickets[1]));
 
-		// Initialize genesis slot value.
+		// Initialize genesis slot..
 		GenesisSlot::<Test>::set(genesis_slot);
 
-		// Before Current session.
+		// Try fetch a ticket for a slot before current session.
 		assert_eq!(Sassafras::slot_ticket(0.into()), None);
 
 		// Current session tickets.
@@ -90,17 +99,9 @@ fn slot_ticket_fetch() {
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 18), Some(next_tickets[2]));
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 19), Some(next_tickets[0]));
 
-		// Beyend next session.
+		// Try fetch tickets for slots beyend next session.
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 20), None);
 		assert_eq!(Sassafras::slot_ticket(genesis_slot + 42), None);
-	});
-}
-
-#[test]
-fn genesis_values() {
-	new_test_ext(4).execute_with(|| {
-		assert_eq!(Sassafras::authorities().len(), 4);
-		assert_eq!(EpochConfig::<Test>::get(), Default::default());
 	});
 }
 
@@ -222,7 +223,7 @@ fn on_normal_block() {
 }
 
 #[test]
-fn epoch_change_block() {
+fn produce_epoch_change_digest() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {
@@ -294,6 +295,133 @@ fn epoch_change_block() {
 }
 
 #[test]
+fn produce_epoch_change_digest_with_config() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(4);
+
+	ext.execute_with(|| {
+		let start_slot = Slot::from(100);
+		let start_block = 1;
+
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
+
+		let config = SassafrasEpochConfiguration { redundancy_factor: 1, attempts_number: 123 };
+		Sassafras::plan_config_change(RuntimeOrigin::root(), config.clone()).unwrap();
+
+		// We want to trigger an epoch change in this test.
+		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+		let digest = progress_to_block(start_block + epoch_duration, &pairs[0]).unwrap();
+
+		Sassafras::on_finalize(start_block + epoch_duration);
+
+		// Header data check.
+		// Skip pallet status checks that were already performed by other tests.
+
+		let header = System::finalize();
+		assert_eq!(header.digest.logs.len(), 2);
+		assert_eq!(header.digest.logs[0], digest.logs[0]);
+		// Deposits consensus log on epoch change
+		let consensus_log = sp_consensus_sassafras::digests::ConsensusLog::NextEpochData(
+			sp_consensus_sassafras::digests::NextEpochDescriptor {
+				authorities: NextAuthorities::<Test>::get().to_vec(),
+				randomness: NextRandomness::<Test>::get(),
+				config: Some(config), // We are mostly interested in this
+			},
+		);
+		let consensus_digest = DigestItem::Consensus(SASSAFRAS_ENGINE_ID, consensus_log.encode());
+		assert_eq!(header.digest.logs[1], consensus_digest)
+	})
+}
+
+#[test]
+fn segments_incremental_sortition_works() {
+	let (pairs, mut ext) = new_test_ext_with_pairs(1);
+	let pair = &pairs[0];
+	let segments_num = 14;
+
+	ext.execute_with(|| {
+		let start_slot = Slot::from(100);
+		let start_block = 1;
+		let max_tickets: u32 = <Test as Config>::MaxTickets::get();
+
+		let digest = make_wrapped_pre_digest(0, start_slot, &pairs[0]);
+		System::initialize(&start_block, &Default::default(), &digest);
+		Sassafras::on_initialize(start_block);
+
+		// Submit authoring tickets in three different batches.
+		// We can ignore the threshold since we are not passing through the unsigned extrinsic
+		// validation.
+		let mut tickets: Vec<Ticket> =
+			make_tickets(start_slot + 1, segments_num * max_tickets, pair)
+				.into_iter()
+				.map(|(output, _)| output)
+				.collect();
+		let segment_len = tickets.len() / segments_num as usize;
+		for i in 0..segments_num as usize {
+			let segment =
+				tickets[i * segment_len..(i + 1) * segment_len].to_vec().try_into().unwrap();
+			Sassafras::submit_tickets(RuntimeOrigin::none(), segment).unwrap();
+		}
+
+		tickets.sort();
+		tickets.truncate(max_tickets as usize);
+		let _expected_tickets = tickets;
+
+		let epoch_duration: u64 = <Test as Config>::EpochDuration::get();
+
+		// Proceed to half of the epoch (sortition should not have been started yet)
+		let half_epoch_block = start_block + epoch_duration / 2;
+		progress_to_block(half_epoch_block, pair);
+
+		// Check that next epoch tickets sortition is not started yet
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, segments_num);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		// Monitor incremental sortition
+
+		progress_to_block(half_epoch_block + 1, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 12);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		progress_to_block(half_epoch_block + 2, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 9);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		progress_to_block(half_epoch_block + 3, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 6);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		progress_to_block(half_epoch_block + 4, pair);
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 3);
+		assert_eq!(meta.tickets_count, [0, 0]);
+
+		Sassafras::on_finalize(half_epoch_block + 4);
+		let header = System::finalize();
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 0);
+		assert_eq!(meta.tickets_count, [0, 6]);
+		assert_eq!(header.digest.logs.len(), 1);
+
+		// The next block will be the first produced on the new epoch,
+		// At this point the tickets were found to be sorted and ready to be used.
+		let slot = Sassafras::current_slot() + 1;
+		let digest = make_wrapped_pre_digest(0, slot, pair);
+		let number = System::block_number() + 1;
+		System::initialize(&number, &header.hash(), &digest);
+		Sassafras::on_initialize(number);
+		Sassafras::on_finalize(half_epoch_block + 5);
+		let header = System::finalize();
+		assert_eq!(header.digest.logs.len(), 2);
+	});
+}
+
+#[test]
 fn submit_enact_claim_tickets() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
@@ -341,9 +469,10 @@ fn submit_enact_claim_tickets() {
 		// Process up to the last epoch slot (do not enact epoch change)
 		let _digest = progress_to_block(epoch_duration, &pairs[0]).unwrap();
 
-		// TODO-SASS-P2: at this point next tickets should have been sorted
-		//assert_eq!(NextTicketsSegmentsCount::<Test>::get(), 0);
-		//assert!(Tickets::<Test>::iter().next().is_some());
+		// At this point next tickets should have been sorted
+		let meta = TicketsMeta::<Test>::get();
+		assert_eq!(meta.segments_count, 0);
+		assert_eq!(meta.tickets_count, [0, 6]);
 
 		// Check if we can claim next epoch tickets in outside-in fashion.
 		let slot = Sassafras::current_slot();
@@ -379,7 +508,7 @@ fn submit_enact_claim_tickets() {
 }
 
 #[test]
-fn block_skips_epochs() {
+fn block_allowed_to_skip_epochs() {
 	let (pairs, mut ext) = new_test_ext_with_pairs(4);
 
 	ext.execute_with(|| {

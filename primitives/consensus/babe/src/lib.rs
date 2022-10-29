@@ -329,6 +329,7 @@ where
 /// sure that all usages of `OpaqueKeyOwnershipProof` refer to the same type.
 #[derive(Decode, Encode, PartialEq)]
 pub struct OpaqueKeyOwnershipProof(Vec<u8>);
+
 impl OpaqueKeyOwnershipProof {
 	/// Create a new `OpaqueKeyOwnershipProof` using the given encoded
 	/// representation.

@@ -29,7 +29,7 @@ impl<T: Config> ShouldEndSession<T::BlockNumber> for Pallet<T> {
 		// possible that Sassafras's own `on_initialize` has not run yet, so let's ensure that we
 		// have initialized the pallet and updated the current slot.
 		Self::on_initialize(now);
-		Self::should_end_session(now)
+		Self::should_end_epoch(now)
 	}
 }
 
@@ -66,7 +66,7 @@ impl<T: Config> OneSessionHandler<T::AccountId> for Pallet<T> {
 			),
 		);
 
-		Self::enact_session_change(bounded_authorities, next_bounded_authorities)
+		Self::enact_epoch_change(bounded_authorities, next_bounded_authorities)
 	}
 
 	fn on_disabled(i: u32) {
