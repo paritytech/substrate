@@ -23,7 +23,7 @@ use super::*;
 
 use crate as pallet_message_queue;
 use frame_support::{
-	parameter_types,
+	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
@@ -78,8 +78,8 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const HeapSize: u32 = 131072;
-	pub const MaxReady: u32 = 3;
+	pub const HeapSize: u32 = 24;
+	pub const MaxStale: u32 = 2;
 }
 
 impl Config for Test {
@@ -88,7 +88,7 @@ impl Config for Test {
 	type MessageProcessor = TestMessageProcessor;
 	type Size = u32;
 	type HeapSize = HeapSize;
-	type MaxReady = MaxReady;
+	type MaxStale = MaxStale;
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
@@ -113,7 +113,20 @@ impl ProcessMessage for TestMessageProcessor {
 		origin: Self::Origin,
 		weight_limit: Weight,
 	) -> Result<(bool, Weight), ProcessMessageError> {
-		let weight = Weight::from_components(1, 1);
+		let weight = if message.starts_with(&b"weight="[..]) {
+			let mut w: u64 = 0;
+			for &c in &message[7..] {
+				if c >= b'0' && c <= b'9' {
+					w = w * 10 + (c - b'0') as u64;
+				} else {
+					break
+				}
+			}
+			w
+		} else {
+			1
+		};
+		let weight = Weight::from_components(weight, weight);
 		if weight.all_lte(weight_limit) {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
@@ -145,18 +158,15 @@ impl IntoWeight for u64 {
 fn enqueue_within_one_page_works() {
 	new_test_ext().execute_with(|| {
 		use MessageOrigin::*;
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"hello"[..]), Here);
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"world"[..]), Here);
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"gav"[..]), Here);
+		MessageQueue::enqueue_message(msg(&"a"), Here);
+		MessageQueue::enqueue_message(msg(&"b"), Here);
+		MessageQueue::enqueue_message(msg(&"c"), Here);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
-		assert_eq!(
-			MessagesProcessed::get(),
-			vec![(b"hello".to_vec(), Here), (b"world".to_vec(), Here)]
-		);
+		assert_eq!(MessagesProcessed::get(), vec![(b"a".to_vec(), Here), (b"b".to_vec(), Here)]);
 
 		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 1.into_weight());
-		assert_eq!(MessagesProcessed::get(), vec![(b"gav".to_vec(), Here)]);
+		assert_eq!(MessagesProcessed::get(), vec![(b"c".to_vec(), Here)]);
 
 		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
@@ -164,9 +174,9 @@ fn enqueue_within_one_page_works() {
 
 		MessageQueue::enqueue_messages(
 			[
-				BoundedSlice::truncate_from(&b"boo"[..]),
-				BoundedSlice::truncate_from(&b"yah"[..]),
-				BoundedSlice::truncate_from(&b"kah"[..]),
+				BoundedSlice::truncate_from(&b"a"[..]),
+				BoundedSlice::truncate_from(&b"b"[..]),
+				BoundedSlice::truncate_from(&b"c"[..]),
 			]
 			.into_iter(),
 			There,
@@ -174,19 +184,16 @@ fn enqueue_within_one_page_works() {
 
 		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
-		assert_eq!(
-			MessagesProcessed::get(),
-			vec![(b"boo".to_vec(), There), (b"yah".to_vec(), There),]
-		);
+		assert_eq!(MessagesProcessed::get(), vec![(b"a".to_vec(), There), (b"b".to_vec(), There),]);
 
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"sha"[..]), Everywhere(1));
+		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"d"[..]), Everywhere(1));
 
 		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(b"kah".to_vec(), There), (b"sha".to_vec(), Everywhere(1))]
+			vec![(b"c".to_vec(), There), (b"d".to_vec(), Everywhere(1))]
 		);
 	});
 }
@@ -270,5 +277,63 @@ fn queue_priority_reset_once_serviced() {
 				(vmsg(&"d"), Everywhere(2)),
 			]
 		);
+	});
+}
+
+#[test]
+fn reaping_overweight_fails_properly() {
+	new_test_ext().execute_with(|| {
+		use MessageOrigin::*;
+		// page 0
+		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
+		MessageQueue::enqueue_message(msg(&"a"), Here);
+		// page 1
+		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
+		MessageQueue::enqueue_message(msg(&"b"), Here);
+		// page 2
+		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
+		MessageQueue::enqueue_message(msg(&"c"), Here);
+		// page 3
+		MessageQueue::enqueue_message(msg(&"bigbig 1"), Here);
+		// page 4
+		MessageQueue::enqueue_message(msg(&"bigbig 2"), Here);
+		// page 5
+		MessageQueue::enqueue_message(msg(&"bigbig 3"), Here);
+
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"a"), Here), (vmsg(&"b"), Here)]);
+		// 2 stale now.
+
+		// Not reapable yet, because we haven't hit the stale limit.
+		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NotReapable);
+
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"c"), Here)]);
+		// 3 stale now: can take something 4 pages in history.
+
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 1"), Here)]);
+
+		// Not reapable yet, because we haven't hit the stale limit.
+		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NotReapable);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
+
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 2"), Here)]);
+
+		// First is now reapable as it is too far behind the first ready page (5).
+		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
+		// Others not reapable yet, because we haven't hit the stale limit.
+		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
+
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 3"), Here)]);
+
+		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
+		// Still not reapable, since the number of stale pages is only 2.
+		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
 	});
 }

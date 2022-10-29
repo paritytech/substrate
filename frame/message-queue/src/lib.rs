@@ -32,7 +32,7 @@ use sp_runtime::{
 	traits::{Hash, One, Zero},
 	SaturatedConversion, Saturating,
 };
-use sp_std::{prelude::*, vec};
+use sp_std::{fmt::Debug, prelude::*, vec};
 pub use weights::WeightInfo;
 
 /// Type for identifying an overweight message.
@@ -51,10 +51,10 @@ pub struct ItemHeader<Size> {
 }
 
 /// A page of messages. Pages always contain at least one item.
-#[derive(Clone, Encode, Decode, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(HeapSize))]
 #[codec(mel_bound(Size: MaxEncodedLen))]
-pub struct Page<Size: Into<u32>, HeapSize: Get<Size>> {
+pub struct Page<Size: Into<u32> + Debug, HeapSize: Get<Size>> {
 	/// Messages remaining to be processed; this includes overweight messages which have been
 	/// skipped.
 	remaining: Size,
@@ -68,7 +68,7 @@ pub struct Page<Size: Into<u32>, HeapSize: Get<Size>> {
 }
 
 impl<
-		Size: BaseArithmetic + Unsigned + Copy + Into<u32> + Codec + MaxEncodedLen,
+		Size: BaseArithmetic + Unsigned + Copy + Into<u32> + Codec + MaxEncodedLen + Debug,
 		HeapSize: Get<Size>,
 	> Page<Size, HeapSize>
 {
@@ -188,15 +188,6 @@ pub struct BookState<MessageOrigin> {
 	end: PageIndex,
 	/// The number of pages stored at present.
 	count: PageIndex,
-	/// The earliest page still in storage. If this is `>= end`, then there are
-	/// no pages in storage. Pages up to `head` are reapable if they have a `remaining`
-	/// field of zero or if `begin - page_number` is sufficiently large compared to
-	/// `count - (end - begin)`.
-	/// NOTE: This currently doesn't really work and will become "holey" when pages are removed
-	/// out of order. This can be maintained "automatically" with a doubly-linked-list or
-	/// "manually" by having a transaction to bump it. However, it probably doesn't actually matter
-	/// anyway since reaping can happen perfectly well without it.
-	earliest: PageIndex,
 	/// If this book has any ready pages, then this will be `Some` with the previous and next
 	/// neighbours. This wraps around.
 	ready_neighbours: Option<Neighbours<MessageOrigin>>,
@@ -204,7 +195,7 @@ pub struct BookState<MessageOrigin> {
 
 impl<MessageOrigin> Default for BookState<MessageOrigin> {
 	fn default() -> Self {
-		Self { begin: 0, end: 0, count: 0, earliest: 0, ready_neighbours: None }
+		Self { begin: 0, end: 0, count: 0, ready_neighbours: None }
 	}
 }
 
@@ -243,10 +234,11 @@ pub mod pallet {
 		#[pallet::constant]
 		type HeapSize: Get<Self::Size>;
 
-		/// The maximum number of queues whose ready status we track. If this is too low then some
-		/// message origins may need to be serviced manually.
+		/// The maximum number of stale pages (i.e. of overweight messages) allowed before culling
+		/// can happen. Once there are more stale pages than this, then historical pages may be
+		/// dropped, even if they contain unprocessed overweight messages.
 		#[pallet::constant]
-		type MaxReady: Get<u32>;
+		type MaxStale: Get<u32>;
 	}
 
 	#[pallet::event]
@@ -265,8 +257,11 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// Dummy.
-		Dummy,
+		/// Page is not reapable because it has items remaining to be processed and is not old
+		/// enough.
+		NotReapable,
+		/// Page to be reaped does not exist.
+		NoPage,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -459,6 +454,7 @@ impl<T: Config> Pallet<T> {
 		}
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
+		book_state.count.saturating_inc();
 		Pages::<T>::insert(
 			origin,
 			book_state.end - 1,
@@ -466,55 +462,50 @@ impl<T: Config> Pallet<T> {
 		);
 		BookStateOf::<T>::insert(&origin, book_state);
 	}
-}
 
-pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
-impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
-	fn get() -> u32 {
-		T::max_encoded_len() as u32
+	/// Remove a page which has no more messages remaining to be processed.
+	fn do_reap_page(origin: &MessageOriginOf<T>, page_index: PageIndex) -> DispatchResult {
+		let mut book_state = BookStateOf::<T>::get(origin);
+		// definitely not reapable if the page's index is no less than the `begin`ning of ready
+		// pages.
+		ensure!(page_index < book_state.begin, Error::<T>::NotReapable);
+
+		let page = Pages::<T>::get(origin, page_index).ok_or(Error::<T>::NoPage)?;
+
+		// definitely reapable if the page has no messages in it.
+		let reapable = page.remaining.is_zero();
+
+		// also reapable if the page index has dropped below our watermark.
+		let cullable = || {
+			let total_pages = book_state.count;
+			let ready_pages = book_state.end.saturating_sub(book_state.begin).min(total_pages);
+			let stale_pages = total_pages - ready_pages;
+			let max_stale = T::MaxStale::get();
+			let overflow = match stale_pages.checked_sub(max_stale + 1) {
+				Some(x) => x + 1,
+				None => return false,
+			};
+			let backlog = (max_stale * max_stale / overflow).max(max_stale);
+			let watermark = book_state.begin.saturating_sub(backlog);
+			page_index < watermark
+		};
+		ensure!(reapable || cullable(), Error::<T>::NotReapable);
+
+		Pages::<T>::remove(origin, page_index);
+		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
+		book_state.count.saturating_dec();
+		BookStateOf::<T>::insert(origin, book_state);
+
+		Ok(())
 	}
-}
 
-pub struct MaxMessageLen<Origin, Size, HeapSize>(
-	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
-);
-impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>> Get<u32>
-	for MaxMessageLen<Origin, Size, HeapSize>
-{
-	fn get() -> u32 {
-		(HeapSize::get().into())
-			.saturating_sub(Origin::max_encoded_len() as u32)
-			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
-	}
-}
-
-pub type MaxMessageLenOf<T> =
-	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
-pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
-pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
-pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
-
-pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
-impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
-	fn get() -> u32 {
-		T::get().into()
-	}
-}
-
-pub trait ServiceQueues {
-	/// Service all message queues in some fair manner.
-	///
-	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
-	///
-	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
-	fn service_queues(weight_limit: Weight) -> Weight;
-}
-
-impl<T: Config> Pallet<T> {
+	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
+	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
+	/// execute are deemed overweight and ignored.
 	fn service_queue(
 		origin: MessageOriginOf<T>,
 		weight_limit: Weight,
-		max_weight: Weight,
+		overweight_limit: Weight,
 	) -> (Weight, Option<MessageOriginOf<T>>) {
 		let mut processed = 0;
 		let mut weight_left = weight_limit;
@@ -536,6 +527,10 @@ impl<T: Config> Pallet<T> {
 					None => break false,
 				}[..];
 
+				if weight_left.any_lte(Weight::zero()) {
+					break true
+				}
+
 				let is_processed = match MessageOriginOf::<T>::decode(&mut message) {
 					Ok(origin) => {
 						let hash = T::Hashing::hash(message);
@@ -545,7 +540,7 @@ impl<T: Config> Pallet<T> {
 							origin.clone(),
 							weight_left,
 						) {
-							Err(Overweight(w)) if processed == 0 || w.any_gt(max_weight) => {
+							Err(Overweight(w)) if processed == 0 || w.any_gt(overweight_limit) => {
 								// Permanently overweight.
 								Self::deposit_event(Event::<T>::Overweight {
 									hash,
@@ -591,9 +586,8 @@ impl<T: Config> Pallet<T> {
 			if page.is_complete() {
 				debug_assert!(!bail, "we never bail if a page became complete");
 				Pages::<T>::remove(&origin, page_index);
-				if book_state.earliest == page_index {
-					book_state.earliest.saturating_inc();
-				}
+				debug_assert!(book_state.count > 0, "completing a page implies there are pages");
+				book_state.count.saturating_dec();
 			} else {
 				Pages::<T>::insert(&origin, page_index, page);
 			}
@@ -617,11 +611,52 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
+impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
+	fn get() -> u32 {
+		T::max_encoded_len() as u32
+	}
+}
+
+pub struct MaxMessageLen<Origin, Size, HeapSize>(
+	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
+);
+impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>> Get<u32>
+	for MaxMessageLen<Origin, Size, HeapSize>
+{
+	fn get() -> u32 {
+		(HeapSize::get().into())
+			.saturating_sub(Origin::max_encoded_len() as u32)
+			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
+	}
+}
+
+pub type MaxMessageLenOf<T> =
+	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
+pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
+pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
+pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
+
+pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
+impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
+	fn get() -> u32 {
+		T::get().into()
+	}
+}
+
+pub trait ServiceQueues {
+	/// Service all message queues in some fair manner.
+	///
+	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
+	///
+	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
+	fn service_queues(weight_limit: Weight) -> Weight;
+}
+
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
 		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight_used = Weight::zero();
-		// TODO: impl bump_service_head
 		let mut next = match Self::bump_service_head() {
 			Some(h) => h,
 			None => return weight_used,
