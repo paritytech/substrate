@@ -1318,6 +1318,20 @@ macro_rules! decl_tests {
 		}
 
 		#[test]
+		fn fungible_unbalanced_trait_decrease_balance_simple_works() {
+			<$ext_builder>::default().build().execute_with(|| {
+				// An Account that starts at 100
+				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 100));
+				// and reserves 50
+				assert_ok!(Balances::reserve(&1337, 50));
+				// and is decreased by 20
+				assert_ok!(<Balances as fungible::Unbalanced<_>>::decrease_balance(&1337, 20));
+				// should end up at 80.
+				assert_eq!(<Balances as fungible::Inspect<_>>::balance(&1337), 80);
+			});
+		}
+
+		#[test]
 		fn fungible_unbalanced_trait_decrease_balance_works() {
 			<$ext_builder>::default().build().execute_with(|| {
 				assert_ok!(<Balances as fungible::Unbalanced<_>>::set_balance(&1337, 10));
