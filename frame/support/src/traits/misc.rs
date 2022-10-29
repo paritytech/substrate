@@ -429,7 +429,7 @@ pub trait DefensiveMin<T> {
 impl<T, U> DefensiveMin<U> for T
 where
 	T: Clone + sp_std::cmp::PartialOrd<U>,
-	U: Copy + std::fmt::Debug,
+	U: Copy + sp_std::fmt::Debug,
 {
 	fn defensive_min(&self, u: U) -> Self {
 		if self <= &u {
