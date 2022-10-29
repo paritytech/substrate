@@ -739,7 +739,9 @@ pub mod pallet {
 					<Voting<T>>::insert(
 						&member,
 						Voter {
-							votes: vec![member.clone()].try_into().expect("Too many votes."),
+							votes: vec![member.clone()]
+								.try_into()
+								.expect("Cannot expect more votes than there are candidates."),
 							stake: *stake,
 							deposit: Zero::zero(),
 						},
@@ -809,7 +811,7 @@ impl<T: Config> Pallet<T> {
 				if let Err(index) = members.binary_search_by(|m| m.who.cmp(&next_best.who)) {
 					members
 						.try_insert(index, next_best.clone())
-						.expect("Cannot accept more than DesiredMembers genesis member.");
+						.expect("Cannot accept more than DesiredMembers.");
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
@@ -933,7 +935,7 @@ impl<T: Config> Pallet<T> {
 		// add all the previous members and runners-up as candidates as well.
 		candidates_and_deposit
 			.try_append(&mut Self::implicit_candidates_with_deposit())
-			.expect("Too many candidates!");
+			.expect("Cannot accept more than MaxCandidates candidates.");
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
@@ -1111,7 +1113,7 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.expect("Cannot accept more than DesiredMembers genesis member."),
+							.expect("Cannot accept more than DesiredMembers."),
 					);
 					<RunnersUp<T>>::put::<BoundedVec<_, T::DesiredRunnersUp>>(
 						new_runners_up_sorted_by_rank
@@ -1123,7 +1125,7 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.expect("Too many runners-up!"),
+							.expect("Cannot accept more than DesiredRunnersUp."),
 					);
 
 					// clean candidates.
@@ -1172,9 +1174,7 @@ impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 					stake: Default::default(),
 					deposit: Default::default(),
 				};
-				members
-					.try_insert(pos, s)
-					.expect("Cannot accept more than DesiredMembers genesis member.")
+				members.try_insert(pos, s).expect("Cannot accept more than DesiredMembers.")
 			},
 		})
 	}
