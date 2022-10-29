@@ -678,7 +678,7 @@ fn finalization_prunes_epoch_changes_and_removes_weights() {
 	//      *-----E(#7)---#11                                          		  < fork #1
 
 	// Finalize block #10 so that on next epoch change the tree is pruned
-	env.client.finalize_block(BlockId::Hash(canon[13]), None, true).unwrap();
+	env.client.finalize_block(&canon[13], None, true).unwrap();
 	let canon_cont = env.propose_and_import_blocks(BlockId::Hash(*canon.last().unwrap()), 4);
 
 	// Post-finalize scenario.
@@ -777,7 +777,7 @@ fn revert_not_allowed_for_finalized() {
 	let canon = env.propose_and_import_blocks(BlockId::Number(0), 3);
 
 	// Finalize best block
-	env.client.finalize_block(BlockId::Hash(canon[2]), None, false).unwrap();
+	env.client.finalize_block(&canon[2], None, false).unwrap();
 
 	// Revert canon chain to last finalized block
 	crate::revert(env.backend.clone(), 100).expect("revert should work for baked test scenario");
