@@ -569,7 +569,7 @@ impl<T: Config> Default for Commission<T> {
 impl<T: Config> Commission<T> {
 	/// Get the current commission percentage of this pool.
 	/// Returns zero if commission has not yet been configured.
-	fn percentage(&self) -> Perbill {
+	fn as_percent(&self) -> Perbill {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 
@@ -588,7 +588,7 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			(*to).saturating_sub(self.percentage()) > t.change_rate.max_increase
+			(*to).saturating_sub(self.as_percent()) > t.change_rate.max_increase
 		} else {
 			return false
 		}
@@ -2639,7 +2639,7 @@ impl<T: Config> Pallet<T> {
 
 		let get_commission_and_payee = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
 			if let Some(c) = &b.commission {
-				let commission_percent = c.percentage();
+				let commission_percent = c.as_percent();
 				if commission_percent > Perbill::zero() {
 					let payee = b.commission_payee().map(|p| p.clone()).or(None);
 					if payee.is_some() {
