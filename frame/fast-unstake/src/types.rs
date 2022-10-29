@@ -17,6 +17,7 @@
 
 //! Types used in the Fast Unstake pallet.
 
+use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{Currency, Get},
@@ -26,10 +27,8 @@ use scale_info::TypeInfo;
 use sp_staking::EraIndex;
 use sp_std::{fmt::Debug, prelude::*};
 
-pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::Balance;
-
+pub type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// An unstake request.
 #[derive(
 	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
