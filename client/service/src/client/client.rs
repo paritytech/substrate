@@ -586,8 +586,7 @@ where
 			Some(storage_changes) => {
 				let storage_changes = match storage_changes {
 					sc_consensus::StorageChanges::Changes(storage_changes) => {
-						self.backend
-							.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+						self.backend.begin_state_operation(&mut operation.op, &parent_hash)?;
 						let (main_sc, child_sc, offchain_sc, tx, _, tx_index) =
 							storage_changes.into_inner();
 
@@ -642,7 +641,7 @@ where
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
-							warn!("Error imporing state: State root mismatch.");
+							warn!("Error importing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot)
 						}
 						None
@@ -878,17 +877,17 @@ where
 			// plugable we cannot make a better choice here. usages that need
 			// an accurate "best" block need to go through `SelectChain`
 			// instead.
-			operation.op.mark_head(BlockId::Hash(block))?;
+			operation.op.mark_head(&block)?;
 		}
 
 		let enacted = route_from_finalized.enacted();
 		assert!(enacted.len() > 0);
 		for finalize_new in &enacted[..enacted.len() - 1] {
-			operation.op.mark_finalized(BlockId::Hash(finalize_new.hash), None)?;
+			operation.op.mark_finalized(&finalize_new.hash, None)?;
 		}
 
 		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
+		operation.op.mark_finalized(&block, justification)?;
 
 		if notify {
 			let finalized =
@@ -1191,8 +1190,8 @@ where
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		// This is read proof only, we can use either LayoutV0 or LayoutV1.
-		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
+		let proof = proof
+			.into_compact_proof::<HashFor<Block>>(root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
