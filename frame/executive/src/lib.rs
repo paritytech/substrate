@@ -235,7 +235,10 @@ impl<
 	COnRuntimeUpgrade: OnRuntimeUpgrade,
 > Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 	where
-		Block::Extrinsic: Checkable<Context> + Codec,
+		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		+ Checkable<Context>
+		+ Codec
+		+ GetDispatchInfo,
 		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 		CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -254,64 +257,62 @@ impl<
 		try_state_root: bool,
 		select: frame_try_runtime::TryStateSelect,
 	) -> Result<frame_support::weights::Weight, &'static str> {
-		unimplemented!();
-		// use frame_support::traits::TryState;
-		//
-		// Self::initialize_block(block.header());
-		// Self::initial_checks(&block);
-		//
-		// let (header, extrinsics) = block.deconstruct();
-		//
-		// Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
-		//
-		// // run the try-state checks of all pallets.
-		// <AllPalletsWithSystem as TryState<System::BlockNumber>>::try_state(
-		// 	*header.number(),
-		// 	select,
-		// )
-		// .map_err(|e| {
-		// 	frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
-		// 	e
-		// })?;
-		//
-		// // do some of the checks that would normally happen in `final_checks`, but perhaps skip
-		// // the state root check.
-		// {
-		// 	let new_header = <frame_system::Pallet<System>>::finalize();
-		// 	let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
-		// 	for (header_item, computed_item) in items_zip {
-		// 		header_item.check_equal(computed_item);
-		// 		assert!(header_item == computed_item, "Digest item must match that calculated.");
-		// 	}
-		//
-		// 	if try_state_root {
-		// 		let storage_root = new_header.state_root();
-		// 		header.state_root().check_equal(storage_root);
-		// 		assert!(
-		// 			header.state_root() == storage_root,
-		// 			"Storage root must match that calculated."
-		// 		);
-		// 	}
-		//
-		// 	assert!(
-		// 		header.extrinsics_root() == new_header.extrinsics_root(),
-		// 		"Transaction trie root must be valid.",
-		// 	);
-		// }
-		//
-		// Ok(frame_system::Pallet::<System>::block_weight().total())
+		use frame_support::traits::TryState;
+
+		Self::initialize_block(block.header());
+		Self::initial_checks(&block);
+
+		let (header, extrinsics) = block.deconstruct();
+
+		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
+
+		// run the try-state checks of all pallets.
+		<AllPalletsWithSystem as TryState<System::BlockNumber>>::try_state(
+			*header.number(),
+			select,
+		)
+		.map_err(|e| {
+			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
+			e
+		})?;
+
+		// do some of the checks that would normally happen in `final_checks`, but perhaps skip
+		// the state root check.
+		{
+			let new_header = <frame_system::Pallet<System>>::finalize();
+			let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+			for (header_item, computed_item) in items_zip {
+				header_item.check_equal(computed_item);
+				assert!(header_item == computed_item, "Digest item must match that calculated.");
+			}
+
+			if try_state_root {
+				let storage_root = new_header.state_root();
+				header.state_root().check_equal(storage_root);
+				assert!(
+					header.state_root() == storage_root,
+					"Storage root must match that calculated."
+				);
+			}
+
+			assert!(
+				header.extrinsics_root() == new_header.extrinsics_root(),
+				"Transaction trie root must be valid.",
+			);
+		}
+
+		Ok(frame_system::Pallet::<System>::block_weight().total())
 	}
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
 	/// This should only be used for testing.
 	pub fn try_runtime_upgrade() -> Result<frame_support::weights::Weight, &'static str> {
-		unimplemented!();
-		// <(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
-		// let weight = Self::execute_on_runtime_upgrade();
-		// <(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
-		//
-		// Ok(weight)
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::pre_upgrade().unwrap();
+		let weight = Self::execute_on_runtime_upgrade();
+		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::post_upgrade().unwrap();
+
+		Ok(weight)
 	}
 }
 
