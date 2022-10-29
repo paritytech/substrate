@@ -28,7 +28,7 @@
 //!
 //! ## Key terms
 //!
-//!  * pool id: A unique identifier of each pool. Set to u12
+//!  * pool id: A unique identifier of each pool. Set to u32.
 //!  * bonded pool: Tracks the distribution of actively staked funds. See [`BondedPool`] and
 //! [`BondedPoolInner`].
 //! * reward pool: Tracks rewards earned by actively staked funds. See [`RewardPool`] and
@@ -47,7 +47,7 @@
 //!   exactly the same rules and conditions as a normal staker. Its bond increases or decreases as
 //!   members join, it can `nominate` or `chill`, and might not even earn staking rewards if it is
 //!   not nominating proper validators.
-//! * reward account: A similar key-less account, that is set as the `Payee` account fo the bonded
+//! * reward account: A similar key-less account, that is set as the `Payee` account for the bonded
 //!   account for all staking rewards.
 //!
 //! ## Usage
@@ -1429,6 +1429,10 @@ pub mod pallet {
 		Defensive(DefensiveError),
 		/// Partial unbonding now allowed permissionlessly.
 		PartialUnbondNotAllowedPermissionlessly,
+		/// Pool id currently in use.
+		PoolIdInUse,
+		/// Pool id provided is not correct/usable.
+		InvalidPoolId,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1850,73 +1854,38 @@ pub mod pallet {
 			nominator: AccountIdLookupOf<T>,
 			state_toggler: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let root = T::Lookup::lookup(root)?;
-			let nominator = T::Lookup::lookup(nominator)?;
-			let state_toggler = T::Lookup::lookup(state_toggler)?;
-
-			ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
-			ensure!(
-				MaxPools::<T>::get()
-					.map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
-				Error::<T>::MaxPools
-			);
-			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+			let depositor = ensure_signed(origin)?;
 
 			let pool_id = LastPoolId::<T>::try_mutate::<_, Error<T>, _>(|id| {
 				*id = id.checked_add(1).ok_or(Error::<T>::OverflowRisk)?;
 				Ok(*id)
 			})?;
-			let mut bonded_pool = BondedPool::<T>::new(
-				pool_id,
-				PoolRoles {
-					root: Some(root),
-					nominator: Some(nominator),
-					state_toggler: Some(state_toggler),
-					depositor: who.clone(),
-				},
-			);
 
-			bonded_pool.try_inc_members()?;
-			let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create)?;
+			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
+		}
 
-			T::Currency::transfer(
-				&who,
-				&bonded_pool.reward_account(),
-				T::Currency::minimum_balance(),
-				ExistenceRequirement::AllowDeath,
-			)?;
+		/// Create a new delegation pool with a previously used pool id
+		///
+		/// # Arguments
+		///
+		/// same as `create` with the inclusion of
+		/// * `pool_id` - `A valid PoolId.
+		#[pallet::weight(T::WeightInfo::create())]
+		#[transactional]
+		pub fn create_with_pool_id(
+			origin: OriginFor<T>,
+			#[pallet::compact] amount: BalanceOf<T>,
+			root: AccountIdLookupOf<T>,
+			nominator: AccountIdLookupOf<T>,
+			state_toggler: AccountIdLookupOf<T>,
+			pool_id: PoolId,
+		) -> DispatchResult {
+			let depositor = ensure_signed(origin)?;
 
-			PoolMembers::<T>::insert(
-				who.clone(),
-				PoolMember::<T> {
-					pool_id,
-					points,
-					last_recorded_reward_counter: Zero::zero(),
-					unbonding_eras: Default::default(),
-				},
-			);
-			RewardPools::<T>::insert(
-				pool_id,
-				RewardPool::<T> {
-					last_recorded_reward_counter: Zero::zero(),
-					last_recorded_total_payouts: Zero::zero(),
-					total_rewards_claimed: Zero::zero(),
-				},
-			);
-			ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
+			ensure!(!BondedPools::<T>::contains_key(pool_id), Error::<T>::PoolIdInUse);
+			ensure!(pool_id < LastPoolId::<T>::get(), Error::<T>::InvalidPoolId);
 
-			Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
-
-			Self::deposit_event(Event::<T>::Bonded {
-				member: who,
-				pool_id,
-				bonded: amount,
-				joined: true,
-			});
-			bonded_pool.put();
-
-			Ok(())
+			Self::do_create(depositor, amount, root, nominator, state_toggler, pool_id)
 		}
 
 		/// Nominate on behalf of the pool.
@@ -2338,6 +2307,76 @@ impl<T: Config> Pallet<T> {
 		});
 
 		Ok(pending_rewards)
+	}
+
+	fn do_create(
+		who: T::AccountId,
+		amount: BalanceOf<T>,
+		root: AccountIdLookupOf<T>,
+		nominator: AccountIdLookupOf<T>,
+		state_toggler: AccountIdLookupOf<T>,
+		pool_id: PoolId,
+	) -> DispatchResult {
+		let root = T::Lookup::lookup(root)?;
+		let nominator = T::Lookup::lookup(nominator)?;
+		let state_toggler = T::Lookup::lookup(state_toggler)?;
+
+		ensure!(amount >= Pallet::<T>::depositor_min_bond(), Error::<T>::MinimumBondNotMet);
+		ensure!(
+			MaxPools::<T>::get().map_or(true, |max_pools| BondedPools::<T>::count() < max_pools),
+			Error::<T>::MaxPools
+		);
+		ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
+		let mut bonded_pool = BondedPool::<T>::new(
+			pool_id,
+			PoolRoles {
+				root: Some(root),
+				nominator: Some(nominator),
+				state_toggler: Some(state_toggler),
+				depositor: who.clone(),
+			},
+		);
+
+		bonded_pool.try_inc_members()?;
+		let points = bonded_pool.try_bond_funds(&who, amount, BondType::Create)?;
+
+		T::Currency::transfer(
+			&who,
+			&bonded_pool.reward_account(),
+			T::Currency::minimum_balance(),
+			ExistenceRequirement::AllowDeath,
+		)?;
+
+		PoolMembers::<T>::insert(
+			who.clone(),
+			PoolMember::<T> {
+				pool_id,
+				points,
+				last_recorded_reward_counter: Zero::zero(),
+				unbonding_eras: Default::default(),
+			},
+		);
+		RewardPools::<T>::insert(
+			pool_id,
+			RewardPool::<T> {
+				last_recorded_reward_counter: Zero::zero(),
+				last_recorded_total_payouts: Zero::zero(),
+				total_rewards_claimed: Zero::zero(),
+			},
+		);
+		ReversePoolIdLookup::<T>::insert(bonded_pool.bonded_account(), pool_id);
+
+		Self::deposit_event(Event::<T>::Created { depositor: who.clone(), pool_id });
+
+		Self::deposit_event(Event::<T>::Bonded {
+			member: who,
+			pool_id,
+			bonded: amount,
+			joined: true,
+		});
+		bonded_pool.put();
+
+		Ok(())
 	}
 
 	/// Ensure the correctness of the state of this pallet.
