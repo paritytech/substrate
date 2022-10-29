@@ -82,7 +82,7 @@ pub(crate) fn claim_slot(
 		authority_idx,
 		slot,
 		vrf_output: VRFOutput(signature.output),
-		vrf_proof: VRFProof(signature.proof.clone()),
+		vrf_proof: VRFProof(signature.proof),
 		ticket_aux,
 	};
 

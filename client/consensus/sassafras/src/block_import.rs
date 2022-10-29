@@ -112,9 +112,8 @@ where
 		let hash = block.post_hash();
 		let number = *block.header.number();
 
-		let pre_digest = find_pre_digest::<Block>(&block.header).expect(
-			"valid sassafras headers must contain a predigest; header has been already verified; qed",
-		);
+		let pre_digest = find_pre_digest::<Block>(&block.header)
+			.expect("valid headers contain a pre-digest; header has been already verified; qed");
 		let slot = pre_digest.slot;
 
 		let parent_hash = *block.header.parent_hash();
@@ -128,10 +127,9 @@ where
 				)
 			})?;
 
-		let parent_slot = find_pre_digest::<Block>(&parent_header).map(|d| d.slot).expect(
-			"parent is non-genesis; valid Sassafras headers contain a pre-digest; \
-             header has already been verified; qed",
-		);
+		let parent_slot = find_pre_digest::<Block>(&parent_header)
+			.map(|d| d.slot)
+			.expect("parent is non-genesis; valid headers contain a pre-digest; header has been already verified; qed");
 
 		// Make sure that slot number is strictly increasing
 		if slot <= parent_slot {
