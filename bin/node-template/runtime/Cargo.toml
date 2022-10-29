@@ -99,7 +99,7 @@ runtime-benchmarks = [
 	"sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [
-	"frame-try-runtime",
+	"frame-try-runtime/try-runtime",
 	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",

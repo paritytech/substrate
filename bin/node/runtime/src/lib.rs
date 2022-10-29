@@ -249,7 +249,7 @@ impl pallet_multisig::Config for Runtime {
 	type Currency = Balances;
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
-	type MaxSignatories = ConstU16<100>;
+	type MaxSignatories = ConstU32<100>;
 	type WeightInfo = pallet_multisig::weights::SubstrateWeight<Runtime>;
 }
 
@@ -585,7 +585,8 @@ impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deposit = ConstU128<{ DOLLARS }>;
-	type DepositCurrency = Balances;
+	type Currency = Balances;
+	type Staking = Staking;
 	type WeightInfo = ();
 }
 
@@ -773,11 +774,10 @@ impl pallet_nomination_pools::Config for Runtime {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
 	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type StakingInterface = pallet_staking::Pallet<Self>;
+	type Staking = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
@@ -1959,7 +1959,16 @@ impl_runtime_apis! {
 			input_data: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractExecResult<Balance> {
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
-			Contracts::bare_call(origin, dest, value, gas_limit, storage_deposit_limit, input_data, true)
+			Contracts::bare_call(
+				origin,
+				dest,
+				value,
+				gas_limit,
+				storage_deposit_limit,
+				input_data,
+				true,
+				pallet_contracts::Determinism::Deterministic,
+			)
 		}
 
 		fn instantiate(
@@ -1973,23 +1982,41 @@ impl_runtime_apis! {
 		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance>
 		{
 			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
-			Contracts::bare_instantiate(origin, value, gas_limit, storage_deposit_limit, code, data, salt, true)
+			Contracts::bare_instantiate(
+				origin,
+				value,
+				gas_limit,
+				storage_deposit_limit,
+				code,
+				data,
+				salt,
+				true
+			)
 		}
 
 		fn upload_code(
 			origin: AccountId,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<Balance>,
+			determinism: pallet_contracts::Determinism,
 		) -> pallet_contracts_primitives::CodeUploadResult<Hash, Balance>
 		{
-			Contracts::bare_upload_code(origin, code, storage_deposit_limit)
+			Contracts::bare_upload_code(
+				origin,
+				code,
+				storage_deposit_limit,
+				determinism,
+			)
 		}
 
 		fn get_storage(
 			address: AccountId,
 			key: Vec<u8>,
 		) -> pallet_contracts_primitives::GetStorageResult {
-			Contracts::get_storage(address, key)
+			Contracts::get_storage(
+				address,
+				key
+			)
 		}
 	}
 
@@ -2016,11 +2043,15 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_mmr::primitives::MmrApi<Block, mmr::Hash> for Runtime {
-		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
+	impl pallet_mmr::primitives::MmrApi<
+		Block,
+		mmr::Hash,
+		BlockNumber,
+	> for Runtime {
+		fn generate_proof(block_number: BlockNumber)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
-			Mmr::generate_batch_proof(vec![leaf_index]).and_then(|(leaves, proof)|
+			Mmr::generate_batch_proof(vec![block_number]).and_then(|(leaves, proof)|
 				Ok((
 					mmr::EncodableOpaqueLeaf::from_leaf(&leaves[0]),
 					mmr::BatchProof::into_single_leaf_proof(proof)?
@@ -2052,9 +2083,9 @@ impl_runtime_apis! {
 		}
 
 		fn generate_batch_proof(
-			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
+			block_numbers: Vec<BlockNumber>,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_batch_proof(leaf_indices).map(|(leaves, proof)| {
+			Mmr::generate_batch_proof(block_numbers).map(|(leaves, proof)| {
 				(
 					leaves
 						.into_iter()
@@ -2066,10 +2097,10 @@ impl_runtime_apis! {
 		}
 
 		fn generate_historical_batch_proof(
-			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
-			leaves_count: pallet_mmr::primitives::LeafIndex,
+			block_numbers: Vec<BlockNumber>,
+			best_known_block_number: BlockNumber,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_historical_batch_proof(leaf_indices, leaves_count).map(
+			Mmr::generate_historical_batch_proof(block_numbers, best_known_block_number).map(
 				|(leaves, proof)| {
 					(
 						leaves

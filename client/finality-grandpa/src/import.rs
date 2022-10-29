@@ -424,13 +424,15 @@ where
 	}
 
 	/// Read current set id form a given state.
-	fn current_set_id(&self, id: &BlockId<Block>) -> Result<SetId, ConsensusError> {
+	fn current_set_id(&self, hash: &Block::Hash) -> Result<SetId, ConsensusError> {
+		let id = &BlockId::hash(*hash);
 		let runtime_version = self.inner.runtime_api().version(id).map_err(|e| {
 			ConsensusError::ClientImport(format!(
 				"Unable to retrieve current runtime version. {}",
 				e
 			))
 		})?;
+
 		if runtime_version
 			.api_version(&<dyn GrandpaApi<Block>>::ID)
 			.map_or(false, |v| v < 3)
@@ -439,7 +441,8 @@ where
 			// This code may be removed once warp sync to an old runtime is no longer needed.
 			for prefix in ["GrandpaFinality", "Grandpa"] {
 				let k = [twox_128(prefix.as_bytes()), twox_128(b"CurrentSetId")].concat();
-				if let Ok(Some(id)) = self.inner.storage(id, &sc_client_api::StorageKey(k.to_vec()))
+				if let Ok(Some(id)) =
+					self.inner.storage(hash, &sc_client_api::StorageKey(k.to_vec()))
 				{
 					if let Ok(id) = SetId::decode(&mut id.0.as_ref()) {
 						return Ok(id)
@@ -472,13 +475,12 @@ where
 				// finality proofs and that the state is correct and final.
 				// So we can read the authority list and set id from the state.
 				self.authority_set_hard_forks.clear();
-				let block_id = BlockId::hash(hash);
 				let authorities = self
 					.inner
 					.runtime_api()
-					.grandpa_authorities(&block_id)
+					.grandpa_authorities(&BlockId::hash(hash))
 					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
-				let set_id = self.current_set_id(&block_id)?;
+				let set_id = self.current_set_id(&hash)?;
 				let authority_set = AuthoritySet::new(
 					authorities.clone(),
 					set_id,

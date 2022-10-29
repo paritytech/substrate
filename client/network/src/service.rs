@@ -35,12 +35,14 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
-	transport, ReputationChange,
+	transport, ChainSyncInterface, ReputationChange,
 };
 
+use codec::Encode;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
+	identify::Info as IdentifyInfo,
 	kad::record::Key as KademliaKey,
 	multiaddr,
 	ping::Failure as PingFailure,
@@ -68,13 +70,13 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::{SyncState, SyncStatus},
+	sync::SyncStatus,
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -119,6 +121,8 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
+	/// Interface that can be used to delegate calls to `ChainSync`
+	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -260,6 +264,11 @@ where
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
+		let block_request_protocol_name = params.block_request_protocol_config.name.clone();
+		let state_request_protocol_name = params.state_request_protocol_config.name.clone();
+		let warp_sync_protocol_name =
+			params.warp_sync_protocol_config.as_ref().map(|c| c.name.clone());
+
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
@@ -273,7 +282,13 @@ where
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
-				config.add_protocol(params.protocol_id.clone());
+				let genesis_hash = params
+					.chain
+					.hash(Zero::zero())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed");
+				config.with_kademlia(genesis_hash, params.fork_id.as_deref(), &params.protocol_id);
 				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
@@ -431,6 +446,7 @@ where
 			local_peer_id,
 			local_identity,
 			to_worker,
+			chain_sync_service: params.chain_sync_service,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
 				.as_ref()
@@ -450,6 +466,9 @@ where
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
+			block_request_protocol_name,
+			state_request_protocol_name,
+			warp_sync_protocol_name,
 			_marker: Default::default(),
 		})
 	}
@@ -812,7 +831,7 @@ where
 	/// a stale fork missing.
 	/// Passing empty `peers` set effectively removes the sync request.
 	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::SyncFork(peers, hash, number));
+		self.chain_sync_service.set_sync_fork_request(peers, hash, number);
 	}
 }
 
@@ -1217,7 +1236,6 @@ enum ServiceToWorkerMsg<B: BlockT> {
 	RemoveSetReserved(ProtocolName, PeerId),
 	AddToPeersSet(ProtocolName, PeerId),
 	RemoveFromPeersSet(ProtocolName, PeerId),
-	SyncFork(Vec<PeerId>, B::Hash, NumberFor<B>),
 	EventStream(out_events::Sender),
 	Request {
 		target: PeerId,
@@ -1269,6 +1287,15 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
+	/// Protocol name used to send out block requests via
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
+	block_request_protocol_name: ProtocolName,
+	/// Protocol name used to send out state requests via
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
+	state_request_protocol_name: ProtocolName,
+	/// Protocol name used to send out warp sync requests via
+	/// [`crate::request_responses::RequestResponsesBehaviour`].
+	warp_sync_protocol_name: Option<ProtocolName>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -1378,11 +1405,6 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.remove_from_peers_set(protocol, peer_id),
-				ServiceToWorkerMsg::SyncFork(peer_ids, hash, number) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.set_sync_fork_request(peer_ids, &hash, number),
 				ServiceToWorkerMsg::EventStream(sender) => this.event_streams.push(sender),
 				ServiceToWorkerMsg::Request {
 					target,
@@ -1451,6 +1473,84 @@ where
 						metrics.import_queue_justifications_submitted.inc();
 					}
 					this.import_queue.import_justifications(origin, hash, nb, justifications);
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match this
+						.network_service
+						.behaviour()
+						.user_protocol()
+						.encode_block_request(&request)
+					{
+						Ok(data) => {
+							this.network_service.behaviour_mut().send_request(
+								&target,
+								&this.block_request_protocol_name,
+								data,
+								pending_response,
+								IfDisconnected::ImmediateError,
+							);
+						},
+						Err(err) => {
+							log::warn!(
+								target: "sync",
+								"Failed to encode block request {:?}: {:?}",
+								request, err
+							);
+						},
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::StateRequest {
+					target,
+					request,
+					pending_response,
+				})) => {
+					match this
+						.network_service
+						.behaviour()
+						.user_protocol()
+						.encode_state_request(&request)
+					{
+						Ok(data) => {
+							this.network_service.behaviour_mut().send_request(
+								&target,
+								&this.state_request_protocol_name,
+								data,
+								pending_response,
+								IfDisconnected::ImmediateError,
+							);
+						},
+						Err(err) => {
+							log::warn!(
+								target: "sync",
+								"Failed to encode state request {:?}: {:?}",
+								request, err
+							);
+						},
+					}
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::WarpSyncRequest {
+					target,
+					request,
+					pending_response,
+				})) => match &this.warp_sync_protocol_name {
+					Some(name) => this.network_service.behaviour_mut().send_request(
+						&target,
+						&name,
+						request.encode(),
+						pending_response,
+						IfDisconnected::ImmediateError,
+					),
+					None => {
+						log::warn!(
+							target: "sync",
+							"Trying to send warp sync request when no protocol is configured {:?}",
+							request,
+						);
+					},
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
@@ -1527,14 +1627,51 @@ where
 							},
 						}
 					},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
-					protocol,
-				))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::ReputationChanges {
+					peer,
+					changes,
+				})) =>
+					for change in changes {
+						this.network_service.behaviour().user_protocol().report_peer(peer, change);
+					},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
+					peer_id,
+					info:
+						IdentifyInfo {
+							protocol_version,
+							agent_version,
+							mut listen_addrs,
+							protocols,
+							..
+						},
+				})) => {
+					if listen_addrs.len() > 30 {
+						debug!(
+							target: "sub-libp2p",
+							"Node {:?} has reported more than 30 addresses; it is identified by {:?} and {:?}",
+							peer_id, protocol_version, agent_version
+						);
+						listen_addrs.truncate(30);
+					}
+					for addr in listen_addrs {
+						this.network_service
+							.behaviour_mut()
+							.add_self_reported_address_to_dht(&peer_id, &protocols, addr);
+					}
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::Discovered(peer_id))) => {
+					this.network_service
+						.behaviour_mut()
+						.user_protocol_mut()
+						.add_default_set_discovered_nodes(iter::once(peer_id));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) =>
 					if let Some(metrics) = this.metrics.as_ref() {
-						metrics
-							.kademlia_random_queries_total
-							.with_label_values(&[protocol.as_ref()])
-							.inc();
+						metrics.kademlia_random_queries_total.inc();
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
@@ -1654,6 +1791,9 @@ where
 					}
 
 					this.event_streams.send(Event::Dht(event));
+				},
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::None)) => {
+					// Ignored event from lower layers.
 				},
 				Poll::Ready(SwarmEvent::ConnectionEstablished {
 					peer_id,
@@ -1863,37 +2003,32 @@ where
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing =
-			match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
-				SyncState::Idle => false,
-				SyncState::Downloading => true,
-			};
+		let is_major_syncing = this
+			.network_service
+			.behaviour_mut()
+			.user_protocol_mut()
+			.sync_state()
+			.state
+			.is_major_syncing();
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, buckets) in this.network_service.behaviour_mut().num_entries_per_kbucket() {
+			if let Some(buckets) = this.network_service.behaviour_mut().num_entries_per_kbucket() {
 				for (lower_ilog2_bucket_bound, num_entries) in buckets {
 					metrics
 						.kbuckets_num_nodes
-						.with_label_values(&[proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.with_label_values(&[&lower_ilog2_bucket_bound.to_string()])
 						.set(num_entries as u64);
 				}
 			}
-			for (proto, num_entries) in this.network_service.behaviour_mut().num_kademlia_records()
-			{
-				metrics
-					.kademlia_records_count
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+			if let Some(num_entries) = this.network_service.behaviour_mut().num_kademlia_records() {
+				metrics.kademlia_records_count.set(num_entries as u64);
 			}
-			for (proto, num_entries) in
+			if let Some(num_entries) =
 				this.network_service.behaviour_mut().kademlia_records_total_size()
 			{
-				metrics
-					.kademlia_records_sizes_total
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+				metrics.kademlia_records_sizes_total.set(num_entries as u64);
 			}
 			metrics
 				.peerset_num_discovered
