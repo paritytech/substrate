@@ -1350,12 +1350,14 @@ fn bond_extra_and_withdraw_unbonded_works() {
 }
 
 #[test]
-fn too_many_unbond_calls_should_not_work() {
+fn many_unbond_calls_should_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
 
-		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() - 1 {
+		let max_unlocking_chunks = <<Test as Config>::MaxUnlockingChunks as Get<u32>>::get();
+
+		for i in 0..max_unlocking_chunks - 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1369,23 +1371,24 @@ fn too_many_unbond_calls_should_not_work() {
 		// == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
-			Staking::ledger(&10).unwrap().unlocking.len(),
+			Staking::chunk_slots_filled(&10).unwrap(),
 			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
-		// can't do more.
-		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
 
-		current_era += 2;
-		mock::start_active_era(current_era);
+		// even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
+		// unbonding works as expected.
+		for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
+			current_era = i as u32;
+			mock::start_active_era(current_era);
+			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+		}
 
-		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
-		// free up everything except the most recently added chunk.
-		assert_ok!(Staking::withdraw_unbonded(RuntimeOrigin::signed(10), 0));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 1);
-
-		// Can add again.
-		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
-		assert_eq!(Staking::ledger(&10).unwrap().unlocking.len(), 2);
+		// only slots of unbonds within last BondingDuration are filled.
+		assert_eq!(
+			Staking::chunk_slots_filled(&10).unwrap(),
+			<<Test as Config>::BondingDuration>::get() as usize
+		);
 	})
 }
 

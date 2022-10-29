@@ -92,6 +92,11 @@ impl<T: Config> Pallet<T> {
 		Self::slashable_balance_of_vote_weight(who, issuance)
 	}
 
+	/// Returns the number of filled chunks for an account.
+	pub fn chunk_slots_filled(who: &T::AccountId) -> Result<usize, Error<T>> {
+		Ok(Self::ledger(&who).ok_or(Error::<T>::NotController)?.unlocking.len())
+	}
+
 	pub(super) fn do_payout_stakers(
 		validator_stash: T::AccountId,
 		era: EraIndex,

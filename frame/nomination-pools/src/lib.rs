@@ -1608,10 +1608,8 @@ pub mod pallet {
 		///
 		/// # Note
 		///
-		/// If there are too many unlocking chunks to unbond with the pool account,
-		/// [`Call::pool_withdraw_unbonded`] can be called to try and minimize unlocking chunks. If
-		/// there are too many unlocking chunks, the result of this call will likely be the
-		/// `NoMoreChunks` error from the staking system.
+		/// The [`StakingInterface::unbond`] will implicitly call [`Call::pool_withdraw_unbonded`]
+		/// if there are no left unlocking chunk slots available.
 		#[pallet::weight(T::WeightInfo::unbond())]
 		#[transactional]
 		pub fn unbond(

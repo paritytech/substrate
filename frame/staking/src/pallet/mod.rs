@@ -932,8 +932,8 @@ pub mod pallet {
 		/// the funds out of management ready for transfer.
 		///
 		/// No more than a limited number of unlocking chunks (see `MaxUnlockingChunks`)
-		/// can co-exists at the same time. In that case, [`Call::withdraw_unbonded`] need
-		/// to be called first to remove some of the chunks (if possible).
+		/// can co-exists at the same time. If there are no unlocking chunks slots available
+		/// [`Call::withdraw_unbonded`] is called to remove some of the chunks (if possible).
 		///
 		/// If a user encounters the `InsufficientBond` error when calling this extrinsic,
 		/// they should call `chill` first in order to free up their bonded funds.
@@ -941,17 +941,27 @@ pub mod pallet {
 		/// Emits `Unbonded`.
 		///
 		/// See also [`Call::withdraw_unbonded`].
-		#[pallet::weight(T::WeightInfo::unbond())]
+		#[pallet::weight(
+            T::WeightInfo::withdraw_unbonded_kill(T::BondingDuration::get()) + 
+            T::WeightInfo::unbond())
+        ]
 		pub fn unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResult {
-			let controller = ensure_signed(origin)?;
+			let controller = ensure_signed(origin.clone())?;
+
+			// ensure that there's chunk slots available by requesting the staking interface to
+			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
+			// slots available.
+			if Self::chunk_slots_filled(&controller)? == T::MaxUnlockingChunks::get() as usize {
+				let num_slashing_spans = T::BondingDuration::get();
+
+				Self::withdraw_unbonded(origin, num_slashing_spans)
+					.map_err(|with_post| with_post.error)?;
+			};
+
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			ensure!(
-				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
-				Error::<T>::NoMoreChunks,
-			);
 
 			let mut value = value.min(ledger.active);
 
