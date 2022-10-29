@@ -54,7 +54,8 @@ schnorrkel = { version = "0.9.1", features = [
 	"preaudit_deprecated",
 	"u64_backend",
 ], default-features = false, optional = true }
-bls-like = {version="*", default-features = false }
+bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb", default-features = false}
+#bls-like = {version="*", default-features = false }
 sha2 = { version = "0.10.0", default-features = false, optional = true }
 hex = { version = "0.4", default-features = false, optional = true}
 libsecp256k1 = { version = "0.7", default-features = false, features = ["static-context"], optional = true }
