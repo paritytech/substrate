@@ -18,55 +18,31 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use sc_sysinfo::{Throughput, Unit};
-use serde::{
-	de::{Error, MapAccess, Visitor},
-	ser::SerializeMap,
-	Deserialize, Deserializer, Serialize, Serializer,
-};
+use sc_sysinfo::Throughput;
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use sp_std::{fmt, fmt::Formatter};
 
-fn serialize_throughput<S>(t: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
+/// Serializes throughput into MiBs and represents it as `f64`.
+fn serialize_throughput_as_f64<S>(throughput: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
 where
 	S: Serializer,
 {
-	let mut map = serializer.serialize_map(Some(1))?;
-	let (value, unit) = t.normalize();
-	let unit_as_str = match unit {
-		Unit::GiBs => "GiBs",
-		Unit::MiBs => "MiBs",
-		Unit::KiBs => "KiBs",
-	};
-
-	map.serialize_entry(&unit_as_str, &value)?;
-	map.end()
+	serializer.serialize_f64(throughput.as_mibs())
 }
 
 struct ThroughputVisitor;
-
 impl<'de> Visitor<'de> for ThroughputVisitor {
 	type Value = Throughput;
 
 	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-		formatter.write_str("A map where the key is the unit and value is a f64.")
+		formatter.write_str("A value that is a f64.")
 	}
 
-	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+	fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
 	where
-		M: MapAccess<'de>,
+		E: serde::de::Error,
 	{
-		let (key, value): (&str, f64) = if let Some((key, value)) = access.next_entry()? {
-			(key, value)
-		} else {
-			return Err(M::Error::custom("Expected an entry."))
-		};
-
-		match key {
-			"KiBs" => Ok(Throughput::from_kibs(value)),
-			"MiBs" => Ok(Throughput::from_mibs(value)),
-			"GiBs" => Ok(Throughput::from_gibs(value)),
-			_ => Err(M::Error::custom("Invalid unit.")),
-		}
+		Ok(Throughput::from_mibs(value))
 	}
 }
 
@@ -74,7 +50,7 @@ fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Erro
 where
 	D: Deserializer<'de>,
 {
-	Ok(deserializer.deserialize_map(ThroughputVisitor))?
+	Ok(deserializer.deserialize_f64(ThroughputVisitor))?
 }
 
 lazy_static! {
@@ -87,6 +63,7 @@ lazy_static! {
 	/// <https://wiki.polkadot.network/docs/maintain-guides-how-to-validate-polkadot>
 	pub static ref SUBSTRATE_REFERENCE_HARDWARE: Requirements = {
 		let raw = include_bytes!("reference_hardware.json").as_slice();
+		println!("{:?}", raw);
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
 	};
 }
@@ -101,7 +78,10 @@ pub struct Requirement {
 	/// The metric to measure.
 	pub metric: Metric,
 	/// The minimal throughput that needs to be archived for this requirement.
-	#[serde(serialize_with = "serialize_throughput", deserialize_with = "deserialize_throughput")]
+	#[serde(
+		serialize_with = "serialize_throughput_as_f64",
+		deserialize_with = "deserialize_throughput"
+	)]
 	pub minimum: Throughput,
 }
 

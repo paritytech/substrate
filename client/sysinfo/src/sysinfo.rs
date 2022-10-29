@@ -116,10 +116,7 @@ impl fmt::Display for Throughput {
 }
 
 /// Serializes `Throughput` and uses MiBs as the unit.
-pub fn serialize_throughput_as_mibs<S>(
-	throughput: &Throughput,
-	serializer: S,
-) -> Result<S::Ok, S::Error>
+pub fn serialize_throughput<S>(throughput: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
 where
 	S: Serializer,
 {
@@ -127,7 +124,7 @@ where
 }
 
 /// Serializes `Option<Throughput>` and uses MiBs as the unit.
-pub fn serialize_throughput_option_as_mibs<S>(
+pub fn serialize_throughput_option<S>(
 	maybe_throughput: &Option<Throughput>,
 	serializer: S,
 ) -> Result<S::Ok, S::Error>

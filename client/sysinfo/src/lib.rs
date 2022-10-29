@@ -29,7 +29,7 @@ mod sysinfo_linux;
 pub use sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
 	benchmark_memory, benchmark_sr25519_verify, gather_hwbench, gather_sysinfo,
-	serialize_throughput_as_mibs, serialize_throughput_option_as_mibs, Throughput, Unit,
+	serialize_throughput, serialize_throughput_option, Throughput,
 };
 
 /// The operating system part of the current target triplet.
@@ -45,20 +45,20 @@ pub const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct HwBench {
 	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
-	#[serde(serialize_with = "serialize_throughput_as_mibs")]
+	#[serde(serialize_with = "serialize_throughput")]
 	pub cpu_hashrate_score: Throughput,
 	/// Memory bandwidth in MB/s, calculated by measuring the throughput of `memcpy`.
-	#[serde(serialize_with = "serialize_throughput_as_mibs")]
+	#[serde(serialize_with = "serialize_throughput")]
 	pub memory_memcpy_score: Throughput,
 	/// Sequential disk write speed in MB/s.
 	#[serde(
-		serialize_with = "serialize_throughput_option_as_mibs",
+		serialize_with = "serialize_throughput_option",
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub disk_sequential_write_score: Option<Throughput>,
 	/// Random disk write speed in MB/s.
 	#[serde(
-		serialize_with = "serialize_throughput_option_as_mibs",
+		serialize_with = "serialize_throughput_option",
 		skip_serializing_if = "Option::is_none"
 	)]
 	pub disk_random_write_score: Option<Throughput>,
