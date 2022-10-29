@@ -329,7 +329,9 @@ pub fn testnet_genesis(
 				.map(|member| (member, STASH))
 				.collect::<Vec<(AccountId, Balance)>>()
 				.try_into()
-				.expect("Too many members."),
+				.expect(
+					"Elections-Phragmen: Cannot accept more than DesiredMembers genesis member.",
+				),
 		},
 		council: CouncilConfig::default(),
 		technical_committee: TechnicalCommitteeConfig {

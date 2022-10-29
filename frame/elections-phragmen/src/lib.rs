@@ -271,14 +271,6 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
 
-		/// The maximum number of elected members.
-		#[pallet::constant]
-		type MaxMembers: Get<u32>;
-
-		/// The maximum number of runners-up.
-		#[pallet::constant]
-		type MaxRunnersUp: Get<u32>;
-
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 	}
@@ -644,7 +636,7 @@ pub mod pallet {
 	#[pallet::getter(fn members)]
 	pub type Members<T: Config> = StorageValue<
 		_,
-		BoundedVec<SeatHolder<T::AccountId, BalanceOf<T>>, T::MaxMembers>,
+		BoundedVec<SeatHolder<T::AccountId, BalanceOf<T>>, T::DesiredMembers>,
 		ValueQuery,
 	>;
 
@@ -656,7 +648,7 @@ pub mod pallet {
 	#[pallet::getter(fn runners_up)]
 	pub type RunnersUp<T: Config> = StorageValue<
 		_,
-		BoundedVec<SeatHolder<T::AccountId, BalanceOf<T>>, T::MaxRunnersUp>,
+		BoundedVec<SeatHolder<T::AccountId, BalanceOf<T>>, T::DesiredRunnersUp>,
 		ValueQuery,
 	>;
 
@@ -691,7 +683,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub members: BoundedVec<(T::AccountId, BalanceOf<T>), T::MaxMembers>,
+		pub members: BoundedVec<(T::AccountId, BalanceOf<T>), T::DesiredMembers>,
 	}
 
 	#[cfg(feature = "std")]
@@ -736,7 +728,7 @@ pub mod pallet {
 										deposit: Zero::zero(),
 									},
 								)
-								.expect("Too many members!"),
+								.expect("Cannot accept more than DesiredMembers genesis member."),
 						}
 					});
 
@@ -815,7 +807,9 @@ impl<T: Config> Pallet<T> {
 				// defensive-only: Members and runners-up are disjoint. This will always be err and
 				// give us an index to insert.
 				if let Err(index) = members.binary_search_by(|m| m.who.cmp(&next_best.who)) {
-					members.try_insert(index, next_best.clone()).expect("Too many members!");
+					members
+						.try_insert(index, next_best.clone())
+						.expect("Cannot accept more than DesiredMembers genesis member.");
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
@@ -1107,7 +1101,7 @@ impl<T: Config> Pallet<T> {
 					// fetch deposits from the one recorded one. This will make sure that a
 					// candidate who submitted candidacy before a change to candidacy deposit will
 					// have the correct amount recorded.
-					<Members<T>>::put::<BoundedVec<_, T::MaxMembers>>(
+					<Members<T>>::put::<BoundedVec<_, T::DesiredMembers>>(
 						new_members_sorted_by_id
 							.iter()
 							.map(|(who, stake)| SeatHolder {
@@ -1117,9 +1111,9 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.expect("Too many members!"),
+							.expect("Cannot accept more than DesiredMembers genesis member."),
 					);
-					<RunnersUp<T>>::put::<BoundedVec<_, T::MaxRunnersUp>>(
+					<RunnersUp<T>>::put::<BoundedVec<_, T::DesiredRunnersUp>>(
 						new_runners_up_sorted_by_rank
 							.into_iter()
 							.map(|(who, stake)| SeatHolder {
@@ -1178,7 +1172,9 @@ impl<T: Config> SortedMembers<T::AccountId> for Pallet<T> {
 					stake: Default::default(),
 					deposit: Default::default(),
 				};
-				members.try_insert(pos, s).expect("Too many members.")
+				members
+					.try_insert(pos, s)
+					.expect("Cannot accept more than DesiredMembers genesis member.")
 			},
 		})
 	}
@@ -1265,8 +1261,6 @@ mod tests {
 		pub static VotingBondFactor: u64 = 0;
 		pub static CandidacyBond: u64 = 3;
 		pub static DesiredMembers: u32 = 2;
-		pub static MaxMembers: u32 = 50;
-		pub static MaxRunnersUp: u32 = 30;
 		pub static DesiredRunnersUp: u32 = 0;
 		pub static TermDuration: u64 = 5;
 		pub static Members: Vec<u64> = vec![];
@@ -1349,8 +1343,6 @@ mod tests {
 		type KickedMember = ();
 		type WeightInfo = ();
 		type MaxVoters = PhragmenMaxVoters;
-		type MaxMembers = MaxMembers;
-		type MaxRunnersUp = MaxRunnersUp;
 		type MaxCandidates = PhragmenMaxCandidates;
 	}
 
@@ -1428,7 +1420,10 @@ mod tests {
 					],
 				},
 				elections: elections_phragmen::GenesisConfig::<Test> {
-					members: self.genesis_members.try_into().unwrap(),
+					members: self
+						.genesis_members
+						.try_into()
+						.expect("Cannot accept more than DesiredMembers genesis member."),
 				},
 			}
 			.build_storage()
@@ -1686,6 +1681,7 @@ mod tests {
 			.build_and_execute(|| {});
 	}
 
+	//
 	#[test]
 	#[should_panic = "Cannot accept more than DesiredMembers genesis member"]
 	fn genesis_members_cannot_too_many() {
