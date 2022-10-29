@@ -3345,6 +3345,7 @@ dependencies = [
  "pallet-indices",
  "pallet-lottery",
  "pallet-membership",
+ "pallet-message-queue",
  "pallet-mmr",
  "pallet-multisig",
  "pallet-nomination-pools",
@@ -5662,6 +5663,8 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "sp-tracing",
+ "sp-weights",
 ]
 
 [[package]]

@@ -1121,6 +1121,35 @@ impl pallet_bounties::Config for Runtime {
 }
 
 parameter_types! {
+	pub const HeapSize: u32 = 24;
+	pub const MaxStale: u32 = 2;
+}
+
+/// Processes any message while consuming no weight.
+pub struct NoOpMessageProcessor;
+
+impl pallet_message_queue::ProcessMessage for NoOpMessageProcessor {
+	type Origin = ();
+
+	fn process_message(
+		message: &[u8],
+		origin: Self::Origin,
+		weight_limit: Weight,
+	) -> Result<(bool, Weight), pallet_message_queue::ProcessMessageError> {
+		Ok((true, Weight::zero()))
+	}
+}
+
+impl pallet_message_queue::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	type MessageProcessor = NoOpMessageProcessor;
+	type Size = u32;
+	type HeapSize = HeapSize;
+	type MaxReady = MaxReady;
+}
+
+parameter_types! {
 	pub const ChildBountyValueMinimum: Balance = 1 * DOLLARS;
 }
 
@@ -1670,6 +1699,7 @@ construct_runtime!(
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
 		FastUnstake: pallet_fast_unstake,
+		MessageQueue: pallet_message_queue,
 	}
 );
 
@@ -1764,6 +1794,7 @@ mod benches {
 		[pallet_indices, Indices]
 		[pallet_lottery, Lottery]
 		[pallet_membership, TechnicalMembership]
+		[pallet_message_queue, MessageQueue]
 		[pallet_mmr, Mmr]
 		[pallet_multisig, Multisig]
 		[pallet_nomination_pools, NominationPoolsBench::<Runtime>]
