@@ -126,7 +126,7 @@ impl ProcessMessage for TestMessageProcessor {
 		} else {
 			1
 		};
-		let weight = Weight::from_components(weight, weight);
+		let weight = Weight::from_parts(weight, weight);
 		if weight.all_lte(weight_limit) {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
@@ -150,7 +150,7 @@ pub trait IntoWeight {
 }
 impl IntoWeight for u64 {
 	fn into_weight(self) -> Weight {
-		Weight::from_components(self, self)
+		Weight::from_parts(self, self)
 	}
 }
 
