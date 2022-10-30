@@ -373,7 +373,7 @@ impl<T: Config> Iterator for ReadyRing<T> {
 /// The status of a page after trying to execute its next message.
 #[derive(PartialEq)]
 enum PageExecutionStatus {
-	/// The execution bailed because there was not enough weight was remaining.
+	/// The execution bailed because there was not enough weight remaining.
 	Bailed,
 	/// No more messages could be loaded. This does _not_ imply `page.is_complete()`.
 	///
@@ -551,25 +551,28 @@ impl<T: Config> Pallet<T> {
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
 	) -> Option<MessageOriginOf<T>> {
+		if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
+			return None
+		}
+
 		let mut processed = 0;
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		while book_state.end > book_state.begin {
-			let page_index = book_state.begin;
-			if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
-				return None
-			}
-
-			let status = Self::service_page(
+			match Self::service_page(
 				&origin,
-				page_index,
 				&mut processed,
 				&mut book_state,
 				weight,
 				overweight_limit,
-			);
-
-			if status == PageExecutionStatus::Bailed {
-				break
+			) {
+				// Store the page progress and do not go to the next one.
+				PageExecutionStatus::Bailed => break,
+				// Go to the next page if this one is at the end.
+				PageExecutionStatus::NoMore => (),
+				// TODO @ggwpez think of a better enum here.
+				PageExecutionStatus::Partial => {
+					defensive!("should progress till the end or bail");
+				},
 			}
 			book_state.begin.saturating_inc();
 		}
@@ -591,17 +594,21 @@ impl<T: Config> Pallet<T> {
 	/// Returns whether the execution bailed.
 	fn service_page(
 		origin: &MessageOriginOf<T>,
-		page_index: u32,
 		processed: &mut u32,
 		book_state: &mut BookState<MessageOriginOf<T>>,
 		weight: &mut WeightCounter,
 		max_per_msg: Weight,
 	) -> PageExecutionStatus {
+		if !weight.check_accrue(T::WeightInfo::service_page_base()) {
+			return PageExecutionStatus::Bailed
+		}
+
+		let page_index = book_state.begin;
 		let mut page = match Pages::<T>::get(&origin, page_index) {
 			Some(p) => p,
 			None => {
 				debug_assert!(false, "message-queue: referenced page not found");
-				return PageExecutionStatus::Bailed
+				return PageExecutionStatus::NoMore
 			},
 		};
 
