@@ -4207,10 +4207,10 @@ mod create {
 		ExtBuilder::default().build_and_execute(|| {
 			let ed = Balances::minimum_balance();
 
-			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
+			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
-				StakingMock::minimum_bond(),
+				StakingMock::minimum_nominator_bond(),
 				123,
 				456,
 				789
