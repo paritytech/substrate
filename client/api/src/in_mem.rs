@@ -295,10 +295,9 @@ impl<Block: BlockT> Blockchain<Block> {
 
 	fn append_justification(
 		&self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Justification,
 	) -> sp_blockchain::Result<()> {
-		let hash = self.expect_block_hash_from_id(&id)?;
 		let mut storage = self.storage.write();
 
 		let block = storage
@@ -745,10 +744,10 @@ where
 
 	fn append_justification(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Justification,
 	) -> sp_blockchain::Result<()> {
-		self.blockchain.append_justification(block, justification)
+		self.blockchain.append_justification(hash, justification)
 	}
 
 	fn blockchain(&self) -> &Self::Blockchain {
@@ -865,26 +864,27 @@ mod tests {
 	fn append_and_retrieve_justifications() {
 		let blockchain = test_blockchain();
 		let last_finalized = blockchain.last_finalized().unwrap();
-		let block = BlockId::Hash(last_finalized);
 
-		blockchain.append_justification(block, (ID2, vec![4])).unwrap();
+		blockchain.append_justification(&last_finalized, (ID2, vec![4])).unwrap();
 		let justifications = {
 			let mut just = Justifications::from((ID1, vec![3]));
 			just.append((ID2, vec![4]));
 			just
 		};
-		assert_eq!(blockchain.justifications(block).unwrap(), Some(justifications));
+		assert_eq!(
+			blockchain.justifications(BlockId::Hash(last_finalized)).unwrap(),
+			Some(justifications)
+		);
 	}
 
 	#[test]
 	fn store_duplicate_justifications_is_forbidden() {
 		let blockchain = test_blockchain();
 		let last_finalized = blockchain.last_finalized().unwrap();
-		let block = BlockId::Hash(last_finalized);
 
-		blockchain.append_justification(block, (ID2, vec![0])).unwrap();
+		blockchain.append_justification(&last_finalized, (ID2, vec![0])).unwrap();
 		assert!(matches!(
-			blockchain.append_justification(block, (ID2, vec![1])),
+			blockchain.append_justification(&last_finalized, (ID2, vec![1])),
 			Err(sp_blockchain::Error::BadJustification(_)),
 		));
 	}
