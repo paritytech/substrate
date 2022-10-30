@@ -26,17 +26,17 @@ use frame_system::RawOrigin;
 use sp_std::prelude::*;
 
 benchmarks! {
+	// Just calling `service_queue` without any iterations happening.
+	service_queue_base { }: { }
+
 	// Just calling `service_page` without any iterations happening.
 	service_page_base {	}: { }
 
-	// Just calling `service_queue` without any iterations happening.
-	service_queue_base { }: { }
+	service_message { }: { }
 
 	// Contains the effort for fetching and (storing or removing) a page.
 	service_page_process_message { }: { }
 
 	// Worst case for calling `bump_service_head`.
 	bump_service_head { }: {}
-
-	service_page_next_msg { }: { }
 }

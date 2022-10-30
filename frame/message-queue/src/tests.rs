@@ -133,8 +133,8 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	fn bump_service_head() -> Weight {
 		WeightForCall::get().get("bump_service_head").copied().unwrap_or_default()
 	}
-	fn service_page_next_msg() -> Weight {
-		WeightForCall::get().get("service_page_next_msg").copied().unwrap_or_default()
+	fn service_message() -> Weight {
+		WeightForCall::get().get("service_message").copied().unwrap_or_default()
 	}
 }
 

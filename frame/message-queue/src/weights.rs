@@ -36,7 +36,7 @@ pub trait WeightInfo {
 	fn service_queue_base() -> Weight;
 	fn service_page_process_message() -> Weight;
 	fn bump_service_head() -> Weight;
-	fn service_page_next_msg() -> Weight;
+	fn service_message() -> Weight;
 }
 
 // TODO auto-generate this by the benchmarking
@@ -49,7 +49,7 @@ impl<W: WeightInfo> WeightMetaInfo<W> {
 			f("service_queue_base", W::service_queue_base()),
 			f("service_page_process_message", W::service_page_process_message()),
 			f("bump_service_head", W::bump_service_head()),
-			f("service_page_next_msg", W::service_page_next_msg()),
+			f("service_message", W::service_message()),
 		]
 	}
 }
@@ -74,7 +74,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 		Weight::from_ref_time(112_000 as u64)
 	}
 
-	fn service_page_next_msg() -> Weight {
+	fn service_message() -> Weight {
 		Weight::from_ref_time(112_000 as u64)
 	}
 }
@@ -98,7 +98,7 @@ impl WeightInfo for () {
 		Weight::from_ref_time(112_000 as u64)
 	}
 
-	fn service_page_next_msg() -> Weight {
+	fn service_message() -> Weight {
 		Weight::from_ref_time(112_000 as u64)
 	}
 }
