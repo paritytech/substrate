@@ -411,14 +411,14 @@ where
 		reference_types: false,
 		simd: false,
 	})
-	.validate_all(original_code.as_ref())
+	.validate_all(original_code)
 	.map_err(|err| {
 		log::debug!(target: "runtime::contracts", "{}", err);
 		(Error::<T>::CodeRejected.into(), "validation of new code failed")
 	})?;
 
 	let (code, (initial, maximum)) = (|| {
-		let contract_module = ContractModule::new(original_code.as_ref(), schedule)?;
+		let contract_module = ContractModule::new(original_code, schedule)?;
 		contract_module.scan_exports()?;
 		contract_module.ensure_no_internal_memory()?;
 		contract_module.ensure_table_size_limit(schedule.limits.table_size)?;
@@ -456,7 +456,7 @@ where
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
 		PrefabWasmModule::<T>::instantiate::<E, _>(
-			original_code.as_ref(),
+			original_code,
 			(),
 			(initial, maximum),
 			stack_limits,
