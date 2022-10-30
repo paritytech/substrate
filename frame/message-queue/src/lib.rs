@@ -528,6 +528,96 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	/// Service as many messages of a page as possible.
+	fn service_page(
+		origin: &MessageOriginOf<T>,
+		page_index: u32,
+		processed: &mut u32,
+		book_state: &mut BookState<MessageOriginOf<T>>,
+		weight: &mut WeightCounter,
+		max_per_msg: Weight,
+	) -> bool /* stop */ {
+		let mut page = match Pages::<T>::get(&origin, page_index) {
+			Some(p) => p,
+			None => {
+				debug_assert!(false, "message-queue: referenced page not found");
+				return true
+			},
+		};
+
+		let bail = loop {
+			if !weight.check_accrue(T::WeightInfo::service_page_next_msg()) {
+				break true
+			}
+			let mut message = &match page.peek_first() {
+				Some(m) => m,
+				None => break false,
+			}[..];
+
+			// TODO should not be needed.
+			if weight.remaining().any_lte(Weight::zero()) {
+				break true
+			}
+
+			let is_processed = match MessageOriginOf::<T>::decode(&mut message) {
+				Ok(origin) => {
+					let hash = T::Hashing::hash(message);
+					use ProcessMessageError::Overweight;
+					match T::MessageProcessor::process_message(
+						message,
+						origin.clone(),
+						weight.remaining(),
+					) {
+						Err(Overweight(w)) if *processed == 0 || w.any_gt(max_per_msg) => {
+							// Permanently overweight.
+							Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
+							false
+						},
+						Err(Overweight(_)) => {
+							// Temporarily overweight - save progress and stop processing this
+							// queue.
+							break true
+						},
+						Err(error) => {
+							// Permanent error - drop
+							Self::deposit_event(Event::<T>::ProcessingFailed {
+								hash,
+								origin,
+								error,
+							});
+							true
+						},
+						Ok((success, weight_used)) => {
+							// Success
+							processed.saturating_inc();
+							weight.defensive_saturating_accrue(weight_used);
+							let event =
+								Event::<T>::Processed { hash, origin, weight_used, success };
+							Self::deposit_event(event);
+							true
+						},
+					}
+				},
+				Err(_) => {
+					let hash = T::Hashing::hash(message);
+					Self::deposit_event(Event::<T>::Discarded { hash });
+					false
+				},
+			};
+			page.skip_first(is_processed);
+		};
+
+		if page.is_complete() {
+			debug_assert!(!bail, "we never bail if a page became complete");
+			Pages::<T>::remove(&origin, page_index);
+			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
+			book_state.count.saturating_dec();
+		} else {
+			Pages::<T>::insert(&origin, page_index, page);
+		}
+		bail
+	}
+
 	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
 	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
 	/// execute are deemed overweight and ignored.
@@ -540,87 +630,23 @@ impl<T: Config> Pallet<T> {
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		while book_state.end > book_state.begin {
 			let page_index = book_state.begin;
-			// TODO: Check `weight_left` and bail before doing this storage read.
-			let mut page = match Pages::<T>::get(&origin, page_index) {
-				Some(p) => p,
-				None => {
-					debug_assert!(false, "message-queue: referenced page not found");
-					break
-				},
-			};
-
-			let bail = loop {
-				let mut message = &match page.peek_first() {
-					Some(m) => m,
-					None => break false,
-				}[..];
-
-				if weight.remaining().any_lte(Weight::zero()) {
-					break true
-				}
-
-				let is_processed = match MessageOriginOf::<T>::decode(&mut message) {
-					Ok(origin) => {
-						let hash = T::Hashing::hash(message);
-						use ProcessMessageError::Overweight;
-						match T::MessageProcessor::process_message(
-							message,
-							origin.clone(),
-							weight.remaining(),
-						) {
-							Err(Overweight(w)) if processed == 0 || w.any_gt(overweight_limit) => {
-								// Permanently overweight.
-								Self::deposit_event(Event::<T>::Overweight {
-									hash,
-									origin,
-									index: 0,
-								}); // TODO page + index
-								false
-							},
-							Err(Overweight(_)) => {
-								// Temporarily overweight - save progress and stop processing this
-								// queue.
-								break true
-							},
-							Err(error) => {
-								// Permanent error - drop
-								Self::deposit_event(Event::<T>::ProcessingFailed {
-									hash,
-									origin,
-									error,
-								});
-								true
-							},
-							Ok((success, weight_used)) => {
-								// Success
-								processed.saturating_inc();
-								weight.defensive_saturating_accrue(weight_used);
-								let event =
-									Event::<T>::Processed { hash, origin, weight_used, success };
-								Self::deposit_event(event);
-								true
-							},
-						}
-					},
-					Err(_) => {
-						let hash = T::Hashing::hash(message);
-						Self::deposit_event(Event::<T>::Discarded { hash });
-						false
-					},
-				};
-				page.skip_first(is_processed);
-			};
-
-			if page.is_complete() {
-				debug_assert!(!bail, "we never bail if a page became complete");
-				Pages::<T>::remove(&origin, page_index);
-				debug_assert!(book_state.count > 0, "completing a page implies there are pages");
-				book_state.count.saturating_dec();
-			} else {
-				Pages::<T>::insert(&origin, page_index, page);
+			if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
+				return None
+			}
+			if !weight.check_accrue(T::WeightInfo::service_page_process_message()) {
+				return None
 			}
 
-			if bail {
+			let stop = Self::service_page(
+				&origin,
+				page_index,
+				&mut processed,
+				&mut book_state,
+				weight,
+				overweight_limit,
+			);
+
+			if stop {
 				break
 			}
 			book_state.begin.saturating_inc();
