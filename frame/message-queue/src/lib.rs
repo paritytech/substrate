@@ -710,7 +710,7 @@ pub trait ServiceQueues {
 
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
-		/// The maximum weight that processing a single message may take.
+		// The maximum weight that processing a single message may take.
 		let max_per_msg = weight_limit.saturating_mul(3).saturating_div(4);
 		let mut weight = WeightCounter::from_limit(weight_limit);
 		log::debug!(
@@ -727,7 +727,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 
 		loop {
 			// TODO should not be needed. Instead add a no-progress check and stop rotating
-			// the ring in that case. This is only needed since tests declares the base weights
+			// the ring in that case. This is only needed since tests declares the weights
 			// as zero, so it produces an infinite loop.
 			if weight.remaining().any_lte(Zero::zero()) {
 				break
