@@ -283,7 +283,7 @@ fn set_external_metadata_works() {
 		let invalid_hash: PreimageHash = [1u8; 32].into();
 		// fails to set metadata if an external proposal does not exist.
 		assert_noop!(
-			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash.clone(),),
+			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash),
 			Error::<Test>::NoProposal,
 		);
 		// create an external proposal.
@@ -291,17 +291,17 @@ fn set_external_metadata_works() {
 		assert!(<NextExternal<Test>>::exists());
 		// fails to set metadata with non external origin.
 		assert_noop!(
-			Democracy::set_external_metadata(RuntimeOrigin::signed(1), invalid_hash.clone(),),
+			Democracy::set_external_metadata(RuntimeOrigin::signed(1), invalid_hash),
 			BadOrigin,
 		);
 		// fails to set non-existing preimage.
 		assert_noop!(
-			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash.clone(),),
+			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash),
 			Error::<Test>::BadMetadata,
 		);
 		// set metadata successful.
 		let hash = note_preimage(1);
-		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash.clone(),),);
+		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash,),);
 		System::assert_last_event(RuntimeEvent::Democracy(crate::Event::MetadataSet {
 			owner: MetadataOwner::External,
 			hash,
@@ -318,7 +318,7 @@ fn clear_metadata_works() {
 		assert!(<NextExternal<Test>>::exists());
 		// set metadata.
 		let hash = note_preimage(1);
-		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash.clone(),));
+		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash,));
 		assert!(Preimage::is_requested(&hash));
 		// fails to clear metadata with a wrong origin.
 		assert_noop!(Democracy::clear_external_metadata(RuntimeOrigin::signed(1)), BadOrigin,);
