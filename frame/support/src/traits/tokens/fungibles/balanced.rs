@@ -213,7 +213,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		let old_balance = Self::balance(asset, who);
 		let old_free_balance = Self::free_balance(asset, who);
 		let (mut new_balance, mut amount) = if old_free_balance < amount {
-			(Zero::zero(), old_free_balance)
+			(old_balance.saturating_sub(old_free_balance), old_free_balance)
 		} else {
 			(old_balance - amount, amount)
 		};
