@@ -532,7 +532,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 3,
+			version: 4,
 			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),

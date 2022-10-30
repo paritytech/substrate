@@ -41,12 +41,12 @@ pub const IMPORT_MODULE_MEMORY: &str = "env";
 
 /// Determines whether a module should be instantiated during preparation.
 pub enum TryInstantiate {
-	/// Do the instantation to make sure that the module is valid.
+	/// Do the innstantiation to make sure that the module is valid.
 	///
 	/// This should be used if a module is only uploaded but not executed. We need
 	/// to make sure that it can be actually instantiated.
 	Instantiate,
-	/// Skip the instantation during preparation.
+	/// Skip the instantiation during preparation.
 	///
 	/// This makes sense when the preparation takes place as part of an instantation. Then
 	/// this instantiation would fail the whole transaction and an extra check is not
@@ -370,26 +370,19 @@ fn get_memory_limits<T: Config>(
 	}
 }
 
-/// Loads the given module given in `original_code`, performs some checks on it and
-/// does some preprocessing.
+/// Check and instrument the given `original_code`.
 ///
-/// The checks are:
-///
-/// - provided code is a valid wasm module.
-/// - the module doesn't define an internal memory instance,
-/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`,
-/// - all imported functions from the external environment matches defined by `env` module,
-///
-/// The preprocessing includes injecting code for gas metering and metering the height of stack.
-pub fn prepare<E, T: Config>(
-	original_code: CodeVec<T>,
+/// On success it returns the instrumented versions together with its `(initial, maximum)`
+/// error requirement. The memory requirement was also validated against the `schedule`.
+fn instrument<E, T>(
+	original_code: &[u8],
 	schedule: &Schedule<T>,
-	owner: AccountIdOf<T>,
 	determinism: Determinism,
 	try_instantiate: TryInstantiate,
-) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)>
+) -> Result<(Vec<u8>, (u32, u32)), (DispatchError, &'static str)>
 where
 	E: Environment<()>,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	// Do not enable any features here. Any additional feature needs to be carefully
@@ -474,6 +467,35 @@ where
 		})?;
 	}
 
+	Ok((code, (initial, maximum)))
+}
+
+/// Loads the given module given in `original_code`, performs some checks on it and
+/// does some preprocessing.
+///
+/// The checks are:
+///
+/// - provided code is a valid wasm module.
+/// - the module doesn't define an internal memory instance,
+/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`,
+/// - all imported functions from the external environment matches defined by `env` module,
+///
+/// The preprocessing includes injecting code for gas metering and metering the height of stack.
+pub fn prepare<E, T>(
+	original_code: CodeVec<T>,
+	schedule: &Schedule<T>,
+	owner: AccountIdOf<T>,
+	determinism: Determinism,
+	try_instantiate: TryInstantiate,
+) -> Result<PrefabWasmModule<T>, (DispatchError, &'static str)>
+where
+	E: Environment<()>,
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
+	let (code, (initial, maximum)) =
+		instrument::<E, T>(original_code.as_ref(), schedule, determinism, try_instantiate)?;
+
 	let original_code_len = original_code.len();
 
 	let mut module = PrefabWasmModule {
@@ -502,30 +524,28 @@ where
 	Ok(module)
 }
 
-/// Just run the instrumentation without checking the code.
+/// Same as [`prepare`] but without constructing a new module.
 ///
-/// Only run this on already uploaded code which is already validated. This also doesn't
-/// check new newly instrumented code as there is nothing we can do on a failure here
-/// anyways: The code is already deployed and it doesn't matter if it fails here or when
-/// actually running the code.
-pub fn reinstrument<E, T: Config>(
+/// Used to update the code of an existing module to the newest [`Schedule`] version.
+/// Stictly speaking is not necessary to check the existing code before reinstrumenting because
+/// it can't change in the meantime. However, since we recently switched the validation library
+/// we want to re-validate to weed out any bugs that were lurking in the old version.
+pub fn reinstrument<E, T>(
 	original_code: &[u8],
 	schedule: &Schedule<T>,
 	determinism: Determinism,
-) -> Result<Vec<u8>, &'static str>
+) -> Result<Vec<u8>, DispatchError>
 where
 	E: Environment<()>,
+	T: Config,
 	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
-	let contract_module = ContractModule::new(original_code, schedule)?;
-	contract_module
-		.inject_gas_metering(determinism)
-		.and_then(|module| module.inject_stack_height_metering())
-		.and_then(|module| module.into_wasm_code())
-		.map_err(|msg| {
+	instrument::<E, T>(original_code, schedule, determinism, TryInstantiate::Skip)
+		.map_err(|(err, msg)| {
 			log::error!(target: "runtime::contracts", "CodeRejected during reinstrument: {}", msg);
-			Error::<T>::CodeRejected.into()
+			err
 		})
+		.map(|(code, _)| code)
 }
 
 /// Alternate (possibly unsafe) preparation functions used only for benchmarking.
