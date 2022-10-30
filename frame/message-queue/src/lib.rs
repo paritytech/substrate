@@ -528,7 +528,52 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
+	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
+	/// execute are deemed overweight and ignored.
+	fn service_queue(
+		origin: MessageOriginOf<T>,
+		weight: &mut WeightCounter,
+		overweight_limit: Weight,
+	) -> Option<MessageOriginOf<T>> {
+		let mut processed = 0;
+		let mut book_state = BookStateOf::<T>::get(&origin);
+		while book_state.end > book_state.begin {
+			let page_index = book_state.begin;
+			if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
+				return None
+			}
+
+			let stop = Self::service_page(
+				&origin,
+				page_index,
+				&mut processed,
+				&mut book_state,
+				weight,
+				overweight_limit,
+			);
+
+			if stop {
+				break
+			}
+			book_state.begin.saturating_inc();
+		}
+		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
+		if book_state.begin >= book_state.end && processed > 0 {
+			// No longer ready - unknit.
+			if let Some(neighbours) = book_state.ready_neighbours.take() {
+				Self::ready_ring_unknit(&origin, neighbours);
+			} else {
+				debug_assert!(false, "Freshly processed queue must have been ready");
+			}
+		}
+		BookStateOf::<T>::insert(&origin, &book_state);
+		next_ready
+	}
+
 	/// Service as many messages of a page as possible.
+	///
+	/// Returns whether the execution bailed.
 	fn service_page(
 		origin: &MessageOriginOf<T>,
 		page_index: u32,
@@ -536,7 +581,7 @@ impl<T: Config> Pallet<T> {
 		book_state: &mut BookState<MessageOriginOf<T>>,
 		weight: &mut WeightCounter,
 		max_per_msg: Weight,
-	) -> bool /* stop */ {
+	) -> bool {
 		let mut page = match Pages::<T>::get(&origin, page_index) {
 			Some(p) => p,
 			None => {
@@ -616,52 +661,6 @@ impl<T: Config> Pallet<T> {
 			Pages::<T>::insert(&origin, page_index, page);
 		}
 		bail
-	}
-
-	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
-	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
-	/// execute are deemed overweight and ignored.
-	fn service_queue(
-		origin: MessageOriginOf<T>,
-		weight: &mut WeightCounter,
-		overweight_limit: Weight,
-	) -> Option<MessageOriginOf<T>> {
-		let mut processed = 0;
-		let mut book_state = BookStateOf::<T>::get(&origin);
-		while book_state.end > book_state.begin {
-			let page_index = book_state.begin;
-			if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
-				return None
-			}
-			if !weight.check_accrue(T::WeightInfo::service_page_process_message()) {
-				return None
-			}
-
-			let stop = Self::service_page(
-				&origin,
-				page_index,
-				&mut processed,
-				&mut book_state,
-				weight,
-				overweight_limit,
-			);
-
-			if stop {
-				break
-			}
-			book_state.begin.saturating_inc();
-		}
-		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
-		if book_state.begin >= book_state.end && processed > 0 {
-			// No longer ready - unknit.
-			if let Some(neighbours) = book_state.ready_neighbours.take() {
-				Self::ready_ring_unknit(&origin, neighbours);
-			} else {
-				debug_assert!(false, "Freshly processed queue must have been ready");
-			}
-		}
-		BookStateOf::<T>::insert(&origin, &book_state);
-		next_ready
 	}
 }
 
