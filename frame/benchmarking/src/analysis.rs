@@ -170,7 +170,8 @@ fn linear_regression(
 	x_vars: usize,
 ) -> Option<(f64, Vec<f64>, Vec<f64>)> {
 	let (intercept, params, errors) = raw_linear_regression(&xs, &ys, x_vars, true)?;
-	if intercept > 0.0 {
+	if intercept >= -0.0001 {
+		// The intercept is positive, or is effectively zero.
 		return Some((intercept, params, errors[1..].to_vec()))
 	}
 
@@ -747,5 +748,22 @@ mod tests {
 			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
 		assert_eq!(extrinsic_time.base, 3_000_000_000);
 		assert_eq!(extrinsic_time.slopes, vec![3_000_000_000]);
+	}
+
+	#[test]
+	fn intercept_of_a_little_under_zero_is_rounded_up_to_zero() {
+		// Analytically this should result in an intercept of 0, but
+		// due to numerical imprecision this will generate an intercept
+		// equal to roughly -0.0000000000000004440892098500626
+		let data = vec![
+			benchmark_result(vec![(BenchmarkParameter::n, 1)], 2, 0, 0, 0),
+			benchmark_result(vec![(BenchmarkParameter::n, 2)], 4, 0, 0, 0),
+			benchmark_result(vec![(BenchmarkParameter::n, 3)], 6, 0, 0, 0),
+		];
+
+		let extrinsic_time =
+			Analysis::min_squares_iqr(&data, BenchmarkSelector::ExtrinsicTime).unwrap();
+		assert_eq!(extrinsic_time.base, 0);
+		assert_eq!(extrinsic_time.slopes, vec![2000]);
 	}
 }
