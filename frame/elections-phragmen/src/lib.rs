@@ -276,7 +276,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Something that will calculate the election results based on the data provided by
-		/// Self as DataProvider.
+		/// `Self as DataProvider`.
 		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
