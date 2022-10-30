@@ -21,7 +21,7 @@
 //! systems such as the Referenda pallet. Members each have a rank, with zero being the lowest.
 //! There is no complexity limitation on either the number of members at a rank or the number of
 //! ranks in the system thus allowing potentially public membership. A member of at least a given
-//! rank can be selected at random in O(1) time, allowing for various games to constructed using
+//! rank can be selected at random in O(1) time, allowing for various games to be constructed using
 //! this as a primitive. Members may only be promoted and demoted by one rank at a time, however
 //! all operations (save one) are O(1) in complexity. The only operation which is not O(1) is the
 //! `remove_member` since they must be removed from all ranks from the present down to zero.
@@ -33,7 +33,7 @@
 //!
 //! Two `Config` trait items control these "rank privileges": `MinRankOfClass` and `VoteWeight`.
 //! The first controls which ranks are allowed to vote on a particular class of poll. The second
-//! controls the weight of a vote given the voters rank compared to the minimum rank of the poll.
+//! controls the weight of a vote given the voter's rank compared to the minimum rank of the poll.
 //!
 //! An origin control, `EnsureRank`, ensures that the origin is a member of the collective of at
 //! least a particular rank.
@@ -310,8 +310,8 @@ impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigi
 	}
 }
 
-/// Guard to ensure that the given origin is a member of the collective. The pair of including both
-/// the account ID and the rank of the member is the `Success` value.
+/// Guard to ensure that the given origin is a member of the collective. The pair of both the
+/// account ID and the rank of the member is the `Success` value.
 pub struct EnsureRankedMember<T, I, const MIN_RANK: u16>(PhantomData<(T, I)>);
 impl<T: Config<I>, I: 'static, const MIN_RANK: u16> EnsureOrigin<T::RuntimeOrigin>
 	for EnsureRankedMember<T, I, MIN_RANK>
@@ -430,7 +430,7 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// A member `who` has been added.
 		MemberAdded { who: T::AccountId },
-		/// The member `who`'s rank has been changed to the given `rank`.
+		/// The member `who`se rank has been changed to the given `rank`.
 		RankChanged { who: T::AccountId, rank: Rank },
 		/// The member `who` of given `rank` has been removed from the collective.
 		MemberRemoved { who: T::AccountId, rank: Rank },
