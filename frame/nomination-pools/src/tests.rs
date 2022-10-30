@@ -4201,6 +4201,44 @@ mod create {
 			);
 		});
 	}
+
+	#[test]
+	fn create_with_pool_id_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let ed = Balances::minimum_balance();
+
+			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
+			assert_ok!(Pools::create(
+				RuntimeOrigin::signed(11),
+				StakingMock::minimum_bond(),
+				123,
+				456,
+				789
+			));
+
+			assert_eq!(Balances::free_balance(&11), 0);
+			// delete the initial pool created, then pool_Id `1` will be free
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 1),
+				Error::<Runtime>::PoolIdInUse
+			);
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 3),
+				Error::<Runtime>::InvalidPoolId
+			);
+
+			// start dismantling the pool.
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
+			assert_ok!(fully_unbond_permissioned(10));
+
+			CurrentEra::set(3);
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 10));
+
+			assert_ok!(Pools::create_with_pool_id(RuntimeOrigin::signed(10), 20, 234, 654, 783, 1));
+		});
+	}
 }
 
 mod nominate {
