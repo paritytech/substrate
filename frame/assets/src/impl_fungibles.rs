@@ -35,6 +35,13 @@ impl<T: Config<I>, I: 'static> fungibles::Inspect<<T as SystemConfig>::AccountId
 		Pallet::<T, I>::balance(asset, who)
 	}
 
+	fn balance_on_free(
+		_asset: Self::AssetId,
+		_who: &<T as SystemConfig>::AccountId,
+	) -> Self::Balance {
+		unreachable!()
+	}
+
 	fn reducible_balance(
 		asset: Self::AssetId,
 		who: &<T as SystemConfig>::AccountId,

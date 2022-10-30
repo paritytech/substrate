@@ -1073,7 +1073,7 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn balance(who: &T::AccountId) -> Self::Balance {
 		Self::account(who).total()
 	}
-	fn free_balance(who: &T::AccountId) -> Self::Balance {
+	fn balance_on_free(who: &T::AccountId) -> Self::Balance {
 		Self::account(who).free
 	}
 	fn reducible_balance(who: &T::AccountId, keep_alive: bool) -> Self::Balance {
