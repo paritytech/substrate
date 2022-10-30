@@ -524,7 +524,6 @@ fn curve_handles_all_inputs() {
 fn set_metadata_works() {
 	new_test_ext().execute_with(|| {
 		use frame_support::traits::Hash as PreimageHash;
-		use sp_std::borrow::Cow;
 		// invalid preimage hash.
 		let invalid_hash: PreimageHash = [1u8; 32].into();
 		// fails to set metadata for a finished referendum.
@@ -560,7 +559,7 @@ fn set_metadata_works() {
 		);
 		// metadata set.
 		let index = ReferendumCount::<Test>::get() - 1;
-		let hash = Preimage::note(Cow::from(vec![1])).unwrap();
+		let hash = note_preimage(1);
 		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, hash.clone(),));
 		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet {
 			index,
@@ -573,8 +572,7 @@ fn set_metadata_works() {
 #[test]
 fn clear_metadata_works() {
 	new_test_ext().execute_with(|| {
-		use sp_std::borrow::Cow;
-		let hash = Preimage::note(Cow::from(vec![1, 2])).unwrap();
+		let hash = note_preimage(1);
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
 			Box::new(RawOrigin::Root.into()),
@@ -593,5 +591,6 @@ fn clear_metadata_works() {
 			index,
 			hash,
 		}));
+		assert!(!Preimage::is_requested(&hash));
 	});
 }

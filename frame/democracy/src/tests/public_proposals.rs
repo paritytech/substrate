@@ -91,7 +91,7 @@ fn cancel_proposal_should_work() {
 		assert_ok!(propose_set_balance(1, 2, 2));
 		assert_ok!(propose_set_balance(1, 4, 4));
 		assert_noop!(Democracy::cancel_proposal(RuntimeOrigin::signed(1), 0), BadOrigin);
-		let hash = note_random_preimage(1);
+		let hash = note_preimage(1);
 		assert_ok!(Democracy::set_proposal_metadata(RuntimeOrigin::signed(1), 0, hash.clone()));
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::Proposal(0)).is_some());
 		assert!(Preimage::is_requested(&hash));
@@ -99,7 +99,10 @@ fn cancel_proposal_should_work() {
 		// metadata cleared, preimage unrequested.
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::Proposal(0)).is_none());
 		assert!(!Preimage::is_requested(&hash));
-		System::assert_last_event(crate::Event::ProposalCanceled { prop_index: 0 }.into());
+		System::assert_has_event(crate::Event::ProposalCanceled { prop_index: 0 }.into());
+		System::assert_last_event(
+			crate::Event::MetadataCleared { owner: MetadataOwner::Proposal(0), hash }.into(),
+		);
 		assert_eq!(Democracy::backing_for(0), None);
 		assert_eq!(Democracy::backing_for(1), Some(4));
 	});
@@ -162,7 +165,7 @@ fn set_external_metadata_works() {
 			Error::<Test>::BadMetadata,
 		);
 		// note preimage.
-		let hash = note_random_preimage(1);
+		let hash = note_preimage(1);
 		// fails to set non-existing preimage.
 		assert_noop!(
 			Democracy::set_proposal_metadata(RuntimeOrigin::signed(3), index, hash.clone(),),
@@ -187,7 +190,7 @@ fn clear_metadata_works() {
 		assert_ok!(propose_set_balance(1, 2, 5));
 		let index = Democracy::public_prop_count() - 1;
 		// set metadata.
-		let hash = note_random_preimage(1);
+		let hash = note_preimage(1);
 		assert!(!Preimage::is_requested(&hash));
 		assert_ok!(
 			Democracy::set_proposal_metadata(RuntimeOrigin::signed(1), index, hash.clone(),)

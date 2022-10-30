@@ -28,7 +28,6 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
-rand = "0.8.4"
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-scheduler = { version = "4.0.0-dev", path = "../scheduler" }
 pallet-preimage = { version = "4.0.0-dev", path = "../preimage" }

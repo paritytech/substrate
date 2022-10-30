@@ -32,9 +32,9 @@ fn fast_track_referendum_works() {
 			RuntimeOrigin::signed(3),
 			set_balance_proposal(2)
 		));
-		let hash = note_random_preimage(1);
+		let hash = note_preimage(1);
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::External).is_none());
-		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(2), hash.clone(),),);
+		assert_ok!(Democracy::set_external_metadata(RuntimeOrigin::signed(3), hash.clone(),),);
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::External).is_some());
 		assert_noop!(Democracy::fast_track(RuntimeOrigin::signed(1), h, 3, 2), BadOrigin);
 		assert_ok!(Democracy::fast_track(RuntimeOrigin::signed(5), h, 2, 0));
