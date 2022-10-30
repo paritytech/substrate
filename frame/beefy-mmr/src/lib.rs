@@ -73,12 +73,8 @@ where
 /// Convert BEEFY secp256k1 public keys into Ethereum addresses
 pub struct BeefyEcdsaToEthereum;
 impl Convert<beefy_primitives::crypto::AuthorityId, Vec<u8>> for BeefyEcdsaToEthereum {
-	fn convert(a: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
-		sp_core::ecdsa::Public::try_from(a.as_ref())
-			.map_err(|_| {
-				log::error!(target: "runtime::beefy", "Invalid BEEFY PublicKey format!");
-			})
-			.unwrap_or(sp_core::ecdsa::Public::from_raw([0u8; 33]))
+	fn convert(beefy_id: beefy_primitives::crypto::AuthorityId) -> Vec<u8> {
+		sp_core::ecdsa::Public::from(beefy_id)
 			.to_eth_address()
 			.map(|v| v.to_vec())
 			.map_err(|_| {
