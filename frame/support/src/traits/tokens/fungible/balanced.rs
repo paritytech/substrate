@@ -164,7 +164,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(who);
-		let (mut new_balance, mut amount) = if Self::balance_on_free(who) < amount {
+		let (mut new_balance, mut amount) = if Self::reducible_balance(who, false) < amount {
 			return Err(TokenError::NoFunds.into())
 		} else {
 			(old_balance - amount, amount)
@@ -186,7 +186,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 	/// Return the imbalance by which the account was reduced.
 	fn decrease_balance_at_most(who: &AccountId, amount: Self::Balance) -> Self::Balance {
 		let old_balance = Self::balance(who);
-		let old_free_balance = Self::balance_on_free(who);
+		let old_free_balance = Self::reducible_balance(who, false);
 		let (mut new_balance, mut amount) = if old_free_balance < amount {
 			(old_balance.saturating_sub(old_free_balance), old_free_balance)
 		} else {

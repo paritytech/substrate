@@ -1073,9 +1073,6 @@ impl<T: Config<I>, I: 'static> fungible::Inspect<T::AccountId> for Pallet<T, I> 
 	fn balance(who: &T::AccountId) -> Self::Balance {
 		Self::account(who).total()
 	}
-	fn balance_on_free(who: &T::AccountId) -> Self::Balance {
-		Self::account(who).free
-	}
 	fn reducible_balance(who: &T::AccountId, keep_alive: bool) -> Self::Balance {
 		let a = Self::account(who);
 		// Liquid balance is what is neither reserved nor locked/frozen.
