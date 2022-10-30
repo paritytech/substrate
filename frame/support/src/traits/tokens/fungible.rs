@@ -46,6 +46,9 @@ pub trait Inspect<AccountId> {
 	/// Get the balance of `who`.
 	fn balance(who: &AccountId) -> Self::Balance;
 
+	/// Get the free balance of `who`.
+	fn free_balance(who: &AccountId) -> Self::Balance;
+
 	/// Get the maximum amount that `who` can withdraw/transfer successfully.
 	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance;
 
@@ -218,6 +221,9 @@ impl<
 	}
 	fn balance(who: &AccountId) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::balance(A::get(), who)
+	}
+	fn free_balance(who: &AccountId) -> Self::Balance {
+		<F as fungibles::Inspect<AccountId>>::free_balance(A::get(), who)
 	}
 	fn reducible_balance(who: &AccountId, keep_alive: bool) -> Self::Balance {
 		<F as fungibles::Inspect<AccountId>>::reducible_balance(A::get(), who, keep_alive)

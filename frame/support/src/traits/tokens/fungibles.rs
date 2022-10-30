@@ -50,6 +50,9 @@ pub trait Inspect<AccountId> {
 	/// Get the `asset` balance of `who`.
 	fn balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
+	/// Get the `asset` free balance of `who`.
+	fn free_balance(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
+
 	/// Get the maximum amount of `asset` that `who` can withdraw/transfer successfully.
 	fn reducible_balance(asset: Self::AssetId, who: &AccountId, keep_alive: bool) -> Self::Balance;
 
