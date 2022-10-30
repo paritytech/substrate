@@ -505,7 +505,6 @@ where
 				.blockchain()
 				.expect_block_hash_from_id(&BlockId::Number(block_num))
 				.and_then(|hash| {
-					println!("{block_num:?} {hash:?}");
 					self.links
 						.to_rpc_best_block_sender
 						.notify(|| Ok::<_, ()>(hash))
