@@ -117,7 +117,7 @@ benchmarks! {
 		let force_origin = T::ForceDeactivateOrigin::successful_origin();
 		assert!(SafeMode::<T>::force_deactivate(force_origin.clone()).is_ok());
 
-		System::<T>::set_block_number(System::<T>::block_number() + One::one());
+		System::<T>::set_block_number(System::<T>::block_number() + T::ReleaseDelay::get().unwrap() + One::one());
 		System::<T>::on_initialize(System::<T>::block_number());
 		SafeMode::<T>::on_initialize(System::<T>::block_number());
 

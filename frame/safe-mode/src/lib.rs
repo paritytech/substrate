@@ -452,7 +452,7 @@ impl<T: Config> Pallet<T> {
 		if who.is_some() {
 			let delay = T::ReleaseDelay::get().ok_or(Error::<T>::NotConfigured)?;
 			let now = <frame_system::Pallet<T>>::block_number();
-			ensure!(now > (block + delay), Error::<T>::CannotReleaseYet);
+			ensure!(now > (block.saturating_add(delay)), Error::<T>::CannotReleaseYet);
 		}
 
 		Reservations::<T>::remove(&account, &block);
