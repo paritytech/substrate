@@ -186,6 +186,7 @@ impl<
 	> ExecuteBlock<Block>
 	for Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 where
+	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 	+ Checkable<Context>
 	+ Codec
@@ -196,17 +197,6 @@ where
 	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
-	fn execute_block_ver(block: Block, public: Vec<u8>) {
-		Executive::<
-			System,
-			Block,
-			Context,
-			UnsignedValidator,
-			AllPalletsWithSystem,
-			COnRuntimeUpgrade,
-		>::execute_block_ver_impl(block, public);
-	}
-
 	// for backward compatibility
 	fn execute_block(block: Block) {
 		Executive::<
@@ -217,6 +207,17 @@ where
 			AllPalletsWithSystem,
 			COnRuntimeUpgrade,
 		>::execute_block(block);
+	}
+
+	fn execute_block_ver(block: Block, public: Vec<u8>) {
+		Executive::<
+			System,
+			Block,
+			Context,
+			UnsignedValidator,
+			AllPalletsWithSystem,
+			COnRuntimeUpgrade,
+		>::execute_block_ver_impl(block, public);
 	}
 }
 
@@ -329,6 +330,7 @@ impl<
 	COnRuntimeUpgrade: OnRuntimeUpgrade,
 > Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
 	where
+		<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
 		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
