@@ -54,7 +54,7 @@ fn add_proposal<T: Config>(n: u32) -> Result<H256, &'static str> {
 	Ok(proposal.hash())
 }
 
-// add a referendum and a metadata.
+// add a referendum with a metadata.
 fn add_referendum<T: Config>(n: u32) -> (ReferendumIndex, H256, PreimageHash) {
 	let vote_threshold = VoteThreshold::SimpleMajority;
 	let proposal = make_proposal::<T>(n);

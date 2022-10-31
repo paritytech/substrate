@@ -1095,7 +1095,9 @@ pub mod pallet {
 
 		/// Set the metadata to the external proposal.
 		///
-		/// - `origin`: Must be `ExternalOrigin`.
+		/// - `origin`: Must be an external origin and correspond to the proposal vote threshold,
+		///   `ExternalOrigin` for `SuperMajorityApprove`, `ExternalDefaultOrigin` for
+		///   `SuperMajorityAgainst` and `ExternalMajorityOrigin` for `SimpleMajority`.
 		/// - `hash`: The preimage hash of an on-chain stored preimage.
 		#[pallet::weight(T::WeightInfo::set_external_metadata())]
 		pub fn set_external_metadata(origin: OriginFor<T>, hash: PreimageHash) -> DispatchResult {
@@ -1120,7 +1122,7 @@ pub mod pallet {
 
 		/// Set the metadata to the public proposal.
 		///
-		/// - `origin`: Must be `Signed`, and the creator of the referendum.
+		/// - `origin`: Must be `Signed`, and the creator of the proposal.
 		/// - `index`: The index of the proposal.
 		/// - `hash`: The preimage hash of an on-chain stored preimage.
 		#[pallet::weight(T::WeightInfo::set_proposal_metadata())]
@@ -1142,7 +1144,9 @@ pub mod pallet {
 
 		/// Clear the external proposal metadata.
 		///
-		/// - `origin`: Must be `ExternalOrigin`.
+		/// - `origin`: Must be an external origin and correspond to the proposal vote threshold,
+		///   `ExternalOrigin` for `SuperMajorityApprove`, `ExternalDefaultOrigin` for
+		///   `SuperMajorityAgainst` and `ExternalMajorityOrigin` for `SimpleMajority`.
 		#[pallet::weight(T::WeightInfo::clear_external_metadata())]
 		pub fn clear_external_metadata(origin: OriginFor<T>) -> DispatchResult {
 			let (_, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::NoProposal)?;
@@ -1163,7 +1167,7 @@ pub mod pallet {
 
 		/// Clear the public proposal metadata.
 		///
-		/// - `origin`: Must be `Signed`, and the creator of the referendum.
+		/// - `origin`: Must be `Signed`, and the creator of the proposal.
 		/// - `index`: The index of the proposal.
 		#[pallet::weight(T::WeightInfo::clear_proposal_metadata())]
 		pub fn clear_proposal_metadata(origin: OriginFor<T>, index: PropIndex) -> DispatchResult {
