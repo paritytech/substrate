@@ -15,9 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Phragmén Election Module.
+//! # Generic Election Module.
 //!
-//! An election module based on sequential phragmen.
+//! An election module based on a generic election algorithm.
 //!
 //! ### Term and Round
 //!
@@ -99,6 +99,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+use frame_election_provider_support::NposSolver;
 use frame_support::{
 	traits::{
 		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
@@ -111,7 +112,7 @@ use scale_info::TypeInfo;
 use sp_npos_elections::{ElectionResult, ExtendedBalance};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
-	DispatchError, Perbill, RuntimeDebug,
+	DispatchError, RuntimeDebug,
 };
 use sp_std::{cmp::Ordering, prelude::*};
 
@@ -197,7 +198,7 @@ pub mod pallet {
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Identifier for the elections-phragmen pallet's lock
+		/// Identifier for the elections pallet's lock
 		#[pallet::constant]
 		type PalletId: Get<LockIdentifier>;
 
@@ -250,7 +251,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type TermDuration: Get<Self::BlockNumber>;
 
-		/// The maximum number of candidates in a phragmen election.
+		/// The maximum number of candidates in an election.
 		///
 		/// Warning: The election happens onchain, and this value will determine
 		/// the size of the election. When this limit is reached no more
@@ -258,12 +259,18 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxCandidates: Get<u32>;
 
-		/// The maximum number of voters to allow in a phragmen election.
+		/// The maximum number of voters to allow in an election.
 		///
 		/// Warning: This impacts the size of the election which is run onchain.
 		/// When the limit is reached the new voters are ignored.
 		#[pallet::constant]
 		type MaxVoters: Get<u32>;
+
+		/// Something that will calculate the result of elections.
+		type ElectionSolver: NposSolver<AccountId = Self::AccountId>;
+
+		/// Weight information for the `ElectionSolver`.
+		type SolverWeightInfo: frame_election_provider_support::WeightInfo;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -277,7 +284,7 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let term_duration = T::TermDuration::get();
 			if !term_duration.is_zero() && (n % term_duration).is_zero() {
-				Self::do_phragmen()
+				Self::do_election()
 			} else {
 				Weight::zero()
 			}
@@ -486,8 +493,8 @@ pub mod pallet {
 		/// the outgoing member is slashed.
 		///
 		/// If a runner-up is available, then the best runner-up will be removed and replaces the
-		/// outgoing member. Otherwise, if `rerun_election` is `true`, a new phragmen election is
-		/// started, else, nothing happens.
+		/// outgoing member. Otherwise, if `rerun_election` is `true`, a new election is started,
+		/// else, nothing happens.
 		///
 		/// If `slash_bond` is set to true, the bond of the member being removed is slashed. Else,
 		/// it is returned.
@@ -498,7 +505,7 @@ pub mod pallet {
 		///
 		/// # <weight>
 		/// If we have a replacement, we use a small weight. Else, since this is a root call and
-		/// will go into phragmen, we assume full block for now.
+		/// will go into the `NposSolver` election, we assume full block for now.
 		/// # </weight>
 		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
@@ -518,7 +525,7 @@ pub mod pallet {
 			Self::deposit_event(Event::MemberKicked { member: who });
 
 			if rerun_election {
-				Self::do_phragmen();
+				Self::do_election();
 			}
 
 			// no refund needed.
@@ -695,7 +702,7 @@ pub mod pallet {
 					Members::<T>::mutate(|members| {
 						match members.binary_search_by(|m| m.who.cmp(member)) {
 							Ok(_) => {
-								panic!("Duplicate member in elections-phragmen genesis: {}", member)
+								panic!("Duplicate member in elections genesis: {}", member)
 							},
 							Err(pos) => members.insert(
 								pos,
@@ -784,7 +791,7 @@ impl<T: Config> Pallet<T> {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
 					log::error!(
-						target: "runtime::elections-phragmen",
+						target: "runtime::elections",
 						"A member seems to also be a runner-up.",
 					);
 				}
@@ -890,11 +897,12 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(_remainder.is_zero());
 	}
 
-	/// Run the phragmen election with all required side processes and state updates, if election
-	/// succeeds. Else, it will emit an `ElectionError` event.
+	/// Run an election with all required side processes and state updates, if election
+	/// succeeds. Else, it will emit an `ElectionError` event. The election algorithm is defined
+	/// by the implementor of `Self::NposSolver`.
 	///
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
-	fn do_phragmen() -> Weight {
+	fn do_election() -> Weight {
 		let desired_seats = T::DesiredMembers::get() as usize;
 		let desired_runners_up = T::DesiredRunnersUp::get() as usize;
 		let num_to_elect = desired_runners_up + desired_seats;
@@ -908,7 +916,7 @@ impl<T: Config> Pallet<T> {
 			return T::DbWeight::get().reads(3)
 		}
 
-		// All of the new winners that come out of phragmen will thus have a deposit recorded.
+		// All of the new winners that come out of the election will thus have a deposit recorded.
 		let candidate_ids =
 			candidates_and_deposit.iter().map(|(x, _)| x).cloned().collect::<Vec<_>>();
 
@@ -933,7 +941,7 @@ impl<T: Config> Pallet<T> {
 			Ok(_) => (),
 			Err(_) => {
 				log::error!(
-					target: "runtime::elections-phragmen",
+					target: "runtime::elections",
 					"Failed to run election. Number of voters exceeded",
 				);
 				Self::deposit_event(Event::ElectionError);
@@ -941,7 +949,7 @@ impl<T: Config> Pallet<T> {
 			},
 		}
 
-		// used for phragmen.
+		// used for elections.
 		let voters_and_votes = voters_and_stakes
 			.iter()
 			.cloned()
@@ -951,12 +959,14 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 
-		let weight_candidates = candidates_and_deposit.len() as u32;
-		let weight_voters = voters_and_votes.len() as u32;
-		let weight_edges = num_edges;
-		let _ =
-			sp_npos_elections::seq_phragmen(num_to_elect, candidate_ids, voters_and_votes, None)
-				.map(|ElectionResult::<T::AccountId, Perbill> { winners, assignments: _ }| {
+		let num_candidates = candidates_and_deposit.len() as u32;
+		let num_voters = voters_and_votes.len() as u32;
+		let _ = T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
+			.map(
+				|ElectionResult::<T::AccountId, <T::ElectionSolver as NposSolver>::Accuracy> {
+				     winners,
+				     assignments: _,
+				 }| {
 					// this is already sorted by id.
 					let old_members_ids_sorted = <Members<T>>::take()
 						.into_iter()
@@ -1059,7 +1069,7 @@ impl<T: Config> Pallet<T> {
 					// write final values to storage.
 					let deposit_of_candidate = |x: &T::AccountId| -> BalanceOf<T> {
 						// defensive-only. This closure is used against the new members and new
-						// runners-up, both of which are phragmen winners and thus must have
+						// runners-up, both of which are election winners and thus must have
 						// deposit.
 						candidates_and_deposit
 							.iter()
@@ -1095,17 +1105,18 @@ impl<T: Config> Pallet<T> {
 
 					Self::deposit_event(Event::NewTerm { new_members: new_members_sorted_by_id });
 					<ElectionRounds<T>>::mutate(|v| *v += 1);
-				})
-				.map_err(|e| {
-					log::error!(
-						target: "runtime::elections-phragmen",
-						"Failed to run election [{:?}].",
-						e,
-					);
-					Self::deposit_event(Event::ElectionError);
-				});
+				},
+			)
+			.map_err(|e| {
+				log::error!(
+					target: "runtime::elections",
+					"Failed to run election [{:?}].",
+					e,
+				);
+				Self::deposit_event(Event::ElectionError);
+			});
 
-		T::WeightInfo::election_phragmen(weight_candidates, weight_voters, weight_edges)
+		T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
 	}
 }
 
@@ -1156,7 +1167,8 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate as elections_phragmen;
+	use crate as elections;
+	use frame_election_provider_support::SequentialPhragmen;
 	use frame_support::{
 		assert_noop, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
@@ -1168,7 +1180,7 @@ mod tests {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
-		BuildStorage,
+		BuildStorage, Perbill,
 	};
 	use substrate_test_utils::assert_eq_uvec;
 
@@ -1274,13 +1286,13 @@ mod tests {
 	}
 
 	parameter_types! {
-		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
-		pub const PhragmenMaxVoters: u32 = 1000;
-		pub const PhragmenMaxCandidates: u32 = 100;
+		pub const ElectionsPalletId: LockIdentifier = *b"elects__";
+		pub const MaxVoters: u32 = 1000;
+		pub const MaxCandidates: u32 = 100;
 	}
 
 	impl Config for Test {
-		type PalletId = ElectionsPhragmenPalletId;
+		type PalletId = ElectionsPalletId;
 		type RuntimeEvent = RuntimeEvent;
 		type Currency = Balances;
 		type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
@@ -1295,8 +1307,21 @@ mod tests {
 		type LoserCandidate = ();
 		type KickedMember = ();
 		type WeightInfo = ();
-		type MaxVoters = PhragmenMaxVoters;
-		type MaxCandidates = PhragmenMaxCandidates;
+		type MaxVoters = MaxVoters;
+		type MaxCandidates = MaxCandidates;
+		type ElectionSolver = SequentialPhragmen<Self::AccountId, Perbill>;
+		type SolverWeightInfo = NposWeightInfo;
+	}
+
+	pub struct NposWeightInfo;
+	impl frame_election_provider_support::WeightInfo for NposWeightInfo {
+		fn phragmen(_v: u32, _t: u32, _d: u32) -> Weight {
+			Weight::zero()
+		}
+
+		fn phragmms(_v: u32, _t: u32, _d: u32) -> Weight {
+			Weight::zero()
+		}
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -1311,7 +1336,7 @@ mod tests {
 		{
 			System: frame_system::{Pallet, Call, Event<T>},
 			Balances: pallet_balances::{Pallet, Call, Event<T>, Config<T>},
-			Elections: elections_phragmen::{Pallet, Call, Event<T>, Config<T>},
+			Elections: elections::{Pallet, Call, Event<T>, Config<T>},
 		}
 	);
 
@@ -1372,9 +1397,7 @@ mod tests {
 						(6, 60 * self.balance_factor),
 					],
 				},
-				elections: elections_phragmen::GenesisConfig::<Test> {
-					members: self.genesis_members,
-				},
+				elections: elections::GenesisConfig::<Test> { members: self.genesis_members },
 			}
 			.build_storage()
 			.unwrap()
@@ -1432,7 +1455,7 @@ mod tests {
 			.get(0)
 			.cloned()
 			.map(|lock| {
-				assert_eq!(lock.id, ElectionsPhragmenPalletId::get());
+				assert_eq!(lock.id, ElectionsPalletId::get());
 				lock.amount
 			})
 			.unwrap_or_default()
@@ -1623,7 +1646,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic = "Duplicate member in elections-phragmen genesis: 2"]
+	#[should_panic = "Duplicate member in elections genesis: 2"]
 	fn genesis_members_cannot_be_duplicate() {
 		ExtBuilder::default()
 			.desired_members(3)
