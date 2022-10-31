@@ -1129,6 +1129,14 @@ fn finality_notifications_content() {
 }
 
 #[test]
+fn get_block_by_bad_block_hash_returns_none() {
+	let client = substrate_test_runtime_client::new();
+
+	let hash = H256::from_low_u64_be(5);
+	assert!(client.block(&BlockId::Hash(hash)).unwrap().is_none());
+}
+
+#[test]
 fn get_header_by_block_number_doesnt_panic() {
 	let client = substrate_test_runtime_client::new();
 
