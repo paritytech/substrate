@@ -116,6 +116,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aquamarine"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a941c39708478e8eea39243b5983f1c42d2717b3620ee91f4a52115fd02ac43f"
+dependencies = [
+ "itertools 0.9.0",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1218,7 +1231,7 @@ dependencies = [
  "cranelift-codegen 0.85.3",
  "cranelift-entity 0.85.3",
  "cranelift-frontend 0.85.3",
- "itertools",
+ "itertools 0.10.5",
  "log",
  "smallvec",
  "wasmparser 0.85.0",
@@ -1245,7 +1258,7 @@ dependencies = [
  "clap 2.34.0",
  "criterion-plot",
  "csv",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "num-traits",
  "oorandom",
@@ -1267,7 +1280,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2673cc8207403546f45f5fd319a974b1e6983ad1a3ee7e6041650013be041876"
 dependencies = [
  "cast",
- "itertools",
+ "itertools 0.10.5",
 ]
 
 [[package]]
@@ -2063,7 +2076,7 @@ dependencies = [
  "handlebars",
  "hash-db",
  "hex",
- "itertools",
+ "itertools 0.10.5",
  "kvdb",
  "lazy_static",
  "linked-hash-map",
@@ -3039,6 +3052,15 @@ name = "ipnet"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "879d54834c8c76457ef4293a689b2a8c59b076067ad77b15efafbb05f92a592b"
+
+[[package]]
+name = "itertools"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "284f18f85651fe11e8a991b2adb42cb078325c996ed026d994719efcfca1d54b"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itertools"
@@ -5339,7 +5361,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
- "itertools",
+ "itertools 0.10.5",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -6568,7 +6590,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "cmake",
  "heck",
- "itertools",
+ "itertools 0.10.5",
  "lazy_static",
  "log",
  "multimap",
@@ -6600,7 +6622,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
 dependencies = [
  "anyhow",
- "itertools",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn",
@@ -7277,6 +7299,7 @@ dependencies = [
 name = "sc-basic-authorship-ver"
 version = "0.10.0-dev"
 dependencies = [
+ "aquamarine",
  "env_logger",
  "futures",
  "futures-timer",

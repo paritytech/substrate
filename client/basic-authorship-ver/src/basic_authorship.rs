@@ -20,6 +20,7 @@
 
 // FIXME #1021 move this into sp-consensus
 
+use aquamarine::aquamarine;
 use codec::{Decode, Encode};
 use futures::{
 	channel::oneshot,
@@ -289,6 +290,72 @@ where
 	type ProofRecording = PR;
 	type Proof = PR::Proof;
 
+	#[cfg_attr(doc, aquamarine)]
+	/// This function is responsible for block creation. [`Proposer`] is tightly coupled with
+	/// [`sc_block_builder::BlockBuilder`] that wraps "lower level" aspects of block creation where
+	/// [`Proposer`] main responsibility is keeping track of block limits (weight, size, execution
+	/// time).
+	///
+	/// Block limits are:
+	/// - X weight
+	/// - Y execution time
+	/// - Z block size in bytes
+	///
+	/// Lets call these limits a "slot". [`Proposer`] divides that slot into 2 halves resulting with
+	/// two smaller slots, where each has limits:
+	/// - X/2 weight
+	/// - Y/2 execution time
+	/// - Z/2 block size in bytes
+	///
+	/// First of the 'smaller slots' is used for executing txs that were included in previous
+	/// blocks. Txs are fetched from the storage queue that is stored in blockchain runtime storage.
+	///
+	/// Second 'smaller slot' is used for fetching txs from transaction pool. If tx is validated
+	/// successfully it is stored into storage queue.
+	///
+	/// [`Proposer`] splits that limits into half and uses first
+	/// ```mermaid
+	/// sequenceDiagram
+	///    participant TransactionPool
+	///    Proposer->>BlockBuilder: create
+	///    BlockBuilder->>RuntimeApi: initialize_block
+	///    BlockBuilder->>Proposer: instance
+	///    Proposer->>BlockBuilder: create_inherents
+	///    BlockBuilder->>BlockBuilder: extract seed from inherent data
+	///    BlockBuilder->>RuntimeApi: inherent_extrinsics
+	///    RuntimeApi->>BlockBuilder: inherents
+	///    BlockBuilder->>Proposer: (seed,inherents)
+	///    Proposer->>BlockBuilder: apply_previous_block_extrinsics
+	///    BlockBuilder->>RuntimeApi: store seed
+	///    RuntimeApi->>FrameSystem: shuffle txs stored in previous block(N-1)
+	///
+	///    loop while half of size/weight/exec time limit is not exceeded
+	///        Note over FrameSystem: ideally all txs from previous block should be consumed
+	///        BlockBuilder->>FrameSystem: fetch tx from storage queue
+	///        FrameSystem->>BlockBuilder: ready tx
+	///        BlockBuilder->>BlockBuilder: execute tx
+	///    end
+	///
+	///
+	///    Proposer->>Proposer: initialize list of valid txs: VALID_TXS
+	///    loop while second half of size/weight/exec time limit is not exceeded
+	///        Proposer->>TransactionPool: fetch ready tx
+	///        TransactionPool->>Proposer: ready tx
+	///        Proposer->>Proposer: validate txs
+	///        alt tx is valid
+	///            Proposer->>Proposer: VALID_TXS.push(tx)
+	///        else
+	///            Proposer->>Proposer: reject tx
+	///        end
+	///    end
+	///
+	///    Proposer->>BlockBuilder: build_block_with_seed
+	///    BlockBuilder->>RuntimeApi: create_enqueue_txs_inherent(VALID_TXS)
+	///    RuntimeApi->>FrameSystem: store txs into storage queue
+	///    BlockBuilder->>RuntimeApi: finalize_block
+	///    RuntimeApi->>BlockBuilder: Header
+	///    BlockBuilder->>Proposer: block
+	/// ```
 	fn propose(
 		self,
 		mut inherent_data: InherentData,
