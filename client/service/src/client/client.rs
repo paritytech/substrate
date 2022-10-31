@@ -1948,7 +1948,7 @@ where
 		Ok(match self.header(id)? {
 			Some(header) => {
 				let hash = header.hash();
-				match (self.body(&hash)?, self.justifications(id)?) {
+				match (self.body(&hash)?, self.justifications(&hash)?) {
 					(Some(extrinsics), justifications) =>
 						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
 					_ => None,
@@ -1962,8 +1962,8 @@ where
 		Client::block_status(self, id)
 	}
 
-	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
-		self.backend.blockchain().justifications(*id)
+	fn justifications(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Justifications>> {
+		self.backend.blockchain().justifications(hash)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {

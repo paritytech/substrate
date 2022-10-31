@@ -26,7 +26,7 @@ use log::{debug, trace};
 use sc_client_api::BlockBackend;
 use sc_network::{config as netconfig, config::RequestResponseConfig, PeerId, ReputationChange};
 use sc_network_common::protocol::ProtocolName;
-use sp_runtime::{generic::BlockId, traits::Block};
+use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
 use crate::communication::request_response::{
@@ -149,9 +149,14 @@ where
 	fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
 		// TODO (issue #12293): validate `request` and change peer reputation for invalid requests.
 
+		let hash = match self.client.block_hash(request.payload.begin).map_err(Error::Client)? {
+			Some(hash) => hash,
+			None => return Ok(()),
+		};
+
 		let maybe_encoded_proof = self
 			.client
-			.justifications(&BlockId::Number(request.payload.begin))
+			.justifications(&hash)
 			.map_err(Error::Client)?
 			.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
 			// No BEEFY justification present.

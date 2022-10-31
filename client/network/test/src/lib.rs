@@ -176,8 +176,11 @@ impl PeersClient {
 		self.backend.have_state_at(&header.hash(), *header.number())
 	}
 
-	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		self.client.justifications(block)
+	pub fn justifications(
+		&self,
+		hash: &<Block as BlockT>::Hash,
+	) -> ClientResult<Option<Justifications>> {
+		self.client.justifications(hash)
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {

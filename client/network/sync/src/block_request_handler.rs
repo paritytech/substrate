@@ -331,11 +331,8 @@ where
 			let number = *header.number();
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
-			let justifications = if get_justification {
-				self.client.justifications(&BlockId::Hash(hash))?
-			} else {
-				None
-			};
+			let justifications =
+				if get_justification { self.client.justifications(&hash)? } else { None };
 
 			let (justifications, justification, is_empty_justification) =
 				if support_multiple_justifications {

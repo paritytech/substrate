@@ -884,11 +884,11 @@ fn import_with_justification() {
 
 	assert_eq!(client.chain_info().finalized_hash, a3.hash());
 
-	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification));
+	assert_eq!(client.justifications(&a3.hash()).unwrap(), Some(justification));
 
-	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None);
+	assert_eq!(client.justifications(&a1.hash()).unwrap(), None);
 
-	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
+	assert_eq!(client.justifications(&a2.hash()).unwrap(), None);
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
