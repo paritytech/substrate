@@ -966,8 +966,8 @@ cfg_if! {
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
-				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
+			impl beefy_primitives::BeefyApi<Block, beefy_primitives::ecdsa_crypto::AuthorityId> for RuntimeApi {
+				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::ecdsa_crypto::AuthorityId>> {
 					None
 				}
 			}

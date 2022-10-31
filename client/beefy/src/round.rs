@@ -183,12 +183,12 @@ mod tests {
 	use sc_network_test::Block;
 	use sp_core::H256;
 
-	use beefy_primitives::{ecdsa_crypto::Public, ValidatorSet};
+	use beefy_primitives::{ecdsa_crypto::{Public, self}, ValidatorSet};
 
 	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
 	use crate::keystore::tests::Keyring;
 
-	impl<P, B> Rounds<P, B>
+	impl<P, B> Rounds<P, B, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>
 	where
 		P: Ord + Hash + Clone,
 		B: BlockT,
@@ -249,7 +249,7 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let rounds = Rounds::<H256, Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(session_start, validators);
 
 		assert_eq!(42, rounds.validator_set_id());
 		assert_eq!(1, rounds.session_start());
@@ -276,7 +276,7 @@ mod tests {
 		let round = (H256::from_low_u64_le(1), 1);
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let mut rounds = Rounds::<H256, Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(session_start, validators);
 
 		// no self vote yet, should self vote
 		assert!(rounds.should_self_vote(&round));
@@ -346,7 +346,7 @@ mod tests {
 		let alice = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
 
 		let session_start = 10u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let mut rounds = Rounds::<H256, Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(session_start, validators);
 
 		let mut vote = (H256::from_low_u64_le(1), 9);
 		// add vote for previous session, should fail
@@ -387,7 +387,7 @@ mod tests {
 		.unwrap();
 
 		let session_start = 1u64.into();
-		let mut rounds = Rounds::<H256, Block>::new(session_start, validators);
+		let mut rounds = Rounds::<H256, Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(session_start, validators);
 
 		// round 1
 		assert!(rounds.add_vote(

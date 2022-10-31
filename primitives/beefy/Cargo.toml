@@ -22,7 +22,7 @@ sp-io = { version = "6.0.0", default-features = false, path = "../io" }
 sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-bls-like = "*"
+bls-like = {git = "https://github.com/w3f/bls", branch = "skalman-hash-to-curve-wb", default-features = false}
 
 [dev-dependencies]
 array-bytes = "4.1"

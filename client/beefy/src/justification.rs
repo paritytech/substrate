@@ -81,18 +81,18 @@ fn verify_with_validator_set<Block: BlockT, AuthId: Encode + Decode + Debug + Or
 #[cfg(test)]
 pub(crate) mod tests {
 	use beefy_primitives::{
-		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof,
+		known_payloads, Commitment, Payload, SignedCommitment, VersionedFinalityProof, ecdsa_crypto,
 	};
 	use substrate_test_runtime_client::runtime::Block;
 
 	use super::*;
-	use crate::{keystore::tests::Keyring, tests::make_beefy_ids};
+	use crate::{keystore::{tests::Keyring, BeefyECDSAKeystore}, tests::make_beefy_ids};
 
 	pub(crate) fn new_finality_proof(
 		block_num: NumberFor<Block>,
-		validator_set: &ValidatorSet<AuthorityId>,
+		validator_set: &ValidatorSet<ecdsa_crypto::AuthorityId>,
 		keys: &[Keyring],
-	) -> BeefyVersionedFinalityProof<Block> {
+	) -> BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature> {
 		let commitment = Commitment {
 			payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 			block_number: block_num,
@@ -114,11 +114,11 @@ pub(crate) mod tests {
 
 		let good_proof = proof.clone().into();
 		// should verify successfully
-		verify_with_validator_set::<Block>(block_num, &validator_set, &good_proof).unwrap();
+		verify_with_validator_set::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(block_num, &validator_set, &good_proof).unwrap();
 
 		// wrong block number -> should fail verification
 		let good_proof = proof.clone().into();
-		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &good_proof) {
+		match verify_with_validator_set::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(block_num + 1, &validator_set, &good_proof) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
 		};
@@ -126,7 +126,7 @@ pub(crate) mod tests {
 		// wrong validator set id -> should fail verification
 		let good_proof = proof.clone().into();
 		let other = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
-		match verify_with_validator_set::<Block>(block_num, &other, &good_proof) {
+		match verify_with_validator_set::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(block_num, &other, &good_proof) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
 		};
@@ -138,7 +138,7 @@ pub(crate) mod tests {
 			VersionedFinalityProof::V1(ref mut sc) => sc,
 		};
 		bad_signed_commitment.signatures.pop().flatten().unwrap();
-		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
+		match verify_with_validator_set::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(block_num + 1, &validator_set, &bad_proof.into()) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
 		};
@@ -150,7 +150,7 @@ pub(crate) mod tests {
 		};
 		// remove a signature (but same length)
 		*bad_signed_commitment.signatures.first_mut().unwrap() = None;
-		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
+		match verify_with_validator_set::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(block_num + 1, &validator_set, &bad_proof.into()) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
 		};
@@ -163,7 +163,7 @@ pub(crate) mod tests {
 		// change a signature to a different key
 		*bad_signed_commitment.signatures.first_mut().unwrap() =
 			Some(Keyring::Dave.sign(&bad_signed_commitment.commitment.encode()));
-		match verify_with_validator_set::<Block>(block_num + 1, &validator_set, &bad_proof.into()) {
+		match verify_with_validator_set::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(block_num + 1, &validator_set, &bad_proof.into()) {
 			Err(ConsensusError::InvalidJustification) => (),
 			_ => assert!(false, "Expected Err(ConsensusError::InvalidJustification)"),
 		};
@@ -177,12 +177,12 @@ pub(crate) mod tests {
 
 		// build valid justification
 		let proof = new_finality_proof(block_num, &validator_set, keys);
-		let versioned_proof: BeefyVersionedFinalityProof<Block> = proof.into();
+		let versioned_proof: BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature> = proof.into();
 		let encoded = versioned_proof.encode();
 
 		// should successfully decode and verify
 		let verified =
-			decode_and_verify_finality_proof::<Block>(&encoded, block_num, &validator_set).unwrap();
+			decode_and_verify_finality_proof::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, BeefyECDSAKeystore>(&encoded, block_num, &validator_set).unwrap();
 		assert_eq!(verified, versioned_proof);
 	}
 }

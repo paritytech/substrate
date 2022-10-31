@@ -37,7 +37,7 @@ use sc_network_test::{
 use sc_utils::notification::NotificationReceiver;
 
 use beefy_primitives::{
-	crypto::{AuthorityId, Signature},
+	ecdsa_crypto::{AuthorityId, Signature, self},
 	mmr::MmrRootProvider,
 	BeefyApi, ConsensusLog, MmrRootHash, ValidatorSet, VersionedFinalityProof, BEEFY_ENGINE_ID,
 	KEY_TYPE as BeefyKeyType,
@@ -67,6 +67,7 @@ use crate::{
 	justification::*,
 	keystore::tests::Keyring as BeefyKeyring,
 	BeefyRPCLinks, BeefyVoterLinks,
+	keystore::BeefyECDSAKeystore,
 };
 
 const GENESIS_HASH: H256 = H256::zero();
@@ -82,6 +83,9 @@ type BeefyBlockImport = crate::BeefyBlockImport<
 	substrate_test_runtime_client::Backend,
 	two_validators::TestApi,
 	BlockImportAdapter<PeersClient, sp_api::TransactionFor<two_validators::TestApi, Block>>,
+	ecdsa_crypto::AuthorityId,
+	ecdsa_crypto::Signature,
+	BeefyECDSAKeystore,
 >;
 
 pub(crate) type BeefyValidatorSet = ValidatorSet<AuthorityId>;
@@ -100,8 +104,8 @@ impl BuildStorage for Genesis {
 
 #[derive(Default)]
 pub(crate) struct PeerData {
-	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block>>>,
-	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block>>>,
+	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block, ecdsa_crypto::Signature>>>,
+	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block, ecdsa_crypto::Signature>>>,
 	pub(crate) beefy_justif_req_handler:
 		Mutex<Option<BeefyJustifsRequestHandler<Block, PeersFullClient>>>,
 }
@@ -239,7 +243,7 @@ macro_rules! create_test_api {
 				}
 			}
 			sp_api::mock_impl_runtime_apis! {
-				impl BeefyApi<Block> for RuntimeApi {
+				impl BeefyApi<Block, ecdsa_crypto::AuthorityId> for RuntimeApi {
 					fn validator_set() -> Option<BeefyValidatorSet> {
 						BeefyValidatorSet::new(make_beefy_ids(&[$($inits),+]), 0)
 					}
@@ -339,6 +343,7 @@ pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStoreP
 	keystore
 }
 
+use crate::keystore::BeefyKeystore;
 // Spawns beefy voters. Returns a future to spawn on the runtime.
 fn initialize_beefy<API>(
 	net: &mut BeefyTestNet,
@@ -347,7 +352,7 @@ fn initialize_beefy<API>(
 ) -> impl Future<Output = ()>
 where
 	API: ProvideRuntimeApi<Block> + Default + Sync + Send,
-	API::Api: BeefyApi<Block> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
+	API::Api: BeefyApi<Block, ecdsa_crypto::AuthorityId> + MmrApi<Block, MmrRootHash, NumberFor<Block>>,
 {
 	let tasks = FuturesUnordered::new();
 
@@ -378,14 +383,17 @@ where
 			backend: peer.client().as_backend(),
 			payload_provider,
 			runtime: api.clone(),
-			key_store: Some(keystore),
+			key_store: BeefyECDSAKeystore::new(keystore),
 			network_params,
 			links: beefy_voter_links.unwrap(),
 			min_block_delta,
 			prometheus_registry: None,
 			on_demand_justifications_handler: on_demand_justif_handler,
+			_auth_id: PhantomData,
+			_signature: PhantomData,
+
 		};
-		let task = crate::start_beefy_gadget::<_, _, _, _, _, _>(beefy_params);
+		let task = crate::start_beefy_gadget::<_, _, _, _, _, _, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&task);
@@ -412,7 +420,7 @@ pub(crate) fn get_beefy_streams(
 	net: &mut BeefyTestNet,
 	// peer index and key
 	peers: impl Iterator<Item = (usize, BeefyKeyring)>,
-) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>)
+) -> (Vec<NotificationReceiver<H256>>, Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature>>>)
 {
 	let mut best_block_streams = Vec::new();
 	let mut versioned_finality_proof_streams = Vec::new();
@@ -453,7 +461,7 @@ fn wait_for_best_beefy_blocks(
 }
 
 fn wait_for_beefy_signed_commitments(
-	streams: Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block>>>,
+	streams: Vec<NotificationReceiver<BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature>>>,
 	net: &Arc<Mutex<BeefyTestNet>>,
 	runtime: &mut Runtime,
 	expected_commitment_block_nums: &[u64],

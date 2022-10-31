@@ -40,9 +40,8 @@ use crate::crypto::{DeriveJunction, Pair as TraitPair, SecretStringError};
 use bip39::{Language, Mnemonic, MnemonicType};
 #[cfg(feature = "full_crypto")]
 use core::convert::TryFrom;
-#[cfg(feature = "full_crypto")]
 use bls_like::{
-    BLS377, EngineBLS, Keypair, Message, Signature as BLSSignature, pop::{ProofOfPossessionGenerator, ProofOfPossessionVerifier}, pop::SignatureAggregatorAssumingPoP, SerializableToBytes
+    BLS377, EngineBLS, Keypair, Message, SerializableToBytes,
 };
 #[cfg(feature = "std")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};

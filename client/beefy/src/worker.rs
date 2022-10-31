@@ -1,3 +1,4 @@
+
 // This file is part of Substrate.
 
 // Copyright (C) 2021-2022 Parity Technologies (UK) Ltd.
@@ -991,6 +992,7 @@ where
 pub(crate) mod tests {
 	use super::*;
 	use crate::{
+		keystore,
 		communication::notification::{BeefyBestBlockStream, BeefyVersionedFinalityProofStream},
 		keystore::tests::Keyring,
 		tests::{
@@ -1000,7 +1002,7 @@ pub(crate) mod tests {
 		BeefyRPCLinks,
 	};
 
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
+	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
@@ -1023,15 +1025,18 @@ pub(crate) mod tests {
 		MmrRootProvider<Block, TestApi>,
 		TestApi,
 		Arc<NetworkService<Block, H256>>,
+		ecdsa_crypto::AuthorityId,
+		ecdsa_crypto::Signature,
+		keystore::BeefyECDSAKeystore,		
 	> {
 		let keystore = create_beefy_keystore(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
-			BeefyVersionedFinalityProofStream::<Block>::channel();
+			BeefyVersionedFinalityProofStream::<Block, ecdsa_crypto::Signature>::channel();
 		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 			BeefyBestBlockStream::<Block>::channel();
 		let (_, from_block_import_justif_stream) =
-			BeefyVersionedFinalityProofStream::<Block>::channel();
+			BeefyVersionedFinalityProofStream::<Block, ecdsa_crypto::Signature>::channel();
 
 		let beefy_rpc_links =
 			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
@@ -1071,7 +1076,7 @@ pub(crate) mod tests {
 			network,
 			on_demand_justifications,
 		};
-		BeefyWorker::<_, _, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _, _, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1168,7 +1173,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn should_vote_target() {
-		let mut oracle = VoterOracle::<Block>::new(1);
+		let mut oracle = VoterOracle::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(1);
 
 		// rounds not initialized -> should vote: `None`
 		assert_eq!(oracle.voting_target(None, 1), None);
@@ -1210,7 +1215,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 
-		let mut oracle = VoterOracle::<Block>::new(1);
+		let mut oracle = VoterOracle::<Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(1);
 
 		// rounds not initialized -> should accept votes: `None`
 		assert!(oracle.accepted_interval(1).is_err());
@@ -1278,18 +1283,18 @@ pub(crate) mod tests {
 		);
 
 		// verify empty digest shows nothing
-		assert!(find_authorities_change::<Block>(&header).is_none());
+		assert!(find_authorities_change::<Block, ecdsa_crypto::AuthorityId>(&header).is_none());
 
 		let peers = &[Keyring::One, Keyring::Two];
 		let id = 42;
 		let validator_set = ValidatorSet::new(make_beefy_ids(peers), id).unwrap();
 		header.digest_mut().push(DigestItem::Consensus(
 			BEEFY_ENGINE_ID,
-			ConsensusLog::<AuthorityId>::AuthoritiesChange(validator_set.clone()).encode(),
+			ConsensusLog::<ecdsa_crypto::AuthorityId>::AuthoritiesChange(validator_set.clone()).encode(),
 		));
 
 		// verify validator set is correctly extracted from digest
-		let extracted = find_authorities_change::<Block>(&header);
+		let extracted = find_authorities_change::<Block, ecdsa_crypto::AuthorityId>(&header);
 		assert_eq!(extracted, Some(validator_set));
 	}
 
@@ -1449,7 +1454,7 @@ pub(crate) mod tests {
 
 		fn new_vote(
 			block_number: NumberFor<Block>,
-		) -> VoteMessage<NumberFor<Block>, AuthorityId, Signature> {
+		) -> VoteMessage<NumberFor<Block>, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature> {
 			let commitment = Commitment {
 				payload: Payload::from_single_entry(*b"BF", vec![]),
 				block_number,
@@ -1547,7 +1552,7 @@ pub(crate) mod tests {
 				block_number: 10,
 				validator_set_id: validator_set.id(),
 			};
-			let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+			let justif = VersionedFinalityProof::<_, ecdsa_crypto::Signature>::V1(SignedCommitment {
 				commitment,
 				signatures: vec![None],
 			});
@@ -1581,7 +1586,7 @@ pub(crate) mod tests {
 				block_number: 12,
 				validator_set_id: validator_set.id(),
 			};
-			let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
+			let justif = VersionedFinalityProof::<_, ecdsa_crypto::Signature>::V1(SignedCommitment {
 				commitment,
 				signatures: vec![None],
 			});
