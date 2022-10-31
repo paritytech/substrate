@@ -2013,12 +2013,11 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 	fn append_justification(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Justification,
 	) -> ClientResult<()> {
 		let mut transaction: Transaction<DbHash> = Transaction::new();
-		let hash = self.blockchain.expect_block_hash_from_id(&block)?;
-		let header = self.blockchain.expect_header(block)?;
+		let header = self.blockchain.expect_header(BlockId::Hash(*hash))?;
 		let number = *header.number();
 
 		// Check if the block is finalized first.
@@ -2027,13 +2026,13 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		// We can do a quick check first, before doing a proper but more expensive check
 		if number > self.blockchain.info().finalized_number ||
-			(hash != last_finalized && !is_descendent_of(&hash, &last_finalized)?)
+			(*hash != last_finalized && !is_descendent_of(hash, &last_finalized)?)
 		{
 			return Err(ClientError::NotInFinalizedChain)
 		}
 
 		let justifications = if let Some(mut stored_justifications) =
-			self.blockchain.justifications(block)?
+			self.blockchain.justifications(BlockId::Hash(*hash))?
 		{
 			if !stored_justifications.append(justification) {
 				return Err(ClientError::BadJustification("Duplicate consensus engine ID".into()))
@@ -2045,7 +2044,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 
 		transaction.set_from_vec(
 			columns::JUSTIFICATIONS,
-			&utils::number_and_hash_to_lookup_key(number, hash)?,
+			&utils::number_and_hash_to_lookup_key(number, *hash)?,
 			justifications.encode(),
 		);
 
@@ -3029,11 +3028,11 @@ pub(crate) mod tests {
 		backend.finalize_block(&block1, Some(just0.clone().into())).unwrap();
 
 		let just1 = (CONS1_ENGINE_ID, vec![4, 5]);
-		backend.append_justification(BlockId::Number(1), just1.clone()).unwrap();
+		backend.append_justification(&block1, just1.clone()).unwrap();
 
 		let just2 = (CONS1_ENGINE_ID, vec![6, 7]);
 		assert!(matches!(
-			backend.append_justification(BlockId::Number(1), just2),
+			backend.append_justification(&block1, just2),
 			Err(ClientError::BadJustification(_))
 		));
 
