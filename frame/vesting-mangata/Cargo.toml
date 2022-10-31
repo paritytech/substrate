@@ -41,4 +41,4 @@ std = [
 	"frame-system/std",
 ]
 runtime-benchmarks = ["frame-benchmarking"]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = ["frame-support/try-runtime", "frame-system/try-runtime"]
