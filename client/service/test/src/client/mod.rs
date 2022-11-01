@@ -396,16 +396,19 @@ fn block_builder_does_not_include_invalid() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-	let hash0 = client
+	let hashof0 = client
 		.expect_block_hash_from_id(&BlockId::Number(0))
 		.expect("block 0 was just imported. qed");
-	let hash1 = client
+	let hashof1 = client
 		.expect_block_hash_from_id(&BlockId::Number(1))
 		.expect("block 1 was just imported. qed");
 
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(client.state_at(&hash1).unwrap().pairs(), client.state_at(&hash0).unwrap().pairs());
-	assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
+	assert_ne!(
+		client.state_at(&hashof1).unwrap().pairs(),
+		client.state_at(&hashof0).unwrap().pairs()
+	);
+	assert_eq!(client.body(&hashof1).unwrap().unwrap().len(), 1)
 }
 
 #[test]

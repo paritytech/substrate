@@ -110,7 +110,7 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 
 	/// Get all indexed transactions for a block,

@@ -577,8 +577,10 @@ impl<Block: BlockT> sc_client_api::blockchain::HeaderBackend<Block> for Blockcha
 }
 
 impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<Block> {
-	fn body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
-		if let Some(body) = read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, id)? {
+	fn body(&self, hash: &Block::Hash) -> ClientResult<Option<Vec<Block::Extrinsic>>> {
+		if let Some(body) =
+			read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY, BlockId::Hash::<Block>(*hash))?
+		{
 			// Plain body
 			match Decode::decode(&mut &body[..]) {
 				Ok(body) => return Ok(Some(body)),
@@ -590,7 +592,12 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 			}
 		}
 
-		if let Some(index) = read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY_INDEX, id)? {
+		if let Some(index) = read_db(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::BODY_INDEX,
+			BlockId::Hash::<Block>(*hash),
+		)? {
 			match Vec::<DbExtrinsic<Block>>::decode(&mut &index[..]) {
 				Ok(index) => {
 					let mut body = Vec::new();
@@ -3201,11 +3208,11 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 		}
 		let bc = backend.blockchain();
-		assert_eq!(None, bc.body(BlockId::hash(blocks[0])).unwrap());
-		assert_eq!(None, bc.body(BlockId::hash(blocks[1])).unwrap());
-		assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(None, bc.body(&blocks[0]).unwrap());
+		assert_eq!(None, bc.body(&blocks[1]).unwrap());
+		assert_eq!(None, bc.body(&blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
 	}
 
 	#[test]
@@ -3236,11 +3243,11 @@ pub(crate) mod tests {
 		backend.commit_operation(op).unwrap();
 
 		let bc = backend.blockchain();
-		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
-		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
-		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(Some(vec![0.into()]), bc.body(&blocks[0]).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(&blocks[1]).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(&blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
 	}
 
 	#[test]
@@ -3291,7 +3298,7 @@ pub(crate) mod tests {
 		backend.commit_operation(op).unwrap();
 
 		let bc = backend.blockchain();
-		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(&fork_hash_root).unwrap());
 
 		for i in 1..5 {
 			let mut op = backend.begin_operation().unwrap();
@@ -3300,13 +3307,13 @@ pub(crate) mod tests {
 			backend.commit_operation(op).unwrap();
 		}
 
-		assert_eq!(Some(vec![0.into()]), bc.body(BlockId::hash(blocks[0])).unwrap());
-		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(blocks[1])).unwrap());
-		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(blocks[2])).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(Some(vec![0.into()]), bc.body(&blocks[0]).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(&blocks[1]).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(&blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
 
-		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(&fork_hash_root).unwrap());
 		assert_eq!(bc.info().best_number, 4);
 		for i in 0..5 {
 			assert!(bc.hash(i).unwrap().is_some());
@@ -3367,11 +3374,11 @@ pub(crate) mod tests {
 		}
 
 		let bc = backend.blockchain();
-		assert_eq!(None, bc.body(BlockId::hash(blocks[0])).unwrap());
-		assert_eq!(None, bc.body(BlockId::hash(blocks[1])).unwrap());
-		assert_eq!(None, bc.body(BlockId::hash(blocks[2])).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
+		assert_eq!(None, bc.body(&blocks[0]).unwrap());
+		assert_eq!(None, bc.body(&blocks[1]).unwrap());
+		assert_eq!(None, bc.body(&blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
 	}
 
 	#[test]
@@ -3408,11 +3415,12 @@ pub(crate) mod tests {
 		assert_eq!(bc.indexed_transaction(&x0_hash).unwrap().unwrap(), &x0[1..]);
 		assert_eq!(bc.indexed_transaction(&x1_hash).unwrap().unwrap(), &x1[1..]);
 
+		let hashof0 = bc.info().genesis_hash;
 		// Push one more blocks and make sure block is pruned and transaction index is cleared.
 		let block1 =
 			insert_block(&backend, 1, hash, None, Default::default(), vec![], None).unwrap();
 		backend.finalize_block(&block1, None).unwrap();
-		assert_eq!(bc.body(BlockId::Number(0)).unwrap(), None);
+		assert_eq!(bc.body(&hashof0).unwrap(), None);
 		assert_eq!(bc.indexed_transaction(&x0_hash).unwrap(), None);
 		assert_eq!(bc.indexed_transaction(&x1_hash).unwrap(), None);
 	}
