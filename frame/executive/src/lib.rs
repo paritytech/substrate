@@ -52,7 +52,7 @@
 //! `Executive` type declaration from the node template.
 //!
 //! ```
-//!
+//! 
 //! # use sp_runtime::generic;
 //! # use frame_executive as executive;
 //! # pub struct UncheckedExtrinsic {};
@@ -188,9 +188,9 @@ impl<
 where
 	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
 	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
-	+ Checkable<Context>
-	+ Codec
-	+ GetDispatchInfo,
+		+ Checkable<Context>
+		+ Codec
+		+ GetDispatchInfo,
 	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
 	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
@@ -223,28 +223,28 @@ where
 
 #[cfg(feature = "try-runtime")]
 impl<
-	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllPalletsWithSystem: OnRuntimeUpgrade
-	+ OnInitialize<System::BlockNumber>
-	+ OnIdle<System::BlockNumber>
-	+ OnFinalize<System::BlockNumber>
-	+ OffchainWorker<System::BlockNumber>
-	+ frame_support::traits::TryState<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-	where
-		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>
+			+ frame_support::traits::TryState<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+where
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-		CallOf<Block::Extrinsic, Context>:
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute given block, but don't as strict is the normal block execution.
 	///
@@ -318,28 +318,28 @@ impl<
 }
 
 impl<
-	System: frame_system::Config + EnsureInherentsAreFirst<Block>,
-	Block: traits::Block<Header = System::Header, Hash = System::Hash>,
-	Context: Default,
-	UnsignedValidator,
-	AllPalletsWithSystem: OnRuntimeUpgrade
-	+ OnInitialize<System::BlockNumber>
-	+ OnIdle<System::BlockNumber>
-	+ OnFinalize<System::BlockNumber>
-	+ OffchainWorker<System::BlockNumber>,
-	COnRuntimeUpgrade: OnRuntimeUpgrade,
-> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
-	where
-		<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
-		Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
+		System: frame_system::Config + EnsureInherentsAreFirst<Block>,
+		Block: traits::Block<Header = System::Header, Hash = System::Hash>,
+		Context: Default,
+		UnsignedValidator,
+		AllPalletsWithSystem: OnRuntimeUpgrade
+			+ OnInitialize<System::BlockNumber>
+			+ OnIdle<System::BlockNumber>
+			+ OnFinalize<System::BlockNumber>
+			+ OffchainWorker<System::BlockNumber>,
+		COnRuntimeUpgrade: OnRuntimeUpgrade,
+	> Executive<System, Block, Context, UnsignedValidator, AllPalletsWithSystem, COnRuntimeUpgrade>
+where
+	<System as frame_system::Config>::BlockNumber: AtLeast32BitUnsigned,
+	Block::Extrinsic: IdentifyAccountWithLookup<Context, AccountId = System::AccountId>
 		+ Checkable<Context>
 		+ Codec
 		+ GetDispatchInfo,
-		CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
-		CallOf<Block::Extrinsic, Context>:
+	CheckedOf<Block::Extrinsic, Context>: Applyable + GetDispatchInfo,
+	CallOf<Block::Extrinsic, Context>:
 		Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
-		OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
-		UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
+	OriginOf<Block::Extrinsic, Context>: From<Option<System::AccountId>>,
+	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
 	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
