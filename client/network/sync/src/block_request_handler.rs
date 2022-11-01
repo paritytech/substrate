@@ -374,7 +374,7 @@ where
 			};
 
 			let indexed_body = if get_indexed_body {
-				match self.client.block_indexed_body(&BlockId::Hash(hash))? {
+				match self.client.block_indexed_body(&hash)? {
 					Some(transactions) => transactions,
 					None => {
 						log::trace!(

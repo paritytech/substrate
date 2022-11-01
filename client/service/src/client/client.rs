@@ -1980,9 +1980,9 @@ where
 
 	fn block_indexed_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
-		self.backend.blockchain().block_indexed_body(*id)
+		self.backend.blockchain().block_indexed_body(hash)
 	}
 
 	fn requires_full_sync(&self) -> bool {
@@ -2073,9 +2073,19 @@ where
 		&self,
 		number: NumberFor<B>,
 	) -> Result<Option<Vec<Vec<u8>>>, sp_transaction_storage_proof::Error> {
+		let hash = match self
+			.backend
+			.blockchain()
+			.block_hash_from_id(&BlockId::Number(number))
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))?
+		{
+			Some(hash) => hash,
+			None => return Ok(None),
+		};
+
 		self.backend
 			.blockchain()
-			.block_indexed_body(BlockId::number(number))
+			.block_indexed_body(&hash)
 			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
 	}
 

@@ -694,8 +694,13 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		Ok(self.db.contains(columns::TRANSACTION, hash.as_ref()))
 	}
 
-	fn block_indexed_body(&self, id: BlockId<Block>) -> ClientResult<Option<Vec<Vec<u8>>>> {
-		let body = match read_db(&*self.db, columns::KEY_LOOKUP, columns::BODY_INDEX, id)? {
+	fn block_indexed_body(&self, hash: &Block::Hash) -> ClientResult<Option<Vec<Vec<u8>>>> {
+		let body = match read_db(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::BODY_INDEX,
+			BlockId::<Block>::Hash(*hash),
+		)? {
 			Some(body) => body,
 			None => return Ok(None),
 		};

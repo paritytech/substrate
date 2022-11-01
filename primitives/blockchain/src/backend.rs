@@ -238,7 +238,7 @@ pub trait Backend<Block: BlockT>:
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 
-	fn block_indexed_body(&self, id: BlockId<Block>) -> Result<Option<Vec<Vec<u8>>>>;
+	fn block_indexed_body(&self, hash: &Block::Hash) -> Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Blockchain info

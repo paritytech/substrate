@@ -451,7 +451,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 
 	fn block_indexed_body(
 		&self,
-		_id: BlockId<Block>,
+		_hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
 		unimplemented!("Not supported by the in-mem backend.")
 	}
