@@ -16,7 +16,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 parity-util-mem = { version = "0.12.0", default-features = false, features = ["primitive-types"] }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-application-crypto = { version = "6.0.0", default-features = false, path = "../application-crypto" }
-sp-core = { version = "6.0.0", default-features = false, path = "../core" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 
 [features]

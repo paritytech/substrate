@@ -26,12 +26,12 @@ derive_more = { version = "0.99.17", default-features = false, features = ["disp
 kvdb = "0.12.0"
 kvdb-rocksdb = "0.16.0"
 sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
 sc-basic-authorship = { version = "0.10.0-dev", path = "../../../client/basic-authorship" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
-sp-tracing = { version = "5.0.0", path = "../../../primitives/tracing" }
+sp-tracing = { version = "6.0.0", path = "../../../primitives/tracing" }
 hash-db = "0.15.2"
 tempfile = "3.1.0"
 fs_extra = "1"
