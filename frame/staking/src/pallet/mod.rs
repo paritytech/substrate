@@ -668,7 +668,7 @@ pub mod pallet {
 		/// A staker (validator or nominator) has been slashed by the given amount.
 		Slashed { staker: T::AccountId, amount: BalanceOf<T> },
 		/// A slash for the given validator, for the given percentage of their stake, at the given
-		/// era as been reporter
+		/// era as been reported.
 		SlashReported { validator: T::AccountId, fraction: Perbill, slash_era: EraIndex },
 		/// An old slashing report from a prior era was discarded because it could
 		/// not be processed.
