@@ -157,7 +157,7 @@ benchmarks_instance_pallet! {
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
 	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, 1u32.into())
 	verify {
-		assert_last_event::<T, I>(Event::Created { asset_id: asset_id, creator: caller.clone(), owner: caller }.into());
+		assert_last_event::<T, I>(Event::Created { asset_id, creator: caller.clone(), owner: caller }.into());
 	}
 
 	force_create {
