@@ -55,10 +55,7 @@ pub fn pallet(
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
 	match parse::Def::try_from(item, dev_mode) {
-		Ok(mut def) => {
-			def.dev_mode = dev_mode;
-			expand::expand(def).into()
-		},
+		Ok(def) => expand::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
 	}
 }
