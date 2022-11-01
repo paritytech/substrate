@@ -125,6 +125,7 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
@@ -137,6 +138,7 @@ mod functions;
 mod impl_fungibles;
 mod impl_stored_map;
 mod types;
+
 pub use types::*;
 
 use codec::HasCompact;
@@ -477,6 +479,13 @@ pub mod pallet {
 		NoDeposit,
 		/// The operation would result in funds being burned.
 		WouldBurn,
+	}
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			migration::migrate_to_v1::<T, I, Self>()
+		}
 	}
 
 	#[pallet::call]

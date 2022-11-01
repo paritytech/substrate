@@ -23,6 +23,7 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 # `system` module provides us with all sorts of useful stuff and macros depend on it being around.
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../benchmarking", optional = true }
+log = { version = "0.4.17", default-features = false }
 
 [dev-dependencies]
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
