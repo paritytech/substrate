@@ -21,12 +21,12 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../timestamp" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-trie = { version = "6.0.0", default-features = false, optional = true, path = "../../primitives/trie" }
+sp-trie = { version = "7.0.0", default-features = false, optional = true, path = "../../primitives/trie" }
 
 [features]
 default = ["historical", "std"]

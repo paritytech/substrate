@@ -28,7 +28,7 @@ void = "1.0.2"
 sc-client-api = { version = "4.0.0-dev", path = "../../api" }
 sc-network-common = { version = "0.10.0-dev", path = "../common" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

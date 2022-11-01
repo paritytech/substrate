@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false }
 schnorrkel = { version = "0.9.1", default-features = false, features = ["preaudit_deprecated", "u64_backend"] }
 sp-core = { version = "7.0.0", default-features = false, path = "../../core" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../std" }
 
 [features]

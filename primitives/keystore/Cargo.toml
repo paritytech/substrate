@@ -1,6 +1,6 @@
 [package]
 name = "sp-keystore"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"

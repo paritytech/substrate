@@ -26,7 +26,7 @@ sp-api = { version = "4.0.0-dev", path = "../../../../primitives/api" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../../../primitives/block-builder" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../../primitives/blockchain" }
 sp-core = { version = "7.0.0", path = "../../../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../../../primitives/runtime" }
 
 [dev-dependencies]
 sc-transaction-pool = { version = "4.0.0-dev", path = "../../../../client/transaction-pool" }

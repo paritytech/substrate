@@ -19,11 +19,11 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 
 [dev-dependencies]
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 
 [features]
 default = ["std"]

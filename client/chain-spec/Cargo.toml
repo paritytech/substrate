@@ -22,4 +22,4 @@ sc-chain-spec-derive = { version = "4.0.0-dev", path = "./derive" }
 sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }

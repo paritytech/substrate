@@ -9401,7 +9401,7 @@ dependencies = [
 
 [[package]]
 name = "sp-application-crypto"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
@@ -9425,7 +9425,7 @@ dependencies = [
 
 [[package]]
 name = "sp-arithmetic"
-version = "5.0.0"
+version = "6.0.0"
 dependencies = [
  "criterion",
  "integer-sqrt",
@@ -9728,7 +9728,7 @@ dependencies = [
 
 [[package]]
 name = "sp-io"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "bytes",
  "futures",
@@ -9763,7 +9763,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keystore"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -9842,7 +9842,7 @@ dependencies = [
 
 [[package]]
 name = "sp-panic-handler"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "backtrace",
  "lazy_static",
@@ -9861,7 +9861,7 @@ dependencies = [
 
 [[package]]
 name = "sp-runtime"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "either",
  "hash256-std-hasher",
@@ -10008,7 +10008,7 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
-version = "0.12.0"
+version = "0.13.0"
 dependencies = [
  "array-bytes",
  "assert_matches",
@@ -10124,7 +10124,7 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "ahash",
  "array-bytes",

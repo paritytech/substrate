@@ -28,11 +28,11 @@ sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
 sp-externalities = { version = "0.13.0", path = "../../primitives/externalities" }
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
-sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
+sp-panic-handler = { version = "5.0.0", path = "../../primitives/panic-handler" }
 sp-runtime-interface = { version = "7.0.0", path = "../../primitives/runtime-interface" }
 sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
-sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
+sp-trie = { version = "7.0.0", path = "../../primitives/trie" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-wasm-interface = { version = "7.0.0", path = "../../primitives/wasm-interface" }
 
@@ -41,8 +41,8 @@ array-bytes = "4.1"
 wat = "1.0"
 sc-runtime-test = { version = "2.0.0", path = "runtime-test" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime" }
-sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../primitives/state-machine" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/maybe-compressed-blob" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing-subscriber = "0.2.19"

@@ -24,7 +24,7 @@ frame-support = { path = "../../support", version = "4.0.0-dev" }
 sp-storage = { path = "../../../primitives/storage", version = "7.0.0" }
 sp-core = { path = "../../../primitives/core", version = "7.0.0" }
 sp-tracing = { path = "../../../primitives/tracing", version = "6.0.0" }
-sp-runtime = { path = "../../../primitives/runtime", version = "6.0.0"}
+sp-runtime = { path = "../../../primitives/runtime", version = "7.0.0" }
 sp-std = { path = "../../../primitives/std", version = "5.0.0" }
 
 # utils

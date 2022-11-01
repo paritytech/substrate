@@ -17,7 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 log = { version = "0.4", default-features = false }
 wasmi = { version = "0.13", default-features = false }
 sp-core = { version = "7.0.0", default-features = false, path = "../core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../io" }
+sp-io = { version = "7.0.0", default-features = false, path = "../io" }
 sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 sp-wasm-interface = { version = "7.0.0", default-features = false, path = "../wasm-interface" }
 
