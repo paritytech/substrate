@@ -18,12 +18,15 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
 #[cfg(test)]
 mod tests;
-mod weights;
+pub mod weights;
 
 use codec::{Codec, Decode, Encode, FullCodec, MaxEncodedLen};
-use frame_support::{pallet_prelude::*, BoundedSlice};
+use frame_support::{
+	defensive, pallet_prelude::*, traits::DefensiveTruncateFrom, BoundedSlice, CloneNoBound,
+};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use scale_info::TypeInfo;
@@ -33,12 +36,15 @@ use sp_runtime::{
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, prelude::*, vec};
+use sp_weights::WeightCounter;
 pub use weights::WeightInfo;
 
 /// Type for identifying an overweight message.
 type OverweightIndex = u64;
 /// Type for identifying a page.
 type PageIndex = u32;
+
+const LOG_TARGET: &'static str = "runtime::message-queue";
 
 /// Data encoded and prefixed to the encoded `MessageItem`.
 #[derive(Encode, Decode, MaxEncodedLen)]
@@ -51,10 +57,10 @@ pub struct ItemHeader<Size> {
 }
 
 /// A page of messages. Pages always contain at least one item.
-#[derive(Clone, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo, MaxEncodedLen)]
+#[derive(CloneNoBound, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(HeapSize))]
 #[codec(mel_bound(Size: MaxEncodedLen))]
-pub struct Page<Size: Into<u32> + Debug, HeapSize: Get<Size>> {
+pub struct Page<Size: Into<u32> + Debug + Clone, HeapSize: Get<Size>> {
 	/// Messages remaining to be processed; this includes overweight messages which have been
 	/// skipped.
 	remaining: Size,
@@ -110,26 +116,30 @@ impl<
 		Ok(())
 	}
 
+	/// Returns the first message in the page without removing it.
+	///
+	/// SAFETY: Does not panic even on corrupted storage.
 	fn peek_first(&self) -> Option<BoundedSlice<u8, IntoU32<HeapSize, Size>>> {
 		if self.first > self.last {
 			return None
 		}
-		let mut item_slice = &self.heap[(self.first.into() as usize)..];
+		let f = (self.first.into() as usize).min(self.heap.len());
+		let mut item_slice = &self.heap[f..];
 		if let Ok(h) = ItemHeader::<Size>::decode(&mut item_slice) {
-			let payload_len = h.payload_len.into();
-			if payload_len <= item_slice.len() as u32 {
+			let payload_len = h.payload_len.into() as usize;
+			if payload_len <= item_slice.len() {
 				// impossible to truncate since is sliced up from `self.heap: BoundedVec<u8,
 				// HeapSize>`
-				return Some(BoundedSlice::truncate_from(&item_slice[..(payload_len as usize)]))
+				return Some(BoundedSlice::defensive_truncate_from(&item_slice[..payload_len]))
 			}
 		}
-		debug_assert!(false, "message-queue: heap corruption");
+		defensive!("message-queue: heap corruption");
 		None
 	}
 
 	/// Point `first` at the next message, marking the first as processed if `is_processed` is true.
 	fn skip_first(&mut self, is_processed: bool) {
-		let f = self.first.into() as usize;
+		let f = (self.first.into() as usize).min(self.heap.len());
 		if let Ok(mut h) = ItemHeader::decode(&mut &self.heap[f..]) {
 			if is_processed && !h.is_processed {
 				h.is_processed = true;
@@ -302,6 +312,7 @@ pub mod pallet {
 		Unexpected,
 		AlreadyProcessed,
 		Queued,
+		InsufficientWeight,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -330,6 +341,15 @@ pub mod pallet {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
 			let weight_used = Weight::zero();
 			weight_used
+		}
+
+		fn integrity_test() {
+			// TODO currently disabled since it fails.
+			// None of the weight functions can be zero.
+			// Otherwise we risk getting stuck in a no-progress situation (= infinite loop).
+			/*weights::WeightMetaInfo::<<T as Config>::WeightInfo>::visit_weight_functions(
+				|name, w| assert!(!w.is_zero(), "Weight function is zero: {}", name),
+			);*/
 		}
 	}
 
@@ -395,6 +415,37 @@ impl<T: Config> Iterator for ReadyRing<T> {
 	}
 }
 
+/// The status of a page after trying to execute its next message.
+#[derive(PartialEq)]
+enum PageExecutionStatus {
+	/// The execution bailed because there was not enough weight remaining.
+	Bailed,
+	/// No more messages could be loaded. This does _not_ imply `page.is_complete()`.
+	///
+	/// The reasons for this status are:
+	///  - The end of the page is reached but there could still be skipped messages.
+	///  - The storage is corrupted.
+	NoMore,
+	/// The execution progressed and executed some messages. The inner is the number of messages
+	/// removed from the queue.
+	Partial,
+}
+
+/// The status of an attempt to process a message.
+#[derive(PartialEq)]
+enum MessageExecutionStatus {
+	/// The message could not be executed due to a format error.
+	BadFormat,
+	/// There is not enough weight remaining at present.
+	InsufficientWeight,
+	/// There will never be enough enough weight.
+	Overweight,
+	/// The message was processed successfully.
+	Processed,
+	/// The message was processed and resulted in a permanent error.
+	Unprocessable,
+}
+
 impl<T: Config> Pallet<T> {
 	/// Knit `origin` into the ready ring right at the end.
 	///
@@ -445,16 +496,26 @@ impl<T: Config> Pallet<T> {
 					ServiceHead::<T>::put(neighbours.next);
 				}
 			} else {
-				debug_assert!(false, "`ServiceHead` must be some if there was a ready queue");
+				defensive!("`ServiceHead` must be some if there was a ready queue");
 			}
 		}
 	}
 
-	fn bump_service_head() -> Option<MessageOriginOf<T>> {
+	fn bump_service_head(weight: &mut WeightCounter) -> Option<MessageOriginOf<T>> {
+		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
+			log::debug!(target: LOG_TARGET, "bump_service_head: weight limit reached");
+			return None
+		}
+
 		if let Some(head) = ServiceHead::<T>::get() {
 			let mut head_book_state = BookStateOf::<T>::get(&head);
 			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
 				ServiceHead::<T>::put(&head_neighbours.next);
+				log::debug!(
+					target: LOG_TARGET,
+					"bump_service_head: next head `{:?}`",
+					head_neighbours.next
+				);
 				Some(head)
 			} else {
 				None
@@ -477,7 +538,7 @@ impl<T: Config> Pallet<T> {
 			let mut page = match Pages::<T>::get(origin, last) {
 				Some(p) => p,
 				None => {
-					debug_assert!(false, "Corruption: referenced page doesn't exist.");
+					defensive!("Corruption: referenced page doesn't exist.");
 					return
 				},
 			};
@@ -511,7 +572,7 @@ impl<T: Config> Pallet<T> {
 		origin: MessageOriginOf<T>,
 		page_index: PageIndex,
 		index: T::Size,
-		mut weight_limit: Weight,
+		weight_limit: Weight,
 	) -> DispatchResult {
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
@@ -523,21 +584,24 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::Queued
 		);
 		ensure!(is_processed, Error::<T>::AlreadyProcessed);
-		let ok = Self::process_message(blob, weight_limit, &mut 0, &mut weight_limit)
-			.map_err(|_| Error::<T>::Unexpected)?;
-		if ok {
-			page.note_processed_at_pos(pos);
+		use MessageExecutionStatus::*;
+		let mut weight_counter = WeightCounter::from_limit(weight_limit);
+		match Self::process_message(blob, &mut weight_counter, weight_limit) {
+			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight.into()),
+			BadFormat | Unprocessable | Processed => {
+				page.note_processed_at_pos(pos);
+				if page.remaining.is_zero() {
+					Pages::<T>::remove(&origin, page_index);
+					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
+					book_state.count.saturating_dec();
+					// no need toconsider .first or ready ring since processing an overweight page would
+					// not alter that state.
+				} else {
+					Pages::<T>::insert(&origin, page_index, page);
+				}
+				Ok(())
+			},
 		}
-		if page.remaining.is_zero() {
-			Pages::<T>::remove(&origin, page_index);
-			debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
-			book_state.count.saturating_dec();
-		// no need toconsider .first or ready ring since processing an overweight page would
-		// not alter that state.
-		} else {
-			Pages::<T>::insert(&origin, page_index, page);
-		}
-		Ok(())
 	}
 
 	/// Remove a page which has no more messages remaining to be processed.
@@ -576,111 +640,42 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
-	fn process_message(
-		mut message: &[u8],
-		overweight_limit: Weight,
-		processed: &mut u32,
-		weight_left: &mut Weight,
-	) -> Result<bool, bool> {
-		match MessageOriginOf::<T>::decode(&mut message) {
-			Ok(origin) => {
-				let hash = T::Hashing::hash(message);
-				use ProcessMessageError::Overweight;
-				match T::MessageProcessor::process_message(message, origin.clone(), *weight_left) {
-					Err(Overweight(w)) if *processed == 0 || w.any_gt(overweight_limit) => {
-						// Permanently overweight.
-						Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
-						Ok(false)
-					},
-					Err(Overweight(_)) => {
-						// Temporarily overweight - save progress and stop processing this
-						// queue.
-						Err(true)
-					},
-					Err(error) => {
-						// Permanent error - drop
-						Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
-						Ok(true)
-					},
-					Ok((success, weight_used)) => {
-						// Success
-						processed.saturating_inc();
-						*weight_left = weight_left.saturating_sub(weight_used);
-						let event = Event::<T>::Processed { hash, origin, weight_used, success };
-						Self::deposit_event(event);
-						Ok(true)
-					},
-				}
-			},
-			Err(_) => {
-				let hash = T::Hashing::hash(message);
-				Self::deposit_event(Event::<T>::Discarded { hash });
-				Ok(true)
-			},
-		}
-	}
-
 	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
 	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
 	/// execute are deemed overweight and ignored.
 	fn service_queue(
 		origin: MessageOriginOf<T>,
-		weight_limit: Weight,
+		weight: &mut WeightCounter,
 		overweight_limit: Weight,
-	) -> (Weight, Option<MessageOriginOf<T>>) {
-		let mut processed = 0;
-		let mut weight_left = weight_limit;
+	) -> Option<MessageOriginOf<T>> {
+		if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
+			return None
+		}
+
 		let mut book_state = BookStateOf::<T>::get(&origin);
+		let mut total_processed = 0;
 		while book_state.end > book_state.begin {
-			let page_index = book_state.begin;
-			// TODO: Check `weight_left` and bail before doing this storage read.
-			let mut page = match Pages::<T>::get(&origin, page_index) {
-				Some(p) => p,
-				None => {
-					debug_assert!(false, "message-queue: referenced page not found");
-					break
+			let (processed, status) = Self::service_page(
+				&origin,
+				&mut book_state,
+				weight,
+				overweight_limit,
+			);
+			total_processed.saturating_accrue(processed);
+			match status {
+				// Store the page progress and do not go to the next one.
+				PageExecutionStatus::Bailed => break,
+				// Go to the next page if this one is at the end.
+				PageExecutionStatus::NoMore => (),
+				// TODO @ggwpez think of a better enum here.
+				PageExecutionStatus::Partial => {
+					defensive!("should progress till the end or bail");
 				},
 			};
-
-			let bail = loop {
-				let message = &match page.peek_first() {
-					Some(m) => m,
-					None => break false,
-				}[..];
-
-				if weight_left.any_lte(Weight::zero()) {
-					break true
-				}
-
-				match Self::process_message(
-					message,
-					overweight_limit,
-					&mut processed,
-					&mut weight_left,
-				) {
-					Ok(is_processed) => {
-						page.skip_first(is_processed);
-					},
-					Err(x) => break x,
-				};
-			};
-
-			if page.is_complete() {
-				debug_assert!(!bail, "we never bail if a page became complete");
-				Pages::<T>::remove(&origin, page_index);
-				debug_assert!(book_state.count > 0, "completing a page implies there are pages");
-				book_state.count.saturating_dec();
-			} else {
-				Pages::<T>::insert(&origin, page_index, page);
-			}
-
-			if bail {
-				break
-			}
 			book_state.begin.saturating_inc();
 		}
 		let next_ready = book_state.ready_neighbours.as_ref().map(|x| x.next.clone());
-		if book_state.begin >= book_state.end && processed > 0 {
+		if book_state.begin >= book_state.end && total_processed > 0 {
 			// No longer ready - unknit.
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
 				Self::ready_ring_unknit(&origin, neighbours);
@@ -689,7 +684,134 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		BookStateOf::<T>::insert(&origin, &book_state);
-		(weight_limit.saturating_sub(weight_left), next_ready)
+		next_ready
+	}
+
+	/// Service as many messages of a page as possible.
+	///
+	/// Returns whether the execution bailed.
+	fn service_page(
+		origin: &MessageOriginOf<T>,
+		book_state: &mut BookState<MessageOriginOf<T>>,
+		weight: &mut WeightCounter,
+		overweight_limit: Weight,
+	) -> (u32, PageExecutionStatus) {
+		use PageExecutionStatus::*;
+		if !weight.check_accrue(T::WeightInfo::service_page_base()) {
+			return (0, Bailed)
+		}
+
+		let page_index = book_state.begin;
+		let mut page = match Pages::<T>::get(&origin, page_index) {
+			Some(p) => p,
+			None => {
+				debug_assert!(false, "message-queue: referenced page not found");
+				return (0, NoMore)
+			},
+		};
+
+		let mut total_processed = 0;
+
+		// Execute as many messages as possible.
+		let status = loop {
+			match Self::service_page_item(origin, &mut page, weight, overweight_limit) {
+				s @ Bailed | s @ NoMore => break s,
+				// Keep going as long as we make progress...
+				Partial => {
+					total_processed.saturating_inc();
+					continue
+				},
+			}
+		};
+
+		if page.is_complete() {
+			debug_assert!(
+				status != PageExecutionStatus::Bailed,
+				"we never bail if a page became complete"
+			);
+			Pages::<T>::remove(&origin, page_index);
+			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
+			book_state.count.saturating_dec();
+		} else {
+			Pages::<T>::insert(&origin, page_index, page);
+		}
+		(total_processed, status)
+	}
+
+	/// Execute the next message of a page.
+	fn service_page_item(
+		_origin: &MessageOriginOf<T>,
+		page: &mut PageOf<T>,
+		weight: &mut WeightCounter,
+		overweight_limit: Weight,
+	) -> PageExecutionStatus {
+		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
+			return PageExecutionStatus::Bailed
+		}
+		let message = &match page.peek_first() {
+			Some(m) => m,
+			None => return PageExecutionStatus::NoMore,
+		}[..];
+
+		// TODO should not be needed.
+		if weight.remaining().any_lte(Weight::zero()) {
+			return PageExecutionStatus::Bailed
+		}
+
+		use MessageExecutionStatus::*;
+		let is_processed = match Self::process_message(message, weight, overweight_limit) {
+			InsufficientWeight => return PageExecutionStatus::Bailed,
+			Processed | Unprocessable | BadFormat => true,
+			Overweight => false,
+		};
+		page.skip_first(is_processed);
+		PageExecutionStatus::Partial
+	}
+
+	fn process_message(
+		mut message: &[u8],
+		weight: &mut WeightCounter,
+		overweight_limit: Weight,
+	) -> MessageExecutionStatus {
+		match MessageOriginOf::<T>::decode(&mut message) {
+			Ok(origin) => {
+				let hash = T::Hashing::hash(message);
+				use ProcessMessageError::Overweight;
+				match T::MessageProcessor::process_message(
+					message,
+					origin.clone(),
+					weight.remaining(),
+				) {
+					Err(Overweight(w)) if w.any_gt(overweight_limit) => {
+						// Permanently overweight.
+						Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
+						MessageExecutionStatus::Overweight
+					},
+					Err(Overweight(_)) => {
+						// Temporarily overweight - save progress and stop processing this
+						// queue.
+						MessageExecutionStatus::InsufficientWeight
+					},
+					Err(error) => {
+						// Permanent error - drop
+						Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+						MessageExecutionStatus::Unprocessable
+					},
+					Ok((success, weight_used)) => {
+						// Success
+						weight.defensive_saturating_accrue(weight_used);
+						let event = Event::<T>::Processed { hash, origin, weight_used, success };
+						Self::deposit_event(event);
+						MessageExecutionStatus::Processed
+					},
+				}
+			},
+			Err(_) => {
+				let hash = T::Hashing::hash(message);
+				Self::deposit_event(Event::<T>::Discarded { hash });
+				MessageExecutionStatus::BadFormat
+			},
+		}
 	}
 }
 
@@ -718,6 +840,7 @@ pub type MaxMessageLenOf<T> =
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
 pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
+pub type PageOf<T> = Page<<T as Config>::Size, <T as Config>::HeapSize>;
 
 pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
 impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
@@ -737,27 +860,35 @@ pub trait ServiceQueues {
 
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
-		let max_weight = weight_limit.saturating_mul(3).saturating_div(4);
-		let mut weight_used = Weight::zero();
-		let mut next = match Self::bump_service_head() {
+		// The maximum weight that processing a single message may take.
+		let overweight_limit = weight_limit;
+		let mut weight = WeightCounter::from_limit(weight_limit);
+		log::debug!(
+			target: LOG_TARGET,
+			"ServiceQueues::service_queues with weight {} and overweight_limit {}",
+			weight_limit,
+			overweight_limit
+		);
+
+		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
-			None => return weight_used,
+			None => return weight.consumed,
 		};
 
 		loop {
-			let left = weight_limit - weight_used;
-			if left.any_lte(Weight::zero()) {
+			// TODO should not be needed. Instead add a no-progress check and stop rotating
+			// the ring in that case. This is only needed since tests declares the weights
+			// as zero, so it produces an infinite loop.
+			if weight.remaining().any_lte(Zero::zero()) {
 				break
 			}
-			// Before servicing, bump `ServiceHead` onto the next item.
-			let (used, n) = Self::service_queue(next, left, max_weight);
-			weight_used.saturating_accrue(used);
+			let n = Self::service_queue(next, &mut weight, overweight_limit);
 			next = match n {
 				Some(n) => n,
 				None => break,
 			}
 		}
-		weight_used
+		weight.consumed
 	}
 }
 

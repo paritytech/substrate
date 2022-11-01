@@ -220,6 +220,49 @@ where
 	}
 }
 
+/// Tracks the already consumed weight and a hard limit for the maximal consumable weight.
+#[derive(Debug, Clone)]
+pub struct WeightCounter {
+	/// The already consumed weight.
+	pub consumed: Weight,
+	/// The maximal consumable weight.
+	pub limit: Weight,
+}
+
+impl WeightCounter {
+	/// Creates [`Self`] with a maximum limit for the consumable weight.
+	pub fn from_limit(limit: Weight) -> Self {
+		Self { consumed: Weight::zero(), limit }
+	}
+
+	/// The remaining weight that can be consumed.
+	pub fn remaining(&self) -> Weight {
+		self.limit.saturating_sub(self.consumed)
+	}
+
+	/// Consume some weight and defensively fail if it is over the limit. Saturate in any case.
+	pub fn defensive_saturating_accrue(&mut self, w: Weight) {
+		self.consumed.saturating_accrue(w);
+		debug_assert!(self.consumed.all_lte(self.limit), "Weight counter overflow");
+	}
+
+	/// Check if the given weight can be consumed. Do nothing if not.
+	pub fn check_accrue(&mut self, w: Weight) -> bool {
+		let test = self.consumed.saturating_add(w);
+		if test.any_gt(self.limit) {
+			false
+		} else {
+			self.consumed = test;
+			true
+		}
+	}
+
+	/// Check if the given weight can be consumed.
+	pub fn can_accrue(&self, w: Weight) -> bool {
+		self.consumed.saturating_add(w).all_lte(self.limit)
+	}
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {

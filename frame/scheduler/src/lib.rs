@@ -81,6 +81,7 @@ use sp_runtime::{
 	BoundedVec, RuntimeDebug,
 };
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
+use sp_weights::WeightCounter;
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.
@@ -142,25 +143,6 @@ pub type ScheduledOf<T> = Scheduled<
 	<T as Config>::PalletsOrigin,
 	<T as frame_system::Config>::AccountId,
 >;
-
-struct WeightCounter {
-	used: Weight,
-	limit: Weight,
-}
-impl WeightCounter {
-	fn check_accrue(&mut self, w: Weight) -> bool {
-		let test = self.used.saturating_add(w);
-		if test.any_gt(self.limit) {
-			false
-		} else {
-			self.used = test;
-			true
-		}
-	}
-	fn can_accrue(&mut self, w: Weight) -> bool {
-		self.used.saturating_add(w).all_lte(self.limit)
-	}
-}
 
 pub(crate) trait MarginalWeightInfo: WeightInfo {
 	fn service_task(maybe_lookup_len: Option<usize>, named: bool, periodic: bool) -> Weight {

@@ -18,7 +18,7 @@ array-bytes = "4.1"
 codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
 hex = "0.4.0"
-libp2p = "0.46.1"
+libp2p = "0.49.0"
 log = "0.4.17"
 pin-project = "1.0.12"
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", version = "0.10.0-dev", path = "../../../utils/prometheus" }

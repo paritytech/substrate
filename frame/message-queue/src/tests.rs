@@ -31,6 +31,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use std::collections::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -84,11 +85,57 @@ parameter_types! {
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = ();
+	type WeightInfo = MockedWeightInfo;
 	type MessageProcessor = TestMessageProcessor;
 	type Size = u32;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
+}
+
+/// Mocked `WeightInfo` impl with allows to set the weight per call.
+pub struct MockedWeightInfo;
+
+parameter_types! {
+	/// Storage for `MockedWeightInfo`, do not use directly.
+	static WeightForCall: BTreeMap<String, Weight> = Default::default();
+}
+
+/// Set the return value for a function from the `WeightInfo` trait.
+impl MockedWeightInfo {
+	fn set_weight(call_name: &str, weight: Weight) {
+		assert!(
+			super::weights::WeightMetaInfo::<<Test as Config>::WeightInfo>::visit_weight_functions(
+				|f, _| f == call_name
+			)
+			.into_iter()
+			.any(|i| i),
+			"Weigh function name invalid: {call_name}"
+		);
+		let mut calls = WeightForCall::get();
+		calls.insert(call_name.into(), weight);
+		WeightForCall::set(calls);
+	}
+}
+
+impl crate::weights::WeightInfo for MockedWeightInfo {
+	fn service_page_base() -> Weight {
+		WeightForCall::get().get("service_page_base").copied().unwrap_or_default()
+	}
+	fn service_queue_base() -> Weight {
+		WeightForCall::get().get("service_queue_base").copied().unwrap_or_default()
+	}
+	fn service_page_process_message() -> Weight {
+		WeightForCall::get()
+			.get("service_page_process_message")
+			.copied()
+			.unwrap_or_default()
+	}
+	fn bump_service_head() -> Weight {
+		WeightForCall::get().get("bump_service_head").copied().unwrap_or_default()
+	}
+	fn service_page_item() -> Weight {
+		WeightForCall::get().get("service_page_item").copied().unwrap_or_default()
+	}
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
@@ -126,7 +173,7 @@ impl ProcessMessage for TestMessageProcessor {
 		} else {
 			1
 		};
-		let weight = Weight::from_components(weight, weight);
+		let weight = Weight::from_parts(weight, weight);
 		if weight.all_lte(weight_limit) {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
@@ -139,6 +186,8 @@ impl ProcessMessage for TestMessageProcessor {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
+	sp_tracing::try_init_simple();
+	WeightForCall::set(Default::default());
 	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| System::set_block_number(1));
@@ -150,8 +199,31 @@ pub trait IntoWeight {
 }
 impl IntoWeight for u64 {
 	fn into_weight(self) -> Weight {
-		Weight::from_components(self, self)
+		Weight::from_parts(self, self)
 	}
+}
+
+#[test]
+fn mocked_weight_works() {
+	new_test_ext().execute_with(|| {
+		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
+	});
+	new_test_ext().execute_with(|| {
+		MockedWeightInfo::set_weight("service_page_base", Weight::MAX);
+		assert_eq!(<Test as Config>::WeightInfo::service_page_base(), Weight::MAX);
+	});
+	// The externalities reset it.
+	new_test_ext().execute_with(|| {
+		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
+	});
+}
+
+#[test]
+#[should_panic]
+fn mocked_weight_panics_on_invalid_name() {
+	new_test_ext().execute_with(|| {
+		MockedWeightInfo::set_weight("invalid_name", Weight::MAX);
+	});
 }
 
 #[test]

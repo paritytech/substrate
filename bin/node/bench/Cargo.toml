@@ -12,7 +12,7 @@ repository = "https://github.com/paritytech/substrate/"
 
 [dependencies]
 array-bytes = "4.1"
-clap = { version = "3.1.18", features = ["derive"] }
+clap = { version = "4.0.9", features = ["derive"] }
 log = "0.4.17"
 node-primitives = { version = "2.0.0", path = "../primitives" }
 node-testing = { version = "3.0.0-dev", path = "../testing" }
