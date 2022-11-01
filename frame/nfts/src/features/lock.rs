@@ -31,17 +31,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
 
-			if lock_settings.is_disabled(CollectionSetting::TransferableItems) {
-				config.disable_setting(CollectionSetting::TransferableItems);
-			}
-			if lock_settings.is_disabled(CollectionSetting::UnlockedMetadata) {
-				config.disable_setting(CollectionSetting::UnlockedMetadata);
-			}
-			if lock_settings.is_disabled(CollectionSetting::UnlockedAttributes) {
-				config.disable_setting(CollectionSetting::UnlockedAttributes);
-			}
-			if lock_settings.is_disabled(CollectionSetting::UnlockedMaxSupply) {
-				config.disable_setting(CollectionSetting::UnlockedMaxSupply);
+			let allowed_to_disabled = vec![
+				CollectionSetting::TransferableItems,
+				CollectionSetting::UnlockedMetadata,
+				CollectionSetting::UnlockedAttributes,
+				CollectionSetting::UnlockedMaxSupply,
+			];
+
+			for setting in allowed_to_disabled {
+				if lock_settings.is_disabled(setting) {
+					config.disable_setting(setting);
+				}
 			}
 
 			Self::deposit_event(Event::<T, I>::CollectionLocked { collection });

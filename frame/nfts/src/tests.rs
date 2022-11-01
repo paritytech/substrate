@@ -417,7 +417,7 @@ fn transfer_owner_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&2), 1);
 
-		// 2's acceptence from before is reset when it became owner, so it cannot be transfered
+		// 2's acceptance from before is reset when it became an owner, so it cannot be transferred
 		// without a fresh acceptance.
 		assert_noop!(
 			Nfts::transfer_ownership(RuntimeOrigin::signed(3), 0, 2),
