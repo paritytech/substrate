@@ -364,7 +364,7 @@ where
 				};
 
 			let body = if get_body {
-				match self.client.block_body(&BlockId::Hash(hash))? {
+				match self.client.block_body(&hash)? {
 					Some(mut extrinsics) =>
 						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
