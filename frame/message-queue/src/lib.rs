@@ -142,6 +142,42 @@ impl<
 		}
 	}
 
+	/// Return the unprocessed encoded (origin, message) pair of `index` into the page's
+	/// messages if and only if it was skipped (i.e. of location prior to `first`) and is
+	/// unprocessed.
+	fn peek_index(&self, index: usize) -> Option<(usize, bool, &[u8])> {
+		let mut pos = 0;
+		let mut item_slice = &self.heap[..];
+		let header_len: usize = ItemHeader::<Size>::max_encoded_len().saturated_into();
+		for _ in 0..index {
+			let h = ItemHeader::<Size>::decode(&mut item_slice).ok()?;
+			let item_len: usize = header_len + h.payload_len.into() as usize;
+			if item_slice.len() < item_len {
+				return None
+			}
+			item_slice = &item_slice[item_len..];
+			pos.saturating_accrue(item_len);
+		}
+		let h = ItemHeader::<Size>::decode(&mut item_slice).ok()?;
+		if item_slice.len() < header_len + h.payload_len.into() as usize {
+			return None
+		}
+		item_slice = &item_slice[header_len + h.payload_len.into() as usize..];
+		Some((pos, h.is_processed, item_slice))
+	}
+
+	/// Set the `is_processed` flag for the item at `pos` to be `true` if not already and decrement
+	/// the `remaining` counter of the page.
+	fn note_processed_at_pos(&mut self, pos: usize) {
+		if let Ok(mut h) = ItemHeader::<Size>::decode(&mut &self.heap[pos..]) {
+			if !h.is_processed {
+				h.is_processed = true;
+				h.using_encoded(|d| self.heap[pos..pos + d.len()].copy_from_slice(d));
+				self.remaining.saturating_dec();
+			}
+		}
+	}
+
 	fn is_complete(&self) -> bool {
 		self.remaining.is_zero()
 	}
@@ -262,6 +298,10 @@ pub mod pallet {
 		NotReapable,
 		/// Page to be reaped does not exist.
 		NoPage,
+		NoMessage,
+		Unexpected,
+		AlreadyProcessed,
+		Queued,
 	}
 
 	/// The index of the first and last (non-empty) pages.
@@ -295,10 +335,15 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(0)]
-		pub fn send(origin: OriginFor<T>) -> DispatchResult {
+		/// Remove a page which has no more messages remaining to be processed.
+		#[pallet::weight(150_000_000_000)]
+		pub fn reap_page(
+			origin: OriginFor<T>,
+			message_origin: MessageOriginOf<T>,
+			page_index: PageIndex,
+		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
-			Ok(())
+			Self::do_reap_page(&message_origin, page_index)
 		}
 
 		/// Execute an overweight message.
@@ -311,7 +356,7 @@ pub mod pallet {
 		///   of the message.
 		///
 		/// Benchmark complexity considerations: O(index + weight_limit).
-		#[pallet::weight(0)]
+		#[pallet::weight(150_000_000_000)]
 		pub fn execute_overweight(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,
@@ -320,8 +365,7 @@ pub mod pallet {
 			weight_limit: Weight,
 		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
-
-			Ok(())
+			Self::do_execute_overweight(message_origin, page, index, weight_limit)
 		}
 	}
 }
@@ -463,6 +507,39 @@ impl<T: Config> Pallet<T> {
 		BookStateOf::<T>::insert(&origin, book_state);
 	}
 
+	pub fn do_execute_overweight(
+		origin: MessageOriginOf<T>,
+		page_index: PageIndex,
+		index: T::Size,
+		mut weight_limit: Weight,
+	) -> DispatchResult {
+		let mut book_state = BookStateOf::<T>::get(&origin);
+		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
+		let (pos, is_processed, blob) =
+			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
+		ensure!(
+			page_index < book_state.begin ||
+				(page_index == book_state.begin && pos < page.first.into() as usize),
+			Error::<T>::Queued
+		);
+		ensure!(is_processed, Error::<T>::AlreadyProcessed);
+		let ok = Self::process_message(blob, weight_limit, &mut 0, &mut weight_limit)
+			.map_err(|_| Error::<T>::Unexpected)?;
+		if ok {
+			page.note_processed_at_pos(pos);
+		}
+		if page.remaining.is_zero() {
+			Pages::<T>::remove(&origin, page_index);
+			debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
+			book_state.count.saturating_dec();
+		// no need toconsider .first or ready ring since processing an overweight page would
+		// not alter that state.
+		} else {
+			Pages::<T>::insert(&origin, page_index, page);
+		}
+		Ok(())
+	}
+
 	/// Remove a page which has no more messages remaining to be processed.
 	fn do_reap_page(origin: &MessageOriginOf<T>, page_index: PageIndex) -> DispatchResult {
 		let mut book_state = BookStateOf::<T>::get(origin);
@@ -499,6 +576,50 @@ impl<T: Config> Pallet<T> {
 		Ok(())
 	}
 
+	fn process_message(
+		mut message: &[u8],
+		overweight_limit: Weight,
+		processed: &mut u32,
+		weight_left: &mut Weight,
+	) -> Result<bool, bool> {
+		match MessageOriginOf::<T>::decode(&mut message) {
+			Ok(origin) => {
+				let hash = T::Hashing::hash(message);
+				use ProcessMessageError::Overweight;
+				match T::MessageProcessor::process_message(message, origin.clone(), *weight_left) {
+					Err(Overweight(w)) if *processed == 0 || w.any_gt(overweight_limit) => {
+						// Permanently overweight.
+						Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
+						Ok(false)
+					},
+					Err(Overweight(_)) => {
+						// Temporarily overweight - save progress and stop processing this
+						// queue.
+						Err(true)
+					},
+					Err(error) => {
+						// Permanent error - drop
+						Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+						Ok(true)
+					},
+					Ok((success, weight_used)) => {
+						// Success
+						processed.saturating_inc();
+						*weight_left = weight_left.saturating_sub(weight_used);
+						let event = Event::<T>::Processed { hash, origin, weight_used, success };
+						Self::deposit_event(event);
+						Ok(true)
+					},
+				}
+			},
+			Err(_) => {
+				let hash = T::Hashing::hash(message);
+				Self::deposit_event(Event::<T>::Discarded { hash });
+				Ok(true)
+			},
+		}
+	}
+
 	/// Execute any messages remaining to be processed in the queue of `origin`, using up to
 	/// `weight_limit` to do so. Any messages which would take more than `overweight_limit` to
 	/// execute are deemed overweight and ignored.
@@ -522,7 +643,7 @@ impl<T: Config> Pallet<T> {
 			};
 
 			let bail = loop {
-				let mut message = &match page.peek_first() {
+				let message = &match page.peek_first() {
 					Some(m) => m,
 					None => break false,
 				}[..];
@@ -531,56 +652,17 @@ impl<T: Config> Pallet<T> {
 					break true
 				}
 
-				let is_processed = match MessageOriginOf::<T>::decode(&mut message) {
-					Ok(origin) => {
-						let hash = T::Hashing::hash(message);
-						use ProcessMessageError::Overweight;
-						match T::MessageProcessor::process_message(
-							message,
-							origin.clone(),
-							weight_left,
-						) {
-							Err(Overweight(w)) if processed == 0 || w.any_gt(overweight_limit) => {
-								// Permanently overweight.
-								Self::deposit_event(Event::<T>::Overweight {
-									hash,
-									origin,
-									index: 0,
-								}); // TODO page + index
-								false
-							},
-							Err(Overweight(_)) => {
-								// Temporarily overweight - save progress and stop processing this
-								// queue.
-								break true
-							},
-							Err(error) => {
-								// Permanent error - drop
-								Self::deposit_event(Event::<T>::ProcessingFailed {
-									hash,
-									origin,
-									error,
-								});
-								true
-							},
-							Ok((success, weight_used)) => {
-								// Success
-								processed.saturating_inc();
-								weight_left = weight_left.saturating_sub(weight_used);
-								let event =
-									Event::<T>::Processed { hash, origin, weight_used, success };
-								Self::deposit_event(event);
-								true
-							},
-						}
+				match Self::process_message(
+					message,
+					overweight_limit,
+					&mut processed,
+					&mut weight_left,
+				) {
+					Ok(is_processed) => {
+						page.skip_first(is_processed);
 					},
-					Err(_) => {
-						let hash = T::Hashing::hash(message);
-						Self::deposit_event(Event::<T>::Discarded { hash });
-						false
-					},
+					Err(x) => break x,
 				};
-				page.skip_first(is_processed);
 			};
 
 			if page.is_complete() {
