@@ -149,6 +149,7 @@ benchmarks_instance_pallet! {
 	remove_other_vote {
 		let caller = funded_account::<T, I>("caller", 0);
 		let voter = funded_account::<T, I>("caller", 0);
+		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		whitelist_account!(caller);
 		let old_account_vote = account_vote::<T, I>(100u32.into());
 
@@ -167,7 +168,7 @@ benchmarks_instance_pallet! {
 
 		let index = polls[0];
 		assert!(T::Polls::end_ongoing(index, false).is_ok());
-	}: _(RawOrigin::Signed(caller.clone()), voter.clone(), class.clone(), index)
+	}: _(RawOrigin::Signed(caller.clone()), voter_lookup, class.clone(), index)
 	verify {
 		assert_matches!(
 			VotingFor::<T, I>::get(&voter, &class),
@@ -182,6 +183,7 @@ benchmarks_instance_pallet! {
 		let class = T::Polls::max_ongoing().0;
 		let polls = &all_polls[&class];
 		let voter = funded_account::<T, I>("voter", 0);
+		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		let caller = funded_account::<T, I>("caller", 0);
 		whitelist_account!(caller);
 
@@ -197,7 +199,7 @@ benchmarks_instance_pallet! {
 			Voting::Casting(Casting { votes, .. }) if votes.len() == r as usize
 		);
 
-	}: _(RawOrigin::Signed(caller.clone()), class.clone(), voter, Conviction::Locked1x, delegated_balance)
+	}: _(RawOrigin::Signed(caller.clone()), class.clone(), voter_lookup, Conviction::Locked1x, delegated_balance)
 	verify {
 		assert_matches!(VotingFor::<T, I>::get(&caller, &class), Voting::Delegating(_));
 	}
@@ -209,6 +211,7 @@ benchmarks_instance_pallet! {
 		let class = T::Polls::max_ongoing().0;
 		let polls = &all_polls[&class];
 		let voter = funded_account::<T, I>("voter", 0);
+		let voter_lookup = T::Lookup::unlookup(voter.clone());
 		let caller = funded_account::<T, I>("caller", 0);
 		whitelist_account!(caller);
 
@@ -218,7 +221,7 @@ benchmarks_instance_pallet! {
 		ConvictionVoting::<T, I>::delegate(
 			RawOrigin::Signed(caller.clone()).into(),
 			class.clone(),
-			voter.clone(),
+			voter_lookup,
 			Conviction::Locked1x,
 			delegated_balance,
 		)?;
@@ -239,6 +242,7 @@ benchmarks_instance_pallet! {
 
 	unlock {
 		let caller = funded_account::<T, I>("caller", 0);
+		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		whitelist_account!(caller);
 		let normal_account_vote = account_vote::<T, I>(T::Currency::free_balance(&caller) - 100u32.into());
 		let big_account_vote = account_vote::<T, I>(T::Currency::free_balance(&caller));
@@ -266,7 +270,7 @@ benchmarks_instance_pallet! {
 		ConvictionVoting::<T, I>::remove_vote(RawOrigin::Signed(caller.clone()).into(), Some(class.clone()), polls[0])?;
 
 		// We can now unlock on `class` from 200 to 100...
-	}: _(RawOrigin::Signed(caller.clone()), class, caller.clone())
+	}: _(RawOrigin::Signed(caller.clone()), class, caller_lookup)
 	verify {
 		assert_eq!(orig_usable, <T::Currency as fungible::Inspect<T::AccountId>>::reducible_balance(&caller, false));
 	}

@@ -95,14 +95,30 @@ pub struct ImportParams {
 	pub execution_strategies: ExecutionStrategiesParams,
 
 	/// Specify the state cache size.
+	///
+	/// Providing `0` will disable the cache.
 	#[clap(long, value_name = "Bytes", default_value = "67108864")]
-	pub state_cache_size: usize,
+	pub trie_cache_size: usize,
+
+	/// DEPRECATED
+	///
+	/// Switch to `--trie-cache-size`.
+	#[clap(long)]
+	state_cache_size: Option<usize>,
 }
 
 impl ImportParams {
-	/// Specify the state cache size.
-	pub fn state_cache_size(&self) -> usize {
-		self.state_cache_size
+	/// Specify the trie cache maximum size.
+	pub fn trie_cache_maximum_size(&self) -> Option<usize> {
+		if self.state_cache_size.is_some() {
+			eprintln!("`--state-cache-size` was deprecated. Please switch to `--trie-cache-size`.");
+		}
+
+		if self.trie_cache_size == 0 {
+			None
+		} else {
+			Some(self.trie_cache_size)
+		}
 	}
 
 	/// Get the WASM execution method from the parameters

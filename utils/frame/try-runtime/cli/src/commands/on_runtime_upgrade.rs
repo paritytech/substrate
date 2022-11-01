@@ -52,7 +52,7 @@ where
 	let execution = shared.execution;
 
 	let ext = {
-		let builder = command.state.builder::<Block>()?;
+		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
 		let (code_key, code) = extract_code(&config.chain_spec)?;
 		builder.inject_hashed_key_value(&[(code_key, code)]).build().await?
 	};

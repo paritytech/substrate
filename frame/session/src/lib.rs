@@ -574,7 +574,7 @@ pub mod pallet {
 				// NOTE: the non-database part of the weight for `should_end_session(n)` is
 				// included as weight for empty block, the database part is expected to be in
 				// cache.
-				0
+				Weight::zero()
 			}
 		}
 	}

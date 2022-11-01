@@ -32,7 +32,7 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 
 [features]
 runtime-benchmarks = []
-try-runtime = []
+try-runtime = [ "frame-support/try-runtime" ]
 default = ["std"]
 std = [
 	"codec/std",

@@ -513,8 +513,8 @@ pub trait SortedListProvider<AccountId> {
 	/// unbounded amount of storage accesses.
 	fn unsafe_clear();
 
-	/// Sanity check internal state of list. Only meant for debug compilation.
-	fn sanity_check() -> Result<(), &'static str>;
+	/// Check internal state of list. Only meant for debugging.
+	fn try_state() -> Result<(), &'static str>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.

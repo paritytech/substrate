@@ -641,7 +641,7 @@ mod tests {
 		.unwrap();
 
 		// when
-		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1.clone()])).unwrap();
+		block_on(pool.prune_tags(&BlockId::Number(1), vec![vec![0]], vec![hash1])).unwrap();
 
 		// then
 		assert!(pool.validated_pool.is_banned(&hash1));
@@ -793,12 +793,8 @@ mod tests {
 			assert_eq!(pool.validated_pool().status().future, 0);
 
 			// when
-			block_on(pool.prune_tags(
-				&BlockId::Number(2),
-				vec![vec![0u8]],
-				vec![watcher.hash().clone()],
-			))
-			.unwrap();
+			block_on(pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]], vec![*watcher.hash()]))
+				.unwrap();
 			assert_eq!(pool.validated_pool().status().ready, 0);
 			assert_eq!(pool.validated_pool().status().future, 0);
 

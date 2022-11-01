@@ -78,7 +78,7 @@ where
 	let mut child_tries = Vec::new();
 	{
 		// fetch child trie roots
-		let trie = crate::TrieDB::<L>::new(db, &top_root)?;
+		let trie = crate::TrieDBBuilder::<L>::new(db, &top_root).build();
 
 		let mut iter = trie.iter()?;
 
@@ -159,7 +159,7 @@ where
 	let mut child_tries = Vec::new();
 	let partial_db = proof.into_memory_db();
 	let mut compact_proof = {
-		let trie = crate::TrieDB::<L>::new(&partial_db, &root)?;
+		let trie = crate::TrieDBBuilder::<L>::new(&partial_db, &root).build();
 
 		let mut iter = trie.iter()?;
 
@@ -197,7 +197,7 @@ where
 			continue
 		}
 
-		let trie = crate::TrieDB::<L>::new(&partial_db, &child_root)?;
+		let trie = crate::TrieDBBuilder::<L>::new(&partial_db, &child_root).build();
 		let child_proof = trie_db::encode_compact::<L>(&trie)?;
 
 		compact_proof.extend(child_proof);

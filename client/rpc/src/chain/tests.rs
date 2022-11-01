@@ -40,7 +40,7 @@ async fn should_return_header() {
 		Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
-			state_root: res.state_root.clone(),
+			state_root: res.state_root,
 			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 				.parse()
 				.unwrap(),
@@ -56,7 +56,7 @@ async fn should_return_header() {
 		Header {
 			parent_hash: H256::from_low_u64_be(0),
 			number: 0,
-			state_root: res.state_root.clone(),
+			state_root: res.state_root,
 			extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 				.parse()
 				.unwrap(),
@@ -97,7 +97,7 @@ async fn should_return_a_block() {
 			header: Header {
 				parent_hash: client.genesis_hash(),
 				number: 1,
-				state_root: res.block.header.state_root.clone(),
+				state_root: res.block.header.state_root,
 				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					.parse()
 					.unwrap(),
@@ -116,7 +116,7 @@ async fn should_return_a_block() {
 			header: Header {
 				parent_hash: client.genesis_hash(),
 				number: 1,
-				state_root: res.block.header.state_root.clone(),
+				state_root: res.block.header.state_root,
 				extrinsics_root: "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314"
 					.parse()
 					.unwrap(),

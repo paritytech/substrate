@@ -31,7 +31,7 @@ use pallet_nomination_pools::{
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
 	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
 };
-use sp_runtime::traits::{Bounded, Zero};
+use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
@@ -73,13 +73,14 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 	let ed = CurrencyOf::<T>::minimum_balance();
 	let pool_creator: T::AccountId =
 		create_funded_user_with_balance::<T>("pool_creator", n, ed + balance * 2u32.into());
+	let pool_creator_lookup = T::Lookup::unlookup(pool_creator.clone());
 
 	Pools::<T>::create(
 		Origin::Signed(pool_creator.clone()).into(),
 		balance,
-		pool_creator.clone(),
-		pool_creator.clone(),
-		pool_creator.clone(),
+		pool_creator_lookup.clone(),
+		pool_creator_lookup.clone(),
+		pool_creator_lookup,
 	)
 	.unwrap();
 
@@ -200,11 +201,11 @@ impl<T: Config> ListScenario<T> {
 
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), amount, 1).unwrap();
 
-		// Sanity check that the vote weight is still the same as the original bonded
+		// check that the vote weight is still the same as the original bonded
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
 		assert_eq!(vote_to_balance::<T>(weight_of(&self.origin1)).unwrap(), original_bonded);
 
-		// Sanity check the member was added correctly
+		// check the member was added correctly
 		let member = PoolMembers::<T>::get(&joiner).unwrap();
 		assert_eq!(member.points, amount);
 		assert_eq!(member.pool_id, 1);
@@ -224,7 +225,7 @@ frame_benchmarking::benchmarks! {
 			origin_weight
 		);
 
-		let max_additional = scenario.dest_weight.clone() - origin_weight;
+		let max_additional = scenario.dest_weight - origin_weight;
 		let joiner_free = CurrencyOf::<T>::minimum_balance() + max_additional;
 
 		let joiner: T::AccountId
@@ -243,7 +244,7 @@ frame_benchmarking::benchmarks! {
 	bond_extra_transfer {
 		let origin_weight = min_create_bond::<T>() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let extra = scenario.dest_weight.clone() - origin_weight;
+		let extra = scenario.dest_weight - origin_weight;
 
 		// creator of the src pool will bond-extra, bumping itself to dest bag.
 
@@ -258,7 +259,7 @@ frame_benchmarking::benchmarks! {
 	bond_extra_reward {
 		let origin_weight = min_create_bond::<T>() * 2u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, true)?;
-		let extra = (scenario.dest_weight.clone() - origin_weight).max(CurrencyOf::<T>::minimum_balance());
+		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
 
 		// transfer exactly `extra` to the depositor of the src pool (1),
 		let reward_account1 = Pools::<T>::create_reward_account(1);
@@ -306,17 +307,18 @@ frame_benchmarking::benchmarks! {
 		// significantly higher than the first position in a list (e.g. the first bag threshold).
 		let origin_weight = min_create_bond::<T>() * 200u32.into();
 		let scenario = ListScenario::<T>::new(origin_weight, false)?;
-		let amount = origin_weight - scenario.dest_weight.clone();
+		let amount = origin_weight - scenario.dest_weight;
 
 		let scenario = scenario.add_joiner(amount);
 		let member_id = scenario.origin1_member.unwrap().clone();
+		let member_id_lookup = T::Lookup::unlookup(member_id.clone());
 		let all_points = PoolMembers::<T>::get(&member_id).unwrap().points;
 		whitelist_account!(member_id);
-	}: _(Origin::Signed(member_id.clone()), member_id.clone(), all_points)
+	}: _(Origin::Signed(member_id.clone()), member_id_lookup, all_points)
 	verify {
 		let bonded_after = T::StakingInterface::active_stake(&scenario.origin1).unwrap();
 		// We at least went down to the destination bag
-		assert!(bonded_after <= scenario.dest_weight.clone());
+		assert!(bonded_after <= scenario.dest_weight);
 		let member = PoolMembers::<T>::get(
 			&member_id
 		)
@@ -382,6 +384,7 @@ frame_benchmarking::benchmarks! {
 		// Add a new member
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
 		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		let joiner_lookup = T::Lookup::unlookup(joiner.clone());
 		Pools::<T>::join(Origin::Signed(joiner.clone()).into(), min_join_bond, 1)
 			.unwrap();
 
@@ -408,7 +411,7 @@ frame_benchmarking::benchmarks! {
 
 		pallet_staking::benchmarking::add_slashing_spans::<T>(&pool_account, s);
 		whitelist_account!(joiner);
-	}: withdraw_unbonded(Origin::Signed(joiner.clone()), joiner.clone(), s)
+	}: withdraw_unbonded(Origin::Signed(joiner.clone()), joiner_lookup, s)
 	verify {
 		assert_eq!(
 			CurrencyOf::<T>::free_balance(&joiner),
@@ -423,6 +426,7 @@ frame_benchmarking::benchmarks! {
 
 		let min_create_bond = min_create_bond::<T>();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
 		// We set the pool to the destroying state so the depositor can leave
 		BondedPools::<T>::try_mutate(&1, |maybe_bonded_pool| {
@@ -465,7 +469,7 @@ frame_benchmarking::benchmarks! {
 		assert!(frame_system::Account::<T>::contains_key(&reward_account));
 
 		whitelist_account!(depositor);
-	}: withdraw_unbonded(Origin::Signed(depositor.clone()), depositor.clone(), s)
+	}: withdraw_unbonded(Origin::Signed(depositor.clone()), depositor_lookup, s)
 	verify {
 		// Pool removal worked
 		assert!(!pallet_staking::Ledger::<T>::contains_key(&pool_account));
@@ -487,6 +491,7 @@ frame_benchmarking::benchmarks! {
 	create {
 		let min_create_bond = min_create_bond::<T>();
 		let depositor: T::AccountId = account("depositor", USER_SEED, 0);
+		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
 		// Give the depositor some balance to bond
 		CurrencyOf::<T>::make_free_balance_be(&depositor, min_create_bond * 2u32.into());
@@ -499,9 +504,9 @@ frame_benchmarking::benchmarks! {
 	}: _(
 			Origin::Signed(depositor.clone()),
 			min_create_bond,
-			depositor.clone(),
-			depositor.clone(),
-			depositor.clone()
+			depositor_lookup.clone(),
+			depositor_lookup.clone(),
+			depositor_lookup
 		)
 	verify {
 		assert_eq!(RewardPools::<T>::count(), 1);

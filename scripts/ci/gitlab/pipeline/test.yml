@@ -277,6 +277,24 @@ test-linux-stable-extra:
     - time cargo test --doc --workspace --locked --release --verbose --features runtime-benchmarks --manifest-path ./bin/node/cli/Cargo.toml
     - rusty-cachier cache upload
 
+# This job runs all benchmarks defined in the `/bin/node/runtime` once to check that there are no errors.
+quick-benchmarks:
+  stage:                           test
+  extends:
+    - .docker-env
+    - .test-refs
+  variables:
+    # Enable debug assertions since we are running optimized builds for testing
+    # but still want to have debug assertions.
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                "full"
+    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
+  script:
+    - rusty-cachier snapshot create
+    - time cargo run --release --features runtime-benchmarks -- benchmark pallet --execution wasm --wasm-execution compiled --chain dev --pallet "*" --extrinsic "*" --steps 2 --repeat 1
+    - rusty-cachier cache upload
+
 test-frame-examples-compile-to-wasm:
   # into one job
   stage:                           test

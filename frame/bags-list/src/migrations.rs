@@ -21,7 +21,6 @@ use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use frame_election_provider_support::ScoreProvider;
 use frame_support::traits::OnRuntimeUpgrade;
-use sp_runtime::traits::Zero;
 
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;

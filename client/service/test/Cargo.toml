@@ -18,7 +18,7 @@ hex = "0.4"
 hex-literal = "0.3.4"
 log = "0.4.17"
 parity-scale-codec = "3.0.0"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 tempfile = "3.1.0"
 tokio = { version = "1.17.0", features = ["time"] }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }

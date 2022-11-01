@@ -350,15 +350,15 @@ mod list {
 	}
 
 	#[test]
-	fn sanity_check_works() {
+	fn try_state_works() {
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
-			assert_ok!(List::<Runtime>::sanity_check());
+			assert_ok!(List::<Runtime>::try_state());
 		});
 
 		// make sure there are no duplicates.
 		ExtBuilder::default().build_and_execute_no_post_check(|| {
 			Bag::<Runtime>::get(10).unwrap().insert_unchecked(2, 10);
-			assert_eq!(List::<Runtime>::sanity_check(), Err("duplicate identified"));
+			assert_eq!(List::<Runtime>::try_state(), Err("duplicate identified"));
 		});
 
 		// ensure count is in sync with `ListNodes::count()`.
@@ -372,7 +372,7 @@ mod list {
 			CounterForListNodes::<Runtime>::mutate(|counter| *counter += 1);
 			assert_eq!(crate::ListNodes::<Runtime>::count(), 5);
 
-			assert_eq!(List::<Runtime>::sanity_check(), Err("iter_count != stored_count"));
+			assert_eq!(List::<Runtime>::try_state(), Err("iter_count != stored_count"));
 		});
 	}
 
@@ -804,7 +804,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_1000), vec![2, 3, 13, 14]);
-				assert_ok!(bag_1000.sanity_check());
+				assert_ok!(bag_1000.try_state());
 				// and the node isn't mutated when its removed
 				assert_eq!(node_4, node_4_pre_remove);
 
@@ -814,7 +814,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_1000), vec![3, 13, 14]);
-				assert_ok!(bag_1000.sanity_check());
+				assert_ok!(bag_1000.try_state());
 
 				// when removing a tail that is not pointing at the head
 				let node_14 = Node::<Runtime>::get(&14).unwrap();
@@ -822,7 +822,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_1000), vec![3, 13]);
-				assert_ok!(bag_1000.sanity_check());
+				assert_ok!(bag_1000.try_state());
 
 				// when removing a tail that is pointing at the head
 				let node_13 = Node::<Runtime>::get(&13).unwrap();
@@ -830,7 +830,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_1000), vec![3]);
-				assert_ok!(bag_1000.sanity_check());
+				assert_ok!(bag_1000.try_state());
 
 				// when removing a node that is both the head & tail
 				let node_3 = Node::<Runtime>::get(&3).unwrap();
@@ -846,7 +846,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_10), vec![1, 12]);
-				assert_ok!(bag_10.sanity_check());
+				assert_ok!(bag_10.try_state());
 
 				// when removing a head that is pointing at the tail
 				let node_1 = Node::<Runtime>::get(&1).unwrap();
@@ -854,7 +854,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_10), vec![12]);
-				assert_ok!(bag_10.sanity_check());
+				assert_ok!(bag_10.try_state());
 				// and since we updated the bag's head/tail, we need to write this storage so we
 				// can correctly `get` it again in later checks
 				bag_10.put();
@@ -865,7 +865,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_2000), vec![15, 17, 18, 19]);
-				assert_ok!(bag_2000.sanity_check());
+				assert_ok!(bag_2000.try_state());
 
 				// when removing a node that is pointing at tail, but not head
 				let node_18 = Node::<Runtime>::get(&18).unwrap();
@@ -873,7 +873,7 @@ mod bags {
 
 				// then
 				assert_eq!(bag_as_ids(&bag_2000), vec![15, 17, 19]);
-				assert_ok!(bag_2000.sanity_check());
+				assert_ok!(bag_2000.try_state());
 
 				// finally, when reading from storage, the state of all bags is as expected
 				assert_eq!(
@@ -905,7 +905,7 @@ mod bags {
 			// .. and the bag it was removed from
 			let bag_1000 = Bag::<Runtime>::get(1_000).unwrap();
 			// is sane
-			assert_ok!(bag_1000.sanity_check());
+			assert_ok!(bag_1000.try_state());
 			// and has the correct head and tail.
 			assert_eq!(bag_1000.head, Some(3));
 			assert_eq!(bag_1000.tail, Some(4));

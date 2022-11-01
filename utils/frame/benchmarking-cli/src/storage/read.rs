@@ -50,16 +50,43 @@ impl StorageCmd {
 		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
+		let mut child_nodes = Vec::new();
 		// Interesting part here:
 		// Read all the keys in the database and measure the time it takes to access each.
 		info!("Reading {} keys", keys.len());
-		for key in keys.clone() {
-			let start = Instant::now();
-			let v = client
-				.storage(&block, &key)
-				.expect("Checked above to exist")
-				.ok_or("Value unexpectedly empty")?;
-			record.append(v.0.len(), start.elapsed())?;
+		for key in keys.as_slice() {
+			match (self.params.include_child_trees, self.is_child_key(key.clone().0)) {
+				(true, Some(info)) => {
+					// child tree key
+					let child_keys = client.child_storage_keys(&block, &info, &empty_prefix)?;
+					for ck in child_keys {
+						child_nodes.push((ck.clone(), info.clone()));
+					}
+				},
+				_ => {
+					// regular key
+					let start = Instant::now();
+					let v = client
+						.storage(&block, &key)
+						.expect("Checked above to exist")
+						.ok_or("Value unexpectedly empty")?;
+					record.append(v.0.len(), start.elapsed())?;
+				},
+			}
+		}
+
+		if self.params.include_child_trees {
+			child_nodes.shuffle(&mut rng);
+
+			info!("Reading {} child keys", child_nodes.len());
+			for (key, info) in child_nodes.as_slice() {
+				let start = Instant::now();
+				let v = client
+					.child_storage(&block, info, key)
+					.expect("Checked above to exist")
+					.ok_or("Value unexpectedly empty")?;
+				record.append(v.0.len(), start.elapsed())?;
+			}
 		}
 		Ok(record)
 	}

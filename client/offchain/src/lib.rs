@@ -246,13 +246,15 @@ pub async fn notification_future<Client, Block, Spawner>(
 mod tests {
 	use super::*;
 	use futures::executor::block_on;
+	use libp2p::{Multiaddr, PeerId};
 	use sc_block_builder::BlockBuilderProvider as _;
 	use sc_client_api::Backend as _;
-	use sc_network::{Multiaddr, PeerId, ReputationChange};
+	use sc_network_common::{config::MultiaddrWithPeerId, protocol::ProtocolName};
+	use sc_peerset::ReputationChange;
 	use sc_transaction_pool::{BasicPool, FullChainApi};
 	use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
 	use sp_consensus::BlockOrigin;
-	use std::{borrow::Cow, collections::HashSet, sync::Arc};
+	use std::{collections::HashSet, sync::Arc};
 	use substrate_test_runtime_client::{
 		runtime::Block, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient,
 		TestClientBuilderExt,
@@ -287,7 +289,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+		fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {
 			unimplemented!();
 		}
 
@@ -299,7 +301,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+		fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
 			unimplemented!();
 		}
 
@@ -309,7 +311,7 @@ mod tests {
 
 		fn set_reserved_peers(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
@@ -317,29 +319,25 @@ mod tests {
 
 		fn add_peers_to_reserved_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(
-			&self,
-			_protocol: Cow<'static, str>,
-			_peers: Vec<PeerId>,
-		) {
+		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 
 		fn add_to_peers_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 

@@ -93,9 +93,9 @@ impl CliConfiguration for BenchmarkCmd {
 		}
 	}
 
-	fn state_cache_size(&self) -> Result<usize> {
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
 		unwrap_cmd! {
-			self, cmd, cmd.state_cache_size()
+			self, cmd, cmd.trie_cache_maximum_size()
 		}
 	}
 

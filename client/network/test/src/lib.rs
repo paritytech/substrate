@@ -23,7 +23,6 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	marker::PhantomData,
 	pin::Pin,
@@ -51,13 +50,14 @@ use sc_consensus::{
 pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
 	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role,
-		SyncMode, TransportConfig,
+		NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role, SyncMode,
+		TransportConfig,
 	},
 	Multiaddr, NetworkService, NetworkWorker,
 };
-pub use sc_network_common::config::ProtocolId;
 use sc_network_common::{
+	config::{MultiaddrWithPeerId, ProtocolId},
+	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
@@ -682,7 +682,7 @@ pub struct FullPeerConfig {
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
+	pub notifications_protocols: Vec<ProtocolName>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -883,6 +883,7 @@ where
 			import_queue,
 			chain_sync: Box::new(chain_sync),
 			metrics_registry: None,
+			bitswap: None,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,

@@ -25,8 +25,8 @@ pub mod constants {
 		/// ParityDB can be enabled with a feature flag, but is still experimental. These weights
 		/// are available for brave runtime engineers who may want to try this out as default.
 		pub const ParityDbWeight: RuntimeDbWeight = RuntimeDbWeight {
-			read: 8_000 * constants::WEIGHT_PER_NANOS,
-			write: 50_000 * constants::WEIGHT_PER_NANOS,
+			read: 8_000 * constants::WEIGHT_PER_NANOS.ref_time(),
+			write: 50_000 * constants::WEIGHT_PER_NANOS.ref_time(),
 		};
 	}
 

@@ -153,7 +153,7 @@ pub mod v8 {
 				Nominators::<T>::iter().map(|(id, _)| id),
 				Pallet::<T>::weight_of_fn(),
 			);
-			debug_assert_eq!(T::VoterList::sanity_check(), Ok(()));
+			debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 
 			StorageVersion::<T>::put(crate::Releases::V8_0_0);
 			crate::log!(
@@ -170,7 +170,7 @@ pub mod v8 {
 
 	#[cfg(feature = "try-runtime")]
 	pub fn post_migrate<T: Config>() -> Result<(), &'static str> {
-		T::VoterList::sanity_check().map_err(|_| "VoterList is not in a sane state.")?;
+		T::VoterList::try_state().map_err(|_| "VoterList is not in a sane state.")?;
 		crate::log!(info, "👜 staking bags-list migration passes POST migrate checks ✅",);
 		Ok(())
 	}

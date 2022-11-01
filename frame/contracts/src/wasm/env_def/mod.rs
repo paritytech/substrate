@@ -21,9 +21,6 @@ use crate::exec::Ext;
 use sp_sandbox::Value;
 use wasm_instrument::parity_wasm::elements::{FunctionType, ValueType};
 
-#[macro_use]
-pub mod macros;
-
 pub trait ConvertibleToWasm: Sized {
 	const VALUE_TYPE: ValueType;
 	type NativeType;

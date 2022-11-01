@@ -22,6 +22,7 @@ use crate as sudo;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, Contains, GenesisBuild},
+	weights::Weight,
 };
 use frame_system::limits;
 use sp_core::H256;
@@ -109,7 +110,7 @@ frame_support::construct_runtime!(
 );
 
 parameter_types! {
-	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(1024);
+	pub BlockWeights: limits::BlockWeights = limits::BlockWeights::simple_max(Weight::from_ref_time(1024));
 }
 
 pub struct BlockEverything;

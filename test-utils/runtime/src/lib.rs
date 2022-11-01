@@ -29,14 +29,17 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
-use sp_trie::{trie_types::TrieDB, PrefixedMemoryDB, StorageProof};
+use sp_trie::{
+	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
+	PrefixedMemoryDB, StorageProof,
+};
 use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
-	weights::RuntimeDbWeight,
+	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
@@ -59,8 +62,6 @@ use sp_runtime::{
 #[cfg(any(feature = "std", test))]
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
-// bench on latest state.
-use sp_trie::trie_types::TrieDBMutV1 as TrieDBMut;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
@@ -576,7 +577,7 @@ parameter_types! {
 	pub RuntimeBlockLength: BlockLength =
 		BlockLength::max(4 * 1024 * 1024);
 	pub RuntimeBlockWeights: BlockWeights =
-		BlockWeights::with_sensible_defaults(4 * 1024 * 1024, Perbill::from_percent(75));
+		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
 }
 
 impl frame_system::Config for Runtime {
@@ -663,25 +664,19 @@ fn code_using_trie() -> u64 {
 
 	let mut mdb = PrefixedMemoryDB::default();
 	let mut root = sp_std::default::Default::default();
-	let _ = {
-		let mut t = TrieDBMut::<Hashing>::new(&mut mdb, &mut root);
+	{
+		let mut t = TrieDBMutBuilderV1::<Hashing>::new(&mut mdb, &mut root).build();
 		for (key, value) in &pairs {
 			if t.insert(key, value).is_err() {
 				return 101
 			}
 		}
-		t
-	};
-
-	if let Ok(trie) = TrieDB::<Hashing>::new(&mdb, &root) {
-		if let Ok(iter) = trie.iter() {
-			iter.flatten().count() as u64
-		} else {
-			102
-		}
-	} else {
-		103
 	}
+
+	let trie = TrieDBBuilder::<Hashing>::new(&mdb, &root).build();
+	let res = if let Ok(iter) = trie.iter() { iter.flatten().count() as u64 } else { 102 };
+
+	res
 }
 
 impl_opaque_keys! {
@@ -869,12 +864,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
@@ -1143,12 +1138,12 @@ cfg_if! {
 			}
 
 			impl sp_consensus_babe::BabeApi<Block> for Runtime {
-				fn configuration() -> sp_consensus_babe::BabeGenesisConfiguration {
-					sp_consensus_babe::BabeGenesisConfiguration {
+				fn configuration() -> sp_consensus_babe::BabeConfiguration {
+					sp_consensus_babe::BabeConfiguration {
 						slot_duration: 1000,
 						epoch_length: EpochDuration::get(),
 						c: (3, 10),
-						genesis_authorities: system::authorities()
+						authorities: system::authorities()
 							.into_iter().map(|x|(x, 1)).collect(),
 						randomness: <pallet_babe::Pallet<Runtime>>::randomness(),
 						allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
@@ -1292,7 +1287,7 @@ fn test_read_child_storage() {
 fn test_witness(proof: StorageProof, root: crate::Hash) {
 	use sp_externalities::Externalities;
 	let db: sp_trie::MemoryDB<crate::Hashing> = proof.into_memory_db();
-	let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root);
+	let backend = sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
 	let mut overlay = sp_state_machine::OverlayedChanges::default();
 	let mut cache = sp_state_machine::StorageTransactionCache::<_, _>::default();
 	let mut ext = sp_state_machine::Ext::new(
@@ -1377,7 +1372,8 @@ mod tests {
 		let mut root = crate::Hash::default();
 		let mut mdb = sp_trie::MemoryDB::<crate::Hashing>::default();
 		{
-			let mut trie = sp_trie::trie_types::TrieDBMutV1::new(&mut mdb, &mut root);
+			let mut trie =
+				sp_trie::trie_types::TrieDBMutBuilderV1::new(&mut mdb, &mut root).build();
 			trie.insert(b"value3", &[142]).expect("insert failed");
 			trie.insert(b"value4", &[124]).expect("insert failed");
 		};
@@ -1387,7 +1383,8 @@ mod tests {
 	#[test]
 	fn witness_backend_works() {
 		let (db, root) = witness_backend();
-		let backend = sp_state_machine::TrieBackend::<_, crate::Hashing>::new(db, root);
+		let backend =
+			sp_state_machine::TrieBackendBuilder::<_, crate::Hashing>::new(db, root).build();
 		let proof = sp_state_machine::prove_read(backend, vec![b"value3"]).unwrap();
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();

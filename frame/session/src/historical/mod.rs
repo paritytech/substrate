@@ -39,8 +39,8 @@ use sp_session::{MembershipProof, ValidatorCount};
 use sp_staking::SessionIndex;
 use sp_std::prelude::*;
 use sp_trie::{
-	trie_types::{TrieDB, TrieDBMutV0},
-	MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
+	trie_types::{TrieDBBuilder, TrieDBMutBuilderV0},
+	LayoutV0, MemoryDB, Recorder, Trie, TrieMut, EMPTY_PREFIX,
 };
 
 use frame_support::{
@@ -236,7 +236,7 @@ impl<T: Config> ProvingTrie<T> {
 		let mut root = Default::default();
 
 		{
-			let mut trie = TrieDBMutV0::new(&mut db, &mut root);
+			let mut trie = TrieDBMutBuilderV0::new(&mut db, &mut root).build();
 			for (i, (validator, full_id)) in validators.into_iter().enumerate() {
 				let i = i as u32;
 				let keys = match <Session<T>>::load_keys(&validator) {
@@ -278,19 +278,20 @@ impl<T: Config> ProvingTrie<T> {
 
 	/// Prove the full verification data for a given key and key ID.
 	pub fn prove(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<Vec<Vec<u8>>> {
-		let trie = TrieDB::new(&self.db, &self.root).ok()?;
-		let mut recorder = Recorder::new();
-		let val_idx = (key_id, key_data).using_encoded(|s| {
-			trie.get_with(s, &mut recorder)
-				.ok()?
-				.and_then(|raw| u32::decode(&mut &*raw).ok())
-		})?;
+		let mut recorder = Recorder::<LayoutV0<T::Hashing>>::new();
+		{
+			let trie =
+				TrieDBBuilder::new(&self.db, &self.root).with_recorder(&mut recorder).build();
+			let val_idx = (key_id, key_data).using_encoded(|s| {
+				trie.get(s).ok()?.and_then(|raw| u32::decode(&mut &*raw).ok())
+			})?;
 
-		val_idx.using_encoded(|s| {
-			trie.get_with(s, &mut recorder)
-				.ok()?
-				.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
-		})?;
+			val_idx.using_encoded(|s| {
+				trie.get(s)
+					.ok()?
+					.and_then(|raw| <IdentificationTuple<T>>::decode(&mut &*raw).ok())
+			})?;
+		}
 
 		Some(recorder.drain().into_iter().map(|r| r.data).collect())
 	}
@@ -303,7 +304,7 @@ impl<T: Config> ProvingTrie<T> {
 	// Check a proof contained within the current memory-db. Returns `None` if the
 	// nodes within the current `MemoryDB` are insufficient to query the item.
 	fn query(&self, key_id: KeyTypeId, key_data: &[u8]) -> Option<IdentificationTuple<T>> {
-		let trie = TrieDB::new(&self.db, &self.root).ok()?;
+		let trie = TrieDBBuilder::new(&self.db, &self.root).build();
 		let val_idx = (key_id, key_data)
 			.using_encoded(|s| trie.get(s))
 			.ok()?

@@ -1063,7 +1063,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_epoch)
@@ -1080,7 +1080,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&genesis_epoch_x_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_epoch)
@@ -1145,7 +1145,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_epoch)
@@ -1162,7 +1162,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&genesis_epoch_x_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"X", 1, *b"0", incremented_epoch)
@@ -1220,7 +1220,7 @@ mod tests {
 		let incremented_epoch = epoch_changes
 			.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
 			.unwrap()
-			.increment(next_descriptor.clone());
+			.increment(next_descriptor);
 
 		epoch_changes
 			.import(&is_descendent_of, *b"1", 1, *b"0", incremented_epoch)
@@ -1330,7 +1330,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&genesis_epoch_a_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"A", 1, *b"0", incremented_epoch)
@@ -1347,7 +1347,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&epoch_b_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"B", 201, *b"A", incremented_epoch)
@@ -1364,7 +1364,7 @@ mod tests {
 			let incremented_epoch = epoch_changes
 				.viable_epoch(&genesis_epoch_x_descriptor, &make_genesis)
 				.unwrap()
-				.increment(next_descriptor.clone());
+				.increment(next_descriptor);
 
 			epoch_changes
 				.import(&is_descendent_of, *b"C", 1, *b"0", incremented_epoch)

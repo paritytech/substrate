@@ -12,8 +12,6 @@ rustflags = [
   "-Aclippy::if-same-then-else",
   "-Aclippy::clone-double-ref",
   "-Dclippy::complexity",
-  "-Aclippy::clone_on_copy",             # Too common
-  "-Aclippy::needless_lifetimes",        # Backward compat?
   "-Aclippy::zero-prefixed-literal",     # 00_1000_000
   "-Aclippy::type_complexity",           # raison d'etre
   "-Aclippy::nonminimal-bool",           # maybe

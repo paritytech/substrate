@@ -31,8 +31,11 @@ use sp_core::{
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 	Hasher,
 };
-use sp_state_machine::Backend;
-use sp_trie::{trie_types::TrieDB, KeySpacedDB, Trie};
+use sp_state_machine::backend::AsTrieBackend;
+use sp_trie::{
+	trie_types::{TrieDB, TrieDBBuilder},
+	KeySpacedDB, Trie,
+};
 use trie_db::{
 	node::{NodePlan, ValuePlan},
 	TrieDBNodeIterator,
@@ -41,9 +44,9 @@ use trie_db::{
 fn count_migrate<'a, H: Hasher>(
 	storage: &'a dyn trie_db::HashDBRef<H, Vec<u8>>,
 	root: &'a H::Out,
-) -> std::result::Result<(u64, TrieDB<'a, H>), String> {
+) -> std::result::Result<(u64, TrieDB<'a, 'a, H>), String> {
 	let mut nb = 0u64;
-	let trie = TrieDB::new(storage, root).map_err(|e| format!("TrieDB creation error: {}", e))?;
+	let trie = TrieDBBuilder::new(storage, root).build();
 	let iter_node =
 		TrieDBNodeIterator::new(&trie).map_err(|e| format!("TrieDB node iterator error: {}", e))?;
 	for node in iter_node {
@@ -68,13 +71,9 @@ pub fn migration_status<H, B>(backend: &B) -> std::result::Result<(u64, u64), St
 where
 	H: Hasher,
 	H::Out: codec::Codec,
-	B: Backend<H>,
+	B: AsTrieBackend<H>,
 {
-	let trie_backend = if let Some(backend) = backend.as_trie_backend() {
-		backend
-	} else {
-		return Err("No access to trie from backend.".to_string())
-	};
+	let trie_backend = backend.as_trie_backend();
 	let essence = trie_backend.essence();
 	let (nb_to_migrate, trie) = count_migrate(essence, essence.root())?;
 

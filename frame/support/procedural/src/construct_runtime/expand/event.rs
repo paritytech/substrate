@@ -18,6 +18,7 @@
 use crate::construct_runtime::Pallet;
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use syn::{Generics, Ident};
 
 pub fn expand_outer_event(
@@ -97,19 +98,35 @@ fn expand_event_variant(
 	let path = &pallet.path;
 	let variant_name = &pallet.name;
 	let part_is_generic = !generics.params.is_empty();
+	let attr = pallet.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+		let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+			.expect("was successfully parsed before; qed");
+		quote! {
+			#acc
+			#attr
+		}
+	});
 
 	match instance {
-		Some(inst) if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime, #path::#inst>),)
+		Some(inst) if part_is_generic => quote! {
+			#attr
+			#[codec(index = #index)]
+			#variant_name(#path::Event<#runtime, #path::#inst>),
 		},
-		Some(inst) => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#path::#inst>),)
+		Some(inst) => quote! {
+			#attr
+			#[codec(index = #index)]
+			#variant_name(#path::Event<#path::#inst>),
 		},
-		None if part_is_generic => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event<#runtime>),)
+		None if part_is_generic => quote! {
+			#attr
+			#[codec(index = #index)]
+			#variant_name(#path::Event<#runtime>),
 		},
-		None => {
-			quote!(#[codec(index = #index)] #variant_name(#path::Event),)
+		None => quote! {
+			#attr
+			#[codec(index = #index)]
+			#variant_name(#path::Event),
 		},
 	}
 }
@@ -120,13 +137,23 @@ fn expand_event_conversion(
 	pallet_event: &TokenStream,
 ) -> TokenStream {
 	let variant_name = &pallet.name;
+	let attr = pallet.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
+		let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
+			.expect("was successfully parsed before; qed");
+		quote! {
+			#acc
+			#attr
+		}
+	});
 
 	quote! {
+		#attr
 		impl From<#pallet_event> for Event {
 			fn from(x: #pallet_event) -> Self {
 				Event::#variant_name(x)
 			}
 		}
+		#attr
 		impl TryInto<#pallet_event> for Event {
 			type Error = ();
 

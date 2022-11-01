@@ -125,6 +125,8 @@ cargo test -p pallet-balances --features runtime-benchmarks
 > ```
 > To solve this, navigate to the folder of the node (`cd bin/node/cli`) or pallet (`cd frame/pallet`) and run the command there.
 
+This will instance each linear component with different values. The number of values per component is set to six and can be changed with the `VALUES_PER_COMPONENT` environment variable.
+
 ## Adding Benchmarks
 
 The benchmarks included with each pallet are not automatically added to your node. To actually
