@@ -1844,6 +1844,17 @@ fn collection_locking_should_work() {
 			collection_config_with_all_settings_enabled()
 		));
 
+		let lock_config =
+			collection_config_from_disabled_settings(CollectionSetting::DepositRequired.into());
+		assert_noop!(
+			Nfts::lock_collection(
+				RuntimeOrigin::signed(user_id),
+				collection_id,
+				lock_config.settings,
+			),
+			Error::<Test>::WrongSetting
+		);
+
 		// validate partial lock
 		let lock_config = collection_config_from_disabled_settings(
 			CollectionSetting::TransferableItems | CollectionSetting::UnlockedAttributes,

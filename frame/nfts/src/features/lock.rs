@@ -28,20 +28,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::has_role(&collection, &origin, CollectionRole::Freezer),
 			Error::<T, I>::NoPermission
 		);
+		ensure!(
+			!lock_settings.is_disabled(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
 
-			let allowed_to_disabled = vec![
-				CollectionSetting::TransferableItems,
-				CollectionSetting::UnlockedMetadata,
-				CollectionSetting::UnlockedAttributes,
-				CollectionSetting::UnlockedMaxSupply,
-			];
-
-			for setting in allowed_to_disabled {
-				if lock_settings.is_disabled(setting) {
-					config.disable_setting(setting);
-				}
+			for setting in lock_settings.get_disabled() {
+				config.disable_setting(setting);
 			}
 
 			Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
