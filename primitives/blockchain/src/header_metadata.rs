@@ -21,7 +21,7 @@
 use lru::LruCache;
 use parking_lot::RwLock;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
-use sp_std::num::NonZeroUsize;
+use std::num::NonZeroUsize;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;

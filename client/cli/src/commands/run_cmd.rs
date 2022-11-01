@@ -250,7 +250,7 @@ pub struct RunCmd {
 	pub max_runtime_instances: Option<usize>,
 
 	/// Maximum number of different runtimes that can be cached.
-	#[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..))]
+	#[arg(long, default_value_t = 2)]
 	pub runtime_cache_size: u8,
 
 	/// Run a temporary node.

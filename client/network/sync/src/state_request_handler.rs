@@ -145,7 +145,8 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let capacity = NonZeroUsize::new(num_peer_hint * 2).expect("cache capacity is not zero");
+		let capacity =
+			NonZeroUsize::new(num_peer_hint.min(1) * 2).expect("cache capacity is not zero");
 		let seen_requests = LruCache::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
