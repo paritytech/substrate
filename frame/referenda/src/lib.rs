@@ -249,7 +249,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A referendum has being submitted.
+		/// A referendum has been submitted.
 		Submitted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
@@ -352,7 +352,7 @@ pub mod pallet {
 		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
-		/// There are already a full complement of referendums in progress for this track.
+		/// There are already a full complement of referenda in progress for this track.
 		Full,
 		/// The queue of the track is empty.
 		QueueEmpty,
@@ -908,7 +908,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// In terms of storage, every call to it is expected to access:
 	/// - The scheduler, either to insert, remove or alter an entry;
-	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16).
+	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16);
 	/// - `DecidingCount`.
 	///
 	/// Both of the two storage items will only have as many items as there are different tracks,
