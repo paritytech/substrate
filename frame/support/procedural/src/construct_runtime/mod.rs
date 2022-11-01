@@ -391,7 +391,7 @@ fn decl_all_pallets<'a>(
 				let test_cfg = features.remove("test").then_some(quote!(test)).into_iter();
 				let disabled_features = all_features.difference(&features);
 				let features = features.iter();
-				let attr = quote!(#[cfg(all( #(#test_cfg),* #(feature = #features,)* #(not(feature = #disabled_features)),* ))]);
+				let attr = quote!(#[cfg(all( #(#test_cfg,)* #(feature = #features,)* #(not(feature = #disabled_features)),* ))]);
 
 				(attr, names)
 			}
