@@ -227,8 +227,11 @@ impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum MintType<CollectionId> {
+	/// Only an `Issuer` could mint items.
 	Private,
+	/// Anyone could mint items.
 	Public,
+	/// Only holders of items in specified collection could mint new items.
 	HolderOf(CollectionId),
 }
 
