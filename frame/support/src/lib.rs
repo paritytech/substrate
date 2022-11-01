@@ -1487,7 +1487,7 @@ pub mod pallet_prelude {
 /// non-instantiable pallets. For an example of an instantiable pallet, see [this
 /// example](#example-of-an-instantiable-pallet).
 ///
-/// # Dev Mode (`#[pallet::pallet(dev_mode)]`)
+/// # Dev Mode (`#[pallet(dev_mode)]`)
 ///
 /// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim
 /// of dev mode is to loosen some of the restrictions and requirements placed on production
@@ -1501,6 +1501,14 @@ pub mod pallet_prelude {
 /// * All storages are marked as unbounded, meaning you do not need to implement
 ///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
 ///   on all storage type definitions.
+///
+/// <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
+/// style="white-space:normal;font:inherit;">
+/// <strong>WARNING</strong>:
+/// You should not deploy or use dev mode pallets in production. Once you are done
+/// tinkering, you should remove the 'dev_mode' argument from your #[pallet] declaration and
+/// fix any compile errors before attempting to use your pallet in a production scenario.
+/// </pre></div>
 ///
 /// # Pallet struct placeholder: `#[pallet::pallet]` (mandatory)
 ///
