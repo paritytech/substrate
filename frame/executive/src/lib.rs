@@ -153,6 +153,32 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 ///   used to call hooks e.g. `on_initialize`.
 /// - `OnRuntimeUpgrade`: Custom logic that should be called after a runtime upgrade. Modules are
 ///   already called by `AllPalletsWithSystem`. It will be called before all modules will be called.
+///
+///   [`Executive`] implements [`ExecuteBlock`] that provieds two methods
+///   - `execute_block` that is responsible for execution of relay chain blocks (origin substrate
+///   impl)
+///   - `execute_block_ver` that is responsible for execution of parachain chain blocks (ver mangata
+///   impl)
+///
+///
+///	Upon VER block execution:
+///	- (if any) previous block extrinsics are executed, they are fetched from a queue that is
+///	persisted in runtime storage. Block header has dedicated field `count`, it is used for notifying
+///	how many txs were fetched and executed by collator when the block was build. Every network
+///	participant needs to fetch and execute exactly same amount of txs from the storage queue to
+///	reach exactly the same state as block author. (its part of block validaiton)
+///	builder
+///	- (if any) new txs that were just collected from transaction pool are persisted into the storage
+///	queue. Dedicated inherent [`frame_system::Pallet::enqueue_txs`] accepts list of encoded txs as
+///	argument.
+///
+///
+///	VER block execution includes number of steps that are not present in origin impl:
+///	- shuffling seed validation
+///	- enqueued txs size & weight limits validation
+///	- validation of txs listed in block body
+///	- malicious collator prevention (decoding txs)
+///
 pub struct Executive<
 	System,
 	Block,

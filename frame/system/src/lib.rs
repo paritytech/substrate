@@ -393,11 +393,9 @@ pub mod pallet {
 			}
 		}
 
-		/// Make some on-chain remark.
-		///
-		/// # <weight>
-		/// - `O(1)`
-		/// # </weight>
+		/// Persists list of encoded txs into the storage queue. There is an dedicated 
+		/// check in [`frame_executive::Executeive`] that verifies that passed binary data can be
+		/// decoded into extrinsics.
 		#[pallet::weight((
 			0,
 			DispatchClass::Mandatory
@@ -618,7 +616,28 @@ pub mod pallet {
 	#[pallet::getter(fn block_seed)]
 	pub type BlockSeed<T: Config> = StorageValue<_, sp_core::H256, ValueQuery>;
 
-	/// Map of block numbers to block shuffling seeds
+	/// Storage queue is used for storing transactions in blockchain itself.
+	/// Main reason for that storage entry is fact that upon VER block `N` execution it is
+	/// required to fetch & executed transactions from previous block (`N-1`) but due to origin
+	/// substrate design blocks & extrinsics are stored in rocksDB database that is not accessible 
+	/// from runtime part of the node ([`URL`]) what makes it impossible to properly implement block
+	/// execution logic. As an solution blockchain runtime storage was selected as buffer for txs
+	/// waiting for execution. Main advantage of such approach is fact that storage state is public
+	/// so its impossible to manipulate data stored in there. Storage queue is implemented as double
+	/// buffered queue - to solve problem of rare occasions where due to different reasons some txs
+	/// that were included in block `N` are not able to be executed in a following block `N+1` (good
+	/// example is new session hook/event that by design consumes whole block capacity). 
+	///
+	///
+	/// # Overhead 
+	/// Its worth to notice that storage queue adds only single storage write, as list of all txs
+	/// is stored as single value (encoded list of txs) maped to single key (block number) 
+	///
+	/// # Storage Qeueue interaction
+	/// There are two ways to interact with storage queue:
+	/// - enqueuing new txs using [`enqueued_txs`] inherent
+	/// - poping txs from the queue using [`pop_tx`] that is exposed throught RuntimeApi call
+	///
 	#[pallet::storage]
 	pub type StorageQueue<T: Config> = StorageValue<
 		_,
@@ -1396,10 +1415,12 @@ impl<T: Config> Pallet<T> {
 		<StorageQueueLimit as Get<u32>>::get() > queue.len() as u32
 	}
 
+	/// returns list of all not executed txs held in storage queue at the moment
 	pub fn enqueued_blocks_count() -> u64 {
 		<StorageQueue<T>>::get().len() as u64
 	}
 
+	/// returns amount of txs in storage queue signed by particular user
 	pub fn enqueued_txs_count(acc: &T::AccountId) -> usize {
 		let queue = <StorageQueue<T>>::get();
 		queue
@@ -1410,6 +1431,8 @@ impl<T: Config> Pallet<T> {
 			.count()
 	}
 
+	/// Dequeue particular number of txs from storage queue.
+	/// It modifies the storage
 	pub fn pop_txs(mut len: usize) -> Vec<EncodedTx> {
 		sp_runtime::runtime_logger::RuntimeLogger::init();
 		let mut result: Vec<_> = Vec::new();

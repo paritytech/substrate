@@ -351,6 +351,8 @@ where
 	///
 	///    Proposer->>BlockBuilder: build_block_with_seed
 	///    BlockBuilder->>RuntimeApi: create_enqueue_txs_inherent(VALID_TXS)
+	///    RuntimeApi->>BlockBuilder: inhernet
+	///    BlockBuilder->>RuntimeApi: apply_extrinsic(inhernet)
 	///    RuntimeApi->>FrameSystem: store txs into storage queue
 	///    BlockBuilder->>RuntimeApi: finalize_block
 	///    RuntimeApi->>BlockBuilder: Header
