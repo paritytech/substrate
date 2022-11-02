@@ -642,8 +642,13 @@ impl<Block: BlockT> sc_client_api::blockchain::Backend<Block> for BlockchainDb<B
 		Ok(None)
 	}
 
-	fn justifications(&self, id: BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		match read_db(&*self.db, columns::KEY_LOOKUP, columns::JUSTIFICATIONS, id)? {
+	fn justifications(&self, hash: &Block::Hash) -> ClientResult<Option<Justifications>> {
+		match read_db(
+			&*self.db,
+			columns::KEY_LOOKUP,
+			columns::JUSTIFICATIONS,
+			BlockId::<Block>::Hash(*hash),
+		)? {
 			Some(justifications) => match Decode::decode(&mut &justifications[..]) {
 				Ok(justifications) => Ok(Some(justifications)),
 				Err(err) =>
@@ -2039,7 +2044,7 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		}
 
 		let justifications = if let Some(mut stored_justifications) =
-			self.blockchain.justifications(BlockId::Hash(*hash))?
+			self.blockchain.justifications(hash)?
 		{
 			if !stored_justifications.append(justification) {
 				return Err(ClientError::BadJustification("Duplicate consensus engine ID".into()))
@@ -3017,7 +3022,7 @@ pub(crate) mod tests {
 		backend.finalize_block(&block1, justification.clone()).unwrap();
 
 		assert_eq!(
-			backend.blockchain().justifications(BlockId::Number(1)).unwrap(),
+			backend.blockchain().justifications(&block1).unwrap(),
 			justification.map(Justifications::from),
 		);
 	}
@@ -3048,10 +3053,7 @@ pub(crate) mod tests {
 			just.append(just1);
 			just
 		};
-		assert_eq!(
-			backend.blockchain().justifications(BlockId::Number(1)).unwrap(),
-			Some(justifications),
-		);
+		assert_eq!(backend.blockchain().justifications(&block1).unwrap(), Some(justifications),);
 	}
 
 	#[test]

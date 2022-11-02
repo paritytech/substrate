@@ -415,10 +415,8 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 			.and_then(|b| b.extrinsics().map(|x| x.to_vec())))
 	}
 
-	fn justifications(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
-		Ok(self.id(id).and_then(|hash| {
-			self.storage.read().blocks.get(&hash).and_then(|b| b.justifications().cloned())
-		}))
+	fn justifications(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Justifications>> {
+		Ok(self.storage.read().blocks.get(&hash).and_then(|b| b.justifications().cloned()))
 	}
 
 	fn last_finalized(&self) -> sp_blockchain::Result<Block::Hash> {
@@ -816,7 +814,7 @@ pub fn check_genesis_storage(storage: &Storage) -> sp_blockchain::Result<()> {
 #[cfg(test)]
 mod tests {
 	use crate::{in_mem::Blockchain, NewBlockState};
-	use sp_api::{BlockId, HeaderT};
+	use sp_api::HeaderT;
 	use sp_blockchain::Backend;
 	use sp_runtime::{ConsensusEngineId, Justifications};
 	use substrate_test_runtime::{Block, Header, H256};
@@ -870,10 +868,7 @@ mod tests {
 			just.append((ID2, vec![4]));
 			just
 		};
-		assert_eq!(
-			blockchain.justifications(BlockId::Hash(last_finalized)).unwrap(),
-			Some(justifications)
-		);
+		assert_eq!(blockchain.justifications(&last_finalized).unwrap(), Some(justifications));
 	}
 
 	#[test]

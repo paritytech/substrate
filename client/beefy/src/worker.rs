@@ -709,7 +709,7 @@ where
 			// a BEEFY justification, or at this session's boundary; voter will resume from there.
 			loop {
 				if let Some(true) = blockchain
-					.justifications(BlockId::hash(header.hash()))
+					.justifications(&header.hash())
 					.ok()
 					.flatten()
 					.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
@@ -1401,7 +1401,7 @@ pub(crate) mod tests {
 		}));
 
 		// check BEEFY justifications are also appended to backend
-		let justifs = backend.blockchain().justifications(BlockId::number(2)).unwrap().unwrap();
+		let justifs = backend.blockchain().justifications(&hashof2).unwrap().unwrap();
 		assert!(justifs.get(BEEFY_ENGINE_ID).is_some())
 	}
 
