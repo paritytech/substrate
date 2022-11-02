@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Gilt pallet.
+//! Test environment for NIS pallet.
 
 use crate as pallet_nis;
 
@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_nis::{Pallet, Call, Config, Storage, Event<T>},
+		Nis: pallet_nis::{Pallet, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -124,12 +124,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 pub fn run_to_block(n: u64) {
 	while System::block_number() < n {
-		Gilt::on_finalize(System::block_number());
+		Nis::on_finalize(System::block_number());
 		Balances::on_finalize(System::block_number());
 		System::on_finalize(System::block_number());
 		System::set_block_number(System::block_number() + 1);
 		System::on_initialize(System::block_number());
 		Balances::on_initialize(System::block_number());
-		Gilt::on_initialize(System::block_number());
+		Nis::on_initialize(System::block_number());
 	}
 }

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Benchmarks for Gilt Pallet
+//! Benchmarks for NIS Pallet
 
 #![cfg(feature = "runtime-benchmarks")]
 
@@ -30,7 +30,7 @@ use sp_arithmetic::Perquintill;
 use sp_runtime::traits::{Bounded, Zero};
 use sp_std::prelude::*;
 
-use crate::Pallet as Gilt;
+use crate::Pallet as Nis;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -41,7 +41,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
-			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		}
 	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
@@ -53,7 +53,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..T::MaxQueueLen::get() {
-			Gilt::<T>::place_bid(origin.clone().into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(origin.clone().into(), T::MinFreeze::get(), 1)?;
 		}
 	}: place_bid(origin, T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
@@ -68,7 +68,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
-			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		}
 	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get(), 1)
 	verify {
@@ -83,9 +83,9 @@ benchmarks! {
 	thaw {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(3u32));
-		Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
-		Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
-		Gilt::<T>::enlarge(T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 2);
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+		Nis::<T>::enlarge(T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 2);
 		Active::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
 	}: _(RawOrigin::Signed(caller.clone()), 0)
 	verify {
@@ -93,7 +93,7 @@ benchmarks! {
 	}
 
 	pursue_target_noop {
-	}: { Gilt::<T>::pursue_target(0) }
+	}: { Nis::<T>::pursue_target(0) }
 
 	pursue_target_per_item {
 		// bids taken
@@ -103,13 +103,13 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(b + 1));
 
 		for _ in 0..b {
-			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
 		}
 
 		Call::<T>::set_target { target: Perquintill::from_percent(100) }
 			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
 
-	}: { Gilt::<T>::pursue_target(b) }
+	}: { Nis::<T>::pursue_target(b) }
 
 	pursue_target_per_queue {
 		// total queues hit
@@ -119,13 +119,13 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(q + 1));
 
 		for i in 0..q {
-			Gilt::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), i + 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), i + 1)?;
 		}
 
 		Call::<T>::set_target { target: Perquintill::from_percent(100) }
 			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
 
-	}: { Gilt::<T>::pursue_target(q) }
+	}: { Nis::<T>::pursue_target(q) }
 
-	impl_benchmark_test_suite!(Gilt, crate::mock::new_test_ext(), crate::mock::Test);
+	impl_benchmark_test_suite!(Nis, crate::mock::new_test_ext(), crate::mock::Test);
 }

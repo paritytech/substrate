@@ -634,8 +634,7 @@ pub mod pallet {
 								totals.proportion =
 									totals.proportion.defensive_saturating_add(proportion);
 								totals.index += 1;
-								let e =
-									Event::Issued { index, expiry, who: who.clone(), amount };
+								let e = Event::Issued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
 								let bond = ActiveType { amount, proportion, who, expiry };
 								Active::<T>::insert(index, bond);
