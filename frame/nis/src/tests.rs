@@ -20,8 +20,9 @@
 use super::*;
 use crate::{mock::*, Error};
 use frame_support::{assert_noop, assert_ok, dispatch::DispatchError, traits::Currency};
-use pallet_balances::Error as BalancesError;
+use pallet_balances::{Error as BalancesError, Instance1, Instance2};
 use sp_arithmetic::Perquintill;
+use sp_runtime::TokenError;
 
 #[test]
 fn basic_setup_works() {
@@ -71,7 +72,7 @@ fn place_bid_works() {
 		assert_noop!(Nis::place_bid(RuntimeOrigin::signed(1), 1, 2), Error::<Test>::AmountTooSmall);
 		assert_noop!(
 			Nis::place_bid(RuntimeOrigin::signed(1), 101, 2),
-			BalancesError::<Test>::InsufficientBalance
+			BalancesError::<Test, Instance1>::InsufficientBalance
 		);
 		assert_noop!(
 			Nis::place_bid(RuntimeOrigin::signed(1), 10, 4),
@@ -330,18 +331,31 @@ fn thaw_when_issuance_higher_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
 		Nis::enlarge(100, 1);
 
+		assert_eq!(NisBalances::free_balance(1), 5_250_000);	// (25% of 21m)
+
 		// Everybody else's balances goes up by 50%
 		Balances::make_free_balance_be(&2, 150);
 		Balances::make_free_balance_be(&3, 150);
 		Balances::make_free_balance_be(&4, 150);
 
 		run_to_block(4);
+
+		// Transfer counterpart away...
+		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 250_000));
+		// ...and it's not thawable.
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0), TokenError::NoFunds);
+
+		// Transfer counterpart back...
+		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(2), 1, 250_000));
+		// ...and it is.
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }
+
+// TODO: Partial thawing.
 
 #[test]
 fn thaw_with_ignored_issuance_works() {

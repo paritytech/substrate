@@ -74,16 +74,28 @@ mod mock;
 mod tests;
 pub mod weights;
 
+pub struct WithMaximumOf<A: sp_core::TypedGet>(sp_std::marker::PhantomData<A>);
+impl<A: sp_core::TypedGet> sp_runtime::traits::Convert<sp_runtime::Perquintill, A::Type> for WithMaximumOf<A> where
+	A::Type: Clone + sp_arithmetic::traits::Unsigned + From<u64>,
+	u64: TryFrom<A::Type>,
+{
+	fn convert(a: sp_runtime::Perquintill) -> A::Type {
+		a * A::get()
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Currency, DefensiveSaturating, OnUnbalanced, ReservableCurrency},
+		traits::{Currency, Defensive, DefensiveSaturating, OnUnbalanced, ReservableCurrency,
+			fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate}
+		},
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
-	use sp_runtime::traits::{Saturating, Zero};
+	use sp_runtime::traits::{Saturating, Zero, Convert};
 	use sp_std::prelude::*;
 
 	type BalanceOf<T> =
@@ -95,8 +107,33 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId,
 	>>::NegativeImbalance;
 
+	pub struct NoFungibleReceipt<T>(sp_std::marker::PhantomData<T>);
+	impl<T> FungibleInspect<T> for NoFungibleReceipt<T> {
+		type Balance = u32;
+		fn total_issuance() -> u32 { 0 }
+		fn minimum_balance() -> u32 { 0 }
+		fn balance(_who: &T) -> u32 { 0 }
+		fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 { 0 }
+		fn can_deposit(_who: &T, _amount: u32, _mint: bool) -> frame_support::traits::tokens::DepositConsequence {
+			frame_support::traits::tokens::DepositConsequence::Success
+		}
+		fn can_withdraw(_who: &T, _amount: u32) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
+			frame_support::traits::tokens::WithdrawConsequence::Success
+		}
+	}
+	impl<T> FungibleMutate<T> for NoFungibleReceipt<T> {
+		fn mint_into(_who: &T, _amount: u32) -> DispatchResult { Ok(()) }
+		fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> { Ok(0) }
+	}
+	impl<T> Convert<Perquintill, u32> for NoFungibleReceipt<T> {
+		fn convert(_: Perquintill) -> u32 { 0 }
+	}
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
+		/// Information on runtime weights.
+		type WeightInfo: WeightInfo;
+
 		/// Overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -129,6 +166,13 @@ pub mod pallet {
 		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
 		/// the issuance with which we determine the thawed value of a bond.
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
+
+		type FungibleReceipt: FungibleMutate<Self::AccountId>;
+
+		type FungibleEquivalence: Convert<
+			Perquintill,
+			<Self::FungibleReceipt as FungibleInspect<Self::AccountId>>::Balance,
+		>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
 		/// this value multiplied by `Period`.
@@ -172,9 +216,6 @@ pub mod pallet {
 		/// bids to make into bonds to reach the target.
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
-
-		/// Information on runtime weights.
-		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::pallet]
@@ -477,6 +518,10 @@ pub mod pallet {
 			ensure!(bond.who == who, Error::<T>::NotOwner);
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= bond.expiry, Error::<T>::NotExpired);
+
+			let fung_eq = T::FungibleEquivalence::convert(bond.proportion);
+			T::FungibleReceipt::burn_from(&who, fung_eq)?;
+
 			// Remove it
 			Active::<T>::remove(index);
 
@@ -636,8 +681,12 @@ pub mod pallet {
 								totals.index += 1;
 								let e = Event::Issued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
-								let bond = ActiveType { amount, proportion, who, expiry };
+								let bond = ActiveType { amount, proportion, who: who.clone(), expiry };
 								Active::<T>::insert(index, bond);
+
+								// issue the fungible counterpart
+								let fung_eq = T::FungibleEquivalence::convert(proportion);
+								let _ = T::FungibleReceipt::mint_into(&who, fung_eq).defensive();
 
 								bids_taken += 1;
 

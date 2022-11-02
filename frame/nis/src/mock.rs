@@ -17,17 +17,18 @@
 
 //! Test environment for NIS pallet.
 
-use crate as pallet_nis;
+use crate::{self as pallet_nis, NoFungibleReceipt, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize},
+	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize, StorageMapShim},
 };
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use pallet_balances::{Instance1, Instance2};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -39,9 +40,10 @@ frame_support::construct_runtime!(
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Nis: pallet_nis::{Pallet, Call, Config, Storage, Event<T>},
+		System: frame_system,
+		Balances: pallet_balances::<Instance1>,
+		NisBalances: pallet_balances::<Instance2>,
+		Nis: pallet_nis,
 	}
 );
 
@@ -72,12 +74,25 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
-impl pallet_balances::Config for Test {
+impl pallet_balances::Config<Instance1> for Test {
 	type Balance = u64;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
 	type AccountStore = System;
+	type WeightInfo = ();
+	type MaxLocks = ();
+	type MaxReserves = ();
+	type ReserveIdentifier = [u8; 8];
+}
+
+impl pallet_balances::Config<Instance2> for Test {
+	type Balance = u64;
+	type DustRemoval = ();
+	type RuntimeEvent = RuntimeEvent;
+	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
+	type AccountStore =
+		StorageMapShim<pallet_balances::Account<Test, Instance2>, frame_system::Provider<Test>, u64, pallet_balances::AccountData<u64>>;
 	type WeightInfo = ();
 	type MaxLocks = ();
 	type MaxReserves = ();
@@ -92,13 +107,16 @@ ord_parameter_types! {
 }
 
 impl pallet_nis::Config for Test {
+	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
+	type CurrencyBalance = <Self as pallet_balances::Config<Instance1>>::Balance;
 	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
 	type Deficit = ();
 	type Surplus = ();
 	type IgnoredIssuance = IgnoredIssuance;
+	type FungibleReceipt = NisBalances;
+	type FungibleEquivalence = WithMaximumOf<ConstU64<21_000_000u64>>;
 	type QueueCount = ConstU32<3>;
 	type MaxQueueLen = ConstU32<3>;
 	type FifoQueueLen = ConstU32<1>;
@@ -106,14 +124,13 @@ impl pallet_nis::Config for Test {
 	type MinFreeze = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;
 	type MaxIntakeBids = ConstU32<2>;
-	type WeightInfo = ();
 }
 
 // This function basically just builds a genesis storage key/value store according to
 // our desired mockup.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test> {
+	pallet_balances::GenesisConfig::<Test, Instance1> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100)],
 	}
 	.assimilate_storage(&mut t)
