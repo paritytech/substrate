@@ -933,16 +933,13 @@ impl<T: Config> Pallet<T> {
 
 		let mut candidates_and_deposit = Self::candidates();
 		// add all the previous members and runners-up as candidates as well.
-		candidates_and_deposit
-			.try_append(&mut Self::implicit_candidates_with_deposit())
 		match candidates_and_deposit
 			.try_append(&mut Self::implicit_candidates_with_deposit())
-			.map_err(|_| T::DbWeight::get().reads(3)) {
-                Ok(_) => (),
-                Err(weight) => return weight,
-            }
-
-
+			.map_err(|_| T::DbWeight::get().reads(3))
+		{
+			Ok(_) => (),
+			Err(weight) => return weight,
+		}
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
