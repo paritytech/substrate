@@ -19,9 +19,15 @@
 
 use super::*;
 use crate::{mock::*, Error};
-use frame_support::{assert_noop, assert_ok, dispatch::DispatchError, traits::Currency};
-use frame_support::traits::nonfungible::{Inspect, Transfer};
-use pallet_balances::{Error as BalancesError, Instance1, Instance2};
+use frame_support::{
+	assert_noop, assert_ok,
+	dispatch::DispatchError,
+	traits::{
+		nonfungible::{Inspect, Transfer},
+		Currency,
+	},
+};
+use pallet_balances::{Error as BalancesError, Instance1};
 use sp_arithmetic::Perquintill;
 use sp_runtime::TokenError;
 
@@ -34,8 +40,8 @@ fn basic_setup_works() {
 			assert!(Queues::<Test>::get(q).is_empty());
 		}
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 0,
 				proportion: Perquintill::zero(),
 				index: 0,
@@ -55,8 +61,8 @@ fn set_target_works() {
 		assert_ok!(Nis::set_target(RuntimeOrigin::signed(1), Perquintill::from_percent(50)));
 
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 0,
 				proportion: Perquintill::zero(),
 				index: 0,
@@ -215,8 +221,8 @@ fn basic_enlarge_works() {
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);
 
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 40,
 				proportion: Perquintill::from_percent(10),
 				index: 1,
@@ -224,8 +230,13 @@ fn basic_enlarge_works() {
 			}
 		);
 		assert_eq!(
-			Active::<Test>::get(0).unwrap(),
-			ActiveType { proportion: Perquintill::from_percent(10), amount: 40, who: 2, expiry: 7 }
+			Receipts::<Test>::get(0).unwrap(),
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 2,
+				expiry: 7
+			}
 		);
 	});
 }
@@ -247,8 +258,8 @@ fn enlarge_respects_bids_limit() {
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (1, 40), (0, 0)]);
 
 		assert_eq!(
-			Active::<Test>::get(0).unwrap(),
-			ActiveType {
+			Receipts::<Test>::get(0).unwrap(),
+			ReceiptRecord {
 				proportion: Perquintill::from_percent(10),
 				amount: 40,
 				who: 4,
@@ -256,12 +267,17 @@ fn enlarge_respects_bids_limit() {
 			}
 		);
 		assert_eq!(
-			Active::<Test>::get(1).unwrap(),
-			ActiveType { proportion: Perquintill::from_percent(10), amount: 40, who: 2, expiry: 7 }
+			Receipts::<Test>::get(1).unwrap(),
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 2,
+				expiry: 7
+			}
 		);
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 80,
 				proportion: Perquintill::from_percent(20),
 				index: 2,
@@ -283,12 +299,17 @@ fn enlarge_respects_amount_limit_and_will_split() {
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);
 
 		assert_eq!(
-			Active::<Test>::get(0).unwrap(),
-			ActiveType { proportion: Perquintill::from_percent(10), amount: 40, who: 1, expiry: 4 }
+			Receipts::<Test>::get(0).unwrap(),
+			ReceiptRecord {
+				proportion: Perquintill::from_percent(10),
+				amount: 40,
+				who: 1,
+				expiry: 4
+			}
 		);
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 40,
 				proportion: Perquintill::from_percent(10),
 				index: 1,
@@ -312,15 +333,15 @@ fn basic_thaw_works() {
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
 
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 0,
 				proportion: Perquintill::zero(),
 				index: 1,
 				target: Perquintill::zero(),
 			}
 		);
-		assert_eq!(Active::<Test>::get(0), None);
+		assert_eq!(Receipts::<Test>::get(0), None);
 		assert_eq!(Balances::free_balance(1), 100);
 		assert_eq!(pot(), 0);
 	});
@@ -359,7 +380,7 @@ fn thaw_when_issuance_higher_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
 		Nis::enlarge(100, 1);
 
-		assert_eq!(NisBalances::free_balance(1), 5_250_000);	// (25% of 21m)
+		assert_eq!(NisBalances::free_balance(1), 5_250_000); // (25% of 21m)
 
 		// Everybody else's balances goes up by 50%
 		Balances::make_free_balance_be(&2, 150);
@@ -501,8 +522,8 @@ fn enlargement_to_target_works() {
 		run_to_block(4);
 		// Two new items should have been issued to 2 & 3 for 40 each & duration of 3.
 		assert_eq!(
-			Active::<Test>::get(0).unwrap(),
-			ActiveType {
+			Receipts::<Test>::get(0).unwrap(),
+			ReceiptRecord {
 				proportion: Perquintill::from_percent(10),
 				amount: 40,
 				who: 2,
@@ -510,8 +531,8 @@ fn enlargement_to_target_works() {
 			}
 		);
 		assert_eq!(
-			Active::<Test>::get(1).unwrap(),
-			ActiveType {
+			Receipts::<Test>::get(1).unwrap(),
+			ReceiptRecord {
 				proportion: Perquintill::from_percent(10),
 				amount: 40,
 				who: 3,
@@ -519,8 +540,8 @@ fn enlargement_to_target_works() {
 			}
 		);
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 80,
 				proportion: Perquintill::from_percent(20),
 				index: 2,
@@ -531,8 +552,8 @@ fn enlargement_to_target_works() {
 		run_to_block(5);
 		// No change
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 80,
 				proportion: Perquintill::from_percent(20),
 				index: 2,
@@ -543,8 +564,8 @@ fn enlargement_to_target_works() {
 		run_to_block(6);
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
-			Active::<Test>::get(2).unwrap(),
-			ActiveType {
+			Receipts::<Test>::get(2).unwrap(),
+			ReceiptRecord {
 				proportion: Perquintill::from_percent(10),
 				amount: 40,
 				who: 1,
@@ -552,8 +573,8 @@ fn enlargement_to_target_works() {
 			}
 		);
 		assert_eq!(
-			Active::<Test>::get(3).unwrap(),
-			ActiveType {
+			Receipts::<Test>::get(3).unwrap(),
+			ReceiptRecord {
 				proportion: Perquintill::from_percent(10),
 				amount: 40,
 				who: 2,
@@ -561,8 +582,8 @@ fn enlargement_to_target_works() {
 			}
 		);
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 160,
 				proportion: Perquintill::from_percent(40),
 				index: 4,
@@ -573,8 +594,8 @@ fn enlargement_to_target_works() {
 		run_to_block(8);
 		// No change now.
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 160,
 				proportion: Perquintill::from_percent(40),
 				index: 4,
@@ -588,8 +609,8 @@ fn enlargement_to_target_works() {
 
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
-			Active::<Test>::get(4).unwrap(),
-			ActiveType {
+			Receipts::<Test>::get(4).unwrap(),
+			ReceiptRecord {
 				proportion: Perquintill::from_percent(10),
 				amount: 40,
 				who: 1,
@@ -598,8 +619,8 @@ fn enlargement_to_target_works() {
 		);
 
 		assert_eq!(
-			ActiveTotal::<Test>::get(),
-			ActiveTotalType {
+			Summary::<Test>::get(),
+			SummaryRecord {
 				frozen: 200,
 				proportion: Perquintill::from_percent(50),
 				index: 5,

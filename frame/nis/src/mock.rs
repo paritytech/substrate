@@ -17,18 +17,22 @@
 
 //! Test environment for NIS pallet.
 
-use crate::{self as pallet_nis, NoFungibleReceipt, WithMaximumOf};
+use crate::{self as pallet_nis, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize, StorageMapShim}, PalletId,
+	traits::{
+		ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize,
+		StorageMapShim,
+	},
+	PalletId,
 };
+use pallet_balances::{Instance1, Instance2};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use pallet_balances::{Instance1, Instance2};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -91,8 +95,12 @@ impl pallet_balances::Config<Instance2> for Test {
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
-	type AccountStore =
-		StorageMapShim<pallet_balances::Account<Test, Instance2>, frame_system::Provider<Test>, u64, pallet_balances::AccountData<u64>>;
+	type AccountStore = StorageMapShim<
+		pallet_balances::Account<Test, Instance2>,
+		frame_system::Provider<Test>,
+		u64,
+		pallet_balances::AccountData<u64>,
+	>;
 	type WeightInfo = ();
 	type MaxLocks = ();
 	type MaxReserves = ();

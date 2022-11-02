@@ -75,7 +75,9 @@ mod tests;
 pub mod weights;
 
 pub struct WithMaximumOf<A: sp_core::TypedGet>(sp_std::marker::PhantomData<A>);
-impl<A: sp_core::TypedGet> sp_runtime::traits::Convert<sp_runtime::Perquintill, A::Type> for WithMaximumOf<A> where
+impl<A: sp_core::TypedGet> sp_runtime::traits::Convert<sp_runtime::Perquintill, A::Type>
+	for WithMaximumOf<A>
+where
 	A::Type: Clone + sp_arithmetic::traits::Unsigned + From<u64>,
 	u64: TryFrom<A::Type>,
 {
@@ -91,15 +93,21 @@ pub mod pallet {
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
-		traits::{Currency, Defensive, DefensiveSaturating, OnUnbalanced, ReservableCurrency,
+		traits::{
 			fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
 			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
+			Currency, Defensive, DefensiveSaturating,
 			ExistenceRequirement::AllowDeath,
-		}, PalletId,
+			OnUnbalanced, ReservableCurrency,
+		},
+		PalletId,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
-	use sp_runtime::{traits::{Saturating, Zero, Convert, AccountIdConversion}, TokenError};
+	use sp_runtime::{
+		traits::{AccountIdConversion, Convert, Saturating, Zero},
+		TokenError,
+	};
 	use sp_std::prelude::*;
 
 	type BalanceOf<T> =
@@ -114,23 +122,44 @@ pub mod pallet {
 	pub struct NoFungibleReceipt<T>(sp_std::marker::PhantomData<T>);
 	impl<T> FungibleInspect<T> for NoFungibleReceipt<T> {
 		type Balance = u32;
-		fn total_issuance() -> u32 { 0 }
-		fn minimum_balance() -> u32 { 0 }
-		fn balance(_who: &T) -> u32 { 0 }
-		fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 { 0 }
-		fn can_deposit(_who: &T, _amount: u32, _mint: bool) -> frame_support::traits::tokens::DepositConsequence {
+		fn total_issuance() -> u32 {
+			0
+		}
+		fn minimum_balance() -> u32 {
+			0
+		}
+		fn balance(_who: &T) -> u32 {
+			0
+		}
+		fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 {
+			0
+		}
+		fn can_deposit(
+			_who: &T,
+			_amount: u32,
+			_mint: bool,
+		) -> frame_support::traits::tokens::DepositConsequence {
 			frame_support::traits::tokens::DepositConsequence::Success
 		}
-		fn can_withdraw(_who: &T, _amount: u32) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
+		fn can_withdraw(
+			_who: &T,
+			_amount: u32,
+		) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
 			frame_support::traits::tokens::WithdrawConsequence::Success
 		}
 	}
 	impl<T> FungibleMutate<T> for NoFungibleReceipt<T> {
-		fn mint_into(_who: &T, _amount: u32) -> DispatchResult { Ok(()) }
-		fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> { Ok(0) }
+		fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
+			Ok(())
+		}
+		fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> {
+			Ok(0)
+		}
 	}
 	impl<T> Convert<Perquintill, u32> for NoFungibleReceipt<T> {
-		fn convert(_: Perquintill) -> u32 { 0 }
+		fn convert(_: Perquintill) -> u32 {
+			0
+		}
 	}
 
 	#[pallet::config]
@@ -245,7 +274,7 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct ActiveType<Balance, AccountId, BlockNumber> {
+	pub struct ReceiptRecord<Balance, AccountId, BlockNumber> {
 		/// The proportion of the effective total issuance (i.e. accounting for any eventual bond
 		/// expansion or contraction that may eventually be claimed).
 		pub proportion: Perquintill,
@@ -271,7 +300,7 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct ActiveTotalType<Balance> {
+	pub struct SummaryRecord<Balance> {
 		/// The total amount of funds held in reserve for all active bonds.
 		pub frozen: Balance,
 		/// The proportion of funds that the `frozen` balance represents to total issuance.
@@ -303,15 +332,15 @@ pub mod pallet {
 
 	/// Information relating to the bonds currently active.
 	#[pallet::storage]
-	pub type ActiveTotal<T> = StorageValue<_, ActiveTotalType<BalanceOf<T>>, ValueQuery>;
+	pub type Summary<T> = StorageValue<_, SummaryRecord<BalanceOf<T>>, ValueQuery>;
 
 	/// The currently active bonds, indexed according to the order of creation.
 	#[pallet::storage]
-	pub type Active<T> = StorageMap<
+	pub type Receipts<T> = StorageMap<
 		_,
 		Blake2_128Concat,
 		ActiveIndex,
-		ActiveType<
+		ReceiptRecord<
 			BalanceOf<T>,
 			<T as frame_system::Config>::AccountId,
 			<T as frame_system::Config>::BlockNumber,
@@ -428,7 +457,12 @@ pub mod pallet {
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
-						let _ = T::Currency::transfer(&Self::account_id(), &bid.who, bid.amount, AllowDeath);
+						let _ = T::Currency::transfer(
+							&Self::account_id(),
+							&bid.who,
+							bid.amount,
+							AllowDeath,
+						);
 						(0, amount - bid.amount)
 					} else {
 						q.try_insert(0, bid).expect("verified queue was not full above. qed.");
@@ -504,7 +538,7 @@ pub mod pallet {
 			#[pallet::compact] target: Perquintill,
 		) -> DispatchResultWithPostInfo {
 			T::AdminOrigin::ensure_origin(origin)?;
-			ActiveTotal::<T>::mutate(|totals| totals.target = target);
+			Summary::<T>::mutate(|totals| totals.target = target);
 			Ok(().into())
 		}
 
@@ -523,7 +557,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// Look for `index`
-			let bond = Active::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+			let bond = Receipts::<T>::get(index).ok_or(Error::<T>::Unknown)?;
 			// If found, check the owner is `who`.
 			ensure!(bond.who == who, Error::<T>::NotOwner);
 			let now = frame_system::Pallet::<T>::block_number();
@@ -533,12 +567,12 @@ pub mod pallet {
 			T::FungibleReceipt::burn_from(&who, fung_eq)?;
 
 			// Remove it
-			Active::<T>::remove(index);
+			Receipts::<T>::remove(index);
 
 			// Multiply the proportion it is by the total issued.
 			let total_issuance =
 				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
-			ActiveTotal::<T>::mutate(|totals| {
+			Summary::<T>::mutate(|totals| {
 				let nonbond_issuance = total_issuance.saturating_sub(totals.frozen);
 				let effective_issuance =
 					totals.proportion.left_from_one().saturating_reciprocal_mul(nonbond_issuance);
@@ -550,7 +584,13 @@ pub mod pallet {
 				// Remove or mint the additional to the amount using `Deficit`/`Surplus`.
 				if bond_value > bond.amount {
 					// Unreserve full amount.
-					let _ = T::Currency::transfer(&Self::account_id(), &bond.who, bond.amount, AllowDeath).defensive();
+					let _ = T::Currency::transfer(
+						&Self::account_id(),
+						&bond.who,
+						bond.amount,
+						AllowDeath,
+					)
+					.defensive();
 					let amount = bond_value - bond.amount;
 					let deficit = T::Currency::deposit_creating(&bond.who, amount);
 					T::Deficit::on_unbalanced(deficit);
@@ -566,7 +606,13 @@ pub mod pallet {
 					// Unreserve only its new value (less than the amount reserved). Everything
 					// should add up, but (defensive) in case it doesn't, unreserve takes lower
 					// priority over the funds.
-					let _ = T::Currency::transfer(&Self::account_id(), &bond.who, bond_value, AllowDeath).defensive();
+					let _ = T::Currency::transfer(
+						&Self::account_id(),
+						&bond.who,
+						bond_value,
+						AllowDeath,
+					)
+					.defensive();
 				}
 
 				let e = Event::Thawed {
@@ -598,11 +644,11 @@ pub mod pallet {
 		type ItemId = ActiveIndex;
 
 		fn owner(item: &ActiveIndex) -> Option<T::AccountId> {
-			Active::<T>::get(item).map(|r| r.who)
+			Receipts::<T>::get(item).map(|r| r.who)
 		}
 
 		fn attribute(item: &Self::ItemId, key: &[u8]) -> Option<Vec<u8>> {
-			let item = Active::<T>::get(item)?;
+			let item = Receipts::<T>::get(item)?;
 			match key {
 				b"proportion" => Some(item.proportion.encode()),
 				b"amount" => Some(item.amount.encode()),
@@ -614,9 +660,9 @@ pub mod pallet {
 
 	impl<T: Config> NonfungibleTransfer<T::AccountId> for Pallet<T> {
 		fn transfer(index: &ActiveIndex, destination: &T::AccountId) -> DispatchResult {
-			let mut item = Active::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
+			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
 			item.who = destination.clone();
-			Active::<T>::insert(index, item);
+			Receipts::<T>::insert(index, item);
 			Ok(())
 		}
 	}
@@ -624,20 +670,20 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Get the target amount of bonds that we're aiming for.
 		pub fn target() -> Perquintill {
-			ActiveTotal::<T>::get().target
+			Summary::<T>::get().target
 		}
 
 		/// The account ID of the reserves.
 		///
-		/// This actually does computation. If you need to keep using it, then make sure you cache the
-		/// value and only call this once.
+		/// This actually does computation. If you need to keep using it, then make sure you cache
+		/// the value and only call this once.
 		pub fn account_id() -> T::AccountId {
 			T::PalletId::get().into_account_truncating()
 		}
 
 		/// Returns information on the issuance of bonds.
 		pub fn issuance() -> IssuanceInfo<BalanceOf<T>> {
-			let totals = ActiveTotal::<T>::get();
+			let totals = Summary::<T>::get();
 
 			let total_issuance = T::Currency::total_issuance();
 			let non_bond = total_issuance.saturating_sub(totals.frozen);
@@ -649,7 +695,7 @@ pub mod pallet {
 		/// Attempt to enlarge our bond-set from bids in order to satisfy our desired target amount
 		/// of funds frozen into bonds.
 		pub fn pursue_target(max_bids: u32) -> Weight {
-			let totals = ActiveTotal::<T>::get();
+			let totals = Summary::<T>::get();
 			if totals.proportion < totals.target {
 				let missing = totals.target.saturating_sub(totals.proportion);
 
@@ -682,7 +728,7 @@ pub mod pallet {
 			let mut queues_hit = 0;
 			let now = frame_system::Pallet::<T>::block_number();
 
-			ActiveTotal::<T>::mutate(|totals| {
+			Summary::<T>::mutate(|totals| {
 				QueueTotals::<T>::mutate(|qs| {
 					for duration in (1..=T::QueueCount::get()).rev() {
 						if qs[duration as usize - 1].0 == 0 {
@@ -726,8 +772,9 @@ pub mod pallet {
 								totals.index += 1;
 								let e = Event::Issued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
-								let bond = ActiveType { amount, proportion, who: who.clone(), expiry };
-								Active::<T>::insert(index, bond);
+								let bond =
+									ReceiptRecord { amount, proportion, who: who.clone(), expiry };
+								Receipts::<T>::insert(index, bond);
 
 								// issue the fungible counterpart
 								let fung_eq = T::FungibleEquivalence::convert(proportion);

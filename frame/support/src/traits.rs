@@ -25,9 +25,9 @@ pub use tokens::{
 		Currency, LockIdentifier, LockableCurrency, NamedReservableCurrency, ReservableCurrency,
 		TotalIssuanceOf, VestingSchedule,
 	},
-	fungible, fungibles, nonfungible, nonfungibles,
+	fungible, fungibles,
 	imbalance::{Imbalance, OnUnbalanced, SignedImbalance},
-	BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
+	nonfungible, nonfungibles, BalanceStatus, ExistenceRequirement, Locker, WithdrawReasons,
 };
 
 mod members;
