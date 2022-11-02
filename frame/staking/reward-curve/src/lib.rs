@@ -28,7 +28,7 @@ use syn::parse::{Parse, ParseStream};
 
 /// Accepts a number of expressions to create a instance of PiecewiseLinear which represents the
 /// NPoS curve (as detailed
-/// [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model))
+/// [here](https://research.web3.foundation/en/latest/polkadot/overview/2-token-economics.html#inflation-model))
 /// for those parameters. Parameters are:
 /// - `min_inflation`: the minimal amount to be rewarded between validators, expressed as a fraction
 ///   of total issuance. Known as `I_0` in the literature. Expressed in millionth, must be between 0

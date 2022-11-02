@@ -20,7 +20,7 @@
 #![warn(missing_docs)]
 
 use crate::{extension::GetExtension, ChainType, Properties, RuntimeGenesis};
-use sc_network::config::MultiaddrWithPeerId;
+use sc_network_common::config::MultiaddrWithPeerId;
 use sc_telemetry::TelemetryEndpoints;
 use serde::{Deserialize, Serialize};
 use serde_json as json;

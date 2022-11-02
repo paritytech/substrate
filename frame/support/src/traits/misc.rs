@@ -18,9 +18,11 @@
 //! Smaller traits used in FRAME which don't need their own file.
 
 use crate::dispatch::Parameter;
-use codec::{CompactLen, Decode, DecodeAll, Encode, EncodeLike, Input, MaxEncodedLen};
+use codec::{CompactLen, Decode, DecodeLimit, Encode, EncodeLike, Input, MaxEncodedLen};
+use impl_trait_for_tuples::impl_for_tuples;
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 use sp_arithmetic::traits::{CheckedAdd, CheckedMul, CheckedSub, Saturating};
+use sp_core::bounded::bounded_vec::TruncateFrom;
 #[doc(hidden)]
 pub use sp_runtime::traits::{
 	ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128, ConstU16, ConstU32,
@@ -150,10 +152,10 @@ pub trait DefensiveOption<T> {
 
 	/// Defensively transform this option to a result, mapping `None` to the return value of an
 	/// error closure.
-	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+	fn defensive_ok_or_else<E: sp_std::fmt::Debug, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
 
 	/// Defensively transform this option to a result, mapping `None` to a default value.
-	fn defensive_ok_or<E>(self, err: E) -> Result<T, E>;
+	fn defensive_ok_or<E: sp_std::fmt::Debug>(self, err: E) -> Result<T, E>;
 
 	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
 	/// is `None`.
@@ -317,16 +319,17 @@ impl<T> DefensiveOption<T> for Option<T> {
 		)
 	}
 
-	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
+	fn defensive_ok_or_else<E: sp_std::fmt::Debug, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
 		self.ok_or_else(|| {
-			defensive!();
-			err()
+			let err_value = err();
+			defensive!(err_value);
+			err_value
 		})
 	}
 
-	fn defensive_ok_or<E>(self, err: E) -> Result<T, E> {
+	fn defensive_ok_or<E: sp_std::fmt::Debug>(self, err: E) -> Result<T, E> {
 		self.ok_or_else(|| {
-			defensive!();
+			defensive!(err);
 			err
 		})
 	}
@@ -364,6 +367,43 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub> DefensiveSaturating f
 	}
 	fn defensive_saturating_mul(self, other: Self) -> Self {
 		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
+	}
+}
+
+/// Construct an object by defensively truncating an input if the `TryFrom` conversion fails.
+pub trait DefensiveTruncateFrom<T> {
+	/// Use `TryFrom` first and defensively fall back to truncating otherwise.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::{BoundedVec, traits::DefensiveTruncateFrom};
+	/// use sp_runtime::traits::ConstU32;
+	///
+	/// let unbound = vec![1, 2];
+	/// let bound = BoundedVec::<u8, ConstU32<2>>::defensive_truncate_from(unbound);
+	///
+	/// assert_eq!(bound, vec![1, 2]);
+	/// ```
+	fn defensive_truncate_from(unbound: T) -> Self;
+}
+
+impl<T, U> DefensiveTruncateFrom<U> for T
+where
+	// NOTE: We use the fact that `BoundedVec` and
+	// `BoundedSlice` use `Self` as error type. We could also
+	// require a `Clone` bound and use `unbound.clone()` in the
+	// error case.
+	T: TruncateFrom<U> + TryFrom<U, Error = U>,
+{
+	fn defensive_truncate_from(unbound: U) -> Self {
+		unbound.try_into().map_or_else(
+			|err| {
+				defensive!("DefensiveTruncateFrom truncating");
+				T::truncate_from(err)
+			},
+			|bound| bound,
+		)
 	}
 }
 
@@ -467,14 +507,18 @@ impl<A, B> SameOrOther<A, B> {
 }
 
 /// Handler for when a new account has been created.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnNewAccount<AccountId> {
 	/// A new account `who` has been registered.
 	fn on_new_account(who: &AccountId);
 }
 
 /// The account with the given id was reaped.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OnKilledAccount<AccountId> {
 	/// The account with the given id was reaped.
 	fn on_killed_account(who: &AccountId);
@@ -632,7 +676,9 @@ impl<Origin: PartialEq> PrivilegeCmp<Origin> for EqualPrivilegeOnly {
 /// but cannot preform any alterations. More specifically alterations are
 /// not forbidden, but they are not persisted in any way after the worker
 /// has finished.
-#[impl_trait_for_tuples::impl_for_tuples(30)]
+#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
+#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
+#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
 pub trait OffchainWorker<BlockNumber> {
 	/// This function is being called after every block import (when fully synced).
 	///
@@ -703,13 +749,13 @@ pub trait EstimateCallFee<Call, Balance> {
 	///
 	/// The dispatch info and the length is deduced from the call. The post info can optionally be
 	/// provided.
-	fn estimate_call_fee(call: &Call, post_info: crate::weights::PostDispatchInfo) -> Balance;
+	fn estimate_call_fee(call: &Call, post_info: crate::dispatch::PostDispatchInfo) -> Balance;
 }
 
 // Useful for building mocks.
 #[cfg(feature = "std")]
 impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
-	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
+	fn estimate_call_fee(_: &Call, _: crate::dispatch::PostDispatchInfo) -> Balance {
 		T.into()
 	}
 }
@@ -745,7 +791,10 @@ impl<T: Encode> Encode for WrapperOpaque<T> {
 
 impl<T: Decode> Decode for WrapperOpaque<T> {
 	fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-		Ok(Self(T::decode_all(&mut &<Vec<u8>>::decode(input)?[..])?))
+		Ok(Self(T::decode_all_with_depth_limit(
+			sp_api::MAX_EXTRINSIC_DEPTH,
+			&mut &<Vec<u8>>::decode(input)?[..],
+		)?))
 	}
 
 	fn skip<I: Input>(input: &mut I) -> Result<(), codec::Error> {
@@ -807,7 +856,7 @@ impl<T: Decode> WrapperKeepOpaque<T> {
 	///
 	/// Returns `None` if the decoding failed.
 	pub fn try_decode(&self) -> Option<T> {
-		T::decode_all(&mut &self.data[..]).ok()
+		T::decode_all_with_depth_limit(sp_api::MAX_EXTRINSIC_DEPTH, &mut &self.data[..]).ok()
 	}
 
 	/// Returns the length of the encoded `T`.
@@ -921,7 +970,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// Maximum size of a preimage.
 	type MaxSize: Get<u32>;
 
-	/// Store the bytes of a preimage on chain.
+	/// Store the bytes of a preimage on chain infallible due to the bounded type.
 	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a
@@ -939,6 +988,81 @@ impl<Hash> PreimageRecipient<Hash> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_core::bounded::{BoundedSlice, BoundedVec};
+	use sp_std::marker::PhantomData;
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_vec_defensive_works() {
+		let unbound = vec![1u32, 2];
+		let bound = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, vec![1u32]);
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_truncating_from_slice_defensive_works() {
+		let unbound = &[1u32, 2];
+		let bound = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+		assert_eq!(bound, &[1u32][..]);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
+	)]
+	fn defensive_truncating_from_vec_defensive_panics() {
+		let unbound = vec![1u32, 2];
+		let _ = BoundedVec::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(
+		expected = "Defensive failure has been triggered!: \"DefensiveTruncateFrom truncating\""
+	)]
+	fn defensive_truncating_from_slice_defensive_panics() {
+		let unbound = &[1u32, 2];
+		let _ = BoundedSlice::<u32, ConstU32<1>>::defensive_truncate_from(unbound);
+	}
+
+	#[test]
+	fn defensive_truncate_from_vec_works() {
+		let unbound = vec![1u32, 2, 3];
+		let bound = BoundedVec::<u32, ConstU32<3>>::defensive_truncate_from(unbound.clone());
+		assert_eq!(bound, unbound);
+	}
+
+	#[test]
+	fn defensive_truncate_from_slice_works() {
+		let unbound = [1u32, 2, 3];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::defensive_truncate_from(&unbound);
+		assert_eq!(bound, &unbound[..]);
+	}
+
+	#[derive(Encode, Decode)]
+	enum NestedType {
+		Nested(Box<Self>),
+		Done,
+	}
+
+	#[test]
+	fn test_opaque_wrapper_decode_limit() {
+		let limit = sp_api::MAX_EXTRINSIC_DEPTH as usize;
+		let mut ok_bytes = vec![0u8; limit];
+		ok_bytes.push(1u8);
+		let mut err_bytes = vec![0u8; limit + 1];
+		err_bytes.push(1u8);
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &ok_bytes.encode()[..]).is_ok());
+		assert!(<WrapperOpaque<NestedType>>::decode(&mut &err_bytes.encode()[..]).is_err());
+
+		let ok_keep_opaque = WrapperKeepOpaque { data: ok_bytes, _phantom: PhantomData };
+		let err_keep_opaque = WrapperKeepOpaque { data: err_bytes, _phantom: PhantomData };
+
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&ok_keep_opaque).is_some());
+		assert!(<WrapperKeepOpaque<NestedType>>::try_decode(&err_keep_opaque).is_none());
+	}
 
 	#[test]
 	fn test_opaque_wrapper() {

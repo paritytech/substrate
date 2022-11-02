@@ -101,14 +101,14 @@ pub fn apply<V: V2ToV3, T: Config>(
 
 		StorageVersion::new(3).put::<Pallet<T>>();
 
-		Weight::max_value()
+		Weight::MAX
 	} else {
 		log::warn!(
 			target: "runtime::elections-phragmen",
 			"Attempted to apply migration to V3 but failed because storage version is {:?}",
 			storage_version,
 		);
-		0
+		Weight::zero()
 	}
 }
 

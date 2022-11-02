@@ -25,6 +25,7 @@ use crate::{
 		KeyLenOf, StorageAppend, StorageDecodeLength, StoragePrefixedMap, StorageTryAppend,
 	},
 	traits::{Get, GetDefault, StorageInfo, StorageInstance},
+	StorageHasher, Twox128,
 };
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::SaturatedConversion;
@@ -61,8 +62,9 @@ where
 	Key: FullCodec + MaxEncodedLen,
 {
 	fn get() -> u32 {
-		let z =
-			Hasher::max_len::<Key>() + Prefix::pallet_prefix().len() + Prefix::STORAGE_PREFIX.len();
+		// The `max_len` of the key hash plus the pallet prefix and storage prefix (which both are
+		// hashed with `Twox128`).
+		let z = Hasher::max_len::<Key>() + Twox128::max_len::<()>() * 2;
 		z as u32
 	}
 }
@@ -499,6 +501,27 @@ mod test {
 		fn get() -> u32 {
 			97
 		}
+	}
+
+	#[test]
+	fn keylenof_works() {
+		// Works with Blake2_128Concat.
+		type A = StorageMap<Prefix, Blake2_128Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 16 + 4; // Blake2_128Concat = hash + key
+		assert_eq!(KeyLenOf::<A>::get(), size);
+
+		// Works with Blake2_256.
+		type B = StorageMap<Prefix, Blake2_256, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 32; // Blake2_256
+		assert_eq!(KeyLenOf::<B>::get(), size);
+
+		// Works with Twox64Concat.
+		type C = StorageMap<Prefix, Twox64Concat, u32, u32>;
+		let size = 16 * 2 // Two Twox128
+			+ 8 + 4; // Twox64Concat = hash + key
+		assert_eq!(KeyLenOf::<C>::get(), size);
 	}
 
 	#[test]

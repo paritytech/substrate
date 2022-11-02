@@ -66,7 +66,7 @@ impl ChainApi for TestApi {
 		uxt: <Self::Block as BlockT>::Extrinsic,
 	) -> Self::ValidationFuture {
 		let nonce = uxt.transfer().nonce;
-		let from = uxt.transfer().from.clone();
+		let from = uxt.transfer().from;
 
 		match self.block_id_to_number(at) {
 			Ok(Some(num)) if num > 5 => return ready(Ok(Err(InvalidTransaction::Stale.into()))),
@@ -76,7 +76,7 @@ impl ChainApi for TestApi {
 		ready(Ok(Ok(ValidTransaction {
 			priority: 4,
 			requires: if nonce > 1 && self.nonce_dependant {
-				vec![to_tag(nonce - 1, from.clone())]
+				vec![to_tag(nonce - 1, from)]
 			} else {
 				vec![]
 			},
@@ -111,7 +111,7 @@ impl ChainApi for TestApi {
 		(blake2_256(&encoded).into(), encoded.len())
 	}
 
-	fn block_body(&self, _id: &BlockId<Self::Block>) -> Self::BodyFuture {
+	fn block_body(&self, _id: &<Self::Block as BlockT>::Hash) -> Self::BodyFuture {
 		ready(Ok(None))
 	}
 
@@ -120,6 +120,14 @@ impl ChainApi for TestApi {
 		_: &BlockId<Self::Block>,
 	) -> Result<Option<<Self::Block as BlockT>::Header>, Self::Error> {
 		Ok(None)
+	}
+
+	fn tree_route(
+		&self,
+		_from: <Self::Block as BlockT>::Hash,
+		_to: <Self::Block as BlockT>::Hash,
+	) -> Result<sp_blockchain::TreeRoute<Self::Block>, Self::Error> {
+		unimplemented!()
 	}
 }
 

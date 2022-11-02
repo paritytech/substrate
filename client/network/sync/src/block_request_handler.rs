@@ -80,10 +80,11 @@ pub fn generate_protocol_config<Hash: AsRef<[u8]>>(
 
 /// Generate the block protocol name from the genesis hash and fork id.
 fn generate_protocol_name<Hash: AsRef<[u8]>>(genesis_hash: Hash, fork_id: Option<&str>) -> String {
+	let genesis_hash = genesis_hash.as_ref();
 	if let Some(fork_id) = fork_id {
-		format!("/{}/{}/sync/2", hex::encode(genesis_hash), fork_id)
+		format!("/{}/{}/sync/2", array_bytes::bytes2hex("", genesis_hash), fork_id)
 	} else {
-		format!("/{}/sync/2", hex::encode(genesis_hash))
+		format!("/{}/sync/2", array_bytes::bytes2hex("", genesis_hash))
 	}
 }
 
@@ -363,7 +364,7 @@ where
 				};
 
 			let body = if get_body {
-				match self.client.block_body(&BlockId::Hash(hash))? {
+				match self.client.block_body(&hash)? {
 					Some(mut extrinsics) =>
 						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
@@ -405,11 +406,20 @@ where
 				indexed_body,
 			};
 
-			total_size += block_data.body.iter().map(|ex| ex.len()).sum::<usize>();
-			total_size += block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+			let new_total_size = total_size +
+				block_data.body.iter().map(|ex| ex.len()).sum::<usize>() +
+				block_data.indexed_body.iter().map(|ex| ex.len()).sum::<usize>();
+
+			// Send at least one block, but make sure to not exceed the limit.
+			if !blocks.is_empty() && new_total_size > MAX_BODY_BYTES {
+				break
+			}
+
+			total_size = new_total_size;
+
 			blocks.push(block_data);
 
-			if blocks.len() >= max_blocks as usize || total_size > MAX_BODY_BYTES {
+			if blocks.len() >= max_blocks as usize {
 				break
 			}
 

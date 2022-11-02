@@ -21,8 +21,8 @@ use crate::{
 	Network, Validator,
 };
 
-use sc_network::ReputationChange;
-use sc_network_common::protocol::event::Event;
+use sc_network_common::protocol::{event::Event, ProtocolName};
+use sc_peerset::ReputationChange;
 
 use futures::{
 	channel::mpsc::{channel, Receiver, Sender},
@@ -33,7 +33,6 @@ use log::trace;
 use prometheus_endpoint::Registry;
 use sp_runtime::traits::Block as BlockT;
 use std::{
-	borrow::Cow,
 	collections::{HashMap, VecDeque},
 	pin::Pin,
 	sync::Arc,
@@ -46,7 +45,7 @@ pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
 	periodic_maintenance_interval: futures_timer::Delay,
-	protocol: Cow<'static, str>,
+	protocol: ProtocolName,
 
 	/// Incoming events from the network.
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
@@ -78,7 +77,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		network: N,
-		protocol: impl Into<Cow<'static, str>>,
+		protocol: impl Into<ProtocolName>,
 		validator: Arc<dyn Validator<B>>,
 		metrics_registry: Option<&Registry>,
 	) -> Self
@@ -152,7 +151,7 @@ impl<B: BlockT> GossipEngine<B> {
 
 	/// Send addressed message to the given peers. The message is not kept or multicast
 	/// later on.
-	pub fn send_message(&mut self, who: Vec<sc_network::PeerId>, data: Vec<u8>) {
+	pub fn send_message(&mut self, who: Vec<PeerId>, data: Vec<u8>) {
 		for who in &who {
 			self.state_machine.send_message(&mut *self.network, who, data.clone());
 		}
@@ -317,7 +316,8 @@ mod tests {
 	};
 	use quickcheck::{Arbitrary, Gen, QuickCheck};
 	use sc_network_common::{
-		protocol::event::ObservedRole,
+		config::MultiaddrWithPeerId,
+		protocol::role::ObservedRole,
 		service::{
 			NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 			NotificationSender, NotificationSenderError,
@@ -328,7 +328,6 @@ mod tests {
 		traits::{Block as BlockT, NumberFor},
 	};
 	use std::{
-		borrow::Cow,
 		collections::HashSet,
 		sync::{Arc, Mutex},
 	};
@@ -359,7 +358,7 @@ mod tests {
 
 		fn report_peer(&self, _who: PeerId, _cost_benefit: ReputationChange) {}
 
-		fn disconnect_peer(&self, _who: PeerId, _protocol: Cow<'static, str>) {
+		fn disconnect_peer(&self, _who: PeerId, _protocol: ProtocolName) {
 			unimplemented!();
 		}
 
@@ -371,7 +370,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn add_reserved_peer(&self, _peer: String) -> Result<(), String> {
+		fn add_reserved_peer(&self, _peer: MultiaddrWithPeerId) -> Result<(), String> {
 			unimplemented!();
 		}
 
@@ -381,7 +380,7 @@ mod tests {
 
 		fn set_reserved_peers(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
@@ -389,28 +388,23 @@ mod tests {
 
 		fn add_peers_to_reserved_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_peers_from_reserved_set(
-			&self,
-			_protocol: Cow<'static, str>,
-			_peers: Vec<PeerId>,
-		) {
-		}
+		fn remove_peers_from_reserved_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {}
 
 		fn add_to_peers_set(
 			&self,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 			_peers: HashSet<Multiaddr>,
 		) -> Result<(), String> {
 			unimplemented!();
 		}
 
-		fn remove_from_peers_set(&self, _protocol: Cow<'static, str>, _peers: Vec<PeerId>) {
+		fn remove_from_peers_set(&self, _protocol: ProtocolName, _peers: Vec<PeerId>) {
 			unimplemented!();
 		}
 
@@ -429,19 +423,14 @@ mod tests {
 	}
 
 	impl NetworkNotification for TestNetwork {
-		fn write_notification(
-			&self,
-			_target: PeerId,
-			_protocol: Cow<'static, str>,
-			_message: Vec<u8>,
-		) {
+		fn write_notification(&self, _target: PeerId, _protocol: ProtocolName, _message: Vec<u8>) {
 			unimplemented!();
 		}
 
 		fn notification_sender(
 			&self,
 			_target: PeerId,
-			_protocol: Cow<'static, str>,
+			_protocol: ProtocolName,
 		) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 			unimplemented!();
 		}
@@ -504,7 +493,7 @@ mod tests {
 	#[test]
 	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
 		let topic = H256::default();
-		let protocol = Cow::Borrowed("/my_protocol");
+		let protocol = ProtocolName::from("/my_protocol");
 		let remote_peer = PeerId::random();
 		let network = TestNetwork::default();
 
@@ -520,7 +509,7 @@ mod tests {
 		// Register the remote peer.
 		event_sender
 			.start_send(Event::NotificationStreamOpened {
-				remote: remote_peer.clone(),
+				remote: remote_peer,
 				protocol: protocol.clone(),
 				negotiated_fallback: None,
 				role: ObservedRole::Authority,
@@ -532,7 +521,7 @@ mod tests {
 			.iter()
 			.cloned()
 			.map(|m| Event::NotificationsReceived {
-				remote: remote_peer.clone(),
+				remote: remote_peer,
 				messages: vec![(protocol.clone(), m.into())],
 			})
 			.collect::<Vec<_>>();
@@ -562,10 +551,7 @@ mod tests {
 			for subscriber in subscribers.iter_mut() {
 				assert_eq!(
 					subscriber.next(),
-					Some(TopicNotification {
-						message: message.clone(),
-						sender: Some(remote_peer.clone()),
-					}),
+					Some(TopicNotification { message: message.clone(), sender: Some(remote_peer) }),
 				);
 			}
 		}
@@ -624,7 +610,7 @@ mod tests {
 		}
 
 		fn prop(channels: Vec<ChannelLengthAndTopic>, notifications: Vec<Vec<Message>>) {
-			let protocol = Cow::Borrowed("/my_protocol");
+			let protocol = ProtocolName::from("/my_protocol");
 			let remote_peer = PeerId::random();
 			let network = TestNetwork::default();
 
@@ -661,7 +647,7 @@ mod tests {
 			// Create channels.
 			let (txs, mut rxs) = channels
 				.iter()
-				.map(|ChannelLengthAndTopic { length, topic }| (topic.clone(), channel(*length)))
+				.map(|ChannelLengthAndTopic { length, topic }| (*topic, channel(*length)))
 				.fold((vec![], vec![]), |mut acc, (topic, (tx, rx))| {
 					acc.0.push((topic, tx));
 					acc.1.push((topic, rx));
@@ -683,7 +669,7 @@ mod tests {
 			// Register the remote peer.
 			event_sender
 				.start_send(Event::NotificationStreamOpened {
-					remote: remote_peer.clone(),
+					remote: remote_peer,
 					protocol: protocol.clone(),
 					negotiated_fallback: None,
 					role: ObservedRole::Authority,
@@ -710,10 +696,7 @@ mod tests {
 					.collect();
 
 				event_sender
-					.start_send(Event::NotificationsReceived {
-						remote: remote_peer.clone(),
-						messages,
-					})
+					.start_send(Event::NotificationsReceived { remote: remote_peer, messages })
 					.expect("Event stream is unbounded; qed.");
 			}
 

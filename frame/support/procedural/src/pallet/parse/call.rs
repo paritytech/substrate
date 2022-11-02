@@ -48,8 +48,8 @@ pub struct CallDef {
 	pub docs: Vec<syn::Lit>,
 }
 
-#[derive(Clone)]
 /// Definition of dispatchable typically: `#[weight...] fn foo(origin .., param1: ...) -> ..`
+#[derive(Clone)]
 pub struct CallVariantDef {
 	/// Function name.
 	pub name: syn::Ident,
@@ -61,6 +61,8 @@ pub struct CallVariantDef {
 	pub call_index: u8,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
+	/// Attributes annotated at the top of the dispatchable function.
+	pub attrs: Vec<syn::Attribute>,
 }
 
 /// Attributes for functions in call impl block.
@@ -143,18 +145,18 @@ impl CallDef {
 		index: usize,
 		item: &mut syn::Item,
 	) -> syn::Result<Self> {
-		let item = if let syn::Item::Impl(item) = item {
+		let item_impl = if let syn::Item::Impl(item) = item {
 			item
 		} else {
 			return Err(syn::Error::new(item.span(), "Invalid pallet::call, expected item impl"))
 		};
 
 		let instances = vec![
-			helper::check_impl_gen(&item.generics, item.impl_token.span())?,
-			helper::check_pallet_struct_usage(&item.self_ty)?,
+			helper::check_impl_gen(&item_impl.generics, item_impl.impl_token.span())?,
+			helper::check_pallet_struct_usage(&item_impl.self_ty)?,
 		];
 
-		if let Some((_, _, for_)) = item.trait_ {
+		if let Some((_, _, for_)) = item_impl.trait_ {
 			let msg = "Invalid pallet::call, expected no trait ident as in \
 				`impl<..> Pallet<..> { .. }`";
 			return Err(syn::Error::new(for_.span(), msg))
@@ -163,8 +165,8 @@ impl CallDef {
 		let mut methods = vec![];
 		let mut indices = HashMap::new();
 		let mut last_index: Option<u8> = None;
-		for impl_item in &mut item.items {
-			if let syn::ImplItem::Method(method) = impl_item {
+		for item in &mut item_impl.items {
+			if let syn::ImplItem::Method(method) = item {
 				if !matches!(method.vis, syn::Visibility::Public(_)) {
 					let msg = "Invalid pallet::call, dispatchable function must be public: \
 						`pub fn`";
@@ -287,10 +289,11 @@ impl CallDef {
 					call_index: final_index,
 					args,
 					docs,
+					attrs: method.attrs.clone(),
 				});
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";
-				return Err(syn::Error::new(impl_item.span(), msg))
+				return Err(syn::Error::new(item.span(), msg))
 			}
 		}
 
@@ -299,8 +302,8 @@ impl CallDef {
 			attr_span,
 			instances,
 			methods,
-			where_clause: item.generics.where_clause.clone(),
-			docs: get_doc_literals(&item.attrs),
+			where_clause: item_impl.generics.where_clause.clone(),
+			docs: get_doc_literals(&item_impl.attrs),
 		})
 	}
 }

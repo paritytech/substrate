@@ -309,7 +309,8 @@ mod tests {
 		}
 
 		for block in to_finalize {
-			client.finalize_block(BlockId::Number(*block), None).unwrap();
+			let hash = blocks[*block as usize - 1].hash();
+			client.finalize_block(&hash, None).unwrap();
 		}
 		(client, backend, blocks)
 	}
@@ -380,8 +381,13 @@ mod tests {
 			precommits: Vec::new(),
 		};
 
-		let grandpa_just =
-			GrandpaJustification::<Block> { round: 8, votes_ancestries: Vec::new(), commit };
+		let grandpa_just: GrandpaJustification<Block> =
+			sp_finality_grandpa::GrandpaJustification::<Header> {
+				round: 8,
+				votes_ancestries: Vec::new(),
+				commit,
+			}
+			.into();
 
 		let finality_proof = FinalityProof {
 			block: header(2).hash(),
@@ -484,7 +490,7 @@ mod tests {
 		let grandpa_just8 = GrandpaJustification::from_commit(&client, round, commit).unwrap();
 
 		client
-			.finalize_block(BlockId::Number(8), Some((ID, grandpa_just8.encode().clone())))
+			.finalize_block(&block8.hash(), Some((ID, grandpa_just8.encode().clone())))
 			.unwrap();
 
 		// Authority set change at block 8, so the justification stored there will be used in the

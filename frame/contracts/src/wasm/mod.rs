@@ -35,12 +35,9 @@ use crate::{
 	Schedule,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{
-	dispatch::{DispatchError, DispatchResult},
-	ensure,
-	traits::Get,
-};
+use frame_support::dispatch::{DispatchError, DispatchResult};
 use sp_core::crypto::UncheckedFrom;
+use sp_runtime::RuntimeDebug;
 use sp_sandbox::{SandboxEnvironmentBuilder, SandboxInstance, SandboxMemory};
 use sp_std::prelude::*;
 #[cfg(test)]
@@ -70,6 +67,10 @@ pub struct PrefabWasmModule<T: Config> {
 	maximum: u32,
 	/// Code instrumented with the latest schedule.
 	code: RelaxedCodeVec<T>,
+	/// A code that might contain non deterministic features and is therefore never allowed
+	/// to be run on chain. Specifically this code can never be instantiated into a contract
+	/// and can just be used through a delegate call.
+	determinism: Determinism,
 	/// The uninstrumented, pristine version of the code.
 	///
 	/// It is not stored because the pristine code has its own storage item. The value
@@ -106,6 +107,27 @@ pub struct OwnerInfo<T: Config> {
 	refcount: u64,
 }
 
+/// Defines the required determinism level of a wasm blob when either running or uploading code.
+#[derive(
+	Clone, Copy, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen, RuntimeDebug, PartialEq, Eq,
+)]
+pub enum Determinism {
+	/// The execution should be deterministic and hence no indeterministic instructions are
+	/// allowed.
+	///
+	/// Dispatchables always use this mode in order to make on-chain execution deterministic.
+	Deterministic,
+	/// Allow calling or uploading an indeterministic code.
+	///
+	/// This is only possible when calling into `pallet-contracts` directly via
+	/// [`crate::Pallet::bare_call`].
+	///
+	/// # Note
+	///
+	/// **Never** use this mode for on-chain execution.
+	AllowIndeterminism,
+}
+
 impl ExportedFunction {
 	/// The wasm export name for the function.
 	fn identifier(&self) -> &str {
@@ -128,18 +150,14 @@ where
 		original_code: Vec<u8>,
 		schedule: &Schedule<T>,
 		owner: AccountIdOf<T>,
+		determinism: Determinism,
 	) -> Result<Self, (DispatchError, &'static str)> {
 		let module = prepare::prepare_contract(
 			original_code.try_into().map_err(|_| (<Error<T>>::CodeTooLarge.into(), ""))?,
 			schedule,
 			owner,
+			determinism,
 		)?;
-		// When instrumenting a new code we apply a stricter limit than enforced by the
-		// `RelaxedCodeVec` in order to leave some headroom for reinstrumentation.
-		ensure!(
-			module.code.len() as u32 <= T::MaxCodeLen::get(),
-			(<Error<T>>::CodeTooLarge.into(), ""),
-		);
 		Ok(module)
 	}
 
@@ -268,6 +286,10 @@ where
 	fn code_len(&self) -> u32 {
 		self.code.len() as u32
 	}
+
+	fn is_deterministic(&self) -> bool {
+		matches!(self.determinism, Determinism::Deterministic)
+	}
 }
 
 #[cfg(test)]
@@ -280,15 +302,18 @@ mod tests {
 		},
 		gas::GasMeter,
 		storage::WriteOutcome,
-		tests::{Call, Test, ALICE, BOB},
+		tests::{RuntimeCall, Test, ALICE, BOB},
 		BalanceOf, CodeHash, Error, Pallet as Contracts,
 	};
 	use assert_matches::assert_matches;
-	use frame_support::{assert_ok, dispatch::DispatchResultWithPostInfo, weights::Weight};
-	use hex_literal::hex;
+	use frame_support::{
+		assert_ok,
+		dispatch::DispatchResultWithPostInfo,
+		weights::{OldWeight, Weight},
+	};
 	use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 	use pretty_assertions::assert_eq;
-	use sp_core::{Bytes, H256};
+	use sp_core::H256;
 	use sp_runtime::DispatchError;
 	use std::{
 		borrow::BorrowMut,
@@ -339,7 +364,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		// (topics, data)
 		events: Vec<(Vec<H256>, Vec<u8>)>,
-		runtime_calls: RefCell<Vec<Call>>,
+		runtime_calls: RefCell<Vec<RuntimeCall>>,
 		schedule: Schedule<Test>,
 		gas_meter: GasMeter<Test>,
 		debug_buffer: Vec<u8>,
@@ -348,8 +373,8 @@ mod tests {
 	}
 
 	/// The call is mocked and just returns this hardcoded value.
-	fn call_return_data() -> Bytes {
-		Bytes(vec![0xDE, 0xAD, 0xBE, 0xEF])
+	fn call_return_data() -> Vec<u8> {
+		vec![0xDE, 0xAD, 0xBE, 0xEF]
 	}
 
 	impl Default for MockExt {
@@ -365,7 +390,7 @@ mod tests {
 				events: Default::default(),
 				runtime_calls: Default::default(),
 				schedule: Default::default(),
-				gas_meter: GasMeter::new(10_000_000_000),
+				gas_meter: GasMeter::new(Weight::from_ref_time(10_000_000_000)),
 				debug_buffer: Default::default(),
 				ecdsa_recover: Default::default(),
 			}
@@ -403,15 +428,15 @@ mod tests {
 			salt: &[u8],
 		) -> Result<(AccountIdOf<Self::T>, ExecReturnValue), ExecError> {
 			self.instantiates.push(InstantiateEntry {
-				code_hash: code_hash.clone(),
+				code_hash,
 				value,
 				data: data.to_vec(),
-				gas_left: gas_limit,
+				gas_left: gas_limit.ref_time(),
 				salt: salt.to_vec(),
 			});
 			Ok((
 				Contracts::<Test>::contract_address(&ALICE, &code_hash, salt),
-				ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) },
+				ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() },
 			))
 		}
 		fn set_code_hash(&mut self, hash: CodeHash<Self::T>) -> Result<(), DispatchError> {
@@ -520,7 +545,7 @@ mod tests {
 			16_384
 		}
 		fn get_weight_price(&self, weight: Weight) -> BalanceOf<Self::T> {
-			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.into())
+			BalanceOf::<Self::T>::from(1312_u32).saturating_mul(weight.ref_time().into())
 		}
 		fn schedule(&self) -> &Schedule<Self::T> {
 			&self.schedule
@@ -532,7 +557,10 @@ mod tests {
 			self.debug_buffer.extend(msg.as_bytes());
 			true
 		}
-		fn call_runtime(&self, call: <Self::T as Config>::Call) -> DispatchResultWithPostInfo {
+		fn call_runtime(
+			&self,
+			call: <Self::T as Config>::RuntimeCall,
+		) -> DispatchResultWithPostInfo {
 			self.runtime_calls.borrow_mut().push(call);
 			Ok(Default::default())
 		}
@@ -541,7 +569,7 @@ mod tests {
 			signature: &[u8; 65],
 			message_hash: &[u8; 32],
 		) -> Result<[u8; 33], ()> {
-			self.ecdsa_recover.borrow_mut().push((signature.clone(), message_hash.clone()));
+			self.ecdsa_recover.borrow_mut().push((*signature, *message_hash));
 			Ok([3; 33])
 		}
 		fn contract_info(&mut self) -> &mut crate::ContractInfo<Self::T> {
@@ -561,8 +589,13 @@ mod tests {
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
 		let wasm = wat::parse_str(wat).unwrap();
 		let schedule = crate::Schedule::default();
-		let executable =
-			PrefabWasmModule::<<MockExt as Ext>::T>::from_code(wasm, &schedule, ALICE).unwrap();
+		let executable = PrefabWasmModule::<<MockExt as Ext>::T>::from_code(
+			wasm,
+			&schedule,
+			ALICE,
+			Determinism::Deterministic,
+		)
+		.unwrap();
 		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
 	}
 
@@ -814,7 +847,7 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		let input = vec![0xff, 0x2a, 0x99, 0x88];
 		let result = execute(CODE, input.clone(), &mut mock_ext).unwrap();
-		assert_eq!(result.data.0, input);
+		assert_eq!(result.data, input);
 		assert_eq!(
 			&mock_ext.calls,
 			&[CallEntry { to: ALICE, value: 0x2a, data: input, allows_reentry: true }]
@@ -917,15 +950,15 @@ mod tests {
 
 		// value does not exist -> sentinel value returned
 		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
 
 		// value did exist -> success
 		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1,);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 1,);
 
 		// value did exist -> success (zero sized type)
 		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0,);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0,);
 	}
 
 	#[test]
@@ -935,7 +968,7 @@ mod tests {
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_contains_storage" (func $seal_contains_storage (param i32 i32) (result i32)))
+	(import "__unstable__" "contains_storage" (func $contains_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 
@@ -953,7 +986,7 @@ mod tests {
 		)
 		;; Call seal_clear_storage and save what it returns at 0
 		(i32.store (i32.const 0)
-			(call $seal_contains_storage
+			(call $contains_storage
 				(i32.const 8)			;; key_ptr
 				(i32.load (i32.const 4))	;; key_len
 			)
@@ -987,13 +1020,13 @@ mod tests {
 		let input = (63, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// sentinel returned
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
 
 		// value exists
 		let input = (64, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// true as u32 returned
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 1);
 		// getter does not remove the value from storage
 		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()).unwrap(), &[42u8]);
 
@@ -1001,7 +1034,7 @@ mod tests {
 		let input = (19, [2u8; 19]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// true as u32 returned
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0);
 		// getter does not remove the value from storage
 		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()).unwrap(), &([] as [u8; 0]));
 	}
@@ -1244,7 +1277,7 @@ mod tests {
 		let output = execute(CODE_ECDSA_TO_ETH_ADDRESS, vec![], MockExt::default()).unwrap();
 		assert_eq!(
 			output,
-			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes([0x02; 20].to_vec()) }
+			ExecReturnValue { flags: ReturnFlags::empty(), data: [0x02; 20].to_vec() }
 		);
 	}
 
@@ -1321,7 +1354,7 @@ mod tests {
 
 		assert_eq!(
 			output,
-			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes([0x22; 32].to_vec()) }
+			ExecReturnValue { flags: ReturnFlags::empty(), data: [0x22; 32].to_vec() }
 		);
 	}
 
@@ -1559,10 +1592,11 @@ mod tests {
 
 		let output = execute(CODE_GAS_LEFT, vec![], &mut ext).unwrap();
 
-		let gas_left = Weight::decode(&mut &*output.data).unwrap();
+		let OldWeight(gas_left) = OldWeight::decode(&mut &*output.data).unwrap();
 		let actual_left = ext.gas_meter.gas_left();
-		assert!(gas_left < gas_limit, "gas_left must be less than initial");
-		assert!(gas_left > actual_left, "gas_left must be greater than final");
+		// TODO: account for proof size weight
+		assert!(gas_left < gas_limit.ref_time(), "gas_left must be less than initial");
+		assert!(gas_left > actual_left.ref_time(), "gas_left must be greater than final");
 	}
 
 	const CODE_VALUE_TRANSFERRED: &str = r#"
@@ -1639,10 +1673,7 @@ mod tests {
 	fn return_from_start_fn() {
 		let output = execute(CODE_RETURN_FROM_START_FN, vec![], MockExt::default()).unwrap();
 
-		assert_eq!(
-			output,
-			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(vec![1, 2, 3, 4]) }
-		);
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: vec![1, 2, 3, 4] });
 	}
 
 	const CODE_TIMESTAMP_NOW: &str = r#"
@@ -1686,9 +1717,51 @@ mod tests {
 )
 "#;
 
+	const CODE_TIMESTAMP_NOW_UNPREFIXED: &str = r#"
+(module
+	(import "seal0" "now" (func $now (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	;; size of our buffer is 32 bytes
+	(data (i32.const 32) "\20")
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		;; This stores the block timestamp in the buffer
+		(call $now (i32.const 0) (i32.const 32))
+
+		;; assert len == 8
+		(call $assert
+			(i32.eq
+				(i32.load (i32.const 32))
+				(i32.const 8)
+			)
+		)
+
+		;; assert that contents of the buffer is equal to the i64 value of 1111.
+		(call $assert
+			(i64.eq
+				(i64.load (i32.const 0))
+				(i64.const 1111)
+			)
+		)
+	)
+	(func (export "deploy"))
+)
+"#;
+
 	#[test]
 	fn now() {
 		assert_ok!(execute(CODE_TIMESTAMP_NOW, vec![], MockExt::default()));
+		assert_ok!(execute(CODE_TIMESTAMP_NOW_UNPREFIXED, vec![], MockExt::default()));
 	}
 
 	const CODE_MINIMUM_BALANCE: &str = r#"
@@ -1799,10 +1872,9 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(
-					hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F")
-						.to_vec()
-				),
+				data: array_bytes::hex_into_unchecked(
+					"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+				)
 			},
 		);
 	}
@@ -1870,13 +1942,13 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(
-					(
-						hex!("000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"),
-						42u64,
-					)
-						.encode()
-				),
+				data: (
+					array_bytes::hex2array_unchecked::<32>(
+						"000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F"
+					),
+					42u64,
+				)
+					.encode()
 			},
 		);
 	}
@@ -1917,7 +1989,7 @@ mod tests {
 			)]
 		);
 
-		assert!(mock_ext.gas_meter.gas_left() > 0);
+		assert!(mock_ext.gas_meter.gas_left().ref_time() > 0);
 	}
 
 	const CODE_DEPOSIT_EVENT_MAX_TOPICS: &str = r#"
@@ -2081,7 +2153,7 @@ mod tests {
 	fn seal_return_with_success_status() {
 		let output = execute(
 			CODE_RETURN_WITH_DATA,
-			hex!("00000000445566778899").to_vec(),
+			array_bytes::hex2bytes_unchecked("00000000445566778899"),
 			MockExt::default(),
 		)
 		.unwrap();
@@ -2090,7 +2162,7 @@ mod tests {
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::empty(),
-				data: Bytes(hex!("445566778899").to_vec()),
+				data: array_bytes::hex2bytes_unchecked("445566778899"),
 			}
 		);
 		assert!(!output.did_revert());
@@ -2098,15 +2170,18 @@ mod tests {
 
 	#[test]
 	fn return_with_revert_status() {
-		let output =
-			execute(CODE_RETURN_WITH_DATA, hex!("010000005566778899").to_vec(), MockExt::default())
-				.unwrap();
+		let output = execute(
+			CODE_RETURN_WITH_DATA,
+			array_bytes::hex2bytes_unchecked("010000005566778899"),
+			MockExt::default(),
+		)
+		.unwrap();
 
 		assert_eq!(
 			output,
 			ExecReturnValue {
 				flags: ReturnFlags::REVERT,
-				data: Bytes(hex!("5566778899").to_vec()),
+				data: array_bytes::hex2bytes_unchecked("5566778899"),
 			}
 		);
 		assert!(output.did_revert());
@@ -2227,7 +2302,7 @@ mod tests {
 	#[cfg(feature = "unstable-interface")]
 	const CODE_CALL_RUNTIME: &str = r#"
 (module
-	(import "__unstable__" "seal_call_runtime" (func $seal_call_runtime (param i32 i32) (result i32)))
+	(import "__unstable__" "call_runtime" (func $call_runtime (param i32 i32) (result i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
@@ -2244,7 +2319,7 @@ mod tests {
 		)
 		;; Just use the call passed as input and store result to memory
 		(i32.store (i32.const 0)
-			(call $seal_call_runtime
+			(call $call_runtime
 				(i32.const 4)				;; Pointer where the call is stored
 				(i32.load (i32.const 0))	;; Size of the call
 			)
@@ -2263,12 +2338,13 @@ mod tests {
 	#[test]
 	#[cfg(feature = "unstable-interface")]
 	fn call_runtime_works() {
-		let call = Call::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
+		let call =
+			RuntimeCall::System(frame_system::Call::remark { remark: b"Hello World".to_vec() });
 		let mut ext = MockExt::default();
 		let result = execute(CODE_CALL_RUNTIME, call.encode(), &mut ext).unwrap();
 		assert_eq!(*ext.runtime_calls.borrow(), vec![call]);
 		// 0 = ReturnCode::Success
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0);
 	}
 
 	#[test]
@@ -2333,19 +2409,19 @@ mod tests {
 		// value did not exist before -> sentinel returned
 		let input = ([1u8; 32], [42u8, 48]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[42u8, 48]);
 
 		// value do exist -> length of old value returned
 		let input = ([1u8; 32], [0u8; 0]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 2);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 2);
 		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[0u8; 0]);
 
 		// value do exist -> length of old value returned (test for zero sized val)
 		let input = ([1u8; 32], [99u8]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0);
 		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[99u8]);
 	}
 
@@ -2356,7 +2432,7 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "set_storage" (func $set_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer
@@ -2373,7 +2449,7 @@ mod tests {
 		)
 		;; Store the passed value to the passed key and store result to memory
 		(i32.store (i32.const 168)
-			(call $seal_set_storage
+			(call $set_storage
 				(i32.const 8)				;; key_ptr
 				(i32.load (i32.const 4))		;; key_len
 				(i32.add				;; value_ptr = 8 + key_len
@@ -2404,19 +2480,19 @@ mod tests {
 		// value did not exist before -> sentinel returned
 		let input = (32, [1u8; 32], [42u8, 48]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[42u8, 48]);
 
 		// value do exist -> length of old value returned
 		let input = (32, [1u8; 32], [0u8; 0]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 2);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 2);
 		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[0u8; 0]);
 
 		// value do exist -> length of old value returned (test for zero sized val)
 		let input = (32, [1u8; 32], [99u8]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0);
 		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[99u8]);
 	}
 
@@ -2427,7 +2503,7 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_get_storage" (func $seal_get_storage (param i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "get_storage" (func $get_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2448,7 +2524,7 @@ mod tests {
 		)
 		;; Load a storage value and result of this call into the output buffer
 		(i32.store (i32.const 168)
-			(call $seal_get_storage
+			(call $get_storage
 				(i32.const 12)			;; key_ptr
 				(i32.load (i32.const 8))	;; key_len
 				(i32.const 172)			;; Pointer to the output buffer
@@ -2489,7 +2565,7 @@ mod tests {
 		let input = (63, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
-			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			u32::from_le_bytes(result.data[0..4].try_into().unwrap()),
 			ReturnCode::KeyNotFound as u32
 		);
 
@@ -2497,21 +2573,21 @@ mod tests {
 		let input = (64, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
-			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			u32::from_le_bytes(result.data[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
 		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()).unwrap(), &[42u8]);
-		assert_eq!(&result.data.0[4..], &[42u8]);
+		assert_eq!(&result.data[4..], &[42u8]);
 
 		// value exists (test for 0 sized)
 		let input = (19, [2u8; 19]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
-			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			u32::from_le_bytes(result.data[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
 		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()), Some(&vec![]));
-		assert_eq!(&result.data.0[4..], &([] as [u8; 0]));
+		assert_eq!(&result.data[4..], &([] as [u8; 0]));
 	}
 
 	#[test]
@@ -2521,7 +2597,7 @@ mod tests {
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "seal_clear_storage" (func $seal_clear_storage (param i32 i32) (result i32)))
+	(import "__unstable__" "clear_storage" (func $clear_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of input buffer
@@ -2538,7 +2614,7 @@ mod tests {
 		)
 		;; Call seal_clear_storage and save what it returns at 0
 		(i32.store (i32.const 0)
-			(call $seal_clear_storage
+			(call $clear_storage
 				(i32.const 8)			;; key_ptr
 				(i32.load (i32.const 4))	;; key_len
 			)
@@ -2573,14 +2649,14 @@ mod tests {
 		let input = (32, [3u8; 32]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// sentinel returned
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[3u8; 32].to_vec()), None);
 
 		// value did exist
 		let input = (64, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// length returned
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 1);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 1);
 		// value cleared
 		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()), None);
 
@@ -2588,14 +2664,14 @@ mod tests {
 		let input = (63, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// sentinel returned
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), crate::SENTINEL);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
 		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()), None);
 
 		// value exists
 		let input = (19, [2u8; 19]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		// length returned (test for 0 sized)
-		assert_eq!(u32::from_le_bytes(result.data.0.try_into().unwrap()), 0);
+		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0);
 		// value cleared
 		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()), None);
 	}
@@ -2607,7 +2683,7 @@ mod tests {
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "seal_take_storage" (func $seal_take_storage (param i32 i32 i32 i32) (result i32)))
+	(import "__unstable__" "take_storage" (func $take_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2629,7 +2705,7 @@ mod tests {
 
 		;; Load a storage value and result of this call into the output buffer
 		(i32.store (i32.const 168)
-			(call $seal_take_storage
+			(call $take_storage
 				(i32.const 12)			;; key_ptr
 				(i32.load (i32.const 8))	;; key_len
 				(i32.const 172)			;; Pointer to the output buffer
@@ -2672,7 +2748,7 @@ mod tests {
 		let input = (63, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
-			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			u32::from_le_bytes(result.data[0..4].try_into().unwrap()),
 			ReturnCode::KeyNotFound as u32
 		);
 
@@ -2680,21 +2756,21 @@ mod tests {
 		let input = (64, [1u8; 64]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
-			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			u32::from_le_bytes(result.data[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
 		assert_eq!(ext.storage.get(&[1u8; 64].to_vec()), None);
-		assert_eq!(&result.data.0[4..], &[42u8]);
+		assert_eq!(&result.data[4..], &[42u8]);
 
 		// value did exist -> length returned (test for 0 sized)
 		let input = (19, [2u8; 19]).encode();
 		let result = execute(CODE, input, &mut ext).unwrap();
 		assert_eq!(
-			u32::from_le_bytes(result.data.0[0..4].try_into().unwrap()),
+			u32::from_le_bytes(result.data[0..4].try_into().unwrap()),
 			ReturnCode::Success as u32
 		);
 		assert_eq!(ext.storage.get(&[2u8; 19].to_vec()), None);
-		assert_eq!(&result.data.0[4..], &[0u8; 0]);
+		assert_eq!(&result.data[4..], &[0u8; 0]);
 	}
 
 	#[test]
@@ -2731,10 +2807,7 @@ mod tests {
 		let output = execute(CODE_IS_CONTRACT, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just always returns 1u32 (`true`).
-		assert_eq!(
-			output,
-			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(1u32.encode()) },
-		);
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 1u32.encode() },);
 	}
 
 	#[test]
@@ -2868,10 +2941,7 @@ mod tests {
 		let output = execute(CODE_CALLER_IS_ORIGIN, vec![], MockExt::default()).unwrap();
 
 		// The mock ext just always returns 0u32 (`false`)
-		assert_eq!(
-			output,
-			ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(0u32.encode()) },
-		);
+		assert_eq!(output, ExecReturnValue { flags: ReturnFlags::empty(), data: 0u32.encode() },);
 	}
 
 	#[test]

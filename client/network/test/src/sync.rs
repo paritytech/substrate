@@ -251,18 +251,22 @@ fn sync_justifications() {
 	assert_eq!(net.peer(1).client().justifications(&BlockId::Number(10)).unwrap(), None);
 
 	// we finalize block #10, #15 and #20 for peer 0 with a justification
+	let backend = net.peer(0).client().as_backend();
+	let hashof10 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
+	let hashof15 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(15)).unwrap();
+	let hashof20 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(20)).unwrap();
 	let just = (*b"FRNK", Vec::new());
 	net.peer(0)
 		.client()
-		.finalize_block(BlockId::Number(10), Some(just.clone()), true)
+		.finalize_block(&hashof10, Some(just.clone()), true)
 		.unwrap();
 	net.peer(0)
 		.client()
-		.finalize_block(BlockId::Number(15), Some(just.clone()), true)
+		.finalize_block(&hashof15, Some(just.clone()), true)
 		.unwrap();
 	net.peer(0)
 		.client()
-		.finalize_block(BlockId::Number(20), Some(just.clone()), true)
+		.finalize_block(&hashof20, Some(just.clone()), true)
 		.unwrap();
 
 	let h1 = net.peer(1).client().header(&BlockId::Number(10)).unwrap().unwrap();
@@ -309,10 +313,7 @@ fn sync_justifications_across_forks() {
 	net.block_until_sync();
 
 	let just = (*b"FRNK", Vec::new());
-	net.peer(0)
-		.client()
-		.finalize_block(BlockId::Hash(f1_best), Some(just), true)
-		.unwrap();
+	net.peer(0).client().finalize_block(&f1_best, Some(just), true).unwrap();
 
 	net.peer(1).request_justification(&f1_best, 10);
 	net.peer(1).request_justification(&f2_best, 11);
@@ -655,14 +656,8 @@ fn can_sync_to_peers_with_wrong_common_block() {
 
 	// both peers re-org to the same fork without notifying each other
 	let just = Some((*b"FRNK", Vec::new()));
-	net.peer(0)
-		.client()
-		.finalize_block(BlockId::Hash(fork_hash), just.clone(), true)
-		.unwrap();
-	net.peer(1)
-		.client()
-		.finalize_block(BlockId::Hash(fork_hash), just, true)
-		.unwrap();
+	net.peer(0).client().finalize_block(&fork_hash, just.clone(), true).unwrap();
+	net.peer(1).client().finalize_block(&fork_hash, just, true).unwrap();
 	let final_hash = net.peer(0).push_blocks(1, false);
 
 	net.block_until_sync();
@@ -976,10 +971,17 @@ fn multiple_requests_are_accepted_as_long_as_they_are_not_fulfilled() {
 		assert_eq!(1, net.peer(0).num_peers());
 	}
 
+	let hashof10 = net
+		.peer(0)
+		.client()
+		.as_backend()
+		.blockchain()
+		.expect_block_hash_from_id(&BlockId::Number(10))
+		.unwrap();
 	// Finalize the block and make the justification available.
 	net.peer(0)
 		.client()
-		.finalize_block(BlockId::Number(10), Some((*b"FRNK", Vec::new())), true)
+		.finalize_block(&hashof10, Some((*b"FRNK", Vec::new())), true)
 		.unwrap();
 
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
@@ -1100,10 +1102,14 @@ fn syncs_state() {
 		assert!(!net.peer(1).client().has_state_at(&BlockId::Number(64)));
 
 		let just = (*b"FRNK", Vec::new());
-		net.peer(1)
+		let hashof60 = net
+			.peer(0)
 			.client()
-			.finalize_block(BlockId::Number(60), Some(just), true)
+			.as_backend()
+			.blockchain()
+			.expect_block_hash_from_id(&BlockId::Number(60))
 			.unwrap();
+		net.peer(1).client().finalize_block(&hashof60, Some(just), true).unwrap();
 		// Wait for state sync.
 		block_on(futures::future::poll_fn::<(), _>(|cx| {
 			net.poll(cx);
@@ -1192,7 +1198,7 @@ fn warp_sync() {
 		..Default::default()
 	});
 	let gap_end = net.peer(0).push_blocks(63, false);
-	net.peer(0).push_blocks(1, false);
+	let target = net.peer(0).push_blocks(1, false);
 	net.peer(1).push_blocks(64, false);
 	net.peer(2).push_blocks(64, false);
 	// Wait for peer 1 to sync state.
@@ -1203,7 +1209,7 @@ fn warp_sync() {
 	// Wait for peer 1 download block history
 	block_on(futures::future::poll_fn::<(), _>(|cx| {
 		net.poll(cx);
-		if net.peer(3).has_block(&gap_end) {
+		if net.peer(3).has_body(&gap_end) && net.peer(3).has_body(&target) {
 			Poll::Ready(())
 		} else {
 			Poll::Pending

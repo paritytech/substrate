@@ -181,6 +181,7 @@ impl Sandbox for FunctionExecutor {
 
 		let len = val_len as usize;
 
+		#[allow(deprecated)]
 		let buffer = match self.memory.get(val_ptr.into(), len) {
 			Err(_) => return Ok(sandbox_env::ERR_OUT_OF_BOUNDS),
 			Ok(buffer) => buffer,
@@ -568,6 +569,7 @@ fn call_in_wasm_module(
 	match result {
 		Ok(Some(I64(r))) => {
 			let (ptr, length) = unpack_ptr_and_len(r as u64);
+			#[allow(deprecated)]
 			memory.get(ptr, length as usize).map_err(|_| Error::Runtime)
 		},
 		Err(e) => {

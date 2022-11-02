@@ -200,7 +200,8 @@ pub mod registration {
 			let mut transaction_root = sp_trie::empty_trie_root::<TrieLayout>();
 			{
 				let mut trie =
-					sp_trie::TrieDBMut::<TrieLayout>::new(&mut db, &mut transaction_root);
+					sp_trie::TrieDBMutBuilder::<TrieLayout>::new(&mut db, &mut transaction_root)
+						.build();
 				let chunks = transaction.chunks(CHUNK_SIZE).map(|c| c.to_vec());
 				for (index, chunk) in chunks.enumerate() {
 					let index = encode_index(index as u32);

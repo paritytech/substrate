@@ -23,6 +23,7 @@ sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
 
 [dev-dependencies]
 criterion = "0.3.3"
@@ -42,6 +43,7 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 	"sp-version/std",
+	"sp-weights/std",
 ]
 runtime-benchmarks = [
 	"frame-support/runtime-benchmarks",
