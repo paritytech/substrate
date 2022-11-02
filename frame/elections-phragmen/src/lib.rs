@@ -935,7 +935,14 @@ impl<T: Config> Pallet<T> {
 		// add all the previous members and runners-up as candidates as well.
 		candidates_and_deposit
 			.try_append(&mut Self::implicit_candidates_with_deposit())
-			.expect("Cannot accept more than MaxCandidates candidates.");
+		match candidates_and_deposit
+			.try_append(&mut Self::implicit_candidates_with_deposit())
+			.map_err(|_| T::DbWeight::get().reads(3)) {
+                Ok(_) => (),
+                Err(weight) => return weight,
+            }
+
+
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
