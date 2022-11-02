@@ -409,3 +409,19 @@ fn reaping_overweight_fails_properly() {
 		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
 	});
 }
+
+#[test]
+fn peek_index_works() {
+	new_test_ext().execute_with(|| {
+		let (mut page, msgs) = full_page::<Test>();
+		assert!(msgs > 1, "precondition unmet");
+
+		for i in 0..msgs {
+			page.skip_first(i % 2 == 0);
+			let (pos, processed, payload) = page.peek_index(i).unwrap();
+			assert_eq!(pos, 10 * i);
+			assert_eq!(processed, i % 2 == 0);
+			assert_eq!(payload, MessageOrigin::Everywhere(i as u32).encode());
+		}
+	});
+}

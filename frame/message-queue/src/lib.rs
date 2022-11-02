@@ -153,26 +153,25 @@ impl<
 	}
 
 	/// Return the unprocessed encoded (origin, message) pair of `index` into the page's
-	/// messages if and only if it was skipped (i.e. of location prior to `first`) and is
-	/// unprocessed.
+	/// messages if and only if it was skipped (i.e. of location prior to `first`).
 	fn peek_index(&self, index: usize) -> Option<(usize, bool, &[u8])> {
 		let mut pos = 0;
 		let mut item_slice = &self.heap[..];
 		let header_len: usize = ItemHeader::<Size>::max_encoded_len().saturated_into();
 		for _ in 0..index {
 			let h = ItemHeader::<Size>::decode(&mut item_slice).ok()?;
-			let item_len: usize = header_len + h.payload_len.into() as usize;
+			let item_len = h.payload_len.into() as usize;
 			if item_slice.len() < item_len {
 				return None
 			}
 			item_slice = &item_slice[item_len..];
-			pos.saturating_accrue(item_len);
+			pos.saturating_accrue(header_len.saturating_add(item_len));
 		}
 		let h = ItemHeader::<Size>::decode(&mut item_slice).ok()?;
-		if item_slice.len() < header_len + h.payload_len.into() as usize {
+		if item_slice.len() < h.payload_len.into() as usize {
 			return None
 		}
-		item_slice = &item_slice[header_len + h.payload_len.into() as usize..];
+		item_slice = &item_slice[..h.payload_len.into() as usize];
 		Some((pos, h.is_processed, item_slice))
 	}
 
