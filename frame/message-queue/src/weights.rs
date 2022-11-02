@@ -29,6 +29,7 @@
 
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use sp_std::marker::PhantomData;
+use sp_std::vec::Vec;
 
 /// Weight functions needed for pallet_message_queue.
 pub trait WeightInfo {
@@ -44,7 +45,7 @@ pub struct WeightMetaInfo<W>(PhantomData<W>);
 impl<W: WeightInfo> WeightMetaInfo<W> {
 	/// Executes a callback for each weight function by passing in its name and value.
 	pub fn visit_weight_functions<F: Fn(&'static str, Weight) -> R, R>(f: F) -> Vec<R> {
-		vec![
+		sp_std::vec![
 			f("service_page_base", W::service_page_base()),
 			f("service_queue_base", W::service_queue_base()),
 			f("service_page_process_message", W::service_page_process_message()),

@@ -18,25 +18,62 @@
 
 #![cfg(feature = "runtime-benchmarks")]
 
-use super::{Pallet as MessageQueue, *};
+use super::{mock::*, Pallet as MessageQueue, *};
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::traits::Get;
-use frame_system::RawOrigin;
+use frame_system::{Pallet as System, RawOrigin};
 use sp_std::prelude::*;
 
+static LOG_TARGET: &'static str = "runtime::message-queue::bench";
+
 benchmarks! {
+	where_clause {
+		// NOTE: We need to generate multiple origins; therefore Origin must be `From<u32>`.
+		where <<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32>
+	}
+
 	// Just calling `service_queue` without any iterations happening.
 	service_queue_base { }: { }
 
 	// Just calling `service_page` without any iterations happening.
 	service_page_base {	}: { }
 
-	service_page_item { }: { }
+	// Processing a single message from a page.
+	//
+	// The benchmarks uses a full page and skips all message except the last one,
+	// although this should not make a difference.
+	service_page_item {
+		let (mut page, msgs) = full_page::<T>();
+		// Skip all messages except the last one.
+		for i in 1..msgs {
+			page.skip_first(true);
+		}
+		assert!(page.peek_first().is_some(), "There is one message left");
+		let mut weight = WeightCounter::unlimited();
+		log::debug!(target: LOG_TARGET, "{} messages per page", msgs);
+	}: {
+		let status = MessageQueue::<T>::service_page_item(&0u32.into(), &mut page, &mut weight, Weight::MAX);
+		assert_eq!(status, PageExecutionStatus::Partial);
+	} verify {
+		// Check fot the `Processed` event
+		assert_last_event::<T>(Event::Processed {
+			hash: T::Hashing::hash(&[]), origin: ((msgs - 1) as u32).into(),
+			weight_used: 1.into_weight(), success: true
+		}.into());
+	}
 
 	// Contains the effort for fetching and (storing or removing) a page.
 	service_page_process_message { }: { }
 
 	// Worst case for calling `bump_service_head`.
 	bump_service_head { }: {}
+
+	// Create a test for each benchmark.
+	impl_benchmark_test_suite!(MessageQueue, crate::tests::new_test_ext(), crate::tests::Test);
+}
+
+fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+	assert!(!System::<T>::block_number().is_zero(), "The genesis block has n o events");
+	System::<T>::assert_last_event(generic_event.into());
 }

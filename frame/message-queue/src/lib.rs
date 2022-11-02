@@ -19,6 +19,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod benchmarking;
+mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
@@ -26,6 +27,7 @@ pub mod weights;
 use codec::{Codec, Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	defensive, pallet_prelude::*, traits::DefensiveTruncateFrom, BoundedSlice, CloneNoBound,
+	DefaultNoBound,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -47,7 +49,7 @@ type PageIndex = u32;
 const LOG_TARGET: &'static str = "runtime::message-queue";
 
 /// Data encoded and prefixed to the encoded `MessageItem`.
-#[derive(Encode, Decode, MaxEncodedLen)]
+#[derive(Encode, Decode, PartialEq, MaxEncodedLen, Debug)]
 pub struct ItemHeader<Size> {
 	/// The length of this item, not including the size of this header. The next item of the page
 	/// follows immediately after the payload of this item.
@@ -57,10 +59,12 @@ pub struct ItemHeader<Size> {
 }
 
 /// A page of messages. Pages always contain at least one item.
-#[derive(CloneNoBound, Encode, Decode, RuntimeDebugNoBound, Default, TypeInfo, MaxEncodedLen)]
+#[derive(
+	CloneNoBound, Encode, Decode, RuntimeDebugNoBound, DefaultNoBound, TypeInfo, MaxEncodedLen,
+)]
 #[scale_info(skip_type_params(HeapSize))]
 #[codec(mel_bound(Size: MaxEncodedLen))]
-pub struct Page<Size: Into<u32> + Debug + Clone, HeapSize: Get<Size>> {
+pub struct Page<Size: Into<u32> + Debug + Clone + Default, HeapSize: Get<Size>> {
 	/// Messages remaining to be processed; this includes overweight messages which have been
 	/// skipped.
 	remaining: Size,
@@ -74,7 +78,7 @@ pub struct Page<Size: Into<u32> + Debug + Clone, HeapSize: Get<Size>> {
 }
 
 impl<
-		Size: BaseArithmetic + Unsigned + Copy + Into<u32> + Codec + MaxEncodedLen + Debug,
+		Size: BaseArithmetic + Unsigned + Copy + Into<u32> + Codec + MaxEncodedLen + Debug + Default,
 		HeapSize: Get<Size>,
 	> Page<Size, HeapSize>
 {
@@ -105,7 +109,7 @@ impl<
 			return Err(())
 		}
 
-		let mut heap = sp_std::mem::replace(&mut self.heap, Default::default()).into_inner();
+		let mut heap = sp_std::mem::take(&mut self.heap).into_inner();
 		h.using_encoded(|d| heap.extend_from_slice(d));
 		heap.extend_from_slice(origin);
 		heap.extend_from_slice(message);
@@ -273,7 +277,8 @@ pub mod pallet {
 			+ Encode
 			+ Decode
 			+ MaxEncodedLen
-			+ TypeInfo;
+			+ TypeInfo
+			+ Default;
 
 		/// The size of the page; this implies the maximum message size which can be sent.
 		#[pallet::constant]
@@ -415,7 +420,7 @@ impl<T: Config> Iterator for ReadyRing<T> {
 }
 
 /// The status of a page after trying to execute its next message.
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 enum PageExecutionStatus {
 	/// The execution bailed because there was not enough weight remaining.
 	Bailed,
@@ -593,8 +598,8 @@ impl<T: Config> Pallet<T> {
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
-					// no need toconsider .first or ready ring since processing an overweight page would
-					// not alter that state.
+				// no need toconsider .first or ready ring since processing an overweight page would
+				// not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
@@ -654,12 +659,8 @@ impl<T: Config> Pallet<T> {
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		let mut total_processed = 0;
 		while book_state.end > book_state.begin {
-			let (processed, status) = Self::service_page(
-				&origin,
-				&mut book_state,
-				weight,
-				overweight_limit,
-			);
+			let (processed, status) =
+				Self::service_page(&origin, &mut book_state, weight, overweight_limit);
 			total_processed.saturating_accrue(processed);
 			match status {
 				// Store the page progress and do not go to the next one.
@@ -738,12 +739,17 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Execute the next message of a page.
-	fn service_page_item(
+	pub(crate) fn service_page_item(
 		_origin: &MessageOriginOf<T>,
 		page: &mut PageOf<T>,
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
 	) -> PageExecutionStatus {
+		// This ugly pre-checking is needed for the invariant
+		// "we never bail if a page became complete".
+		if page.is_complete() {
+			return PageExecutionStatus::NoMore
+		}
 		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
 			return PageExecutionStatus::Bailed
 		}
@@ -751,11 +757,6 @@ impl<T: Config> Pallet<T> {
 			Some(m) => m,
 			None => return PageExecutionStatus::NoMore,
 		}[..];
-
-		// TODO should not be needed.
-		if weight.remaining().any_lte(Weight::zero()) {
-			return PageExecutionStatus::Bailed
-		}
 
 		use MessageExecutionStatus::*;
 		let is_processed = match Self::process_message(message, weight, overweight_limit) {

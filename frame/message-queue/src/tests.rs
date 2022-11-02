@@ -19,7 +19,7 @@
 
 #![cfg(test)]
 
-use super::*;
+use crate::{mock::*, *};
 
 use crate as pallet_message_queue;
 use frame_support::{
@@ -31,7 +31,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use std::collections::BTreeMap;
+use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -79,7 +79,7 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const HeapSize: u32 = 24;
+	pub const HeapSize: u32 = 24; // 64 KiB
 	pub const MaxStale: u32 = 2;
 }
 
@@ -97,14 +97,15 @@ pub struct MockedWeightInfo;
 
 parameter_types! {
 	/// Storage for `MockedWeightInfo`, do not use directly.
-	static WeightForCall: BTreeMap<String, Weight> = Default::default();
+	pub static WeightForCall: BTreeMap<String, Weight> = Default::default();
 }
 
 /// Set the return value for a function from the `WeightInfo` trait.
 impl MockedWeightInfo {
-	fn set_weight(call_name: &str, weight: Weight) {
+	/// Set the weight of a specific weight function.
+	pub fn set_weight<T: Config>(call_name: &str, weight: Weight) {
 		assert!(
-			super::weights::WeightMetaInfo::<<Test as Config>::WeightInfo>::visit_weight_functions(
+			super::weights::WeightMetaInfo::<T::WeightInfo>::visit_weight_functions(
 				|f, _| f == call_name
 			)
 			.into_iter()
@@ -138,13 +139,6 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	}
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
-pub enum MessageOrigin {
-	Here,
-	There,
-	Everywhere(u8),
-}
-
 parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
 }
@@ -155,6 +149,9 @@ impl ProcessMessage for TestMessageProcessor {
 	type Origin = MessageOrigin;
 
 	/// Process the given message, using no more than `weight_limit` in weight to do so.
+	///
+	/// Consumes exactly `n` weight of all components if it starts `weight=n` and `1` otherwise.
+	/// Errors if given the `weight_limit` is insufficient to process the message.
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
@@ -194,13 +191,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext
 }
 
-pub trait IntoWeight {
-	fn into_weight(self) -> Weight;
-}
-impl IntoWeight for u64 {
-	fn into_weight(self) -> Weight {
-		Weight::from_parts(self, self)
-	}
+/// Set the weight of a specific weight function.
+pub fn set_weight(name: &str, w: Weight) {
+	MockedWeightInfo::set_weight::<Test>(name, w);
 }
 
 #[test]
@@ -209,7 +202,7 @@ fn mocked_weight_works() {
 		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
 	});
 	new_test_ext().execute_with(|| {
-		MockedWeightInfo::set_weight("service_page_base", Weight::MAX);
+		set_weight("service_page_base", Weight::MAX);
 		assert_eq!(<Test as Config>::WeightInfo::service_page_base(), Weight::MAX);
 	});
 	// The externalities reset it.
@@ -222,7 +215,7 @@ fn mocked_weight_works() {
 #[should_panic]
 fn mocked_weight_panics_on_invalid_name() {
 	new_test_ext().execute_with(|| {
-		MockedWeightInfo::set_weight("invalid_name", Weight::MAX);
+		set_weight("invalid_name", Weight::MAX);
 	});
 }
 
@@ -268,14 +261,6 @@ fn enqueue_within_one_page_works() {
 			vec![(b"c".to_vec(), There), (b"d".to_vec(), Everywhere(1))]
 		);
 	});
-}
-
-fn msg<N: Get<u32>>(x: &'static str) -> BoundedSlice<u8, N> {
-	BoundedSlice::truncate_from(x.as_bytes())
-}
-
-fn vmsg(x: &'static str) -> Vec<u8> {
-	x.as_bytes().to_vec()
 }
 
 #[test]
@@ -407,6 +392,74 @@ fn reaping_overweight_fails_properly() {
 		// Still not reapable, since the number of stale pages is only 2.
 		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
 		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
+	});
+}
+
+#[test]
+fn service_page_item_bails() {
+	new_test_ext().execute_with(|| {
+		let (mut page, _) = full_page::<Test>();
+		let mut weight = WeightCounter::from_limit(10.into_weight());
+		let overweight_limit = 10.into_weight();
+		set_weight("service_page_item", 11.into_weight());
+
+		assert_eq!(
+			MessageQueue::service_page_item(
+				&MessageOrigin::Here,
+				&mut page,
+				&mut weight,
+				overweight_limit
+			),
+			PageExecutionStatus::Bailed
+		);
+	});
+}
+
+#[test]
+fn service_page_consumes_correct_weight() {
+	new_test_ext().execute_with(|| {
+		let mut page = PageOf::<Test>::from_message(b"weight=3", &MessageOrigin::Here.encode());
+		let mut weight = WeightCounter::from_limit(10.into_weight());
+		let overweight_limit = 0.into_weight();
+		set_weight("service_page_item", 2.into_weight());
+
+		assert_eq!(
+			MessageQueue::service_page_item(
+				&MessageOrigin::Here,
+				&mut page,
+				&mut weight,
+				overweight_limit
+			),
+			PageExecutionStatus::Partial
+		);
+		assert_eq!(weight.consumed, 5.into_weight());
+	});
+}
+
+/// Skips a permanent `Overweight` message and marks it as "unprocessed".
+#[test]
+fn service_page_skips_perm_overweight_message() {
+	new_test_ext().execute_with(|| {
+		let mut page = PageOf::<Test>::from_message(b"weight=6", &MessageOrigin::Here.encode());
+		let mut weight = WeightCounter::from_limit(7.into_weight());
+		let overweight_limit = 5.into_weight();
+		set_weight("service_page_item", 2.into_weight());
+
+		assert_eq!(
+			MessageQueue::service_page_item(
+				&MessageOrigin::Here,
+				&mut page,
+				&mut weight,
+				overweight_limit
+			),
+			PageExecutionStatus::Partial
+		);
+		assert_eq!(weight.consumed, 2.into_weight());
+		// Check that the message was skipped.
+		let (pos, processed, payload) = page.peek_index(0).unwrap();
+		assert_eq!(pos, 0);
+		assert_eq!(processed, false);
+		assert_eq!(payload, (MessageOrigin::Here, b"weight=6").encode());
 	});
 }
 
