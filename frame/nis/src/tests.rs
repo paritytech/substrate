@@ -462,7 +462,7 @@ fn enlargement_to_target_works() {
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (2, 80), (2, 80)]);
 
 		run_to_block(4);
-		// Two new gilts should have been issued to 2 & 3 for 40 each & duration of 3.
+		// Two new items should have been issued to 2 & 3 for 40 each & duration of 3.
 		assert_eq!(
 			Active::<Test>::get(0).unwrap(),
 			ActiveGilt {
@@ -504,7 +504,7 @@ fn enlargement_to_target_works() {
 		);
 
 		run_to_block(6);
-		// Two new gilts should have been issued to 1 & 2 for 40 each & duration of 2.
+		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
 			Active::<Test>::get(2).unwrap(),
 			ActiveGilt {
@@ -549,7 +549,7 @@ fn enlargement_to_target_works() {
 		assert_ok!(Gilt::set_target(RuntimeOrigin::signed(1), Perquintill::from_percent(60)));
 		run_to_block(10);
 
-		// Two new gilts should have been issued to 1 & 2 for 40 each & duration of 2.
+		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
 			Active::<Test>::get(4).unwrap(),
 			ActiveGilt {

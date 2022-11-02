@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Gilt Pallet
+//! # Non-Interactive Staking (NIS) Pallet
 //! A pallet allowing accounts to auction for being frozen and receive open-ended
 //! inflation-protection in return.
 //!
@@ -40,20 +40,20 @@
 //! Account may enqueue a balance with some number of `Period`s lock up, up to a maximum of
 //! `QueueCount`. The balance gets reserved. There's a minimum of `MinFreeze` to avoid dust.
 //!
-//! Until your bid is turned into an issued gilt you can retract it instantly and the funds are
+//! Until your bid is turned into an issued bond you can retract it instantly and the funds are
 //! unreserved.
 //!
-//! There's a target proportion of effective total issuance (i.e. accounting for existing gilts)
+//! There's a target proportion of effective total issuance (i.e. accounting for existing bonds)
 //! which the we attempt to have frozen at any one time. It will likely be gradually increased over
 //! time by governance.
 //!
-//! As the total funds frozen under gilts drops below `FrozenFraction` of the total effective
+//! As the total funds frozen under bonds drops below `FrozenFraction` of the total effective
 //! issuance, then bids are taken from queues, with the queue of the greatest period taking
 //! priority. If the item in the queue's locked amount is greater than the amount left to be
-//! frozen, then it is split up into multiple bids and becomes partially frozen under gilt.
+//! frozen, then it is split up into multiple bids and becomes partially frozen under bond.
 //!
 //! Once an account's balance is frozen, it remains frozen until the owner thaws the balance of the
-//! account. This may happen no earlier than queue's period after the point at which the gilt is
+//! account. This may happen no earlier than queue's period after the point at which the bond is
 //! issued.
 //!
 //! ## Suggested Values
@@ -115,7 +115,7 @@ pub mod pallet {
 			+ TypeInfo
 			+ MaxEncodedLen;
 
-		/// Origin required for setting the target proportion to be under gilt.
+		/// Origin required for setting the target proportion to be under bond.
 		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Unbalanced handler to account for funds created (in case of a higher total issuance over
@@ -127,7 +127,7 @@ pub mod pallet {
 		type Surplus: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
-		/// the issuance by which we inflate or deflate the gilt.
+		/// the issuance with which we determine the thawed value of a bond.
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
@@ -150,16 +150,16 @@ pub mod pallet {
 		#[pallet::constant]
 		type Period: Get<Self::BlockNumber>;
 
-		/// The minimum amount of funds that may be offered to freeze for a gilt. Note that this
-		/// does not actually limit the amount which may be frozen in a gilt since gilts may be
-		/// split up in order to satisfy the desired amount of funds under gilts.
+		/// The minimum amount of funds that may be offered to freeze for a bond. Note that this
+		/// does not actually limit the amount which may be frozen in a bond since bonds may be
+		/// split up in order to satisfy the desired amount of funds under bonds.
 		///
 		/// It should be at least big enough to ensure that there is no possible storage spam attack
 		/// or queue-filling attack.
 		#[pallet::constant]
 		type MinFreeze: Get<BalanceOf<Self>>;
 
-		/// The number of blocks between consecutive attempts to issue more gilts in an effort to
+		/// The number of blocks between consecutive attempts to issue more bonds in an effort to
 		/// get to the target amount to be frozen.
 		///
 		/// A larger value results in fewer storage hits each block, but a slower period to get to
@@ -167,9 +167,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type IntakePeriod: Get<Self::BlockNumber>;
 
-		/// The maximum amount of bids that can be turned into issued gilts each block. A larger
+		/// The maximum amount of bids that can become bonds each block. A larger
 		/// value here means less of the block available for transactions should there be a glut of
-		/// bids to make into gilts to reach the target.
+		/// bids to make into bonds to reach the target.
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
 
@@ -181,37 +181,37 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	/// A single bid on a gilt, an item of a *queue* in `Queues`.
+	/// A single bid on a bond, an item of a *queue* in `Queues`.
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct GiltBid<Balance, AccountId> {
+	pub struct Bid<Balance, AccountId> {
 		/// The amount bid.
 		pub amount: Balance,
 		/// The owner of the bid.
 		pub who: AccountId,
 	}
 
-	/// Information representing an active gilt.
+	/// Information representing an active bond.
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct ActiveGilt<Balance, AccountId, BlockNumber> {
-		/// The proportion of the effective total issuance (i.e. accounting for any eventual gilt
+	pub struct ActiveType<Balance, AccountId, BlockNumber> {
+		/// The proportion of the effective total issuance (i.e. accounting for any eventual bond
 		/// expansion or contraction that may eventually be claimed).
 		pub proportion: Perquintill,
-		/// The amount reserved under this gilt.
+		/// The amount reserved under this bond.
 		pub amount: Balance,
-		/// The account to whom this gilt belongs.
+		/// The account to whom this bond belongs.
 		pub who: AccountId,
-		/// The time after which this gilt can be redeemed for the proportional amount of balance.
+		/// The time after which this bond can be redeemed for the proportional amount of balance.
 		pub expiry: BlockNumber,
 	}
 
-	/// An index for a gilt.
+	/// An index for a bond.
 	pub type ActiveIndex = u32;
 
-	/// Overall information package on the active gilts.
+	/// Overall information package on the active bonds.
 	///
 	/// The way of determining the net issuance (i.e. after factoring in all maturing frozen funds)
 	/// is:
@@ -222,14 +222,14 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct ActiveGiltsTotal<Balance> {
-		/// The total amount of funds held in reserve for all active gilts.
+	pub struct ActiveTotalType<Balance> {
+		/// The total amount of funds held in reserve for all active bonds.
 		pub frozen: Balance,
 		/// The proportion of funds that the `frozen` balance represents to total issuance.
 		pub proportion: Perquintill,
-		/// The total number of gilts issued so far.
+		/// The total number of bonds issued so far.
 		pub index: ActiveIndex,
-		/// The target proportion of gilts within total issuance.
+		/// The target proportion of bonds within total issuance.
 		pub target: Perquintill,
 	}
 
@@ -242,27 +242,27 @@ pub mod pallet {
 	pub type QueueTotals<T: Config> =
 		StorageValue<_, BoundedVec<(u32, BalanceOf<T>), T::QueueCount>, ValueQuery>;
 
-	/// The queues of bids ready to become gilts. Indexed by duration (in `Period`s).
+	/// The queues of bids ready to become bonds. Indexed by duration (in `Period`s).
 	#[pallet::storage]
 	pub type Queues<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		u32,
-		BoundedVec<GiltBid<BalanceOf<T>, T::AccountId>, T::MaxQueueLen>,
+		BoundedVec<Bid<BalanceOf<T>, T::AccountId>, T::MaxQueueLen>,
 		ValueQuery,
 	>;
 
-	/// Information relating to the gilts currently active.
+	/// Information relating to the bonds currently active.
 	#[pallet::storage]
-	pub type ActiveTotal<T> = StorageValue<_, ActiveGiltsTotal<BalanceOf<T>>, ValueQuery>;
+	pub type ActiveTotal<T> = StorageValue<_, ActiveTotalType<BalanceOf<T>>, ValueQuery>;
 
-	/// The currently active gilts, indexed according to the order of creation.
+	/// The currently active bonds, indexed according to the order of creation.
 	#[pallet::storage]
 	pub type Active<T> = StorageMap<
 		_,
 		Blake2_128Concat,
 		ActiveIndex,
-		ActiveGilt<
+		ActiveType<
 			BalanceOf<T>,
 			<T as frame_system::Config>::AccountId,
 			<T as frame_system::Config>::BlockNumber,
@@ -290,17 +290,17 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A bid was successfully placed.
 		BidPlaced { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
-		/// A bid was successfully removed (before being accepted as a gilt).
+		/// A bid was successfully removed (before being accepted).
 		BidRetracted { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
-		/// A bid was accepted as a gilt. The balance may not be released until expiry.
-		GiltIssued {
+		/// A bid was accepted. The balance may not be released until expiry.
+		Issued {
 			index: ActiveIndex,
 			expiry: T::BlockNumber,
 			who: T::AccountId,
 			amount: BalanceOf<T>,
 		},
-		/// An expired gilt has been thawed.
-		GiltThawed {
+		/// An expired bond has been thawed.
+		Thawed {
 			index: ActiveIndex,
 			who: T::AccountId,
 			original_amount: BalanceOf<T>,
@@ -319,11 +319,11 @@ pub mod pallet {
 		/// The queue for the bid's duration is full and the amount bid is too low to get in
 		/// through replacing an existing bid.
 		BidTooLow,
-		/// Gilt index is unknown.
+		/// Bond index is unknown.
 		Unknown,
-		/// Not the owner of the gilt.
+		/// Not the owner of the bond.
 		NotOwner,
-		/// Gilt not yet at expiry date.
+		/// Bond not yet at expiry date.
 		NotExpired,
 		/// The given bid for retraction is not found.
 		NotFound,
@@ -342,15 +342,14 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Place a bid for a gilt to be issued.
+		/// Place a bid for a bond.
 		///
 		/// Origin must be Signed, and account must have at least `amount` in free balance.
 		///
 		/// - `amount`: The amount of the bid; these funds will be reserved. If the bid is
-		/// successfully elevated into an issued gilt, then these funds will continue to be
-		/// reserved until the gilt expires. Must be at least `MinFreeze`.
-		/// - `duration`: The number of periods for which the funds will be locked if the gilt is
-		/// issued. It will expire only after this period has elapsed after the point of issuance.
+		/// successfully elevated into a bond, then these funds will continue to be
+		/// reserved until the bond thaws. Must be at least `MinFreeze`.
+		/// - `duration`: The number of periods before which the bond may be thawed.
 		/// Must be greater than 1 and no more than `QueueCount`.
 		///
 		/// Complexities:
@@ -376,7 +375,7 @@ pub mod pallet {
 					T::Currency::reserve(&who, amount)?;
 
 					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
-					let mut bid = GiltBid { amount, who: who.clone() };
+					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
 						T::Currency::unreserve(&bid.who, bid.amount);
@@ -423,7 +422,7 @@ pub mod pallet {
 			let queue_index = duration.checked_sub(1).ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
 
-			let bid = GiltBid { amount, who };
+			let bid = Bid { amount, who };
 			let new_len = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
 				let pos = q.iter().position(|i| i == &bid).ok_or(Error::<T>::NotFound)?;
 				q.remove(pos);
@@ -442,11 +441,11 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set target proportion of gilt-funds.
+		/// Set target proportion of bonded-funds.
 		///
 		/// Origin must be `AdminOrigin`.
 		///
-		/// - `target`: The target proportion of effective issued funds that should be under gilts
+		/// - `target`: The target proportion of effective issued funds that should be in bonds
 		/// at any one time.
 		#[pallet::weight(T::WeightInfo::set_target())]
 		pub fn set_target(
@@ -458,13 +457,13 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Remove an active but expired gilt. Reserved funds under gilt are freed and balance is
-		/// adjusted to ensure that the funds grow or shrink to maintain the equivalent proportion
-		/// of effective total issued funds.
+		/// Remove an active but expired bond. Reserved funds under bond are freed and balance is
+		/// adjusted to ensure that the newly freed amount is equivalent to the original amount in
+		/// terms of the proportion of effective total issued funds.
 		///
-		/// Origin must be Signed and the account must be the owner of the gilt of the given index.
+		/// Origin must be Signed and the account must be the owner of the bond of the given index.
 		///
-		/// - `index`: The index of the gilt to be thawed.
+		/// - `index`: The index of the bond to be thawed.
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
@@ -473,11 +472,11 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 
 			// Look for `index`
-			let gilt = Active::<T>::get(index).ok_or(Error::<T>::Unknown)?;
+			let bond = Active::<T>::get(index).ok_or(Error::<T>::Unknown)?;
 			// If found, check the owner is `who`.
-			ensure!(gilt.who == who, Error::<T>::NotOwner);
+			ensure!(bond.who == who, Error::<T>::NotOwner);
 			let now = frame_system::Pallet::<T>::block_number();
-			ensure!(now >= gilt.expiry, Error::<T>::NotExpired);
+			ensure!(now >= bond.expiry, Error::<T>::NotExpired);
 			// Remove it
 			Active::<T>::remove(index);
 
@@ -485,42 +484,42 @@ pub mod pallet {
 			let total_issuance =
 				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
 			ActiveTotal::<T>::mutate(|totals| {
-				let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
+				let nonbond_issuance = total_issuance.saturating_sub(totals.frozen);
 				let effective_issuance =
-					totals.proportion.left_from_one().saturating_reciprocal_mul(nongilt_issuance);
-				let gilt_value = gilt.proportion * effective_issuance;
+					totals.proportion.left_from_one().saturating_reciprocal_mul(nonbond_issuance);
+				let bond_value = bond.proportion * effective_issuance;
 
-				totals.frozen = totals.frozen.saturating_sub(gilt.amount);
-				totals.proportion = totals.proportion.saturating_sub(gilt.proportion);
+				totals.frozen = totals.frozen.saturating_sub(bond.amount);
+				totals.proportion = totals.proportion.saturating_sub(bond.proportion);
 
 				// Remove or mint the additional to the amount using `Deficit`/`Surplus`.
-				if gilt_value > gilt.amount {
+				if bond_value > bond.amount {
 					// Unreserve full amount.
-					T::Currency::unreserve(&gilt.who, gilt.amount);
-					let amount = gilt_value - gilt.amount;
-					let deficit = T::Currency::deposit_creating(&gilt.who, amount);
+					T::Currency::unreserve(&bond.who, bond.amount);
+					let amount = bond_value - bond.amount;
+					let deficit = T::Currency::deposit_creating(&bond.who, amount);
 					T::Deficit::on_unbalanced(deficit);
 				} else {
-					if gilt_value < gilt.amount {
-						// We take anything reserved beyond the gilt's final value.
-						let rest = gilt.amount - gilt_value;
+					if bond_value < bond.amount {
+						// We take anything reserved beyond the bond's final value.
+						let rest = bond.amount - bond_value;
 						// `slash` might seem a little aggressive, but it's the only way to do it
 						// in case it's locked into the staking system.
-						let surplus = T::Currency::slash_reserved(&gilt.who, rest).0;
+						let surplus = T::Currency::slash_reserved(&bond.who, rest).0;
 						T::Surplus::on_unbalanced(surplus);
 					}
 					// Unreserve only its new value (less than the amount reserved). Everything
 					// should add up, but (defensive) in case it doesn't, unreserve takes lower
 					// priority over the funds.
-					let err_amt = T::Currency::unreserve(&gilt.who, gilt_value);
+					let err_amt = T::Currency::unreserve(&bond.who, bond_value);
 					debug_assert!(err_amt.is_zero());
 				}
 
-				let e = Event::GiltThawed {
+				let e = Event::Thawed {
 					index,
-					who: gilt.who,
-					original_amount: gilt.amount,
-					additional_amount: gilt_value,
+					who: bond.who,
+					original_amount: bond.amount,
+					additional_amount: bond_value,
 				};
 				Self::deposit_event(e);
 			});
@@ -531,35 +530,35 @@ pub mod pallet {
 
 	/// Issuance information returned by `issuance()`.
 	pub struct IssuanceInfo<Balance> {
-		/// The balance held in reserve over all active gilts.
+		/// The balance held in reserve over all active bonds.
 		pub reserved: Balance,
-		/// The issuance not held in reserve for active gilts. Together with `reserved` this sums
+		/// The issuance not held in reserve for active bonds. Together with `reserved` this sums
 		/// to `Currency::total_issuance`.
-		pub non_gilt: Balance,
+		pub non_bond: Balance,
 		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
 		/// and could be less than `reserved` (though in most cases should be greater).
 		pub effective: Balance,
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Get the target amount of Gilts that we're aiming for.
+		/// Get the target amount of bonds that we're aiming for.
 		pub fn target() -> Perquintill {
 			ActiveTotal::<T>::get().target
 		}
 
-		/// Returns information on the issuance of gilts.
+		/// Returns information on the issuance of bonds.
 		pub fn issuance() -> IssuanceInfo<BalanceOf<T>> {
 			let totals = ActiveTotal::<T>::get();
 
 			let total_issuance = T::Currency::total_issuance();
-			let non_gilt = total_issuance.saturating_sub(totals.frozen);
-			let effective = totals.proportion.left_from_one().saturating_reciprocal_mul(non_gilt);
+			let non_bond = total_issuance.saturating_sub(totals.frozen);
+			let effective = totals.proportion.left_from_one().saturating_reciprocal_mul(non_bond);
 
-			IssuanceInfo { reserved: totals.frozen, non_gilt, effective }
+			IssuanceInfo { reserved: totals.frozen, non_bond, effective }
 		}
 
-		/// Attempt to enlarge our gilt-set from bids in order to satisfy our desired target amount
-		/// of funds frozen into gilts.
+		/// Attempt to enlarge our bond-set from bids in order to satisfy our desired target amount
+		/// of funds frozen into bonds.
 		pub fn pursue_target(max_bids: u32) -> Weight {
 			let totals = ActiveTotal::<T>::get();
 			if totals.proportion < totals.target {
@@ -567,9 +566,9 @@ pub mod pallet {
 
 				let total_issuance =
 					T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
-				let nongilt_issuance = total_issuance.saturating_sub(totals.frozen);
+				let nonbond_issuance = total_issuance.saturating_sub(totals.frozen);
 				let effective_issuance =
-					totals.proportion.left_from_one().saturating_reciprocal_mul(nongilt_issuance);
+					totals.proportion.left_from_one().saturating_reciprocal_mul(nonbond_issuance);
 				let intake = missing * effective_issuance;
 
 				let (bids_taken, queues_hit) = Self::enlarge(intake, max_bids);
@@ -608,7 +607,7 @@ pub mod pallet {
 								if remaining < bid.amount {
 									let overflow = bid.amount - remaining;
 									bid.amount = remaining;
-									q.try_push(GiltBid { amount: overflow, who: bid.who.clone() })
+									q.try_push(Bid { amount: overflow, who: bid.who.clone() })
 										.expect("just popped, so there must be space. qed");
 								}
 								let amount = bid.amount;
@@ -620,12 +619,12 @@ pub mod pallet {
 									qs[queue_index].1.defensive_saturating_sub(bid.amount);
 
 								// Now to activate the bid...
-								let nongilt_issuance =
+								let nonbond_issuance =
 									total_issuance.defensive_saturating_sub(totals.frozen);
 								let effective_issuance = totals
 									.proportion
 									.left_from_one()
-									.saturating_reciprocal_mul(nongilt_issuance);
+									.saturating_reciprocal_mul(nonbond_issuance);
 								let n = amount;
 								let d = effective_issuance;
 								let proportion = Perquintill::from_rational(n, d);
@@ -636,10 +635,10 @@ pub mod pallet {
 									totals.proportion.defensive_saturating_add(proportion);
 								totals.index += 1;
 								let e =
-									Event::GiltIssued { index, expiry, who: who.clone(), amount };
+									Event::Issued { index, expiry, who: who.clone(), amount };
 								Self::deposit_event(e);
-								let gilt = ActiveGilt { amount, proportion, who, expiry };
-								Active::<T>::insert(index, gilt);
+								let bond = ActiveType { amount, proportion, who, expiry };
+								Active::<T>::insert(index, bond);
 
 								bids_taken += 1;
 

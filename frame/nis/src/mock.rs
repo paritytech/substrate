@@ -17,7 +17,7 @@
 
 //! Test environment for Gilt pallet.
 
-use crate as pallet_gilt;
+use crate as pallet_nis;
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
 		Balances: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Gilt: pallet_gilt::{Pallet, Call, Config, Storage, Event<T>},
+		Gilt: pallet_nis::{Pallet, Call, Config, Storage, Event<T>},
 	}
 );
 
@@ -91,7 +91,7 @@ ord_parameter_types! {
 	pub const One: u64 = 1;
 }
 
-impl pallet_gilt::Config for Test {
+impl pallet_nis::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;

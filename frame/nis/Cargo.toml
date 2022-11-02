@@ -1,5 +1,5 @@
 [package]
-name = "pallet-gilt"
+name = "pallet-nis"
 version = "4.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
