@@ -21,7 +21,7 @@ use crate::{self as pallet_nis, NoFungibleReceipt, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize, StorageMapShim},
+	traits::{ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize, StorageMapShim}, PalletId,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -101,7 +101,9 @@ impl pallet_balances::Config<Instance2> for Test {
 
 parameter_types! {
 	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
+	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
 }
+
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
@@ -124,6 +126,7 @@ impl pallet_nis::Config for Test {
 	type MinFreeze = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;
 	type MaxIntakeBids = ConstU32<2>;
+	type PalletId = NisPalletId;
 }
 
 // This function basically just builds a genesis storage key/value store according to

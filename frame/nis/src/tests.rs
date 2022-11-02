@@ -79,7 +79,7 @@ fn place_bid_works() {
 			Error::<Test>::DurationTooBig
 		);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 2));
-		assert_eq!(Balances::reserved_balance(1), 10);
+		assert_eq!(pot(), 10);
 		assert_eq!(Queues::<Test>::get(2), vec![Bid { amount: 10, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (1, 10), (0, 0)]);
 	});
@@ -94,10 +94,10 @@ fn place_bid_queuing_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 5, 2));
 		assert_noop!(Nis::place_bid(RuntimeOrigin::signed(1), 5, 2), Error::<Test>::BidTooLow);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 15, 2));
-		assert_eq!(Balances::reserved_balance(1), 45);
+		assert_eq!(pot(), 45);
 
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 25, 2));
-		assert_eq!(Balances::reserved_balance(1), 60);
+		assert_eq!(pot(), 60);
 		assert_noop!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 2), Error::<Test>::BidTooLow);
 		assert_eq!(
 			Queues::<Test>::get(2),
@@ -133,8 +133,7 @@ fn multiple_place_bids_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 3));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 10, 2));
 
-		assert_eq!(Balances::reserved_balance(1), 40);
-		assert_eq!(Balances::reserved_balance(2), 10);
+		assert_eq!(pot(), 50);
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 10, who: 1 },]);
 		assert_eq!(
 			Queues::<Test>::get(2),
@@ -157,7 +156,7 @@ fn retract_single_item_queue_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 2));
 		assert_ok!(Nis::retract_bid(RuntimeOrigin::signed(1), 10, 1));
 
-		assert_eq!(Balances::reserved_balance(1), 10);
+		assert_eq!(pot(), 10);
 		assert_eq!(Queues::<Test>::get(1), vec![]);
 		assert_eq!(Queues::<Test>::get(2), vec![Bid { amount: 10, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (1, 10), (0, 0)]);
@@ -174,8 +173,7 @@ fn retract_with_other_and_duplicate_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 10, 2));
 
 		assert_ok!(Nis::retract_bid(RuntimeOrigin::signed(1), 10, 2));
-		assert_eq!(Balances::reserved_balance(1), 20);
-		assert_eq!(Balances::reserved_balance(2), 10);
+		assert_eq!(pot(), 30);
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 10, who: 1 },]);
 		assert_eq!(
 			Queues::<Test>::get(2),
@@ -197,6 +195,10 @@ fn retract_non_existent_item_fails() {
 	});
 }
 
+fn pot() -> u64 {
+	Balances::free_balance(&Nis::account_id())
+}
+
 #[test]
 fn basic_enlarge_works() {
 	new_test_ext().execute_with(|| {
@@ -206,8 +208,7 @@ fn basic_enlarge_works() {
 		Nis::enlarge(40, 2);
 
 		// Takes 2/2, then stopped because it reaches its max amount
-		assert_eq!(Balances::reserved_balance(1), 40);
-		assert_eq!(Balances::reserved_balance(2), 40);
+		assert_eq!(pot(), 80);
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 40, who: 1 }]);
 		assert_eq!(Queues::<Test>::get(2), vec![]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);

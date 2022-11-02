@@ -90,12 +90,13 @@ pub mod pallet {
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{Currency, Defensive, DefensiveSaturating, OnUnbalanced, ReservableCurrency,
-			fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate}
-		},
+			fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
+			ExistenceRequirement::AllowDeath,
+		}, PalletId,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
-	use sp_runtime::traits::{Saturating, Zero, Convert};
+	use sp_runtime::traits::{Saturating, Zero, Convert, AccountIdConversion};
 	use sp_std::prelude::*;
 
 	type BalanceOf<T> =
@@ -216,6 +217,10 @@ pub mod pallet {
 		/// bids to make into bonds to reach the target.
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
+
+		/// The treasury's pallet id, used for deriving its sovereign account ID.
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
 	}
 
 	#[pallet::pallet]
@@ -412,14 +417,15 @@ pub mod pallet {
 				duration,
 				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
 					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
+					// ensure!(have_reserved(q[0].amount));
 					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
-					T::Currency::reserve(&who, amount)?;
+					T::Currency::transfer(&who, &Self::account_id(), amount, AllowDeath)?;
 
 					// queue is <Ordered: Lowest ... Highest><Fifo: Last ... First>
 					let mut bid = Bid { amount, who: who.clone() };
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
-						T::Currency::unreserve(&bid.who, bid.amount);
+						let _ = T::Currency::transfer(&Self::account_id(), &bid.who, bid.amount, AllowDeath);
 						(0, amount - bid.amount)
 					} else {
 						q.try_insert(0, bid).expect("verified queue was not full above. qed.");
@@ -462,6 +468,7 @@ pub mod pallet {
 			let queue_count = T::QueueCount::get() as usize;
 			let queue_index = duration.checked_sub(1).ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
+			// TODO: ensure!(have_in_reserve(amount))
 
 			let bid = Bid { amount, who };
 			let new_len = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
@@ -476,7 +483,7 @@ pub mod pallet {
 				qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
 			});
 
-			T::Currency::unreserve(&bid.who, bid.amount);
+			let _ = T::Currency::transfer(&Self::account_id(), &bid.who, bid.amount, AllowDeath);
 			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(().into())
@@ -540,7 +547,7 @@ pub mod pallet {
 				// Remove or mint the additional to the amount using `Deficit`/`Surplus`.
 				if bond_value > bond.amount {
 					// Unreserve full amount.
-					T::Currency::unreserve(&bond.who, bond.amount);
+					let _ = T::Currency::transfer(&Self::account_id(), &bond.who, bond.amount, AllowDeath).defensive();
 					let amount = bond_value - bond.amount;
 					let deficit = T::Currency::deposit_creating(&bond.who, amount);
 					T::Deficit::on_unbalanced(deficit);
@@ -550,14 +557,13 @@ pub mod pallet {
 						let rest = bond.amount - bond_value;
 						// `slash` might seem a little aggressive, but it's the only way to do it
 						// in case it's locked into the staking system.
-						let surplus = T::Currency::slash_reserved(&bond.who, rest).0;
+						let surplus = T::Currency::slash(&Self::account_id(), rest).0;
 						T::Surplus::on_unbalanced(surplus);
 					}
 					// Unreserve only its new value (less than the amount reserved). Everything
 					// should add up, but (defensive) in case it doesn't, unreserve takes lower
 					// priority over the funds.
-					let err_amt = T::Currency::unreserve(&bond.who, bond_value);
-					debug_assert!(err_amt.is_zero());
+					let _ = T::Currency::transfer(&Self::account_id(), &bond.who, bond_value, AllowDeath).defensive();
 				}
 
 				let e = Event::Thawed {
@@ -589,6 +595,14 @@ pub mod pallet {
 		/// Get the target amount of bonds that we're aiming for.
 		pub fn target() -> Perquintill {
 			ActiveTotal::<T>::get().target
+		}
+
+		/// The account ID of the reserves.
+		///
+		/// This actually does computation. If you need to keep using it, then make sure you cache the
+		/// value and only call this once.
+		pub fn account_id() -> T::AccountId {
+			T::PalletId::get().into_account_truncating()
 		}
 
 		/// Returns information on the issuance of bonds.
@@ -656,6 +670,7 @@ pub mod pallet {
 										.expect("just popped, so there must be space. qed");
 								}
 								let amount = bid.amount;
+
 								// Can never overflow due to block above.
 								remaining -= amount;
 								// Should never underflow since it should track the total of the
