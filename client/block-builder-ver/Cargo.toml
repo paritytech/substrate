@@ -14,6 +14,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+aquamarine = "0.1.12"
 log = "0.4.8"
 sp-state-machine = { version = "0.12.0", path = "../../primitives/state-machine" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }

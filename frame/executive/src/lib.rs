@@ -116,6 +116,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use aquamarine::aquamarine;
+
 use crate::traits::AtLeast32BitUnsigned;
 use codec::{Codec, Decode, Encode};
 use frame_support::{
@@ -142,6 +144,7 @@ pub type CheckedOf<E, C> = <E as Checkable<C>>::Checked;
 pub type CallOf<E, C> = <CheckedOf<E, C> as Applyable>::Call;
 pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 
+#[cfg_attr(doc, aquamarine)]
 /// Main entry point for certain runtime actions as e.g. `execute_block`.
 ///
 /// Generic parameters:
@@ -161,16 +164,17 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 ///   impl)
 ///
 ///
+/// # VER block execution
 ///	Upon VER block execution:
 ///	- (if any) previous block extrinsics are executed, they are fetched from a queue that is
-///	persisted in runtime storage. Block header has dedicated field `count`, it is used for notifying
-///	how many txs were fetched and executed by collator when the block was build. Every network
+///	persisted in runtime storage [`frame_system::Pallet::StorageQueue`]. Block header has dedicated field `count`, it is used for notifying
+///	how many txs were fetched and executed by collator when the block was build. That information
+///	can be used to fetch specific amount of txs at once during block execution process. Every network
 ///	participant needs to fetch and execute exactly same amount of txs from the storage queue to
-///	reach exactly the same state as block author. (its part of block validaiton)
-///	builder
+///	reach exactly the same state as block author.
 ///	- (if any) new txs that were just collected from transaction pool are persisted into the storage
 ///	queue. Dedicated inherent [`frame_system::Pallet::enqueue_txs`] accepts list of encoded txs as
-///	argument.
+///	argument, then txs are pushed into the storage queue [`frame_system::Pallet::StorageQueue`]
 ///
 ///
 ///	VER block execution includes number of steps that are not present in origin impl:
@@ -178,6 +182,25 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 ///	- enqueued txs size & weight limits validation
 ///	- validation of txs listed in block body
 ///	- malicious collator prevention (decoding txs)
+///
+/// ```mermaid
+/// flowchart TD
+///     A[Start] --> B{Is new shuffling seed valid}
+///     B -- Yes --> C[Store shufling seed in runtime storage]
+///     C --> D{Fetch Header::count<br> txs from storage queue}
+///     D -- Fail --> E
+///     D -- OK --> F{Number of executed txs}
+///     F -- >0 --> G{StorageQeueu::is_empty<br> or Header::count >0}
+///     F -- 0 --> H
+///     G -- No --> E
+///     G -- Yes --> H{extrinsics from block body<br> == txs popped from<br> StorageQueue }
+///     H -- No --> E
+///     H -- Yes --> I{Verify that there are no new<br> enqueued txs if collator didnt<br> execute any previous ones}
+///     I -- Fail --> E
+///     I -- Ok --> J{validate if local state == Header::state_root}
+///     J -- OK --> K[Accept block]
+///     B -- No ----> E[Reject block]
+/// ```
 ///
 pub struct Executive<
 	System,

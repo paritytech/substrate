@@ -28,15 +28,8 @@ use aquamarine::aquamarine;
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// # Block building process
 ///
-/// Actors:
-///
-/// - [cumulus_client_collator::Collator](https://storage.googleapis.com/mangata-docs-node/cumulus_client_collator/struct.Collator.html)
-/// - [cumulus_client_consenus_common::ParachainConsensus](https://storage.googleapis.com/mangata-docs-node/cumulus_client_consensus_common/trait.ParachainConsensus.html)
-/// - [cumulus_client_consenus_aura::AuraConsensus](https://storage.googleapis.com/mangata-docs-node/cumulus_client_consensus_aura/struct.AuraConsensus.html)
-/// - [sc_consensus_slots::SimpleSlotWorker](https://storage.googleapis.com/mangata-docs-node/sc_consensus_slots/trait.SimpleSlotWorker.html)
-/// - `sc_consensus_aura::AuraWorker` - private struct
-/// - [sc_basic_authorship_ver::Proposer](https://storage.googleapis.com/mangata-docs-node/sc_basic_authorship_ver/struct.Proposer.html)
-///
+/// Block production is initiated by `Collator` impl comming from `cumulus` repository. Whole
+/// pipline looks more & less as on diagram below
 ///
 /// ```mermaid
 /// sequenceDiagram
@@ -53,6 +46,17 @@ use aquamarine::aquamarine;
 ///        SimpleSlotWorker-x Collator: x
 ///    end
 /// ```
+///
+/// see references for particular actors:
+///
+/// - [cumulus_client_collator::Collator](https://storage.googleapis.com/mangata-docs-node/cumulus_client_collator/struct.Collator.html)
+/// - [cumulus_client_consenus_common::ParachainConsensus](https://storage.googleapis.com/mangata-docs-node/cumulus_client_consensus_common/trait.ParachainConsensus.html)
+/// - [cumulus_client_consenus_aura::AuraConsensus](https://storage.googleapis.com/mangata-docs-node/cumulus_client_consensus_aura/struct.AuraConsensus.html)
+/// - [sc_consensus_slots::SimpleSlotWorker](https://storage.googleapis.com/mangata-docs-node/sc_consensus_slots/trait.SimpleSlotWorker.html)
+/// - `sc_consensus_aura::AuraWorker` - private struct
+/// - [sc_basic_authorship_ver::Proposer](https://storage.googleapis.com/mangata-docs-node/sc_basic_authorship_ver/struct.Proposer.html)
+///
+///
 ///
 /// # Block production logic
 ///

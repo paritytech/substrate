@@ -20,6 +20,7 @@
 
 // FIXME #1021 move this into sp-consensus
 
+#[cfg(doc)]
 use aquamarine::aquamarine;
 use codec::{Decode, Encode};
 use futures::{
