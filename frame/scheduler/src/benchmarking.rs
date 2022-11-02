@@ -123,7 +123,7 @@ fn make_origin<T: Config>(signed: bool) -> <T as Config>::PalletsOrigin {
 }
 
 fn dummy_counter() -> WeightCounter {
-	WeightCounter { used: Weight::zero(), limit: Weight::MAX }
+	WeightCounter::from_limit(Weight::MAX)
 }
 
 benchmarks! {
@@ -155,7 +155,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, false, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightCounter::from_limit(Zero::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -169,7 +169,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, false, false, Some(s), 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightCounter::from_limit(Zero::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -181,7 +181,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(false, true, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightCounter::from_limit(Zero::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -193,7 +193,7 @@ benchmarks! {
 		let now = BLOCK_NUMBER.into();
 		let task = make_task::<T>(true, false, false, None, 0);
 		// prevent any tasks from actually being executed as we only want the surrounding weight.
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::zero() };
+		let mut counter = WeightCounter::from_limit(Zero::zero());
 	}: {
 		let result = Scheduler::<T>::service_task(&mut counter, now, now, 0, true, task);
 	} verify {
@@ -201,7 +201,7 @@ benchmarks! {
 
 	// `execute_dispatch` when the origin is `Signed`, not counting the dispatable's weight.
 	execute_dispatch_signed {
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::MAX };
+		let mut counter = WeightCounter::from_limit(Weight::MAX);
 		let origin = make_origin::<T>(true);
 		let call = T::Preimages::realize(&make_call::<T>(None)).unwrap().0;
 	}: {
@@ -212,7 +212,7 @@ benchmarks! {
 
 	// `execute_dispatch` when the origin is not `Signed`, not counting the dispatable's weight.
 	execute_dispatch_unsigned {
-		let mut counter = WeightCounter { used: Weight::zero(), limit: Weight::MAX };
+		let mut counter = WeightCounter::from_limit(Weight::MAX);
 		let origin = make_origin::<T>(false);
 		let call = T::Preimages::realize(&make_call::<T>(None)).unwrap().0;
 	}: {

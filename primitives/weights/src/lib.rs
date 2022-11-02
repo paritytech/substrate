@@ -235,6 +235,10 @@ impl WeightCounter {
 		Self { consumed: Weight::zero(), limit }
 	}
 
+	pub fn unlimited() -> Self {
+		Self { consumed: Weight::zero(), limit: Weight::MAX }
+	}
+
 	/// The remaining weight that can be consumed.
 	pub fn remaining(&self) -> Weight {
 		self.limit.saturating_sub(self.consumed)
