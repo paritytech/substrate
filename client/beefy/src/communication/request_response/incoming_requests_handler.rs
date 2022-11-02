@@ -149,18 +149,18 @@ where
 	fn handle_request(&self, request: IncomingRequest<B>) -> Result<(), Error> {
 		// TODO (issue #12293): validate `request` and change peer reputation for invalid requests.
 
-		let maybe_encoded_proof =
-			match self.client.block_hash(request.payload.begin).map_err(Error::Client)? {
-				Some(hash) => {
-					self.client
-						.justifications(&hash)
-						.map_err(Error::Client)?
-						.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
-						// No BEEFY justification present.
-						.ok_or(())
-				},
-				None => Err(()),
-			};
+		let maybe_encoded_proof = if let Some(hash) =
+			self.client.block_hash(request.payload.begin).map_err(Error::Client)?
+		{
+			self.client
+				.justifications(&hash)
+				.map_err(Error::Client)?
+				.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
+				// No BEEFY justification present.
+				.ok_or(())
+		} else {
+			Err(())
+		};
 
 		request
 			.pending_response
