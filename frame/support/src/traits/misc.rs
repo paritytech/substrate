@@ -409,8 +409,7 @@ where
 
 /// Defensively checks the minimum between two values.
 pub trait DefensiveMin<T> {
-	/// Defensively checks the minimum between two values
-	/// or if the two values are the same.
+	/// Defensively checks the minimum between two values or if the two values are the same.
 	///
 	/// # Example
 	///
@@ -452,8 +451,7 @@ where
 
 /// Defensively checks the maximum between two values.
 pub trait DefensiveMax<T> {
-	/// Defensively checks the maximum between two values
-	/// or if the two values are the same.
+	/// Defensively checks the maximum between two values or if the two values are the same.
 	///
 	/// # Example
 	///
