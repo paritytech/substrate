@@ -24,7 +24,7 @@ use frame_support::{
 	assert_ok, ord_parameter_types, parameter_types,
 	traits::{
 		ConstU32, ConstU64, Contains, EqualPrivilegeOnly, OnInitialize, OriginTrait, Polling,
-		PreimageRecipient, SortedMembers,
+		SortedMembers,
 	},
 	weights::Weight,
 };
@@ -32,7 +32,7 @@ use frame_system::{EnsureRoot, EnsureSignedBy};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
-	traits::{BlakeTwo256, Hash, IdentityLookup},
+	traits::{BlakeTwo256, IdentityLookup},
 	DispatchResult, Perbill,
 };
 
@@ -97,7 +97,6 @@ impl pallet_preimage::Config for Test {
 	type WeightInfo = ();
 	type Currency = Balances;
 	type ManagerOrigin = EnsureRoot<u64>;
-	type MaxSize = ConstU32<4096>;
 	type BaseDeposit = ();
 	type ByteDeposit = ();
 }
@@ -111,8 +110,7 @@ impl pallet_scheduler::Config for Test {
 	type MaxScheduledPerBlock = ConstU32<100>;
 	type WeightInfo = ();
 	type OriginPrivilegeCmp = EqualPrivilegeOnly;
-	type PreimageProvider = Preimage;
-	type NoPreimagePostponement = ConstU64<10>;
+	type Preimages = Preimage;
 }
 impl pallet_balances::Config for Test {
 	type MaxReserves = ();
@@ -229,6 +227,7 @@ impl Config for Test {
 	type UndecidingTimeout = ConstU64<20>;
 	type AlarmInterval = AlarmInterval;
 	type Tracks = TestTracksInfo;
+	type Preimages = Preimage;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -306,14 +305,13 @@ pub fn set_balance_proposal(value: u64) -> Vec<u8> {
 	.encode()
 }
 
-pub fn set_balance_proposal_hash(value: u64) -> H256 {
+pub fn set_balance_proposal_bounded(value: u64) -> BoundedCallOf<Test, ()> {
 	let c = RuntimeCall::Balances(pallet_balances::Call::set_balance {
 		who: 42,
 		new_free: value,
 		new_reserved: 0,
 	});
-	<Preimage as PreimageRecipient<_>>::note_preimage(c.encode().try_into().unwrap());
-	BlakeTwo256::hash_of(&c)
+	<Preimage as StorePreimage>::bound(c).unwrap()
 }
 
 #[allow(dead_code)]
@@ -321,7 +319,7 @@ pub fn propose_set_balance(who: u64, value: u64, delay: u64) -> DispatchResult {
 	Referenda::submit(
 		RuntimeOrigin::signed(who),
 		Box::new(frame_system::RawOrigin::Root.into()),
-		set_balance_proposal_hash(value),
+		set_balance_proposal_bounded(value),
 		DispatchTime::After(delay),
 	)
 }
@@ -449,7 +447,7 @@ impl RefState {
 		assert_ok!(Referenda::submit(
 			RuntimeOrigin::signed(1),
 			Box::new(frame_support::dispatch::RawOrigin::Root.into()),
-			set_balance_proposal_hash(1),
+			set_balance_proposal_bounded(1),
 			DispatchTime::At(10),
 		));
 		assert_ok!(Referenda::place_decision_deposit(RuntimeOrigin::signed(2), 0));

@@ -193,7 +193,6 @@ where
 					fields: BlockAttributes::HEADER |
 						BlockAttributes::BODY | BlockAttributes::JUSTIFICATION,
 					from: FromBlock::Hash(header.hash()),
-					to: Some(header.hash()),
 					direction: Direction::Ascending,
 					max: Some(1),
 				};
