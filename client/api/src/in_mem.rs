@@ -405,15 +405,14 @@ impl<Block: BlockT> HeaderMetadata<Block> for Blockchain<Block> {
 impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn body(
 		&self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		Ok(self.id(id).and_then(|hash| {
-			self.storage
-				.read()
-				.blocks
-				.get(&hash)
-				.and_then(|b| b.extrinsics().map(|x| x.to_vec()))
-		}))
+		Ok(self
+			.storage
+			.read()
+			.blocks
+			.get(hash)
+			.and_then(|b| b.extrinsics().map(|x| x.to_vec())))
 	}
 
 	fn justifications(&self, id: BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {

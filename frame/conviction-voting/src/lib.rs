@@ -121,8 +121,8 @@ pub mod pallet {
 
 		/// The maximum number of concurrent votes an account may have.
 		///
-		/// Also used to compute weight, an overly large value can
-		/// lead to extrinsic with large weight estimation: see `delegate` for instance.
+		/// Also used to compute weight, an overly large value can lead to extrinsics with large
+		/// weight estimation: see `delegate` for instance.
 		#[pallet::constant]
 		type MaxVotes: Get<u32>;
 
@@ -261,7 +261,7 @@ pub mod pallet {
 		/// Undelegate the voting power of the sending account for a particular class of polls.
 		///
 		/// Tokens may be unlocked following once an amount of time consistent with the lock period
-		/// of the conviction with which the delegation was issued.
+		/// of the conviction with which the delegation was issued has passed.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the signing account must be
 		/// currently delegating.
@@ -284,7 +284,7 @@ pub mod pallet {
 			Ok(Some(T::WeightInfo::undelegate(votes)).into())
 		}
 
-		/// Remove the lock caused prior voting/delegating which has expired within a particluar
+		/// Remove the lock caused by prior voting/delegating which has expired within a particular
 		/// class.
 		///
 		/// The dispatch origin of this call must be _Signed_.
@@ -475,7 +475,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Return the number of votes for `who`
+	/// Return the number of votes for `who`.
 	fn increase_upstream_delegation(
 		who: &T::AccountId,
 		class: &ClassOf<T, I>,
@@ -503,7 +503,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Return the number of votes for `who`
+	/// Return the number of votes for `who`.
 	fn reduce_upstream_delegation(
 		who: &T::AccountId,
 		class: &ClassOf<T, I>,

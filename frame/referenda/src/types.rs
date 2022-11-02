@@ -178,7 +178,7 @@ pub struct ReferendumStatus<
 	pub(crate) proposal: Call,
 	/// The time the proposal should be scheduled for enactment.
 	pub(crate) enactment: DispatchTime<Moment>,
-	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if it
+	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if
 	/// `deciding` is `None`.
 	pub(crate) submitted: Moment,
 	/// The deposit reserved for the submission of this referendum.
@@ -224,7 +224,7 @@ pub enum ReferendumInfo<
 	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
 	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
-	/// Referendum finished with cancelation. Submission deposit is held.
+	/// Referendum finished with cancellation. Submission deposit is held.
 	Cancelled(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished and was never decided. Submission deposit is held.
 	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
