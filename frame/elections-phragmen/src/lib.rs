@@ -101,7 +101,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	traits::{
-		defensive_prelude::*, ChangeMembers, Contains, ContainsLengthBound, Currency,
+		defensive_prelude::*, ChangeMembers, ConstU32, Contains, ContainsLengthBound, Currency,
 		CurrencyToVote, Get, InitializeMembers, LockIdentifier, LockableCurrency, OnUnbalanced,
 		ReservableCurrency, SortedMembers, WithdrawReasons,
 	},
@@ -145,9 +145,9 @@ pub enum Renouncing {
 
 /// An active voter.
 #[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, TypeInfo, MaxEncodedLen)]
-pub struct Voter<AccountId, Balance, MaxCandidates: Get<u32>> {
+pub struct Voter<AccountId, Balance> {
 	/// The members being backed.
-	pub votes: BoundedVec<AccountId, MaxCandidates>,
+	pub votes: BoundedVec<AccountId, ConstU32<{ MAXIMUM_VOTE as u32 }>>,
 	/// The amount of stake placed on this vote.
 	pub stake: Balance,
 	/// The amount of deposit reserved for this vote.
@@ -156,9 +156,7 @@ pub struct Voter<AccountId, Balance, MaxCandidates: Get<u32>> {
 	pub deposit: Balance,
 }
 
-impl<AccountId, Balance: Default, MaxCandidates: Get<u32>> Default
-	for Voter<AccountId, Balance, MaxCandidates>
-{
+impl<AccountId, Balance: Default> Default for Voter<AccountId, Balance> {
 	fn default() -> Self {
 		Self {
 			votes: BoundedVec::default(),
@@ -262,7 +260,7 @@ pub mod pallet {
 		/// the size of the election. When this limit is reached no more
 		/// candidates are accepted in the election.
 		#[pallet::constant]
-		type MaxCandidates: Get<u32> + TypeInfo;
+		type MaxCandidates: Get<u32>;
 
 		/// The maximum number of voters to allow in a phragmen election.
 		///
@@ -322,7 +320,7 @@ pub mod pallet {
 		)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			votes: BoundedVec<T::AccountId, T::MaxCandidates>,
+			votes: BoundedVec<T::AccountId, ConstU32<{ MAXIMUM_VOTE as u32 }>>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
@@ -673,13 +671,8 @@ pub mod pallet {
 	/// TWOX-NOTE: SAFE as `AccountId` is a crypto hash.
 	#[pallet::storage]
 	#[pallet::getter(fn voting)]
-	pub type Voting<T: Config> = StorageMap<
-		_,
-		Twox64Concat,
-		T::AccountId,
-		Voter<T::AccountId, BalanceOf<T>, T::MaxCandidates>,
-		ValueQuery,
-	>;
+	pub type Voting<T: Config> =
+		StorageMap<_, Twox64Concat, T::AccountId, Voter<T::AccountId, BalanceOf<T>>, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -1318,16 +1311,7 @@ mod tests {
 	parameter_types! {
 		pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
 		pub const PhragmenMaxVoters: u32 = 1000;
-		#[derive(PartialEq, Debug)]
 		pub const PhragmenMaxCandidates: u32 = 100;
-	}
-
-	impl TypeInfo for PhragmenMaxCandidates {
-		type Identity = Self;
-
-		fn type_info() -> scale_info::Type {
-			u32::type_info()
-		}
 	}
 
 	impl Config for Test {
@@ -1554,7 +1538,7 @@ mod tests {
 		Elections::vote(origin, votes.try_into().unwrap(), stake)
 	}
 
-	fn votes_of(who: &u64) -> BoundedVec<u64, <Test as Config>::MaxCandidates> {
+	fn votes_of(who: &u64) -> BoundedVec<u64, ConstU32<{ MAXIMUM_VOTE as u32 }>> {
 		Voting::<Test>::get(who).votes
 	}
 
@@ -1685,7 +1669,6 @@ mod tests {
 			.build_and_execute(|| {});
 	}
 
-	//
 	#[test]
 	#[should_panic = "Cannot accept more than DesiredMembers genesis member"]
 	fn genesis_members_cannot_too_many() {
