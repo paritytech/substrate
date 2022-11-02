@@ -84,6 +84,8 @@ impl<A: sp_core::TypedGet> sp_runtime::traits::Convert<sp_runtime::Perquintill, 
 	}
 }
 
+// TODO: Partial thawing.
+
 #[frame_support::pallet]
 pub mod pallet {
 	pub use crate::weights::WeightInfo;
@@ -91,12 +93,13 @@ pub mod pallet {
 		pallet_prelude::*,
 		traits::{Currency, Defensive, DefensiveSaturating, OnUnbalanced, ReservableCurrency,
 			fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
+			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
 			ExistenceRequirement::AllowDeath,
 		}, PalletId,
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
-	use sp_runtime::traits::{Saturating, Zero, Convert, AccountIdConversion};
+	use sp_runtime::{traits::{Saturating, Zero, Convert, AccountIdConversion}, TokenError};
 	use sp_std::prelude::*;
 
 	type BalanceOf<T> =
@@ -589,6 +592,33 @@ pub mod pallet {
 		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
 		/// and could be less than `reserved` (though in most cases should be greater).
 		pub effective: Balance,
+	}
+
+	impl<T: Config> NonfungibleInspect<T::AccountId> for Pallet<T> {
+		type ItemId = ActiveIndex;
+
+		fn owner(item: &ActiveIndex) -> Option<T::AccountId> {
+			Active::<T>::get(item).map(|r| r.who)
+		}
+
+		fn attribute(item: &Self::ItemId, key: &[u8]) -> Option<Vec<u8>> {
+			let item = Active::<T>::get(item)?;
+			match key {
+				b"proportion" => Some(item.proportion.encode()),
+				b"amount" => Some(item.amount.encode()),
+				b"expiry" => Some(item.expiry.encode()),
+				_ => None,
+			}
+		}
+	}
+
+	impl<T: Config> NonfungibleTransfer<T::AccountId> for Pallet<T> {
+		fn transfer(index: &ActiveIndex, destination: &T::AccountId) -> DispatchResult {
+			let mut item = Active::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
+			item.who = destination.clone();
+			Active::<T>::insert(index, item);
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {

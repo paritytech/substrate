@@ -20,6 +20,7 @@
 use super::*;
 use crate::{mock::*, Error};
 use frame_support::{assert_noop, assert_ok, dispatch::DispatchError, traits::Currency};
+use frame_support::traits::nonfungible::{Inspect, Transfer};
 use pallet_balances::{Error as BalancesError, Instance1, Instance2};
 use sp_arithmetic::Perquintill;
 use sp_runtime::TokenError;
@@ -321,7 +322,33 @@ fn basic_thaw_works() {
 		);
 		assert_eq!(Active::<Test>::get(0), None);
 		assert_eq!(Balances::free_balance(1), 100);
-		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_eq!(pot(), 0);
+	});
+}
+
+#[test]
+fn thaw_respects_transfers() {
+	new_test_ext().execute_with(|| {
+		run_to_block(1);
+		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
+		Nis::enlarge(40, 1);
+		run_to_block(4);
+
+		assert_eq!(Nis::owner(&0), Some(1));
+		assert_ok!(Nis::transfer(&0, &2));
+
+		// Transfering the receipt...
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0), Error::<Test>::NotOwner);
+		// ...can't be thawed due to missing counterpart
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0), TokenError::NoFunds);
+
+		// Transfer the counterpart also...
+		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 2100000));
+		// ...and thawing is possible.
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 0));
+
+		assert_eq!(Balances::free_balance(2), 140);
+		assert_eq!(Balances::free_balance(1), 60);
 	});
 }
 
@@ -355,8 +382,6 @@ fn thaw_when_issuance_higher_works() {
 		assert_eq!(Balances::reserved_balance(1), 0);
 	});
 }
-
-// TODO: Partial thawing.
 
 #[test]
 fn thaw_with_ignored_issuance_works() {
