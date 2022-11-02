@@ -25,7 +25,12 @@ pub mod weights;
 
 use codec::{Codec, Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
-	defensive, pallet_prelude::*, traits::DefensiveTruncateFrom, BoundedSlice, CloneNoBound,
+	defensive,
+	pallet_prelude::*,
+	traits::{
+		DefensiveTruncateFrom, EnqueueMessage, ProcessMessage, ProcessMessageError, ServiceQueues,
+	},
+	BoundedSlice, CloneNoBound,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -191,32 +196,6 @@ impl<
 	fn is_complete(&self) -> bool {
 		self.remaining.is_zero()
 	}
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, Debug)]
-pub enum ProcessMessageError {
-	/// The message data format is unknown (e.g. unrecognised header)
-	BadFormat,
-	/// The message data is bad (e.g. decoding returns an error).
-	Corrupt,
-	/// The message format is unsupported (e.g. old XCM version).
-	Unsupported,
-	/// Message processing was not attempted because it was not certain that the weight limit
-	/// would be respected. The parameter gives the maximum weight which the message could take
-	/// to process.
-	Overweight(Weight),
-}
-
-pub trait ProcessMessage {
-	/// The transport from where a message originates.
-	type Origin: FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + sp_std::fmt::Debug;
-
-	/// Process the given message, using no more than `weight_limit` in weight to do so.
-	fn process_message(
-		message: &[u8],
-		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
@@ -594,8 +573,8 @@ impl<T: Config> Pallet<T> {
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
-					// no need toconsider .first or ready ring since processing an overweight page would
-					// not alter that state.
+				// no need toconsider .first or ready ring since processing an overweight page would
+				// not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
@@ -655,12 +634,8 @@ impl<T: Config> Pallet<T> {
 		let mut book_state = BookStateOf::<T>::get(&origin);
 		let mut total_processed = 0;
 		while book_state.end > book_state.begin {
-			let (processed, status) = Self::service_page(
-				&origin,
-				&mut book_state,
-				weight,
-				overweight_limit,
-			);
+			let (processed, status) =
+				Self::service_page(&origin, &mut book_state, weight, overweight_limit);
 			total_processed.saturating_accrue(processed);
 			match status {
 				// Store the page progress and do not go to the next one.
@@ -849,15 +824,6 @@ impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
 	}
 }
 
-pub trait ServiceQueues {
-	/// Service all message queues in some fair manner.
-	///
-	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
-	///
-	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
-	fn service_queues(weight_limit: Weight) -> Weight;
-}
-
 impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
 		// The maximum weight that processing a single message may take.
@@ -890,26 +856,6 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		}
 		weight.consumed
 	}
-}
-
-pub trait EnqueueMessage<Origin: MaxEncodedLen> {
-	type MaxMessageLen: Get<u32>;
-
-	/// Enqueue a single `message` from a specific `origin`.
-	///
-	/// Infallible.
-	fn enqueue_message(message: BoundedSlice<u8, Self::MaxMessageLen>, origin: Origin);
-
-	/// Enqueue multiple `messages` from a specific `origin`.
-	///
-	/// If no `message.len()` is greater than `HEAP_SIZE - Origin::max_encoded_len()`, then this
-	/// is guaranteed to succeed. In the case of `Err`, no messages are queued.
-	fn enqueue_messages<'a>(
-		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
-		origin: Origin,
-	);
-
-	// TODO: consider: `fn enqueue_mqc_page(page: &[u8], origin: Origin);`
 }
 
 impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {

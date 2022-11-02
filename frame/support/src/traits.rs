@@ -112,6 +112,9 @@ pub use voting::{
 mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
 
+mod messages;
+pub use messages::{EnqueueMessage, ProcessMessage, ProcessMessageError, ServiceQueues};
+
 #[cfg(feature = "try-runtime")]
 mod try_runtime;
 #[cfg(feature = "try-runtime")]
