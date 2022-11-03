@@ -494,7 +494,7 @@ pub trait DefensiveMax<T> {
 	/// ```
 	fn defensive_max(self, other: T) -> Self;
 
-	/// Returns the maximum and defensively asserts that `other` is smaller `self`.
+	/// Returns the maximum and defensively asserts that `other` is smaller than `self`.
 	///
 	/// # Example
 	///
