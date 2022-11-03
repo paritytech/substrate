@@ -146,13 +146,9 @@ where
 		return None
 	}
 
-	// Helper for uniform conversions on errors.
-	let to_event_err =
-		|err| Some(RuntimeEvent::Invalid(ErrorEvent { error: format!("Api error: {}", err) }));
-
 	let block_rt = match client.runtime_version_at(block) {
 		Ok(rt) => rt,
-		Err(err) => return to_event_err(err),
+		Err(err) => return Some(err.into()),
 	};
 
 	let parent = match parent {
@@ -163,7 +159,7 @@ where
 
 	let parent_rt = match client.runtime_version_at(parent) {
 		Ok(rt) => rt,
-		Err(err) => return to_event_err(err),
+		Err(err) => return Some(err.into()),
 	};
 
 	// Report the runtime version change.

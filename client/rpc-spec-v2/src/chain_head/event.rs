@@ -19,6 +19,7 @@
 //! The chain head's event returned as json compatible object.
 
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use sp_api::ApiError;
 use sp_version::RuntimeVersion;
 
 /// The network config parameter is used when a function
@@ -71,6 +72,12 @@ pub enum RuntimeEvent {
 	Valid(RuntimeVersionEvent),
 	/// The runtime could not be obtained due to an error.
 	Invalid(ErrorEvent),
+}
+
+impl From<ApiError> for RuntimeEvent {
+	fn from(err: ApiError) -> Self {
+		RuntimeEvent::Invalid(ErrorEvent { error: format!("Api error: {}", err) })
+	}
 }
 
 /// Contain information about the latest finalized block.
