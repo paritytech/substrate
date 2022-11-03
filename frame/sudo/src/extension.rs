@@ -17,7 +17,7 @@
 
 use crate::{Config, Pallet};
 use codec::{Decode, Encode};
-use frame_support::dispatch::DispatchInfo;
+use frame_support::{dispatch::DispatchInfo, ensure};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, SignedExtension},
