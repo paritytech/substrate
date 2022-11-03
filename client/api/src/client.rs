@@ -110,7 +110,7 @@ pub trait BlockBackend<Block: BlockT> {
 	/// Get block body by ID. Returns `None` if the body is not stored.
 	fn block_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 
 	/// Get all indexed transactions for a block,
@@ -131,7 +131,7 @@ pub trait BlockBackend<Block: BlockT> {
 		-> sp_blockchain::Result<sp_consensus::BlockStatus>;
 
 	/// Get block justifications for the block with the given id.
-	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>>;
+	fn justifications(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Justifications>>;
 
 	/// Get block hash by number.
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>>;

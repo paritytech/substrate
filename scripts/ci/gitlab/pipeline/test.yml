@@ -68,10 +68,12 @@ cargo-check-benches:
     - !reference [.rusty-cachier, before_script]
     - !reference [.pipeline-stopper-vars, script]
     # merges in the master branch on PRs
+    - |
+      export BASE=$(curl -s -H "Authorization: Bearer ${GITHUB_PR_TOKEN}" https://api.github.com/repos/paritytech/substrate/pulls/${$CI_COMMIT_REF_NAME} | jq .base.ref)
     - if [ $CI_COMMIT_REF_NAME != "master" ]; then
-        git fetch origin +master:master;
+        git fetch origin +${BASE}:${BASE};
         git fetch origin +$CI_COMMIT_REF_NAME:$CI_COMMIT_REF_NAME;
-        git checkout master;
+        git checkout ${BASE};
         git config user.email "ci@gitlab.parity.io";
         git merge $CI_COMMIT_REF_NAME --verbose --no-edit;
       fi
@@ -252,6 +254,7 @@ test-frame-support:
   script:
     - rusty-cachier snapshot create
     - time cargo test --locked -p frame-support-test --features=frame-feature-testing,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
+    - time cargo test --locked -p frame-support-test --features=frame-feature-testing,frame-feature-testing-2,no-metadata-docs --manifest-path ./frame/support/test/Cargo.toml --test pallet # does not reuse cache 1 min 44 sec
     - SUBSTRATE_TEST_TIMEOUT=1 time cargo test -p substrate-test-utils --release --verbose --locked -- --ignored timeout
     - rusty-cachier cache upload
 
@@ -394,6 +397,10 @@ test-wasmer-sandbox:
     - .docker-env
     - .test-refs-wasmer-sandbox
   variables:
+    RUSTFLAGS:                     "-Cdebug-assertions=y -Dwarnings"
+    RUST_BACKTRACE:                1
+    WASM_BUILD_NO_COLOR:           1
+    WASM_BUILD_RUSTFLAGS:          "-Cdebug-assertions=y -Dwarnings"
     CI_JOB_NAME:                   "test-wasmer-sandbox"
   parallel: 3
   script:

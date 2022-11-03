@@ -57,12 +57,12 @@ impl StorageCmd {
 		// Store the time that it took to write each value.
 		let mut record = BenchRecord::default();
 
-		let block = BlockId::Hash(client.usage_info().chain.best_hash);
-		let header = client.header(block)?.ok_or("Header not found")?;
+		let best_hash = client.usage_info().chain.best_hash;
+		let header = client.header(BlockId::Hash(best_hash))?.ok_or("Header not found")?;
 		let original_root = *header.state_root();
 		let trie = DbStateBuilder::<Block>::new(storage.clone(), original_root).build();
 
-		info!("Preparing keys from block {}", block);
+		info!("Preparing keys from block {}", best_hash);
 		// Load all KV pairs and randomly shuffle them.
 		let mut kvs = trie.pairs();
 		let (mut rng, _) = new_rng(None);
@@ -77,7 +77,7 @@ impl StorageCmd {
 			match (self.params.include_child_trees, self.is_child_key(k.to_vec())) {
 				(true, Some(info)) => {
 					let child_keys =
-						client.child_storage_keys_iter(&block, info.clone(), None, None)?;
+						client.child_storage_keys_iter(&best_hash, info.clone(), None, None)?;
 					for ck in child_keys {
 						child_nodes.push((ck.clone(), info.clone()));
 					}
@@ -124,7 +124,7 @@ impl StorageCmd {
 
 			for (key, info) in child_nodes {
 				if let Some(original_v) = client
-					.child_storage(&block, &info.clone(), &key)
+					.child_storage(&best_hash, &info.clone(), &key)
 					.expect("Checked above to exist")
 				{
 					let mut new_v = vec![0; original_v.0.len()];
