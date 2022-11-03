@@ -86,19 +86,13 @@ where
 		info: &DispatchInfoOf<Self::Call>,
 		_len: usize,
 	) -> TransactionValidity {
-		let sudo_key: T::AccountId = match <Pallet<T>>::key() {
-			Some(account) => account,
-			None => return Err(UnknownTransaction::CannotLookup.into()),
-		};
+		let sudo_key: T::AccountId = <Pallet<T>>::key().ok_or(UnknownTransaction::CannotLookup)?;
+		ensure!(*who == sudo_key, InvalidTransaction::BadSigner);
 
-		if *who == sudo_key {
-			Ok(ValidTransaction {
-				priority: info.weight.ref_time() as TransactionPriority,
-				..Default::default()
-			})
-		} else {
-			Err(InvalidTransaction::BadSigner.into())
-		}
+		Ok(ValidTransaction {
+			priority: info.weight.ref_time() as TransactionPriority,
+			..Default::default()
+		})
 	}
 
 	fn pre_dispatch(
