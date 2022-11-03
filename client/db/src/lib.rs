@@ -1811,7 +1811,7 @@ impl<Block: BlockT> Backend<Block> {
 				return Ok(())
 			}
 
-			let f_actual = f_num.clone();
+			let f_actual = f_num;
 			f_num = f_num.saturating_sub(delayed.into());
 			debug!(target: "db", "Mark finalized #{} and canonicalize #{}", f_actual, f_num);
 			f_hash = self.blockchain.hash(f_num)?.ok_or_else(|| {
