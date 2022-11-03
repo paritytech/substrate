@@ -28,7 +28,6 @@ use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
-use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
 use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
@@ -38,7 +37,11 @@ use sp_consensus_babe::{
 };
 use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
-use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
+use sp_keyring::Sr25519Keyring;
+use sp_keystore::{
+	testing::KeyStore as TestKeyStore, vrf::make_transcript as transcript_from_data,
+	SyncCryptoStore,
+};
 use sp_runtime::{
 	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
@@ -363,6 +366,13 @@ fn rejects_empty_block() {
 	})
 }
 
+fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
+	let keystore = Arc::new(TestKeyStore::new());
+	SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
+		.expect("Generates authority key");
+	keystore
+}
+
 fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
 	sp_tracing::try_init_simple();
 	let mutator = Arc::new(mutator) as Mutator;
@@ -370,25 +380,19 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 	let net = BabeTestNet::new(3);
 
-	let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
+	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
 	let mut babe_futures = Vec::new();
-	let mut keystore_paths = Vec::new();
 
-	for (peer_id, seed) in peers {
+	for (peer_id, auth_id) in peers.iter().enumerate() {
 		let mut net = net.lock();
-		let peer = net.peer(*peer_id);
+		let peer = net.peer(peer_id);
 		let client = peer.client().as_client();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
-		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-		let keystore: SyncCryptoStorePtr =
-			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed))
-			.expect("Generates authority key");
-		keystore_paths.push(keystore_path);
+		let keystore = create_keystore(*auth_id);
 
 		let mut got_own = false;
 		let mut got_other = false;
@@ -536,16 +540,14 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	sp_tracing::try_init_simple();
-	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: SyncCryptoStorePtr =
-		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
-		.expect("Generates authority pair");
+
+	let authority = Sr25519Keyring::Alice;
+	let keystore = create_keystore(authority);
 
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0.into(),
-		authorities: vec![(public.into(), 1)],
+		authorities: vec![(authority.public().into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
@@ -967,15 +969,13 @@ fn verify_slots_are_strictly_increasing() {
 #[test]
 fn babe_transcript_generation_match() {
 	sp_tracing::try_init_simple();
-	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
-	let keystore: SyncCryptoStorePtr =
-		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
-	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
-		.expect("Generates authority pair");
+
+	let authority = Sr25519Keyring::Alice;
+	let _keystore = create_keystore(authority);
 
 	let epoch = Epoch {
 		start_slot: 0.into(),
-		authorities: vec![(public.into(), 1)],
+		authorities: vec![(authority.public().into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,

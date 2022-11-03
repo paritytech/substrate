@@ -176,8 +176,11 @@ impl PeersClient {
 		self.backend.have_state_at(&header.hash(), *header.number())
 	}
 
-	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		self.client.justifications(block)
+	pub fn justifications(
+		&self,
+		hash: &<Block as BlockT>::Hash,
+	) -> ClientResult<Option<Justifications>> {
+		self.client.justifications(hash)
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
@@ -542,7 +545,7 @@ where
 	pub fn has_body(&self, hash: &H256) -> bool {
 		self.backend
 			.as_ref()
-			.map(|backend| backend.blockchain().body(BlockId::hash(*hash)).unwrap().is_some())
+			.map(|backend| backend.blockchain().body(hash).unwrap().is_some())
 			.unwrap_or(false)
 	}
 }

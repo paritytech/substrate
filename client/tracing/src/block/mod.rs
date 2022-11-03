@@ -225,7 +225,7 @@ where
 			.ok_or_else(|| Error::MissingBlockComponent("Header not found".to_string()))?;
 		let extrinsics = self
 			.client
-			.block_body(&id)
+			.block_body(&self.block)
 			.map_err(Error::InvalidBlockId)?
 			.ok_or_else(|| Error::MissingBlockComponent("Extrinsics not found".to_string()))?;
 		tracing::debug!(target: "state_tracing", "Found {} extrinsics", extrinsics.len());
