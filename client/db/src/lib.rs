@@ -1167,11 +1167,6 @@ impl<Block: BlockT> Backend<Block> {
 		};
 		trace!(target: "db", "Last canonicalized block #{} and last finalized #{}", canonicalized_num, finalized_num);
 
-		// Nothing to canonicalize.
-		if canonicalized_num == finalized_num {
-			return Ok(())
-		}
-
 		// Canonicalized every block from the last canonicalized
 		// to the finalized block.
 		for num in canonicalized_num + 1..=finalized_num {
