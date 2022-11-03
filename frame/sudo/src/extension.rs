@@ -23,16 +23,19 @@ use sp_runtime::{
 	traits::{DispatchInfoOf, Dispatchable, SignedExtension},
 	transaction_validity::{
 		InvalidTransaction, TransactionPriority, TransactionValidity, TransactionValidityError,
-		ValidTransaction,
+		UnknownTransaction, ValidTransaction,
 	},
 };
 use sp_std::{fmt, marker::PhantomData};
 
 /// Ensure that signed transactions are only valid if they are signed by sudo account.
 ///
-/// In the initial phase of a chain without any tokens, with this extension we could 
-/// reject spam transactions that are not signed by sudo account before they enter 
-/// transaction pool.
+/// In the initial phase of a chain without any tokens you can not prevent accounts from sending
+/// transactions.
+/// These transactions would enter the transaction pool as the succeed the validation, but would
+/// fail on applying them as they are not allowed/disabled/whatever. This would be some huge dos
+/// vector to any kind of chain. This extension solves the dos vector by preventing any kind of
+/// transaction entering the pool as long as it is not signed by the sudo account.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct CheckOnlySudoAccount<T: Config + Send + Sync>(PhantomData<T>);
@@ -85,7 +88,7 @@ where
 	) -> TransactionValidity {
 		let sudo_key: T::AccountId = match <Pallet<T>>::key() {
 			Some(account) => account,
-			None => return Err(InvalidTransaction::BadSigner.into()),
+			None => return Err(UnknownTransaction::CannotLookup.into()),
 		};
 
 		if *who == sudo_key {

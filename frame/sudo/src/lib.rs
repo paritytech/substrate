@@ -83,10 +83,8 @@
 //!
 //! The Sudo pallet defines the following extension:
 //!
-//!   - [`CheckOnlySudoAccount`]: Checks the signer of the transaction and ensure that the signed
-//!     transactions are only valid if they are signed by sudo account. 
-//!     In the initial phase of a chain without any tokens, with this extension we could reject 
-//!     spam transactions that are not signed by sudo account before they enter transaction pool.
+//!   - [`CheckOnlySudoAccount`]: Ensures that the signed transactions are only valid if they are
+//!     signed by sudo account.
 //!
 //! ## Genesis Config
 //!
