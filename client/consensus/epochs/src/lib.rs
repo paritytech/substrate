@@ -1119,8 +1119,8 @@ mod tests {
 		//     +---D       +-------F
 		//     |           |
 		// 0---A---B--(x)--C--(y)--G
-		//         |
-		//         +-------E
+		// |       |
+		// +---H   +-------E
 		//
 		//  Test parameters:
 		//  - epoch duration: 100
@@ -1168,10 +1168,11 @@ mod tests {
 		import_at(300, b"E", 30, b"B", 20);
 		import_at(400, b"F", 40, b"C", 30);
 		import_at(400, b"G", 40, b"C", 30);
+		import_at(100, b"H", 10, b"0", 0);
 
 		let mut nodes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| h).collect();
 		nodes.sort();
-		assert_eq!(nodes, vec![b"A", b"B", b"C", b"D", b"E", b"F", b"G"]);
+		assert_eq!(nodes, vec![b"A", b"B", b"C", b"D", b"E", b"F", b"G", b"H"]);
 
 		// Finalize block 'x' @ number 25, slot 230
 		// This should prune all nodes imported by blocks with a number < 25 that are not
