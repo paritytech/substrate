@@ -28,7 +28,7 @@ use frame_support::{
 	PalletId,
 };
 use pallet_balances::{Instance1, Instance2};
-use sp_core::H256;
+use sp_core::{ConstU128, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -91,15 +91,15 @@ impl pallet_balances::Config<Instance1> for Test {
 }
 
 impl pallet_balances::Config<Instance2> for Test {
-	type Balance = u64;
+	type Balance = u128;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = frame_support::traits::ConstU64<1>;
+	type ExistentialDeposit = frame_support::traits::ConstU128<1>;
 	type AccountStore = StorageMapShim<
 		pallet_balances::Account<Test, Instance2>,
 		frame_system::Provider<Test>,
 		u64,
-		pallet_balances::AccountData<u64>,
+		pallet_balances::AccountData<u128>,
 	>;
 	type WeightInfo = ();
 	type MaxLocks = ();
@@ -125,8 +125,8 @@ impl pallet_nis::Config for Test {
 	type Deficit = ();
 	type Surplus = ();
 	type IgnoredIssuance = IgnoredIssuance;
-	type FungibleReceipt = NisBalances;
-	type FungibleEquivalence = WithMaximumOf<ConstU64<21_000_000u64>>;
+	type Counterpart = NisBalances;
+	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000u128>>;
 	type QueueCount = ConstU32<3>;
 	type MaxQueueLen = ConstU32<3>;
 	type FifoQueueLen = ConstU32<1>;

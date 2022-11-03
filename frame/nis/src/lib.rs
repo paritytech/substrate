@@ -119,8 +119,8 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId,
 	>>::NegativeImbalance;
 
-	pub struct NoFungibleReceipt<T>(sp_std::marker::PhantomData<T>);
-	impl<T> FungibleInspect<T> for NoFungibleReceipt<T> {
+	pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
+	impl<T> FungibleInspect<T> for NoCounterpart<T> {
 		type Balance = u32;
 		fn total_issuance() -> u32 {
 			0
@@ -148,7 +148,7 @@ pub mod pallet {
 			frame_support::traits::tokens::WithdrawConsequence::Success
 		}
 	}
-	impl<T> FungibleMutate<T> for NoFungibleReceipt<T> {
+	impl<T> FungibleMutate<T> for NoCounterpart<T> {
 		fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
 			Ok(())
 		}
@@ -156,7 +156,7 @@ pub mod pallet {
 			Ok(0)
 		}
 	}
-	impl<T> Convert<Perquintill, u32> for NoFungibleReceipt<T> {
+	impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 		fn convert(_: Perquintill) -> u32 {
 			0
 		}
@@ -200,11 +200,11 @@ pub mod pallet {
 		/// the issuance with which we determine the thawed value of a bond.
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
-		type FungibleReceipt: FungibleMutate<Self::AccountId>;
+		type Counterpart: FungibleMutate<Self::AccountId>;
 
-		type FungibleEquivalence: Convert<
+		type CounterpartAmount: Convert<
 			Perquintill,
-			<Self::FungibleReceipt as FungibleInspect<Self::AccountId>>::Balance,
+			<Self::Counterpart as FungibleInspect<Self::AccountId>>::Balance,
 		>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
@@ -563,8 +563,8 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= bond.expiry, Error::<T>::NotExpired);
 
-			let fung_eq = T::FungibleEquivalence::convert(bond.proportion);
-			T::FungibleReceipt::burn_from(&who, fung_eq)?;
+			let fung_eq = T::CounterpartAmount::convert(bond.proportion);
+			T::Counterpart::burn_from(&who, fung_eq)?;
 
 			// Remove it
 			Receipts::<T>::remove(index);
@@ -777,8 +777,8 @@ pub mod pallet {
 								Receipts::<T>::insert(index, bond);
 
 								// issue the fungible counterpart
-								let fung_eq = T::FungibleEquivalence::convert(proportion);
-								let _ = T::FungibleReceipt::mint_into(&who, fung_eq).defensive();
+								let fung_eq = T::CounterpartAmount::convert(proportion);
+								let _ = T::Counterpart::mint_into(&who, fung_eq).defensive();
 
 								bids_taken += 1;
 
