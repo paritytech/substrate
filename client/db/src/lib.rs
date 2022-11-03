@@ -1174,7 +1174,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		// Canonicalized every block from the last canonicalized
 		// to the finalized block.
-		for num in canonicalized_num+1..=finalized_num {
+		for num in canonicalized_num + 1..=finalized_num {
 			self.startup_canonicalize_block(transaction, num)?;
 		}
 
