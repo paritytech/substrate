@@ -1177,7 +1177,7 @@ mod tests {
 		// Finalize block 'x' @ number 25, slot 230
 		// This should prune all nodes imported by blocks with a number < 25 that are not
 		// ancestors of 'x' and all nodes before the one holding the epoch information
-		// to which 'x' belongs to.
+		// to which 'x' belongs to (i.e. before A).
 
 		epoch_changes.prune_finalized(&is_descendent_of, b"x", 25, 230).unwrap();
 
@@ -1185,10 +1185,10 @@ mod tests {
 		nodes.sort();
 		assert_eq!(nodes, vec![b"A", b"B", b"C", b"E", b"F", b"G"]);
 
-		// Finalize block x @ number 35, slot 330
+		// Finalize block y @ number 35, slot 330
 		// This should prune all nodes imported by blocks with a number < 35 that are not
 		// ancestors of 'y' and all nodes before the one holding the epoch information
-		// to which 'y' belongs to.
+		// to which 'y' belongs to (i.e. before B).
 
 		epoch_changes.prune_finalized(&is_descendent_of, b"y", 35, 330).unwrap();
 
