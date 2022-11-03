@@ -430,7 +430,7 @@ pub trait DefensiveMin<T> {
 	/// ```
 	fn defensive_min(self, other: T) -> Self;
 
-	/// Returns the minimum and defensively checks that `self` is smaller `other`.
+	/// Returns the minimum and defensively checks that `self` is smaller than `other`.
 	///
 	/// # Example
 	///
