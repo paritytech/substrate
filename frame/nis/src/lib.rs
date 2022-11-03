@@ -222,8 +222,13 @@ pub mod pallet {
 		/// the issuance with which we determine the thawed value of a given proportion.
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
+		/// The accounting system for the fungible counterpart tokens.
 		type Counterpart: FungibleMutate<Self::AccountId>;
 
+		/// The system to convert an overall proportion of issuance into a number of fungible
+		/// counterpart tokens.
+		///
+		/// In general it's best to use `WithMaximumOf`.
 		type CounterpartAmount: ConvertBack<
 			Perquintill,
 			<Self::Counterpart as FungibleInspect<Self::AccountId>>::Balance,
@@ -310,16 +315,16 @@ pub mod pallet {
 	pub struct ReceiptRecord<AccountId, BlockNumber> {
 		/// The proportion of the effective total issuance.
 		pub proportion: Perquintill,
-		/// The account to whom this bond belongs.
+		/// The account to whom this receipt belongs.
 		pub who: AccountId,
-		/// The time after which this bond can be redeemed for the proportional amount of balance.
+		/// The time after which this receipt can be thawed.
 		pub expiry: BlockNumber,
 	}
 
-	/// An index for a bond.
-	pub type ActiveIndex = u32;
+	/// An index for a receipt.
+	pub type ReceiptIndex = u32;
 
-	/// Overall information package on the active bonds.
+	/// Overall information package on the outstanding receipts.
 	///
 	/// The way of determining the net issuance (i.e. after factoring in all maturing frozen funds)
 	/// is:
@@ -331,10 +336,10 @@ pub mod pallet {
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
 	pub struct SummaryRecord<BlockNumber> {
-		/// The proportion of funds that the `frozen` balance represents to total issuance.
+		/// The total proportion over all outstanding receipts.
 		pub proportion_owed: Perquintill,
-		/// The total number of bonds issued so far.
-		pub index: ActiveIndex,
+		/// The total number of receipts created so far.
+		pub index: ReceiptIndex,
 		/// The amount (as a proportion of ETI) which has been thawed in this period so far.
 		pub thawed: Perquintill,
 		/// The current thaw period's beginning.
@@ -350,7 +355,7 @@ pub mod pallet {
 	pub type QueueTotals<T: Config> =
 		StorageValue<_, BoundedVec<(u32, BalanceOf<T>), T::QueueCount>, ValueQuery>;
 
-	/// The queues of bids ready to become bonds. Indexed by duration (in `Period`s).
+	/// The queues of bids. Indexed by duration (in `Period`s).
 	#[pallet::storage]
 	pub type Queues<T: Config> = StorageMap<
 		_,
@@ -360,14 +365,14 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Information relating to the bonds currently active.
+	/// Summary information over the general state.
 	#[pallet::storage]
 	pub type Summary<T> = StorageValue<_, SummaryRecordOf<T>, ValueQuery>;
 
-	/// The currently active bonds, indexed according to the order of creation.
+	/// The currently outstanding receipts, indexed according to the order of creation.
 	#[pallet::storage]
 	pub type Receipts<T> =
-		StorageMap<_, Blake2_128Concat, ActiveIndex, ReceiptRecordOf<T>, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, ReceiptIndex, ReceiptRecordOf<T>, OptionQuery>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -394,7 +399,7 @@ pub mod pallet {
 		/// A bid was accepted. The balance may not be released until expiry.
 		Issued {
 			/// The identity of the receipt.
-			index: ActiveIndex,
+			index: ReceiptIndex,
 			/// The block number at which the receipt may be thawed.
 			expiry: T::BlockNumber,
 			/// The owner of the receipt.
@@ -404,10 +409,10 @@ pub mod pallet {
 			/// The amount of funds which were debited from the owner.
 			amount: BalanceOf<T>,
 		},
-		/// An expired bond has been thawed.
+		/// An receipt has been (at least partially) thawed.
 		Thawed {
 			/// The identity of the receipt.
-			index: ActiveIndex,
+			index: ReceiptIndex,
 			/// The owner.
 			who: T::AccountId,
 			/// The proportion of the effective total issuance by which the owner was debited.
@@ -432,13 +437,13 @@ pub mod pallet {
 		BidTooLow,
 		/// Bond index is unknown.
 		Unknown,
-		/// Not the owner of the bond.
+		/// Not the owner of the receipt.
 		NotOwner,
 		/// Bond not yet at expiry date.
 		NotExpired,
 		/// The given bid for retraction is not found.
 		NotFound,
-		/// The portion supplied is beyond the value of the bond.
+		/// The portion supplied is beyond the value of the receipt.
 		TooMuch,
 		/// Not enough funds are held to pay out.
 		Unfunded,
@@ -463,15 +468,14 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Place a bid for a bond.
+		/// Place a bid.
 		///
 		/// Origin must be Signed, and account must have at least `amount` in free balance.
 		///
-		/// - `amount`: The amount of the bid; these funds will be reserved. If the bid is
-		/// successfully elevated into a bond, then these funds will continue to be
-		/// reserved until the bond thaws. Must be at least `MinBid`.
-		/// - `duration`: The number of periods before which the bond may be thawed.
-		/// Must be greater than 1 and no more than `QueueCount`.
+		/// - `amount`: The amount of the bid; these funds will be reserved, and if/when
+		///   consolidated, removed. Must be at least `MinBid`.
+		/// - `duration`: The number of periods before which the newly consolidated bid may be
+		///   thawed. Must be greater than 1 and no more than `QueueCount`.
 		///
 		/// Complexities:
 		/// - `Queues[duration].len()` (just take max).
@@ -578,17 +582,18 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Remove an active but expired bond. Reserved funds under bond are freed and balance is
-		/// adjusted to ensure that the newly freed amount is equivalent to the original amount in
-		/// terms of the proportion of effective total issued funds.
+		/// Reduce or remove an outstanding receipt, placing the according proportion of funds into
+		/// the account of the owner.
 		///
-		/// Origin must be Signed and the account must be the owner of the bond of the given index.
-		///
-		/// - `index`: The index of the bond to be thawed.
+		/// - `origin`: Must be Signed and the account must be the owner of the receipt `index` as
+		///   well as any fungible counterpart.
+		/// - `index`: The index of the receipt.
+		/// - `portion`: If `Some`, then only the given portion of the receipt should be thawed. If
+		///   `None`, then all of it should be.
 		#[pallet::weight(T::WeightInfo::thaw())]
 		pub fn thaw(
 			origin: OriginFor<T>,
-			#[pallet::compact] index: ActiveIndex,
+			#[pallet::compact] index: ReceiptIndex,
 			portion: Option<<T::Counterpart as FungibleInspect<T::AccountId>>::Balance>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -653,23 +658,22 @@ pub mod pallet {
 
 	/// Issuance information returned by `issuance()`.
 	pub struct IssuanceInfo<Balance> {
-		/// The balance held in reserve over all active bonds.
+		/// The balance held in reserve by this pallet instance.
 		pub holdings: Balance,
-		/// The issuance not held in reserve for active bonds. Together with `reserved` this sums
-		/// to `Currency::total_issuance`.
+		/// The (non-ignored) issuance in the system, not including this pallet's account.
 		pub other: Balance,
-		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
-		/// and could be less than `reserved` (though in most cases should be greater).
+		/// The effective total issuance, hypothetically if all outstanding receipts were thawed at
+		/// present.
 		pub effective: Balance,
-		/// The balance that `reserved` is effectively worth, at present. This is not issued funds
-		/// and could be less than `reserved` (though in most cases should be greater).
+		/// The amount needed to be the pallet instance's account in case all outstanding receipts
+		/// were thawed at present.
 		pub required: Balance,
 	}
 
 	impl<T: Config> NonfungibleInspect<T::AccountId> for Pallet<T> {
-		type ItemId = ActiveIndex;
+		type ItemId = ReceiptIndex;
 
-		fn owner(item: &ActiveIndex) -> Option<T::AccountId> {
+		fn owner(item: &ReceiptIndex) -> Option<T::AccountId> {
 			Receipts::<T>::get(item).map(|r| r.who)
 		}
 
@@ -684,7 +688,7 @@ pub mod pallet {
 	}
 
 	impl<T: Config> NonfungibleTransfer<T::AccountId> for Pallet<T> {
-		fn transfer(index: &ActiveIndex, destination: &T::AccountId) -> DispatchResult {
+		fn transfer(index: &ReceiptIndex, destination: &T::AccountId) -> DispatchResult {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
 			item.who = destination.clone();
 			Receipts::<T>::insert(index, item);
@@ -701,16 +705,19 @@ pub mod pallet {
 			T::PalletId::get().into_account_truncating()
 		}
 
-		/// Returns information on the issuance of bonds.
-		///
-		/// Also provides the summary and this pallet's account ID.
+		/// Returns information on the issuance within the system.
 		pub fn issuance() -> IssuanceInfo<BalanceOf<T>> {
 			Self::issuance_with(&Self::account_id(), &Summary::<T>::get())
 		}
 
-		/// Returns information on the issuance of bonds.
+		/// Returns information on the issuance within the system
 		///
-		/// Also provides the summary and this pallet's account ID.
+		/// This function is equivalent to `issuance`, except that it accepts arguments rather than
+		/// queries state. If the arguments are already known, then this may be slightly more
+		/// performant.
+		///
+		/// - `our_account`: The value returned by `Self::account_id()`.
+		/// - `summary`: The value returned by `Summary::<T>::get()`.
 		pub fn issuance_with(
 			our_account: &T::AccountId,
 			summary: &SummaryRecordOf<T>,
@@ -725,8 +732,11 @@ pub mod pallet {
 			IssuanceInfo { holdings, other, effective, required }
 		}
 
-		/// Attempt to enlarge our bond-set from bids in order to satisfy our desired target amount
-		/// of funds frozen into bonds.
+		/// Process some bids into receipts in line with the pallet's configuration, especially
+		/// `Target`.
+		///
+		/// Returns the weight used.
+		// TODO: Accept max_weight, not max_bids.
 		pub fn pursue_target(max_bids: u32) -> Weight {
 			let summary: SummaryRecordOf<T> = Summary::<T>::get();
 			let target = T::Target::get();
