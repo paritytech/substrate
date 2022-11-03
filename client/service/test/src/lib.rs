@@ -235,7 +235,7 @@ fn node_config<
 		trie_cache_maximum_size: Some(16 * 1024 * 1024),
 		state_pruning: Default::default(),
 		blocks_pruning: BlocksPruning::KeepFinalized,
-		delayed_canonicalization: true,
+		delayed_canonicalization: Some(32),
 		chain_spec: Box::new((*spec).clone()),
 		wasm_method: sc_service::config::WasmExecutionMethod::Interpreted,
 		wasm_runtime_overrides: Default::default(),

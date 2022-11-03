@@ -42,6 +42,10 @@ pub(crate) const NODE_NAME_MAX_LENGTH: usize = 64;
 /// Default sub directory to store network config.
 pub(crate) const DEFAULT_NETWORK_CONFIG_PATH: &str = "network";
 
+/// The blocks that were supposed to get pruned at the finalization N
+/// will get pruned at N + 32.
+pub(crate) const DELAYED_PRUNING: u32 = 32;
+
 /// The recommended open file descriptor limit to be configured for the process.
 const RECOMMENDED_OPEN_FILE_DESCRIPTOR_LIMIT: u64 = 10_000;
 
@@ -252,8 +256,11 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from `delayed_canonicalization` if it is available.
 	/// Otherwise its true.
-	fn delayed_canonicalization(&self) -> Result<bool> {
-		Ok(self.pruning_params().map(|x| x.delayed_canonicalization()).unwrap_or(true))
+	fn delayed_canonicalization(&self) -> Result<Option<u32>> {
+		Ok(self
+			.pruning_params()
+			.map(|x| x.delayed_canonicalization())
+			.unwrap_or(Some(DELAYED_PRUNING)))
 	}
 
 	/// Get the block pruning mode.

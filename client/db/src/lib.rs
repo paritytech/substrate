@@ -318,7 +318,7 @@ pub struct DatabaseSettings {
 	/// NOTE: only finalized blocks are subject for removal!
 	pub blocks_pruning: BlocksPruning,
 	/// The pruning of blocks is delayed for a number of finalizations.
-	pub delayed_pruning: bool,
+	pub delayed_pruning: Option<u32>,
 }
 
 /// Block pruning settings.
@@ -1058,11 +1058,7 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(
-		db_config: DatabaseSettings,
-		canonicalization_delay: u64,
-		delayed_pruning: Option<u32>,
-	) -> ClientResult<Self> {
+	pub fn new(db_config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
 		use utils::OpenDbError;
 
 		let db_source = &db_config.source;
@@ -1078,13 +1074,7 @@ impl<Block: BlockT> Backend<Block> {
 				Err(as_is) => return Err(as_is.into()),
 			};
 
-		Self::from_database(
-			db as Arc<_>,
-			canonicalization_delay,
-			delayed_pruning,
-			&db_config,
-			needs_init,
-		)
+		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1116,11 +1106,10 @@ impl<Block: BlockT> Backend<Block> {
 			state_pruning: Some(state_pruning),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
 			blocks_pruning,
-			delayed_pruning: true,
+			delayed_pruning,
 		};
 
-		Self::new(db_setting, canonicalization_delay, delayed_pruning)
-			.expect("failed to create test-db")
+		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
 	}
 
 	/// Expose the Database that is used by this backend.
@@ -1221,7 +1210,6 @@ impl<Block: BlockT> Backend<Block> {
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
-		delayed_pruning: Option<u32>,
 		config: &DatabaseSettings,
 		should_init: bool,
 	) -> ClientResult<Self> {
@@ -1243,7 +1231,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let state_pruning_used = state_db.pruning_mode();
 		let is_archive_pruning = state_pruning_used.is_archive();
-		let blockchain = BlockchainDb::new(db.clone(), delayed_pruning)?;
+		let blockchain = BlockchainDb::new(db.clone(), config.delayed_pruning)?;
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
@@ -1255,7 +1243,7 @@ impl<Block: BlockT> Backend<Block> {
 			offchain_storage,
 			blockchain,
 			canonicalization_delay,
-			delayed_pruning,
+			delayed_pruning: config.delayed_pruning,
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
@@ -2657,10 +2645,9 @@ pub(crate) mod tests {
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				blocks_pruning: BlocksPruning::KeepFinalized,
-				delayed_pruning: true,
+				delayed_pruning: None,
 			},
 			0,
-			None,
 		)
 		.unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);

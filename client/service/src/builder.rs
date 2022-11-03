@@ -277,10 +277,7 @@ where
 	Block: BlockT,
 {
 	const CANONICALIZATION_DELAY: u64 = 4096;
-	const DELAYED_PRUNING: u32 = 32;
-
-	let delayed_pruning = if settings.delayed_pruning { Some(DELAYED_PRUNING) } else { None };
-	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY, delayed_pruning)?))
+	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?))
 }
 
 /// Create an instance of client backed by given backend.
