@@ -49,6 +49,7 @@ pub trait WeightInfo {
 	fn retract_bid(l: u32, ) -> Weight;
 	fn set_target() -> Weight;
 	fn thaw() -> Weight;
+	fn fund_deficit() -> Weight;
 	fn pursue_target_noop() -> Weight;
 	fn pursue_target_per_item(b: u32, ) -> Weight;
 	fn pursue_target_per_queue(q: u32, ) -> Weight;
@@ -91,6 +92,13 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nis Active (r:1 w:1)
 	// Storage: Nis ActiveTotal (r:1 w:1)
 	fn thaw() -> Weight {
+		Weight::from_ref_time(47_753_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nis Active (r:1 w:1)
+	// Storage: Nis ActiveTotal (r:1 w:1)
+	fn fund_deficit() -> Weight {
 		Weight::from_ref_time(47_753_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
@@ -163,6 +171,13 @@ impl WeightInfo for () {
 	// Storage: Nis Active (r:1 w:1)
 	// Storage: Nis ActiveTotal (r:1 w:1)
 	fn thaw() -> Weight {
+		Weight::from_ref_time(47_753_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nis Active (r:1 w:1)
+	// Storage: Nis ActiveTotal (r:1 w:1)
+	fn fund_deficit() -> Weight {
 		Weight::from_ref_time(47_753_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))

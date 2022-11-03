@@ -42,8 +42,7 @@ fn basic_setup_works() {
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 0,
-				proportion: Perquintill::zero(),
+				proportion_owed: Perquintill::zero(),
 				index: 0,
 				target: Perquintill::zero(),
 			}
@@ -63,8 +62,7 @@ fn set_target_works() {
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 0,
-				proportion: Perquintill::zero(),
+				proportion_owed: Perquintill::zero(),
 				index: 0,
 				target: Perquintill::from_percent(50),
 			}
@@ -86,7 +84,7 @@ fn place_bid_works() {
 			Error::<Test>::DurationTooBig
 		);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 2));
-		assert_eq!(pot(), 10);
+		assert_eq!(Balances::reserved_balance(1), 10);
 		assert_eq!(Queues::<Test>::get(2), vec![Bid { amount: 10, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (1, 10), (0, 0)]);
 	});
@@ -101,10 +99,10 @@ fn place_bid_queuing_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 5, 2));
 		assert_noop!(Nis::place_bid(RuntimeOrigin::signed(1), 5, 2), Error::<Test>::BidTooLow);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 15, 2));
-		assert_eq!(pot(), 45);
+		assert_eq!(Balances::reserved_balance(1), 45);
 
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 25, 2));
-		assert_eq!(pot(), 60);
+		assert_eq!(Balances::reserved_balance(1), 60);
 		assert_noop!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 2), Error::<Test>::BidTooLow);
 		assert_eq!(
 			Queues::<Test>::get(2),
@@ -140,7 +138,8 @@ fn multiple_place_bids_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 3));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 10, 2));
 
-		assert_eq!(pot(), 50);
+		assert_eq!(Balances::reserved_balance(1), 40);
+		assert_eq!(Balances::reserved_balance(2), 10);
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 10, who: 1 },]);
 		assert_eq!(
 			Queues::<Test>::get(2),
@@ -163,7 +162,7 @@ fn retract_single_item_queue_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 10, 2));
 		assert_ok!(Nis::retract_bid(RuntimeOrigin::signed(1), 10, 1));
 
-		assert_eq!(pot(), 10);
+		assert_eq!(Balances::reserved_balance(1), 10);
 		assert_eq!(Queues::<Test>::get(1), vec![]);
 		assert_eq!(Queues::<Test>::get(2), vec![Bid { amount: 10, who: 1 }]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0), (1, 10), (0, 0)]);
@@ -180,7 +179,8 @@ fn retract_with_other_and_duplicate_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 10, 2));
 
 		assert_ok!(Nis::retract_bid(RuntimeOrigin::signed(1), 10, 2));
-		assert_eq!(pot(), 30);
+		assert_eq!(Balances::reserved_balance(1), 20);
+		assert_eq!(Balances::reserved_balance(2), 10);
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 10, who: 1 },]);
 		assert_eq!(
 			Queues::<Test>::get(2),
@@ -215,7 +215,10 @@ fn basic_enlarge_works() {
 		Nis::enlarge(40, 2);
 
 		// Takes 2/2, then stopped because it reaches its max amount
-		assert_eq!(pot(), 80);
+		assert_eq!(Balances::reserved_balance(1), 40);
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(pot(), 40);
+
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 40, who: 1 }]);
 		assert_eq!(Queues::<Test>::get(2), vec![]);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(1, 40), (0, 0), (0, 0)]);
@@ -223,20 +226,14 @@ fn basic_enlarge_works() {
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 40,
-				proportion: Perquintill::from_percent(10),
+				proportion_owed: Perquintill::from_percent(10),
 				index: 1,
 				target: Perquintill::zero(),
 			}
 		);
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 2,
-				expiry: 7
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7 }
 		);
 	});
 }
@@ -259,27 +256,16 @@ fn enlarge_respects_bids_limit() {
 
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 4,
-				expiry: 10,
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 4, expiry: 10 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(1).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 2,
-				expiry: 7
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 7 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 80,
-				proportion: Perquintill::from_percent(20),
+				proportion_owed: Perquintill::from_percent(20),
 				index: 2,
 				target: Perquintill::zero(),
 			}
@@ -300,18 +286,12 @@ fn enlarge_respects_amount_limit_and_will_split() {
 
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 1,
-				expiry: 4
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 4 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 40,
-				proportion: Perquintill::from_percent(10),
+				proportion_owed: Perquintill::from_percent(10),
 				index: 1,
 				target: Perquintill::zero(),
 			}
@@ -324,26 +304,69 @@ fn basic_thaw_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
-		Nis::enlarge(40, 1);
-		run_to_block(3);
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0), Error::<Test>::NotExpired);
-		run_to_block(4);
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 1), Error::<Test>::Unknown);
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0), Error::<Test>::NotOwner);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
+		assert_eq!(Nis::issuance().effective, 400);
+		assert_eq!(Balances::free_balance(1), 60);
+		assert_eq!(Balances::reserved_balance(1), 40);
+		assert_eq!(pot(), 0);
 
+		Nis::enlarge(40, 1);
+		assert_eq!(Nis::issuance().effective, 400);
+		assert_eq!(Balances::free_balance(1), 60);
+		assert_eq!(Balances::reserved_balance(1), 0);
+		assert_eq!(pot(), 40);
+
+		run_to_block(3);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotExpired);
+		run_to_block(4);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 1, None), Error::<Test>::Unknown);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), Error::<Test>::NotOwner);
+
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_eq!(Nis::issuance().effective, 400);
+		assert_eq!(Balances::free_balance(1), 100);
+		assert_eq!(pot(), 0);
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 0,
-				proportion: Perquintill::zero(),
+				proportion_owed: Perquintill::zero(),
 				index: 1,
 				target: Perquintill::zero(),
 			}
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
+	});
+}
+
+#[test]
+fn partial_thaw_works() {
+	new_test_ext().execute_with(|| {
+		run_to_block(1);
+		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 80, 1));
+		Nis::enlarge(80, 1);
+		assert_eq!(pot(), 80);
+
+		run_to_block(4);
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, Some(1050000)));
+
+		assert_eq!(Nis::issuance().effective, 400);
+		assert_eq!(Balances::free_balance(1), 40);
+		assert_eq!(pot(), 60);
+
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+
+		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 100);
 		assert_eq!(pot(), 0);
+
+		assert_eq!(
+			Summary::<Test>::get(),
+			SummaryRecord {
+				proportion_owed: Perquintill::zero(),
+				index: 1,
+				target: Perquintill::zero(),
+			}
+		);
+		assert_eq!(Receipts::<Test>::get(0), None);
 	});
 }
 
@@ -359,14 +382,14 @@ fn thaw_respects_transfers() {
 		assert_ok!(Nis::transfer(&0, &2));
 
 		// Transfering the receipt...
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0), Error::<Test>::NotOwner);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::NotOwner);
 		// ...can't be thawed due to missing counterpart
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0), TokenError::NoFunds);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), TokenError::NoFunds);
 
 		// Transfer the counterpart also...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 2100000));
 		// ...and thawing is possible.
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 0));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 0, None));
 
 		assert_eq!(Balances::free_balance(2), 140);
 		assert_eq!(Balances::free_balance(1), 60);
@@ -389,15 +412,20 @@ fn thaw_when_issuance_higher_works() {
 
 		run_to_block(4);
 
+		// Unfunded initially...
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::Unfunded);
+		// ...so we fund.
+		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
+
 		// Transfer counterpart away...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(1), 2, 250_000));
 		// ...and it's not thawable.
-		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0), TokenError::NoFunds);
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), TokenError::NoFunds);
 
 		// Transfer counterpart back...
 		assert_ok!(NisBalances::transfer(RuntimeOrigin::signed(2), 1, 250_000));
 		// ...and it is.
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
 
 		assert_eq!(Balances::free_balance(1), 150);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -420,7 +448,12 @@ fn thaw_with_ignored_issuance_works() {
 		assert_ok!(Balances::transfer(RuntimeOrigin::signed(0), 4, 50));
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
+		// Unfunded initially...
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 0, None), Error::<Test>::Unfunded);
+		// ...so we fund...
+		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
+		// ...and then it's ok.
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
 
 		// Account zero changes have been ignored.
 		assert_eq!(Balances::free_balance(1), 150);
@@ -441,7 +474,7 @@ fn thaw_when_issuance_lower_works() {
 		Balances::make_free_balance_be(&4, 75);
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
 
 		assert_eq!(Balances::free_balance(1), 75);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -461,11 +494,12 @@ fn multiple_thaws_works() {
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 200);
 		Balances::make_free_balance_be(&4, 200);
+		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1));
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2, None));
 
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
@@ -485,11 +519,12 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 		Balances::make_free_balance_be(&2, 100);
 		Balances::make_free_balance_be(&3, 200);
 		Balances::make_free_balance_be(&4, 200);
+		assert_ok!(Nis::fund_deficit(RuntimeOrigin::signed(1)));
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2));
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1));
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2, None));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
 
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
@@ -523,27 +558,16 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 2 & 3 for 40 each & duration of 3.
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 2,
-				expiry: 13,
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 13 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(1).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 3,
-				expiry: 13,
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 3, expiry: 13 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 80,
-				proportion: Perquintill::from_percent(20),
+				proportion_owed: Perquintill::from_percent(20),
 				index: 2,
 				target: Perquintill::from_percent(40),
 			}
@@ -554,8 +578,7 @@ fn enlargement_to_target_works() {
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 80,
-				proportion: Perquintill::from_percent(20),
+				proportion_owed: Perquintill::from_percent(20),
 				index: 2,
 				target: Perquintill::from_percent(40),
 			}
@@ -565,27 +588,16 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
 			Receipts::<Test>::get(2).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 1,
-				expiry: 12,
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 12 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(3).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 2,
-				expiry: 12,
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 2, expiry: 12 }
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 160,
-				proportion: Perquintill::from_percent(40),
+				proportion_owed: Perquintill::from_percent(40),
 				index: 4,
 				target: Perquintill::from_percent(40),
 			}
@@ -596,8 +608,7 @@ fn enlargement_to_target_works() {
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 160,
-				proportion: Perquintill::from_percent(40),
+				proportion_owed: Perquintill::from_percent(40),
 				index: 4,
 				target: Perquintill::from_percent(40),
 			}
@@ -610,19 +621,13 @@ fn enlargement_to_target_works() {
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
 		assert_eq!(
 			Receipts::<Test>::get(4).unwrap(),
-			ReceiptRecord {
-				proportion: Perquintill::from_percent(10),
-				amount: 40,
-				who: 1,
-				expiry: 13,
-			}
+			ReceiptRecord { proportion: Perquintill::from_percent(10), who: 1, expiry: 13 }
 		);
 
 		assert_eq!(
 			Summary::<Test>::get(),
 			SummaryRecord {
-				frozen: 200,
-				proportion: Perquintill::from_percent(50),
+				proportion_owed: Perquintill::from_percent(50),
 				index: 5,
 				target: Perquintill::from_percent(60),
 			}

@@ -122,8 +122,8 @@ impl pallet_nis::Config for Test {
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config<Instance1>>::Balance;
 	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
+	type FundOrigin = frame_system::EnsureSigned<Self::AccountId>;
 	type Deficit = ();
-	type Surplus = ();
 	type IgnoredIssuance = IgnoredIssuance;
 	type Counterpart = NisBalances;
 	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000u128>>;
