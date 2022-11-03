@@ -79,12 +79,14 @@
 //! # fn main() {}
 //! ```
 //!
-//! ### Signed Extensions
+//! ### Signed Extension
 //!
-//! The Sudo pallet defines the following extensions:
+//! The Sudo pallet defines the following extension:
 //!
-//!   - [`CheckOnlySudo`]: Checks the signer of the transaction and ensure that the signed
-//!     transactions are only valid if they are signed by root
+//!   - [`CheckOnlySudoAccount`]: Checks the signer of the transaction and ensure that the signed
+//!     transactions are only valid if they are signed by sudo account. 
+//!     In the initial phase of a chain without any tokens, with this extension we could reject 
+//!     spam transactions that are not signed by sudo account before they enter transaction pool.
 //!
 //! ## Genesis Config
 //!
@@ -104,13 +106,13 @@ use sp_std::prelude::*;
 
 use frame_support::{dispatch::GetDispatchInfo, traits::UnfilteredDispatchable};
 
-mod extensions;
+mod extension;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
-pub use extensions::check_only_sudo::CheckOnlySudo;
+pub use extension::CheckOnlySudoAccount;
 pub use pallet::*;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;

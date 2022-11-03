@@ -28,21 +28,25 @@ use sp_runtime::{
 };
 use sp_std::{fmt, marker::PhantomData};
 
-/// Ensure that signed transactions are only valid if they are signed by root.
+/// Ensure that signed transactions are only valid if they are signed by sudo account.
+///
+/// In the initial phase of a chain without any tokens, with this extension we could 
+/// reject spam transactions that are not signed by sudo account before they enter 
+/// transaction pool.
 #[derive(Clone, Eq, PartialEq, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(T))]
-pub struct CheckOnlySudo<T: Config + Send + Sync>(PhantomData<T>);
+pub struct CheckOnlySudoAccount<T: Config + Send + Sync>(PhantomData<T>);
 
-impl<T: Config + Send + Sync> Default for CheckOnlySudo<T> {
+impl<T: Config + Send + Sync> Default for CheckOnlySudoAccount<T> {
 	fn default() -> Self {
 		Self(Default::default())
 	}
 }
 
-impl<T: Config + Send + Sync> fmt::Debug for CheckOnlySudo<T> {
+impl<T: Config + Send + Sync> fmt::Debug for CheckOnlySudoAccount<T> {
 	#[cfg(feature = "std")]
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "CheckSudoKey")
+		write!(f, "CheckOnlySudoAccount")
 	}
 
 	#[cfg(not(feature = "std"))]
@@ -51,18 +55,18 @@ impl<T: Config + Send + Sync> fmt::Debug for CheckOnlySudo<T> {
 	}
 }
 
-impl<T: Config + Send + Sync> CheckOnlySudo<T> {
+impl<T: Config + Send + Sync> CheckOnlySudoAccount<T> {
 	/// Creates new `SignedExtension` to check sudo key.
 	pub fn new() -> Self {
 		Self::default()
 	}
 }
 
-impl<T: Config + Send + Sync> SignedExtension for CheckOnlySudo<T>
+impl<T: Config + Send + Sync> SignedExtension for CheckOnlySudoAccount<T>
 where
 	<T as Config>::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 {
-	const IDENTIFIER: &'static str = "CheckSudoKey";
+	const IDENTIFIER: &'static str = "CheckOnlySudoAccount";
 	type AccountId = T::AccountId;
 	type Call = <T as Config>::RuntimeCall;
 	type AdditionalSigned = ();
