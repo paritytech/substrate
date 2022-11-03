@@ -30,7 +30,7 @@ use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
-use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
 use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
@@ -483,10 +483,10 @@ where
 				TrapReason::Return(ReturnData { flags, data }) => {
 					let flags =
 						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
-					Ok(ExecReturnValue { flags, data: Bytes(data) })
+					Ok(ExecReturnValue { flags, data })
 				},
 				TrapReason::Termination =>
-					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
+					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
 				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
@@ -494,7 +494,7 @@ where
 		// Check the exact type of the error.
 		match sandbox_result {
 			// No traps were generated. Proceed normally.
-			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
+			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
 			// `Error::Module` is returned only if instantiation or linking failed (i.e.
 			// wasm binary tried to import a function that is not provided by the host).
 			// This shouldn't happen because validation process ought to reject such binaries.
@@ -879,7 +879,7 @@ where
 			if let Ok(return_value) = call_outcome {
 				return Err(TrapReason::Return(ReturnData {
 					flags: return_value.flags.bits(),
-					data: return_value.data.0,
+					data: return_value.data,
 				}))
 			}
 		}
@@ -1976,11 +1976,7 @@ pub mod env {
 		data_len: u32,
 	) -> Result<(), TrapReason> {
 		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
-			// # Warning
-			//
-			// Unstable sorts are non-deterministic across architectures. The usage here is OK
-			// because we are rejecting duplicates which removes the non determinism.
-			items.sort_unstable();
+			items.sort();
 			// Find any two consecutive equal elements.
 			items.windows(2).any(|w| match &w {
 				&[a, b] => a == b,
@@ -2388,6 +2384,7 @@ pub mod env {
 	/// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another
 	/// way, when using this API you lose the guarantee that an address always identifies a specific
 	/// code hash.
+	///
 	/// 3. If a contract calls into itself after changing its code the new call would use
 	/// the new code. However, if the original caller panics after returning from the sub call it
 	/// would revert the changes made by `seal_set_code_hash` and the next caller would use

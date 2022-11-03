@@ -21,7 +21,7 @@
 
 pub use self::generic::{
 	RemoteCallRequest, RemoteChangesRequest, RemoteChangesResponse, RemoteHeaderRequest,
-	RemoteHeaderResponse, RemoteReadChildRequest, RemoteReadRequest, Roles,
+	RemoteHeaderResponse, RemoteReadChildRequest, RemoteReadRequest,
 };
 use codec::{Decode, Encode};
 use sc_client_api::StorageProof;
@@ -57,71 +57,17 @@ pub struct RemoteReadResponse {
 /// Generic types.
 pub mod generic {
 	use super::{RemoteCallResponse, RemoteReadResponse};
-	use bitflags::bitflags;
-	use codec::{Decode, Encode, Input, Output};
+	use codec::{Decode, Encode, Input};
 	use sc_client_api::StorageProof;
 	use sc_network_common::{
 		message::RequestId,
+		protocol::role::Roles,
 		sync::message::{
 			generic::{BlockRequest, BlockResponse},
 			BlockAnnounce,
 		},
 	};
 	use sp_runtime::ConsensusEngineId;
-
-	bitflags! {
-		/// Bitmask of the roles that a node fulfills.
-		pub struct Roles: u8 {
-			/// No network.
-			const NONE = 0b00000000;
-			/// Full node, does not participate in consensus.
-			const FULL = 0b00000001;
-			/// Light client node.
-			const LIGHT = 0b00000010;
-			/// Act as an authority
-			const AUTHORITY = 0b00000100;
-		}
-	}
-
-	impl Roles {
-		/// Does this role represents a client that holds full chain data locally?
-		pub fn is_full(&self) -> bool {
-			self.intersects(Self::FULL | Self::AUTHORITY)
-		}
-
-		/// Does this role represents a client that does not participates in the consensus?
-		pub fn is_authority(&self) -> bool {
-			*self == Self::AUTHORITY
-		}
-
-		/// Does this role represents a client that does not hold full chain data locally?
-		pub fn is_light(&self) -> bool {
-			!self.is_full()
-		}
-	}
-
-	impl<'a> From<&'a crate::config::Role> for Roles {
-		fn from(roles: &'a crate::config::Role) -> Self {
-			match roles {
-				crate::config::Role::Full => Self::FULL,
-				crate::config::Role::Authority { .. } => Self::AUTHORITY,
-			}
-		}
-	}
-
-	impl codec::Encode for Roles {
-		fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
-			dest.push_byte(self.bits())
-		}
-	}
-
-	impl codec::EncodeLike for Roles {}
-
-	impl codec::Decode for Roles {
-		fn decode<I: Input>(input: &mut I) -> Result<Self, codec::Error> {
-			Self::from_bits(input.read_byte()?).ok_or_else(|| codec::Error::from("Invalid bytes"))
-		}
-	}
 
 	/// Consensus is mostly opaque to us
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]

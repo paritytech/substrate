@@ -99,6 +99,17 @@ pub fn roll_to(n: BlockNumber) {
 	}
 }
 
+pub fn roll_to_unsigned() {
+	while !matches!(MultiPhase::current_phase(), Phase::Unsigned(_)) {
+		roll_to(System::block_number() + 1);
+	}
+}
+pub fn roll_to_signed() {
+	while !matches!(MultiPhase::current_phase(), Phase::Signed) {
+		roll_to(System::block_number() + 1);
+	}
+}
+
 pub fn roll_to_with_ocw(n: BlockNumber) {
 	let now = System::block_number();
 	for i in now + 1..=n {
@@ -144,7 +155,7 @@ pub fn trim_helpers() -> TrimHelpers {
 		seq_phragmen(desired_targets as usize, targets.clone(), voters.clone(), None).unwrap();
 
 	// sort by decreasing order of stake
-	assignments.sort_unstable_by_key(|assignment| {
+	assignments.sort_by_key(|assignment| {
 		std::cmp::Reverse(stakes.get(&assignment.who).cloned().unwrap_or_default())
 	});
 
@@ -228,7 +239,7 @@ parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
 		::with_sensible_defaults(
-			Weight::from_components(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
+			Weight::from_parts(2u64 * constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
 			NORMAL_DISPATCH_RATIO,
 		);
 }
@@ -560,6 +571,12 @@ impl ExtBuilder {
 			balances: vec![
 				// bunch of account for submitting stuff only.
 				(99, 100),
+				(100, 100),
+				(101, 100),
+				(102, 100),
+				(103, 100),
+				(104, 100),
+				(105, 100),
 				(999, 100),
 				(9999, 100),
 			],

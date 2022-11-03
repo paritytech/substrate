@@ -40,6 +40,9 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
 
+/// Logging target
+const LOG_TARGET: &'static str = "frame::benchmark::pallet";
+
 /// The inclusive range of a component.
 #[derive(Serialize, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ComponentRange {
@@ -242,7 +245,8 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
-			println!(
+			log::info!(
+				target: LOG_TARGET,
 				"Starting benchmark: {}::{}",
 				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
 				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
@@ -268,9 +272,8 @@ impl PalletCmd {
 
 					for s in 0..self.steps {
 						// This is the value we will be testing for component `name`
-						let component_value = ((lowest as f32 + step_size * s as f32) as u32)
-							.min(highest)
-							.max(lowest);
+						let component_value =
+							((lowest as f32 + step_size * s as f32) as u32).clamp(lowest, highest);
 
 						// Select the max value for all the other components.
 						let c: Vec<(BenchmarkParameter, u32)> = components
@@ -297,16 +300,15 @@ impl PalletCmd {
 			for (s, selected_components) in all_components.iter().enumerate() {
 				// First we run a verification
 				if !self.no_verify {
-					// Dont use these results since verification code will add overhead
 					let state = &state_without_tracking;
-					let _results = StateMachine::new(
+					let result = StateMachine::new(
 						state,
 						&mut changes,
 						&executor,
 						"Benchmark_dispatch_benchmark",
 						&(
-							&pallet.clone(),
-							&extrinsic.clone(),
+							&pallet,
+							&extrinsic,
 							&selected_components.clone(),
 							true, // run verification code
 							1,    // no need to do internal repeats
@@ -321,6 +323,20 @@ impl PalletCmd {
 					.map_err(|e| {
 						format!("Error executing and verifying runtime benchmark: {}", e)
 					})?;
+					// Dont use these results since verification code will add overhead.
+					let _batch =
+						<std::result::Result<Vec<BenchmarkBatch>, String> as Decode>::decode(
+							&mut &result[..],
+						)
+						.map_err(|e| format!("Failed to decode benchmark results: {:?}", e))?
+						.map_err(|e| {
+							format!(
+								"Benchmark {}::{} failed: {}",
+								String::from_utf8_lossy(&pallet),
+								String::from_utf8_lossy(&extrinsic),
+								e
+							)
+						})?;
 				}
 				// Do one loop of DB tracking.
 				{
@@ -390,7 +406,9 @@ impl PalletCmd {
 					if let Ok(elapsed) = timer.elapsed() {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
-							println!(
+
+							log::info!(
+								target: LOG_TARGET,
 								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
@@ -480,7 +498,7 @@ impl PalletCmd {
 			if let Some(path) = &self.json_file {
 				fs::write(path, json)?;
 			} else {
-				println!("{}", json);
+				print!("{json}");
 				return Ok(true)
 			}
 		}

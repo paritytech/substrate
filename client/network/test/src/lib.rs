@@ -48,21 +48,21 @@ use sc_consensus::{
 	Verifier,
 };
 use sc_network::{
-	config::{NetworkConfiguration, Role, SyncMode},
+	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
 	config::{
 		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
 	},
-	protocol::ProtocolName,
+	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
-	warp_request_handler, ChainSync,
+	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
+	state_request_handler::StateRequestHandler, warp_request_handler, ChainSync,
 };
 use sc_service::client::Client;
 use sp_blockchain::{
@@ -77,7 +77,7 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
@@ -176,8 +176,11 @@ impl PeersClient {
 		self.backend.have_state_at(&header.hash(), *header.number())
 	}
 
-	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		self.client.justifications(block)
+	pub fn justifications(
+		&self,
+		hash: &<Block as BlockT>::Hash,
+	) -> ClientResult<Option<Justifications>> {
+		self.client.justifications(hash)
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
@@ -190,11 +193,11 @@ impl PeersClient {
 
 	pub fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: &<Block as BlockT>::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> ClientResult<()> {
-		self.client.finalize_block(id, justification, notify)
+		self.client.finalize_block(hash, justification, notify)
 	}
 }
 
@@ -542,7 +545,7 @@ where
 	pub fn has_body(&self, hash: &H256) -> bool {
 		self.backend
 			.as_ref()
-			.map(|backend| backend.blockchain().body(BlockId::hash(*hash)).unwrap().is_some())
+			.map(|backend| backend.blockchain().body(hash).unwrap().is_some())
 			.unwrap_or(false)
 	}
 }
@@ -688,6 +691,8 @@ pub struct FullPeerConfig {
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
 	pub notifications_protocols: Vec<ProtocolName>,
+	/// List of request-response protocols that the network must support.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -790,6 +795,9 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		network_config
+			.request_response_protocols
+			.extend(config.request_response_protocols);
 		network_config.extra_sets = config
 			.notifications_protocols
 			.into_iter()
@@ -797,6 +805,7 @@ where
 				notifications_protocol: p,
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
+				handshake: None,
 				set_config: Default::default(),
 			})
 			.collect();
@@ -858,7 +867,9 @@ where
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
-		let chain_sync = ChainSync::new(
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
+		let (chain_sync, chain_sync_service) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -872,8 +883,22 @@ where
 			block_announce_validator,
 			network_config.max_parallel_downloads,
 			Some(warp_sync),
+			chain_sync_network_handle,
 		)
 		.unwrap();
+		let block_announce_config = chain_sync.get_block_announce_proto_config(
+			protocol_id.clone(),
+			&fork_id,
+			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
+			client.info().best_number,
+			client.info().best_hash,
+			client
+				.block_hash(Zero::zero())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+		);
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -883,7 +908,9 @@ where
 			fork_id,
 			import_queue,
 			chain_sync: Box::new(chain_sync),
+			chain_sync_service,
 			metrics_registry: None,
+			block_announce_config,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
@@ -893,6 +920,11 @@ where
 		.unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
+
+		let service = network.service().clone();
+		async_std::task::spawn(async move {
+			chain_sync_network_provider.run(service).await;
+		});
 
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
@@ -1092,7 +1124,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0
-			.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.finalize_block(&hash, Some(justification), true)
 			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }

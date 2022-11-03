@@ -112,8 +112,8 @@ impl Weight {
 		Self { ref_time: 0, proof_size }
 	}
 
-	/// Construct [`Weight`] with weight components, namely reference time and storage size weights.
-	pub const fn from_components(ref_time: u64, proof_size: u64) -> Self {
+	/// Construct [`Weight`] from weight parts, namely reference time and proof size weights.
+	pub const fn from_parts(ref_time: u64, proof_size: u64) -> Self {
 		Self { ref_time, proof_size }
 	}
 
@@ -318,7 +318,7 @@ impl Zero for Weight {
 	}
 
 	fn is_zero(&self) -> bool {
-		self.ref_time == 0
+		self == &Self::zero()
 	}
 }
 
@@ -445,5 +445,18 @@ impl SubAssign for Weight {
 			ref_time: self.ref_time - other.ref_time,
 			proof_size: self.proof_size - other.proof_size,
 		};
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn is_zero_works() {
+		assert!(Weight::zero().is_zero());
+		assert!(!Weight::from_parts(1, 0).is_zero());
+		assert!(!Weight::from_parts(0, 1).is_zero());
+		assert!(!Weight::MAX.is_zero());
 	}
 }

@@ -64,7 +64,7 @@ benchmarks! {
 
 	#[skip_meta]
 	set_storage {
-		let i in 1 .. 1000;
+		let i in 0 .. 1000;
 
 		// Set up i items to add
 		let mut items = Vec::new();
@@ -72,56 +72,69 @@ benchmarks! {
 			let hash = (i, j).using_encoded(T::Hashing::hash).as_ref().to_vec();
 			items.push((hash.clone(), hash.clone()));
 		}
+
+		let items_to_verify = items.clone();
 	}: _(RawOrigin::Root, items)
 	verify {
-		let last_hash = (i, i - 1).using_encoded(T::Hashing::hash);
-		let value = storage::unhashed::get_raw(last_hash.as_ref()).ok_or("No value stored")?;
-		assert_eq!(value, last_hash.as_ref().to_vec());
+		// Verify that they're actually in the storage.
+		for (item, _) in items_to_verify {
+			let value = storage::unhashed::get_raw(&item).ok_or("No value stored")?;
+			assert_eq!(value, *item);
+		}
 	}
 
 	#[skip_meta]
 	kill_storage {
-		let i in 1 .. 1000;
+		let i in 0 .. 1000;
 
 		// Add i items to storage
-		let mut items = Vec::new();
+		let mut items = Vec::with_capacity(i as usize);
 		for j in 0 .. i {
 			let hash = (i, j).using_encoded(T::Hashing::hash).as_ref().to_vec();
 			storage::unhashed::put_raw(&hash, &hash);
 			items.push(hash);
 		}
 
-		// We will verify this value is removed
-		let last_hash = (i, i - 1).using_encoded(T::Hashing::hash);
-		let value = storage::unhashed::get_raw(last_hash.as_ref()).ok_or("No value stored")?;
-		assert_eq!(value, last_hash.as_ref().to_vec());
+		// Verify that they're actually in the storage.
+		for item in &items {
+			let value = storage::unhashed::get_raw(item).ok_or("No value stored")?;
+			assert_eq!(value, *item);
+		}
 
+		let items_to_verify = items.clone();
 	}: _(RawOrigin::Root, items)
 	verify {
-		assert_eq!(storage::unhashed::get_raw(last_hash.as_ref()), None);
+		// Verify that they're not in the storage anymore.
+		for item in items_to_verify {
+			assert!(storage::unhashed::get_raw(&item).is_none());
+		}
 	}
 
 	#[skip_meta]
 	kill_prefix {
-		let p in 1 .. 1000;
+		let p in 0 .. 1000;
 
 		let prefix = p.using_encoded(T::Hashing::hash).as_ref().to_vec();
+		let mut items = Vec::with_capacity(p as usize);
 		// add p items that share a prefix
 		for i in 0 .. p {
 			let hash = (p, i).using_encoded(T::Hashing::hash).as_ref().to_vec();
 			let key = [&prefix[..], &hash[..]].concat();
 			storage::unhashed::put_raw(&key, &key);
+			items.push(key);
 		}
 
-		// We will verify this value is removed
-		let last_hash = (p, p - 1).using_encoded(T::Hashing::hash).as_ref().to_vec();
-		let last_key = [&prefix[..], &last_hash[..]].concat();
-		let value = storage::unhashed::get_raw(&last_key).ok_or("No value stored")?;
-		assert_eq!(value, last_key);
-
+		// Verify that they're actually in the storage.
+		for item in &items {
+			let value = storage::unhashed::get_raw(item).ok_or("No value stored")?;
+			assert_eq!(value, *item);
+		}
 	}: _(RawOrigin::Root, prefix, p)
 	verify {
-		assert_eq!(storage::unhashed::get_raw(&last_key), None);
+		// Verify that they're not in the storage anymore.
+		for item in items {
+			assert!(storage::unhashed::get_raw(&item).is_none());
+		}
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

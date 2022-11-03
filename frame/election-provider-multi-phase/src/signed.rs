@@ -24,11 +24,11 @@ use crate::{
 };
 use codec::{Decode, Encode, HasCompact};
 use frame_election_provider_support::NposSolution;
-use frame_support::{
-	storage::bounded_btree_map::BoundedBTreeMap,
-	traits::{defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency},
+use frame_support::traits::{
+	defensive_prelude::*, Currency, Get, OnUnbalanced, ReservableCurrency,
 };
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_core::bounded::BoundedVec;
 use sp_npos_elections::ElectionScore;
 use sp_runtime::{
 	traits::{Saturating, Zero},
@@ -37,7 +37,6 @@ use sp_runtime::{
 use sp_std::{
 	cmp::Ordering,
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-	ops::Deref,
 	vec::Vec,
 };
 
@@ -99,8 +98,12 @@ pub type SignedSubmissionOf<T> = SignedSubmission<
 	<<T as crate::Config>::MinerConfig as MinerConfig>::Solution,
 >;
 
-pub type SubmissionIndicesOf<T> =
-	BoundedBTreeMap<ElectionScore, u32, <T as Config>::SignedMaxSubmissions>;
+/// Always sorted vector of a score, submitted at the given block number, which can be found at the
+/// given index (`u32`) of the `SignedSubmissionsMap`.
+pub type SubmissionIndicesOf<T> = BoundedVec<
+	(ElectionScore, <T as frame_system::Config>::BlockNumber, u32),
+	<T as Config>::SignedMaxSubmissions,
+>;
 
 /// Outcome of [`SignedSubmissions::insert`].
 pub enum InsertResult<T: Config> {
@@ -126,6 +129,16 @@ pub struct SignedSubmissions<T: Config> {
 }
 
 impl<T: Config> SignedSubmissions<T> {
+	/// `true` if the structure is empty.
+	pub fn is_empty(&self) -> bool {
+		self.indices.is_empty()
+	}
+
+	/// Get the length of submitted solutions.
+	pub fn len(&self) -> usize {
+		self.indices.len()
+	}
+
 	/// Get the signed submissions from storage.
 	pub fn get() -> Self {
 		let submissions = SignedSubmissions {
@@ -134,10 +147,12 @@ impl<T: Config> SignedSubmissions<T> {
 			insertion_overlay: BTreeMap::new(),
 			deletion_overlay: BTreeSet::new(),
 		};
+
 		// validate that the stored state is sane
 		debug_assert!(submissions
 			.indices
-			.values()
+			.iter()
+			.map(|(_, _, index)| index)
 			.copied()
 			.max()
 			.map_or(true, |max_idx| submissions.next_idx > max_idx,));
@@ -155,7 +170,8 @@ impl<T: Config> SignedSubmissions<T> {
 			.map_or(true, |max_idx| self.next_idx > max_idx,));
 		debug_assert!(self
 			.indices
-			.values()
+			.iter()
+			.map(|(_, _, index)| index)
 			.copied()
 			.max()
 			.map_or(true, |max_idx| self.next_idx > max_idx,));
@@ -174,9 +190,9 @@ impl<T: Config> SignedSubmissions<T> {
 	/// Get the submission at a particular index.
 	fn get_submission(&self, index: u32) -> Option<SignedSubmissionOf<T>> {
 		if self.deletion_overlay.contains(&index) {
-			// Note: can't actually remove the item from the insertion overlay (if present)
-			// because we don't want to use `&mut self` here. There may be some kind of
-			// `RefCell` optimization possible here in the future.
+			// Note: can't actually remove the item from the insertion overlay (if present) because
+			// we don't want to use `&mut self` here. There may be some kind of `RefCell`
+			// optimization possible here in the future.
 			None
 		} else {
 			self.insertion_overlay
@@ -188,27 +204,30 @@ impl<T: Config> SignedSubmissions<T> {
 
 	/// Perform three operations:
 	///
-	/// - Remove a submission (identified by score)
-	/// - Insert a new submission (identified by score and insertion index)
-	/// - Return the submission which was removed.
+	/// - Remove the solution at the given position of `self.indices`.
+	/// - Insert a new submission (identified by score and insertion index), if provided.
+	/// - Return the submission which was removed, if any.
 	///
-	/// Note: in the case that `weakest_score` is not present in `self.indices`, this will return
-	/// `None` without inserting the new submission and without further notice.
-	///
-	/// Note: this does not enforce any ordering relation between the submission removed and that
-	/// inserted.
+	/// The call site must ensure that `remove_pos` is a valid index. If otherwise, `None` is
+	/// silently returned.
 	///
 	/// Note: this doesn't insert into `insertion_overlay`, the optional new insertion must be
-	/// inserted into  `insertion_overlay` to keep the variable `self` in a valid state.
+	/// inserted into `insertion_overlay` to keep the variable `self` in a valid state.
 	fn swap_out_submission(
 		&mut self,
-		remove_score: ElectionScore,
-		insert: Option<(ElectionScore, u32)>,
+		remove_pos: usize,
+		insert: Option<(ElectionScore, T::BlockNumber, u32)>,
 	) -> Option<SignedSubmissionOf<T>> {
-		let remove_index = self.indices.remove(&remove_score)?;
-		if let Some((insert_score, insert_idx)) = insert {
+		if remove_pos >= self.indices.len() {
+			return None
+		}
+
+		// safe: index was just checked in the line above.
+		let (_, _, remove_index) = self.indices.remove(remove_pos);
+
+		if let Some((insert_score, block_number, insert_idx)) = insert {
 			self.indices
-				.try_insert(insert_score, insert_idx)
+				.try_push((insert_score, block_number, insert_idx))
 				.expect("just removed an item, we must be under capacity; qed");
 		}
 
@@ -222,20 +241,17 @@ impl<T: Config> SignedSubmissions<T> {
 		})
 	}
 
+	/// Remove the signed submission with the highest score from the set.
+	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
+		let best_index = self.indices.len().checked_sub(1)?;
+		self.swap_out_submission(best_index, None)
+	}
+
 	/// Iterate through the set of signed submissions in order of increasing score.
 	pub fn iter(&self) -> impl '_ + Iterator<Item = SignedSubmissionOf<T>> {
-		self.indices.iter().filter_map(move |(_score, &idx)| {
-			let maybe_submission = self.get_submission(idx);
-			if maybe_submission.is_none() {
-				log!(
-					error,
-					"SignedSubmissions internal state is invalid (idx {}); \
-					there is a logic error in code handling signed solution submissions",
-					idx,
-				)
-			}
-			maybe_submission
-		})
+		self.indices
+			.iter()
+			.filter_map(move |(_score, _bn, idx)| self.get_submission(*idx).defensive())
 	}
 
 	/// Empty the set of signed submissions, returning an iterator of signed submissions in
@@ -283,67 +299,53 @@ impl<T: Config> SignedSubmissions<T> {
 	/// to `is_score_better`, we do not change anything.
 	pub fn insert(&mut self, submission: SignedSubmissionOf<T>) -> InsertResult<T> {
 		// verify the expectation that we never reuse an index
-		debug_assert!(!self.indices.values().any(|&idx| idx == self.next_idx));
+		debug_assert!(!self.indices.iter().map(|(_, _, x)| x).any(|&idx| idx == self.next_idx));
+		let block_number = frame_system::Pallet::<T>::block_number();
 
-		let weakest = match self.indices.try_insert(submission.raw_solution.score, self.next_idx) {
-			Ok(Some(prev_idx)) => {
-				// a submission of equal score was already present in the set;
-				// no point editing the actual backing map as we know that the newer solution can't
-				// be better than the old. However, we do need to put the old value back.
-				self.indices
-					.try_insert(submission.raw_solution.score, prev_idx)
-					.expect("didn't change the map size; qed");
-				return InsertResult::NotInserted
-			},
-			Ok(None) => {
-				// successfully inserted into the set; no need to take out weakest member
-				None
-			},
-			Err((insert_score, insert_idx)) => {
-				// could not insert into the set because it is full.
-				// note that we short-circuit return here in case the iteration produces `None`.
-				// If there wasn't a weakest entry to remove, then there must be a capacity of 0,
-				// which means that we can't meaningfully proceed.
-				let weakest_score = match self.indices.iter().next() {
+		let maybe_weakest = match self.indices.try_push((
+			submission.raw_solution.score,
+			block_number,
+			self.next_idx,
+		)) {
+			Ok(_) => None,
+			Err(_) => {
+				// the queue is full -- if this is better, insert it.
+				let weakest_score = match self.indices.iter().next().defensive() {
 					None => return InsertResult::NotInserted,
-					Some((score, _)) => *score,
+					Some((score, _, _)) => *score,
 				};
 				let threshold = T::BetterSignedThreshold::get();
 
 				// if we haven't improved on the weakest score, don't change anything.
-				if !insert_score.strict_threshold_better(weakest_score, threshold) {
+				if !submission.raw_solution.score.strict_threshold_better(weakest_score, threshold)
+				{
 					return InsertResult::NotInserted
 				}
 
-				self.swap_out_submission(weakest_score, Some((insert_score, insert_idx)))
+				self.swap_out_submission(
+					0, // swap out the worse one, which is always index 0.
+					Some((submission.raw_solution.score, block_number, self.next_idx)),
+				)
 			},
 		};
+
+		// this is the ONLY place that we insert, and we sort post insertion. If scores are the
+		// same, we sort based on reverse of submission block number.
+		self.indices
+			.sort_by(|(score1, bn1, _), (score2, bn2, _)| match score1.cmp(score2) {
+				Ordering::Equal => bn1.cmp(&bn2).reverse(),
+				x => x,
+			});
 
 		// we've taken out the weakest, so update the storage map and the next index
 		debug_assert!(!self.insertion_overlay.contains_key(&self.next_idx));
 		self.insertion_overlay.insert(self.next_idx, submission);
 		debug_assert!(!self.deletion_overlay.contains(&self.next_idx));
 		self.next_idx += 1;
-		match weakest {
+		match maybe_weakest {
 			Some(weakest) => InsertResult::InsertedEjecting(weakest),
 			None => InsertResult::Inserted,
 		}
-	}
-
-	/// Remove the signed submission with the highest score from the set.
-	pub fn pop_last(&mut self) -> Option<SignedSubmissionOf<T>> {
-		let (score, _) = self.indices.iter().rev().next()?;
-		// deref in advance to prevent mutable-immutable borrow conflict
-		let score = *score;
-		self.swap_out_submission(score, None)
-	}
-}
-
-impl<T: Config> Deref for SignedSubmissions<T> {
-	type Target = SubmissionIndicesOf<T>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.indices
 	}
 }
 
@@ -379,6 +381,12 @@ impl<T: Config> Pallet<T> {
 			Self::snapshot_metadata().unwrap_or_default();
 
 		while let Some(best) = all_submissions.pop_last() {
+			log!(
+				debug,
+				"finalized_signed: trying to verify from {:?} score {:?}",
+				best.who,
+				best.raw_solution.score
+			);
 			let SignedSubmission { raw_solution, who, deposit, call_fee } = best;
 			let active_voters = raw_solution.solution.voter_count() as u32;
 			let feasibility_weight = {
@@ -386,6 +394,7 @@ impl<T: Config> Pallet<T> {
 				let desired_targets = Self::desired_targets().defensive_unwrap_or_default();
 				T::WeightInfo::feasibility_check(voters, targets, active_voters, desired_targets)
 			};
+
 			// the feasibility check itself has some weight
 			weight = weight.saturating_add(feasibility_weight);
 			match Self::feasibility_check(raw_solution, ElectionCompute::Signed) {
@@ -397,12 +406,14 @@ impl<T: Config> Pallet<T> {
 						call_fee,
 					);
 					found_solution = true;
+					log!(debug, "finalized_signed: found a valid solution");
 
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_accept_solution());
 					break
 				},
 				Err(_) => {
+					log!(warn, "finalized_signed: invalid signed submission found, slashing.");
 					Self::finalize_signed_phase_reject_solution(&who, deposit);
 					weight = weight
 						.saturating_add(T::WeightInfo::finalize_signed_phase_reject_solution());
@@ -526,13 +537,7 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		mock::{
-			balances, raw_solution, roll_to, Balances, ExtBuilder, MockedWeightInfo, MultiPhase,
-			Runtime, RuntimeOrigin, SignedMaxRefunds, SignedMaxSubmissions, SignedMaxWeight,
-		},
-		Error, Perbill, Phase,
-	};
+	use crate::{mock::*, ElectionCompute, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
@@ -555,7 +560,7 @@ mod tests {
 	#[test]
 	fn should_pay_deposit() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -565,13 +570,21 @@ mod tests {
 
 			assert_eq!(balances(&99), (95, 5));
 			assert_eq!(MultiPhase::signed_submissions().iter().next().unwrap().deposit, 5);
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn good_solution_is_rewarded() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -582,13 +595,22 @@ mod tests {
 
 			assert!(MultiPhase::finalize_signed_phase());
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn bad_solution_is_slashed() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -604,13 +626,22 @@ mod tests {
 			assert!(!MultiPhase::finalize_signed_phase());
 			// and the bond is gone.
 			assert_eq!(balances(&99), (95, 0));
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 99, value: 5 }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn suppressed_solution_gets_bond_back() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let mut solution = raw_solution();
@@ -633,13 +664,22 @@ mod tests {
 			assert_eq!(balances(&99), (100 + 7 + 8, 0));
 			// 999 gets everything back, including the call fee.
 			assert_eq!(balances(&999), (100 + 8, 0));
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
 	#[test]
 	fn cannot_submit_worse_with_full_queue() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -667,7 +707,7 @@ mod tests {
 	#[test]
 	fn call_fee_refund_is_limited_by_signed_max_refunds() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 			assert_eq!(SignedMaxRefunds::get(), 1);
 			assert!(SignedMaxSubmissions::get() > 2);
@@ -683,7 +723,7 @@ mod tests {
 				assert_eq!(balances(&account), (95, 5));
 			}
 
-			assert!(MultiPhase::finalize_signed_phase());
+			assert_ok!(MultiPhase::do_elect());
 
 			for s in 0..SignedMaxSubmissions::get() {
 				let account = 99 + s as u64;
@@ -699,6 +739,26 @@ mod tests {
 					assert_eq!(balances(&account), (100, 0));
 				}
 			}
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 },
+					Event::ElectionFinalized {
+						compute: ElectionCompute::Signed,
+						score: ElectionScore {
+							minimal_stake: 40,
+							sum_stake: 100,
+							sum_stake_squared: 5200
+						}
+					}
+				]
+			);
 		});
 	}
 
@@ -708,7 +768,7 @@ mod tests {
 			.signed_max_submission(1)
 			.better_signed_threshold(Perbill::from_percent(20))
 			.build_and_execute(|| {
-				roll_to(15);
+				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
 				let mut solution = RawSolution {
@@ -747,13 +807,27 @@ mod tests {
 				};
 
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(solution)));
+				assert_eq!(
+					multi_phase_events(),
+					vec![
+						Event::SignedPhaseStarted { round: 1 },
+						Event::SolutionStored {
+							compute: ElectionCompute::Signed,
+							prev_ejected: false
+						},
+						Event::SolutionStored {
+							compute: ElectionCompute::Signed,
+							prev_ejected: true
+						}
+					]
+				);
 			})
 	}
 
 	#[test]
 	fn weakest_is_removed_if_better_provided() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -798,9 +872,9 @@ mod tests {
 	}
 
 	#[test]
-	fn replace_weakest_works() {
-		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+	fn replace_weakest_by_score_works() {
+		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 1..SignedMaxSubmissions::get() {
@@ -823,7 +897,7 @@ mod tests {
 					.iter()
 					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
-				vec![4, 6, 7, 8, 9],
+				vec![4, 6, 7],
 			);
 
 			// better.
@@ -839,7 +913,7 @@ mod tests {
 					.iter()
 					.map(|s| s.raw_solution.score.minimal_stake)
 					.collect::<Vec<_>>(),
-				vec![5, 6, 7, 8, 9],
+				vec![5, 6, 7],
 			);
 		})
 	}
@@ -847,7 +921,7 @@ mod tests {
 	#[test]
 	fn early_ejected_solution_gets_bond_back() {
 		ExtBuilder::default().signed_deposit(2, 0, 0).build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -876,9 +950,10 @@ mod tests {
 	}
 
 	#[test]
-	fn equally_good_solution_is_not_accepted() {
+	fn equally_good_solution_is_not_accepted_when_queue_full() {
+		// because in ordering of solutions, an older solution has higher priority and should stay.
 		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for i in 0..SignedMaxSubmissions::get() {
@@ -888,6 +963,7 @@ mod tests {
 				};
 				assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(solution)));
 			}
+
 			assert_eq!(
 				MultiPhase::signed_submissions()
 					.iter()
@@ -909,18 +985,112 @@ mod tests {
 	}
 
 	#[test]
+	fn equally_good_solution_is_accepted_when_queue_not_full() {
+		// because in ordering of solutions, an older solution has higher priority and should stay.
+		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(99), Box::new(solution)));
+
+			assert_eq!(
+				MultiPhase::signed_submissions()
+					.iter()
+					.map(|s| (s.who, s.raw_solution.score.minimal_stake,))
+					.collect::<Vec<_>>(),
+				vec![(99, 5)]
+			);
+
+			roll_to(16);
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 5, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(999), Box::new(solution)));
+
+			assert_eq!(
+				MultiPhase::signed_submissions()
+					.iter()
+					.map(|s| (s.who, s.raw_solution.score.minimal_stake,))
+					.collect::<Vec<_>>(),
+				vec![(999, 5), (99, 5)]
+			);
+
+			let solution = RawSolution {
+				score: ElectionScore { minimal_stake: 6, ..Default::default() },
+				..Default::default()
+			};
+			assert_ok!(MultiPhase::submit(RuntimeOrigin::signed(9999), Box::new(solution)));
+
+			assert_eq!(
+				MultiPhase::signed_submissions()
+					.iter()
+					.map(|s| (s.who, s.raw_solution.score.minimal_stake,))
+					.collect::<Vec<_>>(),
+				vec![(999, 5), (99, 5), (9999, 6)]
+			);
+		})
+	}
+
+	#[test]
+	fn all_equal_score() {
+		// because in ordering of solutions, an older solution has higher priority and should stay.
+		ExtBuilder::default().signed_max_submission(3).build_and_execute(|| {
+			roll_to(15);
+			assert!(MultiPhase::current_phase().is_signed());
+
+			for i in 0..SignedMaxSubmissions::get() {
+				roll_to((15 + i).into());
+				let solution = raw_solution();
+				assert_ok!(MultiPhase::submit(
+					RuntimeOrigin::signed(100 + i as AccountId),
+					Box::new(solution)
+				));
+			}
+
+			assert_eq!(
+				MultiPhase::signed_submissions()
+					.iter()
+					.map(|s| (s.who, s.raw_solution.score.minimal_stake))
+					.collect::<Vec<_>>(),
+				vec![(102, 40), (101, 40), (100, 40)]
+			);
+
+			roll_to(25);
+
+			// The first one that will actually get verified is the last one.
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 100, value: 7 },
+					Event::UnsignedPhaseStarted { round: 1 }
+				]
+			);
+		})
+	}
+
+	#[test]
 	fn all_in_one_signed_submission_scenario() {
 		// a combination of:
 		// - good_solution_is_rewarded
 		// - bad_solution_is_slashed
 		// - suppressed_solution_gets_bond_back
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			assert_eq!(balances(&99), (100, 0));
 			assert_eq!(balances(&999), (100, 0));
 			assert_eq!(balances(&9999), (100, 0));
+
 			let solution = raw_solution();
 
 			// submit a correct one.
@@ -951,6 +1121,17 @@ mod tests {
 			assert_eq!(balances(&999), (95, 0));
 			// 9999 gets everything back, including the call fee.
 			assert_eq!(balances(&9999), (100 + 8, 0));
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Slashed { account: 999, value: 5 },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 
@@ -960,7 +1141,7 @@ mod tests {
 			.signed_weight(Weight::from_ref_time(40).set_proof_size(u64::MAX))
 			.mock_weight_info(MockedWeightInfo::Basic)
 			.build_and_execute(|| {
-				roll_to(15);
+				roll_to_signed();
 				assert!(MultiPhase::current_phase().is_signed());
 
 				let (raw, witness) = MultiPhase::mine_solution().unwrap();
@@ -994,7 +1175,7 @@ mod tests {
 	#[test]
 	fn insufficient_deposit_does_not_store_submission() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -1014,7 +1195,7 @@ mod tests {
 	#[test]
 	fn insufficient_deposit_with_full_queue_works_properly() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			for s in 0..SignedMaxSubmissions::get() {
@@ -1060,7 +1241,7 @@ mod tests {
 	#[test]
 	fn finalize_signed_phase_is_idempotent_given_submissions() {
 		ExtBuilder::default().build_and_execute(|| {
-			roll_to(15);
+			roll_to_signed();
 			assert!(MultiPhase::current_phase().is_signed());
 
 			let solution = raw_solution();
@@ -1073,6 +1254,15 @@ mod tests {
 
 			// calling it again doesn't change anything
 			assert_storage_noop!(MultiPhase::finalize_signed_phase());
+
+			assert_eq!(
+				multi_phase_events(),
+				vec![
+					Event::SignedPhaseStarted { round: 1 },
+					Event::SolutionStored { compute: ElectionCompute::Signed, prev_ejected: false },
+					Event::Rewarded { account: 99, value: 7 }
+				]
+			);
 		})
 	}
 }
