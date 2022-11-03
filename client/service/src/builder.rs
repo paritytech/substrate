@@ -213,6 +213,7 @@ where
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			blocks_pruning: config.blocks_pruning,
+			delayed_pruning: config.delayed_canonicalization,
 		};
 
 		let backend = new_db_backend(db_config)?;
@@ -276,8 +277,10 @@ where
 	Block: BlockT,
 {
 	const CANONICALIZATION_DELAY: u64 = 4096;
+	const DELAYED_PRUNING: u32 = 32;
 
-	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?))
+	let delayed_pruning = if settings.delayed_pruning { Some(DELAYED_PRUNING) } else { None };
+	Ok(Arc::new(Backend::new(settings, CANONICALIZATION_DELAY, delayed_pruning)?))
 }
 
 /// Create an instance of client backed by given backend.

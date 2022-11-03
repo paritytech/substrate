@@ -317,6 +317,8 @@ pub struct DatabaseSettings {
 	///
 	/// NOTE: only finalized blocks are subject for removal!
 	pub blocks_pruning: BlocksPruning,
+	/// The pruning of blocks is delayed for a number of finalizations.
+	pub delayed_pruning: bool,
 }
 
 /// Block pruning settings.
@@ -328,14 +330,6 @@ pub enum BlocksPruning {
 	KeepFinalized,
 	/// Keep N recent finalized blocks.
 	Some(u32),
-	/// Delay the pruning of blocks by a given number of finalizations.
-	///
-	/// The blocks that were supposed to get pruned at the finalization N
-	/// will get pruned at N + delay.
-	///
-	/// The feature is introduced to satisfy the block pinning required
-	/// by the RPC spec V2.
-	Delayed(u32),
 }
 
 /// Where to find the database..
@@ -1050,6 +1044,7 @@ pub struct Backend<Block: BlockT> {
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
+	delayed_pruning: Option<u32>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
 	blocks_pruning: BlocksPruning,
@@ -1063,7 +1058,11 @@ impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(db_config: DatabaseSettings, canonicalization_delay: u64) -> ClientResult<Self> {
+	pub fn new(
+		db_config: DatabaseSettings,
+		canonicalization_delay: u64,
+		delayed_pruning: Option<u32>,
+	) -> ClientResult<Self> {
 		use utils::OpenDbError;
 
 		let db_source = &db_config.source;
@@ -1079,13 +1078,23 @@ impl<Block: BlockT> Backend<Block> {
 				Err(as_is) => return Err(as_is.into()),
 			};
 
-		Self::from_database(db as Arc<_>, canonicalization_delay, &db_config, needs_init)
+		Self::from_database(
+			db as Arc<_>,
+			canonicalization_delay,
+			delayed_pruning,
+			&db_config,
+			needs_init,
+		)
 	}
 
 	/// Create new memory-backed client backend for tests.
 	#[cfg(any(test, feature = "test-helpers"))]
 	pub fn new_test(blocks_pruning: u32, canonicalization_delay: u64) -> Self {
-		Self::new_test_with_tx_storage(BlocksPruning::Some(blocks_pruning), canonicalization_delay)
+		Self::new_test_with_tx_storage(
+			BlocksPruning::Some(blocks_pruning),
+			canonicalization_delay,
+			None,
+		)
 	}
 
 	/// Create new memory-backed client backend for tests.
@@ -1093,22 +1102,25 @@ impl<Block: BlockT> Backend<Block> {
 	pub fn new_test_with_tx_storage(
 		blocks_pruning: BlocksPruning,
 		canonicalization_delay: u64,
+		delayed_pruning: Option<u32>,
 	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
 		let state_pruning = match blocks_pruning {
 			BlocksPruning::KeepAll => PruningMode::ArchiveAll,
 			BlocksPruning::KeepFinalized => PruningMode::ArchiveCanonical,
-			BlocksPruning::Some(n) | BlocksPruning::Delayed(n) => PruningMode::blocks_pruning(n),
+			BlocksPruning::Some(n) => PruningMode::blocks_pruning(n),
 		};
 		let db_setting = DatabaseSettings {
 			trie_cache_maximum_size: Some(16 * 1024 * 1024),
 			state_pruning: Some(state_pruning),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
 			blocks_pruning,
+			delayed_pruning: true,
 		};
 
-		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
+		Self::new(db_setting, canonicalization_delay, delayed_pruning)
+			.expect("failed to create test-db")
 	}
 
 	/// Expose the Database that is used by this backend.
@@ -1209,6 +1221,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn from_database(
 		db: Arc<dyn Database<DbHash>>,
 		canonicalization_delay: u64,
+		delayed_pruning: Option<u32>,
 		config: &DatabaseSettings,
 		should_init: bool,
 	) -> ClientResult<Self> {
@@ -1230,13 +1243,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let state_pruning_used = state_db.pruning_mode();
 		let is_archive_pruning = state_pruning_used.is_archive();
-		let delay_canonicalization =
-			if let BlocksPruning::Delayed(delay_canonicalization) = config.blocks_pruning {
-				Some(delay_canonicalization)
-			} else {
-				None
-			};
-		let blockchain = BlockchainDb::new(db.clone(), delay_canonicalization)?;
+		let blockchain = BlockchainDb::new(db.clone(), delayed_pruning)?;
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
@@ -1248,6 +1255,7 @@ impl<Block: BlockT> Backend<Block> {
 			offchain_storage,
 			blockchain,
 			canonicalization_delay,
+			delayed_pruning,
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
@@ -1797,7 +1805,7 @@ impl<Block: BlockT> Backend<Block> {
 		// This implies handling both cases:
 		//   - pruning in the state-db via `canonicalize_block`
 		//   - pruning in db via displaced leaves and `prune_blocks`
-		if let BlocksPruning::Delayed(delayed) = self.blocks_pruning {
+		if let Some(delayed) = self.delayed_pruning {
 			// No blocks to prune in this window.
 			if f_num < delayed.into() {
 				return Ok(())
@@ -1852,11 +1860,6 @@ impl<Block: BlockT> Backend<Block> {
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
 			BlocksPruning::KeepFinalized => {
-				self.prune_displaced_branches(transaction, finalized, displaced)?;
-			},
-			BlocksPruning::Delayed(_) => {
-				// Proper offset and valid displaced set of leaves provided by `note_finalized`.
-				self.prune_block(transaction, BlockId::<Block>::number(finalized))?;
 				self.prune_displaced_branches(transaction, finalized, displaced)?;
 			},
 		}
@@ -2654,8 +2657,10 @@ pub(crate) mod tests {
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				blocks_pruning: BlocksPruning::KeepFinalized,
+				delayed_pruning: true,
 			},
 			0,
+			None,
 		)
 		.unwrap();
 		assert_eq!(backend.blockchain().info().best_number, 9);
@@ -3316,7 +3321,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 0);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 0, None);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..5 {
@@ -3352,7 +3357,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize_in_keep_all() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 0);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 0, None);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..5 {
@@ -3387,7 +3392,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize_with_fork_in_keep_all() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::KeepAll, 10, None);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..5 {
@@ -3457,7 +3462,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn prune_blocks_on_finalize_with_fork() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10, None);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..5 {
@@ -3518,7 +3523,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn indexed_data_block_body() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10, None);
 
 		let x0 = ExtrinsicWrapper::from(0u64).encode();
 		let x1 = ExtrinsicWrapper::from(1u64).encode();
@@ -3560,7 +3565,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn index_invalid_size() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10, None);
 
 		let x0 = ExtrinsicWrapper::from(0u64).encode();
 		let x1 = ExtrinsicWrapper::from(1u64).encode();
@@ -3595,7 +3600,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn renew_transaction_storage() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10, None);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		let x1 = ExtrinsicWrapper::from(0u64).encode();
@@ -3642,7 +3647,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn remove_leaf_block_works() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10);
+		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(2), 10, None);
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 		for i in 0..2 {
@@ -3922,7 +3927,8 @@ pub(crate) mod tests {
 
 	#[test]
 	fn delayed_prune_blocks_on_finalize() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Delayed(2), 0);
+		let backend =
+			Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 0, Some(2));
 		let ext = Default::default();
 		let hash_0 =
 			insert_block(&backend, 0, Default::default(), None, ext, vec![0.into()], None).unwrap();
@@ -3942,27 +3948,30 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![1.into()]), bc.body(BlockId::hash(hash_1)).unwrap());
 
 		// Block tree:
-		//   0 -> 1 -> 2 -> 3
+		//   0 -> 1 -> 2 -> 3 -> 4
 		let hash_2 = insert_block(&backend, 2, hash_1, None, ext, vec![2.into()], None).unwrap();
 		let hash_3 = insert_block(&backend, 3, hash_2, None, ext, vec![3.into()], None).unwrap();
+		let hash_4 = insert_block(&backend, 4, hash_3, None, ext, vec![4.into()], None).unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::Hash(hash_3)).unwrap();
+		backend.begin_state_operation(&mut op, BlockId::Hash(hash_4)).unwrap();
 		op.mark_finalized(BlockId::Hash(hash_2), None).unwrap();
 		op.mark_finalized(BlockId::Hash(hash_3), None).unwrap();
+		op.mark_finalized(BlockId::Hash(hash_4), None).unwrap();
 		backend.commit_operation(op).unwrap();
 
-		// Blocks 0 and 1 are pruned.
+		// We keep 3 blocks around: 1 from `BlocksPruning` mode and 2 from delayed pruning.
 		assert!(bc.body(BlockId::hash(hash_0)).unwrap().is_none());
 		assert!(bc.body(BlockId::hash(hash_1)).unwrap().is_none());
-
 		assert_eq!(Some(vec![2.into()]), bc.body(BlockId::hash(hash_2)).unwrap());
 		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(hash_3)).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(hash_4)).unwrap());
 	}
 
 	#[test]
 	fn delayed_prune_blocks_on_finalize_with_fork() {
-		let backend = Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Delayed(2), 10);
+		let backend =
+			Backend::<Block>::new_test_with_tx_storage(BlocksPruning::Some(1), 10, Some(2));
 		let mut blocks = Vec::new();
 		let mut prev_hash = Default::default();
 
@@ -3996,12 +4005,13 @@ pub(crate) mod tests {
 		op.mark_head(BlockId::hash(blocks[4])).unwrap();
 		backend.commit_operation(op).unwrap();
 
-		// Mark blocks 0, 1, 2 as finalized.
+		// Mark blocks 0, 1, 2, 3 as finalized.
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::hash(blocks[2])).unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[3])).unwrap();
 		op.mark_finalized(BlockId::hash(blocks[0]), None).unwrap();
 		op.mark_finalized(BlockId::hash(blocks[1]), None).unwrap();
 		op.mark_finalized(BlockId::hash(blocks[2]), None).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[3]), None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		let bc = backend.blockchain();
@@ -4015,10 +4025,10 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
 
-		// Mark block 3 as finalized.
+		// Mark block 4 as finalized.
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::hash(blocks[3])).unwrap();
-		op.mark_finalized(BlockId::hash(blocks[3]), None).unwrap();
+		backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
+		op.mark_finalized(BlockId::hash(blocks[4]), None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		// Block 1 is pruned.
@@ -4030,28 +4040,16 @@ pub(crate) mod tests {
 		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
 
-		// Mark block 4 as finalized.
-		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, BlockId::hash(blocks[4])).unwrap();
-		op.mark_finalized(BlockId::hash(blocks[4]), None).unwrap();
-		backend.commit_operation(op).unwrap();
-
-		// Block 2 is pruned along with its fork.
-		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
-		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
-		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
-		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
-
 		// Mark block 5 as finalized.
 		let mut op = backend.begin_operation().unwrap();
 		backend.begin_state_operation(&mut op, BlockId::hash(blocks[5])).unwrap();
 		op.mark_finalized(BlockId::hash(blocks[5]), None).unwrap();
 		backend.commit_operation(op).unwrap();
 
-		assert!(bc.body(BlockId::hash(blocks[3])).unwrap().is_none());
+		// Block 2 is pruned along with its fork.
+		assert!(bc.body(BlockId::hash(blocks[2])).unwrap().is_none());
 		assert_eq!(Some(vec![31.into()]), bc.body(BlockId::hash(fork_hash_root)).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(BlockId::hash(blocks[3])).unwrap());
 		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
@@ -4071,8 +4069,9 @@ pub(crate) mod tests {
 		op.mark_finalized(BlockId::hash(blocks[6]), None).unwrap();
 		backend.commit_operation(op).unwrap();
 
-		assert!(bc.body(BlockId::hash(blocks[4])).unwrap().is_none());
+		assert!(bc.body(BlockId::hash(blocks[3])).unwrap().is_none());
 		assert!(bc.body(BlockId::hash(fork_hash_root)).unwrap().is_none());
+		assert_eq!(Some(vec![4.into()]), bc.body(BlockId::hash(blocks[4])).unwrap());
 		assert_eq!(Some(vec![5.into()]), bc.body(BlockId::hash(blocks[5])).unwrap());
 		assert_eq!(Some(vec![6.into()]), bc.body(BlockId::hash(blocks[6])).unwrap());
 

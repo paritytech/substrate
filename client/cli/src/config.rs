@@ -248,6 +248,14 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			.unwrap_or_else(|| Ok(Default::default()))
 	}
 
+	/// Get the delayed canonicalization mode.
+	///
+	/// By default this is retrieved from `delayed_canonicalization` if it is available.
+	/// Otherwise its true.
+	fn delayed_canonicalization(&self) -> Result<bool> {
+		Ok(self.pruning_params().map(|x| x.delayed_canonicalization()).unwrap_or(true))
+	}
+
 	/// Get the block pruning mode.
 	///
 	/// By default this is retrieved from `block_pruning` if it is available. Otherwise its
@@ -530,6 +538,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			trie_cache_maximum_size: self.trie_cache_maximum_size()?,
 			state_pruning: self.state_pruning()?,
 			blocks_pruning: self.blocks_pruning()?,
+			delayed_canonicalization: self.delayed_canonicalization()?,
 			wasm_method: self.wasm_method()?,
 			wasm_runtime_overrides: self.wasm_runtime_overrides(),
 			execution_strategies: self.execution_strategies(is_dev, is_validator)?,

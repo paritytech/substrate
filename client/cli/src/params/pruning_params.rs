@@ -40,6 +40,14 @@ pub struct PruningParams {
 	/// NOTE: only finalized blocks are subject for removal!
 	#[clap(alias = "keep-blocks", long, value_name = "COUNT")]
 	pub blocks_pruning: Option<String>,
+	/// Specify the delayed canonicalization of blocks.
+	///
+	/// The blocks that were supposed to get pruned at the finalization N
+	/// will get pruned after a number of finalizations.
+	///
+	/// This option is enabled by default.
+	#[clap(alias = "delayed-pruning", long)]
+	pub delayed_canonicalization: Option<bool>,
 }
 
 impl PruningParams {
@@ -75,5 +83,10 @@ impl PruningParams {
 			},
 			None => Ok(BlocksPruning::KeepFinalized),
 		}
+	}
+
+	/// Get the block delayed canonicalization value from the parameters.
+	pub fn delayed_canonicalization(&self) -> bool {
+		self.delayed_canonicalization.unwrap_or(true)
 	}
 }

@@ -69,6 +69,7 @@ fn new_node(tokio_handle: Handle) -> node_cli::service::NewFullBase {
 		trie_cache_maximum_size: Some(64 * 1024 * 1024),
 		state_pruning: Some(PruningMode::ArchiveAll),
 		blocks_pruning: BlocksPruning::KeepAll,
+		delayed_canonicalization: true,
 		chain_spec: spec,
 		wasm_method: WasmExecutionMethod::Interpreted,
 		// NOTE: we enforce the use of the native runtime to make the errors more debuggable

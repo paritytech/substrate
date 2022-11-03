@@ -77,6 +77,8 @@ pub struct Configuration {
 	///
 	/// NOTE: only finalized blocks are subject for removal!
 	pub blocks_pruning: BlocksPruning,
+	/// Enable the delayed pruning of blocks.
+	pub delayed_canonicalization: bool,
 	/// Chain configuration.
 	pub chain_spec: Box<dyn ChainSpec>,
 	/// Wasm execution method.

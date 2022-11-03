@@ -123,6 +123,7 @@ fn create_backend(config: BenchmarkConfig, temp_dir: &TempDir) -> Backend<Block>
 		state_pruning: Some(PruningMode::ArchiveAll),
 		source: DatabaseSource::ParityDb { path },
 		blocks_pruning: BlocksPruning::KeepAll,
+		delayed_pruning: false,
 	};
 
 	Backend::new(settings, 100).expect("Creates backend")
