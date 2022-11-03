@@ -550,12 +550,12 @@ impl<N: Clone + Copy + AtLeast32Bit> RevalidationStatus<N> {
 
 /// Prune the known txs for the given block.
 async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = Block>>(
-	block_hash: &Block::Hash,
+	block_hash: Block::Hash,
 	api: &Api,
 	pool: &graph::Pool<Api>,
 ) -> Vec<ExtrinsicHash<Api>> {
 	let extrinsics = api
-		.block_body(&block_hash)
+		.block_body(block_hash)
 		.await
 		.unwrap_or_else(|e| {
 			log::warn!("Prune known transactions: error request: {}", e);
@@ -567,7 +567,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 
 	log::trace!(target: "txpool", "Pruning transactions: {:?}", hashes);
 
-	let header = match api.block_header(&BlockId::Hash(*block_hash)) {
+	let header = match api.block_header(&BlockId::Hash(block_hash)) {
 		Ok(Some(h)) => h,
 		Ok(None) => {
 			log::debug!(target: "txpool", "Could not find header for {:?}.", block_hash);
@@ -580,7 +580,7 @@ async fn prune_known_txs_for_block<Block: BlockT, Api: graph::ChainApi<Block = B
 	};
 
 	if let Err(e) = pool
-		.prune(&BlockId::Hash(*block_hash), &BlockId::hash(*header.parent_hash()), &extrinsics)
+		.prune(&BlockId::Hash(block_hash), &BlockId::hash(*header.parent_hash()), &extrinsics)
 		.await
 	{
 		log::error!("Cannot prune known in the pool: {}", e);
@@ -638,7 +638,7 @@ where
 			tree_route
 				.enacted()
 				.iter()
-				.map(|h| prune_known_txs_for_block(&h.hash, &*api, &*pool)),
+				.map(|h| prune_known_txs_for_block(h.hash, &*api, &*pool)),
 		)
 		.await
 		.into_iter()
@@ -656,7 +656,7 @@ where
 				let hash = retracted.hash;
 
 				let block_transactions = api
-					.block_body(&hash)
+					.block_body(hash)
 					.await
 					.unwrap_or_else(|e| {
 						log::warn!("Failed to fetch block body: {}", e);
