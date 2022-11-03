@@ -1167,9 +1167,14 @@ impl<Block: BlockT> Backend<Block> {
 		};
 		trace!(target: "db", "Last canonicalized block #{} and last finalized #{}", canonicalized_num, finalized_num);
 
+		// Nothing to canonicalize.
+		if canonicalized_num == finalized_num {
+			return Ok(())
+		}
+
 		// Canonicalized every block from the last canonicalized
 		// to the finalized block.
-		for num in canonicalized_num..=finalized_num {
+		for num in canonicalized_num+1..=finalized_num {
 			self.startup_canonicalize_block(transaction, num)?;
 		}
 
@@ -1799,7 +1804,9 @@ impl<Block: BlockT> Backend<Block> {
 				return Ok(())
 			}
 
+			let f_actual = f_num.clone();
 			f_num = f_num.saturating_sub(delayed.into());
+			debug!(target: "db", "Mark finalized #{} and canonicalize #{}", f_actual, f_num);
 			f_hash = self.blockchain.hash(f_num)?.ok_or_else(|| {
 				sp_blockchain::Error::UnknownBlock(format!("Unknown block number {}", f_num))
 			})?;
