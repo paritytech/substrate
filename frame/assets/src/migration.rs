@@ -31,23 +31,25 @@ pub fn migrate_to_v1<T: Config<I>, I: 'static, P: GetStorageVersion + PalletInfo
 
 	if on_chain_storage_version < 1 {
 		let mut count = 0;
-		Asset::<T, I>::translate::<AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>, _>(|_, old| {
-			count += 1;
-			Some(AssetDetails {
-				owner: old.owner,
-				issuer: old.issuer,
-				admin: old.admin,
-				freezer: old.freezer,
-				supply: old.supply,
-				deposit: old.deposit,
-				min_balance: old.min_balance,
-				is_sufficient: old.is_sufficient,
-				accounts: old.accounts,
-				sufficients: old.sufficients,
-				approvals: old.approvals,
-				is_frozen: old.is_frozen,
-			})
-		});
+		Asset::<T, I>::translate::<AssetDetails<T::Balance, T::AccountId, DepositBalanceOf<T, I>>, _>(
+			|_, old| {
+				count += 1;
+				Some(AssetDetails {
+					owner: old.owner,
+					issuer: old.issuer,
+					admin: old.admin,
+					freezer: old.freezer,
+					supply: old.supply,
+					deposit: old.deposit,
+					min_balance: old.min_balance,
+					is_sufficient: old.is_sufficient,
+					accounts: old.accounts,
+					sufficients: old.sufficients,
+					approvals: old.approvals,
+					is_frozen: old.is_frozen,
+				})
+			},
+		);
 		StorageVersion::new(1).put::<P>();
 		log::info!(
 			target: "runtime::assets",
