@@ -112,8 +112,6 @@ where
 	}
 }
 
-//TODO: impl `ExchangeAsset`.
-
 #[frame_support::pallet]
 pub mod pallet {
 	pub use crate::weights::WeightInfo;
