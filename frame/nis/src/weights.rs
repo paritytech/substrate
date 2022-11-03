@@ -47,7 +47,6 @@ pub trait WeightInfo {
 	fn place_bid(l: u32, ) -> Weight;
 	fn place_bid_max() -> Weight;
 	fn retract_bid(l: u32, ) -> Weight;
-	fn set_target() -> Weight;
 	fn thaw() -> Weight;
 	fn fund_deficit() -> Weight;
 	fn pursue_target_noop() -> Weight;
@@ -82,12 +81,6 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(Weight::from_ref_time(52_000 as u64).saturating_mul(l as u64))
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
-	}
-	// Storage: Nis ActiveTotal (r:1 w:1)
-	fn set_target() -> Weight {
-		Weight::from_ref_time(5_026_000 as u64)
-			.saturating_add(T::DbWeight::get().reads(1 as u64))
-			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: Nis Active (r:1 w:1)
 	// Storage: Nis ActiveTotal (r:1 w:1)
@@ -161,12 +154,6 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_ref_time(52_000 as u64).saturating_mul(l as u64))
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))
-	}
-	// Storage: Nis ActiveTotal (r:1 w:1)
-	fn set_target() -> Weight {
-		Weight::from_ref_time(5_026_000 as u64)
-			.saturating_add(RocksDbWeight::get().reads(1 as u64))
-			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: Nis Active (r:1 w:1)
 	// Storage: Nis ActiveTotal (r:1 w:1)

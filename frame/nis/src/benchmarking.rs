@@ -21,13 +21,10 @@
 
 use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{Currency, EnsureOrigin, Get},
-};
+use frame_support::traits::{Currency, EnsureOrigin, Get};
 use frame_system::RawOrigin;
 use sp_arithmetic::Perquintill;
-use sp_runtime::traits::{Bounded, Zero};
+use sp_runtime::traits::{Bounded, One, Zero};
 use sp_std::prelude::*;
 
 use crate::Pallet as Nis;
@@ -41,11 +38,11 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
-			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
-	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
+	}: _(RawOrigin::Signed(caller.clone()), T::MinBid::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
-		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinFreeze::get() * BalanceOf::<T>::from(l + 2)));
+		assert_eq!(QueueTotals::<T>::get()[0], (l + 1, T::MinBid::get() * BalanceOf::<T>::from(l + 2)));
 	}
 
 	place_bid_max {
@@ -53,13 +50,13 @@ benchmarks! {
 		let origin = RawOrigin::Signed(caller.clone());
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..T::MaxQueueLen::get() {
-			Nis::<T>::place_bid(origin.clone().into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(origin.clone().into(), T::MinBid::get(), 1)?;
 		}
-	}: place_bid(origin, T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 1)
+	}: place_bid(origin, T::MinBid::get() * BalanceOf::<T>::from(2u32), 1)
 	verify {
 		assert_eq!(QueueTotals::<T>::get()[0], (
 			T::MaxQueueLen::get(),
-			T::MinFreeze::get() * BalanceOf::<T>::from(T::MaxQueueLen::get() + 1),
+			T::MinBid::get() * BalanceOf::<T>::from(T::MaxQueueLen::get() + 1),
 		));
 	}
 
@@ -68,64 +65,68 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 		for i in 0..l {
-			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
-	}: _(RawOrigin::Signed(caller.clone()), T::MinFreeze::get(), 1)
+	}: _(RawOrigin::Signed(caller.clone()), T::MinBid::get(), 1)
 	verify {
-		assert_eq!(QueueTotals::<T>::get()[0], (l - 1, T::MinFreeze::get() * BalanceOf::<T>::from(l - 1)));
+		assert_eq!(QueueTotals::<T>::get()[0], (l - 1, T::MinBid::get() * BalanceOf::<T>::from(l - 1)));
 	}
 
-	set_target {
-		let origin = T::AdminOrigin::successful_origin();
-	}: _<T::RuntimeOrigin>(origin, Default::default())
-	verify {}
+	fund_deficit {
+		let origin = T::FundOrigin::successful_origin();
+		let caller: T::AccountId = whitelisted_caller();
+		let bid = T::MinBid::get().max(One::one());
+		T::Currency::make_free_balance_be(&caller, bid);
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
+		Nis::<T>::enlarge(bid, 1);
+		let original = T::Currency::free_balance(&Nis::<T>::account_id());
+		T::Currency::make_free_balance_be(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
+	}: _<T::RuntimeOrigin>(origin)
+	verify {
+		assert_eq!(original, T::Currency::free_balance(&Nis::<T>::account_id()));
+	}
 
 	thaw {
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(3u32));
-		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
-		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
-		Nis::<T>::enlarge(T::MinFreeze::get() * BalanceOf::<T>::from(2u32), 2);
-		Active::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
-	}: _(RawOrigin::Signed(caller.clone()), 0)
+		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+		Nis::<T>::enlarge(T::MinBid::get() * BalanceOf::<T>::from(2u32), 2);
+		Receipts::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
+	}: _(RawOrigin::Signed(caller.clone()), 0, None)
 	verify {
-		assert!(Active::<T>::get(0).is_none());
+		assert!(Receipts::<T>::get(0).is_none());
 	}
 
 	pursue_target_noop {
-	}: { Nis::<T>::pursue_target(0) }
+	}: { Nis::<T>::pursue_target(0, Zero::zero()) }
 
 	pursue_target_per_item {
 		// bids taken
 		let b in 0..T::MaxQueueLen::get();
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(b + 1));
+		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(b + 1));
 
 		for _ in 0..b {
-			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		}
-
-		Call::<T>::set_target { target: Perquintill::from_percent(100) }
-			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
-
-	}: { Nis::<T>::pursue_target(b) }
+		let target = Perquintill::one();
+	}: { Nis::<T>::pursue_target(b, target) }
 
 	pursue_target_per_queue {
 		// total queues hit
 		let q in 0..T::QueueCount::get();
 
 		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(q + 1));
+		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(q + 1));
 
 		for i in 0..q {
-			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinFreeze::get(), i + 1)?;
+			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), i + 1)?;
 		}
 
-		Call::<T>::set_target { target: Perquintill::from_percent(100) }
-			.dispatch_bypass_filter(T::AdminOrigin::successful_origin())?;
-
-	}: { Nis::<T>::pursue_target(q) }
+		let target = Perquintill::one();
+	}: { Nis::<T>::pursue_target(q, target) }
 
 	impl_benchmark_test_suite!(Nis, crate::mock::new_test_ext(), crate::mock::Test);
 }

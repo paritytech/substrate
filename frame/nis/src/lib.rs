@@ -459,7 +459,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			if (n % T::IntakePeriod::get()).is_zero() {
-				Self::pursue_target(T::MaxIntakeBids::get())
+				Self::pursue_target(T::MaxIntakeBids::get(), T::Target::get())
 			} else {
 				Weight::zero()
 			}
@@ -657,6 +657,7 @@ pub mod pallet {
 	}
 
 	/// Issuance information returned by `issuance()`.
+	#[derive(RuntimeDebug)]
 	pub struct IssuanceInfo<Balance> {
 		/// The balance held in reserve by this pallet instance.
 		pub holdings: Balance,
@@ -732,14 +733,11 @@ pub mod pallet {
 			IssuanceInfo { holdings, other, effective, required }
 		}
 
-		/// Process some bids into receipts in line with the pallet's configuration, especially
-		/// `Target`.
+		/// Process some bids into receipts in line with the pallet's configuration.
 		///
 		/// Returns the weight used.
-		// TODO: Accept max_weight, not max_bids.
-		pub fn pursue_target(max_bids: u32) -> Weight {
+		pub fn pursue_target(max_bids: u32, target: Perquintill) -> Weight {
 			let summary: SummaryRecordOf<T> = Summary::<T>::get();
-			let target = T::Target::get();
 			if summary.proportion_owed < target {
 				let missing = target.saturating_sub(summary.proportion_owed);
 				let issuance = Self::issuance_with(&Self::account_id(), &summary);
