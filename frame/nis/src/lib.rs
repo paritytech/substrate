@@ -26,7 +26,7 @@
 //!
 //! ## Design
 //!
-//! Queues for each of 1-`QueueCount` periods, given in blocks (`Period`). Queues are limited in
+//! Queues for each of `1..QueueCount` periods, given in blocks (`Period`). Queues are limited in
 //! size to something sensible, `MaxQueueLen`. A secondary storage item with `QueueCount` x `u32`
 //! elements with the number of items in each queue.
 //!
@@ -40,28 +40,34 @@
 //! Account may enqueue a balance with some number of `Period`s lock up, up to a maximum of
 //! `QueueCount`. The balance gets reserved. There's a minimum of `MinFreeze` to avoid dust.
 //!
-//! Until your bid is turned into an issued bond you can retract it instantly and the funds are
-//! unreserved.
+//! Until your bid is consolidated and you receive a receipt, you can retract it instantly and the
+//! funds are unreserved.
 //!
-//! There's a target proportion of effective total issuance (i.e. accounting for existing bonds)
-//! which the we attempt to have frozen at any one time. It will likely be gradually increased over
-//! time by governance.
+//! There's a target proportion of effective total issuance (i.e. accounting for existing receipts)
+//! which the pallet attempts to have frozen at any one time. It will likely be gradually increased
+//! over time by governance.
 //!
-//! As the total funds frozen under bonds drops below `FrozenFraction` of the total effective
-//! issuance, then bids are taken from queues, with the queue of the greatest period taking
-//! priority. If the item in the queue's locked amount is greater than the amount left to be
-//! frozen, then it is split up into multiple bids and becomes partially frozen under bond.
+//! As the proportion of effective total issuance represented by outstanding receipts drops below
+//! `FrozenFraction`, then bids are taken from queues and consolidated into receipts, with the queue
+//! of the greatest period taking priority. If the item in the queue's locked amount is greater than
+//! the amount remaining to achieve `FrozenFraction`, then it is split up into multiple bids and
+//! becomes partially consolidated.
 //!
-//! Once an account's balance is frozen, it remains frozen until the owner thaws the balance of the
-//! account. This may happen no earlier than queue's period after the point at which the bond is
-//! issued.
+//! With the consolidation of a bid, the bid amount is taken from the owner and a receipt is issued.
+//! The receipt records the proportion of the bid compared to effective total issuance at the time
+//! of consolidation. The receipt has two independent elements: a "main" non-fungible receipt and
+//! a second set of fungible "counterpart" tokens. The accounting functionality of the latter must
+//! be provided through the `Counterpart` trait item. The main non-fungible receipt may have its
+//! owner transferred through the pallet's implementation of `nonfungible::Transfer`.
 //!
-//! ## Suggested Values
+//! A later `thaw` function may be called in order to reduce the recorded proportion or entirely
+//! remove the receipt in return for the appropriate proportion of the effective total issuance.
+//! This may happen no earlier than queue's period after the point at which the receipt was issued.
+//! The call must be made by the owner of both the "main" non-fungible receipt and the appropriate
+//! amount of counterpart tokens.
 //!
-//! - `QueueCount`: 300
-//! - `Period`: 432,000
-//! - `MaxQueueLen`: 1000
-//! - `MinFreeze`: Around CHF 100 in value.
+//! `NoCounterpart` may be provided as an implementation for the counterpart token system in which
+//! case they are completely disregarded from the thawing logic.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -100,6 +106,8 @@ where
 		Perquintill::from_rational(a, A::get())
 	}
 }
+
+//TODO: impl `ExchangeAsset`.
 
 #[frame_support::pallet]
 pub mod pallet {
