@@ -30,6 +30,10 @@ use pallet_balances::{Error as BalancesError, Instance1};
 use sp_arithmetic::Perquintill;
 use sp_runtime::TokenError;
 
+fn pot() -> u64 {
+	Balances::free_balance(&Nis::account_id())
+}
+
 #[test]
 fn basic_setup_works() {
 	new_test_ext().execute_with(|| {
@@ -40,7 +44,12 @@ fn basic_setup_works() {
 		}
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::zero(), index: 0 }
+			SummaryRecord {
+				proportion_owed: Perquintill::zero(),
+				index: 0,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0); 3]);
 	});
@@ -178,10 +187,6 @@ fn retract_non_existent_item_fails() {
 	});
 }
 
-fn pot() -> u64 {
-	Balances::free_balance(&Nis::account_id())
-}
-
 #[test]
 fn basic_enlarge_works() {
 	new_test_ext().execute_with(|| {
@@ -201,7 +206,12 @@ fn basic_enlarge_works() {
 
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(10), index: 1 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(10),
+				index: 1,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
@@ -236,7 +246,12 @@ fn enlarge_respects_bids_limit() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(20), index: 2 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(20),
+				index: 2,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 	});
 }
@@ -258,7 +273,12 @@ fn enlarge_respects_amount_limit_and_will_split() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(10), index: 1 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(10),
+				index: 1,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 	});
 }
@@ -286,12 +306,19 @@ fn basic_thaw_works() {
 		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 0, None), Error::<Test>::NotOwner);
 
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+		assert_eq!(NisBalances::free_balance(1), 0);
+		assert_eq!(Nis::typed_attribute::<_, Perquintill>(&0, b"proportion"), None);
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 100);
 		assert_eq!(pot(), 0);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::zero(), index: 1 }
+			SummaryRecord {
+				proportion_owed: Perquintill::zero(),
+				index: 1,
+				last_period: 0,
+				thawed: Perquintill::from_percent(10)
+			}
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
 	});
@@ -306,7 +333,17 @@ fn partial_thaw_works() {
 		assert_eq!(pot(), 80);
 
 		run_to_block(4);
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, Some(1050000)));
+		assert_noop!(
+			Nis::thaw(RuntimeOrigin::signed(1), 0, Some(4_100_000)),
+			Error::<Test>::MakesDust
+		);
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, Some(1_050_000)));
+
+		assert_eq!(NisBalances::free_balance(1), 3_150_000);
+		assert_eq!(
+			Nis::typed_attribute::<_, Perquintill>(&0, b"proportion"),
+			Some(Perquintill::from_rational(3_150_000u64, 21_000_000u64)),
+		);
 
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 40);
@@ -320,7 +357,12 @@ fn partial_thaw_works() {
 
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::zero(), index: 1 }
+			SummaryRecord {
+				proportion_owed: Perquintill::zero(),
+				index: 1,
+				last_period: 0,
+				thawed: Perquintill::from_percent(20)
+			}
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
 	});
@@ -455,6 +497,8 @@ fn multiple_thaws_works() {
 		run_to_block(4);
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(2), 2, None), Error::<Test>::Throttled);
+		run_to_block(5);
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2, None));
 
 		assert_eq!(Balances::free_balance(1), 200);
@@ -479,8 +523,11 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 
 		run_to_block(4);
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(2), 2, None));
-		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
+		assert_noop!(Nis::thaw(RuntimeOrigin::signed(1), 1, None), Error::<Test>::Throttled);
 		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 0, None));
+
+		run_to_block(5);
+		assert_ok!(Nis::thaw(RuntimeOrigin::signed(1), 1, None));
 
 		assert_eq!(Balances::free_balance(1), 200);
 		assert_eq!(Balances::free_balance(2), 200);
@@ -522,14 +569,24 @@ fn enlargement_to_target_works() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(20), index: 2 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(20),
+				index: 2,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 
 		run_to_block(5);
 		// No change
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(20), index: 2 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(20),
+				index: 2,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 
 		run_to_block(6);
@@ -544,14 +601,24 @@ fn enlargement_to_target_works() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(40), index: 4 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(40),
+				index: 4,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 
 		run_to_block(8);
 		// No change now.
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(40), index: 4 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(40),
+				index: 4,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 
 		// Set target a bit higher to use up the remaining bid.
@@ -566,7 +633,12 @@ fn enlargement_to_target_works() {
 
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord { proportion_owed: Perquintill::from_percent(50), index: 5 }
+			SummaryRecord {
+				proportion_owed: Perquintill::from_percent(50),
+				index: 5,
+				last_period: 0,
+				thawed: Perquintill::zero()
+			}
 		);
 	});
 }

@@ -38,7 +38,7 @@
 //! bid size so that smaller bids fall off as it gets too large.
 //!
 //! Account may enqueue a balance with some number of `Period`s lock up, up to a maximum of
-//! `QueueCount`. The balance gets reserved. There's a minimum of `MinFreeze` to avoid dust.
+//! `QueueCount`. The balance gets reserved. There's a minimum of `MinBid` to avoid dust.
 //!
 //! Until your bid is consolidated and you receive a receipt, you can retract it instantly and the
 //! funds are unreserved.
@@ -145,6 +145,7 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::BlockNumber,
 	>;
+	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber>;
 
 	pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
 	impl<T> FungibleInspect<T> for NoCounterpart<T> {
@@ -196,6 +197,10 @@ pub mod pallet {
 
 		/// Overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+		/// The treasury's pallet id, used for deriving its sovereign account ID.
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
 
 		/// Currency type that this works on.
 		type Currency: ReservableCurrency<Self::AccountId, Balance = Self::CurrencyBalance>;
@@ -260,7 +265,12 @@ pub mod pallet {
 		/// It should be at least big enough to ensure that there is no possible storage spam attack
 		/// or queue-filling attack.
 		#[pallet::constant]
-		type MinFreeze: Get<BalanceOf<Self>>;
+		type MinBid: Get<BalanceOf<Self>>;
+
+		/// The minimum amount of funds which may intentionally be left remaining under a single
+		/// receipt.
+		#[pallet::constant]
+		type MinReceipt: Get<Perquintill>;
 
 		/// The number of blocks between consecutive attempts to dequeue bids and create receipts.
 		///
@@ -275,9 +285,9 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
 
-		/// The treasury's pallet id, used for deriving its sovereign account ID.
+		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
-		type PalletId: Get<PalletId>;
+		type ThawThrottle: Get<(Perquintill, Self::BlockNumber)>;
 	}
 
 	#[pallet::pallet]
@@ -322,11 +332,15 @@ pub mod pallet {
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct SummaryRecord {
+	pub struct SummaryRecord<BlockNumber> {
 		/// The proportion of funds that the `frozen` balance represents to total issuance.
 		pub proportion_owed: Perquintill,
 		/// The total number of bonds issued so far.
 		pub index: ActiveIndex,
+		/// The amount (as a proportion of ETI) which has been thawed in this period so far.
+		pub thawed: Perquintill,
+		/// The current thaw period's beginning.
+		pub last_period: BlockNumber,
 	}
 
 	/// The totals of items and balances within each queue. Saves a lot of storage reads in the
@@ -350,7 +364,7 @@ pub mod pallet {
 
 	/// Information relating to the bonds currently active.
 	#[pallet::storage]
-	pub type Summary<T> = StorageValue<_, SummaryRecord, ValueQuery>;
+	pub type Summary<T> = StorageValue<_, SummaryRecordOf<T>, ValueQuery>;
 
 	/// The currently active bonds, indexed according to the order of creation.
 	#[pallet::storage]
@@ -432,6 +446,10 @@ pub mod pallet {
 		Unfunded,
 		/// There are enough funds for what is required.
 		Funded,
+		/// The thaw throttle has been reached for this period.
+		Throttled,
+		/// The operation would result in a receipt worth an insignficant value.
+		MakesDust,
 	}
 
 	#[pallet::hooks]
@@ -453,7 +471,7 @@ pub mod pallet {
 		///
 		/// - `amount`: The amount of the bid; these funds will be reserved. If the bid is
 		/// successfully elevated into a bond, then these funds will continue to be
-		/// reserved until the bond thaws. Must be at least `MinFreeze`.
+		/// reserved until the bond thaws. Must be at least `MinBid`.
 		/// - `duration`: The number of periods before which the bond may be thawed.
 		/// Must be greater than 1 and no more than `QueueCount`.
 		///
@@ -467,7 +485,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			ensure!(amount >= T::MinFreeze::get(), Error::<T>::AmountTooSmall);
+			ensure!(amount >= T::MinBid::get(), Error::<T>::AmountTooSmall);
 			let queue_count = T::QueueCount::get() as usize;
 			let queue_index = duration.checked_sub(1).ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
@@ -527,7 +545,6 @@ pub mod pallet {
 			let queue_count = T::QueueCount::get() as usize;
 			let queue_index = duration.checked_sub(1).ok_or(Error::<T>::DurationTooSmall)? as usize;
 			ensure!(queue_index < queue_count, Error::<T>::DurationTooBig);
-			// TODO: ensure!(have_in_reserve(amount))
 
 			let bid = Bid { amount, who };
 			let new_len = Queues::<T>::try_mutate(duration, |q| -> Result<u32, DispatchError> {
@@ -554,7 +571,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::fund_deficit())]
 		pub fn fund_deficit(origin: OriginFor<T>) -> DispatchResult {
 			T::FundOrigin::ensure_origin(origin)?;
-			let summary: SummaryRecord = Summary::<T>::get();
+			let summary: SummaryRecordOf<T> = Summary::<T>::get();
 			let our_account = Self::account_id();
 			let issuance = Self::issuance_with(&our_account, &summary);
 			let deficit = issuance.required.saturating_sub(issuance.holdings);
@@ -586,19 +603,32 @@ pub mod pallet {
 			let now = frame_system::Pallet::<T>::block_number();
 			ensure!(now >= receipt.expiry, Error::<T>::NotExpired);
 
+			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
+
 			let proportion = if let Some(counterpart) = portion {
 				let proportion = T::CounterpartAmount::convert_back(counterpart);
 				ensure!(proportion <= receipt.proportion, Error::<T>::TooMuch);
-				// TODO: check if `proportion` is below a minimum bond size and if so then fail.
+				let remaining = receipt.proportion.saturating_sub(proportion);
+				ensure!(
+					remaining.is_zero() || remaining >= T::MinReceipt::get(),
+					Error::<T>::MakesDust
+				);
 				proportion
 			} else {
-				let fung_eq = T::CounterpartAmount::convert(receipt.proportion);
-				T::Counterpart::burn_from(&who, fung_eq)?;
 				receipt.proportion
 			};
 
+			let (throttle, throttle_period) = T::ThawThrottle::get();
+			if now.saturating_sub(summary.last_period) >= throttle_period {
+				summary.thawed = Zero::zero();
+				summary.last_period = now;
+			}
+			summary.thawed.saturating_accrue(proportion);
+			ensure!(summary.thawed <= throttle, Error::<T>::Throttled);
+
+			T::Counterpart::burn_from(&who, T::CounterpartAmount::convert(proportion))?;
+
 			// Multiply the proportion it is by the total issued.
-			let mut summary: SummaryRecord = Summary::<T>::get();
 			let our_account = Self::account_id();
 			let effective_issuance = Self::issuance_with(&our_account, &summary).effective;
 			let amount = proportion * effective_issuance;
@@ -685,7 +715,7 @@ pub mod pallet {
 		/// Also provides the summary and this pallet's account ID.
 		pub fn issuance_with(
 			our_account: &T::AccountId,
-			summary: &SummaryRecord,
+			summary: &SummaryRecordOf<T>,
 		) -> IssuanceInfo<BalanceOf<T>> {
 			let total_issuance =
 				T::Currency::total_issuance().saturating_sub(T::IgnoredIssuance::get());
@@ -700,7 +730,7 @@ pub mod pallet {
 		/// Attempt to enlarge our bond-set from bids in order to satisfy our desired target amount
 		/// of funds frozen into bonds.
 		pub fn pursue_target(max_bids: u32) -> Weight {
-			let summary: SummaryRecord = Summary::<T>::get();
+			let summary: SummaryRecordOf<T> = Summary::<T>::get();
 			let target = T::Target::get();
 			if summary.proportion_owed < target {
 				let missing = target.saturating_sub(summary.proportion_owed);

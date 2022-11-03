@@ -111,17 +111,18 @@ parameter_types! {
 	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
 	pub static Target: Perquintill = Perquintill::zero();
+	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
+	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
 }
 
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
 
-// TODO: Throttled thawing.
-
 impl pallet_nis::Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
+	type PalletId = NisPalletId;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config<Instance1>>::Balance;
 	type FundOrigin = frame_system::EnsureSigned<Self::AccountId>;
@@ -134,10 +135,11 @@ impl pallet_nis::Config for Test {
 	type MaxQueueLen = ConstU32<3>;
 	type FifoQueueLen = ConstU32<1>;
 	type Period = ConstU64<3>;
-	type MinFreeze = ConstU64<2>;
+	type MinBid = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;
 	type MaxIntakeBids = ConstU32<2>;
-	type PalletId = NisPalletId;
+	type MinReceipt = MinReceipt;
+	type ThawThrottle = ThawThrottle;
 }
 
 // This function basically just builds a genesis storage key/value store according to
