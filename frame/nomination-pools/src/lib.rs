@@ -363,6 +363,15 @@ enum AccountType {
 	Reward,
 }
 
+/// Actions to be taken
+#[derive(Encode, Decode)]
+enum ClaimableAction {
+	/// Increase the bond of a member
+	Increase,
+	/// Take out rewards
+	Withdraw,
+}
+
 /// A member in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
 #[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound, DefaultNoBound))]
