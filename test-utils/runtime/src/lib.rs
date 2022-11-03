@@ -29,6 +29,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 
 use sp_application_crypto::{ecdsa, ed25519, sr25519, RuntimeAppPublic};
 use sp_core::{offchain::KeyTypeId, OpaqueMetadata, RuntimeDebug};
+// use sp_mmr_primitives as mmr;
 use sp_trie::{
 	trie_types::{TrieDBBuilder, TrieDBMutBuilderV1},
 	PrefixedMemoryDB, StorageProof,
@@ -66,6 +67,7 @@ use sp_version::RuntimeVersion;
 
 // Ensure Babe and Aura use the same crypto to simplify things a bit.
 pub use sp_consensus_babe::{AllowedSlots, AuthorityId, Slot};
+use sp_runtime::traits::Keccak256;
 
 pub type AuraId = sp_consensus_aura::sr25519::AuthorityId;
 
@@ -608,7 +610,7 @@ impl From<frame_system::Call<Runtime>> for Extrinsic {
 	}
 }
 
-impl frame_system::Config for Runtime {
+impl frame_system::pallet::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
@@ -634,6 +636,19 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
+type MmrHash = <Keccak256 as sp_runtime::traits::Hash>::Output;
+
+impl pallet_mmr::Config for Runtime {
+	const INDEXING_PREFIX: &'static [u8] = b"mmr";
+	type Hashing = Keccak256;
+	type Hash = MmrHash;
+	type OnNewRoot = ();
+	type WeightInfo = ();
+	type LeafData = pallet_mmr::ParentNumberAndHash<Self>;
+}
+
+pub type MmrHashing = <Runtime as pallet_mmr::Config>::Hashing;
 
 impl system::Config for Runtime {}
 
@@ -966,13 +981,13 @@ cfg_if! {
 				}
 			}
 
-			impl beefy_primitives::BeefyApi<Block> for RuntimeApi {
+			impl beefy_primitives::BeefyApi<Block> for Runtime {
 				fn validator_set() -> Option<beefy_primitives::ValidatorSet<beefy_primitives::crypto::AuthorityId>> {
 					None
 				}
 			}
 
-			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for RuntimeApi {
+			impl beefy_merkle_tree::BeefyMmrApi<Block, beefy_primitives::MmrRootHash> for Runtime {
 				fn authority_set_proof() -> beefy_primitives::mmr::BeefyAuthoritySet<beefy_primitives::MmrRootHash> {
 					Default::default()
 				}
@@ -987,6 +1002,49 @@ cfg_if! {
 					0
 				}
 			}
+
+			// impl mmr::MmrApi<Block, Hash, BlockNumber> for Runtime {
+			// 	fn mmr_root() -> Result<Hash, mmr::Error> {
+			// 		Ok(Mmr::mmr_root())
+			// 	}
+			//
+			// 	fn generate_proof(
+			// 		block_numbers: Vec<BlockNumber>,
+			// 		best_known_block_number: Option<BlockNumber>,
+			// 	) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::Proof<Hash>), mmr::Error> {
+			// 		Mmr::generate_proof(block_numbers, best_known_block_number).map(
+			// 			|(leaves, proof)| {
+			// 				(
+			// 					leaves
+			// 						.into_iter()
+			// 						.map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf))
+			// 						.collect(),
+			// 					proof,
+			// 				)
+			// 			},
+			// 		)
+			// 	}
+			//
+			// 	fn verify_proof(leaves: Vec<mmr::EncodableOpaqueLeaf>, proof: mmr::Proof<Hash>)
+			// 		-> Result<(), mmr::Error>
+			// 	{
+			// 		pub type MmrLeaf = <<Runtime as pallet_mmr::Config>::LeafData as mmr::LeafDataProvider>::LeafData;
+			// 		let leaves = leaves.into_iter().map(|leaf|
+			// 			leaf.into_opaque_leaf()
+			// 			.try_decode()
+			// 			.ok_or(mmr::Error::Verify)).collect::<Result<Vec<MmrLeaf>, mmr::Error>>()?;
+			// 		Mmr::verify_leaves(leaves, proof)
+			// 	}
+			//
+			// 	fn verify_proof_stateless(
+			// 		root: Hash,
+			// 		leaves: Vec<mmr::EncodableOpaqueLeaf>,
+			// 		proof: mmr::Proof<Hash>
+			// 	) -> Result<(), mmr::Error> {
+			// 		let nodes = leaves.into_iter().map(|leaf|mmr::DataOrHash::Data(leaf.into_opaque_leaf())).collect();
+			// 		pallet_mmr::verify_leaves_proof::<MmrHashing, _>(root, nodes, proof)
+			// 	}
+			// }
 		}
 	} else {
 		impl_runtime_apis! {
