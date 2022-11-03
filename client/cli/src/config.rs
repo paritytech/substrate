@@ -255,7 +255,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	/// Get the delayed canonicalization mode.
 	///
 	/// By default this is retrieved from `delayed_canonicalization` if it is available.
-	/// Otherwise its true.
+	/// Otherwise the mode is active.
 	fn delayed_canonicalization(&self) -> Result<Option<u32>> {
 		Ok(self
 			.pruning_params()
