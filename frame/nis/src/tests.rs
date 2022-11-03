@@ -21,7 +21,6 @@ use super::*;
 use crate::{mock::*, Error};
 use frame_support::{
 	assert_noop, assert_ok,
-	dispatch::DispatchError,
 	traits::{
 		nonfungible::{Inspect, Transfer},
 		Currency,
@@ -41,32 +40,9 @@ fn basic_setup_works() {
 		}
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::zero(),
-				index: 0,
-				target: Perquintill::zero(),
-			}
+			SummaryRecord { proportion_owed: Perquintill::zero(), index: 0 }
 		);
 		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0); 3]);
-	});
-}
-
-#[test]
-fn set_target_works() {
-	new_test_ext().execute_with(|| {
-		run_to_block(1);
-		let e = DispatchError::BadOrigin;
-		assert_noop!(Nis::set_target(RuntimeOrigin::signed(2), Perquintill::from_percent(50)), e);
-		assert_ok!(Nis::set_target(RuntimeOrigin::signed(1), Perquintill::from_percent(50)));
-
-		assert_eq!(
-			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::zero(),
-				index: 0,
-				target: Perquintill::from_percent(50),
-			}
-		);
 	});
 }
 
@@ -225,11 +201,7 @@ fn basic_enlarge_works() {
 
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(10),
-				index: 1,
-				target: Perquintill::zero(),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(10), index: 1 }
 		);
 		assert_eq!(
 			Receipts::<Test>::get(0).unwrap(),
@@ -264,11 +236,7 @@ fn enlarge_respects_bids_limit() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(20),
-				index: 2,
-				target: Perquintill::zero(),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(20), index: 2 }
 		);
 	});
 }
@@ -290,11 +258,7 @@ fn enlarge_respects_amount_limit_and_will_split() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(10),
-				index: 1,
-				target: Perquintill::zero(),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(10), index: 1 }
 		);
 	});
 }
@@ -327,11 +291,7 @@ fn basic_thaw_works() {
 		assert_eq!(pot(), 0);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::zero(),
-				index: 1,
-				target: Perquintill::zero(),
-			}
+			SummaryRecord { proportion_owed: Perquintill::zero(), index: 1 }
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
 	});
@@ -360,11 +320,7 @@ fn partial_thaw_works() {
 
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::zero(),
-				index: 1,
-				target: Perquintill::zero(),
-			}
+			SummaryRecord { proportion_owed: Perquintill::zero(), index: 1 }
 		);
 		assert_eq!(Receipts::<Test>::get(0), None);
 	});
@@ -540,7 +496,7 @@ fn enlargement_to_target_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 40, 2));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 40, 3));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(3), 40, 3));
-		assert_ok!(Nis::set_target(RuntimeOrigin::signed(1), Perquintill::from_percent(40)));
+		Target::set(Perquintill::from_percent(40));
 
 		run_to_block(3);
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 40, who: 1 },]);
@@ -566,22 +522,14 @@ fn enlargement_to_target_works() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(20),
-				index: 2,
-				target: Perquintill::from_percent(40),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(20), index: 2 }
 		);
 
 		run_to_block(5);
 		// No change
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(20),
-				index: 2,
-				target: Perquintill::from_percent(40),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(20), index: 2 }
 		);
 
 		run_to_block(6);
@@ -596,26 +544,18 @@ fn enlargement_to_target_works() {
 		);
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(40),
-				index: 4,
-				target: Perquintill::from_percent(40),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(40), index: 4 }
 		);
 
 		run_to_block(8);
 		// No change now.
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(40),
-				index: 4,
-				target: Perquintill::from_percent(40),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(40), index: 4 }
 		);
 
 		// Set target a bit higher to use up the remaining bid.
-		assert_ok!(Nis::set_target(RuntimeOrigin::signed(1), Perquintill::from_percent(60)));
+		Target::set(Perquintill::from_percent(60));
 		run_to_block(10);
 
 		// Two new items should have been issued to 1 & 2 for 40 each & duration of 2.
@@ -626,11 +566,7 @@ fn enlargement_to_target_works() {
 
 		assert_eq!(
 			Summary::<Test>::get(),
-			SummaryRecord {
-				proportion_owed: Perquintill::from_percent(50),
-				index: 5,
-				target: Perquintill::from_percent(60),
-			}
+			SummaryRecord { proportion_owed: Perquintill::from_percent(50), index: 5 }
 		);
 	});
 }

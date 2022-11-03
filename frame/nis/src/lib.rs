@@ -68,6 +68,11 @@
 //!
 //! `NoCounterpart` may be provided as an implementation for the counterpart token system in which
 //! case they are completely disregarded from the thawing logic.
+//!
+//! ## Terms
+//!
+//! - *Effective total issuance*: The total issuance of balances in the system, including all claims
+//!   of all outstanding receipts but excluding `IgnoredIssuance`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -207,14 +212,11 @@ pub mod pallet {
 			+ TypeInfo
 			+ MaxEncodedLen;
 
-		/// Origin required for setting the target proportion to be under bond.
-		type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// Origin required for auto-funding the deficit.
 		type FundOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The issuance to ignore. This is subtracted from the `Currency`'s `total_issuance` to get
-		/// the issuance with which we determine the thawed value of a bond.
+		/// the issuance with which we determine the thawed value of a given proportion.
 		type IgnoredIssuance: Get<BalanceOf<Self>>;
 
 		type Counterpart: FungibleMutate<Self::AccountId>;
@@ -227,6 +229,9 @@ pub mod pallet {
 		/// Unbalanced handler to account for funds created (in case of a higher total issuance over
 		/// freezing period).
 		type Deficit: OnUnbalanced<PositiveImbalanceOf<Self>>;
+
+		/// The target sum of all receipts' proportions.
+		type Target: Get<Perquintill>;
 
 		/// Number of duration queues in total. This sets the maximum duration supported, which is
 		/// this value multiplied by `Period`.
@@ -248,26 +253,25 @@ pub mod pallet {
 		#[pallet::constant]
 		type Period: Get<Self::BlockNumber>;
 
-		/// The minimum amount of funds that may be offered to freeze for a bond. Note that this
-		/// does not actually limit the amount which may be frozen in a bond since bonds may be
-		/// split up in order to satisfy the desired amount of funds under bonds.
+		/// The minimum amount of funds that may be placed in a bid. Note that this
+		/// does not actually limit the amount which may be represented in a receipt since bids may
+		/// be split up by the system.
 		///
 		/// It should be at least big enough to ensure that there is no possible storage spam attack
 		/// or queue-filling attack.
 		#[pallet::constant]
 		type MinFreeze: Get<BalanceOf<Self>>;
 
-		/// The number of blocks between consecutive attempts to issue more bonds in an effort to
-		/// get to the target amount to be frozen.
+		/// The number of blocks between consecutive attempts to dequeue bids and create receipts.
 		///
 		/// A larger value results in fewer storage hits each block, but a slower period to get to
 		/// the target.
 		#[pallet::constant]
 		type IntakePeriod: Get<Self::BlockNumber>;
 
-		/// The maximum amount of bids that can become bonds each block. A larger
-		/// value here means less of the block available for transactions should there be a glut of
-		/// bids to make into bonds to reach the target.
+		/// The maximum amount of bids that can consolidated into receipts in a single intake. A
+		/// larger value here means less of the block available for transactions should there be a
+		/// glut of bids.
 		#[pallet::constant]
 		type MaxIntakeBids: Get<u32>;
 
@@ -280,7 +284,7 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	/// A single bid on a bond, an item of a *queue* in `Queues`.
+	/// A single bid, an item of a *queue* in `Queues`.
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
@@ -291,13 +295,12 @@ pub mod pallet {
 		pub who: AccountId,
 	}
 
-	/// Information representing an active bond.
+	/// Information representing a receipt.
 	#[derive(
 		Clone, Eq, PartialEq, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
 	)]
 	pub struct ReceiptRecord<AccountId, BlockNumber> {
-		/// The proportion of the effective total issuance (i.e. accounting for any eventual bond
-		/// expansion or contraction that may eventually be claimed).
+		/// The proportion of the effective total issuance.
 		pub proportion: Perquintill,
 		/// The account to whom this bond belongs.
 		pub who: AccountId,
@@ -324,8 +327,6 @@ pub mod pallet {
 		pub proportion_owed: Perquintill,
 		/// The total number of bonds issued so far.
 		pub index: ActiveIndex,
-		/// The target proportion of bonds within total issuance.
-		pub target: Perquintill,
 	}
 
 	/// The totals of items and balances within each queue. Saves a lot of storage reads in the
@@ -547,22 +548,6 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Set target proportion of bonded-funds.
-		///
-		/// Origin must be `AdminOrigin`.
-		///
-		/// - `target`: The target proportion of effective issued funds that should be in bonds
-		/// at any one time.
-		#[pallet::weight(T::WeightInfo::set_target())]
-		pub fn set_target(
-			origin: OriginFor<T>,
-			#[pallet::compact] target: Perquintill,
-		) -> DispatchResultWithPostInfo {
-			T::AdminOrigin::ensure_origin(origin)?;
-			Summary::<T>::mutate(|totals| totals.target = target);
-			Ok(().into())
-		}
-
 		/// Ensure we have sufficient funding for all potential payouts.
 		///
 		/// - `origin`: Must be accepted by `FundOrigin`.
@@ -680,11 +665,6 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		/// Get the target amount of bonds that we're aiming for.
-		pub fn target() -> Perquintill {
-			Summary::<T>::get().target
-		}
-
 		/// The account ID of the reserves.
 		///
 		/// This actually does computation. If you need to keep using it, then make sure you cache
@@ -721,8 +701,9 @@ pub mod pallet {
 		/// of funds frozen into bonds.
 		pub fn pursue_target(max_bids: u32) -> Weight {
 			let summary: SummaryRecord = Summary::<T>::get();
-			if summary.proportion_owed < summary.target {
-				let missing = summary.target.saturating_sub(summary.proportion_owed);
+			let target = T::Target::get();
+			if summary.proportion_owed < target {
+				let missing = target.saturating_sub(summary.proportion_owed);
 				let issuance = Self::issuance_with(&Self::account_id(), &summary);
 
 				let intake = missing * issuance.effective;

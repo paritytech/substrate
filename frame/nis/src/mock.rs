@@ -17,7 +17,7 @@
 
 //! Test environment for NIS pallet.
 
-use crate::{self as pallet_nis, WithMaximumOf};
+use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
@@ -110,23 +110,26 @@ impl pallet_balances::Config<Instance2> for Test {
 parameter_types! {
 	pub IgnoredIssuance: u64 = Balances::total_balance(&0); // Account zero is ignored.
 	pub const NisPalletId: PalletId = PalletId(*b"py/nis  ");
+	pub static Target: Perquintill = Perquintill::zero();
 }
 
 ord_parameter_types! {
 	pub const One: u64 = 1;
 }
 
+// TODO: Throttled thawing.
+
 impl pallet_nis::Config for Test {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config<Instance1>>::Balance;
-	type AdminOrigin = frame_system::EnsureSignedBy<One, Self::AccountId>;
 	type FundOrigin = frame_system::EnsureSigned<Self::AccountId>;
 	type Deficit = ();
 	type IgnoredIssuance = IgnoredIssuance;
 	type Counterpart = NisBalances;
 	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000u128>>;
+	type Target = Target;
 	type QueueCount = ConstU32<3>;
 	type MaxQueueLen = ConstU32<3>;
 	type FifoQueueLen = ConstU32<1>;
