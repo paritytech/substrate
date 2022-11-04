@@ -24,11 +24,6 @@ sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
 sp-staking = { default-features = false, path = "../../primitives/staking" }
-
-pallet-balances = { default-features = false, path = "../balances" }
-pallet-timestamp = { default-features = false, path = "../timestamp" }
-pallet-staking = { default-features = false, path = "../staking" }
-pallet-nomination-pools = { default-features = false, path = "../nomination-pools" }
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
@@ -38,6 +33,10 @@ pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward
 sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+pallet-staking = { path = "../staking" }
+pallet-balances = { path = "../balances" }
+pallet-timestamp = { path = "../timestamp" }
+
 
 [features]
 default = ["std"]
@@ -54,10 +53,6 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 
-	"pallet-staking/std",
-	"pallet-nomination-pools/std",
-	"pallet-balances/std",
-	"pallet-timestamp/std",
 	"frame-election-provider-support/std",
 
 	"frame-benchmarking/std",
@@ -65,6 +60,6 @@ std = [
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-system/runtime-benchmarks",
-	"pallet-staking/runtime-benchmarks",
+	"sp-staking/runtime-benchmarks"
 ]
 try-runtime = ["frame-support/try-runtime"]

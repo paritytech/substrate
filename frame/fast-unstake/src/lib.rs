@@ -19,8 +19,7 @@
 //!
 //! If a nominator is not exposed in any `ErasStakers` (i.e. "has not actively backed any
 //! validators in the last `BondingDuration` days"), then they can register themselves in this
-//! pallet, unstake faster than having to wait an entire bonding duration, and potentially move
-//! into a nomination pool.
+//! pallet, unstake faster than having to wait an entire bonding duration.
 //!
 //! Appearing in the exposure of a validator means being exposed equal to that validator from the
 //! point of view of the staking system. This usually means earning rewards with the validator, and
@@ -43,8 +42,7 @@
 //! to prevent them from accidentally exposing themselves behind a validator etc.
 //!
 //! Once processed, if successful, no additional fee for the checking process is taken, and the
-//! staker is instantly unbonded. Optionally, if they have asked to join a pool, their *entire*
-//! stake is joined into their pool of choice.
+//! staker is instantly unbonded.
 //!
 //! If unsuccessful, meaning that the staker was exposed sometime in the last `BondingDuration` eras
 //! they will end up being slashed for the amount of wasted work they have inflicted on the chian.
@@ -62,7 +60,7 @@ mod tests;
 // NOTE: enable benchmarking in tests as well.
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod types;
+pub mod types;
 pub mod weights;
 
 pub const LOG_TARGET: &'static str = "runtime::fast-unstake";
@@ -82,18 +80,18 @@ macro_rules! log {
 pub mod pallet {
 	use super::*;
 	use crate::types::*;
-	use frame_election_provider_support::ElectionProvider;
-	use frame_support::pallet_prelude::*;
-	use frame_system::{pallet_prelude::*, RawOrigin};
-	use pallet_nomination_pools::PoolId;
-	use pallet_staking::Pallet as Staking;
+	use frame_support::{
+		pallet_prelude::*,
+		traits::{Defensive, ReservableCurrency},
+	};
+	use frame_system::pallet_prelude::*;
 	use sp_runtime::{
 		traits::{Saturating, Zero},
 		DispatchResult,
 	};
-	use sp_staking::EraIndex;
+	use sp_staking::{EraIndex, StakingInterface};
 	use sp_std::{prelude::*, vec::Vec};
-	use weights::WeightInfo;
+	pub use weights::WeightInfo;
 
 	#[derive(scale_info::TypeInfo, codec::Encode, codec::Decode, codec::MaxEncodedLen)]
 	#[codec(mel_bound(T: Config))]
@@ -101,7 +99,7 @@ pub mod pallet {
 	pub struct MaxChecking<T: Config>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> frame_support::traits::Get<u32> for MaxChecking<T> {
 		fn get() -> u32 {
-			<T as pallet_staking::Config>::BondingDuration::get() + 1
+			T::Staking::bonding_duration() + 1
 		}
 	}
 
@@ -109,24 +107,24 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	#[pallet::config]
-	pub trait Config:
-		frame_system::Config
-		+ pallet_staking::Config<
-			CurrencyBalance = <Self as pallet_nomination_pools::Config>::CurrencyBalance,
-		> + pallet_nomination_pools::Config
-	{
+	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>
 			+ TryInto<Event<Self>>;
 
-		/// The amount of balance slashed per each era that was wastefully checked.
-		///
-		/// A reasonable value could be `runtime_weight_to_fee(weight_per_era_check)`.
-		type SlashPerEra: Get<BalanceOf<Self>>;
+		/// The currency used for deposits.
+		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
+		/// the costs of resources on unsuccessful unstake.
+		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
 		type ControlOrigin: frame_support::traits::EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// The access to staking functionality.
+		type Staking: StakingInterface<Balance = BalanceOf<Self>, AccountId = Self::AccountId>;
 
 		/// The weight information of this pallet.
 		type WeightInfo: WeightInfo;
@@ -135,14 +133,13 @@ pub mod pallet {
 	/// The current "head of the queue" being unstaked.
 	#[pallet::storage]
 	pub type Head<T: Config> =
-		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecking<T>>, OptionQuery>;
+		StorageValue<_, UnstakeRequest<T::AccountId, MaxChecking<T>, BalanceOf<T>>, OptionQuery>;
 
 	/// The map of all accounts wishing to be unstaked.
 	///
-	/// Points the `AccountId` wishing to unstake to the optional `PoolId` they wish to join
-	/// thereafter.
+	/// Keeps track of `AccountId` wishing to unstake and it's corresponding deposit.
 	#[pallet::storage]
-	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, Option<PoolId>>;
+	pub type Queue<T: Config> = CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
 
 	/// Number of eras to check per block.
 	///
@@ -158,7 +155,7 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A staker was unstaked.
-		Unstaked { stash: T::AccountId, maybe_pool_id: Option<PoolId>, result: DispatchResult },
+		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
 		/// A staker was partially checked for the given eras, but the process did not finish.
@@ -185,6 +182,8 @@ pub mod pallet {
 		NotQueued,
 		/// The provided un-staker is already in Head, and cannot deregister.
 		AlreadyHead,
+		/// The call is not allowed at this point because the pallet is not active.
+		CallNotAllowed,
 	}
 
 	#[pallet::hooks]
@@ -213,42 +212,39 @@ pub mod pallet {
 		/// they are guaranteed to remain eligible, because the call will chill them as well.
 		///
 		/// If the check works, the entire staking data is removed, i.e. the stash is fully
-		/// unstaked, and they potentially join a pool with their entire bonded stake.
+		/// unstaked.
 		///
 		/// If the check fails, the stash remains chilled and waiting for being unbonded as in with
 		/// the normal staking system, but they lose part of their unbonding chunks due to consuming
 		/// the chain's resources.
 		#[pallet::weight(<T as Config>::WeightInfo::register_fast_unstake())]
-		pub fn register_fast_unstake(
-			origin: OriginFor<T>,
-			maybe_pool_id: Option<PoolId>,
-		) -> DispatchResult {
+		pub fn register_fast_unstake(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
 
-			let ledger =
-				pallet_staking::Ledger::<T>::get(&ctrl).ok_or(Error::<T>::NotController)?;
-			ensure!(!Queue::<T>::contains_key(&ledger.stash), Error::<T>::AlreadyQueued);
+			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
+			let stash_account =
+				T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
+			ensure!(!Queue::<T>::contains_key(&stash_account), Error::<T>::AlreadyQueued);
 			ensure!(
-				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != ledger.stash),
+				Head::<T>::get()
+					.map_or(true, |UnstakeRequest { stash, .. }| stash_account != stash),
 				Error::<T>::AlreadyHead
 			);
-			// second part of the && is defensive.
-			ensure!(
-				ledger.active == ledger.total && ledger.unlocking.is_empty(),
-				Error::<T>::NotFullyBonded
-			);
+
+			ensure!(!T::Staking::is_unbonding(&stash_account)?, Error::<T>::NotFullyBonded);
 
 			// chill and fully unstake.
-			Staking::<T>::chill(RawOrigin::Signed(ctrl.clone()).into())?;
-			Staking::<T>::unbond(RawOrigin::Signed(ctrl).into(), ledger.total)?;
+			T::Staking::chill(&stash_account)?;
+			T::Staking::fully_unbond(&stash_account)?;
+
+			T::Currency::reserve(&stash_account, T::Deposit::get())?;
 
 			// enqueue them.
-			Queue::<T>::insert(ledger.stash, maybe_pool_id);
+			Queue::<T>::insert(stash_account, T::Deposit::get());
 			Ok(())
 		}
 
-		/// Deregister oneself from the fast-unstake (also cancels joining the pool if that was
-		/// supplied on `register_fast_unstake` .
+		/// Deregister oneself from the fast-unstake.
 		///
 		/// This is useful if one is registered, they are still waiting, and they change their mind.
 		///
@@ -258,15 +254,28 @@ pub mod pallet {
 		#[pallet::weight(<T as Config>::WeightInfo::deregister())]
 		pub fn deregister(origin: OriginFor<T>) -> DispatchResult {
 			let ctrl = ensure_signed(origin)?;
-			let stash = pallet_staking::Ledger::<T>::get(&ctrl)
-				.map(|l| l.stash)
-				.ok_or(Error::<T>::NotController)?;
-			ensure!(Queue::<T>::contains_key(&stash), Error::<T>::NotQueued);
+
+			ensure!(ErasToCheckPerBlock::<T>::get() != 0, <Error<T>>::CallNotAllowed);
+
+			let stash_account =
+				T::Staking::stash_by_ctrl(&ctrl).map_err(|_| Error::<T>::NotController)?;
+			ensure!(Queue::<T>::contains_key(&stash_account), Error::<T>::NotQueued);
 			ensure!(
-				Head::<T>::get().map_or(true, |UnstakeRequest { stash, .. }| stash != stash),
+				Head::<T>::get()
+					.map_or(true, |UnstakeRequest { stash, .. }| stash_account != stash),
 				Error::<T>::AlreadyHead
 			);
-			Queue::<T>::remove(stash);
+			let deposit = Queue::<T>::take(stash_account.clone());
+
+			if let Some(deposit) = deposit.defensive() {
+				let remaining = T::Currency::unreserve(&stash_account, deposit);
+				if !remaining.is_zero() {
+					frame_support::defensive!("`not enough balance to unreserve`");
+					ErasToCheckPerBlock::<T>::put(0);
+					Self::deposit_event(Event::<T>::InternalError)
+				}
+			}
+
 			Ok(())
 		}
 
@@ -303,7 +312,7 @@ pub mod pallet {
 
 			// NOTE: here we're assuming that the number of validators has only ever increased,
 			// meaning that the number of exposures to check is either this per era, or less.
-			let validator_count = pallet_staking::ValidatorCount::<T>::get();
+			let validator_count = T::Staking::desired_validator_count();
 
 			// determine the number of eras to check. This is based on both `ErasToCheckPerBlock`
 			// and `remaining_weight` passed on to us from the runtime executive.
@@ -319,7 +328,7 @@ pub mod pallet {
 				}
 			}
 
-			if <T as pallet_staking::Config>::ElectionProvider::ongoing() {
+			if T::Staking::election_ongoing() {
 				// NOTE: we assume `ongoing` does not consume any weight.
 				// there is an ongoing election -- we better not do anything. Imagine someone is not
 				// exposed anywhere in the last era, and the snapshot for the election is already
@@ -327,23 +336,23 @@ pub mod pallet {
 				return T::DbWeight::get().reads(2)
 			}
 
-			let UnstakeRequest { stash, mut checked, maybe_pool_id } = match Head::<T>::take()
-				.or_else(|| {
+			let UnstakeRequest { stash, mut checked, deposit } =
+				match Head::<T>::take().or_else(|| {
 					// NOTE: there is no order guarantees in `Queue`.
 					Queue::<T>::drain()
-						.map(|(stash, maybe_pool_id)| UnstakeRequest {
+						.map(|(stash, deposit)| UnstakeRequest {
 							stash,
-							maybe_pool_id,
+							deposit,
 							checked: Default::default(),
 						})
 						.next()
 				}) {
-				None => {
-					// There's no `Head` and nothing in the `Queue`, nothing to do here.
-					return T::DbWeight::get().reads(4)
-				},
-				Some(head) => head,
-			};
+					None => {
+						// There's no `Head` and nothing in the `Queue`, nothing to do here.
+						return T::DbWeight::get().reads(4)
+					},
+					Some(head) => head,
+				};
 
 			log!(
 				debug,
@@ -354,8 +363,8 @@ pub mod pallet {
 			);
 
 			// the range that we're allowed to check in this round.
-			let current_era = pallet_staking::CurrentEra::<T>::get().unwrap_or_default();
-			let bonding_duration = <T as pallet_staking::Config>::BondingDuration::get();
+			let current_era = T::Staking::current_era();
+			let bonding_duration = T::Staking::bonding_duration();
 			// prune all the old eras that we don't care about. This will help us keep the bound
 			// of `checked`.
 			checked.retain(|e| *e >= current_era.saturating_sub(bonding_duration));
@@ -389,58 +398,25 @@ pub mod pallet {
 			);
 
 			if unchecked_eras_to_check.is_empty() {
-				// `stash` is not exposed in any era now -- we can let go of them now.
-				let num_slashing_spans = Staking::<T>::slashing_spans(&stash).iter().count() as u32;
+				let result = T::Staking::force_unstake(stash.clone());
 
-				let ctrl = match pallet_staking::Bonded::<T>::get(&stash) {
-					Some(ctrl) => ctrl,
-					None => {
-						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_unstake()
-					},
-				};
-
-				let ledger = match pallet_staking::Ledger::<T>::get(ctrl) {
-					Some(ledger) => ledger,
-					None => {
-						Self::deposit_event(Event::<T>::Errored { stash });
-						return <T as Config>::WeightInfo::on_idle_unstake()
-					},
-				};
-
-				let unstake_result = pallet_staking::Pallet::<T>::force_unstake(
-					RawOrigin::Root.into(),
-					stash.clone(),
-					num_slashing_spans,
-				);
-
-				let pool_stake_result = if let Some(pool_id) = maybe_pool_id {
-					pallet_nomination_pools::Pallet::<T>::join(
-						RawOrigin::Signed(stash.clone()).into(),
-						ledger.total,
-						pool_id,
-					)
+				let remaining = T::Currency::unreserve(&stash, deposit);
+				if !remaining.is_zero() {
+					frame_support::defensive!("`not enough balance to unreserve`");
+					ErasToCheckPerBlock::<T>::put(0);
+					Self::deposit_event(Event::<T>::InternalError)
 				} else {
-					Ok(())
-				};
+					log!(info, "unstaked {:?}, outcome: {:?}", stash, result);
+					Self::deposit_event(Event::<T>::Unstaked { stash, result });
+				}
 
-				let result = unstake_result.and(pool_stake_result);
-				log!(
-					info,
-					"unstaked {:?}, maybe_pool {:?}, outcome: {:?}",
-					stash,
-					maybe_pool_id,
-					result
-				);
-
-				Self::deposit_event(Event::<T>::Unstaked { stash, maybe_pool_id, result });
 				<T as Config>::WeightInfo::on_idle_unstake()
 			} else {
 				// eras remaining to be checked.
 				let mut eras_checked = 0u32;
 				let is_exposed = unchecked_eras_to_check.iter().any(|e| {
 					eras_checked.saturating_inc();
-					Self::is_exposed_in_era(&stash, e)
+					T::Staking::is_exposed_in_era(&stash, e)
 				});
 
 				log!(
@@ -456,17 +432,9 @@ pub mod pallet {
 				// the last 28 eras, have registered yourself to be unstaked, midway being checked,
 				// you are exposed.
 				if is_exposed {
-					let amount = T::SlashPerEra::get()
-						.saturating_mul(eras_checked.saturating_add(checked.len() as u32).into());
-					pallet_staking::slashing::do_slash::<T>(
-						&stash,
-						amount,
-						&mut Default::default(),
-						&mut Default::default(),
-						current_era,
-					);
-					log!(info, "slashed {:?} by {:?}", stash, amount);
-					Self::deposit_event(Event::<T>::Slashed { stash, amount });
+					T::Currency::slash_reserved(&stash, deposit);
+					log!(info, "slashed {:?} by {:?}", stash, deposit);
+					Self::deposit_event(Event::<T>::Slashed { stash, amount: deposit });
 				} else {
 					// Not exposed in these eras.
 					match checked.try_extend(unchecked_eras_to_check.clone().into_iter()) {
@@ -474,7 +442,7 @@ pub mod pallet {
 							Head::<T>::put(UnstakeRequest {
 								stash: stash.clone(),
 								checked,
-								maybe_pool_id,
+								deposit,
 							});
 							Self::deposit_event(Event::<T>::Checking {
 								stash,
@@ -493,13 +461,6 @@ pub mod pallet {
 
 				<T as Config>::WeightInfo::on_idle_check(validator_count * eras_checked)
 			}
-		}
-
-		/// Checks whether an account `staker` has been exposed in an era.
-		fn is_exposed_in_era(staker: &T::AccountId, era: &EraIndex) -> bool {
-			pallet_staking::ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
-				validator == *staker || exposures.others.iter().any(|i| i.who == *staker)
-			})
 		}
 	}
 }

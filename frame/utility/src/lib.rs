@@ -63,7 +63,7 @@ use frame_support::{
 };
 use sp_core::TypeId;
 use sp_io::hashing::blake2_256;
-use sp_runtime::traits::{Dispatchable, TrailingZeroInput};
+use sp_runtime::traits::{BadOrigin, Dispatchable, TrailingZeroInput};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -124,7 +124,7 @@ pub mod pallet {
 	// Align the call size to 1KB. As we are currently compiling the runtime for native/wasm
 	// the `size_of` of the `Call` can be different. To ensure that this don't leads to
 	// mismatches between native/wasm or to different metadata for the same runtime, we
-	// algin the call size. The value is choosen big enough to hopefully never reach it.
+	// algin the call size. The value is chosen big enough to hopefully never reach it.
 	const CALL_ALIGN: u32 = 1024;
 
 	#[pallet::extra_constants]
@@ -164,13 +164,13 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		/// Send a batch of dispatch calls.
 		///
-		/// May be called from any origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Config::BaseCallFilter`).
+		/// If origin is root then the calls are dispatched without checking origin filter. (This
+		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
@@ -203,7 +203,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
+			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
@@ -286,13 +291,13 @@ pub mod pallet {
 		/// Send a batch of dispatch calls and atomically execute them.
 		/// The whole transaction will rollback and fail if any of the calls failed.
 		///
-		/// May be called from any origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Config::BaseCallFilter`).
+		/// If origin is root then the calls are dispatched without checking origin filter. (This
+		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
@@ -319,7 +324,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
+			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 
@@ -393,13 +403,13 @@ pub mod pallet {
 		/// Send a batch of dispatch calls.
 		/// Unlike `batch`, it allows errors and won't interrupt.
 		///
-		/// May be called from any origin.
+		/// May be called from any origin except `None`.
 		///
 		/// - `calls`: The calls to be dispatched from the same origin. The number of call must not
 		///   exceed the constant: `batched_calls_limit` (available in constant metadata).
 		///
-		/// If origin is root then call are dispatch without checking origin filter. (This includes
-		/// bypassing `frame_system::Config::BaseCallFilter`).
+		/// If origin is root then the calls are dispatch without checking origin filter. (This
+		/// includes bypassing `frame_system::Config::BaseCallFilter`).
 		///
 		/// # <weight>
 		/// - Complexity: O(C) where C is the number of calls to be batched.
@@ -426,7 +436,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			calls: Vec<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
-			let is_root = ensure_signed_or_root(origin.clone())?.is_none();
+			// Do not allow the `None` origin.
+			if ensure_none(origin.clone()).is_ok() {
+				return Err(BadOrigin.into())
+			}
+
+			let is_root = ensure_root(origin.clone()).is_ok();
 			let calls_len = calls.len();
 			ensure!(calls_len <= Self::batched_calls_limit() as usize, Error::<T>::TooManyCalls);
 

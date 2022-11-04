@@ -78,8 +78,8 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Convert an arbitrary block ID into a block hash. Returns `UnknownBlock` error if block is
 	/// not found.
 	fn expect_block_hash_from_id(&self, id: &BlockId<Block>) -> Result<Block::Hash> {
-		self.block_hash_from_id(id).and_then(|n| {
-			n.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
+		self.block_hash_from_id(id).and_then(|h| {
+			h.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
 		})
 	}
 }
@@ -89,9 +89,9 @@ pub trait Backend<Block: BlockT>:
 	HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>
 {
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	fn body(&self, hash: &Block::Hash) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justifications. Returns `None` if no justification exists.
-	fn justifications(&self, id: BlockId<Block>) -> Result<Option<Justifications>>;
+	fn justifications(&self, hash: &Block::Hash) -> Result<Option<Justifications>>;
 	/// Get last finalized block hash.
 	fn last_finalized(&self) -> Result<Block::Hash>;
 
@@ -238,7 +238,7 @@ pub trait Backend<Block: BlockT>:
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 
-	fn block_indexed_body(&self, id: BlockId<Block>) -> Result<Option<Vec<Vec<u8>>>>;
+	fn block_indexed_body(&self, hash: &Block::Hash) -> Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Blockchain info
