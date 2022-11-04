@@ -59,6 +59,8 @@ use std::{marker::PhantomData, sync::Arc};
 pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
+	/// Backend of the chain.
+	backend: Arc<BE>,
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
 	/// Keep track of the pinned blocks for each subscription.
@@ -72,13 +74,14 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	/// the finalization event.
 	best_block: Arc<RwLock<Option<Block::Hash>>>,
 	/// Phantom member to pin the block type.
-	_phantom: PhantomData<(Block, BE)>,
+	_phantom: PhantomData<Block>,
 }
 
 impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Create a new [`ChainHead`].
 	pub fn new<GenesisHash: AsRef<[u8]>>(
 		client: Arc<Client>,
+		backend: Arc<BE>,
 		executor: SubscriptionTaskExecutor,
 		genesis_hash: GenesisHash,
 	) -> Self {
@@ -86,6 +89,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 
 		Self {
 			client,
+			backend,
 			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			genesis_hash,
@@ -177,6 +181,26 @@ where
 		Some(RuntimeEvent::Valid(RuntimeVersionEvent { spec: block_rt }))
 	} else {
 		None
+	}
+}
+
+fn get_initial_blocks<BE, Block>(
+	backend: &Arc<BE>,
+	parent_hash: Block::Hash,
+	result: &mut Vec<(Block::Hash, Block::Hash)>,
+) where
+	Block: BlockT + 'static,
+	BE: Backend<Block> + 'static,
+{
+	use sp_blockchain::Backend;
+
+	match backend.blockchain().children(parent_hash) {
+		Ok(blocks) =>
+			for child_hash in blocks {
+				result.push((child_hash, parent_hash));
+				get_initial_blocks(backend, child_hash, result);
+			},
+		Err(_) => (),
 	}
 }
 
@@ -336,12 +360,44 @@ where
 
 		let stream = stream::once(async move {
 			FollowEvent::Initialized(Initialized {
-				finalized_block_hash,
+				finalized_block_hash: finalized_block_hash.clone(),
 				finalized_block_runtime,
 				runtime_updates,
 			})
-		})
-		.chain(merged);
+		});
+
+		let mut initial_blocks = Vec::new();
+		get_initial_blocks(&self.backend, finalized_block_hash, &mut initial_blocks);
+		let sub_id = sub_id.clone();
+		let mut in_memory_blocks: Vec<_> = initial_blocks
+			.into_iter()
+			.map(|(child, parent)| {
+				let new_runtime = generate_runtime_event(
+					&self.client,
+					runtime_updates,
+					&BlockId::Hash(child),
+					Some(&BlockId::Hash(parent)),
+				);
+
+				let _ = self.subscriptions.pin_block(&sub_id, child);
+
+				FollowEvent::NewBlock(NewBlock {
+					block_hash: child,
+					parent_block_hash: parent,
+					new_runtime,
+					runtime_updates,
+				})
+			})
+			.collect();
+
+		// Generate a new best block event.
+		let best_block_hash = self.client.info().best_hash;
+		if best_block_hash != finalized_block_hash {
+			let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
+			in_memory_blocks.push(best_block);
+		};
+
+		let stream = stream.chain(stream::iter(in_memory_blocks)).chain(merged);
 
 		let subscriptions = self.subscriptions.clone();
 		let fut = async move {
