@@ -331,7 +331,7 @@ pub mod pallet {
 
 	/// The index of the first and last (non-empty) pages.
 	#[pallet::storage]
-	pub(super) type BookStateOf<T: Config> =
+	pub(super) type BookStateFor<T: Config> =
 		StorageMap<_, Twox64Concat, MessageOriginOf<T>, BookState<MessageOriginOf<T>>, ValueQuery>;
 
 	/// The origin at which we should begin servicing.
@@ -419,7 +419,7 @@ impl<T: Config> Iterator for ReadyRing<T> {
 		match self.next.take() {
 			None => None,
 			Some(last) => {
-				self.next = BookStateOf::<T>::get(&last)
+				self.next = BookStateFor::<T>::get(&last)
 					.ready_neighbours
 					.map(|n| n.next)
 					.filter(|n| Some(n) != self.first.as_ref());
@@ -466,18 +466,18 @@ impl<T: Config> Pallet<T> {
 	/// Return the two ready ring neighbours of `origin`.
 	fn ready_ring_knit(origin: &MessageOriginOf<T>) -> Result<Neighbours<MessageOriginOf<T>>, ()> {
 		if let Some(head) = ServiceHead::<T>::get() {
-			let mut head_book_state = BookStateOf::<T>::get(&head);
+			let mut head_book_state = BookStateFor::<T>::get(&head);
 			let mut head_neighbours = head_book_state.ready_neighbours.take().ok_or(())?;
 			let tail = head_neighbours.prev;
 			head_neighbours.prev = origin.clone();
 			head_book_state.ready_neighbours = Some(head_neighbours);
-			BookStateOf::<T>::insert(&head, head_book_state);
+			BookStateFor::<T>::insert(&head, head_book_state);
 
-			let mut tail_book_state = BookStateOf::<T>::get(&tail);
+			let mut tail_book_state = BookStateFor::<T>::get(&tail);
 			let mut tail_neighbours = tail_book_state.ready_neighbours.take().ok_or(())?;
 			tail_neighbours.next = origin.clone();
 			tail_book_state.ready_neighbours = Some(tail_neighbours);
-			BookStateOf::<T>::insert(&tail, tail_book_state);
+			BookStateFor::<T>::insert(&tail, tail_book_state);
 
 			Ok(Neighbours { next: head, prev: tail })
 		} else {
@@ -495,12 +495,12 @@ impl<T: Config> Pallet<T> {
 			// Service queue empty.
 			ServiceHead::<T>::kill();
 		} else {
-			BookStateOf::<T>::mutate(&neighbours.next, |book_state| {
+			BookStateFor::<T>::mutate(&neighbours.next, |book_state| {
 				if let Some(ref mut n) = book_state.ready_neighbours {
 					n.prev = neighbours.prev.clone()
 				}
 			});
-			BookStateOf::<T>::mutate(&neighbours.prev, |book_state| {
+			BookStateFor::<T>::mutate(&neighbours.prev, |book_state| {
 				if let Some(ref mut n) = book_state.ready_neighbours {
 					n.next = neighbours.next.clone()
 				}
@@ -522,7 +522,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		if let Some(head) = ServiceHead::<T>::get() {
-			let mut head_book_state = BookStateOf::<T>::get(&head);
+			let mut head_book_state = BookStateFor::<T>::get(&head);
 			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
 				ServiceHead::<T>::put(&head_neighbours.next);
 				log::debug!(
@@ -544,7 +544,7 @@ impl<T: Config> Pallet<T> {
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
 		origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
-		let mut book_state = BookStateOf::<T>::get(origin);
+		let mut book_state = BookStateFor::<T>::get(origin);
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
@@ -579,7 +579,7 @@ impl<T: Config> Pallet<T> {
 			book_state.end - 1,
 			Page::from_message::<T>(message, origin_data),
 		);
-		BookStateOf::<T>::insert(&origin, book_state);
+		BookStateFor::<T>::insert(origin, book_state);
 	}
 
 	pub fn do_execute_overweight(
@@ -588,7 +588,7 @@ impl<T: Config> Pallet<T> {
 		index: T::Size,
 		weight_limit: Weight,
 	) -> DispatchResult {
-		let mut book_state = BookStateOf::<T>::get(&origin);
+		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, blob) =
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
@@ -620,7 +620,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Remove a page which has no more messages remaining to be processed.
 	fn do_reap_page(origin: &MessageOriginOf<T>, page_index: PageIndex) -> DispatchResult {
-		let mut book_state = BookStateOf::<T>::get(origin);
+		let mut book_state = BookStateFor::<T>::get(origin);
 		// definitely not reapable if the page's index is no less than the `begin`ning of ready
 		// pages.
 		ensure!(page_index < book_state.begin, Error::<T>::NotReapable);
@@ -649,7 +649,7 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::remove(origin, page_index);
 		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
 		book_state.count.saturating_dec();
-		BookStateOf::<T>::insert(origin, book_state);
+		BookStateFor::<T>::insert(origin, book_state);
 		Self::deposit_event(Event::PageReaped { origin: origin.clone(), index: page_index });
 
 		Ok(())
@@ -667,7 +667,7 @@ impl<T: Config> Pallet<T> {
 			return None
 		}
 
-		let mut book_state = BookStateOf::<T>::get(&origin);
+		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut total_processed = 0;
 		while book_state.end > book_state.begin {
 			let (processed, status) =
@@ -694,8 +694,8 @@ impl<T: Config> Pallet<T> {
 				debug_assert!(false, "Freshly processed queue must have been ready");
 			}
 		}
-		BookStateOf::<T>::insert(&origin, &book_state);
-		next_ready
+		BookStateFor::<T>::insert(&origin, &book_state);
+		(total_processed > 0, next_ready)
 	}
 
 	/// Service as many messages of a page as possible.
@@ -795,7 +795,7 @@ impl<T: Config> Pallet<T> {
 	#[cfg(feature = "std")]
 	fn debug_info() -> String {
 		let mut info = String::new();
-		for (origin, book_state) in BookStateOf::<T>::iter() {
+		for (origin, book_state) in BookStateFor::<T>::iter() {
 			let mut queue = format!("queue {:?}:\n", &origin);	
 			let mut pages = Pages::<T>::iter_prefix(&origin).collect::<Vec<_>>();
 			pages.sort_by(|(a,_ ), (b, _)| a.cmp(b));
@@ -893,6 +893,7 @@ pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
 pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
 pub type PageOf<T> = Page<<T as Config>::Size, <T as Config>::HeapSize>;
+pub type BookStateOf<T> = BookState<MessageOriginOf<T>>;
 
 pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
 impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
