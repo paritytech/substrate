@@ -884,17 +884,21 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 			Some(h) => h,
 			None => return weight.consumed,
 		};
+		// The last queue that did not make any progress.
+		// The loop aborts as soon as it arrives at this queue again without making any progress
+		// on other queues in between.
+		let mut last_no_progress = None;
 
 		loop {
-			// TODO should not be needed. Instead add a no-progress check and stop rotating
-			// the ring in that case. This is only needed since tests declares the weights
-			// as zero, so it produces an infinite loop.
-			if weight.remaining().any_lte(Zero::zero()) {
-				break
-			}
-			let n = Self::service_queue(next, &mut weight, overweight_limit);
+			let (progressed, n) = Self::service_queue(next.clone(), &mut weight, overweight_limit);
 			next = match n {
-				Some(n) => n,
+				Some(n) =>
+					if !progressed && last_no_progress == Some(n.clone()) {
+						break
+					} else {
+						last_no_progress = Some(next);
+						n
+					},
 				None => break,
 			}
 		}
