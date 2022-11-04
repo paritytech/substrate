@@ -287,13 +287,32 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Message discarded due to an inability to decode the item. Usually caused by state
 		/// corruption.
-		Discarded { hash: T::Hash },
+		Discarded {
+			hash: T::Hash,
+		},
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
-		ProcessingFailed { hash: T::Hash, origin: MessageOriginOf<T>, error: ProcessMessageError },
+		ProcessingFailed {
+			hash: T::Hash,
+			origin: MessageOriginOf<T>,
+			error: ProcessMessageError,
+		},
 		/// Message is processed.
-		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
+		Processed {
+			hash: T::Hash,
+			origin: MessageOriginOf<T>,
+			weight_used: Weight,
+			success: bool,
+		},
 		/// Message placed in overweight queue.
-		Overweight { hash: T::Hash, origin: MessageOriginOf<T>, index: OverweightIndex },
+		Overweight {
+			hash: T::Hash,
+			origin: MessageOriginOf<T>,
+			index: OverweightIndex,
+		},
+		PageReaped {
+			origin: MessageOriginOf<T>,
+			index: PageIndex,
+		},
 	}
 
 	#[pallet::error]
@@ -537,7 +556,7 @@ impl<T: Config> Pallet<T> {
 					return
 				},
 			};
-			if let Ok(_) = page.try_append_message(&message[..], &origin_data[..]) {
+			if let Ok(_) = page.try_append_message::<T>(message, origin_data) {
 				Pages::<T>::insert(origin, last, &page);
 				return
 			}
@@ -558,7 +577,7 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::insert(
 			origin,
 			book_state.end - 1,
-			Page::from_message(&message[..], &origin_data[..]),
+			Page::from_message::<T>(message, origin_data),
 		);
 		BookStateOf::<T>::insert(&origin, book_state);
 	}
@@ -631,6 +650,7 @@ impl<T: Config> Pallet<T> {
 		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
 		book_state.count.saturating_dec();
 		BookStateOf::<T>::insert(origin, book_state);
+		Self::deposit_event(Event::PageReaped { origin: origin.clone(), index: page_index });
 
 		Ok(())
 	}
