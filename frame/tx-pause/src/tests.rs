@@ -31,8 +31,8 @@ fn can_pause_specific_call() {
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Balances").into(),
-			name(b"transfer").into(),
+			name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 		));
 
 		assert_err!(
@@ -54,7 +54,7 @@ fn can_pause_all_calls_in_pallet_except_on_whitelist() {
 
 		assert_ok!(TxPause::pause_pallet(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Utility").into(),
+			name::<Test>(b"Utility").into(),
 		));
 
 		assert_err!(
@@ -69,8 +69,8 @@ fn can_unpause_specific_call() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Balances").into(),
-			name(b"transfer").into(),
+			name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 		));
 		assert_err!(
 			call_transfer(2, 1).dispatch(Origin::signed(2)),
@@ -79,8 +79,8 @@ fn can_unpause_specific_call() {
 
 		assert_ok!(TxPause::unpause(
 			Origin::signed(mock::UnpauseOrigin::get()),
-			name(b"Balances").into(),
-			name(b"transfer").into(),
+			name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 		));
 		assert_ok!(call_transfer(4, 1).dispatch(Origin::signed(0)));
 	});
@@ -94,8 +94,8 @@ fn can_filter_balance_in_batch_when_paused() {
 
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Balances").into(),
-			name(b"transfer").into(),
+			name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 		));
 
 		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
@@ -114,8 +114,8 @@ fn can_filter_balance_in_proxy_when_paused() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Balances").into(),
-			name(b"transfer").into(),
+			name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 		));
 
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
@@ -138,8 +138,8 @@ fn fails_to_pause_self() {
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				name(b"TxPause").into(),
-				name(b"pause").into(),
+				name::<Test>(b"TxPause").into(),
+				name::<Test>(b"pause_call").into(),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -152,8 +152,8 @@ fn fails_to_pause_unpausable_pallet() {
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				name(b"DummyPallet").into(),
-				name(b"any_call").into(),
+				name::<Test>(b"DummyPallet").into(),
+				name::<Test>(b"any_call").into(),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -171,7 +171,7 @@ fn fails_to_pause_unpausable_call_when_pallet_is_paused() {
 
 		assert_ok!(TxPause::pause_pallet(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Balances").into(),
+			name::<Test>(b"Balances").into(),
 		));
 
 		assert_ok!(call_transfer_keep_alive(3, 1).dispatch(Origin::signed(3)));
@@ -188,8 +188,8 @@ fn fails_to_pause_unpausable_call() {
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				name(b"Balances").into(),
-				name(b"transfer_keep_alive").into(),
+				name::<Test>(b"Balances").into(),
+				name::<Test>(b"transfer_keep_alive").into(),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -201,15 +201,15 @@ fn fails_to_pause_already_paused_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			name(b"Balances").into(),
-			name(b"transfer").into(),
+			name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 		));
 
 		assert_noop!(
 			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				name(b"Balances").into(),
-			name(b"transfer").into(),
+				name::<Test>(b"Balances").into(),
+			name::<Test>(b"transfer").into(),
 			),
 			Error::<Test>::IsPaused
 		);
@@ -222,8 +222,8 @@ fn fails_to_unpause_not_paused_pallet() {
 		assert_noop!(
 			TxPause::unpause(
 				Origin::signed(mock::UnpauseOrigin::get()),
-				name(b"Balances").into(),
-				name(b"transfer_keep_alive").into(),
+				name::<Test>(b"Balances").into(),
+				name::<Test>(b"transfer_keep_alive").into(),
 			),
 			Error::<Test>::IsUnpaused
 		);
@@ -238,8 +238,6 @@ pub fn call_transfer_keep_alive(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { dest, value })
 }
 
-pub fn name(
-	name_bytes: &[u8],
-) -> Vec<Test> {
-	name_bytes.to_vec().try_into().unwrap()
+pub fn name<T: Config>(bytes: &[u8]) -> BoundedVec<u8, T::MaxNameLen> {
+	bytes.to_vec().try_into().unwrap()
 }
