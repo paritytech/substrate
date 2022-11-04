@@ -656,7 +656,10 @@ where
 
 		// Ensure parent chain is finalized to maintain invariant that finality is called
 		// sequentially.
-		if finalized && parent_exists {
+		if finalized &&
+			parent_exists &&
+			(self.backend.blockchain().last_finalized()? != parent_hash)
+		{
 			self.apply_finality_with_block_hash(
 				operation,
 				parent_hash,
