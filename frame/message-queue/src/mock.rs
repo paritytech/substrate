@@ -46,19 +46,36 @@ impl IntoWeight for u64 {
 }
 
 pub fn msg<N: Get<u32>>(x: &'static str) -> BoundedSlice<u8, N> {
-	BoundedSlice::truncate_from(x.as_bytes())
+	BoundedSlice::defensive_truncate_from(x.as_bytes())
 }
 
 pub fn vmsg(x: &'static str) -> Vec<u8> {
 	x.as_bytes().to_vec()
 }
 
-/// Returns a full page and its number of empty messages.
+pub fn page<T: Config>(msg: &[u8], origin: MessageOrigin) -> PageOf<T> {
+	PageOf::<T>::from_message::<T>(
+		msg.try_into().unwrap(),
+		BoundedSlice::try_from(&origin.encode()[..]).unwrap(),
+	)
+}
+
+pub fn single_page_book<T: Config>() -> BookStateOf<T> {
+	BookStateOf::<T> { begin: 0, end: 1, count: 1, ready_neighbours: None }
+}
+
+/// Returns a page filled with empty messages and the number of messages.
 pub fn full_page<T: Config>() -> (PageOf<T>, usize) {
 	let mut msgs = 0;
 	let mut page = PageOf::<T>::default();
 	for i in 0..u32::MAX {
-		if page.try_append_message(&[], &MessageOrigin::Everywhere(i).encode()).is_err() {
+		if page
+			.try_append_message::<T>(
+				[][..].try_into().unwrap(),
+				MessageOrigin::Everywhere(i).encode()[..].try_into().unwrap(),
+			)
+			.is_err()
+		{
 			break
 		} else {
 			msgs += 1;
@@ -66,4 +83,12 @@ pub fn full_page<T: Config>() -> (PageOf<T>, usize) {
 	}
 	assert!(msgs > 0, "page must hold at least one message");
 	(page, msgs)
+}
+
+pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+	assert!(
+		!frame_system::Pallet::<T>::block_number().is_zero(),
+		"The genesis block has n o events"
+	);
+	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }

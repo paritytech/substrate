@@ -23,7 +23,7 @@ use crate::{mock::*, *};
 
 use crate as pallet_message_queue;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
+	assert_noop, assert_ok, assert_storage_noop, parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
@@ -79,7 +79,7 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const HeapSize: u32 = 24; // 64 KiB
+	pub const HeapSize: u32 = 24;
 	pub const MaxStale: u32 = 2;
 }
 
@@ -104,14 +104,6 @@ parameter_types! {
 impl MockedWeightInfo {
 	/// Set the weight of a specific weight function.
 	pub fn set_weight<T: Config>(call_name: &str, weight: Weight) {
-		assert!(
-			super::weights::WeightMetaInfo::<T::WeightInfo>::visit_weight_functions(
-				|f, _| f == call_name
-			)
-			.into_iter()
-			.any(|i| i),
-			"Weigh function name invalid: {call_name}"
-		);
 		let mut calls = WeightForCall::get();
 		calls.insert(call_name.into(), weight);
 		WeightForCall::set(calls);
@@ -136,6 +128,9 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	}
 	fn service_page_item() -> Weight {
 		WeightForCall::get().get("service_page_item").copied().unwrap_or_default()
+	}
+	fn ready_ring_unknit() -> Weight {
+		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
 	}
 }
 
@@ -208,14 +203,6 @@ fn mocked_weight_works() {
 	// The externalities reset it.
 	new_test_ext().execute_with(|| {
 		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
-	});
-}
-
-#[test]
-#[should_panic]
-fn mocked_weight_panics_on_invalid_name() {
-	new_test_ext().execute_with(|| {
-		set_weight("invalid_name", Weight::MAX);
 	});
 }
 
@@ -338,6 +325,29 @@ fn queue_priority_reset_once_serviced() {
 }
 
 #[test]
+fn reap_page_permanent_overweight_works() {
+	assert!(MaxStale::get() >= 2, "pre-condition unmet");
+	new_test_ext().execute_with(|| {
+		use MessageOrigin::*;
+		// Create pages with messages with a weight of two.
+		// TODO why do we need `+ 2` here?
+		for _ in 0..(MaxStale::get() + 2) {
+			MessageQueue::enqueue_message(msg(&"weight=2"), Here);
+		}
+
+		// … but only allow the processing to take at most weight 1.
+		MessageQueue::service_queues(1.into_weight());
+
+		// We can now reap the first one since they are permanently overweight and over the MaxStale
+		// limit.
+		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
+		// Cannot reap again.
+		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
+	});
+}
+
+#[test]
 fn reaping_overweight_fails_properly() {
 	new_test_ext().execute_with(|| {
 		use MessageOrigin::*;
@@ -396,6 +406,53 @@ fn reaping_overweight_fails_properly() {
 }
 
 #[test]
+fn service_queue_bails() {
+	// Not enough weight for `service_queue_base`.
+	new_test_ext().execute_with(|| {
+		set_weight("service_queue_base", 2.into_weight());
+		let mut meter = WeightCounter::from_limit(1.into_weight());
+
+		assert_storage_noop!(MessageQueue::service_queue(0u32.into(), &mut meter, Weight::MAX));
+		assert!(meter.consumed.is_zero());
+	});
+	// Not enough weight for `ready_ring_unknit`.
+	new_test_ext().execute_with(|| {
+		set_weight("ready_ring_unknit", 2.into_weight());
+		let mut meter = WeightCounter::from_limit(1.into_weight());
+
+		assert_storage_noop!(MessageQueue::service_queue(0u32.into(), &mut meter, Weight::MAX));
+		assert!(meter.consumed.is_zero());
+	});
+	// Not enough weight for `service_queue_base` and `ready_ring_unknit`.
+	new_test_ext().execute_with(|| {
+		set_weight("service_queue_base", 2.into_weight());
+		set_weight("ready_ring_unknit", 2.into_weight());
+
+		let mut meter = WeightCounter::from_limit(3.into_weight());
+		assert_storage_noop!(MessageQueue::service_queue(0.into(), &mut meter, Weight::MAX));
+		assert!(meter.consumed.is_zero());
+	});
+}
+
+#[test]
+fn service_page_bails() {
+	// Not enough weight for `service_page_base`.
+	new_test_ext().execute_with(|| {
+		set_weight("service_page_base", 2.into_weight());
+		let mut meter = WeightCounter::from_limit(1.into_weight());
+		let mut book = single_page_book::<Test>();
+
+		assert_storage_noop!(MessageQueue::service_page(
+			&0.into(),
+			&mut book,
+			&mut meter,
+			Weight::MAX
+		));
+		assert!(meter.consumed.is_zero());
+	});
+}
+
+#[test]
 fn service_page_item_bails() {
 	new_test_ext().execute_with(|| {
 		let (mut page, _) = full_page::<Test>();
@@ -418,7 +475,7 @@ fn service_page_item_bails() {
 #[test]
 fn service_page_consumes_correct_weight() {
 	new_test_ext().execute_with(|| {
-		let mut page = PageOf::<Test>::from_message(b"weight=3", &MessageOrigin::Here.encode());
+		let mut page = page::<Test>(b"weight=3", MessageOrigin::Here);
 		let mut weight = WeightCounter::from_limit(10.into_weight());
 		let overweight_limit = 0.into_weight();
 		set_weight("service_page_item", 2.into_weight());
@@ -436,11 +493,11 @@ fn service_page_consumes_correct_weight() {
 	});
 }
 
-/// Skips a permanent `Overweight` message and marks it as "unprocessed".
+/// `service_page_item` skips a permanently `Overweight` message and marks it as `unprocessed`.
 #[test]
 fn service_page_skips_perm_overweight_message() {
 	new_test_ext().execute_with(|| {
-		let mut page = PageOf::<Test>::from_message(b"weight=6", &MessageOrigin::Here.encode());
+		let mut page = page::<Test>(b"weight=6", MessageOrigin::Here);
 		let mut weight = WeightCounter::from_limit(7.into_weight());
 		let overweight_limit = 5.into_weight();
 		set_weight("service_page_item", 2.into_weight());
@@ -477,4 +534,29 @@ fn peek_index_works() {
 			assert_eq!(payload, MessageOrigin::Everywhere(i as u32).encode());
 		}
 	});
+}
+
+#[test]
+fn page_from_message_basic_works() {
+	assert!(MaxOriginLenOf::<Test>::get() >= 3, "pre-condition unmet");
+	assert!(MaxMessageLenOf::<Test>::get() >= 3, "pre-condition unmet");
+
+	let page = PageOf::<Test>::from_message::<Test>(
+		BoundedSlice::defensive_truncate_from(b"MSG"),
+		BoundedSlice::defensive_truncate_from(b"ORI"),
+	);
+}
+
+// `Page::from_message` does not panic when called with the maximum message and origin lengths.
+#[test]
+fn page_from_message_max_len_works() {
+	let max_msg_len: usize = MaxMessageLenOf::<Test>::get() as usize;
+	let max_origin_len: usize = MaxOriginLenOf::<Test>::get() as usize;
+
+	let page = PageOf::<Test>::from_message::<Test>(
+		vec![1; max_msg_len][..].try_into().unwrap(),
+		vec![2; max_origin_len][..].try_into().unwrap(),
+	);
+
+	assert_eq!(page.remaining, 1);
 }

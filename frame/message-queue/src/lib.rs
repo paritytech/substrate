@@ -357,6 +357,7 @@ pub mod pallet {
 			weight_used
 		}
 
+		/// Check all pre-conditions about the [`crate::Config`] types.
 		fn integrity_test() {
 			// TODO currently disabled since it fails.
 			// None of the weight functions can be zero.
@@ -369,7 +370,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Remove a page which has no more messages remaining to be processed.
+		/// Remove a page which has no more messages remaining to be processed or is stale.
 		#[pallet::weight(150_000_000_000)]
 		pub fn reap_page(
 			origin: OriginFor<T>,
@@ -452,7 +453,7 @@ enum MessageExecutionStatus {
 	BadFormat,
 	/// There is not enough weight remaining at present.
 	InsufficientWeight,
-	/// There will never be enough enough weight.
+	/// There will never be enough weight.
 	Overweight,
 	/// The message was processed successfully.
 	Processed,
@@ -517,7 +518,6 @@ impl<T: Config> Pallet<T> {
 
 	fn bump_service_head(weight: &mut WeightCounter) -> Option<MessageOriginOf<T>> {
 		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
-			log::debug!(target: LOG_TARGET, "bump_service_head: weight limit reached");
 			return None
 		}
 
@@ -525,11 +525,6 @@ impl<T: Config> Pallet<T> {
 			let mut head_book_state = BookStateFor::<T>::get(&head);
 			if let Some(head_neighbours) = head_book_state.ready_neighbours.take() {
 				ServiceHead::<T>::put(&head_neighbours.next);
-				log::debug!(
-					target: LOG_TARGET,
-					"bump_service_head: next head `{:?}`",
-					head_neighbours.next
-				);
 				Some(head)
 			} else {
 				None
@@ -608,8 +603,8 @@ impl<T: Config> Pallet<T> {
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
-				// no need toconsider .first or ready ring since processing an overweight page would
-				// not alter that state.
+				// no need to consider .first or ready ring since processing an overweight page
+				// would not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
@@ -662,13 +657,16 @@ impl<T: Config> Pallet<T> {
 		origin: MessageOriginOf<T>,
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
-	) -> Option<MessageOriginOf<T>> {
-		if !weight.check_accrue(T::WeightInfo::service_queue_base()) {
-			return None
+	) -> (bool, Option<MessageOriginOf<T>>) {
+		if !weight.check_accrue(
+			T::WeightInfo::service_queue_base().saturating_add(T::WeightInfo::ready_ring_unknit()),
+		) {
+			return (false, None)
 		}
 
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut total_processed = 0;
+
 		while book_state.end > book_state.begin {
 			let (processed, status) =
 				Self::service_page(&origin, &mut book_state, weight, overweight_limit);
@@ -744,6 +742,7 @@ impl<T: Config> Pallet<T> {
 			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
 			book_state.count.saturating_dec();
 		} else {
+			// TODO we only benchmark the `true` case; assuming that it is more expensive.
 			Pages::<T>::insert(&origin, page_index, page);
 		}
 		(total_processed, status)
@@ -768,6 +767,7 @@ impl<T: Config> Pallet<T> {
 			Some(m) => m,
 			None => return PageExecutionStatus::NoMore,
 		}[..];
+		log::debug!(target: LOG_TARGET, "\n{}", Self::debug_info());
 
 		use MessageExecutionStatus::*;
 		let is_processed = match Self::process_message(message, weight, overweight_limit) {
@@ -779,12 +779,14 @@ impl<T: Config> Pallet<T> {
 		PageExecutionStatus::Partial
 	}
 
-	/// Print which messages are in each queue.
+	/// Print the pages in each queue, the message in each page.
+	///
+	/// Processed messages are prefixed with a `*` and the current `begin`ning page by `>`.
 	///
 	/// # Example output
 	///
 	/// ```text
-	///	queue Here:
+	/// 	queue Here:
 	///   page 0: []
 	/// > page 1: []
 	///   page 2: ["\0weight=4", "\0c", ]
@@ -796,21 +798,32 @@ impl<T: Config> Pallet<T> {
 	fn debug_info() -> String {
 		let mut info = String::new();
 		for (origin, book_state) in BookStateFor::<T>::iter() {
-			let mut queue = format!("queue {:?}:\n", &origin);	
+			let mut queue = format!("queue {:?}:\n", &origin);
 			let mut pages = Pages::<T>::iter_prefix(&origin).collect::<Vec<_>>();
-			pages.sort_by(|(a,_ ), (b, _)| a.cmp(b));
+			pages.sort_by(|(a, _), (b, _)| a.cmp(b));
 			for (page_index, page) in pages.into_iter() {
 				let mut page = page;
-				let mut page_info = format!("page {}: [", page_index);
+				let mut page_info = format!("page {} ({:?} msgs): [", page_index, page.remaining);
 				if book_state.begin == page_index {
 					page_info = format!("> {}", page_info);
 				} else {
 					page_info = format!("  {}", page_info);
 				}
-				while let Some(message) = page.peek_first() {
-					let msg = String::from_utf8_lossy(message.deref());
-					page_info.push_str(&format!("{:?}, ", msg));
-					page.skip_first(true);
+				for i in 0..u32::MAX {
+					if let Some((_, processed, message)) =
+						page.peek_index(i.try_into().expect("std-only code"))
+					{
+						let msg = String::from_utf8_lossy(message.deref());
+						if processed {
+							page_info.push_str("*");
+						} else {
+							page_info.push_str(" ");
+						}
+						page_info.push_str(&format!("{:?}, ", msg));
+						page.skip_first(true);
+					} else {
+						break
+					}
 				}
 				page_info.push_str("]\n");
 				queue.push_str(&page_info);
@@ -907,12 +920,6 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		// The maximum weight that processing a single message may take.
 		let overweight_limit = weight_limit;
 		let mut weight = WeightCounter::from_limit(weight_limit);
-		log::debug!(
-			target: LOG_TARGET,
-			"ServiceQueues::service_queues with weight {} and overweight_limit {}",
-			weight_limit,
-			overweight_limit
-		);
 
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
