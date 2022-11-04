@@ -41,7 +41,7 @@ use sp_runtime::{
 	traits::{Hash, One, Zero},
 	SaturatedConversion, Saturating,
 };
-use sp_std::{fmt::Debug, prelude::*, vec};
+use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
 use sp_weights::WeightCounter;
 pub use weights::WeightInfo;
 
@@ -744,6 +744,47 @@ impl<T: Config> Pallet<T> {
 		};
 		page.skip_first(is_processed);
 		PageExecutionStatus::Partial
+	}
+
+	/// Print which messages are in each queue.
+	///
+	/// # Example output
+	///
+	/// ```text
+	///	queue Here:
+	///   page 0: []
+	/// > page 1: []
+	///   page 2: ["\0weight=4", "\0c", ]
+	///   page 3: ["\0bigbig 1", ]
+	///   page 4: ["\0bigbig 2", ]
+	///   page 5: ["\0bigbig 3", ]
+	/// ```
+	#[cfg(feature = "std")]
+	fn debug_info() -> String {
+		let mut info = String::new();
+		for (origin, book_state) in BookStateOf::<T>::iter() {
+			let mut queue = format!("queue {:?}:\n", &origin);	
+			let mut pages = Pages::<T>::iter_prefix(&origin).collect::<Vec<_>>();
+			pages.sort_by(|(a,_ ), (b, _)| a.cmp(b));
+			for (page_index, page) in pages.into_iter() {
+				let mut page = page;
+				let mut page_info = format!("page {}: [", page_index);
+				if book_state.begin == page_index {
+					page_info = format!("> {}", page_info);
+				} else {
+					page_info = format!("  {}", page_info);
+				}
+				while let Some(message) = page.peek_first() {
+					let msg = String::from_utf8_lossy(message.deref());
+					page_info.push_str(&format!("{:?}, ", msg));
+					page.skip_first(true);
+				}
+				page_info.push_str("]\n");
+				queue.push_str(&page_info);
+			}
+			info.push_str(&queue);
+		}
+		info
 	}
 
 	fn process_message(
