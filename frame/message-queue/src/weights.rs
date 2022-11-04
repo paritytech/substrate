@@ -38,21 +38,7 @@ pub trait WeightInfo {
 	fn service_page_process_message() -> Weight;
 	fn bump_service_head() -> Weight;
 	fn service_page_item() -> Weight;
-}
-
-// TODO auto-generate this by the benchmarking
-pub struct WeightMetaInfo<W>(PhantomData<W>);
-impl<W: WeightInfo> WeightMetaInfo<W> {
-	/// Executes a callback for each weight function by passing in its name and value.
-	pub fn visit_weight_functions<F: Fn(&'static str, Weight) -> R, R>(f: F) -> Vec<R> {
-		sp_std::vec![
-			f("service_page_base", W::service_page_base()),
-			f("service_queue_base", W::service_queue_base()),
-			f("service_page_process_message", W::service_page_process_message()),
-			f("bump_service_head", W::bump_service_head()),
-			f("service_page_item", W::service_page_item()),
-		]
-	}
+	fn ready_ring_unknit() -> Weight;
 }
 
 /// Weights for pallet_message_queue using the Substrate node and recommended hardware.
@@ -78,6 +64,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	fn service_page_item() -> Weight {
 		Weight::from_ref_time(112_000 as u64)
 	}
+	fn ready_ring_unknit() -> Weight {
+		Weight::from_ref_time(112_000 as u64)
+	}
 }
 
 // For backwards compatibility and tests
@@ -100,6 +89,10 @@ impl WeightInfo for () {
 	}
 
 	fn service_page_item() -> Weight {
+		Weight::from_ref_time(112_000 as u64)
+	}
+
+	fn ready_ring_unknit() -> Weight {
 		Weight::from_ref_time(112_000 as u64)
 	}
 }

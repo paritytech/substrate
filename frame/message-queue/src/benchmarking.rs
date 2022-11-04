@@ -33,16 +33,38 @@ benchmarks! {
 		where <<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32>
 	}
 
-	// Just calling `service_queue` without any iterations happening.
-	service_queue_base { }: { }
+	// `service_queue` without any page processing or unknitting.
+	service_queue_base {
+		let mut meter = WeightCounter::unlimited();
+	}: {
+		MessageQueue::<T>::service_queue(0u32.into(), &mut meter, Weight::MAX)
+	}
 
-	// Just calling `service_page` without any iterations happening.
-	service_page_base {	}: { }
+	// `service_page` without any message processing but with page completion.
+	service_page_base {
+		let origin: MessageOriginOf<T> = 0.into();
+		let (page, msgs) = full_page::<T>();
+		Pages::<T>::insert(&origin, 0, &page);
+		let mut book_state = single_page_book::<T>();
+		let mut meter = WeightCounter::unlimited();
+		let limit = Weight::MAX;
+	}: {
+		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
+	}
+
+	// Worst case path of `ready_ring_unknit`.
+	ready_ring_unknit {
+		let origin: MessageOriginOf<T> = 0.into();
+		let neighbours = Neighbours::<MessageOriginOf<T>> {
+			prev: 0.into(),
+			next: 1.into()
+		};
+		ServiceHead::<T>::put(&origin);
+	}: {
+		MessageQueue::<T>::ready_ring_unknit(&origin, neighbours);
+	}
 
 	// Processing a single message from a page.
-	//
-	// The benchmarks uses a full page and skips all message except the last one,
-	// although this should not make a difference.
 	service_page_item {
 		let (mut page, msgs) = full_page::<T>();
 		// Skip all messages except the last one.
@@ -69,11 +91,19 @@ benchmarks! {
 	// Worst case for calling `bump_service_head`.
 	bump_service_head { }: {}
 
+	reap_page {
+		assert!(T::MaxStale::get() >= 2, "pre-condition: MaxStale needs to be at least two");
+
+		for i in 0..(T::MaxStale::get() + 2) {
+			MessageQueue::<T>::enqueue_message(msg(&"weight=2"), 0.into());
+		}
+		MessageQueue::<T>::service_queues(1.into_weight());
+
+	}: _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0)
+	verify {
+		assert_last_event::<T>(Event::PageReaped{ origin: 0.into(), index: 0 }.into());
+	}
+
 	// Create a test for each benchmark.
 	impl_benchmark_test_suite!(MessageQueue, crate::tests::new_test_ext(), crate::tests::Test);
-}
-
-fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
-	assert!(!System::<T>::block_number().is_zero(), "The genesis block has n o events");
-	System::<T>::assert_last_event(generic_event.into());
 }
