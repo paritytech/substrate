@@ -3083,18 +3083,18 @@ mod pool_withdraw_unbonded {
 	fn pool_withdraw_unbonded_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given 10 unbond'ed directly against the pool account
-			assert_ok!(StakingMock::unbond(default_bonded_account(), 5));
+			assert_ok!(StakingMock::unbond(&default_bonded_account(), 5));
 			// and the pool account only has 10 balance
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(10));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(10));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 
 			// When
 			assert_ok!(Pools::pool_withdraw_unbonded(RuntimeOrigin::signed(10), 1, 0));
 
 			// Then there unbonding balance is no longer locked
-			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Some(5));
-			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(5));
+			assert_eq!(StakingMock::active_stake(&default_bonded_account()), Ok(5));
+			assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(5));
 			assert_eq!(Balances::free_balance(&default_bonded_account()), 10);
 		});
 	}
@@ -3270,7 +3270,7 @@ mod withdraw_unbonded {
 				// current bond is 600, we slash it all to 300.
 				StakingMock::set_bonded_balance(default_bonded_account(), 300);
 				Balances::make_free_balance_be(&default_bonded_account(), 300);
-				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Some(300));
+				assert_eq!(StakingMock::total_stake(&default_bonded_account()), Ok(300));
 
 				assert_ok!(fully_unbond_permissioned(40));
 				assert_ok!(fully_unbond_permissioned(550));
@@ -4074,12 +4074,15 @@ mod create {
 			assert!(!BondedPools::<Runtime>::contains_key(2));
 			assert!(!RewardPools::<Runtime>::contains_key(2));
 			assert!(!PoolMembers::<Runtime>::contains_key(11));
-			assert_eq!(StakingMock::active_stake(&next_pool_stash), None);
+			assert_err!(
+				StakingMock::active_stake(&next_pool_stash),
+				DispatchError::Other("balance not found")
+			);
 
-			Balances::make_free_balance_be(&11, StakingMock::minimum_bond() + ed);
+			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
 			assert_ok!(Pools::create(
 				RuntimeOrigin::signed(11),
-				StakingMock::minimum_bond(),
+				StakingMock::minimum_nominator_bond(),
 				123,
 				456,
 				789
@@ -4090,7 +4093,7 @@ mod create {
 				PoolMembers::<Runtime>::get(11).unwrap(),
 				PoolMember {
 					pool_id: 2,
-					points: StakingMock::minimum_bond(),
+					points: StakingMock::minimum_nominator_bond(),
 					..Default::default()
 				}
 			);
@@ -4099,7 +4102,7 @@ mod create {
 				BondedPool {
 					id: 2,
 					inner: BondedPoolInner {
-						points: StakingMock::minimum_bond(),
+						points: StakingMock::minimum_nominator_bond(),
 						member_counter: 1,
 						state: PoolState::Open,
 						roles: PoolRoles {
@@ -4113,7 +4116,7 @@ mod create {
 			);
 			assert_eq!(
 				StakingMock::active_stake(&next_pool_stash).unwrap(),
-				StakingMock::minimum_bond()
+				StakingMock::minimum_nominator_bond()
 			);
 			assert_eq!(
 				RewardPools::<Runtime>::get(2).unwrap(),
@@ -4142,7 +4145,7 @@ mod create {
 
 			// Given
 			assert_eq!(MinCreateBond::<Runtime>::get(), 2);
-			assert_eq!(StakingMock::minimum_bond(), 10);
+			assert_eq!(StakingMock::minimum_nominator_bond(), 10);
 
 			// Then
 			assert_noop!(
@@ -4196,6 +4199,44 @@ mod create {
 				create.dispatch(RuntimeOrigin::signed(11)),
 				Error::<Runtime>::MaxPoolMembers
 			);
+		});
+	}
+
+	#[test]
+	fn create_with_pool_id_works() {
+		ExtBuilder::default().build_and_execute(|| {
+			let ed = Balances::minimum_balance();
+
+			Balances::make_free_balance_be(&11, StakingMock::minimum_nominator_bond() + ed);
+			assert_ok!(Pools::create(
+				RuntimeOrigin::signed(11),
+				StakingMock::minimum_nominator_bond(),
+				123,
+				456,
+				789
+			));
+
+			assert_eq!(Balances::free_balance(&11), 0);
+			// delete the initial pool created, then pool_Id `1` will be free
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 1),
+				Error::<Runtime>::PoolIdInUse
+			);
+
+			assert_noop!(
+				Pools::create_with_pool_id(RuntimeOrigin::signed(12), 20, 234, 654, 783, 3),
+				Error::<Runtime>::InvalidPoolId
+			);
+
+			// start dismantling the pool.
+			assert_ok!(Pools::set_state(RuntimeOrigin::signed(902), 1, PoolState::Destroying));
+			assert_ok!(fully_unbond_permissioned(10));
+
+			CurrentEra::set(3);
+			assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 10));
+
+			assert_ok!(Pools::create_with_pool_id(RuntimeOrigin::signed(10), 20, 234, 654, 783, 1));
 		});
 	}
 }

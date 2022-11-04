@@ -3,6 +3,7 @@ use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
 use sp_runtime::FixedU128;
+use sp_staking::Stake;
 
 pub type BlockNumber = u64;
 pub type AccountId = u128;
@@ -47,8 +48,15 @@ impl sp_staking::StakingInterface for StakingMock {
 	type Balance = Balance;
 	type AccountId = AccountId;
 
-	fn minimum_bond() -> Self::Balance {
+	fn minimum_nominator_bond() -> Self::Balance {
 		StakingMinBond::get()
+	}
+	fn minimum_validator_bond() -> Self::Balance {
+		StakingMinBond::get()
+	}
+
+	fn desired_validator_count() -> u32 {
+		unimplemented!("method currently not used in testing")
 	}
 
 	fn current_era() -> EraIndex {
@@ -59,39 +67,24 @@ impl sp_staking::StakingInterface for StakingMock {
 		BondingDuration::get()
 	}
 
-	fn active_stake(who: &Self::AccountId) -> Option<Self::Balance> {
-		BondedBalanceMap::get().get(who).map(|v| *v)
-	}
-
-	fn total_stake(who: &Self::AccountId) -> Option<Self::Balance> {
-		match (
-			UnbondingBalanceMap::get().get(who).map(|v| *v),
-			BondedBalanceMap::get().get(who).map(|v| *v),
-		) {
-			(None, None) => None,
-			(Some(v), None) | (None, Some(v)) => Some(v),
-			(Some(a), Some(b)) => Some(a + b),
-		}
-	}
-
-	fn bond_extra(who: Self::AccountId, extra: Self::Balance) -> DispatchResult {
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
 		let mut x = BondedBalanceMap::get();
-		x.get_mut(&who).map(|v| *v += extra);
+		x.get_mut(who).map(|v| *v += extra);
 		BondedBalanceMap::set(&x);
 		Ok(())
 	}
 
-	fn unbond(who: Self::AccountId, amount: Self::Balance) -> DispatchResult {
+	fn unbond(who: &Self::AccountId, amount: Self::Balance) -> DispatchResult {
 		let mut x = BondedBalanceMap::get();
-		*x.get_mut(&who).unwrap() = x.get_mut(&who).unwrap().saturating_sub(amount);
+		*x.get_mut(who).unwrap() = x.get_mut(who).unwrap().saturating_sub(amount);
 		BondedBalanceMap::set(&x);
 		let mut y = UnbondingBalanceMap::get();
-		*y.entry(who).or_insert(Self::Balance::zero()) += amount;
+		*y.entry(*who).or_insert(Self::Balance::zero()) += amount;
 		UnbondingBalanceMap::set(&y);
 		Ok(())
 	}
 
-	fn chill(_: Self::AccountId) -> sp_runtime::DispatchResult {
+	fn chill(_: &Self::AccountId) -> sp_runtime::DispatchResult {
 		Ok(())
 	}
 
@@ -104,17 +97,12 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(UnbondingBalanceMap::get().is_empty() && BondedBalanceMap::get().is_empty())
 	}
 
-	fn bond(
-		stash: Self::AccountId,
-		_: Self::AccountId,
-		value: Self::Balance,
-		_: Self::AccountId,
-	) -> DispatchResult {
-		StakingMock::set_bonded_balance(stash, value);
+	fn bond(stash: &Self::AccountId, value: Self::Balance, _: &Self::AccountId) -> DispatchResult {
+		StakingMock::set_bonded_balance(*stash, value);
 		Ok(())
 	}
 
-	fn nominate(_: Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
+	fn nominate(_: &Self::AccountId, nominations: Vec<Self::AccountId>) -> DispatchResult {
 		Nominations::set(&Some(nominations));
 		Ok(())
 	}
@@ -122,6 +110,48 @@ impl sp_staking::StakingInterface for StakingMock {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
+	}
+
+	fn stash_by_ctrl(_controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
+		unimplemented!("method currently not used in testing")
+	}
+
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+		match (
+			UnbondingBalanceMap::get().get(who).map(|v| *v),
+			BondedBalanceMap::get().get(who).map(|v| *v),
+		) {
+			(None, None) => Err(DispatchError::Other("balance not found")),
+			(Some(v), None) => Ok(Stake { total: v, active: 0, stash: *who }),
+			(None, Some(v)) => Ok(Stake { total: v, active: v, stash: *who }),
+			(Some(a), Some(b)) => Ok(Stake { total: a + b, active: b, stash: *who }),
+		}
+	}
+
+	fn election_ongoing() -> bool {
+		unimplemented!("method currently not used in testing")
+	}
+
+	fn force_unstake(_who: Self::AccountId) -> sp_runtime::DispatchResult {
+		unimplemented!("method currently not used in testing")
+	}
+
+	fn is_exposed_in_era(_who: &Self::AccountId, _era: &EraIndex) -> bool {
+		unimplemented!("method currently not used in testing")
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add_era_stakers(
+		_current_era: &EraIndex,
+		_stash: &Self::AccountId,
+		_exposures: Vec<(Self::AccountId, Self::Balance)>,
+	) {
+		unimplemented!("method currently not used in testing")
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_current_era(_era: EraIndex) {
+		unimplemented!("method currently not used in testing")
 	}
 }
 
@@ -192,11 +222,10 @@ impl pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
 	type RewardCounter = RewardCounter;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type StakingInterface = StakingMock;
+	type Staking = StakingMock;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type PalletId = PoolsPalletId;
 	type MaxMetadataLen = MaxMetadataLen;

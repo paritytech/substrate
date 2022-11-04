@@ -315,13 +315,13 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		Self::hash_and_length_inner(ex)
 	}
 
-	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		futures::future::ready(Ok(match id {
-			BlockId::Number(num) =>
-				self.chain.read().block_by_number.get(num).map(|b| b[0].0.extrinsics().to_vec()),
-			BlockId::Hash(hash) =>
-				self.chain.read().block_by_hash.get(hash).map(|b| b.extrinsics().to_vec()),
-		}))
+	fn block_body(&self, hash: &<Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+		futures::future::ready(Ok(self
+			.chain
+			.read()
+			.block_by_hash
+			.get(hash)
+			.map(|b| b.extrinsics().to_vec())))
 	}
 
 	fn block_header(

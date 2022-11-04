@@ -641,7 +641,7 @@ where
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
-							warn!("Error imporing state: State root mismatch.");
+							warn!("Error importing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot)
 						}
 						None
@@ -1053,9 +1053,9 @@ where
 	/// Get block body by id.
 	pub fn body(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		self.backend.blockchain().body(*id)
+		self.backend.blockchain().body(hash)
 	}
 
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
@@ -1190,8 +1190,8 @@ where
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		// This is read proof only, we can use either LayoutV0 or LayoutV1.
-		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
+		let proof = proof
+			.into_compact_proof::<HashFor<Block>>(root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
@@ -1939,16 +1939,22 @@ where
 {
 	fn block_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		self.body(id)
+		self.body(hash)
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match (self.header(id)?, self.body(id)?, self.justifications(id)?) {
-			(Some(header), Some(extrinsics), justifications) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
-			_ => None,
+		Ok(match self.header(id)? {
+			Some(header) => {
+				let hash = header.hash();
+				match (self.body(&hash)?, self.justifications(&hash)?) {
+					(Some(extrinsics), justifications) =>
+						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
+					_ => None,
+				}
+			},
+			None => None,
 		})
 	}
 
@@ -1956,8 +1962,8 @@ where
 		Client::block_status(self, id)
 	}
 
-	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
-		self.backend.blockchain().justifications(*id)
+	fn justifications(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Justifications>> {
+		self.backend.blockchain().justifications(hash)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
@@ -1974,9 +1980,9 @@ where
 
 	fn block_indexed_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: &Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
-		self.backend.blockchain().block_indexed_body(*id)
+		self.backend.blockchain().block_indexed_body(hash)
 	}
 
 	fn requires_full_sync(&self) -> bool {
@@ -2067,9 +2073,19 @@ where
 		&self,
 		number: NumberFor<B>,
 	) -> Result<Option<Vec<Vec<u8>>>, sp_transaction_storage_proof::Error> {
+		let hash = match self
+			.backend
+			.blockchain()
+			.block_hash_from_id(&BlockId::Number(number))
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))?
+		{
+			Some(hash) => hash,
+			None => return Ok(None),
+		};
+
 		self.backend
 			.blockchain()
-			.block_indexed_body(BlockId::number(number))
+			.block_indexed_body(&hash)
 			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
 	}
 

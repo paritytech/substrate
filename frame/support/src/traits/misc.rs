@@ -407,6 +407,134 @@ where
 	}
 }
 
+/// Defensively calculates the minimum of two values.
+///
+/// Can be used in contexts where we assume the receiver value to be (strictly) smaller.
+pub trait DefensiveMin<T> {
+	/// Returns the minimum and defensively checks that `self` is not larger than `other`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(3, 4) is 3.
+	/// assert_eq!(3, 3_u32.defensive_min(4_u32));
+	/// // min(4, 4) is 4.
+	/// assert_eq!(4, 4_u32.defensive_min(4_u32));
+	/// ```
+	///
+	/// ```should_panic
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(4, 3) panics.
+	/// 4_u32.defensive_min(3_u32);
+	/// ```
+	fn defensive_min(self, other: T) -> Self;
+
+	/// Returns the minimum and defensively checks that `self` is smaller than `other`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(3, 4) is 3.
+	/// assert_eq!(3, 3_u32.defensive_strict_min(4_u32));
+	/// ```
+	///
+	/// ```should_panic
+	/// use frame_support::traits::DefensiveMin;
+	/// // min(4, 4) panics.
+	/// 4_u32.defensive_strict_min(4_u32);
+	/// ```
+	fn defensive_strict_min(self, other: T) -> Self;
+}
+
+impl<T> DefensiveMin<T> for T
+where
+	T: sp_std::cmp::PartialOrd<T>,
+{
+	fn defensive_min(self, other: T) -> Self {
+		if self <= other {
+			self
+		} else {
+			defensive!("DefensiveMin");
+			other
+		}
+	}
+
+	fn defensive_strict_min(self, other: T) -> Self {
+		if self < other {
+			self
+		} else {
+			defensive!("DefensiveMin strict");
+			other
+		}
+	}
+}
+
+/// Defensively calculates the maximum of two values.
+///
+/// Can be used in contexts where we assume the receiver value to be (strictly) larger.
+pub trait DefensiveMax<T> {
+	/// Returns the maximum and defensively asserts that `other` is not larger than `self`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMax;
+	/// // max(4, 3) is 4.
+	/// assert_eq!(4, 4_u32.defensive_max(3_u32));
+	/// // max(4, 4) is 4.
+	/// assert_eq!(4, 4_u32.defensive_max(4_u32));
+	/// ```
+	///
+	/// ```should_panic
+	/// use frame_support::traits::DefensiveMax;
+	/// // max(4, 5) panics.
+	/// 4_u32.defensive_max(5_u32);
+	/// ```
+	fn defensive_max(self, other: T) -> Self;
+
+	/// Returns the maximum and defensively asserts that `other` is smaller than `self`.
+	///
+	/// # Example
+	///
+	/// ```
+	/// use frame_support::traits::DefensiveMax;
+	/// // y(4, 3) is 4.
+	/// assert_eq!(4, 4_u32.defensive_strict_max(3_u32));
+	/// ```
+	///
+	/// ```should_panic
+	/// use frame_support::traits::DefensiveMax;
+	/// // max(4, 4) panics.
+	/// 4_u32.defensive_strict_max(4_u32);
+	/// ```
+	fn defensive_strict_max(self, other: T) -> Self;
+}
+
+impl<T> DefensiveMax<T> for T
+where
+	T: sp_std::cmp::PartialOrd<T>,
+{
+	fn defensive_max(self, other: T) -> Self {
+		if self >= other {
+			self
+		} else {
+			defensive!("DefensiveMax");
+			other
+		}
+	}
+
+	fn defensive_strict_max(self, other: T) -> Self {
+		if self > other {
+			self
+		} else {
+			defensive!("DefensiveMax strict");
+			other
+		}
+	}
+}
+
 /// Anything that can have a `::len()` method.
 pub trait Len {
 	/// Return the length of data type.
@@ -1108,5 +1236,53 @@ mod test {
 		let decoded = WrapperKeepOpaque::<u32>::decode(&mut &data[..]).unwrap();
 		let data = decoded.encode();
 		WrapperOpaque::<u32>::decode(&mut &data[..]).unwrap();
+	}
+
+	#[test]
+	fn defensive_min_works() {
+		assert_eq!(10, 10_u32.defensive_min(11_u32));
+		assert_eq!(10, 10_u32.defensive_min(10_u32));
+	}
+
+	#[test]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin\"")]
+	fn defensive_min_panics() {
+		10_u32.defensive_min(9_u32);
+	}
+
+	#[test]
+	fn defensive_strict_min_works() {
+		assert_eq!(10, 10_u32.defensive_strict_min(11_u32));
+		assert_eq!(9, 9_u32.defensive_strict_min(10_u32));
+	}
+
+	#[test]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMin strict\"")]
+	fn defensive_strict_min_panics() {
+		9_u32.defensive_strict_min(9_u32);
+	}
+
+	#[test]
+	fn defensive_max_works() {
+		assert_eq!(11, 11_u32.defensive_max(10_u32));
+		assert_eq!(10, 10_u32.defensive_max(10_u32));
+	}
+
+	#[test]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax\"")]
+	fn defensive_max_panics() {
+		9_u32.defensive_max(10_u32);
+	}
+
+	#[test]
+	fn defensive_strict_max_works() {
+		assert_eq!(11, 11_u32.defensive_strict_max(10_u32));
+		assert_eq!(10, 10_u32.defensive_strict_max(9_u32));
+	}
+
+	#[test]
+	#[should_panic(expected = "Defensive failure has been triggered!: \"DefensiveMax strict\"")]
+	fn defensive_strict_max_panics() {
+		9_u32.defensive_strict_max(9_u32);
 	}
 }
