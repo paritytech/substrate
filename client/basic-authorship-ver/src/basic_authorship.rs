@@ -623,6 +623,7 @@ where
 		self.transaction_pool.remove_invalid(&unqueue_invalid);
 
 		debug!(target: "block_builder","created block {:?}", block);
+		debug!(target: "block_builder","created block with hash {}", block.header().hash());
 
 		self.metrics.report(|metrics| {
 			metrics.number_of_transactions.set(block.extrinsics().len() as u64);
