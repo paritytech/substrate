@@ -86,39 +86,52 @@ impl<
 		HeapSize: Get<Size>,
 	> Page<Size, HeapSize>
 {
-	fn from_message(message: &[u8], origin: &[u8]) -> Self {
-		let len = ItemHeader::<Size>::max_encoded_len() + origin.len() + message.len();
-		let mut heap = Vec::with_capacity(len);
-		let payload_len: Size = (origin.len() + message.len()).saturated_into(); // TODO: bounded inputs for safety
-		let h = ItemHeader { payload_len, is_processed: false };
-		h.using_encoded(|d| heap.extend_from_slice(d));
-		heap.extend_from_slice(origin);
-		heap.extend_from_slice(message);
+	/// Create a [`Page`] from one unprocessed message and its origin.
+	fn from_message<T: Config>(
+		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
+		origin: BoundedSlice<u8, MaxOriginLenOf<T>>,
+	) -> Self {
+		let payload_len = origin.len().saturating_add(message.len());
+		let data_len = ItemHeader::<Size>::max_encoded_len().saturating_add(payload_len);
+		let header =
+			ItemHeader::<Size> { payload_len: payload_len.saturated_into(), is_processed: false };
+
+		let mut heap = Vec::with_capacity(data_len);
+		header.using_encoded(|h| heap.extend_from_slice(h));
+		heap.extend_from_slice(origin.deref());
+		heap.extend_from_slice(message.deref());
+
 		Page {
 			remaining: One::one(),
 			first: Zero::zero(),
 			last: Zero::zero(),
-			heap: BoundedVec::truncate_from(heap),
+			heap: BoundedVec::defensive_truncate_from(heap),
 		}
 	}
 
-	fn try_append_message(&mut self, message: &[u8], origin: &[u8]) -> Result<(), ()> {
+	/// Try to append one message from an origin.
+	fn try_append_message<T: Config>(
+		&mut self,
+		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
+		origin: BoundedSlice<u8, MaxOriginLenOf<T>>,
+	) -> Result<(), ()> {
 		let pos = self.heap.len();
-		let len = (ItemHeader::<Size>::max_encoded_len() + origin.len() + message.len()) as u32;
-		let payload_len: Size = (origin.len() + message.len()).saturated_into(); // TODO: bounded inputs for safety
-		let h = ItemHeader { payload_len, is_processed: false };
+		let payload_len = origin.len().saturating_add(message.len());
+		let data_len = ItemHeader::<Size>::max_encoded_len().saturating_add(payload_len);
+
+		let header =
+			ItemHeader::<Size> { payload_len: payload_len.saturated_into(), is_processed: false };
 		let heap_size: u32 = HeapSize::get().into();
-		if heap_size.saturating_sub(self.heap.len() as u32) < len {
+		if (heap_size as usize).saturating_sub(self.heap.len()) < data_len {
 			// Can't fit.
 			return Err(())
 		}
 
 		let mut heap = sp_std::mem::take(&mut self.heap).into_inner();
-		h.using_encoded(|d| heap.extend_from_slice(d));
-		heap.extend_from_slice(origin);
-		heap.extend_from_slice(message);
-		debug_assert!(heap.len() as u32 <= HeapSize::get().into(), "already checked size; qed");
-		self.heap = BoundedVec::truncate_from(heap);
+		header.using_encoded(|h| heap.extend_from_slice(h));
+		heap.extend_from_slice(origin.deref());
+		heap.extend_from_slice(message.deref());
+		self.heap = BoundedVec::defensive_truncate_from(heap);
 		self.last = pos.saturated_into();
 		self.remaining.saturating_inc();
 		Ok(())
