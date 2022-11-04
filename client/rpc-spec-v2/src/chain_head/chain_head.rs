@@ -40,6 +40,8 @@ use jsonrpsee::{
 	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
+use log::error;
+use parking_lot::RwLock;
 use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
@@ -63,9 +65,16 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	subscriptions: Arc<SubscriptionManagement<Block>>,
 	/// The hexadecimal encoded hash of the genesis block.
 	genesis_hash: String,
+	/// Best block reported by the RPC layer.
+	/// This is used to determine if the previously reported best
+	/// block is also pruned with the current finalization. In that
+	/// case, the RPC should report a new best block before reporting
+	/// the finalization event.
+	best_block: Arc<RwLock<Option<Block::Hash>>>,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<(Block, BE)>,
 }
+
 impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	/// Create a new [`ChainHead`].
 	pub fn new<GenesisHash: AsRef<[u8]>>(
@@ -80,6 +89,7 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			genesis_hash,
+			best_block: Default::default(),
 			_phantom: PhantomData,
 		}
 	}
@@ -195,6 +205,7 @@ where
 
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
+		let best_reported_block = self.best_block.clone();
 
 		let sub_id_import = sub_id.clone();
 		let stream_import = self
@@ -226,15 +237,36 @@ where
 				let best_block = FollowEvent::BestBlockChanged(BestBlockChanged {
 					best_block_hash: notification.hash,
 				});
-				stream::iter(vec![new_block, best_block])
+
+				let mut best_block_cache = best_reported_block.write();
+				match *best_block_cache {
+					Some(block_cache) => {
+						// The RPC layer has not reported this block as best before.
+						// Note: This handles the race with the finalized branch.
+						if block_cache != notification.hash {
+							*best_block_cache = Some(notification.hash);
+							stream::iter(vec![new_block, best_block])
+						} else {
+							stream::iter(vec![new_block])
+						}
+					},
+					None => {
+						*best_block_cache = Some(notification.hash);
+						stream::iter(vec![new_block, best_block])
+					},
+				}
 			})
 			.flatten();
 
+		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 		let sub_id_finalized = sub_id.clone();
+		let best_reported_block = self.best_block.clone();
 
-		let stream_finalized =
-			self.client.finality_notification_stream().map(move |notification| {
+		let stream_finalized = self
+			.client
+			.finality_notification_stream()
+			.map(move |notification| {
 				// We might not receive all new blocks reports, also pin the block here.
 				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash);
 
@@ -245,11 +277,49 @@ where
 					notification.tree_route.iter().cloned().collect::<Vec<_>>();
 				finalized_block_hashes.push(notification.hash);
 
-				FollowEvent::Finalized(Finalized {
+				let pruned_block_hashes: Vec<_> =
+					notification.stale_heads.iter().cloned().collect();
+
+				let finalized_event = FollowEvent::Finalized(Finalized {
 					finalized_block_hashes,
-					pruned_block_hashes: notification.stale_heads.iter().cloned().collect(),
-				})
-			});
+					pruned_block_hashes: pruned_block_hashes.clone(),
+				});
+
+				let mut best_block_cache = best_reported_block.write();
+				match *best_block_cache {
+					Some(block_cache) => {
+						// Check if the current best block is also reported as pruned.
+						let reported_pruned =
+							pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
+						if reported_pruned.is_none() {
+							return stream::iter(vec![finalized_event])
+						}
+
+						// The best block is reported as pruned. Therefore, we need to signal a new
+						// best block event before submitting the finalized event.
+						let best_block_hash = client.info().best_hash;
+						if best_block_hash == block_cache {
+							// The client doest not have any new information about the best block.
+							// The information from `.info()` is updated from the DB as the last
+							// step of the finalization and it should be up to date. Also, the
+							// displaced nodes (list of nodes reported) should be reported with
+							// an offset of 32 blocks for substrate.
+							// If the info is outdated, there is nothing the RPC can do for now.
+							error!(target: "rpc-spec-v2", "Client does not contain different best block");
+							stream::iter(vec![finalized_event])
+						} else {
+							// The RPC needs to also submit a new best block changed before the
+							// finalized event.
+							*best_block_cache = Some(best_block_hash);
+							let best_block =
+								FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
+							stream::iter(vec![best_block, finalized_event])
+						}
+					},
+					None => stream::iter(vec![finalized_event]),
+				}
+			})
+			.flatten();
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 
