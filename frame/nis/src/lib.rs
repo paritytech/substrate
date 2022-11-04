@@ -359,13 +359,8 @@ pub mod pallet {
 
 	/// The queues of bids. Indexed by duration (in `Period`s).
 	#[pallet::storage]
-	pub type Queues<T: Config> = StorageMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		BoundedVec<BidOf<T>, T::MaxQueueLen>,
-		ValueQuery,
-	>;
+	pub type Queues<T: Config> =
+		StorageMap<_, Blake2_128Concat, u32, BoundedVec<BidOf<T>, T::MaxQueueLen>, ValueQuery>;
 
 	/// Summary information over the general state.
 	#[pallet::storage]
@@ -483,7 +478,12 @@ pub mod pallet {
 				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };
 			if (n % T::IntakePeriod::get()).is_zero() {
 				if weight_counter.check_accrue(T::WeightInfo::process_queues()) {
-					Self::process_queues(T::Target::get(), T::QueueCount::get(), u32::max_value(), &mut weight_counter)
+					Self::process_queues(
+						T::Target::get(),
+						T::QueueCount::get(),
+						u32::max_value(),
+						&mut weight_counter,
+					)
 				}
 			}
 			weight_counter.used
@@ -783,7 +783,9 @@ pub mod pallet {
 			let mut totals = QueueTotals::<T>::get();
 			let count = T::QueueCount::get();
 			for duration in (1..=count).rev() {
-				if totals[duration as usize - 1].0.is_zero() { break }
+				if totals[duration as usize - 1].0.is_zero() {
+					continue
+				}
 				if remaining.is_zero() || queues_hit >= max_queues
 					|| !weight.check_accrue(T::WeightInfo::process_queue())
 					// No point trying to process a queue if we can't process a single bid.
@@ -826,8 +828,10 @@ pub mod pallet {
 			let expiry = now.saturating_add(T::Period::get().saturating_mul(duration.into()));
 			let mut count = 0;
 
-			while count < max_bids && !queue.is_empty() && !remaining.is_zero()
-				&& weight.check_accrue(T::WeightInfo::process_bid())
+			while count < max_bids &&
+				!queue.is_empty() &&
+				!remaining.is_zero() &&
+				weight.check_accrue(T::WeightInfo::process_bid())
 			{
 				let bid = match queue.pop() {
 					Some(b) => b,
@@ -842,9 +846,7 @@ pub mod pallet {
 					&mut queue_total.1,
 					summary,
 				) {
-					queue
-						.try_push(bid)
-						.expect("just popped, so there must be space. qed");
+					queue.try_push(bid).expect("just popped, so there must be space. qed");
 				}
 				count.saturating_inc();
 			}
@@ -869,8 +871,7 @@ pub mod pallet {
 			} else {
 				None
 			};
-			let amount =
-				bid.amount.saturating_sub(T::Currency::unreserve(&bid.who, bid.amount));
+			let amount = bid.amount.saturating_sub(T::Currency::unreserve(&bid.who, bid.amount));
 			if T::Currency::transfer(&bid.who, &our_account, amount, AllowDeath).is_err() {
 				return result
 			}

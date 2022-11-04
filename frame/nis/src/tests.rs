@@ -24,11 +24,12 @@ use frame_support::{
 	traits::{
 		nonfungible::{Inspect, Transfer},
 		Currency,
-	}, weights::Weight,
+	},
+	weights::Weight,
 };
 use pallet_balances::{Error as BalancesError, Instance1};
 use sp_arithmetic::Perquintill;
-use sp_runtime::{TokenError, traits::Bounded, Saturating};
+use sp_runtime::{traits::Bounded, Saturating, TokenError};
 
 fn pot() -> u64 {
 	Balances::free_balance(&Nis::account_id())
@@ -546,6 +547,10 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 fn enlargement_to_target_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(2);
+		let w = <() as WeightInfo>::process_queues() +
+			<() as WeightInfo>::process_queue() +
+			(<() as WeightInfo>::process_bid() * 2);
+		super::mock::MaxIntakeWeight::set(w);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 2));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 40, 2));
@@ -581,7 +586,7 @@ fn enlargement_to_target_works() {
 				proportion_owed: Perquintill::from_percent(20),
 				index: 2,
 				last_period: 0,
-				thawed: Perquintill::zero()
+				thawed: Perquintill::zero(),
 			}
 		);
 
