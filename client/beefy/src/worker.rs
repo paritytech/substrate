@@ -1002,7 +1002,7 @@ pub(crate) mod tests {
 		BeefyRPCLinks,
 	};
 
-	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto};
+	use beefy_primitives::{known_payloads, mmr::MmrRootProvider, ecdsa_crypto, bls_crypto};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
@@ -1014,7 +1014,7 @@ pub(crate) mod tests {
 		Backend, ClientExt,
 	};
 
-	fn create_beefy_worker(
+	fn create_beefy_worker<AuthId, TSignature, BKS>(
 		peer: &BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
@@ -1025,19 +1025,22 @@ pub(crate) mod tests {
 		MmrRootProvider<Block, TestApi>,
 		TestApi,
 		Arc<NetworkService<Block, H256>>,
-		ecdsa_crypto::AuthorityId,
-		ecdsa_crypto::Signature,
-		keystore::BeefyECDSAKeystore,		
-	> {
+		AuthId,
+		TSignature,
+		BKS,		
+		> where
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	{
 		let keystore = create_beefy_keystore(*key);
 
 		let (to_rpc_justif_sender, from_voter_justif_stream) =
-			BeefyVersionedFinalityProofStream::<Block, ecdsa_crypto::Signature>::channel();
+			BeefyVersionedFinalityProofStream::<Block, TSignature>::channel();
 		let (to_rpc_best_block_sender, from_voter_best_beefy_stream) =
 			BeefyBestBlockStream::<Block>::channel();
 		let (_, from_block_import_justif_stream) =
-			BeefyVersionedFinalityProofStream::<Block, ecdsa_crypto::Signature>::channel();
-
+			BeefyVersionedFinalityProofStream::<Block, TSignature>::channel();
 		let beefy_rpc_links =
 			BeefyRPCLinks { from_voter_justif_stream, from_voter_best_beefy_stream };
 		*peer.data.beefy_rpc_links.lock() = Some(beefy_rpc_links);
@@ -1297,13 +1300,19 @@ pub(crate) mod tests {
 		let extracted = find_authorities_change::<Block, ecdsa_crypto::AuthorityId>(&header);
 		assert_eq!(extracted, Some(validator_set));
 	}
-
-	#[test]
-	fn keystore_vs_validator_set() {
+	
+	fn keystore_vs_validator_set<AuthId,
+		TSignature,
+		BKS,		
+		> () where
+	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
+		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
+	{
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker::<AuthId, TSignature, BKS>(&net.peer(0), &keys[0], 1);
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
@@ -1319,6 +1328,16 @@ pub(crate) mod tests {
 		worker.key_store = None.into();
 		let expected_err = Err(Error::Keystore("no Keystore".into()));
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), expected_err);
+	}
+ 	
+	#[test]
+	fn test_keystore_vs_validator_set_ecdsa() {
+		keystore_vs_validator_set::<ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature, keystore::BeefyECDSAKeystore>();
+	}
+
+	#[test]
+	fn test_keystore_vs_validator_set_ecdsa_and_bls() {
+		keystore_vs_validator_set::<(ecdsa_crypto::AuthorityId, bls_crypto::AuthorityId), (ecdsa_crypto::Signature,bls_crypto::Signature), keystore::BeefyBLSnECDSAKeystore>();
 	}
 
 	#[test]

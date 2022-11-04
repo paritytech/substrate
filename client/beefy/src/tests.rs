@@ -50,11 +50,12 @@ use sp_consensus::BlockOrigin;
 use sp_core::H256;
 use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 use sp_runtime::{
-	codec::Encode,
+	codec::{Encode, Decode},
 	generic::BlockId,
 	traits::{Header as HeaderT, NumberFor},
 	BuildStorage, DigestItem, Justifications, Storage,
 };
+use core::fmt::Debug;
 
 use substrate_test_runtime_client::{runtime::Header, ClientExt};
 
@@ -103,19 +104,24 @@ impl BuildStorage for Genesis {
 }
 
 #[derive(Default)]
-pub(crate) struct PeerData {
-	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block, ecdsa_crypto::Signature>>>,
-	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block, ecdsa_crypto::Signature>>>,
+pub(crate) struct PeerData<TSignature> where
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+{
+	pub(crate) beefy_rpc_links: Mutex<Option<BeefyRPCLinks<Block, TSignature>>>,
+	pub(crate) beefy_voter_links: Mutex<Option<BeefyVoterLinks<Block, TSignature>>>,
 	pub(crate) beefy_justif_req_handler:
 		Mutex<Option<BeefyJustifsRequestHandler<Block, PeersFullClient>>>,
 }
 
 #[derive(Default)]
-pub(crate) struct BeefyTestNet {
-	peers: Vec<BeefyPeer>,
+pub(crate) struct BeefyTestNet<TSignature> where
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,{
+	peers: Vec<BeefyPeer<TSignature>>,
 }
 
-impl BeefyTestNet {
+impl<TSignature> BeefyTestNet<TSignature> where
+	TSignature: Encode + Decode + Debug + Clone + Sync + Send,
+{
 	pub(crate) fn new(n_authority: usize) -> Self {
 		let mut net = BeefyTestNet { peers: Vec::with_capacity(n_authority) };
 
