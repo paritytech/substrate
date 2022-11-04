@@ -4394,7 +4394,7 @@ fn reentrant_count_works_with_call() {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			300_000,
 			GAS_LIMIT,
 			None,
@@ -4406,7 +4406,7 @@ fn reentrant_count_works_with_call() {
 		// passing reentrant count to the input
 		let input = 0.encode();
 
-		Contracts::bare_call(ALICE, contract_addr, 0, GAS_LIMIT, None, input, true)
+		Contracts::bare_call(ALICE, contract_addr, 0, GAS_LIMIT, None, input, true, Determinism::Deterministic)
 			.result
 			.unwrap();
 	});
@@ -4422,7 +4422,7 @@ fn reentrant_count_works_with_delegated_call() {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			300_000,
 			GAS_LIMIT,
 			None,
@@ -4434,7 +4434,7 @@ fn reentrant_count_works_with_delegated_call() {
 		// adding a callstack height to the input
 		let input = (code_hash, 1).encode();
 
-		Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, input, true)
+		Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, input, true, Determinism::Deterministic)
 			.result
 			.unwrap();
 	});
@@ -4450,7 +4450,7 @@ fn account_entrance_count_works() {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			300_000,
 			GAS_LIMIT,
 			None,
@@ -4459,7 +4459,7 @@ fn account_entrance_count_works() {
 			vec![],
 		));
 
-		Contracts::bare_call(
+		let result = Contracts::bare_call(
 			ALICE,
 			contract_addr.clone(),
 			0,
@@ -4467,8 +4467,11 @@ fn account_entrance_count_works() {
 			None,
 			contract_addr.encode(),
 			true,
+			Determinism::Deterministic
 		)
 		.result
 		.unwrap();
+
+		assert_eq!(result.data, 1.encode());
 	});
 }

@@ -1198,6 +1198,7 @@ pub mod env {
 			Ok(ReturnCode::KeyNotFound)
 		}
 	}
+
 	/// Transfer some value to another account.
 	///
 	/// # Parameters
@@ -1364,6 +1365,7 @@ pub mod env {
 			output_len_ptr,
 		)
 	}
+
 	/// Instantiate a contract with the specified code hash.
 	///
 	/// # Deprecation
@@ -2453,32 +2455,48 @@ pub mod env {
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
-	},
+	}
 
-	// Returns the number of times the currently executing contract exists on the call stack in addition
-	// to the calling instance.
-	//
-	// # Return Value
-	//
-	// Returns 0 when there is no reentrancy.
-	[__unstable__] seal_reentrant_count(ctx) -> u32 => {
+	/// Returns the number of times the currently executing contract exists on the call stack in addition
+	/// to the calling instance.
+	///
+	/// # Return Value
+	///
+	/// Returns 0 when there is no reentrancy.
+	#[unstable]
+	#[prefixed_alias]
+	fn reentrant_count(ctx: Runtime<E>, out_ptr: u32) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
-		Ok(ctx.ext.reentrant_count())
-	},
 
-	// Returns the number of times specified contract exists on the call stack. Delegated calls are
-	// not calculated as separate calls.
-	//
-	// # Parameters
-	//
-	// - `account_ptr`: a pointer to the contract address.
-	//
-	// # Return Value
-	//
-	// Returns 0 when the contract does not exist on the call stack.
-	[__unstable__] seal_account_entrance_count(ctx, account_ptr: u32) -> u32 => {
+		let count = ctx.ext.reentrant_count();
+
+		ctx.write_sandbox_memory(out_ptr, &count.to_le_bytes())?;
+		Ok(ReturnCode::Success)
+	}
+
+	/// Returns the number of times specified contract exists on the call stack. Delegated calls are
+	/// not calculated as separate calls.
+	///
+	/// # Parameters
+	///
+	/// - `account_ptr`: a pointer to the contract address.
+	///
+	/// # Return Value
+	///
+	/// Returns 0 when the contract does not exist on the call stack.
+	#[unstable]
+	#[prefixed_alias]
+	fn account_entrance_count(
+		ctx: Runtime<E>,
+		account_ptr: u32,
+		out_ptr: u32,
+	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
-		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId = ctx.read_sandbox_memory_as(account_ptr)?;
-		Ok(ctx.ext.account_entrance_count(&account_id))
-	},
-);
+		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+
+		let count = ctx.ext.account_entrance_count(&account_id);
+		ctx.write_sandbox_memory(out_ptr, &count.to_le_bytes())?;
+		Ok(ReturnCode::Success)
+	}
+}

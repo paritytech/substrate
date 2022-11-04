@@ -424,10 +424,10 @@ pub struct HostFnWeights<T: Config> {
 	pub ecdsa_to_eth_address: u64,
 
 	/// Weight of calling `seal_reentrant_count`.
-	pub reentrant_count: Weight,
+	pub reentrant_count: u64,
 
 	/// Weight of calling `seal_account_entrance_count`.
-	pub account_entrance_count: Weight,
+	pub account_entrance_count: u64,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]

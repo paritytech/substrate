@@ -29,10 +29,10 @@
 		;; Reading input
 		(call $seal_input (i32.const 0) (i32.const 36))
 
-		;; reading passed callstack high
+		;; reading passed callstack height
 		(set_local $callstack_high (i32.load (i32.const 32)))
 
-		;; incrementing callstack high
+		;; incrementing callstack height
 		(i32.store (i32.const 32) (i32.add (i32.load (i32.const 32)) (i32.const 1)))
 
 		;; reentrance count stays 0

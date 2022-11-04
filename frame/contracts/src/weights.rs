@@ -1028,11 +1028,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_reentrant_count(r: u32, ) -> Weight {
-		(304_709_000 as Weight)
+		Weight::from_ref_time(304_709_000 as u64)
 			// Standard Error: 67_000
-			.saturating_add((15_411_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(15_411_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -1040,11 +1040,11 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_account_entrance_count(r: u32, ) -> Weight {
-		(328_378_000 as Weight)
+		Weight::from_ref_time(328_378_000 as u64)
 			// Standard Error: 137_000
-			.saturating_add((37_448_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(T::DbWeight::get().reads(4 as Weight))
-			.saturating_add(T::DbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(37_448_000 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64const(r: u32, ) -> Weight {
@@ -2268,11 +2268,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_reentrant_count(r: u32, ) -> Weight {
-		(304_709_000 as Weight)
+		Weight::from_ref_time(304_709_000 as u64)
 			// Standard Error: 67_000
-			.saturating_add((15_411_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(15_411_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -2280,11 +2280,11 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	/// The range of component `r` is `[0, 20]`.
 	fn seal_account_entrance_count(r: u32, ) -> Weight {
-		(328_378_000 as Weight)
+		Weight::from_ref_time(328_378_000 as u64)
 			// Standard Error: 137_000
-			.saturating_add((37_448_000 as Weight).saturating_mul(r as Weight))
-			.saturating_add(RocksDbWeight::get().reads(4 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(1 as Weight))
+			.saturating_add(Weight::from_ref_time(37_448_000 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	/// The range of component `r` is `[0, 50]`.
 	fn instr_i64const(r: u32, ) -> Weight {
