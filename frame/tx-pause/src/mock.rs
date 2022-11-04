@@ -148,23 +148,29 @@ pub struct WhitelistCallNames;
 
 /// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`
 /// and all DummyPallet calls. All others may be paused.
-impl Contains<FullNameOf<Test>> for WhitelistCallNames {
-	fn contains(full_name: &FullNameOf<Test>) -> bool {
-		let unpausables: Vec<FullNameOf<Test>> = vec![
+impl Contains<(PalletNameOf<Test>, PausedCallsOf<Test>)> for WhitelistCallNames {
+	fn contains(this_pallet_calls_of: &(PalletNameOf<Test>, PausedCallsOf<Test>)) -> bool {
+		let whitelists: Vec<(PalletNameOf<Test>, PausedCallsOf<Test>)> = vec![
 			(
 				b"Balances".to_vec().try_into().unwrap(),
-				Some(b"transfer_keep_alive".to_vec().try_into().unwrap()),
+				PausedCallsOf::<Test>::TheseCalls([b"transfer_keep_alive".to_vec().try_into().unwrap()].try_into().expect("Must have TheseCalls items less than MaxPausableCalls")),
 			),
-			(b"DummyPallet".to_vec().try_into().unwrap(), None),
+			(b"DummyPallet".to_vec().try_into().unwrap(), PausedCallsOf::<Test>::AllCalls),
 		];
 
-		for unpausable_call in unpausables {
-			let (pallet_name, maybe_call_name) = full_name;
-			if unpausable_call.1.is_none() {
-				return &unpausable_call.0 == pallet_name
-			} else {
-				if &unpausable_call.0 == pallet_name {
-					return &unpausable_call.1 == maybe_call_name
+		for whitelist in whitelists {
+			let (whitelisted_pallet, whitelisted_calls_of) = whitelist;
+			if whitelisted_pallet == this_pallet_calls_of.0 {
+				match whitelisted_calls_of {
+					PausedCallsOf::<Test>::AllCalls => return true,
+					PausedCallsOf::<Test>::TheseCalls(whitelist_calls) =>
+						if let PausedCallsOf::<Test>::TheseCalls(paused_calls) = this_pallet_calls_of.1 {
+							for call in paused_calls {
+								if whitelist_calls.contains(&call) {
+									return true
+								}
+							}
+						},
 				}
 			}
 		}

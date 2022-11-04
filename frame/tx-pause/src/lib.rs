@@ -233,9 +233,9 @@ pub mod pallet {
 			for (pallet_name, paused_calls) in &self.paused {
 				if let PausedCallsOf::<T>::TheseCalls(genesis_calls) = paused_calls {
 					let sorted_calls = genesis_calls.sort();
-					PausedCalls::<T>::insert((pallet_name, sorted_calls), ());
+					PausedCalls::<T>::insert(pallet_name, PausedCallsOf::<T>::TheseCalls(sorted_calls));
 				} else {
-					PausedCalls::<T>::insert((pallet_name, paused_calls), ());
+					PausedCalls::<T>::insert(pallet_name, paused_calls);
 				}
 			}
 		}
@@ -329,12 +329,14 @@ impl<T: Config> Pallet<T> {
 
 		match (pallet_name, call_name) {
 			(Ok(pallet_name), Ok(call_name)) => {
-				let mut tmp_call_set: BoundedBTreeSet<CallNameOf<T>, <T as Config>::MaxPausableCalls> =
-				BoundedBTreeSet::new();
-				// TODO can we make this somehow faster? new() doesn't allocate but it feels wrong here, we
-				// need this fn to be as fast as possible! maybe a TryFrom impl? Sound this be in the
-				// unbound fn above instead? Could use this pub fn and accidentially fail otherwise in this
-				// fn.
+				let mut tmp_call_set: BoundedBTreeSet<
+					CallNameOf<T>,
+					<T as Config>::MaxPausableCalls,
+				> = BoundedBTreeSet::new();
+				// TODO can we make this somehow faster? new() doesn't allocate but it feels wrong
+				// here, we need this fn to be as fast as possible! maybe a TryFrom impl? Sound this
+				// be in the unbound fn above instead? Could use this pub fn and accidentally fail
+				// otherwise in this fn.
 				if tmp_call_set.try_insert(call_name).is_err() {
 					return T::PauseTooLongNames::get()
 				};
@@ -346,6 +348,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Return whether a specific a call in a pallet is paused.
 	fn is_paused(pallet_name: &PalletNameOf<T>, these_pause_calls_of: &PausedCallsOf<T>) -> bool {
+		// TODO should these saftey chewcks only be a write time? in the ensure_is_paused below.
+
+		// SAFETY: The `TxPause` pallet can never be paused.
+		if pallet_name.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+			return false
+		}
+
 		// SAFETY: Everything that is whitelisted cannot be paused,
 		// including calls within paused pallets.
 		if T::WhitelistCallNames::contains(&(pallet_name.clone(), these_pause_calls_of.clone())) {
@@ -375,31 +384,9 @@ impl<T: Config> Pallet<T> {
 		pallet_name: &PalletNameOf<T>,
 		these_pause_calls_of: &PausedCallsOf<T>,
 	) -> Result<(), Error<T>> {
-		// SAFETY: The `TxPause` pallet can never be paused.
-		if pallet_name.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-			return Err(Error::<T>::IsUnpausable)
+		if Self::is_paused(pallet_name, these_pause_calls_of) {
+			Err(Error::IsPaused)
 		}
-		// TODO ensure the impl fails AllCalls if any individual call is in whitelist. OR ideally
-		// enforce that here...
-		if T::WhitelistCallNames::contains(&(pallet_name.clone(), these_pause_calls_of.clone())) {
-			return Err(Error::<T>::IsUnpausable)
-		}
-
-		if let Ok(present_paused_calls_of) = <PausedCalls<T>>::try_get(pallet_name) {
-			match present_paused_calls_of {
-				PausedCallsOf::<T>::AllCalls => return Err(Error::<T>::IsPaused),
-				PausedCallsOf::<T>::TheseCalls(present_paused_calls) => {
-					for call in these_pause_calls_of {
-						if present_paused_calls.contains(call) {
-							return Err(Error::<T>::IsPaused)
-						}
-					}
-				},
-			}
-		} else {
-			return Err(Error::<T>::IsPaused)
-		}
-
 		Ok(())
 	}
 
@@ -408,7 +395,7 @@ impl<T: Config> Pallet<T> {
 		pallet_name: &PalletNameOf<T>,
 		these_pause_calls_of: &PausedCallsOf<T>,
 	) -> Result<(), Error<T>> {
-		if Self::is_paused(pallet_name, call_name) {
+		if Self::is_paused(pallet_name, these_pause_calls_of) {
 			// SAFETY: Everything that is paused, can be un-paused.
 			Ok(())
 		} else {

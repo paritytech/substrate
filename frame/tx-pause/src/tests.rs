@@ -29,9 +29,10 @@ fn can_pause_specific_call() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(call_transfer(1, 1).dispatch(Origin::signed(0)));
 
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Balances", Some(b"transfer"))
+			name(b"Balances").into(),
+			name(b"transfer").into(),
 		));
 
 		assert_err!(
@@ -51,10 +52,10 @@ fn can_pause_all_calls_in_pallet_except_on_whitelist() {
 			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
 		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
 
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_pallet(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Utility", None)
-		),);
+			name(b"Utility").into(),
+		));
 
 		assert_err!(
 			batch_call.clone().dispatch(Origin::signed(0)),
@@ -66,9 +67,10 @@ fn can_pause_all_calls_in_pallet_except_on_whitelist() {
 #[test]
 fn can_unpause_specific_call() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Balances", Some(b"transfer")),
+			name(b"Balances").into(),
+			name(b"transfer").into(),
 		));
 		assert_err!(
 			call_transfer(2, 1).dispatch(Origin::signed(2)),
@@ -77,7 +79,8 @@ fn can_unpause_specific_call() {
 
 		assert_ok!(TxPause::unpause(
 			Origin::signed(mock::UnpauseOrigin::get()),
-			full_name::<Test>(b"Balances", Some(b"transfer")),
+			name(b"Balances").into(),
+			name(b"transfer").into(),
 		));
 		assert_ok!(call_transfer(4, 1).dispatch(Origin::signed(0)));
 	});
@@ -89,9 +92,10 @@ fn can_filter_balance_in_batch_when_paused() {
 		let batch_call =
 			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
 
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Balances", Some(b"transfer")),
+			name(b"Balances").into(),
+			name(b"transfer").into(),
 		));
 
 		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
@@ -108,9 +112,10 @@ fn can_filter_balance_in_batch_when_paused() {
 #[test]
 fn can_filter_balance_in_proxy_when_paused() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Balances", Some(b"transfer")),
+			name(b"Balances").into(),
+			name(b"transfer").into(),
 		));
 
 		assert_ok!(Proxy::add_proxy(Origin::signed(1), 2, ProxyType::JustTransfer, 0));
@@ -131,9 +136,10 @@ fn can_filter_balance_in_proxy_when_paused() {
 fn fails_to_pause_self() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::pause(
+			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				full_name::<Test>(b"TxPause", Some(b"pause")),
+				name(b"TxPause").into(),
+				name(b"pause").into(),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -144,9 +150,10 @@ fn fails_to_pause_self() {
 fn fails_to_pause_unpausable_pallet() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::pause(
+			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				full_name::<Test>(b"DummyPallet", Some(b"any_call")),
+				name(b"DummyPallet").into(),
+				name(b"any_call").into(),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -162,9 +169,9 @@ fn fails_to_pause_unpausable_call_when_pallet_is_paused() {
 			RuntimeCall::Utility(pallet_utility::Call::batch { calls: vec![call_transfer(1, 1)] });
 		assert_ok!(batch_call.clone().dispatch(Origin::signed(0)));
 
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_pallet(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Balances", None),
+			name(b"Balances").into(),
 		));
 
 		assert_ok!(call_transfer_keep_alive(3, 1).dispatch(Origin::signed(3)));
@@ -179,9 +186,10 @@ fn fails_to_pause_unpausable_call_when_pallet_is_paused() {
 fn fails_to_pause_unpausable_call() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			TxPause::pause(
+			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				full_name::<Test>(b"Balances", Some(b"transfer_keep_alive")),
+				name(b"Balances").into(),
+				name(b"transfer_keep_alive").into(),
 			),
 			Error::<Test>::IsUnpausable
 		);
@@ -191,15 +199,17 @@ fn fails_to_pause_unpausable_call() {
 #[test]
 fn fails_to_pause_already_paused_pallet() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(TxPause::pause(
+		assert_ok!(TxPause::pause_call(
 			Origin::signed(mock::PauseOrigin::get()),
-			full_name::<Test>(b"Balances", Some(b"transfer")),
+			name(b"Balances").into(),
+			name(b"transfer").into(),
 		));
 
 		assert_noop!(
-			TxPause::pause(
+			TxPause::pause_call(
 				Origin::signed(mock::PauseOrigin::get()),
-				full_name::<Test>(b"Balances", Some(b"transfer")),
+				name(b"Balances").into(),
+			name(b"transfer").into(),
 			),
 			Error::<Test>::IsPaused
 		);
@@ -212,7 +222,8 @@ fn fails_to_unpause_not_paused_pallet() {
 		assert_noop!(
 			TxPause::unpause(
 				Origin::signed(mock::UnpauseOrigin::get()),
-				full_name::<Test>(b"Balances", Some(b"transfer_keep_alive")),
+				name(b"Balances").into(),
+				name(b"transfer_keep_alive").into(),
 			),
 			Error::<Test>::IsUnpaused
 		);
@@ -227,15 +238,8 @@ pub fn call_transfer_keep_alive(dest: u64, value: u64) -> RuntimeCall {
 	RuntimeCall::Balances(pallet_balances::Call::transfer_keep_alive { dest, value })
 }
 
-pub fn full_name<T: Config>(
-	pallet_name_bytes: &[u8],
-	maybe_call_name_bytes: Option<&[u8]>,
-) -> FullNameOf<T> {
-	match maybe_call_name_bytes {
-		Some(call_name_bytes) => <FullNameOf<T>>::from((
-			pallet_name_bytes.to_vec().try_into().unwrap(),
-			Some(call_name_bytes.to_vec().try_into().unwrap()),
-		)),
-		None => <FullNameOf<T>>::from((pallet_name_bytes.to_vec().try_into().unwrap(), None)),
-	}
+pub fn name(
+	name_bytes: &[u8],
+) -> Vec<Test> {
+	name_bytes.to_vec().try_into().unwrap()
 }
