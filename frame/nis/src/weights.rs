@@ -49,9 +49,9 @@ pub trait WeightInfo {
 	fn retract_bid(l: u32, ) -> Weight;
 	fn thaw() -> Weight;
 	fn fund_deficit() -> Weight;
-	fn pursue_target_noop() -> Weight;
-	fn pursue_target_per_item(b: u32, ) -> Weight;
-	fn pursue_target_per_queue(q: u32, ) -> Weight;
+	fn process_queues() -> Weight;
+	fn process_queue() -> Weight;
+	fn process_bid() -> Weight;
 }
 
 /// Weights for pallet_nis using the Substrate node and recommended hardware.
@@ -97,7 +97,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 	// Storage: Nis ActiveTotal (r:1 w:0)
-	fn pursue_target_noop() -> Weight {
+	fn process_queues() -> Weight {
 		Weight::from_ref_time(1_663_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 	}
@@ -105,26 +105,21 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nis QueueTotals (r:1 w:1)
 	// Storage: Nis Queues (r:1 w:1)
 	// Storage: Nis Active (r:0 w:1)
-	fn pursue_target_per_item(b: u32, ) -> Weight {
+	fn process_queue() -> Weight {
 		Weight::from_ref_time(40_797_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add(Weight::from_ref_time(4_122_000 as u64).saturating_mul(b as u64))
 			.saturating_add(T::DbWeight::get().reads(3 as u64))
 			.saturating_add(T::DbWeight::get().writes(3 as u64))
-			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(b as u64)))
 	}
 	// Storage: Nis ActiveTotal (r:1 w:1)
 	// Storage: Nis QueueTotals (r:1 w:1)
 	// Storage: Nis Queues (r:1 w:1)
 	// Storage: Nis Active (r:0 w:1)
-	fn pursue_target_per_queue(q: u32, ) -> Weight {
+	fn process_bid() -> Weight {
 		Weight::from_ref_time(14_944_000 as u64)
 			// Standard Error: 6_000
-			.saturating_add(Weight::from_ref_time(8_135_000 as u64).saturating_mul(q as u64))
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
-			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(q as u64)))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
-			.saturating_add(T::DbWeight::get().writes((2 as u64).saturating_mul(q as u64)))
 	}
 }
 
@@ -170,7 +165,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 	// Storage: Nis ActiveTotal (r:1 w:0)
-	fn pursue_target_noop() -> Weight {
+	fn process_queues() -> Weight {
 		Weight::from_ref_time(1_663_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 	}
@@ -178,25 +173,20 @@ impl WeightInfo for () {
 	// Storage: Nis QueueTotals (r:1 w:1)
 	// Storage: Nis Queues (r:1 w:1)
 	// Storage: Nis Active (r:0 w:1)
-	fn pursue_target_per_item(b: u32, ) -> Weight {
+	fn process_queue() -> Weight {
 		Weight::from_ref_time(40_797_000 as u64)
 			// Standard Error: 1_000
-			.saturating_add(Weight::from_ref_time(4_122_000 as u64).saturating_mul(b as u64))
 			.saturating_add(RocksDbWeight::get().reads(3 as u64))
 			.saturating_add(RocksDbWeight::get().writes(3 as u64))
-			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(b as u64)))
 	}
 	// Storage: Nis ActiveTotal (r:1 w:1)
 	// Storage: Nis QueueTotals (r:1 w:1)
 	// Storage: Nis Queues (r:1 w:1)
 	// Storage: Nis Active (r:0 w:1)
-	fn pursue_target_per_queue(q: u32, ) -> Weight {
+	fn process_bid() -> Weight {
 		Weight::from_ref_time(14_944_000 as u64)
 			// Standard Error: 6_000
-			.saturating_add(Weight::from_ref_time(8_135_000 as u64).saturating_mul(q as u64))
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
-			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(q as u64)))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))
-			.saturating_add(RocksDbWeight::get().writes((2 as u64).saturating_mul(q as u64)))
 	}
 }

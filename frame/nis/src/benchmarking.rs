@@ -98,10 +98,10 @@ benchmarks! {
 		assert!(Receipts::<T>::get(0).is_none());
 	}
 
-	pursue_target_noop {
+	process_queues {
 	}: { Nis::<T>::pursue_target(0, Zero::zero()) }
 
-	pursue_target_per_item {
+	process_queue {
 		// bids taken
 		let b in 0..T::MaxQueueLen::get();
 
@@ -114,7 +114,7 @@ benchmarks! {
 		let target = Perquintill::one();
 	}: { Nis::<T>::pursue_target(b, target) }
 
-	pursue_target_per_queue {
+	process_bid {
 		// total queues hit
 		let q in 0..T::QueueCount::get();
 

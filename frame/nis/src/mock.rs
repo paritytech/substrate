@@ -25,7 +25,7 @@ use frame_support::{
 		ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize,
 		StorageMapShim,
 	},
-	PalletId,
+	PalletId, weights::Weight,
 };
 use pallet_balances::{Instance1, Instance2};
 use sp_core::{ConstU128, H256};
@@ -113,6 +113,7 @@ parameter_types! {
 	pub static Target: Perquintill = Perquintill::zero();
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const ThawThrottle: (Perquintill, u64) = (Perquintill::from_percent(25), 5);
+	pub const MaxIntakeWeight: Weight = Weight::from_ref_time(2_000_000_000);
 }
 
 ord_parameter_types! {
@@ -137,7 +138,7 @@ impl pallet_nis::Config for Test {
 	type Period = ConstU64<3>;
 	type MinBid = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;
-	type MaxIntakeBids = ConstU32<2>;
+	type MaxIntakeWeight = MaxIntakeWeight;
 	type MinReceipt = MinReceipt;
 	type ThawThrottle = ThawThrottle;
 }

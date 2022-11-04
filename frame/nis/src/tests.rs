@@ -24,14 +24,22 @@ use frame_support::{
 	traits::{
 		nonfungible::{Inspect, Transfer},
 		Currency,
-	},
+	}, weights::Weight,
 };
 use pallet_balances::{Error as BalancesError, Instance1};
 use sp_arithmetic::Perquintill;
-use sp_runtime::TokenError;
+use sp_runtime::{TokenError, traits::Bounded, Saturating};
 
 fn pot() -> u64 {
 	Balances::free_balance(&Nis::account_id())
+}
+
+fn enlarge(amount: u64, max_bids: u32) {
+	let mut weight_counter = WeightCounter { used: Weight::zero(), limit: Weight::max_value() };
+	let summary: SummaryRecord<u64> = Summary::<Test>::get();
+	let increase_in_proportion_owed = Perquintill::from_rational(amount, Nis::issuance().effective);
+	let target = summary.proportion_owed.saturating_add(increase_in_proportion_owed);
+	Nis::process_queues(target, u32::max_value(), max_bids, &mut weight_counter);
 }
 
 #[test]
@@ -193,7 +201,7 @@ fn basic_enlarge_works() {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 40, 2));
-		Nis::enlarge(40, 2);
+		enlarge(40, 2);
 
 		// Takes 2/2, then stopped because it reaches its max amount
 		assert_eq!(Balances::reserved_balance(1), 40);
@@ -228,7 +236,7 @@ fn enlarge_respects_bids_limit() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 40, 2));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(3), 40, 2));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(4), 40, 3));
-		Nis::enlarge(100, 2);
+		enlarge(100, 2);
 
 		// Should have taken 4/3 and 2/2, then stopped because it's only allowed 2.
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 40, who: 1 }]);
@@ -261,7 +269,7 @@ fn enlarge_respects_amount_limit_and_will_split() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 80, 1));
-		Nis::enlarge(40, 2);
+		enlarge(40, 2);
 
 		// Takes 2/2, then stopped because it reaches its max amount
 		assert_eq!(Queues::<Test>::get(1), vec![Bid { amount: 40, who: 1 }]);
@@ -293,7 +301,7 @@ fn basic_thaw_works() {
 		assert_eq!(Balances::reserved_balance(1), 40);
 		assert_eq!(pot(), 0);
 
-		Nis::enlarge(40, 1);
+		enlarge(40, 1);
 		assert_eq!(Nis::issuance().effective, 400);
 		assert_eq!(Balances::free_balance(1), 60);
 		assert_eq!(Balances::reserved_balance(1), 0);
@@ -329,7 +337,7 @@ fn partial_thaw_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 80, 1));
-		Nis::enlarge(80, 1);
+		enlarge(80, 1);
 		assert_eq!(pot(), 80);
 
 		run_to_block(4);
@@ -373,7 +381,7 @@ fn thaw_respects_transfers() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
-		Nis::enlarge(40, 1);
+		enlarge(40, 1);
 		run_to_block(4);
 
 		assert_eq!(Nis::owner(&0), Some(1));
@@ -399,7 +407,7 @@ fn thaw_when_issuance_higher_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
-		Nis::enlarge(100, 1);
+		enlarge(100, 1);
 
 		assert_eq!(NisBalances::free_balance(1), 5_250_000); // (25% of 21m)
 
@@ -438,7 +446,7 @@ fn thaw_with_ignored_issuance_works() {
 		Balances::make_free_balance_be(&0, 200);
 
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
-		Nis::enlarge(100, 1);
+		enlarge(100, 1);
 
 		// Account zero transfers 50 into everyone else's accounts.
 		assert_ok!(Balances::transfer(RuntimeOrigin::signed(0), 2, 50));
@@ -464,7 +472,7 @@ fn thaw_when_issuance_lower_works() {
 	new_test_ext().execute_with(|| {
 		run_to_block(1);
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 100, 1));
-		Nis::enlarge(100, 1);
+		enlarge(100, 1);
 
 		// Everybody else's balances goes down by 25%
 		Balances::make_free_balance_be(&2, 75);
@@ -486,7 +494,7 @@ fn multiple_thaws_works() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 60, 1));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 50, 1));
-		Nis::enlarge(200, 3);
+		enlarge(200, 3);
 
 		// Double everyone's free balances.
 		Balances::make_free_balance_be(&2, 100);
@@ -513,7 +521,7 @@ fn multiple_thaws_works_in_alternative_thaw_order() {
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 40, 1));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(1), 60, 1));
 		assert_ok!(Nis::place_bid(RuntimeOrigin::signed(2), 50, 1));
-		Nis::enlarge(200, 3);
+		enlarge(200, 3);
 
 		// Double everyone's free balances.
 		Balances::make_free_balance_be(&2, 100);

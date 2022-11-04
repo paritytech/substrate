@@ -143,7 +143,10 @@ pub mod pallet {
 		<T as frame_system::Config>::AccountId,
 		<T as frame_system::Config>::BlockNumber,
 	>;
+	type IssuanceInfoOf<T> = IssuanceInfo<BalanceOf<T>>;
 	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber>;
+	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
+	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
 
 	pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
 	impl<T> FungibleInspect<T> for NoCounterpart<T> {
@@ -286,7 +289,7 @@ pub mod pallet {
 		/// larger value here means less of the block available for transactions should there be a
 		/// glut of bids.
 		#[pallet::constant]
-		type MaxIntakeBids: Get<u32>;
+		type MaxIntakeWeight: Get<Weight>;
 
 		/// The maximum proportion which may be thawed and the period over which it is reset.
 		#[pallet::constant]
@@ -352,8 +355,7 @@ pub mod pallet {
 	/// The vector is indexed by duration in `Period`s, offset by one, so information on the queue
 	/// whose duration is one `Period` would be storage `0`.
 	#[pallet::storage]
-	pub type QueueTotals<T: Config> =
-		StorageValue<_, BoundedVec<(u32, BalanceOf<T>), T::QueueCount>, ValueQuery>;
+	pub type QueueTotals<T: Config> = StorageValue<_, QueueTotalsTypeOf<T>, ValueQuery>;
 
 	/// The queues of bids. Indexed by duration (in `Period`s).
 	#[pallet::storage]
@@ -361,7 +363,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		u32,
-		BoundedVec<Bid<BalanceOf<T>, T::AccountId>, T::MaxQueueLen>,
+		BoundedVec<BidOf<T>, T::MaxQueueLen>,
 		ValueQuery,
 	>;
 
@@ -455,14 +457,36 @@ pub mod pallet {
 		MakesDust,
 	}
 
+	pub(crate) struct WeightCounter {
+		pub(crate) used: Weight,
+		pub(crate) limit: Weight,
+	}
+	impl WeightCounter {
+		fn check_accrue(&mut self, w: Weight) -> bool {
+			let test = self.used.saturating_add(w);
+			if test.any_gt(self.limit) {
+				false
+			} else {
+				self.used = test;
+				true
+			}
+		}
+		fn can_accrue(&mut self, w: Weight) -> bool {
+			self.used.saturating_add(w).all_lte(self.limit)
+		}
+	}
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
+			let mut weight_counter =
+				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };
 			if (n % T::IntakePeriod::get()).is_zero() {
-				Self::pursue_target(T::MaxIntakeBids::get(), T::Target::get())
-			} else {
-				Weight::zero()
+				if weight_counter.check_accrue(T::WeightInfo::process_queues()) {
+					Self::process_queues(T::Target::get(), T::QueueCount::get(), u32::max_value(), &mut weight_counter)
+				}
 			}
+			weight_counter.used
 		}
 	}
 
@@ -733,110 +757,154 @@ pub mod pallet {
 			IssuanceInfo { holdings, other, effective, required }
 		}
 
-		/// Process some bids into receipts in line with the pallet's configuration.
+		/// Process some bids into receipts up to a `target` total of all receipts.
 		///
-		/// Returns the weight used.
-		pub fn pursue_target(max_bids: u32, target: Perquintill) -> Weight {
-			let summary: SummaryRecordOf<T> = Summary::<T>::get();
-			if summary.proportion_owed < target {
-				let missing = target.saturating_sub(summary.proportion_owed);
-				let issuance = Self::issuance_with(&Self::account_id(), &summary);
-
-				let intake = missing * issuance.effective;
-
-				let (bids_taken, queues_hit) = Self::enlarge(intake, max_bids);
-				let first_from_each_queue = T::WeightInfo::pursue_target_per_queue(queues_hit);
-				let rest_from_each_queue = T::WeightInfo::pursue_target_per_item(bids_taken)
-					.saturating_sub(T::WeightInfo::pursue_target_per_item(queues_hit));
-				first_from_each_queue + rest_from_each_queue
-			} else {
-				T::WeightInfo::pursue_target_noop()
+		/// Touch at most `max_queues`.
+		///
+		/// Return the weight used.
+		pub(crate) fn process_queues(
+			target: Perquintill,
+			max_queues: u32,
+			max_bids: u32,
+			weight: &mut WeightCounter,
+		) {
+			let mut summary: SummaryRecordOf<T> = Summary::<T>::get();
+			if summary.proportion_owed >= target {
+				return
 			}
-		}
 
-		/// Freeze additional funds from queue of bids up to `amount`. Use at most `max_bids`
-		/// from the queue.
-		///
-		/// Return the number of bids taken and the number of distinct queues taken from.
-		pub fn enlarge(amount: BalanceOf<T>, max_bids: u32) -> (u32, u32) {
-			let mut remaining = amount;
-			let mut bids_taken = 0;
-			let mut queues_hit = 0;
 			let now = frame_system::Pallet::<T>::block_number();
-
-			let mut summary = Summary::<T>::get();
-			let mut queue_totals = QueueTotals::<T>::get();
 			let our_account = Self::account_id();
-			let issuance = Self::issuance_with(&our_account, &summary);
+			let issuance: IssuanceInfoOf<T> = Self::issuance_with(&our_account, &summary);
+			let mut remaining = target.saturating_sub(summary.proportion_owed) * issuance.effective;
 
-			for duration in (1..=T::QueueCount::get()).rev() {
-				if queue_totals[duration as usize - 1].0 == 0 {
-					continue
-				}
-				let queue_index = duration as usize - 1;
-				let expiry = now.saturating_add(T::Period::get().saturating_mul(duration.into()));
-				let mut queue = Queues::<T>::get(&duration);
-				while let Some(mut bid) = queue.pop() {
-					if remaining < bid.amount {
-						let overflow = bid.amount - remaining;
-						bid.amount = remaining;
-						queue
-							.try_push(Bid { amount: overflow, who: bid.who.clone() })
-							.expect("just popped, so there must be space. qed");
-					}
-					let amount =
-						bid.amount.saturating_sub(T::Currency::unreserve(&bid.who, bid.amount));
-					if T::Currency::transfer(&bid.who, &our_account, amount, AllowDeath).is_err() {
-						continue
-					}
-
-					// Can never overflow due to block above.
-					remaining.saturating_reduce(amount);
-					// Should never underflow since it should track the total of the
-					// bids exactly, but we'll be defensive.
-					queue_totals[queue_index].1 =
-						queue_totals[queue_index].1.defensive_saturating_sub(amount);
-
-					// Now to activate the bid...
-					let n = amount;
-					let d = issuance.effective;
-					let proportion = Perquintill::from_rational(n, d);
-					let who = bid.who;
-					let index = summary.index;
-					summary.proportion_owed.defensive_saturating_accrue(proportion);
-					summary.index += 1;
-
-					let e = Event::Issued {
-						index,
-						expiry,
-						who: who.clone(),
-						amount,
-						proportion: proportion.clone(),
-					};
-					Self::deposit_event(e);
-					let receipt = ReceiptRecord { proportion, who: who.clone(), expiry };
-					Receipts::<T>::insert(index, receipt);
-
-					// issue the fungible counterpart
-					let fung_eq = T::CounterpartAmount::convert(proportion);
-					let _ = T::Counterpart::mint_into(&who, fung_eq).defensive();
-
-					bids_taken += 1;
-
-					if remaining.is_zero() || bids_taken == max_bids {
-						break
-					}
-				}
-				queues_hit += 1;
-				queue_totals[queue_index].0 = queue.len() as u32;
-				Queues::<T>::insert(&duration, &queue);
-				if remaining.is_zero() || bids_taken == max_bids {
+			let mut queues_hit = 0;
+			let mut bids_hit = 0;
+			let mut totals = QueueTotals::<T>::get();
+			let count = T::QueueCount::get();
+			for duration in (1..=count).rev() {
+				if totals[duration as usize - 1].0.is_zero() { break }
+				if remaining.is_zero() || queues_hit >= max_queues
+					|| !weight.check_accrue(T::WeightInfo::process_queue())
+					// No point trying to process a queue if we can't process a single bid.
+					|| !weight.can_accrue(T::WeightInfo::process_bid())
+				{
 					break
 				}
+
+				let b = Self::process_queue(
+					duration,
+					now,
+					&our_account,
+					&issuance,
+					max_bids.saturating_sub(bids_hit),
+					&mut remaining,
+					&mut totals[duration as usize - 1],
+					&mut summary,
+					weight,
+				);
+
+				bids_hit.saturating_accrue(b);
+				queues_hit.saturating_inc();
 			}
-			QueueTotals::<T>::put(&queue_totals);
+			QueueTotals::<T>::put(&totals);
 			Summary::<T>::put(&summary);
-			(bids_taken, queues_hit)
+		}
+
+		pub(crate) fn process_queue(
+			duration: u32,
+			now: T::BlockNumber,
+			our_account: &T::AccountId,
+			issuance: &IssuanceInfo<BalanceOf<T>>,
+			max_bids: u32,
+			remaining: &mut BalanceOf<T>,
+			queue_total: &mut (u32, BalanceOf<T>),
+			summary: &mut SummaryRecordOf<T>,
+			weight: &mut WeightCounter,
+		) -> u32 {
+			let mut queue: BoundedVec<BidOf<T>, _> = Queues::<T>::get(&duration);
+			let expiry = now.saturating_add(T::Period::get().saturating_mul(duration.into()));
+			let mut count = 0;
+
+			while count < max_bids && !queue.is_empty() && !remaining.is_zero()
+				&& weight.check_accrue(T::WeightInfo::process_bid())
+			{
+				let bid = match queue.pop() {
+					Some(b) => b,
+					None => break,
+				};
+				if let Some(bid) = Self::process_bid(
+					bid,
+					expiry,
+					our_account,
+					issuance,
+					remaining,
+					&mut queue_total.1,
+					summary,
+				) {
+					queue
+						.try_push(bid)
+						.expect("just popped, so there must be space. qed");
+				}
+				count.saturating_inc();
+			}
+			queue_total.0 = queue.len() as u32;
+			Queues::<T>::insert(&duration, &queue);
+			count
+		}
+
+		pub(crate) fn process_bid(
+			mut bid: BidOf<T>,
+			expiry: T::BlockNumber,
+			our_account: &T::AccountId,
+			issuance: &IssuanceInfo<BalanceOf<T>>,
+			remaining: &mut BalanceOf<T>,
+			queue_amount: &mut BalanceOf<T>,
+			summary: &mut SummaryRecordOf<T>,
+		) -> Option<BidOf<T>> {
+			let result = if *remaining < bid.amount {
+				let overflow = bid.amount - *remaining;
+				bid.amount = *remaining;
+				Some(Bid { amount: overflow, who: bid.who.clone() })
+			} else {
+				None
+			};
+			let amount =
+				bid.amount.saturating_sub(T::Currency::unreserve(&bid.who, bid.amount));
+			if T::Currency::transfer(&bid.who, &our_account, amount, AllowDeath).is_err() {
+				return result
+			}
+
+			// Can never overflow due to block above.
+			remaining.saturating_reduce(amount);
+			// Should never underflow since it should track the total of the
+			// bids exactly, but we'll be defensive.
+			queue_amount.defensive_saturating_reduce(amount);
+
+			// Now to activate the bid...
+			let n = amount;
+			let d = issuance.effective;
+			let proportion = Perquintill::from_rational(n, d);
+			let who = bid.who;
+			let index = summary.index;
+			summary.proportion_owed.defensive_saturating_accrue(proportion);
+			summary.index += 1;
+
+			let e = Event::Issued {
+				index,
+				expiry,
+				who: who.clone(),
+				amount,
+				proportion: proportion.clone(),
+			};
+			Self::deposit_event(e);
+			let receipt = ReceiptRecord { proportion, who: who.clone(), expiry };
+			Receipts::<T>::insert(index, receipt);
+
+			// issue the fungible counterpart
+			let fung_eq = T::CounterpartAmount::convert(proportion);
+			let _ = T::Counterpart::mint_into(&who, fung_eq).defensive();
+			result
 		}
 	}
 }
