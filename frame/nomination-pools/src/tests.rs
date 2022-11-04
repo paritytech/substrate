@@ -25,7 +25,7 @@ macro_rules! unbonding_pools_with_era {
 	($($k:expr => $v:expr),* $(,)?) => {{
 		use sp_std::iter::{Iterator, IntoIterator};
 		let not_bounded: BTreeMap<_, _> = Iterator::collect(IntoIterator::into_iter([$(($k, $v),)*]));
-		UnbondingPoolsWithEra::try_from(not_bounded).unwrap()
+		BoundedBTreeMap::<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>::try_from(not_bounded).unwrap()
 	}};
 }
 
@@ -213,31 +213,31 @@ mod bonded_pool {
 
 			// Simulate a 100% slashed pool
 			StakingMock::set_bonded_balance(pool.bonded_account(), 0);
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			// Simulate a slashed pool at `MaxPointsToBalance` + 1 slashed pool
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				max_points_to_balance.saturating_add(1).into(),
 			);
-			assert_ok!(pool.ok_to_join(0));
+			assert_ok!(pool.ok_to_join());
 
 			// Simulate a slashed pool at `MaxPointsToBalance`
 			StakingMock::set_bonded_balance(pool.bonded_account(), max_points_to_balance);
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance,
 			);
 			// New bonded balance would be over threshold of Balance type
-			assert_noop!(pool.ok_to_join(0), Error::<Runtime>::OverflowRisk);
+			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
 			// and a sanity check
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance - 1,
 			);
-			assert_ok!(pool.ok_to_join(0));
+			assert_ok!(pool.ok_to_join());
 		});
 	}
 }
@@ -437,7 +437,7 @@ mod join {
 				roles: DEFAULT_ROLES,
 			},
 		};
-		ExtBuilder::default().build_and_execute(|| {
+		ExtBuilder::default().with_check(0).build_and_execute(|| {
 			// Given
 			Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
 			assert!(!PoolMembers::<Runtime>::contains_key(&11));
@@ -4242,7 +4242,7 @@ mod set_state {
 	fn set_state_works() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Given
-			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open(0));
+			assert_ok!(BondedPool::<Runtime>::get(1).unwrap().ok_to_be_open());
 
 			// Only the root and state toggler can change the state when the pool is ok to be open.
 			assert_noop!(
@@ -4786,6 +4786,41 @@ mod reward_counter_precision {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 1173 }]
+			);
+		})
+	}
+
+	#[test]
+	fn massive_reward_in_small_pool() {
+		let tiny_bond = 1000 * DOT;
+		ExtBuilder::default().ed(DOT).min_bond(tiny_bond).build_and_execute(|| {
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Created { depositor: 10, pool_id: 1 },
+					Event::Bonded { member: 10, pool_id: 1, bonded: 10000000000000, joined: true }
+				]
+			);
+
+			Balances::make_free_balance_be(&20, tiny_bond);
+			assert_ok!(Pools::join(RuntimeOrigin::signed(20), tiny_bond / 2, 1));
+
+			// Suddenly, add a shit ton of rewards.
+			assert_ok!(
+				Balances::mutate_account(&default_reward_account(), |a| a.free += inflation(1))
+			);
+
+			// now claim.
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(10)));
+			assert_ok!(Pools::claim_payout(RuntimeOrigin::signed(20)));
+
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![
+					Event::Bonded { member: 20, pool_id: 1, bonded: 5000000000000, joined: true },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333332 },
+					Event::PaidOut { member: 20, pool_id: 1, payout: 3666666666666666666 }
+				]
 			);
 		})
 	}
