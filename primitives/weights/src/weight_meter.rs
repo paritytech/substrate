@@ -78,7 +78,7 @@ impl WeightMeter {
 		debug_assert!(res, "Weight meter exhausted; {} + {} > {}", &self.consumed, &w, &self.limit);
 	}
 
-	/// Check if the given weight can be consumed. Do nothing if not.
+	/// Consume the given weight after checking if it can be consumed. Do nothing if not.
 	pub fn check_accrue(&mut self, w: Weight) -> bool {
 		self.consumed.checked_add(&w).map_or(false, |test| {
 			if test.any_gt(self.limit) {
