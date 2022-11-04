@@ -234,7 +234,7 @@ benchmarks! {
 
 	submit_candidacy {
 		// number of already existing candidates.
-		let c in 1 .. T::MaxCandidates::get() - 1;
+		let c in 1 .. T::MaxCandidates::get();
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
