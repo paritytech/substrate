@@ -237,8 +237,7 @@ mod tests {
 
 	use crate::keystore::{tests::Keyring, BeefyKeystore};
 	use beefy_primitives::{
-		crypto::Signature, known_payload_ids, Commitment, MmrRootHash, Payload, VoteMessage,
-		KEY_TYPE,
+		crypto::Signature, known_payloads, Commitment, MmrRootHash, Payload, VoteMessage, KEY_TYPE,
 	};
 
 	use super::*;
@@ -348,7 +347,10 @@ mod tests {
 	}
 
 	fn dummy_vote(block_number: u64) -> VoteMessage<u64, Public, Signature> {
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, MmrRootHash::default().encode());
+		let payload = Payload::from_single_entry(
+			known_payloads::MMR_ROOT_ID,
+			MmrRootHash::default().encode(),
+		);
 		let commitment = Commitment { payload, block_number, validator_set_id: 0 };
 		let signature = sign_commitment(&Keyring::Alice, &commitment);
 

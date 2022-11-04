@@ -87,7 +87,6 @@ members = [
 	"frame/collective",
 	"frame/contracts",
 	"frame/contracts/primitives",
-	"frame/contracts/runtime-api",
 	"frame/conviction-voting",
 	"frame/democracy",
 	"frame/fast-unstake",
@@ -233,6 +232,7 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
 	"utils/frame/generate-bags/node-runtime",
+	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]

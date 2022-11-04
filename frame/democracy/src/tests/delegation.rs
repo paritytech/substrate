@@ -24,7 +24,7 @@ fn single_proposal_should_work_with_delegation() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
+		assert_ok!(propose_set_balance(1, 2, 1));
 
 		fast_forward_to(2);
 
@@ -75,7 +75,7 @@ fn cyclic_delegation_should_unwind() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
+		assert_ok!(propose_set_balance(1, 2, 1));
 
 		fast_forward_to(2);
 
@@ -100,7 +100,7 @@ fn single_proposal_should_work_with_vote_and_delegation() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
+		assert_ok!(propose_set_balance(1, 2, 1));
 
 		fast_forward_to(2);
 
@@ -122,7 +122,7 @@ fn single_proposal_should_work_with_undelegation() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 
-		assert_ok!(propose_set_balance_and_note(1, 2, 1));
+		assert_ok!(propose_set_balance(1, 2, 1));
 
 		// Delegate and undelegate vote.
 		assert_ok!(Democracy::delegate(RuntimeOrigin::signed(2), 1, Conviction::None, 20));

@@ -20,11 +20,11 @@ use crate::{
 	state_machine_call_with_proof, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use remote_externalities::rpc_api;
 use sc_service::{Configuration, NativeExecutionDispatch};
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{ws_client, ChainApi};
 
 /// Configurations of the [`Command::ExecuteBlock`].
 ///
@@ -33,11 +33,11 @@ use std::{fmt::Debug, str::FromStr};
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// Overwrite the wasm code in state or not.
-	#[clap(long)]
+	#[arg(long)]
 	overwrite_wasm_code: bool,
 
 	/// If set the state root check is disabled.
-	#[clap(long)]
+	#[arg(long)]
 	no_state_root_check: bool,
 
 	/// Which try-state targets to execute when running this command.
@@ -49,17 +49,16 @@ pub struct ExecuteBlockCmd {
 	///   `Staking, System`).
 	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
 	///   round-robin fashion.
-	#[clap(long, default_value = "none")]
+	#[arg(long, default_value = "none")]
 	try_state: frame_try_runtime::TryStateSelect,
 
 	/// The block hash at which to fetch the block.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = crate::parse::hash)
+		value_parser = crate::parse::hash
 	)]
 	block_at: Option<String>,
 
@@ -67,10 +66,9 @@ pub struct ExecuteBlockCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = crate::parse::url)
+		value_parser = crate::parse::url
 	)]
 	block_ws_uri: Option<String>,
 
@@ -79,17 +77,18 @@ pub struct ExecuteBlockCmd {
 	/// For this command only, if the `live` is used, then state of the parent block is fetched.
 	///
 	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	state: State,
 }
 
 impl ExecuteBlockCmd {
 	async fn block_at<Block: BlockT>(&self, ws_uri: String) -> sc_cli::Result<Block::Hash>
 	where
-		Block::Hash: FromStr,
+		Block::Hash: FromStr + serde::de::DeserializeOwned,
 		<Block::Hash as FromStr>::Err: Debug,
+		Block::Header: serde::de::DeserializeOwned,
 	{
-		let rpc_service = rpc_api::RpcService::new(ws_uri, false).await?;
+		let rpc = ws_client(&ws_uri).await?;
 
 		match (&self.block_at, &self.state) {
 			(Some(block_at), State::Snap { .. }) => hash_of::<Block>(block_at),
@@ -102,7 +101,9 @@ impl ExecuteBlockCmd {
 					target: LOG_TARGET,
 					"No --block-at or --at provided, using the latest finalized block instead"
 				);
-				rpc_service.get_finalized_head::<Block>().await.map_err(Into::into)
+				ChainApi::<(), Block::Hash, Block::Header, ()>::finalized_head(&rpc)
+					.await
+					.map_err(|e| e.to_string().into())
 			},
 			(None, State::Live { at: Some(at), .. }) => hash_of::<Block>(at),
 			_ => {
@@ -139,6 +140,8 @@ where
 	Block: BlockT + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
 	<Block::Hash as FromStr>::Err: Debug,
+	Block::Hash: serde::de::DeserializeOwned,
+	Block::Header: serde::de::DeserializeOwned,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
@@ -148,8 +151,11 @@ where
 
 	let block_ws_uri = command.block_ws_uri::<Block>();
 	let block_at = command.block_at::<Block>(block_ws_uri.clone()).await?;
-	let rpc_service = rpc_api::RpcService::new(block_ws_uri.clone(), false).await?;
-	let block: Block = rpc_service.get_block::<Block>(block_at).await?;
+	let rpc = ws_client(&block_ws_uri).await?;
+	let block: Block = ChainApi::<(), Block::Hash, Block::Header, _>::block(&rpc, Some(block_at))
+		.await
+		.unwrap()
+		.unwrap();
 	let parent_hash = block.header().parent_hash();
 	log::info!(
 		target: LOG_TARGET,

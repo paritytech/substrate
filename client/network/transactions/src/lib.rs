@@ -35,10 +35,7 @@ use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
 use sc_network_common::{
 	config::{NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, SetConfig},
 	error,
-	protocol::{
-		event::{Event, ObservedRole},
-		ProtocolName,
-	},
+	protocol::{event::Event, role::ObservedRole, ProtocolName},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
 	utils::{interval, LruHashSet},
 	ExHashT,
@@ -145,6 +142,7 @@ impl TransactionsHandlerPrototype {
 			notifications_protocol: self.protocol_name.clone(),
 			fallback_names: self.fallback_protocol_names.clone(),
 			max_notification_size: MAX_TRANSACTIONS_SIZE,
+			handshake: None,
 			set_config: SetConfig {
 				in_peers: 0,
 				out_peers: 0,

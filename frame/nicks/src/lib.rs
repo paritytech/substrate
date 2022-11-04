@@ -140,7 +140,7 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
 
 			let bounded_name: BoundedVec<_, _> =
-				name.try_into().map_err(|()| Error::<T>::TooLong)?;
+				name.try_into().map_err(|_| Error::<T>::TooLong)?;
 			ensure!(bounded_name.len() >= T::MinLength::get() as usize, Error::<T>::TooShort);
 
 			let deposit = if let Some((_, deposit)) = <NameOf<T>>::get(&sender) {
@@ -229,7 +229,7 @@ pub mod pallet {
 			T::ForceOrigin::ensure_origin(origin)?;
 
 			let bounded_name: BoundedVec<_, _> =
-				name.try_into().map_err(|()| Error::<T>::TooLong)?;
+				name.try_into().map_err(|_| Error::<T>::TooLong)?;
 			let target = T::Lookup::lookup(target)?;
 			let deposit = <NameOf<T>>::get(&target).map(|x| x.1).unwrap_or_else(Zero::zero);
 			<NameOf<T>>::insert(&target, (bounded_name, deposit));
