@@ -118,6 +118,17 @@ mod tests {
 	}
 
 	#[test]
+	fn weight_meter_can_accrue_works() {
+		let mut meter = WeightMeter::from_limit(Weight::from_parts(1, 1));
+
+		assert!(meter.can_accrue(Weight::from_parts(0, 0)));
+		assert!(meter.can_accrue(Weight::from_parts(1, 1)));
+		assert!(!meter.can_accrue(Weight::from_parts(0, 2)));
+		assert!(!meter.can_accrue(Weight::from_parts(2, 0)));
+		assert!(!meter.can_accrue(Weight::from_parts(2, 2)));
+	}
+
+	#[test]
 	fn weight_meter_check_and_can_accrue_works() {
 		let mut meter = WeightMeter::max_limit();
 
