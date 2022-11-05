@@ -129,7 +129,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
-		traits::{AccountIdConversion, Convert, ConvertBack, Saturating, Zero, Bounded},
+		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
 		TokenError,
 	};
 	use sp_std::prelude::*;
