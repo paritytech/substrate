@@ -27,7 +27,6 @@ use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
@@ -485,12 +484,12 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
-	/// Append justification to the block with the given Id.
+	/// Append justification to the block with the given `hash`.
 	///
 	/// This should only be called for blocks that are already finalized.
 	fn append_justification(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Justification,
 	) -> sp_blockchain::Result<()>;
 

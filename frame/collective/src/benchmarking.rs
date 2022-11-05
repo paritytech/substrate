@@ -489,9 +489,19 @@ benchmarks_instance_pallet! {
 		let index = p - 1;
 		// Have almost everyone vote aye on last proposal, while keeping it from passing.
 		// A few abstainers will be the nay votes needed to fail the vote.
+		let mut yes_votes: MemberCount = 0;
 		for j in 2 .. m - 1 {
 			let voter = &members[j as usize];
 			let approve = true;
+			yes_votes += 1;
+			// vote aye till a prime nay vote keeps the proposal disapproved.
+			if <<T as Config<I>>::DefaultVote as DefaultVote>::default_vote(
+				Some(false),
+				yes_votes,
+				0,
+				m,) {
+				break;
+			}
 			Collective::<T, I>::vote(
 				SystemOrigin::Signed(voter.clone()).into(),
 				last_hash,

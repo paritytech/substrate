@@ -999,5 +999,15 @@ mod tests {
 		};
 		check(u16::MAX as usize / 2); // old limit
 		check(u16::MAX as usize / 2 + 1); // value over old limit still works
+  }
+
+	fn node_with_no_children_fail_decoding() {
+		let branch = NodeCodec::<Blake2Hasher>::branch_node_nibbled(
+			b"some_partial".iter().copied(),
+			24,
+			vec![None; 16].into_iter(),
+			Some(trie_db::node::Value::Inline(b"value"[..].into())),
+		);
+		assert!(NodeCodec::<Blake2Hasher>::decode(branch.as_slice()).is_err());
 	}
 }

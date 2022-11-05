@@ -656,50 +656,39 @@ fn compact_wasm_file(
 	project: &Path,
 	profile: Profile,
 	cargo_manifest: &Path,
-	wasm_binary_name: Option<String>,
+	out_name: Option<String>,
 ) -> (Option<WasmBinary>, Option<WasmBinary>, WasmBinaryBloaty) {
-	let default_wasm_binary_name = get_wasm_binary_name(cargo_manifest);
-	let wasm_file = project
+	let default_out_name = get_wasm_binary_name(cargo_manifest);
+	let out_name = out_name.unwrap_or_else(|| default_out_name.clone());
+	let in_path = project
 		.join("target/wasm32-unknown-unknown")
 		.join(profile.directory())
-		.join(format!("{}.wasm", default_wasm_binary_name));
+		.join(format!("{}.wasm", default_out_name));
 
-	let wasm_compact_file = if profile.wants_compact() {
-		let wasm_compact_file = project.join(format!(
-			"{}.compact.wasm",
-			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone()),
-		));
-		wasm_gc::garbage_collect_file(&wasm_file, &wasm_compact_file)
+	let (wasm_compact_path, wasm_compact_compressed_path) = if profile.wants_compact() {
+		let wasm_compact_path = project.join(format!("{}.compact.wasm", out_name,));
+		wasm_opt::OptimizationOptions::new_opt_level_0()
+			.mvp_features_only()
+			.debug_info(true)
+			.add_pass(wasm_opt::Pass::StripDwarf)
+			.run(&in_path, &wasm_compact_path)
 			.expect("Failed to compact generated WASM binary.");
-		Some(WasmBinary(wasm_compact_file))
-	} else {
-		None
-	};
 
-	let wasm_compact_compressed_file = wasm_compact_file.as_ref().and_then(|compact_binary| {
-		let file_name =
-			wasm_binary_name.clone().unwrap_or_else(|| default_wasm_binary_name.clone());
-
-		let wasm_compact_compressed_file =
-			project.join(format!("{}.compact.compressed.wasm", file_name));
-
-		if compress_wasm(&compact_binary.0, &wasm_compact_compressed_file) {
-			Some(WasmBinary(wasm_compact_compressed_file))
+		let wasm_compact_compressed_path =
+			project.join(format!("{}.compact.compressed.wasm", out_name));
+		if compress_wasm(&wasm_compact_path, &wasm_compact_compressed_path) {
+			(Some(WasmBinary(wasm_compact_path)), Some(WasmBinary(wasm_compact_compressed_path)))
 		} else {
-			None
+			(Some(WasmBinary(wasm_compact_path)), None)
 		}
-	});
-
-	let bloaty_file_name = if let Some(name) = wasm_binary_name {
-		format!("{}.wasm", name)
 	} else {
-		format!("{}.wasm", default_wasm_binary_name)
+		(None, None)
 	};
 
-	let bloaty_file = project.join(bloaty_file_name);
-	fs::copy(wasm_file, &bloaty_file).expect("Copying the bloaty file to the project dir.");
+	let bloaty_path = project.join(format!("{}.wasm", out_name));
+	fs::copy(in_path, &bloaty_path).expect("Copying the bloaty file to the project dir.");
 
-	(wasm_compact_file, wasm_compact_compressed_file, WasmBinaryBloaty(bloaty_file))
+	(wasm_compact_path, wasm_compact_compressed_path, WasmBinaryBloaty(bloaty_path))
 }
 
 fn compress_wasm(wasm_binary_path: &Path, compressed_binary_out_path: &Path) -> bool {

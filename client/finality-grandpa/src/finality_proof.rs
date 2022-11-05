@@ -183,10 +183,12 @@ where
 			}
 		},
 		AuthoritySetChangeId::Set(_, last_block_for_set) => {
-			let last_block_for_set_id = BlockId::Number(last_block_for_set);
+			let last_block_for_set_id = backend
+				.blockchain()
+				.expect_block_hash_from_id(&BlockId::Number(last_block_for_set))?;
 			let justification = if let Some(grandpa_justification) = backend
 				.blockchain()
-				.justifications(last_block_for_set_id)?
+				.justifications(&last_block_for_set_id)?
 				.and_then(|justifications| justifications.into_justification(GRANDPA_ENGINE_ID))
 			{
 				grandpa_justification
