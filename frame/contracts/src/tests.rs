@@ -4444,7 +4444,6 @@ fn reentrant_count_works_with_delegated_call() {
 #[cfg(feature = "unstable-interface")]
 fn account_entrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_entrance_count_call").unwrap();
-	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -4458,6 +4457,8 @@ fn account_entrance_count_works() {
 			vec![],
 			vec![],
 		));
+
+		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		let result = Contracts::bare_call(
 			ALICE,
@@ -4473,5 +4474,6 @@ fn account_entrance_count_works() {
 		.unwrap();
 
 		assert_eq!(result.data, 1.encode());
+		assert_ne!(result.data, 2.encode());
 	});
 }

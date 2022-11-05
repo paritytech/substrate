@@ -2465,13 +2465,9 @@ pub mod env {
 	/// Returns 0 when there is no reentrancy.
 	#[unstable]
 	#[prefixed_alias]
-	fn reentrant_count(ctx: Runtime<E>, out_ptr: u32) -> Result<ReturnCode, TrapReason> {
+	fn reentrant_count(ctx: Runtime<E>) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
-
-		let count = ctx.ext.reentrant_count();
-
-		ctx.write_sandbox_memory(out_ptr, &count.to_le_bytes())?;
-		Ok(ReturnCode::Success)
+		Ok(ctx.ext.reentrant_count())
 	}
 
 	/// Returns the number of times specified contract exists on the call stack. Delegated calls are
@@ -2489,14 +2485,10 @@ pub mod env {
 	fn account_entrance_count(
 		ctx: Runtime<E>,
 		account_ptr: u32,
-		out_ptr: u32,
-	) -> Result<ReturnCode, TrapReason> {
+	) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr)?;
-
-		let count = ctx.ext.account_entrance_count(&account_id);
-		ctx.write_sandbox_memory(out_ptr, &count.to_le_bytes())?;
-		Ok(ReturnCode::Success)
+		Ok(ctx.ext.account_entrance_count(&account_id))
 	}
 }
