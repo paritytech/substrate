@@ -25,22 +25,20 @@ use frame_support::{
 		nonfungible::{Inspect, Transfer},
 		Currency,
 	},
-	weights::Weight,
 };
 use pallet_balances::{Error as BalancesError, Instance1};
 use sp_arithmetic::Perquintill;
-use sp_runtime::{traits::Bounded, Saturating, TokenError};
+use sp_runtime::{Saturating, TokenError};
 
 fn pot() -> u64 {
 	Balances::free_balance(&Nis::account_id())
 }
 
 fn enlarge(amount: u64, max_bids: u32) {
-	let mut weight_counter = WeightCounter { used: Weight::zero(), limit: Weight::max_value() };
 	let summary: SummaryRecord<u64> = Summary::<Test>::get();
 	let increase_in_proportion_owed = Perquintill::from_rational(amount, Nis::issuance().effective);
 	let target = summary.proportion_owed.saturating_add(increase_in_proportion_owed);
-	Nis::process_queues(target, u32::max_value(), max_bids, &mut weight_counter);
+	Nis::process_queues(target, u32::max_value(), max_bids, &mut WeightCounter::unlimited());
 }
 
 #[test]

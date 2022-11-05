@@ -129,7 +129,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
-		traits::{AccountIdConversion, Convert, ConvertBack, Saturating, Zero},
+		traits::{AccountIdConversion, Convert, ConvertBack, Saturating, Zero, Bounded},
 		TokenError,
 	};
 	use sp_std::prelude::*;
@@ -457,6 +457,9 @@ pub mod pallet {
 		pub(crate) limit: Weight,
 	}
 	impl WeightCounter {
+		pub fn unlimited() -> Self {
+			WeightCounter { used: Weight::zero(), limit: Weight::max_value() }
+		}
 		fn check_accrue(&mut self, w: Weight) -> bool {
 			let test = self.used.saturating_add(w);
 			if test.any_gt(self.limit) {
@@ -508,7 +511,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
 			duration: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(amount >= T::MinBid::get(), Error::<T>::AmountTooSmall);
@@ -550,7 +553,7 @@ pub mod pallet {
 			});
 			Self::deposit_event(Event::BidPlaced { who, amount, duration });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Retract a previously placed bid.

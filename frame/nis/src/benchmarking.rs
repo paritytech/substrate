@@ -20,17 +20,38 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{benchmarks, whitelisted_caller, account};
 use frame_support::traits::{Currency, EnsureOrigin, Get};
 use frame_system::RawOrigin;
 use sp_arithmetic::Perquintill;
-use sp_runtime::traits::{Bounded, One, Zero};
+use sp_runtime::{traits::{Bounded, One, Zero}, DispatchError};
 use sp_std::prelude::*;
 
 use crate::Pallet as Nis;
 
+const SEED: u32 = 0;
+
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+fn fill_queues<T: Config>() -> Result<(), DispatchError> {
+	// filling queues involves filling the first queue entirely and placing a single item in all
+	// other queues.
+
+	let queues = T::QueueCount::get();
+	let bids = T::MaxQueueLen::get();
+
+	let caller: T::AccountId = whitelisted_caller();
+	T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(queues + bids));
+
+	for _ in 0..bids {
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
+	}
+	for d in 1..queues {
+		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1 + d)?;
+	}
+	Ok(())
+}
 
 benchmarks! {
 	place_bid {
@@ -78,7 +99,7 @@ benchmarks! {
 		let bid = T::MinBid::get().max(One::one());
 		T::Currency::make_free_balance_be(&caller, bid);
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
-		Nis::<T>::enlarge(bid, 1);
+		//Nis::<T>::enlarge(bid, 1);
 		let original = T::Currency::free_balance(&Nis::<T>::account_id());
 		T::Currency::make_free_balance_be(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
 	}: _<T::RuntimeOrigin>(origin)
@@ -91,7 +112,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
-		Nis::<T>::enlarge(T::MinBid::get() * BalanceOf::<T>::from(2u32), 2);
+		//Nis::<T>::enlarge(T::MinBid::get() * BalanceOf::<T>::from(2u32), 2);
 		Receipts::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
 	}: _(RawOrigin::Signed(caller.clone()), 0, None)
 	verify {
@@ -99,34 +120,54 @@ benchmarks! {
 	}
 
 	process_queues {
-	}: { Nis::<T>::pursue_target(0, Zero::zero()) }
+		fill_queues::<T>()?;
+	}: {
+		Nis::<T>::process_queues(
+			Perquintill::one(),
+			Zero::zero(),
+			u32::max_value(),
+			&mut WeightCounter::unlimited(),
+		)
+	}
 
 	process_queue {
-		// bids taken
-		let b in 0..T::MaxQueueLen::get();
-
-		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(b + 1));
-
-		for _ in 0..b {
-			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
-		}
-		let target = Perquintill::one();
-	}: { Nis::<T>::pursue_target(b, target) }
+		let our_account = Nis::<T>::account_id();
+		let issuance = Nis::<T>::issuance();
+		let mut summary = Summary::<T>::get();
+	}: {
+		Nis::<T>::process_queue(
+			1u32,
+			1u32.into(),
+			&our_account,
+			&issuance,
+			0,
+			&mut Bounded::max_value(),
+			&mut (T::MaxQueueLen::get(), Bounded::max_value()),
+			&mut summary,
+			&mut WeightCounter::unlimited(),
+		)
+	}
 
 	process_bid {
-		// total queues hit
-		let q in 0..T::QueueCount::get();
-
-		let caller: T::AccountId = whitelisted_caller();
-		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(q + 1));
-
-		for i in 0..q {
-			Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), i + 1)?;
-		}
-
-		let target = Perquintill::one();
-	}: { Nis::<T>::pursue_target(q, target) }
+		let who = account::<T::AccountId>("bidder", 0, SEED);
+		let bid = Bid {
+			amount: T::MinBid::get(),
+			who,
+		};
+		let our_account = Nis::<T>::account_id();
+		let issuance = Nis::<T>::issuance();
+		let mut summary = Summary::<T>::get();
+	}: {
+		Nis::<T>::process_bid(
+			bid,
+			2u32.into(),
+			&our_account,
+			&issuance,
+			&mut Bounded::max_value(),
+			&mut Bounded::max_value(),
+			&mut summary,
+		)
+	}
 
 	impl_benchmark_test_suite!(Nis, crate::mock::new_test_ext(), crate::mock::Test);
 }
