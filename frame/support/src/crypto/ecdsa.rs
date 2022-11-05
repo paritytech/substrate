@@ -41,7 +41,7 @@ impl ECDSAExt for Public {
 			let uncompressed = pub_key.to_encoded_point(false);
 			// convert to ETH address
 			<[u8; 20]>::try_from(
-				sp_io::hashing::keccak_256(&uncompressed.as_bytes()[1..])[12..].as_ref(),
+				sp_io::hashing::keccak_256(uncompressed.as_bytes())[12..].as_ref(),
 			)
 			.map_err(drop)
 		})
