@@ -18,7 +18,7 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use sc_sysinfo::Throughput;
+use sc_sysinfo::{Metric, Throughput};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use sp_std::{fmt, fmt::Formatter};
 
@@ -82,45 +82,6 @@ pub struct Requirement {
 		deserialize_with = "deserialize_throughput"
 	)]
 	pub minimum: Throughput,
-}
-
-/// A single hardware metric.
-///
-/// The implementation of these is in `sc-sysinfo`.
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub enum Metric {
-	/// SR25519 signature verification.
-	Sr25519Verify,
-	/// Blake2-256 hashing algorithm.
-	Blake2256,
-	/// Copying data in RAM.
-	MemCopy,
-	/// Disk sequential write.
-	DiskSeqWrite,
-	/// Disk random write.
-	DiskRndWrite,
-}
-
-impl Metric {
-	/// The category of the metric.
-	pub fn category(&self) -> &'static str {
-		match self {
-			Self::Sr25519Verify | Self::Blake2256 => "CPU",
-			Self::MemCopy => "Memory",
-			Self::DiskSeqWrite | Self::DiskRndWrite => "Disk",
-		}
-	}
-
-	/// The name of the metric. It is always prefixed by the [`self::category()`].
-	pub fn name(&self) -> &'static str {
-		match self {
-			Self::Sr25519Verify => "SR25519-Verify",
-			Self::Blake2256 => "BLAKE2-256",
-			Self::MemCopy => "Copy",
-			Self::DiskSeqWrite => "Seq Write",
-			Self::DiskRndWrite => "Rnd Write",
-		}
-	}
 }
 
 #[cfg(test)]

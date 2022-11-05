@@ -24,7 +24,7 @@ use sp_io::crypto::sr25519_verify;
 use sp_std::{fmt, prelude::*};
 
 use rand::{seq::SliceRandom, Rng, RngCore};
-use serde::Serializer;
+use serde::{Deserialize, Serialize, Serializer};
 use std::{
 	fs::File,
 	io::{Seek, SeekFrom, Write},
@@ -32,6 +32,43 @@ use std::{
 	path::{Path, PathBuf},
 	time::{Duration, Instant},
 };
+
+/// A single hardware metric.
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
+pub enum Metric {
+	/// SR25519 signature verification.
+	Sr25519Verify,
+	/// Blake2-256 hashing algorithm.
+	Blake2256,
+	/// Copying data in RAM.
+	MemCopy,
+	/// Disk sequential write.
+	DiskSeqWrite,
+	/// Disk random write.
+	DiskRndWrite,
+}
+
+impl Metric {
+	/// The category of the metric.
+	pub fn category(&self) -> &'static str {
+		match self {
+			Self::Sr25519Verify | Self::Blake2256 => "CPU",
+			Self::MemCopy => "Memory",
+			Self::DiskSeqWrite | Self::DiskRndWrite => "Disk",
+		}
+	}
+
+	/// The name of the metric. It is always prefixed by the [`self::category()`].
+	pub fn name(&self) -> &'static str {
+		match self {
+			Self::Sr25519Verify => "SR25519-Verify",
+			Self::Blake2256 => "BLAKE2-256",
+			Self::MemCopy => "Copy",
+			Self::DiskSeqWrite => "Seq Write",
+			Self::DiskRndWrite => "Rnd Write",
+		}
+	}
+}
 
 /// The unit in which the [`Throughput`] (bytes per second) is denoted.
 pub enum Unit {
