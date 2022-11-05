@@ -245,9 +245,6 @@ benchmarks! {
 		// create m members and runners combined.
 		let _ = fill_seats_up_to::<T>(m)?;
 
-		// create previous candidates;
-		let _ = submit_candidates::<T>(c, "candidates")?;
-
 		// we assume worse case that: extrinsic is successful and candidate is not duplicate.
 		let candidate_account = endowed_account::<T>("caller", 0);
 		whitelist!(candidate_account);
