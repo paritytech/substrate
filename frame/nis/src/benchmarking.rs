@@ -99,7 +99,7 @@ benchmarks! {
 		let bid = T::MinBid::get().max(One::one());
 		T::Currency::make_free_balance_be(&caller, bid);
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), bid, 1)?;
-		//Nis::<T>::enlarge(bid, 1);
+		Nis::<T>::process_queues(Perquintill::one(), 1, 1, &mut WeightCounter::unlimited());
 		let original = T::Currency::free_balance(&Nis::<T>::account_id());
 		T::Currency::make_free_balance_be(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
 	}: _<T::RuntimeOrigin>(origin)
@@ -112,7 +112,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(3u32));
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;
-		//Nis::<T>::enlarge(T::MinBid::get() * BalanceOf::<T>::from(2u32), 2);
+		Nis::<T>::process_queues(Perquintill::one(), 1, 2, &mut WeightCounter::unlimited());
 		Receipts::<T>::mutate(0, |m_g| if let Some(ref mut g) = m_g { g.expiry = Zero::zero() });
 	}: _(RawOrigin::Signed(caller.clone()), 0, None)
 	verify {
