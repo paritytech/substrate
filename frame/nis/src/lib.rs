@@ -467,7 +467,8 @@ pub mod pallet {
 		pub(crate) limit: Weight,
 	}
 	impl WeightCounter {
-		pub fn unlimited() -> Self {
+		#[allow(dead_code)]
+		pub(crate) fn unlimited() -> Self {
 			WeightCounter { used: Weight::zero(), limit: Weight::max_value() }
 		}
 		fn check_accrue(&mut self, w: Weight) -> bool {
