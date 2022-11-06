@@ -76,8 +76,11 @@ impl<BlockHash> LeavesProof<BlockHash> {
 
 /// MMR RPC methods.
 #[rpc(client, server)]
-pub trait MmrApi<BlockHash, BlockNumber> {
-	/// Generate a MMR proof for the given `block_numbers`.
+pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
+	/// Get the MMR root hash for the current best block.
+	#[method(name = "mmr_root")]
+	fn mmr_root(&self) -> RpcResult<MmrHash>;
+	/// Generate an MMR proof for the given `block_numbers`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
 	/// a MMR proof for the set of blocks that have the given `block_numbers` with MMR given the
@@ -115,6 +118,19 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		&self,
 		proof: LeavesProof<BlockHash>,
 	) -> RpcResult<bool>;
+
+	/// Verify an MMR `proof` statelessly given an `mmr_root`.
+	///
+	/// This method calls into a runtime with MMR pallet included and attempts to verify
+	/// a MMR proof against a provided mmr root.
+	///
+	/// Returns `true` if the proof is valid, else returns the verification error.
+	#[method(name = "mmr_verifyProofStateless")]
+	fn verify_proof_stateless(
+		&self,
+		mmr_root: MmrHash,
+		proof: LeavesProof<BlockHash>,
+	) -> RpcResult<bool>;
 }
 
 /// MMR RPC methods.
@@ -131,7 +147,7 @@ impl<C, B> Mmr<C, B> {
 }
 
 #[async_trait]
-impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash, NumberFor<Block>>
+impl<Client, Block, MmrHash> MmrApiServer<<Block as BlockT>::Hash, NumberFor<Block>, MmrHash>
 	for Mmr<Client, (Block, MmrHash)>
 where
 	Block: BlockT,
@@ -139,6 +155,15 @@ where
 	Client::Api: MmrRuntimeApi<Block, MmrHash, NumberFor<Block>>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
+	fn mmr_root(&self) -> RpcResult<MmrHash> {
+		let best_block_hash = self.client.info().best_hash;
+		let api = self.client.runtime_api();
+		let mmr_root = api.mmr_root(&BlockId::Hash(best_block_hash))
+						  .map_err(runtime_error_into_rpc_error)?
+						  .map_err(mmr_error_into_rpc_error)?;
+		Ok(mmr_root)
+	}
+
 	fn generate_proof(
 		&self,
 		block_numbers: Vec<NumberFor<Block>>,
@@ -182,6 +207,31 @@ where
 			decoded_proof,
 		).map_err(runtime_error_into_rpc_error)?
 		 .map_err(mmr_error_into_rpc_error)?;
+
+		Ok(true)
+	}
+
+	fn verify_proof_stateless(
+		&self,
+		mmr_root: MmrHash,
+		proof: LeavesProof<<Block as BlockT>::Hash>,
+	) -> RpcResult<bool> {
+		let api = self.client.runtime_api();
+
+		let leaves =
+			Decode::decode(&mut &proof.leaves.0[..]).map_err(runtime_error_into_rpc_error)?;
+
+		let decoded_proof =
+			Decode::decode(&mut &proof.proof.0[..]).map_err(runtime_error_into_rpc_error)?;
+
+		api.verify_proof_stateless(
+			&BlockId::hash(proof.block_hash),
+			mmr_root,
+			leaves,
+			decoded_proof,
+		)
+		.map_err(runtime_error_into_rpc_error)?
+		.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(true)
 	}
