@@ -104,8 +104,12 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		at: Option<BlockHash>,
 	) -> RpcResult<LeavesProof<BlockHash>>;
 
-	/// Verify a MMR proof for the given `leaves`
-	/// TODO: add docs
+	/// Verify an MMR `proof`.
+	///
+	/// This method calls into a runtime with MMR pallet included and attempts to verify
+	/// a MMR proof.
+	///
+	/// Returns `true` if the proof is valid, else returns the verification error.
 	#[method(name = "mmr_verifyProof")]
 	fn verify_proof(
 		&self,
