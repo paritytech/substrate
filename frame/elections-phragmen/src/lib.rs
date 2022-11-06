@@ -1119,8 +1119,8 @@ impl<T: Config> Pallet<T> {
 							.take(T::DesiredRunnersUp::get() as usize)
 							.map(|(who, stake)| SeatHolder {
 								deposit: deposit_of_candidate(&who),
-								who: who.clone(),
-								stake: stake.clone(),
+								who,
+								stake,
 							})
 							.collect::<Vec<_>>()
 							.try_into()
