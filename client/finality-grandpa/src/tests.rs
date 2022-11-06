@@ -363,9 +363,11 @@ fn finalize_3_voters_no_observers() {
 	runtime.spawn(initialize_grandpa(&mut net, peers));
 	net.peer(0).push_blocks(20, false);
 	net.block_until_sync();
+	let hashof20 = net.peer(0).client().info().best_hash;
 
 	for i in 0..3 {
 		assert_eq!(net.peer(i).client().info().best_number, 20, "Peer #{} failed to sync", i);
+		assert_eq!(net.peer(i).client().info().best_hash, hashof20, "Peer #{} failed to sync", i);
 	}
 
 	let net = Arc::new(Mutex::new(net));
@@ -373,12 +375,7 @@ fn finalize_3_voters_no_observers() {
 
 	// normally there's no justification for finalized blocks
 	assert!(
-		net.lock()
-			.peer(0)
-			.client()
-			.justifications(&BlockId::Number(20))
-			.unwrap()
-			.is_none(),
+		net.lock().peer(0).client().justifications(&hashof20).unwrap().is_none(),
 		"Extra justification for block#1",
 	);
 }
@@ -616,19 +613,15 @@ fn justification_is_generated_periodically() {
 	net.peer(0).push_blocks(32, false);
 	net.block_until_sync();
 
+	let hashof32 = net.peer(0).client().info().best_hash;
+
 	let net = Arc::new(Mutex::new(net));
 	run_to_completion(&mut runtime, 32, net.clone(), peers);
 
 	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
 	for i in 0..3 {
-		assert!(net
-			.lock()
-			.peer(i)
-			.client()
-			.justifications(&BlockId::Number(32))
-			.unwrap()
-			.is_some());
+		assert!(net.lock().peer(i).client().justifications(&hashof32).unwrap().is_some());
 	}
 }
 
@@ -648,7 +641,7 @@ fn sync_justifications_on_change_blocks() {
 	net.peer(0).push_blocks(20, false);
 
 	// at block 21 we do add a transition which is instant
-	net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
+	let hashof21 = net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 		let mut block = builder.build().unwrap().block;
 		add_scheduled_change(
 			&mut block,
@@ -672,25 +665,12 @@ fn sync_justifications_on_change_blocks() {
 	// the first 3 peers are grandpa voters and therefore have already finalized
 	// block 21 and stored a justification
 	for i in 0..3 {
-		assert!(net
-			.lock()
-			.peer(i)
-			.client()
-			.justifications(&BlockId::Number(21))
-			.unwrap()
-			.is_some());
+		assert!(net.lock().peer(i).client().justifications(&hashof21).unwrap().is_some());
 	}
 
 	// the last peer should get the justification by syncing from other peers
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
-		if net
-			.lock()
-			.peer(3)
-			.client()
-			.justifications(&BlockId::Number(21))
-			.unwrap()
-			.is_none()
-		{
+		if net.lock().peer(3).client().justifications(&hashof21).unwrap().is_none() {
 			net.lock().poll(cx);
 			Poll::Pending
 		} else {
@@ -1686,7 +1666,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	);
 
 	// the justification should be imported and available from the client
-	assert!(client.justifications(&BlockId::Hash(block_hash)).unwrap().is_some());
+	assert!(client.justifications(&block_hash).unwrap().is_some());
 }
 
 #[test]
