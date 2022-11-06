@@ -1110,7 +1110,13 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.expect("Cannot accept more than DesiredMembers."),
+							.unwrap_or_else(|_| {
+								log::error!(
+									target: "runtime::elections-phragmen",
+									"There are too many members.",
+								);
+								Default::default()
+							}),
 					);
 					<RunnersUp<T>>::put::<BoundedVec<_, T::DesiredRunnersUp>>(
 						new_runners_up_sorted_by_rank
@@ -1122,7 +1128,13 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.expect("Cannot accept more than DesiredRunnersUp."),
+							.unwrap_or_else(|_| {
+								log::error!(
+									target: "runtime::elections-phragmen",
+									"There are too many runners up.",
+								);
+								Default::default()
+							}),
 					);
 
 					// clean candidates.
