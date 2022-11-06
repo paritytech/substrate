@@ -731,8 +731,9 @@ cfg_if! {
 			  fn create_enqueue_txs_inherent(_: Vec<<Block as BlockT>::Extrinsic>) -> <Block as BlockT>::Extrinsic{
 				  todo!()
 			  }
-				fn pop_tx() -> std::option::Option<sp_application_crypto::Vec<u8>> { todo!() }
-				fn 	start_prevalidation() {}
+				fn pop_txs(_count: u64) -> std::option::Option<sp_application_crypto::Vec<sp_application_crypto::Vec<u8>>> { todo!() }
+				fn fetch_previous_block_txs() -> Vec<Vec<u8>>{todo!()}
+				fn start_prevalidation() {}
 			}
 
 			impl sp_api::Metadata<Block> for Runtime {

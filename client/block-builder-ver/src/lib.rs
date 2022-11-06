@@ -376,61 +376,121 @@ where
 		self.api.store_seed(&block_id, seed.seed).unwrap();
 		let extrinsics = &mut self.extrinsics;
 
-		loop {
-			let current_block_size = *block_size;
-			let execution_status =
-				self.api
-				.execute_in_transaction(|api| match api.pop_tx(&block_id).unwrap() {
-					Some(tx_bytes) if (tx_bytes.len() + current_block_size + sp_core::H256::len_bytes()) <= max_block_size => {
-						if let Ok(xt) = <Block as BlockT>::Extrinsic::decode(&mut tx_bytes.as_slice()) {
-							log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
-							if !api.execute_in_transaction(|api| {
-								match apply_transaction_wrapper::<Block, A>(
-									api,
-									block_id,
-									xt.clone(),
-									ExecutionContext::BlockConstruction,
-								) {
-									_ if is_timer_expired() => {
-										log::debug!(target: "block_builder", "timer expired no room for other txs from queue");
-										TransactionOutcome::Commit(false)
-									},
-									Ok(Err(validity_err)) if validity_err.exhausted_resources() => {
-										log::debug!(target: "block_builder", "exhaust resources no room for other txs from queue");
-										TransactionOutcome::Rollback(false)
-									},
-									Ok(Ok(_)) => {TransactionOutcome::Commit(true)}
-									Ok(Err(validity_err)) => {
-										log::warn!(target: "block_builder", "enqueued tx execution {} failed '${}'", BlakeTwo256::hash(&xt.encode()), validity_err);
-										TransactionOutcome::Commit(true)
-									},
-									Err(_e) => {
-										log::warn!(target: "block_builder", "enqueued tx execution {} failed - unknwown execution problem", BlakeTwo256::hash(&xt.encode()));
-										TransactionOutcome::Commit(true)
-									}
-								}
-							}) {
-								TransactionOutcome::Rollback(false)
-							}else{
-								extrinsics.push(xt);
-								log::trace!(target: "block_builder", "fetched txs from storage queue");
-								TransactionOutcome::Commit(true)
-							}
-						} else {
-							log::warn!(target: "block_builder", "couldnt deserialize tx from queue, ignoring it");
-							TransactionOutcome::Commit(true)
-						}
+		let previous_block_txs = self.api.get_previous_block_txs(&block_id).unwrap();
+		let previous_block_txs_count = previous_block_txs.len();
+		log::debug!(target: "block_builder", "previous block enqueued {} txs", previous_block_txs_count);
 
-					},
-					Some(_) => {
-						log::debug!(target: "block_builder", "fetching txs from storage queue would exceed block limit");
-						TransactionOutcome::Rollback(false)
-					},
-					None => TransactionOutcome::Rollback(false),
-				});
-			if !execution_status {
+		for tx_bytes in previous_block_txs {
+			if (*block_size + tx_bytes.len() + sp_core::H256::len_bytes()) > max_block_size {
 				break
 			}
+
+			if let Ok(xt) = <Block as BlockT>::Extrinsic::decode(&mut tx_bytes.as_slice()) {
+				if self.api.execute_in_transaction(|api| { // execute tx to get execution status
+					match apply_transaction_wrapper::<Block, A>(
+						api,
+						block_id,
+						xt.clone(),
+						ExecutionContext::BlockConstruction,
+					) {
+
+						_ if is_timer_expired() => {
+							log::debug!(target: "block_builder", "timer expired no room for other txs from queue");
+							TransactionOutcome::Rollback(false)
+						},
+						Ok(Err(validity_err)) if validity_err.exhausted_resources() => {
+							log::debug!(target: "block_builder", "exhaust resources no room for other txs from queue");
+							TransactionOutcome::Rollback(false)
+						},
+						Ok(Ok(_)) => {TransactionOutcome::Commit(true)}
+						Ok(Err(validity_err)) => {
+							log::warn!(target: "block_builder", "enqueued tx execution {} failed '${}'", BlakeTwo256::hash(&xt.encode()), validity_err);
+							TransactionOutcome::Commit(true)
+						},
+						Err(_e) => {
+							log::warn!(target: "block_builder", "enqueued tx execution {} failed - unknwown execution problem", BlakeTwo256::hash(&xt.encode()));
+							TransactionOutcome::Commit(true)
+						}
+					}
+				}){
+					extrinsics.push(xt);
+					*block_size += tx_bytes.len() + sp_core::H256::len_bytes();
+				}else{
+					break;
+				}
+			} else {
+				log::warn!(target: "block_builder", "cannot decode tx");
+			}
+		}
+
+		self.api.pop_txs(&block_id, extrinsics.len() as u64).unwrap();
+
+		if extrinsics.len() == previous_block_txs_count {
+			log::info!(target: "block_builder", "executed all previous block transactions");
+			// fetch more txs one by one
+			loop {
+				let current_block_size = *block_size;
+				let execution_status =
+						self.api
+						.execute_in_transaction(|api| // pop single tx
+							match api.pop_txs(&block_id, 1_u64).unwrap().get(0) {
+								Some(tx_bytes) if (tx_bytes.len() + current_block_size + sp_core::H256::len_bytes()) <= max_block_size => {
+									if let Ok(xt) = <Block as BlockT>::Extrinsic::decode(&mut tx_bytes.as_slice()) {
+										log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
+										if !api.execute_in_transaction(|api| { // execute tx to get execution status
+											match apply_transaction_wrapper::<Block, A>(
+												api,
+												block_id,
+												xt.clone(),
+												ExecutionContext::BlockConstruction,
+											) {
+												_ if is_timer_expired() => {
+													log::debug!(target: "block_builder", "timer expired no room for other txs from queue");
+													TransactionOutcome::Commit(false)
+												},
+												Ok(Err(validity_err)) if validity_err.exhausted_resources() => {
+													log::debug!(target: "block_builder", "exhaust resources no room for other txs from queue");
+													TransactionOutcome::Rollback(false)
+												},
+												Ok(Ok(_)) => {TransactionOutcome::Commit(true)}
+												Ok(Err(validity_err)) => {
+													log::warn!(target: "block_builder", "enqueued tx execution {} failed '${}'", BlakeTwo256::hash(&xt.encode()), validity_err);
+													TransactionOutcome::Commit(true)
+												},
+												Err(_e) => {
+													log::warn!(target: "block_builder", "enqueued tx execution {} failed - unknwown execution problem", BlakeTwo256::hash(&xt.encode()));
+													TransactionOutcome::Commit(true)
+												}
+											}
+										}) {
+											TransactionOutcome::Rollback(false)
+										}else{
+											extrinsics.push(xt);
+											*block_size += tx_bytes.len() + sp_core::H256::len_bytes();
+											log::trace!(target: "block_builder", "fetched txs from storage queue");
+											TransactionOutcome::Commit(true)
+										}
+									} else {
+										log::warn!(target: "block_builder", "couldnt deserialize tx from queue, ignoring it");
+										TransactionOutcome::Commit(true)
+									}
+
+								},
+								Some(_) => {
+									log::debug!(target: "block_builder", "fetching txs from storage queue would exceed block limit");
+									TransactionOutcome::Rollback(false)
+								},
+								None => {
+									log::info!(target: "block_builder", "storage queue is empty - no more txs for executiong");
+									TransactionOutcome::Rollback(false)
+								}
+							});
+				if !execution_status {
+					break
+				}
+			}
+		} else {
+			log::info!(target: "block_builder", "executed {}/{} previous block transactions", extrinsics.len(), previous_block_txs_count)
 		}
 	}
 

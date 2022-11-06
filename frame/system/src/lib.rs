@@ -393,7 +393,7 @@ pub mod pallet {
 			}
 		}
 
-		/// Persists list of encoded txs into the storage queue. There is an dedicated 
+		/// Persists list of encoded txs into the storage queue. There is an dedicated
 		/// check in [`frame_executive::Executeive`] that verifies that passed binary data can be
 		/// decoded into extrinsics.
 		#[pallet::weight((
@@ -414,7 +414,9 @@ pub mod pallet {
 			let hashes =
 				txs.iter().map(|(_, data)| T::Hashing::hash(&data[..])).collect::<Vec<_>>();
 			Self::deposit_log(generic::DigestItem::Other(hashes.encode()));
+			let count = txs.len() as u64;
 			Self::store_txs(txs);
+			Self::deposit_event(Event::TxsEnqueued { count });
 			Ok(().into())
 		}
 
@@ -552,6 +554,8 @@ pub mod pallet {
 		KilledAccount { account: T::AccountId },
 		/// On on-chain remark happened.
 		Remarked { sender: T::AccountId, hash: T::Hash },
+		/// On stored txs
+		TxsEnqueued { count: u64 },
 	}
 
 	/// Error for the System pallet
@@ -619,25 +623,24 @@ pub mod pallet {
 	/// Storage queue is used for storing transactions in blockchain itself.
 	/// Main reason for that storage entry is fact that upon VER block `N` execution it is
 	/// required to fetch & executed transactions from previous block (`N-1`) but due to origin
-	/// substrate design blocks & extrinsics are stored in rocksDB database that is not accessible 
+	/// substrate design blocks & extrinsics are stored in rocksDB database that is not accessible
 	/// from runtime part of the node ([`URL`]) what makes it impossible to properly implement block
 	/// execution logic. As an solution blockchain runtime storage was selected as buffer for txs
 	/// waiting for execution. Main advantage of such approach is fact that storage state is public
 	/// so its impossible to manipulate data stored in there. Storage queue is implemented as double
 	/// buffered queue - to solve problem of rare occasions where due to different reasons some txs
 	/// that were included in block `N` are not able to be executed in a following block `N+1` (good
-	/// example is new session hook/event that by design consumes whole block capacity). 
+	/// example is new session hook/event that by design consumes whole block capacity).
 	///
 	///
-	/// # Overhead 
+	/// # Overhead
 	/// Its worth to notice that storage queue adds only single storage write, as list of all txs
-	/// is stored as single value (encoded list of txs) maped to single key (block number) 
+	/// is stored as single value (encoded list of txs) maped to single key (block number)
 	///
 	/// # Storage Qeueue interaction
 	/// There are two ways to interact with storage queue:
 	/// - enqueuing new txs using [`enqueued_txs`] inherent
 	/// - poping txs from the queue using [`pop_tx`] that is exposed throught RuntimeApi call
-	///
 	#[pallet::storage]
 	pub type StorageQueue<T: Config> = StorageValue<
 		_,
@@ -1429,6 +1432,21 @@ impl<T: Config> Pallet<T> {
 			.flatten()
 			.filter(|(who, _)| who.clone() == Some(acc.clone()))
 			.count()
+	}
+
+	pub fn get_previous_block_txs() -> Vec<Vec<u8>> {
+		let previous_block = Self::current_block_number() - One::one();
+		let queue = <StorageQueue<T>>::get();
+		let prev_block_shuffled = queue.iter().find(|block| match block {
+			(block_nr, Some(_seed), _) if *block_nr == previous_block => true,
+			_ => false,
+		});
+
+		if let Some((_, _, txs)) = prev_block_shuffled {
+			txs.iter().map(|(_who, tx)| tx).cloned().collect()
+		} else {
+			vec![]
+		}
 	}
 
 	/// Dequeue particular number of txs from storage queue.
