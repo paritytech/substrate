@@ -1352,7 +1352,7 @@ where
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		client
-			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
+			.apply_finality(import_op, &hash, persisted_justification, true)
 			.map_err(|e| {
 				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
 				e

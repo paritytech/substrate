@@ -342,6 +342,7 @@ impl<T: Config> Pallet<T> {
 
 	fn insert(hash: &T::Hash, preimage: Cow<[u8]>) -> Result<(), ()> {
 		BoundedSlice::<u8, ConstU32<MAX_SIZE>>::try_from(preimage.as_ref())
+			.map_err(|_| ())
 			.map(|s| PreimageFor::<T>::insert((hash, s.len() as u32), s))
 	}
 
