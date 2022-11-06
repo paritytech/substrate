@@ -377,9 +377,11 @@ impl<T: Saturating + CheckedAdd + CheckedMul + CheckedSub + One> DefensiveSatura
 		self.checked_mul(&other).defensive_unwrap_or_else(|| self.saturating_mul(other))
 	}
 	fn defensive_saturating_accrue(&mut self, other: Self) {
+		// Use `replace` here since `take` would require `T: Default`.
 		*self = sp_std::mem::replace(self, One::one()).defensive_saturating_add(other);
 	}
 	fn defensive_saturating_reduce(&mut self, other: Self) {
+		// Use `replace` here since `take` would require `T: Default`.
 		*self = sp_std::mem::replace(self, One::one()).defensive_saturating_sub(other);
 	}
 	fn defensive_saturating_inc(&mut self) {
@@ -1010,6 +1012,92 @@ mod test {
 	use super::*;
 	use sp_core::bounded::{BoundedSlice, BoundedVec};
 	use sp_std::marker::PhantomData;
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_accrue_works() {
+		let mut v = 1_u32;
+		v.defensive_saturating_accrue(2);
+		assert_eq!(v, 3);
+		v.defensive_saturating_accrue(u32::MAX);
+		assert_eq!(v, u32::MAX);
+		v.defensive_saturating_accrue(1);
+		assert_eq!(v, u32::MAX);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_accrue_panics() {
+		let mut v = u32::MAX;
+		v.defensive_saturating_accrue(1); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_reduce_works() {
+		let mut v = u32::MAX;
+		v.defensive_saturating_reduce(3);
+		assert_eq!(v, u32::MAX - 3);
+		v.defensive_saturating_reduce(u32::MAX);
+		assert_eq!(v, 0);
+		v.defensive_saturating_reduce(1);
+		assert_eq!(v, 0);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_reduce_panics() {
+		let mut v = 0_u32;
+		v.defensive_saturating_reduce(1); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_inc_works() {
+		let mut v = 0_u32;
+		for i in 1..10 {
+			v.defensive_saturating_inc();
+			assert_eq!(v, i);
+		}
+		v += u32::MAX - 10;
+		v.defensive_saturating_inc();
+		assert_eq!(v, u32::MAX);
+		v.defensive_saturating_inc();
+		assert_eq!(v, u32::MAX);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_inc_panics() {
+		let mut v = u32::MAX;
+		v.defensive_saturating_inc(); // defensive failure
+	}
+
+	#[test]
+	#[cfg(not(debug_assertions))]
+	fn defensive_saturating_dec_works() {
+		let mut v = u32::MAX;
+		for i in 1..10 {
+			v.defensive_saturating_dec();
+			assert_eq!(v, u32::MAX - i);
+		}
+		v -= u32::MAX - 10;
+		v.defensive_saturating_dec();
+		assert_eq!(v, 0);
+		v.defensive_saturating_dec();
+		assert_eq!(v, 0);
+	}
+
+	#[test]
+	#[cfg(debug_assertions)]
+	#[should_panic(expected = "Defensive")]
+	fn defensive_saturating_dec_panics() {
+		let mut v = 0_u32;
+		v.defensive_saturating_dec(); // defensive failure
+	}
 
 	#[test]
 	#[cfg(not(debug_assertions))]
