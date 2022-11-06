@@ -57,7 +57,7 @@ impl WeightMeter {
 		Self::from_limit(Weight::MAX)
 	}
 
-	/// The remaining weight that can be still consumed.
+	/// The remaining weight that can still be consumed.
 	pub fn remaining(&self) -> Weight {
 		self.limit.saturating_sub(self.consumed)
 	}
@@ -65,20 +65,13 @@ impl WeightMeter {
 	/// The ratio of consumed weight to the limit.
 	///
 	/// Calculates one ratio per component and returns the largest.
-	pub fn remaining_ratio(&self) -> Perbill {
+	pub fn consumed_ratio(&self) -> Perbill {
 		let time = Perbill::from_rational(self.consumed.ref_time(), self.limit.ref_time());
 		let pov = Perbill::from_rational(self.consumed.proof_size(), self.limit.proof_size());
 		time.max(pov)
 	}
 
-	/// Consume some weight and defensively fail if it is over the limit or would saturate the
-	/// arithmetic type.
-	pub fn defensive_accrue(&mut self, w: Weight) {
-		let res = self.check_accrue(w);
-		debug_assert!(res, "Weight meter exhausted; {} + {} > {}", &self.consumed, &w, &self.limit);
-	}
-
-	/// Consume the given weight after checking if it can be consumed. Do nothing if not.
+	/// Consume the given weight after checking that it can be consumed. Otherwise do nothing.
 	pub fn check_accrue(&mut self, w: Weight) -> bool {
 		self.consumed.checked_add(&w).map_or(false, |test| {
 			if test.any_gt(self.limit) {
@@ -104,15 +97,15 @@ mod tests {
 	fn weight_meter_remaining_works() {
 		let mut meter = WeightMeter::from_limit(Weight::from_parts(10, 20));
 
-		meter.defensive_accrue(Weight::from_parts(5, 0));
+		assert!(meter.check_accrue(Weight::from_parts(5, 0)));
 		assert_eq!(meter.consumed, Weight::from_parts(5, 0));
 		assert_eq!(meter.remaining(), Weight::from_parts(5, 20));
 
-		meter.defensive_accrue(Weight::from_parts(2, 10));
+		assert!(meter.check_accrue(Weight::from_parts(2, 10)));
 		assert_eq!(meter.consumed, Weight::from_parts(7, 10));
 		assert_eq!(meter.remaining(), Weight::from_parts(3, 10));
 
-		meter.defensive_accrue(Weight::from_parts(3, 10));
+		assert!(meter.check_accrue(Weight::from_parts(3, 10)));
 		assert_eq!(meter.consumed, Weight::from_parts(10, 20));
 		assert_eq!(meter.remaining(), Weight::from_parts(0, 0));
 	}
@@ -149,30 +142,22 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Weight meter exhausted")]
-	fn weight_meter_defensive_accrue_works() {
-		let mut meter = WeightMeter::from_limit(Weight::from_parts(10, 0));
-
-		meter.defensive_accrue(Weight::from_parts(11, 0));
-	}
-
-	#[test]
-	fn remaining_ratio_works() {
+	fn consumed_ratio_works() {
 		let mut meter = WeightMeter::from_limit(Weight::from_parts(10, 20));
 
-		meter.defensive_accrue(Weight::from_parts(5, 0));
-		assert_eq!(meter.remaining_ratio(), Perbill::from_percent(50));
-		meter.defensive_accrue(Weight::from_parts(0, 12));
-		assert_eq!(meter.remaining_ratio(), Perbill::from_percent(60));
+		assert!(meter.check_accrue(Weight::from_parts(5, 0)));
+		assert_eq!(meter.consumed_ratio(), Perbill::from_percent(50));
+		assert!(meter.check_accrue(Weight::from_parts(0, 12)));
+		assert_eq!(meter.consumed_ratio(), Perbill::from_percent(60));
 
-		meter.defensive_accrue(Weight::from_parts(2, 0));
-		assert_eq!(meter.remaining_ratio(), Perbill::from_percent(70));
-		meter.defensive_accrue(Weight::from_parts(0, 4));
-		assert_eq!(meter.remaining_ratio(), Perbill::from_percent(80));
+		assert!(meter.check_accrue(Weight::from_parts(2, 0)));
+		assert_eq!(meter.consumed_ratio(), Perbill::from_percent(70));
+		assert!(meter.check_accrue(Weight::from_parts(0, 4)));
+		assert_eq!(meter.consumed_ratio(), Perbill::from_percent(80));
 
-		meter.defensive_accrue(Weight::from_parts(3, 0));
-		assert_eq!(meter.remaining_ratio(), Perbill::from_percent(100));
-		meter.defensive_accrue(Weight::from_parts(0, 4));
-		assert_eq!(meter.remaining_ratio(), Perbill::from_percent(100));
+		assert!(meter.check_accrue(Weight::from_parts(3, 0)));
+		assert_eq!(meter.consumed_ratio(), Perbill::from_percent(100));
+		assert!(meter.check_accrue(Weight::from_parts(0, 4)));
+		assert_eq!(meter.consumed_ratio(), Perbill::from_percent(100));
 	}
 }
