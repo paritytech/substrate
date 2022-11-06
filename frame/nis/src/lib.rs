@@ -479,7 +479,7 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut weight_counter =
 				WeightCounter { used: Weight::zero(), limit: T::MaxIntakeWeight::get() };
-			if (n % T::IntakePeriod::get()).is_zero() {
+			if T::IntakePeriod::get().is_zero() || (n % T::IntakePeriod::get()).is_zero() {
 				if weight_counter.check_accrue(T::WeightInfo::process_queues()) {
 					Self::process_queues(
 						T::Target::get(),
