@@ -250,6 +250,8 @@ pub mod pallet {
 		type QueueCount: Get<u32>;
 
 		/// Maximum number of items that may be in each duration queue.
+		///
+		/// Must be larger than zero.
 		#[pallet::constant]
 		type MaxQueueLen: Get<u32>;
 
@@ -549,7 +551,7 @@ pub mod pallet {
 			QueueTotals::<T>::mutate(|qs| {
 				qs.bounded_resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 += net.0;
-				qs[queue_index].1 = qs[queue_index].1.saturating_add(net.1);
+				qs[queue_index].1.saturating_accrue(net.1);
 			});
 			Self::deposit_event(Event::BidPlaced { who, amount, duration });
 
@@ -563,12 +565,12 @@ pub mod pallet {
 		///
 		/// - `amount`: The amount of the previous bid.
 		/// - `duration`: The duration of the previous bid.
-		#[pallet::weight(T::WeightInfo::place_bid(T::MaxQueueLen::get()))]
+		#[pallet::weight(T::WeightInfo::retract_bid(T::MaxQueueLen::get()))]
 		pub fn retract_bid(
 			origin: OriginFor<T>,
 			#[pallet::compact] amount: BalanceOf<T>,
 			duration: u32,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let queue_count = T::QueueCount::get() as usize;
@@ -585,13 +587,13 @@ pub mod pallet {
 			QueueTotals::<T>::mutate(|qs| {
 				qs.bounded_resize(queue_count, (0, Zero::zero()));
 				qs[queue_index].0 = new_len;
-				qs[queue_index].1 = qs[queue_index].1.saturating_sub(bid.amount);
+				qs[queue_index].1.saturating_reduce(bid.amount);
 			});
 
 			let _ = T::Currency::unreserve(&bid.who, bid.amount);
 			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Ensure we have sufficient funding for all potential payouts.
