@@ -22,7 +22,7 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use codec::{Codec, Encode};
+use codec::{Codec, Encode, Decode};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
@@ -42,6 +42,9 @@ const RUNTIME_ERROR: i32 = 8000;
 const MMR_ERROR: i32 = 8010;
 const LEAF_NOT_FOUND_ERROR: i32 = MMR_ERROR + 1;
 const GENERATE_PROOF_ERROR: i32 = MMR_ERROR + 2;
+const VERIFY_PROOF_ERROR: i32 = MMR_ERROR + 3;
+const BLOCK_NUM_TO_LEAF_INDEX_ERROR: i32 = MMR_ERROR + 4;
+const INVALID_BEST_KNOWN_BLOCK_ERROR: i32 = MMR_ERROR + 5;
 
 /// Retrieved MMR leaves and their proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -100,6 +103,14 @@ pub trait MmrApi<BlockHash, BlockNumber> {
 		best_known_block_number: Option<BlockNumber>,
 		at: Option<BlockHash>,
 	) -> RpcResult<LeavesProof<BlockHash>>;
+
+	/// Verify a MMR proof for the given `leaves`
+	/// TODO: add docs
+	#[method(name = "mmr_verifyProof")]
+	fn verify_proof(
+		&self,
+		proof: LeavesProof<BlockHash>,
+	) -> RpcResult<bool>;
 }
 
 /// MMR RPC methods.
@@ -147,6 +158,29 @@ where
 
 		Ok(LeavesProof::new(block_hash, leaves, proof))
 	}
+
+	fn verify_proof(
+		&self,
+		proof: LeavesProof<<Block as BlockT>::Hash>,
+	) -> RpcResult<bool> {
+		let api = self.client.runtime_api();
+
+		let leaves = Decode::decode(&mut &proof.leaves.0[..])
+			.map_err(runtime_error_into_rpc_error)?;
+
+		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
+			.map_err(runtime_error_into_rpc_error)?;
+
+		api.verify_proof_with_context(
+			&BlockId::hash(proof.block_hash),
+			sp_core::ExecutionContext::OffchainCall(None),
+			leaves,
+			decoded_proof,
+		).map_err(runtime_error_into_rpc_error)?
+		 .map_err(mmr_error_into_rpc_error)?;
+
+		Ok(true)
+	}
 }
 
 /// Converts a mmr-specific error into a [`CallError`].
@@ -161,6 +195,21 @@ fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
 		MmrError::GenerateProof => CallError::Custom(ErrorObject::owned(
 			GENERATE_PROOF_ERROR,
 			"Error while generating the proof",
+			Some(data),
+		)),
+		MmrError::Verify => CallError::Custom(ErrorObject::owned(
+			VERIFY_PROOF_ERROR,
+			"Error while verifying the proof",
+			Some(data),
+		)),
+		MmrError::BlockNumToLeafIndex => CallError::Custom(ErrorObject::owned(
+			BLOCK_NUM_TO_LEAF_INDEX_ERROR,
+			"Error while converting block number to leaf index",
+			Some(data),
+		)),
+		MmrError::InvalidBestKnownBlock => CallError::Custom(ErrorObject::owned(
+			INVALID_BEST_KNOWN_BLOCK_ERROR,
+			"Invalid best known block",
 			Some(data),
 		)),
 		_ => CallError::Custom(ErrorObject::owned(MMR_ERROR, "Unexpected MMR error", Some(data))),
