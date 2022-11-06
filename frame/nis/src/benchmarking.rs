@@ -20,11 +20,14 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use frame_benchmarking::{benchmarks, whitelisted_caller, account};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::traits::{Currency, EnsureOrigin, Get};
 use frame_system::RawOrigin;
 use sp_arithmetic::Perquintill;
-use sp_runtime::{traits::{Bounded, One, Zero}, DispatchError};
+use sp_runtime::{
+	traits::{Bounded, One, Zero},
+	DispatchError,
+};
 use sp_std::prelude::*;
 
 use crate::Pallet as Nis;
@@ -42,7 +45,10 @@ fn fill_queues<T: Config>() -> Result<(), DispatchError> {
 	let bids = T::MaxQueueLen::get();
 
 	let caller: T::AccountId = whitelisted_caller();
-	T::Currency::make_free_balance_be(&caller, T::MinBid::get() * BalanceOf::<T>::from(queues + bids));
+	T::Currency::make_free_balance_be(
+		&caller,
+		T::MinBid::get() * BalanceOf::<T>::from(queues + bids),
+	);
 
 	for _ in 0..bids {
 		Nis::<T>::place_bid(RawOrigin::Signed(caller.clone()).into(), T::MinBid::get(), 1)?;

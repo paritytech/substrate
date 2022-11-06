@@ -112,6 +112,49 @@ where
 	}
 }
 
+pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
+impl<T> FungibleInspect<T> for NoCounterpart<T> {
+	type Balance = u32;
+	fn total_issuance() -> u32 {
+		0
+	}
+	fn minimum_balance() -> u32 {
+		0
+	}
+	fn balance(_who: &T) -> u32 {
+		0
+	}
+	fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 {
+		0
+	}
+	fn can_deposit(
+		_who: &T,
+		_amount: u32,
+		_mint: bool,
+	) -> frame_support::traits::tokens::DepositConsequence {
+		frame_support::traits::tokens::DepositConsequence::Success
+	}
+	fn can_withdraw(
+		_who: &T,
+		_amount: u32,
+	) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
+		frame_support::traits::tokens::WithdrawConsequence::Success
+	}
+}
+impl<T> FungibleMutate<T> for NoCounterpart<T> {
+	fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
+		Ok(())
+	}
+	fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> {
+		Ok(0)
+	}
+}
+impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
+	fn convert(_: Perquintill) -> u32 {
+		0
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	pub use crate::weights::WeightInfo;
@@ -129,7 +172,7 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
 	use sp_runtime::{
-		traits::{AccountIdConversion, Convert, ConvertBack, Saturating, Zero, Bounded},
+		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
 		TokenError,
 	};
 	use sp_std::prelude::*;
@@ -147,49 +190,6 @@ pub mod pallet {
 	type SummaryRecordOf<T> = SummaryRecord<<T as frame_system::Config>::BlockNumber>;
 	type BidOf<T> = Bid<BalanceOf<T>, <T as frame_system::Config>::AccountId>;
 	type QueueTotalsTypeOf<T> = BoundedVec<(u32, BalanceOf<T>), <T as Config>::QueueCount>;
-
-	pub struct NoCounterpart<T>(sp_std::marker::PhantomData<T>);
-	impl<T> FungibleInspect<T> for NoCounterpart<T> {
-		type Balance = u32;
-		fn total_issuance() -> u32 {
-			0
-		}
-		fn minimum_balance() -> u32 {
-			0
-		}
-		fn balance(_who: &T) -> u32 {
-			0
-		}
-		fn reducible_balance(_who: &T, _keep_alive: bool) -> u32 {
-			0
-		}
-		fn can_deposit(
-			_who: &T,
-			_amount: u32,
-			_mint: bool,
-		) -> frame_support::traits::tokens::DepositConsequence {
-			frame_support::traits::tokens::DepositConsequence::Success
-		}
-		fn can_withdraw(
-			_who: &T,
-			_amount: u32,
-		) -> frame_support::traits::tokens::WithdrawConsequence<u32> {
-			frame_support::traits::tokens::WithdrawConsequence::Success
-		}
-	}
-	impl<T> FungibleMutate<T> for NoCounterpart<T> {
-		fn mint_into(_who: &T, _amount: u32) -> DispatchResult {
-			Ok(())
-		}
-		fn burn_from(_who: &T, _amount: u32) -> Result<u32, DispatchError> {
-			Ok(0)
-		}
-	}
-	impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
-		fn convert(_: Perquintill) -> u32 {
-			0
-		}
-	}
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
