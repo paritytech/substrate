@@ -1103,6 +1103,7 @@ impl<T: Config> Pallet<T> {
 					<Members<T>>::put::<BoundedVec<_, T::DesiredMembers>>(
 						new_members_sorted_by_id
 							.iter()
+							.take(T::DesiredMembers::get() as usize)
 							.map(|(who, stake)| SeatHolder {
 								deposit: deposit_of_candidate(who),
 								who: who.clone(),
@@ -1110,31 +1111,20 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.unwrap_or_else(|_| {
-								log::error!(
-									target: "runtime::elections-phragmen",
-									"There are too many members.",
-								);
-								Default::default()
-							}),
+							.defensive_unwrap_or_default(),
 					);
 					<RunnersUp<T>>::put::<BoundedVec<_, T::DesiredRunnersUp>>(
 						new_runners_up_sorted_by_rank
 							.into_iter()
+							.take(T::DesiredRunnersUp::get() as usize)
 							.map(|(who, stake)| SeatHolder {
 								deposit: deposit_of_candidate(&who),
-								who,
-								stake,
+								who: who.clone(),
+								stake: stake.clone(),
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.unwrap_or_else(|_| {
-								log::error!(
-									target: "runtime::elections-phragmen",
-									"There are too many runners up.",
-								);
-								Default::default()
-							}),
+							.defensive_unwrap_or_default(),
 					);
 
 					// clean candidates.
