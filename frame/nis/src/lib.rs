@@ -76,6 +76,10 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use frame_support::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
+};
 pub use pallet::*;
 use sp_arithmetic::{traits::Unsigned, RationalArg};
 use sp_core::TypedGet;
@@ -157,11 +161,11 @@ impl<T> Convert<Perquintill, u32> for NoCounterpart<T> {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use super::{FungibleInspect, FungibleMutate};
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
 		pallet_prelude::*,
 		traits::{
-			fungible::{Inspect as FungibleInspect, Mutate as FungibleMutate},
 			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
 			Currency, Defensive, DefensiveSaturating,
 			ExistenceRequirement::AllowDeath,
@@ -395,6 +399,8 @@ pub mod pallet {
 		BidPlaced { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was successfully removed (before being accepted).
 		BidRetracted { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
+		/// A bid was dropped from a queue because of another, more substantial, bid was present.
+		BidDropped { who: T::AccountId, amount: BalanceOf<T>, duration: u32 },
 		/// A bid was accepted. The balance may not be released until expiry.
 		Issued {
 			/// The identity of the receipt.
@@ -421,6 +427,8 @@ pub mod pallet {
 			/// If `true` then the receipt is done.
 			dropped: bool,
 		},
+		/// An automatic funding of the deficit was made.
+		Funded { deficit: BalanceOf<T> },
 	}
 
 	#[pallet::error]
@@ -534,6 +542,11 @@ pub mod pallet {
 					let net = if queue_full {
 						sp_std::mem::swap(&mut q[0], &mut bid);
 						let _ = T::Currency::unreserve(&bid.who, bid.amount);
+						Self::deposit_event(Event::<T>::BidDropped {
+							who: bid.who,
+							amount: bid.amount,
+							duration,
+						});
 						(0, amount - bid.amount)
 					} else {
 						q.try_insert(0, bid).expect("verified queue was not full above. qed.");
@@ -608,6 +621,7 @@ pub mod pallet {
 			let deficit = issuance.required.saturating_sub(issuance.holdings);
 			ensure!(!deficit.is_zero(), Error::<T>::Funded);
 			T::Deficit::on_unbalanced(T::Currency::deposit_creating(&our_account, deficit));
+			Self::deposit_event(Event::<T>::Funded { deficit });
 			Ok(())
 		}
 
