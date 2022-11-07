@@ -137,6 +137,7 @@ mod serde_balance {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use frame_support::weights::Weight;
 
 	#[test]
 	fn should_serialize_and_deserialize_properly_with_string() {
