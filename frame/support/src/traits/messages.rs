@@ -19,9 +19,9 @@
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::Get;
-use sp_runtime::{BoundedSlice, RuntimeDebug};
-use sp_std::{fmt::Debug, prelude::*};
+use sp_core::{Get, TypedGet, ConstU32};
+use sp_runtime::{BoundedSlice, RuntimeDebug, traits::Convert};
+use sp_std::{fmt::Debug, prelude::*, marker::PhantomData};
 use sp_weights::Weight;
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
@@ -59,20 +59,110 @@ pub trait ServiceQueues {
 	fn service_queues(weight_limit: Weight) -> Weight;
 }
 
+#[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
+pub struct Footprint {
+	pub count: u32,
+	pub size: u32,
+}
+
 pub trait EnqueueMessage<Origin: MaxEncodedLen> {
 	type MaxMessageLen: Get<u32>;
 
 	/// Enqueue a single `message` from a specific `origin`.
-	///
-	/// Infallible.
 	fn enqueue_message(message: BoundedSlice<u8, Self::MaxMessageLen>, origin: Origin);
 
 	/// Enqueue multiple `messages` from a specific `origin`.
-	///
-	/// If no `message.len()` is greater than `HEAP_SIZE - Origin::max_encoded_len()`, then this
-	/// is guaranteed to succeed. In the case of `Err`, no messages are queued.
 	fn enqueue_messages<'a>(
 		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
 		origin: Origin,
 	);
+
+	/// Any remaining unprocessed messages should happen only lazily, not proactively.
+	fn sweep_queue(origin: Origin);
+
+	/// Return the state footprint of the given queue.
+	fn footprint(origin: Origin) -> Footprint;
+}
+
+impl<Origin: MaxEncodedLen> EnqueueMessage<Origin> for () {
+	type MaxMessageLen = ConstU32<0>;
+	fn enqueue_message(_: BoundedSlice<u8, Self::MaxMessageLen>, _: Origin) {}
+	fn enqueue_messages<'a>(
+		_: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
+		_: Origin,
+	) {}
+	fn sweep_queue(_: Origin) {}
+	fn footprint(_: Origin) -> Footprint { Footprint::default() }
+}
+
+pub struct TransformOrigin<E, O, N, C>(PhantomData<(E, O, N, C)>);
+impl<
+	E: EnqueueMessage<O>,
+	O: MaxEncodedLen,
+	N: MaxEncodedLen,
+	C: Convert<N, O>
+> EnqueueMessage<N> for TransformOrigin<E, O, N, C> {
+	type MaxMessageLen = E::MaxMessageLen;
+
+	fn enqueue_message(message: BoundedSlice<u8, Self::MaxMessageLen>, origin: N) {
+		E::enqueue_message(message, C::convert(origin));
+	}
+
+	fn enqueue_messages<'a>(
+		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
+		origin: N,
+	) {
+		E::enqueue_messages(messages, C::convert(origin));
+	}
+
+	fn sweep_queue(origin: N) {
+		E::sweep_queue(C::convert(origin));
+	}
+
+	fn footprint(origin: N) -> Footprint {
+		E::footprint(C::convert(origin))
+	}
+}
+
+pub trait HandleMessage {
+	type MaxMessageLen: Get<u32>;
+
+	/// Enqueue a single `message` with an implied origin.
+	fn handle_message(message: BoundedSlice<u8, Self::MaxMessageLen>);
+
+	/// Enqueue multiple `messages` from an implied origin.
+	fn handle_messages<'a>(
+		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
+	);
+
+	/// Any remaining unprocessed messages should happen only lazily, not proactively.
+	fn sweep_queue();
+
+	/// Return the state footprint of the queue.
+	fn footprint() -> Footprint;
+}
+
+pub struct EnqueueWithOrigin<E, O>(PhantomData<(E, O)>);
+impl<E: EnqueueMessage<O::Type>, O: TypedGet> HandleMessage for EnqueueWithOrigin<E, O> where
+	O::Type: MaxEncodedLen
+{
+	type MaxMessageLen = E::MaxMessageLen;
+
+	fn handle_message(message: BoundedSlice<u8, Self::MaxMessageLen>) {
+		E::enqueue_message(message, O::get());
+	}
+
+	fn handle_messages<'a>(
+		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
+	) {
+		E::enqueue_messages(messages, O::get());
+	}
+
+	fn sweep_queue() {
+		E::sweep_queue(O::get());
+	}
+
+	fn footprint() -> Footprint {
+		E::footprint(O::get())
+	}
 }

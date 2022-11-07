@@ -24,12 +24,13 @@ mod mock;
 mod tests;
 pub mod weights;
 
-use codec::{Codec, Decode, Encode, FullCodec, MaxEncodedLen};
+use codec::{Codec, Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	defensive,
 	pallet_prelude::*,
 	traits::{
 		DefensiveTruncateFrom, EnqueueMessage, ProcessMessage, ProcessMessageError, ServiceQueues,
+		Footprint,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -72,6 +73,8 @@ pub struct Page<Size: Into<u32> + Debug + Clone + Default, HeapSize: Get<Size>> 
 	/// Messages remaining to be processed; this includes overweight messages which have been
 	/// skipped.
 	remaining: Size,
+	/// The size of all remaining messages to be processed.
+	remaining_size: Size,
 	/// The heap-offset of the header of the first message item in this page which is ready for
 	/// processing.
 	first: Size,
@@ -86,23 +89,20 @@ impl<
 		HeapSize: Get<Size>,
 	> Page<Size, HeapSize>
 {
-	/// Create a [`Page`] from one unprocessed message and its origin.
-	fn from_message<T: Config>(
-		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
-		origin: BoundedSlice<u8, MaxOriginLenOf<T>>,
-	) -> Self {
-		let payload_len = origin.len().saturating_add(message.len());
+	/// Create a [`Page`] from one unprocessed message.
+	fn from_message<T: Config>(message: BoundedSlice<u8, MaxMessageLenOf<T>>) -> Self {
+		let payload_len = message.len();
 		let data_len = ItemHeader::<Size>::max_encoded_len().saturating_add(payload_len);
-		let header =
-			ItemHeader::<Size> { payload_len: payload_len.saturated_into(), is_processed: false };
+		let payload_len = payload_len.saturated_into();
+		let header = ItemHeader::<Size> { payload_len, is_processed: false };
 
 		let mut heap = Vec::with_capacity(data_len);
 		header.using_encoded(|h| heap.extend_from_slice(h));
-		heap.extend_from_slice(origin.deref());
 		heap.extend_from_slice(message.deref());
 
 		Page {
 			remaining: One::one(),
+			remaining_size: payload_len,
 			first: Zero::zero(),
 			last: Zero::zero(),
 			heap: BoundedVec::defensive_truncate_from(heap),
@@ -113,14 +113,12 @@ impl<
 	fn try_append_message<T: Config>(
 		&mut self,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
-		origin: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) -> Result<(), ()> {
 		let pos = self.heap.len();
-		let payload_len = origin.len().saturating_add(message.len());
+		let payload_len = message.len();
 		let data_len = ItemHeader::<Size>::max_encoded_len().saturating_add(payload_len);
-
-		let header =
-			ItemHeader::<Size> { payload_len: payload_len.saturated_into(), is_processed: false };
+		let payload_len = payload_len.saturated_into();
+		let header = ItemHeader::<Size> { payload_len, is_processed: false };
 		let heap_size: u32 = HeapSize::get().into();
 		if (heap_size as usize).saturating_sub(self.heap.len()) < data_len {
 			// Can't fit.
@@ -129,11 +127,11 @@ impl<
 
 		let mut heap = sp_std::mem::take(&mut self.heap).into_inner();
 		header.using_encoded(|h| heap.extend_from_slice(h));
-		heap.extend_from_slice(origin.deref());
 		heap.extend_from_slice(message.deref());
 		self.heap = BoundedVec::defensive_truncate_from(heap);
 		self.last = pos.saturated_into();
 		self.remaining.saturating_inc();
+		self.remaining_size.saturating_accrue(payload_len);
 		Ok(())
 	}
 
@@ -166,6 +164,7 @@ impl<
 				h.is_processed = true;
 				h.using_encoded(|d| self.heap[f..f + d.len()].copy_from_slice(d));
 				self.remaining.saturating_dec();
+				self.remaining_size.saturating_reduce(h.payload_len);
 			}
 			self.first
 				.saturating_accrue(ItemHeader::<Size>::max_encoded_len().saturated_into());
@@ -204,6 +203,7 @@ impl<
 				h.is_processed = true;
 				h.using_encoded(|d| self.heap[pos..pos + d.len()].copy_from_slice(d));
 				self.remaining.saturating_dec();
+				self.remaining_size.saturating_reduce(h.payload_len);
 			}
 		}
 	}
@@ -231,11 +231,15 @@ pub struct BookState<MessageOrigin> {
 	/// If this book has any ready pages, then this will be `Some` with the previous and next
 	/// neighbours. This wraps around.
 	ready_neighbours: Option<Neighbours<MessageOrigin>>,
+	/// The number of unprocessed messages stored at present.
+	message_count: u32,
+	/// The total size of all unprocessed messages stored at present.
+	size: u32,
 }
 
 impl<MessageOrigin> Default for BookState<MessageOrigin> {
 	fn default() -> Self {
-		Self { begin: 0, end: 0, count: 0, ready_neighbours: None }
+		Self { begin: 0, end: 0, count: 0, ready_neighbours: None, message_count: 0, size: 0 }
 	}
 }
 
@@ -449,8 +453,6 @@ enum PageExecutionStatus {
 /// The status of an attempt to process a message.
 #[derive(PartialEq)]
 enum MessageExecutionStatus {
-	/// The message could not be executed due to a format error.
-	BadFormat,
 	/// There is not enough weight remaining at present.
 	InsufficientWeight,
 	/// There will never be enough weight.
@@ -537,9 +539,11 @@ impl<T: Config> Pallet<T> {
 	fn do_enqueue_message(
 		origin: &MessageOriginOf<T>,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
-		origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
+		_origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
 		let mut book_state = BookStateFor::<T>::get(origin);
+		book_state.message_count.saturating_inc();
+		book_state.size.saturating_accrue((message.len() + origin.encode().len()) as u32);
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
@@ -551,8 +555,9 @@ impl<T: Config> Pallet<T> {
 					return
 				},
 			};
-			if let Ok(_) = page.try_append_message::<T>(message, origin_data) {
+			if let Ok(_) = page.try_append_message::<T>(message) {
 				Pages::<T>::insert(origin, last, &page);
+				BookStateFor::<T>::insert(origin, book_state);
 				return
 			}
 		} else {
@@ -569,11 +574,8 @@ impl<T: Config> Pallet<T> {
 		// No room on the page or no page - link in a new page.
 		book_state.end.saturating_inc();
 		book_state.count.saturating_inc();
-		Pages::<T>::insert(
-			origin,
-			book_state.end - 1,
-			Page::from_message::<T>(message, origin_data),
-		);
+		let page = Page::from_message::<T>(message);
+		Pages::<T>::insert(origin, book_state.end - 1, &page);
 		BookStateFor::<T>::insert(origin, book_state);
 	}
 
@@ -585,8 +587,9 @@ impl<T: Config> Pallet<T> {
 	) -> DispatchResult {
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
-		let (pos, is_processed, blob) =
+		let (pos, is_processed, payload) =
 			page.peek_index(index.into() as usize).ok_or(Error::<T>::NoMessage)?;
+		let payload_len = payload.len() as u32;
 		ensure!(
 			page_index < book_state.begin ||
 				(page_index == book_state.begin && pos < page.first.into() as usize),
@@ -595,16 +598,19 @@ impl<T: Config> Pallet<T> {
 		ensure!(is_processed, Error::<T>::AlreadyProcessed);
 		use MessageExecutionStatus::*;
 		let mut weight_counter = WeightCounter::from_limit(weight_limit);
-		match Self::process_message(blob, &mut weight_counter, weight_limit) {
+		match Self::process_message_payload(origin.clone(), payload, &mut weight_counter, weight_limit) {
 			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight.into()),
-			BadFormat | Unprocessable | Processed => {
+			Unprocessable | Processed => {
 				page.note_processed_at_pos(pos);
+				book_state.message_count.saturating_dec();
+				book_state.size.saturating_reduce(payload_len);
 				if page.remaining.is_zero() {
+					debug_assert!(page.remaining_size.is_zero(), "no messages remaining; no space taken; qed");
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
-				// no need to consider .first or ready ring since processing an overweight page
-				// would not alter that state.
+					// no need to consider .first or ready ring since processing an overweight page
+					// would not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
@@ -644,6 +650,8 @@ impl<T: Config> Pallet<T> {
 		Pages::<T>::remove(origin, page_index);
 		debug_assert!(book_state.count > 0, "reaping a page implies there are pages");
 		book_state.count.saturating_dec();
+		book_state.message_count.saturating_reduce(page.remaining.into());
+		book_state.size.saturating_reduce(page.remaining_size.into());
 		BookStateFor::<T>::insert(origin, book_state);
 		Self::deposit_event(Event::PageReaped { origin: origin.clone(), index: page_index });
 
@@ -701,7 +709,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns whether the execution bailed.
 	fn service_page(
 		origin: &MessageOriginOf<T>,
-		book_state: &mut BookState<MessageOriginOf<T>>,
+		book_state: &mut BookStateOf<T>,
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
@@ -723,7 +731,7 @@ impl<T: Config> Pallet<T> {
 
 		// Execute as many messages as possible.
 		let status = loop {
-			match Self::service_page_item(origin, &mut page, weight, overweight_limit) {
+			match Self::service_page_item(origin, book_state, &mut page, weight, overweight_limit) {
 				s @ Bailed | s @ NoMore => break s,
 				// Keep going as long as we make progress...
 				Partial => {
@@ -750,7 +758,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Execute the next message of a page.
 	pub(crate) fn service_page_item(
-		_origin: &MessageOriginOf<T>,
+		origin: &MessageOriginOf<T>,
+		book_state: &mut BookStateOf<T>,
 		page: &mut PageOf<T>,
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
@@ -763,18 +772,22 @@ impl<T: Config> Pallet<T> {
 		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
 			return PageExecutionStatus::Bailed
 		}
-		let message = &match page.peek_first() {
+		let payload = &match page.peek_first() {
 			Some(m) => m,
 			None => return PageExecutionStatus::NoMore,
 		}[..];
 		log::debug!(target: LOG_TARGET, "\n{}", Self::debug_info());
 
 		use MessageExecutionStatus::*;
-		let is_processed = match Self::process_message(message, weight, overweight_limit) {
+		let is_processed = match Self::process_message_payload(origin.clone(), payload.deref(), weight, overweight_limit) {
 			InsufficientWeight => return PageExecutionStatus::Bailed,
-			Processed | Unprocessable | BadFormat => true,
+			Processed | Unprocessable => true,
 			Overweight => false,
 		};
+		if is_processed {
+			book_state.message_count.saturating_dec();
+			book_state.size.saturating_reduce(payload.len() as u32);
+		}
 		page.skip_first(is_processed);
 		PageExecutionStatus::Partial
 	}
@@ -833,48 +846,40 @@ impl<T: Config> Pallet<T> {
 		info
 	}
 
-	fn process_message(
-		mut message: &[u8],
+	fn process_message_payload(
+		origin: MessageOriginOf<T>,
+		message: &[u8],
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
-		match MessageOriginOf::<T>::decode(&mut message) {
-			Ok(origin) => {
-				let hash = T::Hashing::hash(message);
-				use ProcessMessageError::Overweight;
-				match T::MessageProcessor::process_message(
-					message,
-					origin.clone(),
-					weight.remaining(),
-				) {
-					Err(Overweight(w)) if w.any_gt(overweight_limit) => {
-						// Permanently overweight.
-						Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
-						MessageExecutionStatus::Overweight
-					},
-					Err(Overweight(_)) => {
-						// Temporarily overweight - save progress and stop processing this
-						// queue.
-						MessageExecutionStatus::InsufficientWeight
-					},
-					Err(error) => {
-						// Permanent error - drop
-						Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
-						MessageExecutionStatus::Unprocessable
-					},
-					Ok((success, weight_used)) => {
-						// Success
-						weight.defensive_saturating_accrue(weight_used);
-						let event = Event::<T>::Processed { hash, origin, weight_used, success };
-						Self::deposit_event(event);
-						MessageExecutionStatus::Processed
-					},
-				}
+		let hash = T::Hashing::hash(message);
+		use ProcessMessageError::Overweight;
+		match T::MessageProcessor::process_message(
+			message,
+			origin.clone(),
+			weight.remaining(),
+		) {
+			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
+				// Permanently overweight.
+				Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
+				MessageExecutionStatus::Overweight
 			},
-			Err(_) => {
-				let hash = T::Hashing::hash(message);
-				Self::deposit_event(Event::<T>::Discarded { hash });
-				MessageExecutionStatus::BadFormat
+			Err(Overweight(_)) => {
+				// Temporarily overweight - save progress and stop processing this
+				// queue.
+				MessageExecutionStatus::InsufficientWeight
+			},
+			Err(error) => {
+				// Permanent error - drop
+				Self::deposit_event(Event::<T>::ProcessingFailed { hash, origin, error });
+				MessageExecutionStatus::Unprocessable
+			},
+			Ok((success, weight_used)) => {
+				// Success
+				weight.defensive_saturating_accrue(weight_used);
+				let event = Event::<T>::Processed { hash, origin, weight_used, success };
+				Self::deposit_event(event);
+				MessageExecutionStatus::Processed
 			},
 		}
 	}
@@ -974,5 +979,24 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 				Self::do_enqueue_message(&origin, message, origin_data);
 			}
 		})
+	}
+
+	// TODO: test.
+	fn sweep_queue(origin: MessageOriginOf<T>) {
+		let mut book_state = BookStateFor::<T>::get(&origin);
+		book_state.begin = book_state.end;
+		if let Some(neighbours) = book_state.ready_neighbours.take() {
+			Self::ready_ring_unknit(&origin, neighbours);
+		}
+		BookStateFor::<T>::insert(&origin, &book_state);
+	}
+
+	// TODO: test.
+	fn footprint(origin: MessageOriginOf<T>) -> Footprint {
+		let book_state = BookStateFor::<T>::get(&origin);
+		Footprint {
+			count: book_state.message_count,
+			size: book_state.size,
+		}
 	}
 }

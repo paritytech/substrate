@@ -21,175 +21,9 @@
 
 use crate::{mock::*, *};
 
-use crate as pallet_message_queue;
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, parameter_types,
-	traits::{ConstU32, ConstU64},
+	assert_noop, assert_ok, assert_storage_noop,
 };
-use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
-use sp_std::collections::btree_map::BTreeMap;
-
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
-type Block = frame_system::mocking::MockBlock<Test>;
-
-frame_support::construct_runtime!(
-	pub enum Test where
-		Block = Block,
-		NodeBlock = Block,
-		UncheckedExtrinsic = UncheckedExtrinsic,
-	{
-		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
-	}
-);
-
-parameter_types! {
-	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
-}
-impl frame_system::Config for Test {
-	type BaseCallFilter = frame_support::traits::Everything;
-	type BlockWeights = ();
-	type BlockLength = ();
-	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type Index = u64;
-	type BlockNumber = u64;
-	type Hash = H256;
-	type RuntimeCall = RuntimeCall;
-	type Hashing = BlakeTwo256;
-	type AccountId = u64;
-	type Lookup = IdentityLookup<Self::AccountId>;
-	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
-	type BlockHashCount = ConstU64<250>;
-	type Version = ();
-	type PalletInfo = PalletInfo;
-	type AccountData = ();
-	type OnNewAccount = ();
-	type OnKilledAccount = ();
-	type SystemWeightInfo = ();
-	type SS58Prefix = ();
-	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
-}
-
-parameter_types! {
-	pub const HeapSize: u32 = 24;
-	pub const MaxStale: u32 = 2;
-}
-
-impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = MockedWeightInfo;
-	type MessageProcessor = TestMessageProcessor;
-	type Size = u32;
-	type HeapSize = HeapSize;
-	type MaxStale = MaxStale;
-}
-
-/// Mocked `WeightInfo` impl with allows to set the weight per call.
-pub struct MockedWeightInfo;
-
-parameter_types! {
-	/// Storage for `MockedWeightInfo`, do not use directly.
-	pub static WeightForCall: BTreeMap<String, Weight> = Default::default();
-}
-
-/// Set the return value for a function from the `WeightInfo` trait.
-impl MockedWeightInfo {
-	/// Set the weight of a specific weight function.
-	pub fn set_weight<T: Config>(call_name: &str, weight: Weight) {
-		let mut calls = WeightForCall::get();
-		calls.insert(call_name.into(), weight);
-		WeightForCall::set(calls);
-	}
-}
-
-impl crate::weights::WeightInfo for MockedWeightInfo {
-	fn service_page_base() -> Weight {
-		WeightForCall::get().get("service_page_base").copied().unwrap_or_default()
-	}
-	fn service_queue_base() -> Weight {
-		WeightForCall::get().get("service_queue_base").copied().unwrap_or_default()
-	}
-	fn service_page_process_message() -> Weight {
-		WeightForCall::get()
-			.get("service_page_process_message")
-			.copied()
-			.unwrap_or_default()
-	}
-	fn bump_service_head() -> Weight {
-		WeightForCall::get().get("bump_service_head").copied().unwrap_or_default()
-	}
-	fn service_page_item() -> Weight {
-		WeightForCall::get().get("service_page_item").copied().unwrap_or_default()
-	}
-	fn ready_ring_unknit() -> Weight {
-		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
-	}
-}
-
-parameter_types! {
-	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
-}
-
-pub struct TestMessageProcessor;
-impl ProcessMessage for TestMessageProcessor {
-	/// The transport from where a message originates.
-	type Origin = MessageOrigin;
-
-	/// Process the given message, using no more than `weight_limit` in weight to do so.
-	///
-	/// Consumes exactly `n` weight of all components if it starts `weight=n` and `1` otherwise.
-	/// Errors if given the `weight_limit` is insufficient to process the message.
-	fn process_message(
-		message: &[u8],
-		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		let weight = if message.starts_with(&b"weight="[..]) {
-			let mut w: u64 = 0;
-			for &c in &message[7..] {
-				if c >= b'0' && c <= b'9' {
-					w = w * 10 + (c - b'0') as u64;
-				} else {
-					break
-				}
-			}
-			w
-		} else {
-			1
-		};
-		let weight = Weight::from_parts(weight, weight);
-		if weight.all_lte(weight_limit) {
-			let mut m = MessagesProcessed::get();
-			m.push((message.to_vec(), origin));
-			MessagesProcessed::set(m);
-			Ok((true, weight))
-		} else {
-			Err(ProcessMessageError::Overweight(weight))
-		}
-	}
-}
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	sp_tracing::try_init_simple();
-	WeightForCall::set(Default::default());
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
-}
-
-/// Set the weight of a specific weight function.
-pub fn set_weight(name: &str, w: Weight) {
-	MockedWeightInfo::set_weight::<Test>(name, w);
-}
 
 #[test]
 fn mocked_weight_works() {
@@ -463,9 +297,10 @@ fn service_page_item_bails() {
 		assert_eq!(
 			MessageQueue::service_page_item(
 				&MessageOrigin::Here,
+				&mut book_for::<Test>(&page),
 				&mut page,
 				&mut weight,
-				overweight_limit
+				overweight_limit,
 			),
 			PageExecutionStatus::Bailed
 		);
@@ -475,7 +310,7 @@ fn service_page_item_bails() {
 #[test]
 fn service_page_consumes_correct_weight() {
 	new_test_ext().execute_with(|| {
-		let mut page = page::<Test>(b"weight=3", MessageOrigin::Here);
+		let mut page = page::<Test>(b"weight=3");
 		let mut weight = WeightCounter::from_limit(10.into_weight());
 		let overweight_limit = 0.into_weight();
 		set_weight("service_page_item", 2.into_weight());
@@ -483,6 +318,7 @@ fn service_page_consumes_correct_weight() {
 		assert_eq!(
 			MessageQueue::service_page_item(
 				&MessageOrigin::Here,
+				&mut book_for::<Test>(&page),
 				&mut page,
 				&mut weight,
 				overweight_limit
@@ -497,7 +333,7 @@ fn service_page_consumes_correct_weight() {
 #[test]
 fn service_page_skips_perm_overweight_message() {
 	new_test_ext().execute_with(|| {
-		let mut page = page::<Test>(b"weight=6", MessageOrigin::Here);
+		let mut page = page::<Test>(b"weight=6");
 		let mut weight = WeightCounter::from_limit(7.into_weight());
 		let overweight_limit = 5.into_weight();
 		set_weight("service_page_item", 2.into_weight());
@@ -505,6 +341,7 @@ fn service_page_skips_perm_overweight_message() {
 		assert_eq!(
 			MessageQueue::service_page_item(
 				&MessageOrigin::Here,
+				&mut book_for::<Test>(&page),
 				&mut page,
 				&mut weight,
 				overweight_limit
@@ -516,7 +353,7 @@ fn service_page_skips_perm_overweight_message() {
 		let (pos, processed, payload) = page.peek_index(0).unwrap();
 		assert_eq!(pos, 0);
 		assert_eq!(processed, false);
-		assert_eq!(payload, (MessageOrigin::Here, b"weight=6").encode());
+		assert_eq!(payload, b"weight=6".encode());
 	});
 }
 
@@ -529,9 +366,9 @@ fn peek_index_works() {
 		for i in 0..msgs {
 			page.skip_first(i % 2 == 0);
 			let (pos, processed, payload) = page.peek_index(i).unwrap();
-			assert_eq!(pos, 10 * i);
+			assert_eq!(pos, 9 * i);
 			assert_eq!(processed, i % 2 == 0);
-			assert_eq!(payload, MessageOrigin::Everywhere(i as u32).encode());
+			assert_eq!(payload, (i as u32).encode());
 		}
 	});
 }
@@ -541,9 +378,8 @@ fn page_from_message_basic_works() {
 	assert!(MaxOriginLenOf::<Test>::get() >= 3, "pre-condition unmet");
 	assert!(MaxMessageLenOf::<Test>::get() >= 3, "pre-condition unmet");
 
-	let page = PageOf::<Test>::from_message::<Test>(
+	let _page = PageOf::<Test>::from_message::<Test>(
 		BoundedSlice::defensive_truncate_from(b"MSG"),
-		BoundedSlice::defensive_truncate_from(b"ORI"),
 	);
 }
 
@@ -551,11 +387,9 @@ fn page_from_message_basic_works() {
 #[test]
 fn page_from_message_max_len_works() {
 	let max_msg_len: usize = MaxMessageLenOf::<Test>::get() as usize;
-	let max_origin_len: usize = MaxOriginLenOf::<Test>::get() as usize;
 
 	let page = PageOf::<Test>::from_message::<Test>(
 		vec![1; max_msg_len][..].try_into().unwrap(),
-		vec![2; max_origin_len][..].try_into().unwrap(),
 	);
 
 	assert_eq!(page.remaining, 1);
