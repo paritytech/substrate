@@ -748,7 +748,7 @@ where
 
 		match result {
 			Err(msg) => {
-				log::error!(target: "txpool", "{msg}");
+				log::debug!(target: "txpool", "{msg}");
 				self.enactment_state.lock().force_update(&event);
 			},
 			Ok(None) => {},
