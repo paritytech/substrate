@@ -8576,6 +8576,7 @@ dependencies = [
  "sp-maybe-compressed-blob",
  "sp-runtime",
  "sp-version",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "thiserror",
  "tokio",

@@ -8,11 +8,13 @@ use jsonrpsee::{
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
+use sp_api::BlockId;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys::CODE, testing::TaskExecutor};
 use sp_version::RuntimeVersion;
 use std::sync::Arc;
+use substrate_test_runtime::Transfer;
 use substrate_test_runtime_client::{
 	prelude::*, runtime, Backend, BlockBuilderExt, Client, ClientBlockImportExt,
 };
@@ -43,13 +45,17 @@ async fn setup_api() -> (
 	Block,
 ) {
 	let child_info = ChildInfo::new_default(CHILD_STORAGE_KEY);
-	let client = TestClientBuilder::new()
-		.add_extra_child_storage(&child_info, KEY.to_vec(), CHILD_VALUE.to_vec())
-		.build();
-	let mut client = Arc::new(client);
+	let builder = TestClientBuilder::new().add_extra_child_storage(
+		&child_info,
+		KEY.to_vec(),
+		CHILD_VALUE.to_vec(),
+	);
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
 
 	let api =
-		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
+			.into_rpc();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
 	// TODO: Jsonrpsee release for sub_id.
@@ -79,9 +85,13 @@ async fn setup_api() -> (
 
 #[tokio::test]
 async fn follow_subscription_produces_blocks() {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
 	let api =
-		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
@@ -127,9 +137,13 @@ async fn follow_subscription_produces_blocks() {
 
 #[tokio::test]
 async fn follow_with_runtime() {
-	let mut client = Arc::new(substrate_test_runtime_client::new());
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
 	let api =
-		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
+			.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
@@ -223,9 +237,13 @@ async fn follow_with_runtime() {
 
 #[tokio::test]
 async fn get_genesis() {
-	let client = Arc::new(substrate_test_runtime_client::new());
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let client = Arc::new(builder.build());
+
 	let api =
-		ChainHead::new(client.clone(), Arc::new(TaskExecutor::default()), CHAIN_GENESIS).into_rpc();
+		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
+			.into_rpc();
 
 	let genesis: String =
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
@@ -464,4 +482,91 @@ async fn get_storage() {
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result == expected_value);
+}
+
+#[tokio::test]
+async fn follow_generates_initial_blocks() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let api =
+		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
+			.into_rpc();
+
+	let finalized_hash = client.info().finalized_hash;
+
+	// Block tree:
+	// finalized -> block 1 -> block 2 -> block 4
+	//           -> block 1 -> block 3
+	let block_1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_1_hash = block_1.header.hash();
+	client.import(BlockOrigin::Own, block_1.clone()).await.unwrap();
+
+	let block_2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_2_hash = block_2.header.hash();
+	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
+
+	let mut block_builder = client
+		.new_block_at(&BlockId::Hash(block_1.header.hash()), Default::default(), false)
+		.unwrap();
+	// This push is required as otherwise block 3 has the same hash as block 2 and won't get
+	// imported
+	block_builder
+		.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
+		.unwrap();
+	let block_3 = block_builder.build().unwrap().block;
+	let block_3_hash = block_3.header.hash();
+	client.import(BlockOrigin::Own, block_3.clone()).await.unwrap();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+
+	// Initialized must always be reported first.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Initialized(Initialized {
+		finalized_block_hash: format!("{:?}", finalized_hash),
+		finalized_block_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	// Check block 1.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_1_hash),
+		parent_block_hash: format!("{:?}", finalized_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	// Check block 2.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_2_hash),
+		parent_block_hash: format!("{:?}", block_1_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+	// Check block 3.
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_3_hash),
+		parent_block_hash: format!("{:?}", block_1_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", block_2_hash),
+	});
+	assert_eq!(event, expected);
 }
