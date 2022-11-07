@@ -164,6 +164,7 @@ where
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	inherents: Vec<Block::Extrinsic>,
 	extrinsics: Vec<Block::Extrinsic>,
+	all_previous_block_txs_executed: bool,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
@@ -218,6 +219,7 @@ where
 			parent_hash,
 			inherents: Vec::new(),
 			extrinsics: Vec::new(),
+			all_previous_block_txs_executed: false,
 			api,
 			block_id,
 			backend,
@@ -238,7 +240,9 @@ where
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		let block_id = self.block_id;
 
-		let valid_txs = if self.api.can_enqueue_txs(&block_id).unwrap() {
+		let valid_txs = if self.all_previous_block_txs_executed &&
+			self.api.can_enqueue_txs(&block_id).unwrap()
+		{
 			self.api.execute_in_transaction(|api| {
 				let next_header = api
 					.finalize_block_with_context(&block_id, ExecutionContext::BlockConstruction)
@@ -426,6 +430,8 @@ where
 		self.api.pop_txs(&block_id, extrinsics.len() as u64).unwrap();
 
 		if extrinsics.len() == previous_block_txs_count {
+			//
+			self.all_previous_block_txs_executed = true;
 			log::info!(target: "block_builder", "executed all previous block transactions");
 			// fetch more txs one by one
 			loop {
