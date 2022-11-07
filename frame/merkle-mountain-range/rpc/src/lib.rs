@@ -79,7 +79,8 @@ impl<BlockHash> LeavesProof<BlockHash> {
 pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
 	/// Get the MMR root hash for the current best block.
 	#[method(name = "mmr_root")]
-	fn mmr_root(&self) -> RpcResult<MmrHash>;
+	fn mmr_root(&self, at: Option<BlockHash>) -> RpcResult<MmrHash>;
+
 	/// Generate an MMR proof for the given `block_numbers`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
@@ -155,12 +156,15 @@ where
 	Client::Api: MmrRuntimeApi<Block, MmrHash, NumberFor<Block>>,
 	MmrHash: Codec + Send + Sync + 'static,
 {
-	fn mmr_root(&self) -> RpcResult<MmrHash> {
-		let best_block_hash = self.client.info().best_hash;
+	fn mmr_root(&self, at: Option<<Block as BlockT>::Hash>) -> RpcResult<MmrHash> {
+		let block_hash = at.unwrap_or_else(||
+			// If the block hash is not supplied assume the best block.
+			self.client.info().best_hash);
 		let api = self.client.runtime_api();
-		let mmr_root = api.mmr_root(&BlockId::Hash(best_block_hash))
-						  .map_err(runtime_error_into_rpc_error)?
-						  .map_err(mmr_error_into_rpc_error)?;
+		let mmr_root = api
+			.mmr_root(&BlockId::Hash(block_hash))
+			.map_err(runtime_error_into_rpc_error)?
+			.map_err(mmr_error_into_rpc_error)?;
 		Ok(mmr_root)
 	}
 
