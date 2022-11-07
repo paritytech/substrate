@@ -77,7 +77,7 @@ impl ChainInfoCmd {
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			blocks_pruning: config.blocks_pruning,
-			delayed_pruning: config.delayed_canonicalization,
+			delayed_canonicalization: config.delayed_canonicalization,
 		};
 		let backend = sc_service::new_db_backend::<B>(db_config)?;
 		let info: ChainInfo<B> = backend.blockchain().info().into();

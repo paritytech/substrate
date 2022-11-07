@@ -214,7 +214,7 @@ where
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			blocks_pruning: config.blocks_pruning,
-			delayed_pruning: config.delayed_canonicalization,
+			delayed_canonicalization: config.delayed_canonicalization,
 		};
 
 		let backend = new_db_backend(db_config)?;

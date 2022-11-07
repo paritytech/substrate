@@ -318,7 +318,7 @@ pub struct DatabaseSettings {
 	/// NOTE: only finalized blocks are subject for removal!
 	pub blocks_pruning: BlocksPruning,
 	/// The pruning of blocks is delayed for a number of finalizations.
-	pub delayed_pruning: Option<u32>,
+	pub delayed_canonicalization: Option<u32>,
 }
 
 /// Block pruning settings.
@@ -1056,7 +1056,7 @@ pub struct Backend<Block: BlockT> {
 	offchain_storage: offchain::LocalStorage,
 	blockchain: BlockchainDb<Block>,
 	canonicalization_delay: u64,
-	delayed_pruning: Option<u32>,
+	delayed_canonicalization: Option<u32>,
 	import_lock: Arc<RwLock<()>>,
 	is_archive: bool,
 	blocks_pruning: BlocksPruning,
@@ -1104,7 +1104,7 @@ impl<Block: BlockT> Backend<Block> {
 	pub fn new_test_with_tx_storage(
 		blocks_pruning: BlocksPruning,
 		canonicalization_delay: u64,
-		delayed_pruning: Option<u32>,
+		delayed_canonicalization: Option<u32>,
 	) -> Self {
 		let db = kvdb_memorydb::create(crate::utils::NUM_COLUMNS);
 		let db = sp_database::as_database(db);
@@ -1118,7 +1118,7 @@ impl<Block: BlockT> Backend<Block> {
 			state_pruning: Some(state_pruning),
 			source: DatabaseSource::Custom { db, require_create_flag: true },
 			blocks_pruning,
-			delayed_pruning,
+			delayed_canonicalization,
 		};
 
 		Self::new(db_setting, canonicalization_delay).expect("failed to create test-db")
@@ -1243,7 +1243,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		let state_pruning_used = state_db.pruning_mode();
 		let is_archive_pruning = state_pruning_used.is_archive();
-		let blockchain = BlockchainDb::new(db.clone(), config.delayed_pruning)?;
+		let blockchain = BlockchainDb::new(db.clone(), config.delayed_canonicalization)?;
 
 		let storage_db =
 			StorageDb { db: db.clone(), state_db, prefix_keys: !db.supports_ref_counting() };
@@ -1255,7 +1255,7 @@ impl<Block: BlockT> Backend<Block> {
 			offchain_storage,
 			blockchain,
 			canonicalization_delay,
-			delayed_pruning: config.delayed_pruning,
+			delayed_canonicalization: config.delayed_canonicalization,
 			import_lock: Default::default(),
 			is_archive: is_archive_pruning,
 			io_stats: FrozenForDuration::new(std::time::Duration::from_secs(1)),
@@ -1805,7 +1805,7 @@ impl<Block: BlockT> Backend<Block> {
 		// This implies handling both cases:
 		//   - pruning in the state-db via `canonicalize_block`
 		//   - pruning in db via displaced leaves and `prune_blocks`
-		if let Some(delayed) = self.delayed_pruning {
+		if let Some(delayed) = self.delayed_canonicalization {
 			// No blocks to prune in this window.
 			if f_num < delayed.into() {
 				return Ok(())
@@ -2648,7 +2648,7 @@ pub(crate) mod tests {
 				state_pruning: Some(PruningMode::blocks_pruning(1)),
 				source: DatabaseSource::Custom { db: backing, require_create_flag: false },
 				blocks_pruning: BlocksPruning::KeepFinalized,
-				delayed_pruning: None,
+				delayed_canonicalization: None,
 			},
 			0,
 		)

@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{config::DELAYED_PRUNING, error};
+use crate::{config::DELAYED_CANONICALIZATION, error};
 use clap::Args;
 use sc_service::{BlocksPruning, PruningMode};
 
@@ -88,7 +88,7 @@ impl PruningParams {
 	/// Get the block delayed canonicalization value from the parameters.
 	pub fn delayed_canonicalization(&self) -> Option<u32> {
 		if self.delayed_canonicalization.unwrap_or(true) {
-			Some(DELAYED_PRUNING)
+			Some(DELAYED_CANONICALIZATION)
 		} else {
 			None
 		}
