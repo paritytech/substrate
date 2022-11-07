@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Stress tests pallet-message-queue.
-//! Defines its own runtime config to use larger constants for `HeapSize` and `MaxStale`.
+//! Stress tests pallet-message-queue. Defines its own runtime config to use larger constants for
+//! `HeapSize` and `MaxStale`.
 
 #![cfg(test)]
 
