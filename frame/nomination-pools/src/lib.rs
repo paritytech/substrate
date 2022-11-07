@@ -598,7 +598,7 @@ impl<T: Config> Commission<T> {
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
-				return Err("Error".into())
+				return Err(Error::<T>::CommissionChangeThrottled.into())
 			}
 			*old = new_max;
 			// ensure current is also less then the new maximum.
