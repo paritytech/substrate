@@ -658,7 +658,7 @@ where
 		// sequentially.
 		if finalized &&
 			parent_exists &&
-			(self.backend.blockchain().last_finalized()? != parent_hash)
+			info.finalized_hash != parent_hash
 		{
 			self.apply_finality_with_block_hash(
 				operation,
