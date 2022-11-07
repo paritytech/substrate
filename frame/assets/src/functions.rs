@@ -700,7 +700,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				// Should only destroy accounts while the asset is in a destroying state
-				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
+				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
 
 				for (who, v) in Account::<T, I>::drain_prefix(id) {
 					let _ = Self::dead_account(&who, &mut details, &v.reason, true);
@@ -739,7 +739,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 				// Should only destroy accounts while the asset is in a destroying state.
-				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
+				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
 
 				for ((owner, _), approval) in Approvals::<T, I>::drain_prefix((id,)) {
 					T::Currency::unreserve(&owner, approval.deposit);
@@ -765,7 +765,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(super) fn do_finish_destroy(id: T::AssetId) -> DispatchResult {
 		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 			let details = maybe_details.take().ok_or(Error::<T, I>::Unknown)?;
-			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::LiveAsset);
+			ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
 			ensure!(details.accounts == 0, Error::<T, I>::InUse);
 			ensure!(details.approvals == 0, Error::<T, I>::InUse);
 

@@ -506,6 +506,8 @@ pub mod pallet {
 		LiveAsset,
 		/// The asset is not live, and likely being destroyed.
 		AssetNotLive,
+		/// The asset status is not the expected status.
+		IncorrectStatus,
 		/// The asset should be frozen before the given operation.
 		NotFrozen,
 	}
