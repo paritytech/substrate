@@ -748,8 +748,8 @@ where
 
 		match result {
 			Err(msg) => {
-				log::warn!(target: "txpool", "{msg}");
-				return
+				log::debug!(target: "txpool", "{msg}");
+				self.enactment_state.lock().force_update(&event);
 			},
 			Ok(None) => {},
 			Ok(Some(tree_route)) => {
