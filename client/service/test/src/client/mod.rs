@@ -396,16 +396,19 @@ fn block_builder_does_not_include_invalid() {
 	let block = builder.build().unwrap().block;
 	block_on(client.import(BlockOrigin::Own, block)).unwrap();
 
-	let hash0 = client
+	let hashof0 = client
 		.expect_block_hash_from_id(&BlockId::Number(0))
 		.expect("block 0 was just imported. qed");
-	let hash1 = client
+	let hashof1 = client
 		.expect_block_hash_from_id(&BlockId::Number(1))
 		.expect("block 1 was just imported. qed");
 
 	assert_eq!(client.chain_info().best_number, 1);
-	assert_ne!(client.state_at(&hash1).unwrap().pairs(), client.state_at(&hash0).unwrap().pairs());
-	assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
+	assert_ne!(
+		client.state_at(&hashof1).unwrap().pairs(),
+		client.state_at(&hashof0).unwrap().pairs()
+	);
+	assert_eq!(client.body(&hashof1).unwrap().unwrap().len(), 1)
 }
 
 #[test]
@@ -881,11 +884,11 @@ fn import_with_justification() {
 
 	assert_eq!(client.chain_info().finalized_hash, a3.hash());
 
-	assert_eq!(client.justifications(&BlockId::Hash(a3.hash())).unwrap(), Some(justification));
+	assert_eq!(client.justifications(&a3.hash()).unwrap(), Some(justification));
 
-	assert_eq!(client.justifications(&BlockId::Hash(a1.hash())).unwrap(), None);
+	assert_eq!(client.justifications(&a1.hash()).unwrap(), None);
 
-	assert_eq!(client.justifications(&BlockId::Hash(a2.hash())).unwrap(), None);
+	assert_eq!(client.justifications(&a2.hash()).unwrap(), None);
 
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[]);
 	finality_notification_check(&mut finality_notifications, &[a3.hash()], &[]);
@@ -1126,6 +1129,14 @@ fn finality_notifications_content() {
 	finality_notification_check(&mut finality_notifications, &[a1.hash(), a2.hash()], &[c1.hash()]);
 	finality_notification_check(&mut finality_notifications, &[d3.hash(), d4.hash()], &[b2.hash()]);
 	assert!(finality_notifications.try_next().is_err());
+}
+
+#[test]
+fn get_block_by_bad_block_hash_returns_none() {
+	let client = substrate_test_runtime_client::new();
+
+	let hash = H256::from_low_u64_be(5);
+	assert!(client.block(&BlockId::Hash(hash)).unwrap().is_none());
 }
 
 #[test]

@@ -29,12 +29,12 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_keystore::LocalKeystore;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
+use sp_keystore::testing::KeyStore as TestKeystore;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
@@ -333,7 +333,7 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(LocalKeystore::in_memory());
+	let keystore = Arc::new(TestKeystore::new());
 	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore
@@ -741,9 +741,9 @@ fn beefy_importing_blocks() {
 
 	let full_client = client.as_client();
 	let parent_id = BlockId::Number(0);
-	let block_id = BlockId::Number(1);
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof1 = block.header.hash();
 
 	// Import without justifications.
 	let mut justif_recv = justif_stream.subscribe();
@@ -755,10 +755,16 @@ fn beefy_importing_blocks() {
 		block_on(block_import.import_block(params(block, None), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
-	// Verify no justifications present:
+	// Verify no BEEFY justifications present:
 	{
 		// none in backend,
-		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		assert_eq!(
+			full_client
+				.justifications(&hashof1)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
 		// and none sent to BEEFY worker.
 		block_on(poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
@@ -778,6 +784,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof2 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -787,11 +794,18 @@ fn beefy_importing_blocks() {
 			..Default::default()
 		}),
 	);
-	// Verify justification successfully imported:
+	// Verify BEEFY justification successfully imported:
 	{
-		// available in backend,
-		assert!(full_client.justifications(&BlockId::Number(block_num)).unwrap().is_some());
-		// and also sent to BEEFY worker.
+		// still not in backend (worker is responsible for appending to backend),
+		assert_eq!(
+			full_client
+				.justifications(&hashof2)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
+		// but sent to BEEFY worker
+		// (worker will append it to backend when all previous mandatory justifs are there as well).
 		block_on(poll_fn(move |cx| {
 			match justif_recv.poll_next_unpin(cx) {
 				Poll::Ready(Some(_justification)) => (),
@@ -813,6 +827,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof3 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -823,10 +838,16 @@ fn beefy_importing_blocks() {
 			..Default::default()
 		}),
 	);
-	// Verify bad justifications was not imported:
+	// Verify bad BEEFY justifications was not imported:
 	{
 		// none in backend,
-		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		assert_eq!(
+			full_client
+				.justifications(&hashof3)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
 		// and none sent to BEEFY worker.
 		block_on(poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);

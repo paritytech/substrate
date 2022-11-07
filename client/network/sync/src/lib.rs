@@ -271,6 +271,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	gap_sync: Option<GapSync<B>>,
 	/// Channel for receiving service commands
 	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
+	/// Handle for communicating with `NetworkService`
+	_network_service: service::network::NetworkServiceHandle,
 }
 
 /// All the data we have about a Peer that we are trying to sync with
@@ -1775,6 +1777,7 @@ where
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
 		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+		_network_service: service::network::NetworkServiceHandle,
 	) -> Result<(Self, Box<ChainSyncInterfaceHandle<B>>), ClientError> {
 		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
 
@@ -1800,6 +1803,7 @@ where
 			import_existing: false,
 			gap_sync: None,
 			service_rx,
+			_network_service,
 		};
 		sync.reset_sync_start_point()?;
 		Ok((sync, Box::new(ChainSyncInterfaceHandle::new(tx))))
@@ -2670,6 +2674,7 @@ fn validate_blocks<Block: BlockT>(
 #[cfg(test)]
 mod test {
 	use super::*;
+	use crate::service::network::NetworkServiceProvider;
 	use futures::{executor::block_on, future::poll_fn};
 	use sc_block_builder::BlockBuilderProvider;
 	use sc_network_common::sync::message::{BlockData, BlockState, FromBlock};
@@ -2691,9 +2696,17 @@ mod test {
 		let block_announce_validator = Box::new(DefaultBlockAnnounceValidator);
 		let peer_id = PeerId::random();
 
-		let (mut sync, _) =
-			ChainSync::new(SyncMode::Full, client.clone(), block_announce_validator, 1, None)
-				.unwrap();
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
+		let (mut sync, _) = ChainSync::new(
+			SyncMode::Full,
+			client.clone(),
+			block_announce_validator,
+			1,
+			None,
+			chain_sync_network_handle,
+		)
+		.unwrap();
 
 		let (a1_hash, a1_number) = {
 			let a1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
@@ -2739,12 +2752,16 @@ mod test {
 	#[test]
 	fn restart_doesnt_affect_peers_downloading_finality_data() {
 		let mut client = Arc::new(TestClientBuilder::new().build());
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
+
 		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
 			client.clone(),
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
@@ -2905,6 +2922,8 @@ mod test {
 		sp_tracing::try_init_simple();
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 
 		let (mut sync, _) = ChainSync::new(
 			SyncMode::Full,
@@ -2912,6 +2931,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
@@ -3019,6 +3039,8 @@ mod test {
 		};
 
 		let mut client = Arc::new(TestClientBuilder::new().build());
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 		let info = client.info();
 
 		let (mut sync, _) = ChainSync::new(
@@ -3027,6 +3049,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
@@ -3140,6 +3163,8 @@ mod test {
 	fn can_sync_huge_fork() {
 		sp_tracing::try_init_simple();
 
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..MAX_BLOCKS_TO_LOOK_BACKWARDS * 4)
 			.map(|_| build_block(&mut client, None, false))
@@ -3170,6 +3195,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
@@ -3269,6 +3295,8 @@ mod test {
 	fn syncs_fork_without_duplicate_requests() {
 		sp_tracing::try_init_simple();
 
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..MAX_BLOCKS_TO_LOOK_BACKWARDS * 4)
 			.map(|_| build_block(&mut client, None, false))
@@ -3299,6 +3327,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			5,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
@@ -3419,6 +3448,8 @@ mod test {
 	#[test]
 	fn removes_target_fork_on_disconnect() {
 		sp_tracing::try_init_simple();
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 		let mut client = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..3).map(|_| build_block(&mut client, None, false)).collect::<Vec<_>>();
 
@@ -3428,6 +3459,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
@@ -3450,6 +3482,8 @@ mod test {
 	#[test]
 	fn can_import_response_with_missing_blocks() {
 		sp_tracing::try_init_simple();
+		let (_chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
 		let mut client2 = Arc::new(TestClientBuilder::new().build());
 		let blocks = (0..4).map(|_| build_block(&mut client2, None, false)).collect::<Vec<_>>();
 
@@ -3461,6 +3495,7 @@ mod test {
 			Box::new(DefaultBlockAnnounceValidator),
 			1,
 			None,
+			chain_sync_network_handle,
 		)
 		.unwrap();
 
