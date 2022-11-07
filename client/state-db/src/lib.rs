@@ -58,8 +58,6 @@ use std::{
 	fmt,
 };
 
-pub use noncanonical::LAST_CANONICAL;
-
 const PRUNING_MODE: &[u8] = b"mode";
 const PRUNING_MODE_ARCHIVE: &[u8] = b"archive";
 const PRUNING_MODE_ARCHIVE_CANON: &[u8] = b"archive_canonical";
