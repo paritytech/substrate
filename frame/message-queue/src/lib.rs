@@ -935,10 +935,16 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 			let (progressed, n) = Self::service_queue(next.clone(), &mut weight, overweight_limit);
 			next = match n {
 				Some(n) =>
-					if !progressed && last_no_progress == Some(n.clone()) {
-						break
+					if !progressed {
+						if last_no_progress == Some(n.clone()) {
+							break
+						}
+						if last_no_progress.is_none() {
+							last_no_progress = Some(next.clone())
+						}
+						n
 					} else {
-						last_no_progress = Some(next);
+						last_no_progress = None;
 						n
 					},
 				None => break,
