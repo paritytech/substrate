@@ -537,7 +537,7 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{mock::*, ElectionError, ElectionCompute, Error, Event, Perbill, Phase};
+	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
