@@ -980,7 +980,7 @@ pub mod tests {
 			let proof = backend.extract_proof().unwrap();
 
 			let mut nodes = Vec::new();
-			for node in proof.iter_nodes() {
+			for node in proof.into_iter_nodes() {
 				let hash = BlakeTwo256::hash(&node);
 				// Only insert the node/value that contains the important data.
 				if hash != value_hash {

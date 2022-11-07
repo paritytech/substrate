@@ -345,8 +345,8 @@ where
 		self.block_or_best(block)
 			.and_then(|block| {
 				self.client
-					.read_proof(&BlockId::Hash(block), &mut keys.iter().map(|key| key.0.as_ref()))
-					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+					.read_proof(&block, &mut keys.iter().map(|key| key.0.as_ref()))
+					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
 			.map_err(client_err)
@@ -494,11 +494,11 @@ where
 				};
 				self.client
 					.read_child_proof(
-						&BlockId::Hash(block),
+						&block,
 						&child_info,
 						&mut keys.iter().map(|key| key.0.as_ref()),
 					)
-					.map(|proof| proof.iter_nodes().map(|node| node.into()).collect())
+					.map(|proof| proof.into_iter_nodes().map(|node| node.into()).collect())
 					.map(|proof| ReadProof { at: block, proof })
 			})
 			.map_err(client_err)

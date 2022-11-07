@@ -27,7 +27,6 @@ use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
-	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
@@ -216,13 +215,13 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Mark a block as finalized.
 	fn mark_finalized(
 		&mut self,
-		id: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
-	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
+	fn mark_head(&mut self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
 
 	/// Add a transaction index operation.
 	fn update_transaction_index(&mut self, index: Vec<IndexOperation>)
@@ -252,7 +251,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -272,7 +271,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	/// while performing major synchronization work.
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		block: &Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -467,7 +466,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: BlockId<Block>,
+		block: &Block::Hash,
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
@@ -476,21 +475,21 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		transaction: Self::BlockImportOperation,
 	) -> sp_blockchain::Result<()>;
 
-	/// Finalize block with given Id.
+	/// Finalize block with given `hash`.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
 	fn finalize_block(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
-	/// Append justification to the block with the given Id.
+	/// Append justification to the block with the given `hash`.
 	///
 	/// This should only be called for blocks that are already finalized.
 	fn append_justification(
 		&self,
-		block: BlockId<Block>,
+		hash: &Block::Hash,
 		justification: Justification,
 	) -> sp_blockchain::Result<()>;
 
