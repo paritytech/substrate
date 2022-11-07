@@ -262,42 +262,42 @@ impl Default for ExtBuilder {
 #[cfg_attr(feature = "fuzzing", allow(dead_code))]
 impl ExtBuilder {
 	// Add members to pool 0.
-	fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
+	pub fn add_members(mut self, members: Vec<(AccountId, Balance)>) -> Self {
 		self.members = members;
 		self
 	}
 
-	fn ed(self, ed: Balance) -> Self {
+	pub fn ed(self, ed: Balance) -> Self {
 		ExistentialDeposit::set(ed);
 		self
 	}
 
-	fn min_bond(self, min: Balance) -> Self {
+	pub fn min_bond(self, min: Balance) -> Self {
 		StakingMinBond::set(min);
 		self
 	}
 
-	fn min_join_bond(self, min: Balance) -> Self {
+	pub fn min_join_bond(self, min: Balance) -> Self {
 		MinJoinBondConfig::set(min);
 		self
 	}
 
-	fn with_check(self, level: u8) -> Self {
+	pub fn with_check(self, level: u8) -> Self {
 		CheckLevel::set(level);
 		self
 	}
 
-	fn max_members(mut self, max: Option<u32>) -> Self {
+	pub fn max_members(mut self, max: Option<u32>) -> Self {
 		self.max_members = max;
 		self
 	}
 
-	fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
+	pub fn max_members_per_pool(mut self, max: Option<u32>) -> Self {
 		self.max_members_per_pool = max;
 		self
 	}
 
-	fn build(self) -> sp_io::TestExternalities {
+	pub fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
@@ -332,7 +332,7 @@ impl ExtBuilder {
 		ext
 	}
 
-	fn build_and_execute(self, test: impl FnOnce() -> ()) {
+	pub fn build_and_execute(self, test: impl FnOnce() -> ()) {
 		self.build().execute_with(|| {
 			test();
 			Pools::do_try_state(CheckLevel::get()).unwrap();

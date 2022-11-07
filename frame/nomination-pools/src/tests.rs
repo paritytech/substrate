@@ -230,8 +230,7 @@ mod bonded_pool {
 				pool.bonded_account(),
 				Balance::MAX / max_points_to_balance,
 			);
-			// New bonded balance would be over threshold of Balance type
-			assert_noop!(pool.ok_to_join(), Error::<Runtime>::OverflowRisk);
+
 			// and a sanity check
 			StakingMock::set_bonded_balance(
 				pool.bonded_account(),
@@ -545,7 +544,7 @@ mod join {
 			// Balance needs to be gt Balance::MAX / `MaxPointsToBalance`
 			assert_noop!(
 				Pools::join(RuntimeOrigin::signed(11), 5, 123),
-				Error::<Runtime>::OverflowRisk
+				pallet_balances::Error::<Runtime>::InsufficientBalance,
 			);
 
 			StakingMock::set_bonded_balance(Pools::create_bonded_account(1), max_points_to_balance);
@@ -4859,7 +4858,7 @@ mod reward_counter_precision {
 				pool_events_since_last_call(),
 				vec![
 					Event::Bonded { member: 20, pool_id: 1, bonded: 5000000000000, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333332 },
+					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333333 },
 					Event::PaidOut { member: 20, pool_id: 1, payout: 3666666666666666666 }
 				]
 			);

@@ -334,7 +334,8 @@ use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero,
+		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
+		Zero,
 	},
 	FixedPointNumber,
 };
@@ -461,21 +462,12 @@ impl<T: Config> PoolMember<T> {
 	///
 	/// This is derived from the ratio of points in the pool to which the member belongs to.
 	/// Might return different values based on the pool state for the same member and points.
-	fn active_stake(&self) -> BalanceOf<T> {
+	fn active_balance(&self) -> BalanceOf<T> {
 		if let Some(pool) = BondedPool::<T>::get(self.pool_id).defensive() {
 			pool.points_to_balance(self.points)
 		} else {
 			Zero::zero()
 		}
-	}
-
-	/// Total balance of the member.
-	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
-	fn total_balance(&self) -> BalanceOf<T> {
-		SubPoolsStorage::<T>::get(self.pool_id)
-			.map(|sub: SubPools<T>| sub.sum_unbonding_balance())
-			.unwrap_or_default() +
-			self.active_balance()
 	}
 
 	/// Total points of this member, both active and unbonding.
@@ -787,7 +779,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Whether or not the pool is ok to be in `PoolSate::Open`. If this returns an `Err`, then the
 	/// pool is unrecoverable and should be in the destroying state.
-	fn ok_to_be_open(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+	fn ok_to_be_open(&self) -> Result<(), DispatchError> {
 		ensure!(!self.is_destroying(), Error::<T>::CanNotChangeState);
 
 		let bonded_balance =
@@ -808,12 +800,6 @@ impl<T: Config> BondedPool<T> {
 			points_to_balance_ratio_floor < max_points_to_balance.into(),
 			Error::<T>::OverflowRisk
 		);
-		// while restricting the balance to `max_points_to_balance` of max total issuance,
-		let next_bonded_balance = bonded_balance.saturating_add(new_funds);
-		ensure!(
-			next_bonded_balance < BalanceOf::<T>::max_value().div(max_points_to_balance.into()),
-			Error::<T>::OverflowRisk
-		);
 
 		// then we can be decently confident the bonding pool points will not overflow
 		// `BalanceOf<T>`. Note that these are just heuristics.
@@ -822,9 +808,9 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	/// Check that the pool can accept a member with `new_funds`.
-	fn ok_to_join(&self, new_funds: BalanceOf<T>) -> Result<(), DispatchError> {
+	fn ok_to_join(&self) -> Result<(), DispatchError> {
 		ensure!(self.state == PoolState::Open, Error::<T>::NotOpen);
-		self.ok_to_be_open(new_funds)?;
+		self.ok_to_be_open()?;
 		Ok(())
 	}
 
@@ -844,7 +830,7 @@ impl<T: Config> BondedPool<T> {
 				target_member.active_points().saturating_sub(unbonding_points);
 			let mut target_member_after_unbond = (*target_member).clone();
 			target_member_after_unbond.points = new_depositor_points;
-			target_member_after_unbond.active_stake()
+			target_member_after_unbond.active_balance()
 		};
 
 		// any partial unbonding is only ever allowed if this unbond is permissioned.
@@ -1126,7 +1112,7 @@ pub struct SubPools<T: Config> {
 	/// older then `current_era - TotalUnbondingPools`.
 	no_era: UnbondPool<T>,
 	/// Map of era in which a pool becomes unbonded in => unbond pools.
-	with_era: UnbondingPoolsWithEra<T>,
+	with_era: BoundedBTreeMap<EraIndex, UnbondPool<T>, TotalUnbondingPools<T>>,
 }
 
 impl<T: Config> SubPools<T> {
@@ -1175,8 +1161,8 @@ pub struct TotalUnbondingPools<T: Config>(PhantomData<T>);
 impl<T: Config> Get<u32> for TotalUnbondingPools<T> {
 	fn get() -> u32 {
 		// NOTE: this may be dangerous in the scenario bonding_duration gets decreased because
-		// we would no longer be able to decode `UnbondingPoolsWithEra`, which uses
-		// `TotalUnbondingPools` as the bound
+		// we would no longer be able to decode `BoundedBTreeMap::<EraIndex, UnbondPool<T>,
+		// TotalUnbondingPools<T>>`, which uses `TotalUnbondingPools` as the bound
 		T::Staking::bonding_duration() + T::PostUnbondingPoolsWindow::get()
 	}
 }
@@ -1534,7 +1520,7 @@ pub mod pallet {
 			ensure!(!PoolMembers::<T>::contains_key(&who), Error::<T>::AccountBelongsToOtherPool);
 
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
-			bonded_pool.ok_to_join(amount)?;
+			bonded_pool.ok_to_join()?;
 
 			let mut reward_pool = RewardPools::<T>::get(pool_id)
 				.defensive_ok_or::<Error<T>>(DefensiveError::RewardPoolNotFound.into())?;
@@ -1589,10 +1575,6 @@ pub mod pallet {
 			// payout related stuff: we must claim the payouts, and updated recorded payout data
 			// before updating the bonded pool points, similar to that of `join` transaction.
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
-			// TODO: optimize this to not touch the free balance of `who ` at all in benchmarks.
-			// Currently, bonding rewards is like a batch. In the same PR, also make this function
-			// take a boolean argument that make it either 100% pure (no storage update), or make it
-			// also emit event and do the transfer. #11671
 			let claimed =
 				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
@@ -1603,8 +1585,9 @@ pub mod pallet {
 					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
 			};
 
-			bonded_pool.ok_to_be_open(bonded)?;
-			member.points = member.points.saturating_add(points_issued);
+			bonded_pool.ok_to_be_open()?;
+			member.points =
+				member.points.checked_add(&points_issued).ok_or(Error::<T>::OverflowRisk)?;
 
 			Self::deposit_event(Event::<T>::Bonded {
 				member: who.clone(),
@@ -1835,7 +1818,7 @@ pub mod pallet {
 				// don't exist. This check is also defensive in cases where the unbond pool does not
 				// update its balance (e.g. a bug in the slashing hook.) We gracefully proceed in
 				// order to ensure members can leave the pool and it can be destroyed.
-				.defensive_min(bonded_pool.transferrable_balance());
+				.min(bonded_pool.transferrable_balance());
 
 			T::Currency::transfer(
 				&bonded_pool.bonded_account(),
@@ -1981,7 +1964,7 @@ pub mod pallet {
 
 			if bonded_pool.can_toggle_state(&who) {
 				bonded_pool.set_state(state);
-			} else if bonded_pool.ok_to_be_open(Zero::zero()).is_err() &&
+			} else if bonded_pool.ok_to_be_open().is_err() &&
 				state == PoolState::Destroying
 			{
 				// If the pool has bad properties, then anyone can set it as destroying

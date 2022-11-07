@@ -30,6 +30,10 @@ log = { version = "0.4.0", default-features = false }
 pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing", optional = true }
 
+[dev-dependencies]
+pallet-balances = { version = "4.0.0-dev", path = "../balances" }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+
 [features]
 default = ["std"]
 fuzzing = ["pallet-balances", "sp-tracing"]
