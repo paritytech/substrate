@@ -15,6 +15,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
+	// The MEL requirement for bounded pallets is skipped by the `dev_mode`.
 	#[pallet::storage]
 	type MyStorage<T: Config> = StorageValue<_, Vec<u8>>;
 
