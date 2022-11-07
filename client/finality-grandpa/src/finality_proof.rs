@@ -188,7 +188,7 @@ where
 				.expect_block_hash_from_id(&BlockId::Number(last_block_for_set))?;
 			let justification = if let Some(grandpa_justification) = backend
 				.blockchain()
-				.justifications(&last_block_for_set_id)?
+				.justifications(last_block_for_set_id)?
 				.and_then(|justifications| justifications.into_justification(GRANDPA_ENGINE_ID))
 			{
 				grandpa_justification
@@ -312,7 +312,7 @@ mod tests {
 
 		for block in to_finalize {
 			let hash = blocks[*block as usize - 1].hash();
-			client.finalize_block(&hash, None).unwrap();
+			client.finalize_block(hash, None).unwrap();
 		}
 		(client, backend, blocks)
 	}
@@ -492,7 +492,7 @@ mod tests {
 		let grandpa_just8 = GrandpaJustification::from_commit(&client, round, commit).unwrap();
 
 		client
-			.finalize_block(&block8.hash(), Some((ID, grandpa_just8.encode().clone())))
+			.finalize_block(block8.hash(), Some((ID, grandpa_just8.encode().clone())))
 			.unwrap();
 
 		// Authority set change at block 8, so the justification stored there will be used in the
