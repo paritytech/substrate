@@ -233,6 +233,7 @@ members = [
 	"utils/frame/generate-bags",
 	"utils/frame/generate-bags/node-runtime",
 	"utils/frame/rpc/client",
+	"utils/frame/sub-du",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
