@@ -768,7 +768,6 @@ impl<T: Config> Pallet<T> {
 			Some(m) => m,
 			None => return PageExecutionStatus::NoMore,
 		}[..];
-		log::debug!(target: LOG_TARGET, "\n{}", Self::debug_info());
 
 		use MessageExecutionStatus::*;
 		let is_processed = match Self::process_message(message, weight, overweight_limit) {
@@ -780,14 +779,14 @@ impl<T: Config> Pallet<T> {
 		PageExecutionStatus::Partial
 	}
 
-	/// Print the pages in each queue, the message in each page.
+	/// Print the pages in each queue and the messages in each page.
 	///
-	/// Processed messages are prefixed with a `*` and the current `begin`ning page by `>`.
+	/// Processed messages are prefixed with a `*` and the current `begin`ning page with a `>`.
 	///
 	/// # Example output
 	///
 	/// ```text
-	/// 	queue Here:
+	/// queue Here:
 	///   page 0: []
 	/// > page 1: []
 	///   page 2: ["\0weight=4", "\0c", ]
@@ -804,7 +803,10 @@ impl<T: Config> Pallet<T> {
 			pages.sort_by(|(a, _), (b, _)| a.cmp(b));
 			for (page_index, page) in pages.into_iter() {
 				let mut page = page;
-				let mut page_info = format!("page {} ({:?} msgs): [", page_index, page.remaining);
+				let mut page_info = format!(
+					"page {} ({:?} first, {:?} last, {:?} remain): [",
+					page_index, page.first, page.last, page.remaining
+				);
 				if book_state.begin == page_index {
 					page_info = format!("> {}", page_info);
 				} else {
