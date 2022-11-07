@@ -30,6 +30,9 @@ mod parse;
 
 pub use parse::Def;
 use syn::spanned::Spanned;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::collections::hash_map::DefaultHasher;
 
 pub fn pallet(
 	attr: proc_macro::TokenStream,
@@ -44,6 +47,10 @@ pub fn pallet(
 	}
 
 	let item = syn::parse_macro_input!(item as syn::ItemMod);
+    let mut s = DefaultHasher::new();
+    item.hash(&mut s);
+    let code = s.finish();
+	println!("{:?}", code);
 	match parse::Def::try_from(item) {
 		Ok(def) => expand::expand(def).into(),
 		Err(e) => e.to_compile_error().into(),
