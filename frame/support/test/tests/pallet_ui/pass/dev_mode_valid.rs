@@ -15,14 +15,14 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {}
 
-	// The MEL requirement for bounded pallets is skipped by the `dev_mode`.
+	// The MEL requirement for bounded pallets is skipped by `dev_mode`.
 	#[pallet::storage]
 	type MyStorage<T: Config> = StorageValue<_, Vec<u8>>;
 
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		// No need to define a `weight` attribute here because of the `dev_mode`.
+		// No need to define a `weight` attribute here because of `dev_mode`.
 		pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
