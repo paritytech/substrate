@@ -1,5 +1,5 @@
 error: Invalid pallet macro call: unexpected attribute. Macro call must be bare, such as `#[frame_support::pallet]` or `#[pallet]`, or must specify the `dev_mode` attribute, such as `#[frame_support::pallet(dev_mode)]` or #[pallet(dev_mode)].
- --> tests/pallet_ui/attr_non_empty.rs:1:26
+ --> tests/pallet_ui/pallet_invalid_arg.rs:1:25
   |
-1 | #[frame_support::pallet [foo]]
-  |                          ^^^
+1 | #[frame_support::pallet(foo)]
+  |                         ^^^
