@@ -360,7 +360,7 @@ where
 
 		let stream = stream::once(async move {
 			FollowEvent::Initialized(Initialized {
-				finalized_block_hash: finalized_block_hash.clone(),
+				finalized_block_hash,
 				finalized_block_runtime,
 				runtime_updates,
 			})
