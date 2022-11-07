@@ -26,8 +26,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate self as sp_weights;
-
 mod weight_v2;
 
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
@@ -70,6 +68,8 @@ pub mod constants {
 	MaxEncodedLen,
 	TypeInfo,
 )]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(transparent))]
 pub struct OldWeight(pub u64);
 
 /// The weight of database operations that the runtime can invoke.
@@ -106,7 +106,7 @@ impl RuntimeDbWeight {
 /// coeff_integer * x^(degree) + coeff_frac * x^(degree)
 /// ```
 ///
-/// The `negative` value encodes whether the term is added or substracted from the
+/// The `negative` value encodes whether the term is added or subtracted from the
 /// overall polynomial result.
 #[derive(Clone, Encode, Decode, TypeInfo)]
 pub struct WeightToFeeCoefficient<Balance> {
