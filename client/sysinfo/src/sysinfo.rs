@@ -58,7 +58,7 @@ impl Metric {
 		}
 	}
 
-	/// The name of the metric. It is always prefixed by the [`self::category()`].
+	/// The name of the metric. It is always prefixed by the [`self.category()`].
 	pub fn name(&self) -> &'static str {
 		match self {
 			Self::Sr25519Verify => "SR25519-Verify",
