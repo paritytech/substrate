@@ -1436,19 +1436,19 @@ impl<T: Config> Pallet<T> {
 			.count()
 	}
 
-	pub fn get_previous_block_txs() -> Vec<Vec<u8>> {
+	pub fn get_previous_blocks_txs() -> Vec<Vec<u8>> {
 		let previous_block = Self::current_block_number() - One::one();
 		let queue = <StorageQueue<T>>::get();
-		let prev_block_shuffled = queue.iter().find(|block| match block {
-			(block_nr, Some(_seed), _) if *block_nr == previous_block => true,
-			_ => false,
-		});
-
-		if let Some((_, _, txs)) = prev_block_shuffled {
-			txs.iter().map(|(_who, tx)| tx).cloned().collect()
-		} else {
-			vec![]
-		}
+		queue
+			.iter()
+			.filter_map(|block| match block {
+				(block_nr, Some(_), txs) if *block_nr <= previous_block =>
+					Some(txs.iter().map(|(_, tx)| tx)),
+				_ => None,
+			})
+			.flatten()
+			.cloned()
+			.collect::<Vec<_>>()
 	}
 
 	/// Dequeue particular number of txs from storage queue.
