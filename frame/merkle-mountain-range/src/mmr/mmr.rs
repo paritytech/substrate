@@ -60,7 +60,7 @@ where
 		.map_err(|e| Error::Verify.log_debug(e))
 }
 
-/// A wrapper around a MMR library to expose limited functionality.
+/// A wrapper around an MMR library to expose limited functionality.
 ///
 /// Available functions depend on the storage kind ([Runtime](crate::mmr::storage::RuntimeStorage)
 /// vs [Off-chain](crate::mmr::storage::OffchainStorage)).

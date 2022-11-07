@@ -341,7 +341,7 @@ impl_leaf_data_for_tuple!(A:0, B:1, C:2);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 
-/// A MMR proof data for a group of leaves.
+/// An MMR proof data for a group of leaves.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
 pub struct Proof<Hash> {
 	/// The indices of the leaves the proof is for.

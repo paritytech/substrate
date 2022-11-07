@@ -84,7 +84,7 @@ pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
 	/// Generate an MMR proof for the given `block_numbers`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to generate
-	/// a MMR proof for the set of blocks that have the given `block_numbers` with MMR given the
+	/// an MMR proof for the set of blocks that have the given `block_numbers` with the MMR root at
 	/// `best_known_block_number`. `best_known_block_number` must be larger than all the
 	/// `block_numbers` for the function to succeed.
 	///
@@ -111,7 +111,7 @@ pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
 	/// Verify an MMR `proof`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to verify
-	/// a MMR proof.
+	/// an MMR proof.
 	///
 	/// Returns `true` if the proof is valid, else returns the verification error.
 	#[method(name = "mmr_verifyProof")]
@@ -120,7 +120,7 @@ pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
 	/// Verify an MMR `proof` statelessly given an `mmr_root`.
 	///
 	/// This method calls into a runtime with MMR pallet included and attempts to verify
-	/// a MMR proof against a provided mmr root.
+	/// an MMR proof against a provided MMR root.
 	///
 	/// Returns `true` if the proof is valid, else returns the verification error.
 	#[method(name = "mmr_verifyProofStateless")]
@@ -236,7 +236,7 @@ where
 	}
 }
 
-/// Converts a mmr-specific error into a [`CallError`].
+/// Converts an mmr-specific error into a [`CallError`].
 fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
 	let data = format!("{:?}", err);
 	match err {
