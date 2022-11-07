@@ -383,7 +383,7 @@ pub trait ElectionProviderBase {
 		BlockNumber = Self::BlockNumber,
 	>;
 
-	/// checked call to [`Self::DataProvider::desired_targets()`] ensuring the value never exceeds
+	/// checked call to `Self::DataProvider::desired_targets()` ensuring the value never exceeds
 	/// [`Self::MaxWinners`].
 	fn desired_targets_checked() -> data_provider::Result<u32> {
 		match Self::DataProvider::desired_targets() {
