@@ -573,6 +573,11 @@ impl<T: Config> Commission<T> {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 
+	/// Gets the current commission payee of this pool as a reference.
+	fn payee(&self) -> Option<&T::AccountId> {
+		self.current.as_ref().map(|(_, p)| p).or(None)
+	}
+
 	/// Returns true if a commission percentage updating to `to` would exhaust the throttle limit.
 	/// A commission update will be throttled (disallowed) if:
 	/// 1. not enough blocks have passed since the previous commission update took place, and
@@ -730,11 +735,6 @@ impl<T: Config> BondedPool<T> {
 	/// Get the reward account id of this pool.
 	fn reward_account(&self) -> T::AccountId {
 		Pallet::<T>::create_reward_account(self.id)
-	}
-
-	/// Gets the current commission payee of this pool as a reference.
-	fn commission_payee(&self) -> Option<&T::AccountId> {
-		self.commission.current.as_ref().map(|(_, p)| p).or(None)
 	}
 
 	/// Consume self and put into storage.
@@ -2157,7 +2157,7 @@ pub mod pallet {
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			let final_payee = payee
-				.or(bonded_pool.commission_payee().cloned())
+				.or(bonded_pool.commission.payee().cloned())
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
 			let commission = &mut bonded_pool.commission;
@@ -2558,7 +2558,7 @@ impl<T: Config> Pallet<T> {
 		let get_commission_and_payee = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
 			let commission_percent = &b.commission.as_percent();
 			if commission_percent > &Perbill::zero() {
-				let payee = b.commission_payee().map(|p| p.clone()).or(None);
+				let payee = b.commission.payee().map(|p| p.clone()).or(None);
 				if payee.is_some() {
 					return (*commission_percent * pending_rewards, payee)
 				}
