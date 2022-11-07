@@ -97,7 +97,7 @@ benchmarks! {
 
 	pursue_target_per_item {
 		// bids taken
-		let b in 1..T::MaxQueueLen::get();
+		let b in 0..T::MaxQueueLen::get();
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(b + 1));
@@ -113,7 +113,7 @@ benchmarks! {
 
 	pursue_target_per_queue {
 		// total queues hit
-		let q in 1..T::QueueCount::get();
+		let q in 0..T::QueueCount::get();
 
 		let caller: T::AccountId = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, T::MinFreeze::get() * BalanceOf::<T>::from(q + 1));

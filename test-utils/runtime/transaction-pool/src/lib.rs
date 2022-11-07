@@ -22,7 +22,7 @@
 use codec::Encode;
 use futures::future::ready;
 use parking_lot::RwLock;
-use sp_blockchain::CachedHeaderMetadata;
+use sp_blockchain::{CachedHeaderMetadata, TreeRoute};
 use sp_runtime::{
 	generic::{self, BlockId},
 	traits::{
@@ -315,13 +315,13 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		Self::hash_and_length_inner(ex)
 	}
 
-	fn block_body(&self, id: &BlockId<Self::Block>) -> Self::BodyFuture {
-		futures::future::ready(Ok(match id {
-			BlockId::Number(num) =>
-				self.chain.read().block_by_number.get(num).map(|b| b[0].0.extrinsics().to_vec()),
-			BlockId::Hash(hash) =>
-				self.chain.read().block_by_hash.get(hash).map(|b| b.extrinsics().to_vec()),
-		}))
+	fn block_body(&self, hash: &<Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+		futures::future::ready(Ok(self
+			.chain
+			.read()
+			.block_by_hash
+			.get(hash)
+			.map(|b| b.extrinsics().to_vec())))
 	}
 
 	fn block_header(
@@ -334,6 +334,14 @@ impl sc_transaction_pool::ChainApi for TestApi {
 			BlockId::Hash(hash) =>
 				self.chain.read().block_by_hash.get(hash).map(|b| b.header().clone()),
 		})
+	}
+
+	fn tree_route(
+		&self,
+		from: <Self::Block as BlockT>::Hash,
+		to: <Self::Block as BlockT>::Hash,
+	) -> Result<TreeRoute<Self::Block>, Self::Error> {
+		sp_blockchain::tree_route::<Block, TestApi>(self, from, to).map_err(Into::into)
 	}
 }
 

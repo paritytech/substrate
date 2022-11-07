@@ -36,6 +36,7 @@ mod transactional;
 mod tt_macro;
 
 use proc_macro::TokenStream;
+use quote::quote;
 use std::{cell::RefCell, str::FromStr};
 pub(crate) use storage::INHERENT_INSTANCE_NAME;
 
@@ -402,7 +403,49 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 	construct_runtime::construct_runtime(input)
 }
 
-/// Macro to define a pallet. Docs are at `frame_support::pallet`.
+/// The pallet struct placeholder `#[pallet::pallet]` is mandatory and allows you to specify
+/// pallet information.
+///
+/// The struct must be defined as follows:
+/// ```ignore
+/// #[pallet::pallet]
+/// pub struct Pallet<T>(_);
+/// ```
+/// I.e. a regular struct definition named `Pallet`, with generic T and no where clause.
+///
+/// ## Macro expansion:
+///
+/// The macro adds this attribute to the struct definition:
+/// ```ignore
+/// #[derive(
+/// 	frame_support::CloneNoBound,
+/// 	frame_support::EqNoBound,
+/// 	frame_support::PartialEqNoBound,
+/// 	frame_support::RuntimeDebugNoBound,
+/// )]
+/// ```
+/// and replaces the type `_` with `PhantomData<T>`. It also implements on the pallet:
+/// * `GetStorageVersion`
+/// * `OnGenesis`: contains some logic to write the pallet version into storage.
+/// * `PalletErrorTypeInfo`: provides the type information for the pallet error, if defined.
+///
+/// It declares `type Module` type alias for `Pallet`, used by `construct_runtime`.
+///
+/// It implements `PalletInfoAccess` on `Pallet` to ease access to pallet information given by
+/// `frame_support::traits::PalletInfo`. (The implementation uses the associated type
+/// `frame_system::Config::PalletInfo`).
+///
+/// It implements `StorageInfoTrait` on `Pallet` which give information about all storages.
+///
+/// If the attribute `generate_store` is set then the macro creates the trait `Store` and
+/// implements it on `Pallet`.
+///
+/// If the attribute `set_storage_max_encoded_len` is set then the macro calls
+/// `StorageInfoTrait` for each storage in the implementation of `StorageInfoTrait` for the
+/// pallet. Otherwise it implements `StorageInfoTrait` for the pallet using the
+/// `PartialStorageInfoTrait` implementation of storages.
+///
+/// See `frame_support::pallet` docs for more info.
 #[proc_macro_attribute]
 pub fn pallet(attr: TokenStream, item: TokenStream) -> TokenStream {
 	pallet::pallet(attr, item)
@@ -582,4 +625,639 @@ pub fn storage_alias(_: TokenStream, input: TokenStream) -> TokenStream {
 	storage_alias::storage_alias(input.into())
 		.unwrap_or_else(|r| r.into_compile_error())
 		.into()
+}
+
+/// Used internally to decorate pallet attribute macro stubs when they are erroneously used
+/// outside of a pallet module
+fn pallet_macro_stub() -> TokenStream {
+	quote!(compile_error!(
+		"This attribute can only be used from within a pallet module marked with `#[frame_support::pallet]`"
+	))
+	.into()
+}
+
+/// The mandatory attribute `#[pallet::config]` defines the configurable options for the pallet.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::config]
+/// pub trait Config: frame_system::Config + $optionally_some_other_supertraits
+/// $optional_where_clause
+/// {
+/// ...
+/// }
+/// ```
+///
+/// I.e. a regular trait definition named `Config`, with the supertrait
+/// `frame_system::pallet::Config`, and optionally other supertraits and a where clause.
+/// (Specifying other supertraits here is known as [tight
+/// coupling](https://docs.substrate.io/reference/how-to-guides/pallet-design/use-tight-coupling/))
+///
+/// The associated type `RuntimeEvent` is reserved. If defined, it must have the bounds
+/// `From<Event>` and `IsType<<Self as frame_system::Config>::RuntimeEvent>`.
+///
+/// [`pallet::event`](`macro@event`) must be present if `RuntimeEvent` exists as a config item
+/// in your `#[pallet::config]`.
+#[proc_macro_attribute]
+pub fn config(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::constant]` attribute can be used to add an associated type trait bounded by `Get`
+/// from [`pallet::config`](`macro@config`) into metadata, e.g.:
+///
+/// ```ignore
+/// #[pallet::config]
+/// pub trait Config: frame_system::Config {
+/// 	#[pallet::constant]
+/// 	type Foo: Get<u32>;
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn constant(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// To bypass the `frame_system::Config` supertrait check, use the attribute
+/// `pallet::disable_frame_system_supertrait_check`, e.g.:
+///
+/// ```ignore
+/// #[pallet::config]
+/// #[pallet::disable_frame_system_supertrait_check]
+/// pub trait Config: pallet_timestamp::Config {}
+/// ```
+///
+/// NOTE: Bypassing the `frame_system::Config` supertrait check is typically desirable when you
+/// want to write an alternative to the `frame_system` pallet.
+#[proc_macro_attribute]
+pub fn disable_frame_system_supertrait_check(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// To generate a `Store` trait associating all storages, annotate your `Pallet` struct with
+/// the attribute `#[pallet::generate_store($vis trait Store)]`, e.g.:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// #[pallet::generate_store(pub(super) trait Store)]
+/// pub struct Pallet<T>(_);
+/// ```
+/// More precisely, the `Store` trait contains an associated type for each storage. It is
+/// implemented for `Pallet` allowing access to the storage from pallet struct.
+///
+/// Thus when defining a storage named `Foo`, it can later be accessed from `Pallet` using
+/// `<Pallet as Store>::Foo`.
+///
+/// NOTE: this attribute is only valid when applied _directly_ to your `Pallet` struct
+/// definition.
+#[proc_macro_attribute]
+pub fn generate_store(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// To generate the full storage info (used for PoV calculation) use the attribute
+/// `#[pallet::generate_storage_info]`, e.g.:
+///
+/// ```ignore
+/// #[pallet::pallet]
+/// #[pallet::generate_storage_info]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// This requires all storage items to implement the trait `StorageInfoTrait`, thus all keys
+/// and value types must be bound by `MaxEncodedLen`. Individual storages can opt-out from this
+/// constraint by using [`#[pallet::unbounded]`](`macro@unbounded`) (see
+/// [`#[pallet::storage]`](`macro@storage`) for more info).
+#[proc_macro_attribute]
+pub fn generate_storage_info(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Because the `pallet::pallet` macro implements `GetStorageVersion`, the current storage
+/// version needs to be communicated to the macro. This can be done by using the
+/// `pallet::storage_version` attribute:
+///
+/// ```ignore
+/// const STORAGE_VERSION: StorageVersion = StorageVersion::new(5);
+///
+/// #[pallet::pallet]
+/// #[pallet::storage_version(STORAGE_VERSION)]
+/// pub struct Pallet<T>(_);
+/// ```
+///
+/// If not present, the current storage version is set to the default value.
+#[proc_macro_attribute]
+pub fn storage_version(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::hooks]` attribute allows you to specify a `Hooks` implementation for
+/// `Pallet` that specifies pallet-specific logic.
+///
+/// The item the attribute attaches to must be defined as follows:
+/// ```ignore
+/// #[pallet::hooks]
+/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> $optional_where_clause {
+///     ...
+/// }
+/// ```
+/// I.e. a regular trait implementation with generic bound: `T: Config`, for the trait
+/// `Hooks<BlockNumberFor<T>>` (they are defined in preludes), for the type `Pallet<T>` and
+/// with an optional where clause.
+///
+/// If no `#[pallet::hooks]` exists, then the following default implementation is
+/// automatically generated:
+/// ```ignore
+/// #[pallet::hooks]
+/// impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+/// ```
+///
+/// ## Macro expansion
+///
+/// The macro implements the traits `OnInitialize`, `OnIdle`, `OnFinalize`, `OnRuntimeUpgrade`,
+/// `OffchainWorker`, and `IntegrityTest` using the provided `Hooks` implementation.
+///
+/// NOTE: `OnRuntimeUpgrade` is implemented with `Hooks::on_runtime_upgrade` and some
+/// additional logic. E.g. logic to write the pallet version into storage.
+///
+/// NOTE: The macro also adds some tracing logic when implementing the above traits. The
+/// following hooks emit traces: `on_initialize`, `on_finalize` and `on_runtime_upgrade`.
+#[proc_macro_attribute]
+pub fn hooks(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Each dispatchable needs to define a weight with `#[pallet::weight($expr)]` attribute, the
+/// first argument must be `origin: OriginFor<T>`.
+#[proc_macro_attribute]
+pub fn weight(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Compact encoding for arguments can be achieved via `#[pallet::compact]`. The function must
+/// return a `DispatchResultWithPostInfo` or `DispatchResult`.
+#[proc_macro_attribute]
+pub fn compact(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Each dispatchable may also be annotated with the `#[pallet::call_index($idx)]` attribute,
+/// which explicitly defines the codec index for the dispatchable function in the `Call` enum.
+///
+/// All call indexes start from 0, until it encounters a dispatchable function with a defined
+/// call index. The dispatchable function that lexically follows the function with a defined
+/// call index will have that call index, but incremented by 1, e.g. if there are 3
+/// dispatchable functions `fn foo`, `fn bar` and `fn qux` in that order, and only `fn bar`
+/// has a call index of 10, then `fn qux` will have an index of 11, instead of 1.
+///
+/// All arguments must implement [`Debug`], [`PartialEq`], [`Eq`], `Decode`, `Encode`, and
+/// [`Clone`]. For ease of use, bound by the trait `frame_support::pallet_prelude::Member`.
+///
+/// If no `#[pallet::call]` exists, then a default implementation corresponding to the
+/// following code is automatically generated:
+///
+/// ```ignore
+/// #[pallet::call]
+/// impl<T: Config> Pallet<T> {}
+/// ```
+///
+/// **WARNING**: modifying dispatchables, changing their order, removing some, etc., must be
+/// done with care. Indeed this will change the outer runtime call type (which is an enum with
+/// one variant per pallet), this outer runtime call can be stored on-chain (e.g. in
+/// `pallet-scheduler`). Thus migration might be needed. To mitigate against some of this, the
+/// `#[pallet::call_index($idx)]` attribute can be used to fix the order of the dispatchable so
+/// that the `Call` enum encoding does not change after modification. As a general rule of
+/// thumb, it is therefore adventageous to always add new calls to the end so you can maintain
+/// the existing order of calls.
+///
+/// ### Macro expansion
+///
+/// The macro creates an enum `Call` with one variant per dispatchable. This enum implements:
+/// [`Clone`], [`Eq`], [`PartialEq`], [`Debug`] (with stripped implementation in `not("std")`),
+/// `Encode`, `Decode`, `GetDispatchInfo`, `GetCallName`, and `UnfilteredDispatchable`.
+///
+/// The macro implements the `Callable` trait on `Pallet` and a function `call_functions`
+/// which returns the dispatchable metadata.
+#[proc_macro_attribute]
+pub fn call_index(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// Allows you to define some extra constants to be added into constant metadata.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::extra_constants]
+/// impl<T: Config> Pallet<T> where $optional_where_clause {
+/// 	/// $some_doc
+/// 	$vis fn $fn_name() -> $some_return_type {
+/// 		...
+/// 	}
+/// 	...
+/// }
+/// ```
+/// I.e. a regular rust `impl` block with some optional where clause and functions with 0 args,
+/// 0 generics, and some return type.
+///
+/// ## Macro expansion
+///
+/// The macro add some extra constants to pallet constant metadata.
+#[proc_macro_attribute]
+pub fn extra_constants(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::error]` attribute allows you to define an error enum that will be returned
+/// from the dispatchable when an error occurs. The information for this error type is then
+/// stored in metadata.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::error]
+/// pub enum Error<T> {
+/// 	/// $some_optional_doc
+/// 	$SomeFieldLessVariant,
+/// 	/// $some_more_optional_doc
+/// 	$SomeVariantWithOneField(FieldType),
+/// 	...
+/// }
+/// ```
+/// I.e. a regular enum named `Error`, with generic `T` and fieldless or multiple-field
+/// variants.
+///
+/// Any field type in the enum variants must implement `TypeInfo` in order to be properly used
+/// in the metadata, and its encoded size should be as small as possible, preferably 1 byte in
+/// size in order to reduce storage size. The error enum itself has an absolute maximum encoded
+/// size specified by `MAX_MODULE_ERROR_ENCODED_SIZE`.
+///
+/// (1 byte can still be 256 different errors. The more specific the error, the easier it is to
+/// diagnose problems and give a better experience to the user. Don't skimp on having lots of
+/// individual error conditions.)
+///
+/// Field types in enum variants must also implement `PalletError`, otherwise the pallet will
+/// fail to compile. Rust primitive types have already implemented the `PalletError` trait
+/// along with some commonly used stdlib types such as [`Option`] and `PhantomData`, and hence
+/// in most use cases, a manual implementation is not necessary and is discouraged.
+///
+/// The generic `T` must not bound anything and a `where` clause is not allowed. That said,
+/// bounds and/or a where clause should not needed for any use-case.
+///
+/// ## Macro expansion
+///
+/// The macro implements the [`Debug`] trait and functions `as_u8` using variant position, and
+/// `as_str` using variant doc.
+///
+/// The macro also implements `From<Error<T>>` for `&'static str` and `From<Error<T>>` for
+/// `DispatchError`.
+#[proc_macro_attribute]
+pub fn error(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::event]` attribute allows you to define pallet events. Pallet events are
+/// stored under the `system` / `events` key when the block is applied (and then replaced when
+/// the next block writes it's events).
+///
+/// The Event enum must be defined as follows:
+///
+/// ```ignore
+/// #[pallet::event]
+/// #[pallet::generate_deposit($visibility fn deposit_event)] // Optional
+/// pub enum Event<$some_generic> $optional_where_clause {
+/// 	/// Some doc
+/// 	$SomeName($SomeType, $YetanotherType, ...),
+/// 	...
+/// }
+/// ```
+///
+/// I.e. an enum (with named or unnamed fields variant), named `Event`, with generic: none or
+/// `T` or `T: Config`, and optional w here clause.
+///
+/// Each field must implement [`Clone`], [`Eq`], [`PartialEq`], `Encode`, `Decode`, and
+/// [`Debug`] (on std only). For ease of use, bound by the trait `Member`, available in
+/// `frame_support::pallet_prelude`.
+#[proc_macro_attribute]
+pub fn event(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The attribute `#[pallet::generate_deposit($visibility fn deposit_event)]` generates a
+/// helper function on `Pallet` that handles deposit events.
+///
+/// NOTE: For instantiable pallets, the event must be generic over `T` and `I`.
+///
+/// ## Macro expansion
+///
+/// The macro will add on enum `Event` the attributes:
+/// * `#[derive(frame_support::CloneNoBound)]`
+/// * `#[derive(frame_support::EqNoBound)]`
+/// * `#[derive(frame_support::PartialEqNoBound)]`
+/// * `#[derive(frame_support::RuntimeDebugNoBound)]`
+/// * `#[derive(codec::Encode)]`
+/// * `#[derive(codec::Decode)]`
+///
+/// The macro implements `From<Event<..>>` for ().
+///
+/// The macro implements a metadata function on `Event` returning the `EventMetadata`.
+///
+/// If `#[pallet::generate_deposit]` is present then the macro implements `fn deposit_event` on
+/// `Pallet`.
+#[proc_macro_attribute]
+pub fn generate_deposit(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::storage]` attribute lets you define some abstract storage inside of runtime
+/// storage and also set its metadata. This attribute can be used multiple times.
+///
+/// Item should be defined as:
+///
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::getter(fn $getter_name)] // optional
+/// $vis type $StorageName<$some_generic> $optional_where_clause
+/// 	= $StorageType<$generic_name = $some_generics, $other_name = $some_other, ...>;
+/// ```
+///
+/// or with unnamed generic:
+///
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::getter(fn $getter_name)] // optional
+/// $vis type $StorageName<$some_generic> $optional_where_clause
+/// 	= $StorageType<_, $some_generics, ...>;
+/// ```
+///
+/// I.e. it must be a type alias, with generics: `T` or `T: Config`. The aliased type must be
+/// one of `StorageValue`, `StorageMap` or `StorageDoubleMap`. The generic arguments of the
+/// storage type can be given in two manners: named and unnamed. For named generic arguments,
+/// the name for each argument should match the name defined for it on the storage struct:
+/// * `StorageValue` expects `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * `StorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * `CountedStorageMap` expects `Hasher`, `Key`, `Value` and optionally `QueryKind` and `OnEmpty`,
+/// * `StorageDoubleMap` expects `Hasher1`, `Key1`, `Hasher2`, `Key2`, `Value` and optionally
+///   `QueryKind` and `OnEmpty`.
+///
+/// For unnamed generic arguments: Their first generic must be `_` as it is replaced by the
+/// macro and other generic must declared as a normal generic type declaration.
+///
+/// The `Prefix` generic written by the macro is generated using
+/// `PalletInfo::name::<Pallet<..>>()` and the name of the storage type. E.g. if runtime names
+/// the pallet "MyExample" then the storage `type Foo<T> = ...` should use the prefix:
+/// `Twox128(b"MyExample") ++ Twox128(b"Foo")`.
+///
+/// For the `CountedStorageMap` variant, the `Prefix` also implements
+/// `CountedStorageMapInstance`. It also associates a `CounterPrefix`, which is implemented the
+/// same as above, but the storage prefix is prepend with `"CounterFor"`. E.g. if runtime names
+/// the pallet "MyExample" then the storage `type Foo<T> = CountedStorageaMap<...>` will store
+/// its counter at the prefix: `Twox128(b"MyExample") ++ Twox128(b"CounterForFoo")`.
+///
+/// E.g:
+///
+/// ```ignore
+/// #[pallet::storage]
+/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// ```
+///
+/// In this case the final prefix used by the map is `Twox128(b"MyExample") ++
+/// Twox128(b"OtherName")`.
+#[proc_macro_attribute]
+pub fn storage(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The optional attribute `#[pallet::getter(fn $my_getter_fn_name)]` allows you to define a
+/// getter function on `Pallet`.
+///
+/// Also see [`pallet::storage`](`macro@storage`)
+#[proc_macro_attribute]
+pub fn getter(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The optional attribute `#[pallet::storage_prefix = "SomeName"]` allows you to define the
+/// storage prefix to use. This is helpful if you wish to rename the storage field but don't
+/// want to perform a migration.
+///
+/// E.g:
+///
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::storage_prefix = "foo"]
+/// #[pallet::getter(fn my_storage)]
+/// pub(super) type MyStorage<T> = StorageMap<Hasher = Blake2_128Concat, Key = u32, Value = u32>;
+/// ```
+///
+/// or
+///
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::getter(fn my_storage)]
+/// pub(super) type MyStorage<T> = StorageMap<_, Blake2_128Concat, u32, u32>;
+/// ```
+#[proc_macro_attribute]
+pub fn storage_prefix(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The optional attribute `#[pallet::unbounded]` declares the storage as unbounded. When
+/// implementating the storage info (when `#[pallet::generate_storage_info]` is specified on
+/// the pallet struct placeholder), the size of the storage will be declared as unbounded. This
+/// can be useful for storage which can never go into PoV (Proof of Validity).
+#[proc_macro_attribute]
+pub fn unbounded(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The optional attribute `#[pallet::whitelist_storage]` will declare the
+/// storage as whitelisted from benchmarking. Doing so will exclude reads of
+/// that value's storage key from counting towards weight calculations during
+/// benchmarking.
+///
+/// This attribute should only be attached to storages that are known to be
+/// read/used in every block. This will result in a more accurate benchmarking weight.
+///
+/// ### Example
+/// ```ignore
+/// #[pallet::storage]
+/// #[pallet::whitelist_storage]
+/// pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+/// ```
+///
+/// NOTE: As with all `pallet::*` attributes, this one _must_ be written as
+/// `#[pallet::whitelist_storage]` and can only be placed inside a `pallet` module in order for
+/// it to work properly.
+#[proc_macro_attribute]
+pub fn whitelist_storage(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::type_value]` attribute lets you define a struct implementing the `Get` trait
+/// to ease the use of storage types. This attribute is meant to be used alongside
+/// [`#[pallet::storage]`](`macro@storage`) to define a storage's default value. This attribute
+/// can be used multiple times.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::type_value]
+/// fn $MyDefaultName<$some_generic>() -> $default_type $optional_where_clause { $expr }
+/// ```
+///
+/// I.e.: a function definition with generics none or `T: Config` and a returned type.
+///
+/// E.g.:
+///
+/// ```ignore
+/// #[pallet::type_value]
+/// fn MyDefault<T: Config>() -> T::Balance { 3.into() }
+/// ```
+///
+/// ## Macro expansion
+///
+/// The macro renames the function to some internal name, generates a struct with the original
+/// name of the function and its generic, and implements `Get<$ReturnType>` by calling the user
+/// defined function.
+#[proc_macro_attribute]
+pub fn type_value(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::genesis_config]` attribute allows you to define the genesis configuration
+/// for the pallet.
+///
+/// Item is defined as either an enum or a struct. It needs to be public and implement the
+/// trait `GenesisBuild` with [`#[pallet::genesis_build]`](`macro@genesis_build`). The type
+/// generics are constrained to be either none, or `T` or `T: Config`.
+///
+/// E.g:
+///
+/// ```ignore
+/// #[pallet::genesis_config]
+/// pub struct GenesisConfig<T: Config> {
+/// 	_myfield: BalanceOf<T>,
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn genesis_config(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::genesis_build]` attribute allows you to define how `genesis_configuration`
+/// is built. This takes as input the `GenesisConfig` type (as `self`) and constructs the pallet's
+/// initial state.
+///
+/// The impl must be defined as:
+///
+/// ```ignore
+/// #[pallet::genesis_build]
+/// impl<T: Config> GenesisBuild<T> for GenesisConfig<$maybe_generics> {
+/// 	fn build(&self) { $expr }
+/// }
+/// ```
+///
+/// I.e. a trait implementation with generic `T: Config`, of trait `GenesisBuild<T>` on
+/// type `GenesisConfig` with generics none or `T`.
+///
+/// E.g.:
+///
+/// ```ignore
+/// #[pallet::genesis_build]
+/// impl<T: Config> GenesisBuild<T> for GenesisConfig {
+/// 	fn build(&self) {}
+/// }
+/// ```
+///
+/// ## Macro expansion
+///
+/// The macro will add the following attribute:
+/// * `#[cfg(feature = "std")]`
+///
+/// The macro will implement `sp_runtime::BuildModuleGenesisStorage` using `()` as a second
+/// generic for non-instantiable pallets.
+#[proc_macro_attribute]
+pub fn genesis_build(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::inherent]` attribute allows the pallet to provide some
+/// [inherent](https://docs.substrate.io/fundamentals/transaction-types/#inherent-transactions).
+/// An inherent is some piece of data that is inserted by a block authoring node at block
+/// creation time and can either be accepted or rejected by validators based on whether the
+/// data falls within an acceptable range.
+///
+/// The most common inherent is the `timestamp` that is inserted into every block. Since there
+/// is no way to validate timestamps, validators simply check that the timestamp reported by
+/// the block authoring node falls within an acceptable range.
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::inherent]
+/// impl<T: Config> ProvideInherent for Pallet<T> {
+/// 	// ... regular trait implementation
+/// }
+/// ```
+///
+/// I.e. a trait implementation with bound `T: Config`, of trait `ProvideInherent` for type
+/// `Pallet<T>`, and some optional where clause.
+///
+/// ## Macro expansion
+///
+/// The macro currently makes no use of this information, but it might use this information in
+/// the future to give information directly to `construct_runtime`.
+#[proc_macro_attribute]
+pub fn inherent(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::validate_unsigned]` attribute allows the pallet to validate some unsigned
+/// transaction:
+///
+/// Item must be defined as:
+///
+/// ```ignore
+/// #[pallet::validate_unsigned]
+/// impl<T: Config> ValidateUnsigned for Pallet<T> {
+/// 	// ... regular trait implementation
+/// }
+/// ```
+///
+/// I.e. a trait implementation with bound `T: Config`, of trait `ValidateUnsigned` for type
+/// `Pallet<T>`, and some optional where clause.
+///
+/// NOTE: There is also the `sp_runtime::traits::SignedExtension` trait that can be used to add
+/// some specific logic for transaction validation.
+///
+/// ## Macro expansion
+///
+/// The macro currently makes no use of this information, but it might use this information in
+/// the future to give information directly to `construct_runtime`.
+#[proc_macro_attribute]
+pub fn validate_unsigned(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
+}
+
+/// The `#[pallet::origin]` attribute allows you to define some origin for the pallet.
+///
+/// Item must be either a type alias, an enum, or a struct. It needs to be public.
+///
+/// E.g.:
+///
+/// ```ignore
+/// #[pallet::origin]
+/// pub struct Origin<T>(PhantomData<(T)>);
+/// ```
+///
+/// **WARNING**: modifying origin changes the outer runtime origin. This outer runtime origin
+/// can be stored on-chain (e.g. in `pallet-scheduler`), thus any change must be done with care
+/// as it might require some migration.
+///
+/// NOTE: for instantiable pallets, the origin must be generic over `T` and `I`.
+#[proc_macro_attribute]
+pub fn origin(_: TokenStream, _: TokenStream) -> TokenStream {
+	pallet_macro_stub()
 }

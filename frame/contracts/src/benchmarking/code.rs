@@ -24,7 +24,7 @@
 //! we define this simple definition of a contract that can be passed to `create_code` that
 //! compiles it down into a `WasmModule` that can be used as a contract's code.
 
-use crate::Config;
+use crate::{Config, Determinism};
 use frame_support::traits::Get;
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::Hash;
@@ -554,7 +554,7 @@ where
 
 fn inject_gas_metering<T: Config>(module: Module) -> Module {
 	let schedule = T::Schedule::get();
-	let gas_rules = schedule.rules(&module);
+	let gas_rules = schedule.rules(&module, Determinism::Deterministic);
 	wasm_instrument::gas_metering::inject(module, &gas_rules, "seal0").unwrap()
 }
 

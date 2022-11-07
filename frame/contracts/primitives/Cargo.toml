@@ -19,6 +19,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 # Substrate Dependencies (This crate should not rely on frame)
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../../primitives/weights" }
 
 [features]
 default = ["std"]
