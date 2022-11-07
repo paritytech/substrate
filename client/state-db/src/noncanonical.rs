@@ -28,7 +28,7 @@ use log::trace;
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
-pub const LAST_CANONICAL: &[u8] = b"last_canonical";
+pub(crate) const LAST_CANONICAL: &[u8] = b"last_canonical";
 const MAX_BLOCKS_PER_LEVEL: u64 = 32;
 
 /// See module documentation.

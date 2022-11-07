@@ -63,7 +63,7 @@ use sc_client_api::{
 	utils::is_descendent_of,
 	IoInfo, MemoryInfo, MemorySize, UsageInfo,
 };
-use sc_state_db::{IsPruned, StateDb, LAST_CANONICAL};
+use sc_state_db::{IsPruned, StateDb};
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{
 	well_known_cache_keys, Backend as _, CachedHeaderMetadata, Error as ClientError, HeaderBackend,
@@ -1149,47 +1149,25 @@ impl<Block: BlockT> Backend<Block> {
 	/// in the case of delayed pruning. This inconsistency could
 	/// cause the database to miss-behave if started without this
 	/// option.
-	fn startup_canonicalization_gap(
+	fn remove_canonicalization_gap(
 		&self,
 		transaction: &mut Transaction<DbHash>,
+		canonicalized_num: u64,
+		finalized_num: u64,
 	) -> ClientResult<()> {
-		// Read the finalized block from the database.
-		let finalized_num =
-			match self.storage.db.get(columns::META, meta_keys::FINALIZED_BLOCK).and_then(
-				|block_key| {
-					self.storage
-						.db
-						.get(columns::HEADER, &block_key)
-						.map(|bytes| Block::Header::decode(&mut &bytes[..]).ok())
-				},
-			) {
-				Some(Some(header)) => (*header.number()).saturated_into::<u64>(),
-				_ => return Ok(()),
-			};
-
-		// The last canonicalized block is stored in the state-db meta section.
-		let canonicalized_num = match self
-			.storage
-			.db
-			.get(columns::STATE_META, LAST_CANONICAL)
-			.and_then(|bytes| <(Block::Hash, u64)>::decode(&mut &bytes[..]).ok())
-		{
-			Some((_hash, num)) => num,
-			_ => return Ok(()),
-		};
 		trace!(target: "db", "Last canonicalized block #{} and last finalized #{}", canonicalized_num, finalized_num);
 
 		// Canonicalized every block from the last canonicalized
 		// to the finalized block.
 		for num in canonicalized_num + 1..=finalized_num {
-			self.startup_canonicalize_block(transaction, num)?;
+			self.canonicalize_block(transaction, num)?;
 		}
 
 		Ok(())
 	}
 
 	/// Canonicalize the given block number.
-	fn startup_canonicalize_block(
+	fn canonicalize_block(
 		&self,
 		transaction: &mut Transaction<DbHash>,
 		number: u64,
@@ -1242,6 +1220,7 @@ impl<Block: BlockT> Backend<Block> {
 		apply_state_commit(&mut db_init_transaction, state_db_init_commit_set);
 
 		let state_pruning_used = state_db.pruning_mode();
+		let canonicalized_num = state_db.best_canonical();
 		let is_archive_pruning = state_pruning_used.is_archive();
 		let blockchain = BlockchainDb::new(db.clone(), config.delayed_canonicalization)?;
 
@@ -1269,6 +1248,8 @@ impl<Block: BlockT> Backend<Block> {
 
 		// Older DB versions have no last state key. Check if the state is available and set it.
 		let info = backend.blockchain.info();
+		let finalized_num: NumberFor<Block> = info.finalized_number;
+		let finalized_num = finalized_num.saturated_into::<u64>();
 		if info.finalized_state.is_none() &&
 			info.finalized_hash != Default::default() &&
 			sc_client_api::Backend::have_state_at(
@@ -1285,7 +1266,11 @@ impl<Block: BlockT> Backend<Block> {
 			});
 		}
 
-		backend.startup_canonicalization_gap(&mut db_init_transaction)?;
+		backend.remove_canonicalization_gap(
+			&mut db_init_transaction,
+			canonicalized_num.unwrap_or(finalized_num),
+			finalized_num,
+		)?;
 
 		db.commit(db_init_transaction)?;
 
