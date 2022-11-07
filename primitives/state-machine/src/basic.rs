@@ -246,7 +246,7 @@ impl Externalities for BasicExternalities {
 
 	fn storage_append(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		let current_value = self.overlay.value_mut_or_insert_with(&key, || Default::default());
-		crate::ext::StorageAppend::new(current_value).append(value);
+		//crate::ext::StorageAppend::new(current_value).append(value);
 	}
 
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {

@@ -38,6 +38,7 @@ use sp_std::{
 	vec,
 	vec::Vec,
 };
+use codec::Compact;
 #[cfg(feature = "std")]
 use std::error;
 
@@ -525,7 +526,7 @@ where
 		let current_value = self.overlay.value_mut_or_insert_with(&key, || {
 			backend.storage(&key).expect(EXT_NOT_ALLOWED_TO_FAIL).unwrap_or_default()
 		});
-		StorageAppend::new(current_value).append(value);
+		//StorageAppend::new(current_value).append(value);
 	}
 
 	fn storage_root(&mut self, state_version: StateVersion) -> Vec<u8> {
@@ -792,34 +793,59 @@ impl Encode for EncodeOpaqueValue {
 	}
 }
 
+// AppendValue
+#[derive(Debug,PartialEq)]
+struct AppendedValue {
+	num: Compact<u32>,
+	data: Vec<u8>,
+	materialized: Option<Vec<u8>>
+}
+
+impl Default for AppendedValue {
+	fn default() -> Self{
+		AppendedValue {
+			num: Compact(0),
+			data: vec![],
+			materialized: None
+		}
+	}
+}
+
 /// Auxialiary structure for appending a value to a storage item.
-pub(crate) struct StorageAppend<'a>(&'a mut Vec<u8>);
+pub(crate) struct StorageAppend(AppendedValue);
 
-impl<'a> StorageAppend<'a> {
+
+
+impl StorageAppend {
 	/// Create a new instance using the given `storage` reference.
-	pub fn new(storage: &'a mut Vec<u8>) -> Self {
-		Self(storage)
-	}
-
-	/// Append the given `value` to the storage item.
-	///
-	/// If appending fails, `[value]` is stored in the storage item.
-	pub fn append(&mut self, value: Vec<u8>) {
-		let value = vec![EncodeOpaqueValue(value)];
-
-		let item = sp_std::mem::take(self.0);
-
-		*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
-			Ok(item) => item,
-			Err(_) => {
-				log_error!(
-					target: "runtime",
-					"Failed to append value, resetting storage item to `[value]`.",
-				);
-				value.encode()
-			},
+	pub fn new(storage: &mut Vec<u8>) -> Self {
+		let appended_value = AppendedValue {
+			num:Compact(0),
+			data: storage.to_vec(),
+			materialized: None
 		};
+		Self(appended_value)
 	}
+
+	// Append the given `value` to the storage item.
+	//
+	// If appending fails, `[value]` is stored in the storage item.
+	// pub fn append(&mut self, value: Vec<u8>) {
+	// 	let value = vec![EncodeOpaqueValue(value)];
+	//
+	// 	let item = sp_std::mem::take(self.0);
+	//
+	// 	*self.0 = match Vec::<EncodeOpaqueValue>::append_or_new(item, &value) {
+	// 		Ok(item) => item,
+	// 		Err(_) => {
+	// 			log_error!(
+	// 				target: "runtime",
+	// 				"Failed to append value, resetting storage item to `[value]`.",
+	// 			);
+	// 			value.encode()
+	// 		},
+	// 	};
+	// }
 }
 
 #[cfg(not(feature = "std"))]
@@ -1113,19 +1139,25 @@ mod tests {
 	fn storage_append_works() {
 		let mut data = Vec::new();
 		let mut append = StorageAppend::new(&mut data);
-		append.append(1u32.encode());
-		append.append(2u32.encode());
-		drop(append);
-
-		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
+		// append.append(1u32.encode());
+		// append.append(2u32.encode());
+		// drop(append);
+		assert_eq!(append.0,
+				  AppendedValue{
+					  num: Compact(0),
+					  data: vec![],
+					  materialized: None
+				  }
+		);
+		//assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
 
 		// Initialize with some invalid data
 		let mut data = vec![1];
 		let mut append = StorageAppend::new(&mut data);
-		append.append(1u32.encode());
-		append.append(2u32.encode());
-		drop(append);
+		// append.append(1u32.encode());
+		// append.append(2u32.encode());
+		// drop(append);
 
-		assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
+		//assert_eq!(Vec::<u32>::decode(&mut &data[..]).unwrap(), vec![1, 2]);
 	}
 }
