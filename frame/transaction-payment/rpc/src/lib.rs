@@ -118,12 +118,18 @@ where
 			))
 		}
 
-		if api
+		let api_version = api
 			.api_version::<dyn TransactionPaymentRuntimeApi<Block, Balance>>(&at)
-			.map_err(|e| map_err(e, "Transaction payment runtime api not present."))?
-			.unwrap_or(0) <
-			2
-		{
+			.map_err(|e| map_err(e, "Failed to get transaction payment runtime api version"))?
+			.ok_or_else(|| {
+				CallError::Custom(ErrorObject::owned(
+					Error::RuntimeError.into(),
+					"Transaction payment runtime api wasn't found in the runtime",
+					None::<String>,
+				))
+			})?;
+
+		if api_version < 2 {
 			#[allow(deprecated)]
 			api.query_info_before_version_2(&at, uxt, encoded_len)
 				.map_err(|e| map_err(e, "Unable to query dispatch info.").into())
