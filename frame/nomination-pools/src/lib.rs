@@ -286,7 +286,7 @@ use sp_runtime::{
 		AccountIdConversion, Bounded, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
 		Zero,
 	},
-	FixedPointNumber, FixedPointOperand, Perbill,
+	FixedPointNumber, Perbill,
 };
 use sp_staking::{EraIndex, OnStakerSlash, StakingInterface};
 use sp_std::{collections::btree_map::BTreeMap, fmt::Debug, ops::Div, vec::Vec};
@@ -1292,7 +1292,7 @@ pub mod pallet {
 	use super::*;
 	use frame_support::traits::StorageVersion;
 	use frame_system::{ensure_signed, pallet_prelude::*};
-	use sp_runtime::{traits::CheckedAdd, Perbill};
+	use sp_runtime::Perbill;
 
 	/// The current storage version.
 	const STORAGE_VERSION: StorageVersion = StorageVersion::new(3);
@@ -2172,21 +2172,19 @@ pub mod pallet {
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			let final_payee = payee
-				.map(|p| p)
-				.or(bonded_pool.commission_payee().map(|p| p.clone()))
+				.or(bonded_pool.commission_payee().cloned())
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
 			let commission = &bonded_pool.commission;
 
 			ensure!(
-				commission.as_ref().map(|c| !c.throttling(&new_commission)).unwrap_or(true),
+				commission.as_ref().map_or(true, |c| !c.throttling(&new_commission)),
 				Error::<T>::CommissionChangeThrottled
 			);
 			ensure!(
 				commission
 					.as_ref()
-					.map(|c| c.max.map(|m| new_commission <= m).unwrap_or(true))
-					.unwrap_or(true),
+					.map_or(true, |c| c.max.map(|m| new_commission <= m).unwrap_or(true)),
 				Error::<T>::CommissionExceedsMaximum
 			);
 
@@ -2219,11 +2217,16 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			if let Some(c) = &bonded_pool.commission {
-				if let Some(existing_max) = c.max {
-					ensure!(existing_max > max_commission, Error::<T>::MaxCommissionRestricted);
-				}
-			}
+			ensure!(
+				&bonded_pool
+					.commission
+					.as_ref()
+					.map(|c| c.max)
+					.flatten()
+					.map_or(true, |m| m > max_commission),
+				Error::<T>::MaxCommissionRestricted
+			);
+
 			bonded_pool.set_max_commission(max_commission.clone());
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
