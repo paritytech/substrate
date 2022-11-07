@@ -113,7 +113,7 @@ mod preimages;
 pub use preimages::{Bounded, BoundedInline, FetchResult, Hash, QueryPreimage, StorePreimage};
 
 mod messages;
-pub use messages::{EnqueueMessage, ProcessMessage, ProcessMessageError, ServiceQueues, Footprint};
+pub use messages::{EnqueueMessage, Footprint, ProcessMessage, ProcessMessageError, ServiceQueues};
 
 #[cfg(feature = "try-runtime")]
 mod try_runtime;

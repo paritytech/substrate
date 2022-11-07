@@ -19,7 +19,13 @@
 
 #![cfg(test)]
 
-use crate::{mock::*, *};
+use crate::{
+	mock::{
+		new_test_ext, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
+		SimpleTestMessageProcessor,
+	},
+	*,
+};
 
 use crate as pallet_message_queue;
 use frame_support::{
@@ -97,11 +103,11 @@ impl Config for Test {
 /// Simulates heavy usage by enqueueing and processing large amounts of messages.
 #[test]
 fn stress_test_enqueue_and_service() {
-	let blocks = 100;
+	let blocks = 10;
 	let max_queues = 10_000;
 	let max_messages_per_queue = 100_000;
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+	let mut rng = rand::rngs::StdRng::seed_from_u64(42);
 
 	new_test_ext::<Test>().execute_with(|| {
 		for _ in 0..blocks {
@@ -144,9 +150,7 @@ fn stress_test_enqueue_and_service() {
 				if consumed != weight {
 					panic!(
 						"consumed != weight: {} != {}\n{}",
-						consumed,
-						weight,
-						"MessageQueue::debug_info()"
+						consumed, weight, "MessageQueue::debug_info()"
 					);
 				}
 				let processed = NumMessagesProcessed::take();

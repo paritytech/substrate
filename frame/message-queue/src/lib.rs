@@ -30,8 +30,8 @@ use frame_support::{
 	defensive,
 	pallet_prelude::*,
 	traits::{
-		DefensiveTruncateFrom, EnqueueMessage, ProcessMessage, ProcessMessageError, ServiceQueues,
-		Footprint,
+		DefensiveTruncateFrom, EnqueueMessage, Footprint, ProcessMessage, ProcessMessageError,
+		ServiceQueues,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -544,7 +544,9 @@ impl<T: Config> Pallet<T> {
 	) {
 		let mut book_state = BookStateFor::<T>::get(origin);
 		book_state.message_count.saturating_inc();
-		book_state.size.saturating_accrue((message.len() + origin.encode().len()) as u32);
+		book_state
+			.size
+			.saturating_accrue((message.len() + origin.encode().len()) as u32);
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
@@ -599,19 +601,27 @@ impl<T: Config> Pallet<T> {
 		ensure!(is_processed, Error::<T>::AlreadyProcessed);
 		use MessageExecutionStatus::*;
 		let mut weight_counter = WeightCounter::from_limit(weight_limit);
-		match Self::process_message_payload(origin.clone(), payload, &mut weight_counter, weight_limit) {
+		match Self::process_message_payload(
+			origin.clone(),
+			payload,
+			&mut weight_counter,
+			weight_limit,
+		) {
 			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight.into()),
 			Unprocessable | Processed => {
 				page.note_processed_at_pos(pos);
 				book_state.message_count.saturating_dec();
 				book_state.size.saturating_reduce(payload_len);
 				if page.remaining.is_zero() {
-					debug_assert!(page.remaining_size.is_zero(), "no messages remaining; no space taken; qed");
+					debug_assert!(
+						page.remaining_size.is_zero(),
+						"no messages remaining; no space taken; qed"
+					);
 					Pages::<T>::remove(&origin, page_index);
 					debug_assert!(book_state.count >= 1, "page exists, so book must have pages");
 					book_state.count.saturating_dec();
-					// no need to consider .first or ready ring since processing an overweight page
-					// would not alter that state.
+				// no need to consider .first or ready ring since processing an overweight page
+				// would not alter that state.
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
@@ -779,7 +789,12 @@ impl<T: Config> Pallet<T> {
 		}[..];
 
 		use MessageExecutionStatus::*;
-		let is_processed = match Self::process_message_payload(origin.clone(), payload.deref(), weight, overweight_limit) {
+		let is_processed = match Self::process_message_payload(
+			origin.clone(),
+			payload.deref(),
+			weight,
+			overweight_limit,
+		) {
 			InsufficientWeight => return PageExecutionStatus::Bailed,
 			Processed | Unprocessable => true,
 			Overweight => false,
@@ -857,11 +872,7 @@ impl<T: Config> Pallet<T> {
 	) -> MessageExecutionStatus {
 		let hash = T::Hashing::hash(message);
 		use ProcessMessageError::Overweight;
-		match T::MessageProcessor::process_message(
-			message,
-			origin.clone(),
-			weight.remaining(),
-		) {
+		match T::MessageProcessor::process_message(message, origin.clone(), weight.remaining()) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
 				Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
@@ -1003,9 +1014,6 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 	// TODO: test.
 	fn footprint(origin: MessageOriginOf<T>) -> Footprint {
 		let book_state = BookStateFor::<T>::get(&origin);
-		Footprint {
-			count: book_state.message_count,
-			size: book_state.size,
-		}
+		Footprint { count: book_state.message_count, size: book_state.size }
 	}
 }

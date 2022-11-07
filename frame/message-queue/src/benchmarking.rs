@@ -75,12 +75,12 @@ benchmarks! {
 		let mut weight = WeightCounter::unlimited();
 		log::debug!(target: LOG_TARGET, "{} messages per page", msgs);
 	}: {
-		let status = MessageQueue::<T>::service_page_item(&0u32.into(), &mut page, &mut weight, Weight::MAX);
+		let status = MessageQueue::<T>::service_page_item(&0u32.into(), &mut book_for::<T>(&page), &mut page, &mut weight, Weight::MAX);
 		assert_eq!(status, PageExecutionStatus::Partial);
 	} verify {
-		// Check fot the `Processed` event
+		// Check for the `Processed` event.
 		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&[]), origin: ((msgs - 1) as u32).into(),
+			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
 			weight_used: 1.into_weight(), success: true
 		}.into());
 	}
@@ -105,5 +105,5 @@ benchmarks! {
 	}
 
 	// Create a test for each benchmark.
-	impl_benchmark_test_suite!(MessageQueue, crate::mock::new_test_ext::<crate::tests::Test>(), crate::tests::Test);
+	impl_benchmark_test_suite!(MessageQueue, crate::mock::new_test_ext::<crate::mock::Test>(), crate::mock::Test);
 }

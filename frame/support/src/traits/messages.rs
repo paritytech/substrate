@@ -19,9 +19,9 @@
 
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::{Get, TypedGet, ConstU32};
-use sp_runtime::{BoundedSlice, RuntimeDebug, traits::Convert};
-use sp_std::{fmt::Debug, prelude::*, marker::PhantomData};
+use sp_core::{ConstU32, Get, TypedGet};
+use sp_runtime::{traits::Convert, BoundedSlice, RuntimeDebug};
+use sp_std::{fmt::Debug, marker::PhantomData, prelude::*};
 use sp_weights::Weight;
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, TypeInfo, RuntimeDebug)]
@@ -90,18 +90,18 @@ impl<Origin: MaxEncodedLen> EnqueueMessage<Origin> for () {
 	fn enqueue_messages<'a>(
 		_: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
 		_: Origin,
-	) {}
+	) {
+	}
 	fn sweep_queue(_: Origin) {}
-	fn footprint(_: Origin) -> Footprint { Footprint::default() }
+	fn footprint(_: Origin) -> Footprint {
+		Footprint::default()
+	}
 }
 
 pub struct TransformOrigin<E, O, N, C>(PhantomData<(E, O, N, C)>);
-impl<
-	E: EnqueueMessage<O>,
-	O: MaxEncodedLen,
-	N: MaxEncodedLen,
-	C: Convert<N, O>
-> EnqueueMessage<N> for TransformOrigin<E, O, N, C> {
+impl<E: EnqueueMessage<O>, O: MaxEncodedLen, N: MaxEncodedLen, C: Convert<N, O>> EnqueueMessage<N>
+	for TransformOrigin<E, O, N, C>
+{
 	type MaxMessageLen = E::MaxMessageLen;
 
 	fn enqueue_message(message: BoundedSlice<u8, Self::MaxMessageLen>, origin: N) {
@@ -143,8 +143,9 @@ pub trait HandleMessage {
 }
 
 pub struct EnqueueWithOrigin<E, O>(PhantomData<(E, O)>);
-impl<E: EnqueueMessage<O::Type>, O: TypedGet> HandleMessage for EnqueueWithOrigin<E, O> where
-	O::Type: MaxEncodedLen
+impl<E: EnqueueMessage<O::Type>, O: TypedGet> HandleMessage for EnqueueWithOrigin<E, O>
+where
+	O::Type: MaxEncodedLen,
 {
 	type MaxMessageLen = E::MaxMessageLen;
 

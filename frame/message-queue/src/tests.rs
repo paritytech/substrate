@@ -21,9 +21,7 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop,
-};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 #[test]
 fn mocked_weight_works() {
@@ -378,9 +376,7 @@ fn page_from_message_basic_works() {
 	assert!(MaxOriginLenOf::<Test>::get() >= 3, "pre-condition unmet");
 	assert!(MaxMessageLenOf::<Test>::get() >= 3, "pre-condition unmet");
 
-	let _page = PageOf::<Test>::from_message::<Test>(
-		BoundedSlice::defensive_truncate_from(b"MSG"),
-	);
+	let _page = PageOf::<Test>::from_message::<Test>(BoundedSlice::defensive_truncate_from(b"MSG"));
 }
 
 // `Page::from_message` does not panic when called with the maximum message and origin lengths.
@@ -388,9 +384,7 @@ fn page_from_message_basic_works() {
 fn page_from_message_max_len_works() {
 	let max_msg_len: usize = MaxMessageLenOf::<Test>::get() as usize;
 
-	let page = PageOf::<Test>::from_message::<Test>(
-		vec![1; max_msg_len][..].try_into().unwrap(),
-	);
+	let page = PageOf::<Test>::from_message::<Test>(vec![1; max_msg_len][..].try_into().unwrap());
 
 	assert_eq!(page.remaining, 1);
 }
