@@ -104,7 +104,8 @@ pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 /// [`Config::RuntimeCall`] variants.
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 /// The presently paused calls within a pallet.
-enum PausedCallsOf<T> {
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Debug)]
+pub enum PausedCallsOf<T: Config> {
 	/// Specific calls in this pallet are paused, by their name.
 	TheseCalls(BoundedBTreeSet<CallNameOf<T>, <T as Config>::MaxPausableCalls>),
 	/// All calls of this pallet are paused.
@@ -208,7 +209,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn paused_calls)]
 	pub type PausedCalls<T: Config> =
-		StorageMap<_, Blake2_128Concat, PalletNameOf<T>, PausedCallsOf<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, PalletNameOf<T>, PausedCallsOf<T>, OptionQuery>;
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
@@ -385,7 +386,7 @@ impl<T: Config> Pallet<T> {
 		these_pause_calls_of: &PausedCallsOf<T>,
 	) -> Result<(), Error<T>> {
 		if Self::is_paused(pallet_name, these_pause_calls_of) {
-			Err(Error::IsPaused)
+			return Err(Error::IsPaused)
 		}
 		Ok(())
 	}

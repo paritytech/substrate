@@ -153,7 +153,7 @@ impl Contains<(PalletNameOf<Test>, PausedCallsOf<Test>)> for WhitelistCallNames 
 		let whitelists: Vec<(PalletNameOf<Test>, PausedCallsOf<Test>)> = vec![
 			(
 				b"Balances".to_vec().try_into().unwrap(),
-				PausedCallsOf::<Test>::TheseCalls([b"transfer_keep_alive".to_vec().try_into().unwrap()].try_into().expect("Must have TheseCalls items less than MaxPausableCalls")),
+				PausedCallsOf::<Test>::TheseCalls(vec![b"transfer_keep_alive".to_vec().try_into().unwrap()].try_into().expect("Must have TheseCalls items less than MaxPausableCalls")),
 			),
 			(b"DummyPallet".to_vec().try_into().unwrap(), PausedCallsOf::<Test>::AllCalls),
 		];
@@ -202,6 +202,7 @@ impl Config for Test {
 	type UnpauseOrigin = EnsureSignedBy<UnpauseOrigin, Self::AccountId>;
 	type WhitelistCallNames = WhitelistCallNames;
 	type MaxNameLen = MaxNameLen;
+	type MaxPausableCalls = ConstU32<64>;
 	type PauseTooLongNames = PauseTooLongNames;
 	type WeightInfo = ();
 }
