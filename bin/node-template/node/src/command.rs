@@ -4,9 +4,7 @@ use crate::{
 	cli::{Cli, Subcommand},
 	service,
 };
-use frame_benchmarking_cli::{
-	BenchmarkCmd, ExtrinsicFactory, MachineCmd, SUBSTRATE_REFERENCE_HARDWARE,
-};
+use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use node_template_runtime::{Block, EXISTENTIAL_DEPOSIT};
 use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
 use sc_service::PartialComponents;
