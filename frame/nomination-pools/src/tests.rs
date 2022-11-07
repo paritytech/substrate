@@ -55,7 +55,7 @@ fn test_setup_works() {
 			BondedPool::<Runtime> {
 				id: last_pool,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 10,
 					roles: DEFAULT_ROLES,
@@ -99,7 +99,7 @@ mod bonded_pool {
 			let mut bonded_pool = BondedPool::<Runtime> {
 				id: 123123,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 100,
 					roles: DEFAULT_ROLES,
@@ -155,7 +155,7 @@ mod bonded_pool {
 			let mut bonded_pool = BondedPool::<Runtime> {
 				id: 123123,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 100,
 					roles: DEFAULT_ROLES,
@@ -204,7 +204,7 @@ mod bonded_pool {
 			let pool = BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 100,
 					roles: DEFAULT_ROLES,
@@ -256,7 +256,7 @@ mod bonded_pool {
 				Some(900)
 			));
 
-			let commission = BondedPool::<Runtime>::get(1).unwrap().commission.unwrap();
+			let commission = BondedPool::<Runtime>::get(1).unwrap().commission;
 
 			assert_eq!(commission.as_percent(), Perbill::from_percent(50));
 			// Commission change events triggered successfully
@@ -321,7 +321,7 @@ mod bonded_pool {
 			));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
-				Some(Commission {
+				Commission {
 					current: None,
 					max: None,
 					throttle: Some(CommissionThrottle {
@@ -331,7 +331,7 @@ mod bonded_pool {
 						},
 						previous_set_at: None,
 					})
-				})
+				}
 			);
 
 			// We now try to increase commission to 5% (5% increase): this should be throttled.
@@ -355,7 +355,7 @@ mod bonded_pool {
 			));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
-				Some(Commission {
+				Commission {
 					current: Some((Perbill::from_percent(1), 900)),
 					max: None,
 					throttle: Some(CommissionThrottle {
@@ -365,7 +365,7 @@ mod bonded_pool {
 						},
 						previous_set_at: Some(1_u64),
 					})
-				})
+				}
 			);
 
 			// Attempt to increase the commission an additional 1% (now 2%) again immediately.
@@ -481,7 +481,7 @@ mod bonded_pool {
 				Perbill::from_percent(90)
 			));
 			assert_eq!(
-				BondedPools::<Runtime>::get(1).unwrap().commission.unwrap().max,
+				BondedPools::<Runtime>::get(1).unwrap().commission.max,
 				Some(Perbill::from_percent(90))
 			);
 
@@ -510,11 +510,11 @@ mod bonded_pool {
 			));
 			assert_eq!(
 				BondedPools::<Runtime>::get(1).unwrap().commission,
-				Some(Commission {
+				Commission {
 					current: Some((Perbill::from_percent(50), 900)),
 					max: Some(Perbill::from_percent(50)),
 					throttle: None
-				})
+				}
 			);
 
 			// Commission change events triggered successfully
@@ -579,7 +579,7 @@ mod bonded_pool {
 				}
 			));
 			assert_eq!(
-				BondedPools::<Runtime>::get(1).unwrap().commission.unwrap().throttle,
+				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
 				Some(CommissionThrottle {
 					change_rate: CommissionThrottlePrefs {
 						max_increase: Perbill::from_percent(5),
@@ -837,7 +837,7 @@ mod join {
 		let bonded = |points, member_counter| BondedPool::<Runtime> {
 			id: 1,
 			inner: BondedPoolInner {
-				commission: None,
+				commission: Commission::default(),
 				member_counter,
 				points,
 				roles: DEFAULT_ROLES,
@@ -921,7 +921,7 @@ mod join {
 			BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 100,
 					roles: DEFAULT_ROLES,
@@ -991,7 +991,7 @@ mod join {
 			BondedPool::<Runtime> {
 				id: 123,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 100,
 					roles: DEFAULT_ROLES,
@@ -2844,7 +2844,7 @@ mod unbond {
 				BondedPool {
 					id: 1,
 					inner: BondedPoolInner {
-						commission: None,
+						commission: Commission::default(),
 						member_counter: 1,
 						points: 0,
 						roles: DEFAULT_ROLES,
@@ -2881,7 +2881,7 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							commission: None,
+							commission: Commission::default(),
 							member_counter: 3,
 							points: 560,
 							roles: DEFAULT_ROLES,
@@ -2922,7 +2922,7 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							commission: None,
+							commission: Commission::default(),
 							member_counter: 3,
 							points: 10,
 							roles: DEFAULT_ROLES,
@@ -2966,7 +2966,7 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							commission: None,
+							commission: Commission::default(),
 							member_counter: 1,
 							points: 0,
 							roles: DEFAULT_ROLES,
@@ -3095,7 +3095,7 @@ mod unbond {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							commission: None,
+							commission: Commission::default(),
 							member_counter: 3,
 							points: 10, // Only 10 points because 200 + 100 was unbonded
 							roles: DEFAULT_ROLES,
@@ -3246,7 +3246,7 @@ mod unbond {
 			BondedPool::<Runtime> {
 				id: 1,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 10,
 					roles: DEFAULT_ROLES,
@@ -3959,7 +3959,7 @@ mod withdraw_unbonded {
 					BondedPool {
 						id: 1,
 						inner: BondedPoolInner {
-							commission: None,
+							commission: Commission::default(),
 							member_counter: 3,
 							points: 10,
 							roles: DEFAULT_ROLES,
@@ -4040,7 +4040,7 @@ mod withdraw_unbonded {
 				BondedPool {
 					id: 1,
 					inner: BondedPoolInner {
-						commission: None,
+						commission: Commission::default(),
 						member_counter: 2,
 						points: 10,
 						roles: DEFAULT_ROLES,
@@ -4594,7 +4594,7 @@ mod create {
 				BondedPool {
 					id: 2,
 					inner: BondedPoolInner {
-						commission: None,
+						commission: Commission::default(),
 						points: StakingMock::minimum_nominator_bond(),
 						member_counter: 1,
 						roles: PoolRoles {
@@ -4659,7 +4659,7 @@ mod create {
 			BondedPool::<Runtime> {
 				id: 2,
 				inner: BondedPoolInner {
-					commission: None,
+					commission: Commission::default(),
 					member_counter: 1,
 					points: 10,
 					roles: DEFAULT_ROLES,

@@ -623,8 +623,8 @@ pub struct CommissionThrottle<T: Config> {
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct BondedPoolInner<T: Config> {
-	/// The commission rate, if any, of the pool.
-	pub commission: Option<Commission<T>>,
+	/// The commission rate of the pool.
+	pub commission: Commission<T>,
 	/// Count of members that belong to the pool.
 	pub member_counter: u32,
 	/// Total points of all the members in the pool who are actively bonded.
@@ -667,7 +667,7 @@ impl<T: Config> BondedPool<T> {
 		Self {
 			id,
 			inner: BondedPoolInner {
-				commission: None,
+				commission: Commission::default(),
 				member_counter: Zero::zero(),
 				points: Zero::zero(),
 				roles,
@@ -693,10 +693,7 @@ impl<T: Config> BondedPool<T> {
 
 	/// Gets the current commission payee of this pool as a reference.
 	fn commission_payee(&self) -> Option<&T::AccountId> {
-		self.commission
-			.as_ref()
-			.and_then(|c| c.current.as_ref().map(|(_, p)| p))
-			.or(None)
+		self.commission.current.as_ref().map(|(_, p)| p).or(None)
 	}
 
 	/// Consume self and put into storage.
@@ -787,58 +784,41 @@ impl<T: Config> BondedPool<T> {
 	///
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
 	fn set_commission_current(&mut self, commission: &Perbill, payee: T::AccountId) {
-		self.commission = self
-			.commission
-			.take()
-			.map_or(Some(Commission::default()), |c| Some(c))
-			.map(|c| Commission {
-				current: if commission > &Perbill::zero() {
-					Some((*commission, payee))
-				} else {
-					None
-				},
-				throttle: c
-					.throttle
-					.map(|t| CommissionThrottle {
-						previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
-						..t
-					})
-					.or(None),
-				..c
-			});
+		self.commission = Commission {
+			current: if commission > &Perbill::zero() { Some((*commission, payee)) } else { None },
+			throttle: self
+				.commission
+				.throttle
+				.as_ref()
+				.map(|t| CommissionThrottle {
+					previous_set_at: Some(<frame_system::Pallet<T>>::block_number()),
+					..*t
+				})
+				.or(None),
+			..self.commission
+		};
 	}
 
 	/// Set the pool's maximum commission.
 	fn set_max_commission(&mut self, max_commission: Perbill) {
-		self.commission = self
+		self.commission.max = Some(max_commission);
+		self.commission.current = self
 			.commission
-			.take()
-			.map_or(Some(Commission::default()), |c| Some(c))
-			.map(|c| Commission {
-				max: Some(max_commission),
-				// if the pool's current commission is higher than the updated maximum
-				// commission, decrease it to the new maximum commission.
-				current: c
-					.current
-					.map(|x| if x.0 > max_commission { (max_commission, x.1) } else { x })
-					.or(None),
-				..c
-			});
+			.current
+			.as_ref()
+			.map(|x| if x.0 > max_commission { (max_commission, x.1.clone()) } else { x.clone() })
+			.or(None);
 	}
 
 	/// Set the pool's commission throttle settings.
 	fn set_commission_throttle(&mut self, change_rate: CommissionThrottlePrefs<T::BlockNumber>) {
-		self.commission =
-			self.commission
-				.take()
-				.map_or(Some(Commission::default()), |c| Some(c))
-				.map(|c| Commission {
-					throttle: c.throttle.map_or(
-						Some(CommissionThrottle { change_rate, previous_set_at: None }),
-						|t| Some(CommissionThrottle { change_rate, ..t }),
-					),
-					..c
-				});
+		self.commission.throttle = self
+			.commission
+			.throttle
+			.as_ref()
+			.map_or(Some(CommissionThrottle { change_rate, previous_set_at: None }), |t| {
+				Some(CommissionThrottle { change_rate, ..*t })
+			});
 	}
 
 	fn is_root(&self, who: &T::AccountId) -> bool {
@@ -2177,14 +2157,9 @@ pub mod pallet {
 
 			let commission = &bonded_pool.commission;
 
+			ensure!(!commission.throttling(&new_commission), Error::<T>::CommissionChangeThrottled);
 			ensure!(
-				commission.as_ref().map_or(true, |c| !c.throttling(&new_commission)),
-				Error::<T>::CommissionChangeThrottled
-			);
-			ensure!(
-				commission
-					.as_ref()
-					.map_or(true, |c| c.max.map(|m| new_commission <= m).unwrap_or(true)),
+				commission.max.map(|m| new_commission <= m).unwrap_or(true),
 				Error::<T>::CommissionExceedsMaximum
 			);
 
@@ -2218,12 +2193,7 @@ pub mod pallet {
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			ensure!(
-				&bonded_pool
-					.commission
-					.as_ref()
-					.map(|c| c.max)
-					.flatten()
-					.map_or(true, |m| m > max_commission),
+				&bonded_pool.commission.max.map_or(true, |m| m > max_commission),
 				Error::<T>::MaxCommissionRestricted
 			);
 
@@ -2251,15 +2221,14 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			if let Some(c) = &bonded_pool.commission {
-				if let Some(throttle) = &c.throttle {
-					ensure!(
-						!(prefs.max_increase > throttle.change_rate.max_increase ||
-							prefs.min_delay < throttle.change_rate.min_delay),
-						Error::<T>::CommissionThrottleNotAllowed
-					);
-				}
+			if let Some(throttle) = &bonded_pool.commission.throttle {
+				ensure!(
+					!(prefs.max_increase > throttle.change_rate.max_increase ||
+						prefs.min_delay < throttle.change_rate.min_delay),
+					Error::<T>::CommissionThrottleNotAllowed
+				);
 			}
+
 			bonded_pool.set_commission_throttle(prefs);
 			bonded_pool.put();
 			Ok(())
@@ -2587,13 +2556,11 @@ impl<T: Config> Pallet<T> {
 		reward_pool.register_claimed_reward(pending_rewards);
 
 		let get_commission_and_payee = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
-			if let Some(c) = &b.commission {
-				let commission_percent = c.as_percent();
-				if commission_percent > Perbill::zero() {
-					let payee = b.commission_payee().map(|p| p.clone()).or(None);
-					if payee.is_some() {
-						return (commission_percent * pending_rewards, payee)
-					}
+			let commission_percent = &b.commission.as_percent();
+			if commission_percent > &Perbill::zero() {
+				let payee = b.commission_payee().map(|p| p.clone()).or(None);
+				if payee.is_some() {
+					return (*commission_percent * pending_rewards, payee)
 				}
 			}
 			(Zero::zero(), None)
