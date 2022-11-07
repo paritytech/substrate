@@ -105,5 +105,5 @@ benchmarks! {
 	}
 
 	// Create a test for each benchmark.
-	impl_benchmark_test_suite!(MessageQueue, crate::tests::new_test_ext(), crate::tests::Test);
+	impl_benchmark_test_suite!(MessageQueue, crate::mock::new_test_ext::<crate::tests::Test>(), crate::tests::Test);
 }

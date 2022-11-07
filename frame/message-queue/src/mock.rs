@@ -19,6 +19,7 @@
 use super::*;
 
 use frame_support::{assert_noop, assert_ok, parameter_types};
+use frame_system::Pallet as System;
 use sp_std::collections::btree_map::BTreeMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
@@ -91,4 +92,130 @@ pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) 
 		"The genesis block has n o events"
 	);
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
+}
+
+/// Mocked `WeightInfo` impl with allows to set the weight per call.
+pub struct MockedWeightInfo;
+
+parameter_types! {
+	/// Storage for `MockedWeightInfo`, do not use directly.
+	pub static WeightForCall: BTreeMap<String, Weight> = Default::default();
+}
+
+/// Set the return value for a function from the `WeightInfo` trait.
+impl MockedWeightInfo {
+	/// Set the weight of a specific weight function.
+	pub fn set_weight<T: Config>(call_name: &str, weight: Weight) {
+		let mut calls = WeightForCall::get();
+		calls.insert(call_name.into(), weight);
+		WeightForCall::set(calls);
+	}
+}
+
+impl crate::weights::WeightInfo for MockedWeightInfo {
+	fn service_page_base() -> Weight {
+		WeightForCall::get().get("service_page_base").copied().unwrap_or_default()
+	}
+	fn service_queue_base() -> Weight {
+		WeightForCall::get().get("service_queue_base").copied().unwrap_or_default()
+	}
+	fn service_page_process_message() -> Weight {
+		WeightForCall::get()
+			.get("service_page_process_message")
+			.copied()
+			.unwrap_or_default()
+	}
+	fn bump_service_head() -> Weight {
+		WeightForCall::get().get("bump_service_head").copied().unwrap_or_default()
+	}
+	fn service_page_item() -> Weight {
+		WeightForCall::get().get("service_page_item").copied().unwrap_or_default()
+	}
+	fn ready_ring_unknit() -> Weight {
+		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
+	}
+}
+
+parameter_types! {
+	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
+}
+
+pub struct TestMessageProcessor;
+impl ProcessMessage for TestMessageProcessor {
+	/// The transport from where a message originates.
+	type Origin = MessageOrigin;
+
+	/// Process the given message, using no more than `weight_limit` in weight to do so.
+	///
+	/// Consumes exactly `n` weight of all components if it starts `weight=n` and `1` otherwise.
+	/// Errors if given the `weight_limit` is insufficient to process the message.
+	fn process_message(
+		message: &[u8],
+		origin: Self::Origin,
+		weight_limit: Weight,
+	) -> Result<(bool, Weight), ProcessMessageError> {
+		let weight = if message.starts_with(&b"weight="[..]) {
+			let mut w: u64 = 0;
+			for &c in &message[7..] {
+				if c >= b'0' && c <= b'9' {
+					w = w * 10 + (c - b'0') as u64;
+				} else {
+					break
+				}
+			}
+			w
+		} else {
+			1
+		};
+		let weight = Weight::from_parts(weight, weight);
+		if weight.all_lte(weight_limit) {
+			let mut m = MessagesProcessed::get();
+			m.push((message.to_vec(), origin));
+			MessagesProcessed::set(m);
+			Ok((true, weight))
+		} else {
+			Err(ProcessMessageError::Overweight(weight))
+		}
+	}
+}
+
+parameter_types! {
+	pub static NumMessagesProcessed: usize = 0;
+}
+
+pub struct SimpleTestMessageProcessor;
+impl ProcessMessage for SimpleTestMessageProcessor {
+	/// The transport from where a message originates.
+	type Origin = MessageOrigin;
+
+	/// Process the given message, using no more than `weight_limit` in weight to do so.
+	///
+	/// Consumes exactly `n` weight of all components if it starts `weight=n` and `1` otherwise.
+	/// Errors if given the `weight_limit` is insufficient to process the message.
+	fn process_message(
+		message: &[u8],
+		origin: Self::Origin,
+		weight_limit: Weight,
+	) -> Result<(bool, Weight), ProcessMessageError> {
+		let weight = Weight::from_parts(1, 1);
+
+		if weight.all_lte(weight_limit) {
+			NumMessagesProcessed::set(NumMessagesProcessed::get() + 1);
+			Ok((true, weight))
+		} else {
+			Err(ProcessMessageError::Overweight(weight))
+		}
+	}
+}
+
+pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
+where
+	<T as frame_system::Config>::BlockNumber: From<u32>,
+{
+	sp_tracing::try_init_simple();
+	WeightForCall::set(Default::default());
+	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
+	let mut ext = sp_io::TestExternalities::new(t);
+	ext.execute_with(|| System::<T>::set_block_number(1.into()));
+	ext
 }

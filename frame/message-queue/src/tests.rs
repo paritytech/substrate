@@ -92,100 +92,6 @@ impl Config for Test {
 	type MaxStale = MaxStale;
 }
 
-/// Mocked `WeightInfo` impl with allows to set the weight per call.
-pub struct MockedWeightInfo;
-
-parameter_types! {
-	/// Storage for `MockedWeightInfo`, do not use directly.
-	pub static WeightForCall: BTreeMap<String, Weight> = Default::default();
-}
-
-/// Set the return value for a function from the `WeightInfo` trait.
-impl MockedWeightInfo {
-	/// Set the weight of a specific weight function.
-	pub fn set_weight<T: Config>(call_name: &str, weight: Weight) {
-		let mut calls = WeightForCall::get();
-		calls.insert(call_name.into(), weight);
-		WeightForCall::set(calls);
-	}
-}
-
-impl crate::weights::WeightInfo for MockedWeightInfo {
-	fn service_page_base() -> Weight {
-		WeightForCall::get().get("service_page_base").copied().unwrap_or_default()
-	}
-	fn service_queue_base() -> Weight {
-		WeightForCall::get().get("service_queue_base").copied().unwrap_or_default()
-	}
-	fn service_page_process_message() -> Weight {
-		WeightForCall::get()
-			.get("service_page_process_message")
-			.copied()
-			.unwrap_or_default()
-	}
-	fn bump_service_head() -> Weight {
-		WeightForCall::get().get("bump_service_head").copied().unwrap_or_default()
-	}
-	fn service_page_item() -> Weight {
-		WeightForCall::get().get("service_page_item").copied().unwrap_or_default()
-	}
-	fn ready_ring_unknit() -> Weight {
-		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
-	}
-}
-
-parameter_types! {
-	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
-}
-
-pub struct TestMessageProcessor;
-impl ProcessMessage for TestMessageProcessor {
-	/// The transport from where a message originates.
-	type Origin = MessageOrigin;
-
-	/// Process the given message, using no more than `weight_limit` in weight to do so.
-	///
-	/// Consumes exactly `n` weight of all components if it starts `weight=n` and `1` otherwise.
-	/// Errors if given the `weight_limit` is insufficient to process the message.
-	fn process_message(
-		message: &[u8],
-		origin: Self::Origin,
-		weight_limit: Weight,
-	) -> Result<(bool, Weight), ProcessMessageError> {
-		let weight = if message.starts_with(&b"weight="[..]) {
-			let mut w: u64 = 0;
-			for &c in &message[7..] {
-				if c >= b'0' && c <= b'9' {
-					w = w * 10 + (c - b'0') as u64;
-				} else {
-					break
-				}
-			}
-			w
-		} else {
-			1
-		};
-		let weight = Weight::from_parts(weight, weight);
-		if weight.all_lte(weight_limit) {
-			let mut m = MessagesProcessed::get();
-			m.push((message.to_vec(), origin));
-			MessagesProcessed::set(m);
-			Ok((true, weight))
-		} else {
-			Err(ProcessMessageError::Overweight(weight))
-		}
-	}
-}
-
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	sp_tracing::try_init_simple();
-	WeightForCall::set(Default::default());
-	let t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let mut ext = sp_io::TestExternalities::new(t);
-	ext.execute_with(|| System::set_block_number(1));
-	ext
-}
-
 /// Set the weight of a specific weight function.
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);
@@ -193,22 +99,22 @@ pub fn set_weight(name: &str, w: Weight) {
 
 #[test]
 fn mocked_weight_works() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
 	});
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		set_weight("service_page_base", Weight::MAX);
 		assert_eq!(<Test as Config>::WeightInfo::service_page_base(), Weight::MAX);
 	});
 	// The externalities reset it.
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
 	});
 }
 
 #[test]
 fn enqueue_within_one_page_works() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		MessageQueue::enqueue_message(msg(&"a"), Here);
 		MessageQueue::enqueue_message(msg(&"b"), Here);
@@ -252,7 +158,7 @@ fn enqueue_within_one_page_works() {
 
 #[test]
 fn queue_priority_retains() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![]);
 		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
@@ -300,7 +206,7 @@ fn queue_priority_retains() {
 
 #[test]
 fn queue_priority_reset_once_serviced() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
 		MessageQueue::enqueue_message(msg(&"b"), Everywhere(2));
@@ -327,7 +233,7 @@ fn queue_priority_reset_once_serviced() {
 #[test]
 fn reap_page_permanent_overweight_works() {
 	assert!(MaxStale::get() >= 2, "pre-condition unmet");
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		// Create pages with messages with a weight of two.
 		// TODO why do we need `+ 2` here?
@@ -349,7 +255,7 @@ fn reap_page_permanent_overweight_works() {
 
 #[test]
 fn reaping_overweight_fails_properly() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		// page 0
 		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
@@ -408,7 +314,7 @@ fn reaping_overweight_fails_properly() {
 #[test]
 fn service_queue_bails() {
 	// Not enough weight for `service_queue_base`.
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		set_weight("service_queue_base", 2.into_weight());
 		let mut meter = WeightCounter::from_limit(1.into_weight());
 
@@ -416,7 +322,7 @@ fn service_queue_bails() {
 		assert!(meter.consumed.is_zero());
 	});
 	// Not enough weight for `ready_ring_unknit`.
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		set_weight("ready_ring_unknit", 2.into_weight());
 		let mut meter = WeightCounter::from_limit(1.into_weight());
 
@@ -424,7 +330,7 @@ fn service_queue_bails() {
 		assert!(meter.consumed.is_zero());
 	});
 	// Not enough weight for `service_queue_base` and `ready_ring_unknit`.
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		set_weight("service_queue_base", 2.into_weight());
 		set_weight("ready_ring_unknit", 2.into_weight());
 
@@ -437,7 +343,7 @@ fn service_queue_bails() {
 #[test]
 fn service_page_bails() {
 	// Not enough weight for `service_page_base`.
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		set_weight("service_page_base", 2.into_weight());
 		let mut meter = WeightCounter::from_limit(1.into_weight());
 		let mut book = single_page_book::<Test>();
@@ -454,7 +360,7 @@ fn service_page_bails() {
 
 #[test]
 fn service_page_item_bails() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		let (mut page, _) = full_page::<Test>();
 		let mut weight = WeightCounter::from_limit(10.into_weight());
 		let overweight_limit = 10.into_weight();
@@ -474,7 +380,7 @@ fn service_page_item_bails() {
 
 #[test]
 fn service_page_consumes_correct_weight() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		let mut page = page::<Test>(b"weight=3", MessageOrigin::Here);
 		let mut weight = WeightCounter::from_limit(10.into_weight());
 		let overweight_limit = 0.into_weight();
@@ -496,7 +402,7 @@ fn service_page_consumes_correct_weight() {
 /// `service_page_item` skips a permanently `Overweight` message and marks it as `unprocessed`.
 #[test]
 fn service_page_skips_perm_overweight_message() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		let mut page = page::<Test>(b"weight=6", MessageOrigin::Here);
 		let mut weight = WeightCounter::from_limit(7.into_weight());
 		let overweight_limit = 5.into_weight();
@@ -522,7 +428,7 @@ fn service_page_skips_perm_overweight_message() {
 
 #[test]
 fn peek_index_works() {
-	new_test_ext().execute_with(|| {
+	new_test_ext::<Test>().execute_with(|| {
 		let (mut page, msgs) = full_page::<Test>();
 		assert!(msgs > 1, "precondition unmet");
 
