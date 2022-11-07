@@ -598,7 +598,7 @@ impl<T: Config> Commission<T> {
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
-				return Err(Error::<T>::CommissionChangeThrottled.into())
+				return Err(Error::<T>::MaxCommissionRestricted.into())
 			}
 			*old = new_max;
 			// ensure current is also less then the new maximum.
@@ -2195,11 +2195,6 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
-
-			ensure!(
-				&bonded_pool.commission.max.map_or(true, |m| m > max_commission),
-				Error::<T>::MaxCommissionRestricted
-			);
 
 			bonded_pool.commission.maybe_update_max(max_commission.clone())?;
 			bonded_pool.put();
