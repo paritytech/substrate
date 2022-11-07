@@ -22,6 +22,7 @@ pub mod pallet {
 	// Your Pallet's callable functions.
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		// No need to define a `weight` attribute here because of the `dev_mode`.
 		pub fn my_call(_origin: OriginFor<T>) -> DispatchResult {
 			Ok(())
 		}
