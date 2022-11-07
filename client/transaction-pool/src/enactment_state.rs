@@ -134,6 +134,16 @@ where
 
 		Ok(Some(tree_route))
 	}
+
+	/// Forces update of the state according to the given `ChainEvent`. Intended to be used as a
+	/// fallback when tree_route cannot be computed.
+	pub fn force_update(&mut self, event: &ChainEvent<Block>) {
+		match event {
+			ChainEvent::NewBestBlock { hash, .. } => self.recent_best_block = *hash,
+			ChainEvent::Finalized { hash, .. } => self.recent_finalized_block = *hash,
+		};
+		log::debug!(target: "txpool", "forced update: {:?}, {:?}", self.recent_best_block, self.recent_finalized_block);
+	}
 }
 
 #[cfg(test)]
