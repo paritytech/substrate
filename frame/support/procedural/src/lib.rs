@@ -459,6 +459,11 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 ///   storage types. This is equivalent to specifying `#[pallet::unbounded]` on all storage type
 ///   definitions.
 ///
+/// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
+/// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
+/// cannot be specified anywhere else, including but not limited to the `#[pallet::pallet]`
+/// attribute macro.
+///
 /// <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
 /// style="white-space:normal;font:inherit;">
 /// <strong>WARNING</strong>:

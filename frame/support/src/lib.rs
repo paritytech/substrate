@@ -1489,10 +1489,11 @@ pub mod pallet_prelude {
 ///
 /// # Dev Mode (`#[pallet(dev_mode)]`)
 ///
-/// Specifying the argument `dev_mode` will allow you to enable dev mode for a pallet. The aim
-/// of dev mode is to loosen some of the restrictions and requirements placed on production
-/// pallets for easy tinkering and development. Dev mode pallets should not be used in
-/// production. Enabling dev mode has the following effects:
+/// Specifying the argument `dev_mode` on the `#[pallet]` or `#[frame_support::pallet]`
+/// attribute attached to your pallet module will allow you to enable dev mode for a pallet.
+/// The aim of dev mode is to loosen some of the restrictions and requirements placed on
+/// production pallets for easy tinkering and development. Dev mode pallets should not be used
+/// in production. Enabling dev mode has the following effects:
 ///
 /// * Weights no longer need to be specified on every `#[pallet::call]` declaration. By
 ///   default, dev mode pallets will assume a weight of zero (`0`) if a weight is not
@@ -1501,6 +1502,11 @@ pub mod pallet_prelude {
 /// * All storages are marked as unbounded, meaning you do not need to implement
 ///   `MaxEncodedLen` on storage types. This is equivalent to specifying `#[pallet::unbounded]`
 ///   on all storage type definitions.
+///
+/// Note that the `dev_mode` argument can only be supplied to the `#[pallet]` or
+/// `#[frame_support::pallet]` attribute macro that encloses your pallet module. This argument
+/// cannot be specified anywhere else, including but not limited to the `#[pallet::pallet]`
+/// attribute macro.
 ///
 /// <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
 /// style="white-space:normal;font:inherit;">
