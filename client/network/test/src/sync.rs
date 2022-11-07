@@ -549,6 +549,10 @@ fn syncs_header_only_forks() {
 	while !net.peer(1).has_block(small_hash) {
 		net.block_until_idle();
 	}
+
+	net.block_until_sync();
+	assert_eq!(net.peer(0).client().info().best_hash, net.peer(1).client().info().best_hash);
+	assert_ne!(small_hash, net.peer(0).client().info().best_hash);
 }
 
 #[test]

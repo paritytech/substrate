@@ -2043,15 +2043,15 @@ where
 			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		};
 
+		if let PeerSyncState::AncestorSearch { .. } = peer.state {
+			trace!(target: "sync", "Peer state is ancestor search.");
+			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
+		}
+
 		if is_best {
 			// update their best block
 			peer.best_number = number;
 			peer.best_hash = hash;
-		}
-
-		if let PeerSyncState::AncestorSearch { .. } = peer.state {
-			trace!(target: "sync", "Peer state is ancestor search.");
-			return PollBlockAnnounceValidation::Nothing { is_best, who, announce }
 		}
 
 		// If the announced block is the best they have and is not ahead of us, our common number
