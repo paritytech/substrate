@@ -593,6 +593,21 @@ impl<T: Config> Commission<T> {
 			return false
 		}
 	}
+
+	/// Set the pool's maximum commission.
+	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
+		if let Some(old) = self.max.as_mut() {
+			if new_max > *old {
+				return Err("Error".into())
+			}
+			*old = new_max;
+			// ensure current is also less then the new maximum.
+			let _ = self.current.as_mut().map(|(x, _)| *x = (*x).min(new_max));
+		} else {
+			self.max = Some(new_max)
+		};
+		Ok(())
+	}
 }
 
 /// Pool commission throttle preferences.
@@ -797,17 +812,6 @@ impl<T: Config> BondedPool<T> {
 				.or(None),
 			..self.commission
 		};
-	}
-
-	/// Set the pool's maximum commission.
-	fn set_max_commission(&mut self, max_commission: Perbill) {
-		self.commission.max = Some(max_commission);
-		self.commission.current = self
-			.commission
-			.current
-			.as_ref()
-			.map(|x| if x.0 > max_commission { (max_commission, x.1.clone()) } else { x.clone() })
-			.or(None);
 	}
 
 	/// Set the pool's commission throttle settings.
@@ -2197,7 +2201,7 @@ pub mod pallet {
 				Error::<T>::MaxCommissionRestricted
 			);
 
-			bonded_pool.set_max_commission(max_commission.clone());
+			bonded_pool.commission.maybe_update_max(max_commission.clone())?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolMaxCommissionUpdated { pool_id, max_commission });
 			Ok(())
