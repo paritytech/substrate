@@ -24,16 +24,20 @@ use codec::{Decode, Encode};
 
 use log::*;
 use serde::de::DeserializeOwned;
-use sp_core::{
+pub use sp_core::{
 	hashing::twox_128,
+	storage::{StorageData, StorageKey},
+};
+use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{
 		well_known_keys::{is_default_child_storage_key, DEFAULT_CHILD_STORAGE_KEY_PREFIX},
-		ChildInfo, ChildType, PrefixedStorageKey, StorageData, StorageKey,
+		ChildInfo, ChildType, PrefixedStorageKey,
 	},
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_runtime::traits::Block as BlockT;
+pub use sp_runtime::StateVersion;
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -142,7 +146,7 @@ pub struct OnlineConfig<B: BlockT> {
 
 impl<B: BlockT> OnlineConfig<B> {
 	/// Return rpc (ws) client.
-	fn rpc_client(&self) -> &WsClient {
+	pub fn rpc_client(&self) -> &WsClient {
 		self.transport
 			.as_client()
 			.expect("ws client must have been initialized by now; qed.")
@@ -227,7 +231,7 @@ impl<B: BlockT> Default for Builder<B> {
 
 // Mode methods
 impl<B: BlockT> Builder<B> {
-	fn as_online(&self) -> &OnlineConfig<B> {
+	pub fn as_online(&self) -> &OnlineConfig<B> {
 		match &self.mode {
 			Mode::Online(config) => config,
 			Mode::OfflineOrElseOnline(_, config) => config,
@@ -267,7 +271,7 @@ where
 	}
 
 	/// Get the latest finalized head.
-	async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
+	pub async fn rpc_get_head(&self) -> Result<B::Hash, &'static str> {
 		trace!(target: LOG_TARGET, "rpc: finalized_head");
 
 		// sadly this pretty much unreadable...
