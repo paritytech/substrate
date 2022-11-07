@@ -690,11 +690,8 @@ impl StorageDef {
 		let PalletStorageAttrInfo { getter, rename_as, mut unbounded, whitelisted } =
 			PalletStorageAttrInfo::from_attrs(attrs)?;
 
-		if dev_mode {
-			// set all storages to be unbounded if dev_mode is enabled
-			unbounded = true;
-		}
-
+		// set all storages to be unbounded if dev_mode is enabled
+		unbounded |= dev_mode;
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
 		let instances = vec![helper::check_type_def_gen(&item.generics, item.ident.span())?];
