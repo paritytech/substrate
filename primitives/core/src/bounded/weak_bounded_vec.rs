@@ -40,7 +40,7 @@ use sp_std::{marker::PhantomData, prelude::*};
 /// The length of the vec is not strictly bounded. Decoding a vec with more element that the bound
 /// is accepted, and some method allow to bypass the restriction with warnings.
 #[cfg_attr(feature = "std", derive(Serialize), serde(transparent))]
-#[derive(Encode, scale_info::TypeInfo)]
+#[derive(Encode, scale_info::TypeInfo, PartialEq, Eq)]
 #[scale_info(skip_type_params(S))]
 pub struct WeakBoundedVec<T, S>(
 	pub(super) Vec<T>,
