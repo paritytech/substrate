@@ -118,10 +118,8 @@ pub trait BlockBackend<Block: BlockT> {
 	///
 	/// Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn block_indexed_body(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
+	fn block_indexed_body(&self, hash: &Block::Hash)
+		-> sp_blockchain::Result<Option<Vec<Vec<u8>>>>;
 
 	/// Get full block by id.
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>>;
