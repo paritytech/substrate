@@ -569,4 +569,40 @@ async fn follow_generates_initial_blocks() {
 		best_block_hash: format!("{:?}", block_2_hash),
 	});
 	assert_eq!(event, expected);
+
+	// Import block 4.
+	let block_4 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_4_hash = block_4.header.hash();
+	client.import(BlockOrigin::Own, block_4.clone()).await.unwrap();
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::NewBlock(NewBlock {
+		block_hash: format!("{:?}", block_4_hash),
+		parent_block_hash: format!("{:?}", block_2_hash),
+		new_runtime: None,
+		runtime_updates: false,
+	});
+	assert_eq!(event, expected);
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::BestBlockChanged(BestBlockChanged {
+		best_block_hash: format!("{:?}", block_4_hash),
+	});
+	assert_eq!(event, expected);
+
+	// Check the finalized event:
+	//  - blocks 1, 2, 4 from canonical chain are finalized
+	//  - block 3 from the fork is pruned
+	client.finalize_block(&block_4_hash, None).unwrap();
+
+	let event: FollowEvent<String> = get_next_event(&mut sub).await;
+	let expected = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes: vec![
+			format!("{:?}", block_1_hash),
+			format!("{:?}", block_2_hash),
+			format!("{:?}", block_4_hash),
+		],
+		pruned_block_hashes: vec![format!("{:?}", block_3_hash)],
+	});
+	assert_eq!(event, expected);
 }
