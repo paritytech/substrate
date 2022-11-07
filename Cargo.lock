@@ -5656,6 +5656,8 @@ dependencies = [
  "frame-system",
  "log",
  "parity-scale-codec",
+ "rand 0.8.5",
+ "rand_distr",
  "scale-info",
  "serde",
  "sp-arithmetic",

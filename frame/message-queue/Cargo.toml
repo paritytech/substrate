@@ -23,6 +23,8 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 
 [dev-dependencies]
 sp-tracing = { version = "5.0.0", default-features = false, path = "../../primitives/tracing" }
+rand = "0.8.5"
+rand_distr = "0.4.3"
 
 [features]
 default = ["std"]
