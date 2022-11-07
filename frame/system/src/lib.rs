@@ -416,7 +416,9 @@ pub mod pallet {
 			Self::deposit_log(generic::DigestItem::Other(hashes.encode()));
 			let count = txs.len() as u64;
 			Self::store_txs(txs);
-			Self::deposit_event(Event::TxsEnqueued { count });
+			if count > 0u64 {
+				Self::deposit_event(Event::TxsEnqueued { count });
+			}
 			Ok(().into())
 		}
 
