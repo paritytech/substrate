@@ -36,7 +36,7 @@ mod children;
 mod parity_db;
 mod record_stats_state;
 mod stats;
-#[cfg(any(feature = "rocksdb", test))]
+#[cfg(feature = "rocksdb")]
 mod upgrade;
 mod utils;
 
