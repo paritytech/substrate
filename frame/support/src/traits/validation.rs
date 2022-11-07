@@ -23,8 +23,10 @@ use sp_runtime::{
 	traits::{Convert, Zero},
 	BoundToRuntimeAppPublic, ConsensusEngineId, Permill, RuntimeAppPublic,
 };
-use sp_staking::SessionIndex;
 use sp_std::prelude::*;
+
+/// Simple index type with which we can count sessions.
+pub type SessionIndex = u32;
 
 /// A trait for online node inspection in a session.
 ///

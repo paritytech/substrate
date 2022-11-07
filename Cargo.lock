@@ -2338,7 +2338,6 @@ dependencies = [
  "sp-inherents",
  "sp-io",
  "sp-runtime",
- "sp-staking",
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
