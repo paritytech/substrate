@@ -2457,8 +2457,8 @@ pub mod env {
 		}
 	}
 
-	/// Returns the number of times the currently executing contract exists on the call stack in addition
-	/// to the calling instance.
+	/// Returns the number of times the currently executing contract exists on the call stack in
+	/// addition to the calling instance.
 	///
 	/// # Return Value
 	///
@@ -2482,10 +2482,7 @@ pub mod env {
 	/// Returns 0 when the contract does not exist on the call stack.
 	#[unstable]
 	#[prefixed_alias]
-	fn account_entrance_count(
-		ctx: Runtime<E>,
-		account_ptr: u32,
-	) -> Result<u32, TrapReason> {
+	fn account_entrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr)?;

@@ -4406,9 +4406,18 @@ fn reentrant_count_works_with_call() {
 		// passing reentrant count to the input
 		let input = 0.encode();
 
-		Contracts::bare_call(ALICE, contract_addr, 0, GAS_LIMIT, None, input, true, Determinism::Deterministic)
-			.result
-			.unwrap();
+		Contracts::bare_call(
+			ALICE,
+			contract_addr,
+			0,
+			GAS_LIMIT,
+			None,
+			input,
+			true,
+			Determinism::Deterministic,
+		)
+		.result
+		.unwrap();
 	});
 }
 
@@ -4434,9 +4443,18 @@ fn reentrant_count_works_with_delegated_call() {
 		// adding a callstack height to the input
 		let input = (code_hash, 1).encode();
 
-		Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, input, true, Determinism::Deterministic)
-			.result
-			.unwrap();
+		Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			input,
+			true,
+			Determinism::Deterministic,
+		)
+		.result
+		.unwrap();
 	});
 }
 
@@ -4468,7 +4486,7 @@ fn account_entrance_count_works() {
 			None,
 			contract_addr.encode(),
 			true,
-			Determinism::Deterministic
+			Determinism::Deterministic,
 		)
 		.result
 		.unwrap();
