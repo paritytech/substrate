@@ -22,7 +22,7 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use codec::{Codec, Encode, Decode};
+use codec::{Codec, Decode, Encode};
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	proc_macros::rpc,
@@ -115,10 +115,7 @@ pub trait MmrApi<BlockHash, BlockNumber, MmrHash> {
 	///
 	/// Returns `true` if the proof is valid, else returns the verification error.
 	#[method(name = "mmr_verifyProof")]
-	fn verify_proof(
-		&self,
-		proof: LeavesProof<BlockHash>,
-	) -> RpcResult<bool>;
+	fn verify_proof(&self, proof: LeavesProof<BlockHash>) -> RpcResult<bool>;
 
 	/// Verify an MMR `proof` statelessly given an `mmr_root`.
 	///
@@ -192,25 +189,23 @@ where
 		Ok(LeavesProof::new(block_hash, leaves, proof))
 	}
 
-	fn verify_proof(
-		&self,
-		proof: LeavesProof<<Block as BlockT>::Hash>,
-	) -> RpcResult<bool> {
+	fn verify_proof(&self, proof: LeavesProof<<Block as BlockT>::Hash>) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
 
-		let leaves = Decode::decode(&mut &proof.leaves.0[..])
-			.map_err(runtime_error_into_rpc_error)?;
+		let leaves =
+			Decode::decode(&mut &proof.leaves.0[..]).map_err(runtime_error_into_rpc_error)?;
 
-		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
-			.map_err(runtime_error_into_rpc_error)?;
+		let decoded_proof =
+			Decode::decode(&mut &proof.proof.0[..]).map_err(runtime_error_into_rpc_error)?;
 
 		api.verify_proof_with_context(
 			&BlockId::hash(proof.block_hash),
 			sp_core::ExecutionContext::OffchainCall(None),
 			leaves,
 			decoded_proof,
-		).map_err(runtime_error_into_rpc_error)?
-		 .map_err(mmr_error_into_rpc_error)?;
+		)
+		.map_err(runtime_error_into_rpc_error)?
+		.map_err(mmr_error_into_rpc_error)?;
 
 		Ok(true)
 	}
