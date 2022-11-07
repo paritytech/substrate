@@ -55,22 +55,6 @@ impl SubstrateCli for Cli {
 pub fn run() -> sc_cli::Result<()> {
 	let cli = Cli::from_args();
 
-	if cli.run.validator {
-		let cmd = MachineCmd {
-			shared_params: cli.run.shared_params.clone(),
-			allow_fail: true,
-			tolerance: 10.0,
-			verify_duration: 5.0,
-			disk_duration: 5.0,
-			hash_duration: 5.0,
-			memory_duration: 5.0,
-		};
-
-		let runner = cli.create_runner(&cmd)?;
-
-		let _ = runner.sync_run(|config| cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()));
-	}
-
 	match &cli.subcommand {
 		Some(Subcommand::Key(cmd)) => cmd.run(&cli),
 		Some(Subcommand::BuildSpec(cmd)) => {
@@ -185,14 +169,8 @@ pub fn run() -> sc_cli::Result<()> {
 
 						cmd.run(client, inherent_benchmark_data()?, Vec::new(), &ext_factory)
 					},
-					BenchmarkCmd::Machine(cmd) => {
-						// the hardware benchmark is run automatically if the
-						// validator flag is being used.
-						if !cli.run.validator {
-							return cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone())
-						}
-						Ok(())
-					},
+					BenchmarkCmd::Machine(cmd) =>
+						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),
 				}
 			})
 		},
