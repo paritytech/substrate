@@ -462,9 +462,10 @@ pub fn construct_runtime(input: TokenStream) -> TokenStream {
 /// <div class="example-wrap" style="display:inline-block"><pre class="compile_fail"
 /// style="white-space:normal;font:inherit;">
 /// <strong>WARNING</strong>:
-/// You should not deploy or use dev mode pallets in production. Once you are done
-/// tinkering, you should remove the 'dev_mode' argument from your #[pallet] declaration and
-/// fix any compile errors before attempting to use your pallet in a production scenario.
+/// You should not deploy or use dev mode pallets in production. Doing so can break your chain
+/// and therefore should never be done. Once you are done tinkering, you should remove the
+/// 'dev_mode' argument from your #[pallet] declaration and fix any compile errors before
+/// attempting to use your pallet in a production scenario.
 /// </pre></div>
 ///
 /// See `frame_support::pallet` docs for more info.
