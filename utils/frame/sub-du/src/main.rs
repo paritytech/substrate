@@ -1,8 +1,10 @@
 use ansi_term::{Colour::*, Style};
 use frame_metadata::{RuntimeMetadata, RuntimeMetadataPrefixed, StorageEntryType};
+use remote_externalities::{twox_128, StorageKey};
+use sc_rpc_api::state::StateApiClient;
 use separator::Separatable;
+use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
 use structopt::StructOpt;
-use sub_storage::{get_head, get_metadata, unwrap_decoded, Hash, StorageKey};
 
 const KB: usize = 1024;
 const MB: usize = KB * KB;
@@ -36,13 +38,13 @@ impl std::fmt::Display for Size {
 }
 
 #[derive(Debug, Clone, Default)]
-struct Module {
+struct Pallet {
 	pub name: String,
 	pub size: usize,
 	pub items: Vec<Storage>,
 }
 
-impl std::fmt::Display for Module {
+impl std::fmt::Display for Pallet {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let mod_style = Style::new().bold().italic().fg(Green);
 		write!(
@@ -59,7 +61,7 @@ impl std::fmt::Display for Module {
 	}
 }
 
-impl Module {
+impl Pallet {
 	fn new(name: String) -> Self {
 		Self { name, ..Default::default() }
 	}
@@ -77,7 +79,7 @@ impl std::fmt::Display for StorageItem {
 			Self::Value(bytes) => write!(f, "Value({} bytes)", bytes.separated_string()),
 			Self::Map(bytes, count) => {
 				write!(f, "Map({} bytes, {} keys)", bytes.separated_string(), count)
-			}
+			},
 		}
 	}
 }
@@ -143,60 +145,70 @@ struct Opt {
 	scrape_pairs: bool,
 }
 
+/// create key prefix for a module as vec bytes. Basically twox128 hash of the given values.
+pub fn pallet_prefix_raw(module: &[u8], storage: &[u8]) -> Vec<u8> {
+	let module_key = twox_128(module);
+	let storage_key = twox_128(storage);
+	let mut final_key = Vec::with_capacity(module_key.len() + storage_key.len());
+	final_key.extend_from_slice(&module_key);
+	final_key.extend_from_slice(&storage_key);
+	final_key
+}
+
+type Block = RawBlock<ExtrinsicWrapper<Hash>>;
+
 #[async_std::main]
 async fn main() -> () {
-	env_logger::Builder::from_default_env().format_module_path(false).format_level(true).init();
-
 	let opt = Opt::from_args();
 
 	// connect to a node.
-	use jsonrpsee_ws_client::{WsClient, WsConfig};
-	let client = WsClient::new(&opt.uri, WsConfig::default()).await.unwrap();
-
-	let mut modules: Vec<Module> = vec![];
+	let ext = remote_externalities::Builder::<Block>::new();
+	let mut modules: Vec<Pallet> = vec![];
 
 	// potentially replace head with the given hash
-	let head = get_head(&client).await;
-	let at = opt.at.unwrap_or(head);
-	let runtime = sub_storage::get_runtime_version(&client, at).await;
+	let head = ext.rpc_get_head().await.unwrap();
+	let at = opt.at.or(Some(head));
+
+	let rpc_client = ext.as_online().rpc_client();
+
+	let runtime = rpc_client.runtime_version(at).await.unwrap();
 
 	println!("Scraping at block {:?} of {}({})", at, runtime.spec_name, runtime.spec_version,);
 
-	let raw_metadata = get_metadata(&client, at).await.0;
+	let raw_metadata = rpc_client.metadata(at).await.unwrap();
 	let prefixed_metadata = <RuntimeMetadataPrefixed as codec::Decode>::decode(&mut &*raw_metadata)
 		.expect("Runtime Metadata failed to decode");
 	let metadata = prefixed_metadata.1;
 
-	if let RuntimeMetadata::V12(inner) = metadata {
-		let decode_modules = unwrap_decoded(inner.modules);
-		for module in decode_modules.into_iter() {
-			let name = unwrap_decoded(module.name);
+	if let RuntimeMetadata::V14(inner) = metadata {
+		let pallets = inner.pallets;
+		for pallet in pallets.into_iter() {
+			let name = pallet.name;
 
 			// skip, if this module has no storage items.
-			if module.storage.is_none() {
+			if pallet.storage.is_none() {
 				log::warn!(
 					target: LOG_TARGET,
-					"Module with name {:?} seem to have no storage items.",
+					"Pallet with name {:?} seems to have no storage items.",
 					name
 				);
-				continue;
+				continue
 			}
 
-			let storage = unwrap_decoded(module.storage.unwrap());
-			let prefix = unwrap_decoded(storage.prefix);
-			let entries = unwrap_decoded(storage.entries);
-			let mut module_info = Module::new(name.clone());
+			let storage = pallet.storage.unwrap();
+			let prefix = storage.prefix;
+			let entries = storage.entries;
+			let mut pallet_info = Pallet::new(name.clone());
 
 			for storage_entry in entries.into_iter() {
-				let storage_name = unwrap_decoded(storage_entry.name);
+				let storage_name = storage_entry.name;
 				let ty = storage_entry.ty;
-				let key_prefix =
-					sub_storage::module_prefix_raw(prefix.as_bytes(), storage_name.as_bytes());
+				let key_prefix = pallet_prefix_raw(prefix.as_bytes(), storage_name.as_bytes());
 
 				let (pairs, size) = if opt.scrape_pairs {
 					// this should be slower but gives more detail.
 					let pairs =
-						sub_storage::get_pairs(StorageKey(key_prefix.clone()), &client, at).await;
+						rpc_client.storage_pairs(StorageKey(key_prefix.clone()), at).await.unwrap();
 					let pairs = pairs
 						.into_iter()
 						.map(|(k, v)| (k.0, v.0))
@@ -205,8 +217,10 @@ async fn main() -> () {
 					(pairs, size)
 				} else {
 					// This should be faster
-					let size = sub_storage::get_storage_size(StorageKey(key_prefix), &client, at)
+					let size = rpc_client
+						.storage_size(StorageKey(key_prefix), at)
 						.await
+						.unwrap()
 						.unwrap_or_default() as usize;
 					let pairs: Vec<_> = vec![];
 					(pairs, size)
@@ -221,22 +235,20 @@ async fn main() -> () {
 					size
 				);
 
-				module_info.size += size;
+				pallet_info.size += size;
 				let item = match ty {
 					StorageEntryType::Plain(_) => StorageItem::Value(size),
-					StorageEntryType::Map { .. } | StorageEntryType::DoubleMap { .. } => {
-						StorageItem::Map(size, pairs.len())
-					}
+					StorageEntryType::Map { .. } => StorageItem::Map(size, pairs.len()),
 				};
-				module_info.items.push(Storage::new(storage_name, item));
+				pallet_info.items.push(Storage::new(storage_name, item));
 			}
-			module_info.items.sort_by_key(|x| x.size);
-			module_info.items.reverse();
-			println!("Scraped module {}. Total size {}.", module_info.name, module_info.size,);
+			pallet_info.items.sort_by_key(|x| x.size);
+			pallet_info.items.reverse();
+			println!("Scraped module {}. Total size {}.", pallet_info.name, pallet_info.size,);
 			if opt.progress {
-				print!("{}", module_info);
+				print!("{}", pallet_info);
 			}
-			modules.push(module_info);
+			modules.push(pallet_info);
 		}
 
 		println!("Scraping results done. Final sorted tree:");

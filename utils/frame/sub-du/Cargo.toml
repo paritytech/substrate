@@ -10,12 +10,14 @@ async-std = { version = "1.12.0", features = ["attributes"] }
 jsonrpsee = { version = "0.15.1", features = ["jsonrpsee-types", "jsonrpsee-http-client", "jsonrpsee-ws-client"] }
 separator = "0.4.1"
 ansi_term = "0.12.1"
-env_logger = "0.9"
+tracing-subscriber = "0.3.16"
 log = "0.4.17"
 structopt = "0.3"
 
-sub-storage = { path = "../sub-storage", features = ["helpers"] }
-frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
+remote-externalities = { path = "../remote-externalities" }
+sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+frame-metadata = { version = "15.0.0", default-features = false, features = ["v14", "std"] }
+sc-rpc-api = { version = "0.10.0-dev", path = "../../../client/rpc-api" }
 
 [features]
 default = []
