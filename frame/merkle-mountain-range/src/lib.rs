@@ -383,7 +383,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Generate a MMR proof for the given `block_numbers`.
 	/// If `best_known_block_number = Some(n)`, this generates a historical proof for
-	/// the head of the chain was at height `n`.
+	/// the chain with head at height `n`.
 	/// Else it generates a proof for the MMR at the current block height.
 	///
 	/// Note this method can only be used from an off-chain context
