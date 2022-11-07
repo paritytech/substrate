@@ -1442,8 +1442,8 @@ impl<T: Config> Pallet<T> {
 		queue
 			.iter()
 			.filter_map(|block| match block {
-				(block_nr, Some(_), txs) if *block_nr <= previous_block =>
-					Some(txs.iter().map(|(_, tx)| tx)),
+				(block_nr, Some(exec_index), txs) if *block_nr <= previous_block =>
+					Some(txs.iter().skip(*exec_index as usize).map(|(_, tx)| tx)),
 				_ => None,
 			})
 			.flatten()
