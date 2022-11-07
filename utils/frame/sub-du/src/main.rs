@@ -1,6 +1,6 @@
 use ansi_term::{Colour::*, Style};
 use frame_metadata::{RuntimeMetadata, RuntimeMetadataPrefixed, StorageEntryType};
-use remote_externalities::{twox_128, StorageKey};
+use remote_externalities::{twox_128, Mode, OnlineConfig, StorageKey, Transport};
 use sc_rpc_api::state::StateApiClient;
 use separator::Separatable;
 use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper, H256 as Hash};
@@ -161,8 +161,11 @@ type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 async fn main() -> () {
 	let opt = Opt::from_args();
 
+	let mut cfg = OnlineConfig::default();
+	cfg.transport = Transport::Uri(opt.uri);
+
 	// connect to a node.
-	let ext = remote_externalities::Builder::<Block>::new();
+	let ext = remote_externalities::Builder::<Block>::new().mode(Mode::Online(cfg));
 	let mut modules: Vec<Pallet> = vec![];
 
 	// potentially replace head with the given hash
