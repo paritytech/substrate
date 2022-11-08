@@ -375,7 +375,7 @@ fn finalize_3_voters_no_observers() {
 
 	// normally there's no justification for finalized blocks
 	assert!(
-		net.lock().peer(0).client().justifications(&hashof20).unwrap().is_none(),
+		net.lock().peer(0).client().justifications(hashof20).unwrap().is_none(),
 		"Extra justification for block#1",
 	);
 }
@@ -621,7 +621,7 @@ fn justification_is_generated_periodically() {
 	// when block#32 (justification_period) is finalized, justification
 	// is required => generated
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().justifications(&hashof32).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justifications(hashof32).unwrap().is_some());
 	}
 }
 
@@ -665,12 +665,12 @@ fn sync_justifications_on_change_blocks() {
 	// the first 3 peers are grandpa voters and therefore have already finalized
 	// block 21 and stored a justification
 	for i in 0..3 {
-		assert!(net.lock().peer(i).client().justifications(&hashof21).unwrap().is_some());
+		assert!(net.lock().peer(i).client().justifications(hashof21).unwrap().is_some());
 	}
 
 	// the last peer should get the justification by syncing from other peers
 	futures::executor::block_on(futures::future::poll_fn(move |cx| {
-		if net.lock().peer(3).client().justifications(&hashof21).unwrap().is_none() {
+		if net.lock().peer(3).client().justifications(hashof21).unwrap().is_none() {
 			net.lock().poll(cx);
 			Poll::Pending
 		} else {
@@ -1428,7 +1428,7 @@ fn grandpa_environment_respects_voting_rules() {
 		.as_client()
 		.expect_block_hash_from_id(&BlockId::Number(19))
 		.unwrap();
-	peer.client().finalize_block(&hashof19, None, false).unwrap();
+	peer.client().finalize_block(hashof19, None, false).unwrap();
 
 	// the 3/4 environment should propose block 21 for voting
 	assert_eq!(
@@ -1455,7 +1455,7 @@ fn grandpa_environment_respects_voting_rules() {
 		.as_client()
 		.expect_block_hash_from_id(&BlockId::Number(21))
 		.unwrap();
-	peer.client().finalize_block(&hashof21, None, false).unwrap();
+	peer.client().finalize_block(hashof21, None, false).unwrap();
 
 	// even though the default environment will always try to not vote on the
 	// best block, there's a hard rule that we can't cast any votes lower than
@@ -1666,7 +1666,7 @@ fn imports_justification_for_regular_blocks_on_import() {
 	);
 
 	// the justification should be imported and available from the client
-	assert!(client.justifications(&block_hash).unwrap().is_some());
+	assert!(client.justifications(block_hash).unwrap().is_some());
 }
 
 #[test]

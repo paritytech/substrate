@@ -205,14 +205,14 @@ where
 
 			if !request.no_proof {
 				let (proof, _count) = self.client.read_proof_collection(
-					&block,
+					block,
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;
 				response.proof = proof.encode();
 			} else {
 				let entries = self.client.storage_collection(
-					&block,
+					block,
 					request.start.as_slice(),
 					MAX_RESPONSE_BYTES,
 				)?;

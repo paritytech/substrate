@@ -16,8 +16,12 @@
 // limitations under the License.
 
 use crate::{self as fast_unstake};
+use frame_benchmarking::frame_support::assert_ok;
 use frame_support::{
-	pallet_prelude::*, parameter_types, traits::ConstU64, weights::constants::WEIGHT_PER_SECOND,
+	pallet_prelude::*,
+	parameter_types,
+	traits::{ConstU64, Currency},
+	weights::constants::WEIGHT_PER_SECOND,
 };
 use sp_runtime::traits::{Convert, IdentityLookup};
 
@@ -168,15 +172,17 @@ impl Convert<sp_core::U256, Balance> for U256ToBalance {
 }
 
 parameter_types! {
-	pub static DepositAmount: u128 = 7;
+	pub static Deposit: u128 = 7;
+	pub static BatchSize: u32 = 1;
 }
 
 impl fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Deposit = DepositAmount;
+	type Deposit = Deposit;
 	type Currency = Balances;
 	type Staking = Staking;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
+	type BatchSize = BatchSize;
 	type WeightInfo = ();
 }
 
@@ -212,13 +218,13 @@ pub(crate) fn fast_unstake_events_since_last_call() -> Vec<super::Event<Runtime>
 }
 
 pub struct ExtBuilder {
-	exposed_nominators: Vec<(AccountId, AccountId, Balance)>,
+	unexposed: Vec<(AccountId, AccountId, Balance)>,
 }
 
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			exposed_nominators: vec![
+			unexposed: vec![
 				(1, 2, 7 + 100),
 				(3, 4, 7 + 100),
 				(5, 6, 7 + 100),
@@ -255,6 +261,11 @@ impl ExtBuilder {
 			});
 	}
 
+	pub(crate) fn batch(self, size: u32) -> Self {
+		BatchSize::set(size);
+		self
+	}
+
 	pub(crate) fn build(self) -> sp_io::TestExternalities {
 		sp_tracing::try_init_simple();
 		let mut storage =
@@ -266,12 +277,12 @@ impl ExtBuilder {
 
 		let _ = pallet_balances::GenesisConfig::<Runtime> {
 			balances: self
-				.exposed_nominators
+				.unexposed
 				.clone()
 				.into_iter()
 				.map(|(stash, _, balance)| (stash, balance * 2))
 				.chain(
-					self.exposed_nominators
+					self.unexposed
 						.clone()
 						.into_iter()
 						.map(|(_, ctrl, balance)| (ctrl, balance * 2)),
@@ -284,7 +295,7 @@ impl ExtBuilder {
 
 		let _ = pallet_staking::GenesisConfig::<Runtime> {
 			stakers: self
-				.exposed_nominators
+				.unexposed
 				.into_iter()
 				.map(|(x, y, z)| (x, y, z, pallet_staking::StakerStatus::Nominator(vec![42])))
 				.chain(validators_range.map(|x| (x, x, 100, StakerStatus::Validator)))
@@ -307,6 +318,7 @@ impl ExtBuilder {
 			// because we read this value as a measure of how many validators we have.
 			pallet_staking::ValidatorCount::<Runtime>::put(VALIDATORS_PER_ERA as u32);
 		});
+
 		ext
 	}
 
@@ -346,4 +358,21 @@ pub fn assert_unstaked(stash: &AccountId) {
 	assert!(!pallet_staking::Payee::<T>::contains_key(stash));
 	assert!(!pallet_staking::Validators::<T>::contains_key(stash));
 	assert!(!pallet_staking::Nominators::<T>::contains_key(stash));
+}
+
+pub fn create_exposed_nominator(exposed: AccountId, era: u32) {
+	// create an exposed nominator in era 1
+	pallet_staking::ErasStakers::<T>::mutate(era, VALIDATORS_PER_ERA, |expo| {
+		expo.others.push(IndividualExposure { who: exposed, value: 0 as Balance });
+	});
+	Balances::make_free_balance_be(&exposed, 100);
+	assert_ok!(Staking::bond(
+		RuntimeOrigin::signed(exposed),
+		exposed,
+		10,
+		pallet_staking::RewardDestination::Staked
+	));
+	assert_ok!(Staking::nominate(RuntimeOrigin::signed(exposed), vec![exposed]));
+	// register the exposed one.
+	assert_ok!(FastUnstake::register_fast_unstake(RuntimeOrigin::signed(exposed)));
 }
