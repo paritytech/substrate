@@ -291,6 +291,7 @@ pub struct StateDbSync<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
 	pruning: Option<RefWindow<BlockHash, Key, D>>,
 	pinned: HashMap<BlockHash, u32>,
+	ref_counting: bool,
 }
 
 impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
@@ -311,7 +312,7 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => None,
 		};
 
-		Ok(StateDbSync { mode, non_canonical, pruning, pinned: Default::default() })
+		Ok(StateDbSync { mode, non_canonical, pruning, pinned: Default::default(), ref_counting })
 	}
 
 	fn insert_block(
@@ -372,9 +373,9 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 					match self.pruning.as_ref() {
 						None => IsPruned::NotPruned,
 						Some(pruning) => match pruning.have_block(hash, number) {
-							HaveBlock::NotHave => IsPruned::Pruned,
-							HaveBlock::Have => IsPruned::NotPruned,
-							HaveBlock::MayHave => IsPruned::MaybePruned,
+							HaveBlock::No => IsPruned::Pruned,
+							HaveBlock::Yes => IsPruned::NotPruned,
+							HaveBlock::Maybe => IsPruned::MaybePruned,
 						},
 					}
 				}
@@ -444,9 +445,9 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 				let have_block = self.non_canonical.have_block(hash) ||
 					self.pruning.as_ref().map_or(false, |pruning| {
 						match pruning.have_block(hash, number) {
-							HaveBlock::NotHave => false,
-							HaveBlock::Have => true,
-							HaveBlock::MayHave => hint(),
+							HaveBlock::No => false,
+							HaveBlock::Yes => true,
+							HaveBlock::Maybe => hint(),
 						}
 					});
 				if have_block {
@@ -494,30 +495,6 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 			return Ok(Some(value))
 		}
 		db.get(key.as_ref()).map_err(Error::Db)
-	}
-
-	fn apply_pending(&mut self) {
-		self.non_canonical.apply_pending();
-		if let Some(pruning) = &mut self.pruning {
-			pruning.apply_pending();
-		}
-		let next_hash = self.pruning.as_mut().map(|p| p.next_hash());
-		trace!(
-			target: "forks",
-			"First available: {:?} ({}), Last canon: {:?} ({}), Best forks: {:?}",
-			next_hash,
-			self.pruning.as_ref().map(|p| p.pending()).unwrap_or(0),
-			self.non_canonical.last_canonicalized_hash(),
-			self.non_canonical.last_canonicalized_block_number().unwrap_or(0),
-			self.non_canonical.top_level(),
-		);
-	}
-
-	fn revert_pending(&mut self) {
-		if let Some(pruning) = &mut self.pruning {
-			pruning.revert_pending();
-		}
-		self.non_canonical.revert_pending();
 	}
 
 	fn memory_info(&self) -> StateDbMemoryInfo {
@@ -654,14 +631,11 @@ impl<BlockHash: Hash + MallocSizeOf, Key: Hash + MallocSizeOf, D: MetaDb>
 		return self.db.read().is_pruned(hash, number)
 	}
 
-	/// Apply all pending changes
-	pub fn apply_pending(&self) {
-		self.db.write().apply_pending();
-	}
-
-	/// Revert all pending changes
-	pub fn revert_pending(&self) {
-		self.db.write().revert_pending();
+	/// Reset in-memory changes to the last disk-backed state.
+	pub fn reset(&self, db: D) -> Result<(), Error<D::Error>> {
+		let mut state_db = self.db.write();
+		*state_db = StateDbSync::new(state_db.mode.clone(), state_db.ref_counting, db)?;
+		Ok(())
 	}
 
 	/// Returns the current memory statistics of this instance.
@@ -766,9 +740,7 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		state_db.apply_pending();
 		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(1)).unwrap());
-		state_db.apply_pending();
 		db.commit(
 			&state_db
 				.insert_block(
@@ -779,11 +751,8 @@ mod tests {
 				)
 				.unwrap(),
 		);
-		state_db.apply_pending();
 		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(21)).unwrap());
-		state_db.apply_pending();
 		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(3)).unwrap());
-		state_db.apply_pending();
 
 		(db, state_db)
 	}
