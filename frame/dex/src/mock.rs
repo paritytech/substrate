@@ -21,7 +21,9 @@ use super::*;
 use crate as pallet_dex;
 
 use frame_support::{
-	construct_runtime, parameter_types,
+	construct_runtime,
+	instances::{Instance1, Instance2},
+	parameter_types,
 	traits::{ConstU32, ConstU64},
 	PalletId,
 };
@@ -44,7 +46,8 @@ construct_runtime!(
 	{
 		System: frame_system,
 		Balances: pallet_balances,
-		Assets: pallet_assets,
+		LocalAssets: pallet_assets::<Instance1>,
+		PoolAssets:  pallet_assets::<Instance2>,
 		Dex: pallet_dex,
 	}
 );
@@ -88,7 +91,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 }
 
-impl pallet_assets::Config for Test {
+impl pallet_assets::Config<Instance1> for Test {
 	type Event = Event;
 	type Balance = u64;
 	type AssetId = u32;
@@ -105,6 +108,24 @@ impl pallet_assets::Config for Test {
 	type Extra = ();
 }
 
+//TODO: limit creation only to dex pallet
+impl pallet_assets::Config<Instance2> for Test {
+	type Event = Event;
+	type Balance = u64;
+	type AssetId = u32;
+	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<u64>;
+	type AssetDeposit = ConstU64<0>;
+	type AssetAccountDeposit = ConstU64<0>;
+	type MetadataDepositBase = ConstU64<0>;
+	type MetadataDepositPerByte = ConstU64<0>;
+	type ApprovalDeposit = ConstU64<0>;
+	type StringLimit = ConstU32<50>;
+	type Freezer = ();
+	type WeightInfo = ();
+	type Extra = ();
+}
+
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
 }
@@ -113,7 +134,8 @@ impl Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = Assets;
+	type Assets = LocalAssets;
+	type PoolAssets = PoolAssets;
 	type AssetId = u32;
 	type PalletId = DexPalletId;
 }
