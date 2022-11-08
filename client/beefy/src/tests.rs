@@ -29,12 +29,12 @@ use sc_consensus::{
 	BlockImport, BlockImportParams, BoxJustificationImport, ForkChoiceStrategy, ImportResult,
 	ImportedAux,
 };
-use sc_keystore::LocalKeystore;
 use sc_network_test::{
 	Block, BlockImportAdapter, FullPeerConfig, PassThroughVerifier, Peer, PeersClient,
 	PeersFullClient, TestNetFactory,
 };
 use sc_utils::notification::NotificationReceiver;
+use sp_keystore::testing::KeyStore as TestKeystore;
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
@@ -311,7 +311,7 @@ pub(crate) fn make_beefy_ids(keys: &[BeefyKeyring]) -> Vec<AuthorityId> {
 }
 
 pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(LocalKeystore::in_memory());
+	let keystore = Arc::new(TestKeystore::new());
 	SyncCryptoStore::ecdsa_generate_new(&*keystore, BeefyKeyType, Some(&authority.to_seed()))
 		.expect("Creates authority key");
 	keystore
@@ -487,14 +487,10 @@ fn finalize_block_and_wait_for_beefy(
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 
 	for block in finalize_targets {
-		let finalize = BlockId::number(*block);
 		peers.clone().for_each(|(index, _)| {
-			net.lock()
-				.peer(index)
-				.client()
-				.as_client()
-				.finalize_block(finalize, None)
-				.unwrap();
+			let client = net.lock().peer(index).client().as_client();
+			let finalize = client.expect_block_hash_from_id(&BlockId::number(*block)).unwrap();
+			client.finalize_block(finalize, None).unwrap();
 		})
 	}
 
@@ -582,7 +578,13 @@ fn lagging_validators() {
 	);
 
 	// Alice finalizes #25, Bob lags behind
-	let finalize = BlockId::number(25);
+	let finalize = net
+		.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.expect_block_hash_from_id(&BlockId::number(25))
+		.unwrap();
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
@@ -606,7 +608,13 @@ fn lagging_validators() {
 
 	// Alice finalizes session-boundary mandatory block #60, Bob lags behind
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	let finalize = BlockId::number(60);
+	let finalize = net
+		.lock()
+		.peer(0)
+		.client()
+		.as_client()
+		.expect_block_hash_from_id(&BlockId::number(60))
+		.unwrap();
 	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
@@ -659,24 +667,16 @@ fn correct_beefy_payload() {
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
 
 	// now 2 good validators and 1 bad one are voting
-	net.lock()
+	let hashof11 = net
+		.lock()
 		.peer(0)
 		.client()
 		.as_client()
-		.finalize_block(BlockId::number(11), None)
+		.expect_block_hash_from_id(&BlockId::number(11))
 		.unwrap();
-	net.lock()
-		.peer(1)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
-	net.lock()
-		.peer(3)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(hashof11, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(hashof11, None).unwrap();
+	net.lock().peer(3).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is _not_ reached
 	let timeout = Some(Duration::from_millis(250));
@@ -686,12 +686,7 @@ fn correct_beefy_payload() {
 	// 3rd good validator catches up and votes as well
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
-	net.lock()
-		.peer(2)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(11), None)
-		.unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is reached
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
@@ -724,9 +719,9 @@ fn beefy_importing_blocks() {
 
 	let full_client = client.as_client();
 	let parent_id = BlockId::Number(0);
-	let block_id = BlockId::Number(1);
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof1 = block.header.hash();
 
 	// Import without justifications.
 	let mut justif_recv = justif_stream.subscribe();
@@ -738,10 +733,16 @@ fn beefy_importing_blocks() {
 		block_on(block_import.import_block(params(block, None), HashMap::new())).unwrap(),
 		ImportResult::AlreadyInChain
 	);
-	// Verify no justifications present:
+	// Verify no BEEFY justifications present:
 	{
 		// none in backend,
-		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		assert_eq!(
+			full_client
+				.justifications(hashof1)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
 		// and none sent to BEEFY worker.
 		block_on(poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
@@ -761,6 +762,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof2 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -770,11 +772,18 @@ fn beefy_importing_blocks() {
 			..Default::default()
 		}),
 	);
-	// Verify justification successfully imported:
+	// Verify BEEFY justification successfully imported:
 	{
-		// available in backend,
-		assert!(full_client.justifications(&BlockId::Number(block_num)).unwrap().is_some());
-		// and also sent to BEEFY worker.
+		// still not in backend (worker is responsible for appending to backend),
+		assert_eq!(
+			full_client
+				.justifications(hashof2)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
+		// but sent to BEEFY worker
+		// (worker will append it to backend when all previous mandatory justifs are there as well).
 		block_on(poll_fn(move |cx| {
 			match justif_recv.poll_next_unpin(cx) {
 				Poll::Ready(Some(_justification)) => (),
@@ -796,6 +805,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof3 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -806,10 +816,16 @@ fn beefy_importing_blocks() {
 			..Default::default()
 		}),
 	);
-	// Verify bad justifications was not imported:
+	// Verify bad BEEFY justifications was not imported:
 	{
 		// none in backend,
-		assert!(full_client.justifications(&block_id).unwrap().is_none());
+		assert_eq!(
+			full_client
+				.justifications(hashof3)
+				.unwrap()
+				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
+			None
+		);
 		// and none sent to BEEFY worker.
 		block_on(poll_fn(move |cx| {
 			assert_eq!(justif_recv.poll_next_unpin(cx), Poll::Pending);
@@ -901,12 +917,9 @@ fn on_demand_beefy_justification_sync() {
 
 	let (dave_best_blocks, _) =
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
-	net.lock()
-		.peer(dave_index)
-		.client()
-		.as_client()
-		.finalize_block(BlockId::number(1), None)
-		.unwrap();
+	let client = net.lock().peer(dave_index).client().as_client();
+	let hashof1 = client.expect_block_hash_from_id(&BlockId::number(1)).unwrap();
+	client.finalize_block(hashof1, None).unwrap();
 	// Give Dave task some cpu cycles to process the finality notification,
 	run_for(Duration::from_millis(100), &net, &mut runtime);
 	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.

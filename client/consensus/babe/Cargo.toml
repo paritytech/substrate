@@ -54,8 +54,8 @@ sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 
 [dev-dependencies]
 rand_chacha = "0.2.2"
-tempfile = "3.1.0"
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
+sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
 sc-network-test = { version = "0.8.0", path = "../../network/test" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
