@@ -304,8 +304,13 @@ const BITMAP_LENGTH: usize = 2;
 pub(crate) struct Bitmap(u16);
 
 impl Bitmap {
-	pub fn decode(mut data: &[u8]) -> Result<Self, codec::Error> {
-		Ok(Bitmap(u16::decode(&mut data)?))
+	pub fn decode(data: &[u8]) -> Result<Self, codec::Error> {
+		let value = u16::decode(&mut &data[..])?;
+		if value == 0 {
+			Err("Bitmap without a child.".into())
+		} else {
+			Ok(Bitmap(value))
+		}
 	}
 
 	pub fn value_at(&self, i: usize) -> bool {

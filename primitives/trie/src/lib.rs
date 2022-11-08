@@ -57,10 +57,10 @@ pub use trie_db::{
 pub use trie_stream::TrieStream;
 
 /// substrate trie layout
-pub struct LayoutV0<H>(sp_std::marker::PhantomData<H>);
+pub struct LayoutV0<H>(PhantomData<H>);
 
 /// substrate trie layout, with external value nodes.
-pub struct LayoutV1<H>(sp_std::marker::PhantomData<H>);
+pub struct LayoutV1<H>(PhantomData<H>);
 
 impl<H> TrieLayout for LayoutV0<H>
 where
@@ -985,5 +985,16 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(first_storage_root, second_storage_root);
+	}
+
+	#[test]
+	fn node_with_no_children_fail_decoding() {
+		let branch = NodeCodec::<Blake2Hasher>::branch_node_nibbled(
+			b"some_partial".iter().copied(),
+			24,
+			vec![None; 16].into_iter(),
+			Some(trie_db::node::Value::Inline(b"value"[..].into())),
+		);
+		assert!(NodeCodec::<Blake2Hasher>::decode(branch.as_slice()).is_err());
 	}
 }

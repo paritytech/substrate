@@ -44,11 +44,20 @@ pub struct PeerInfo<Block: BlockT> {
 
 /// Reported sync state.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum SyncState {
+pub enum SyncState<BlockNumber> {
 	/// Initial sync is complete, keep-up sync is active.
 	Idle,
 	/// Actively catching up with the chain.
-	Downloading,
+	Downloading { target: BlockNumber },
+	/// All blocks are downloaded and are being imported.
+	Importing { target: BlockNumber },
+}
+
+impl<BlockNumber> SyncState<BlockNumber> {
+	/// Are we actively catching up with the chain?
+	pub fn is_major_syncing(&self) -> bool {
+		!matches!(self, SyncState::Idle)
+	}
 }
 
 /// Reported state download progress.
@@ -64,7 +73,7 @@ pub struct StateDownloadProgress {
 #[derive(Clone)]
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
-	pub state: SyncState,
+	pub state: SyncState<NumberFor<Block>>,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<Block>>,
 	/// Number of peers participating in syncing.
@@ -395,4 +404,14 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Decode implementation-specific state response.
 	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
+
+	/// Advance the state of `ChainSync`
+	///
+	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
+	/// this function should be polled until it returns [`Poll::Pending`] to
+	/// consume all pending events.
+	fn poll(
+		&mut self,
+		cx: &mut std::task::Context,
+	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 }
