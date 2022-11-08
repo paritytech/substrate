@@ -89,7 +89,7 @@ sp_api::decl_runtime_apis! {
 		/// Currently, only the value provided by this type at genesis will be used.
 		fn slot_duration() -> SlotDuration;
 
-		// Return the current set of authorities.
+		/// Return the current set of authorities.
 		fn authorities() -> Vec<AuthorityId>;
 	}
 }

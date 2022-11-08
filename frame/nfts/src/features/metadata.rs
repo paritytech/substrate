@@ -81,7 +81,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
 		}
 
-		// NOTE: if the item was previously burned, the ItemConfigOf record might not exists
+		// NOTE: if the item was previously burned, the ItemConfigOf record might not exist
 		let is_locked = Self::get_item_config(&collection, &item)
 			.map_or(false, |c| c.has_disabled_setting(ItemSetting::UnlockedMetadata));
 

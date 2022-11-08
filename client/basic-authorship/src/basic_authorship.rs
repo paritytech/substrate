@@ -736,7 +736,7 @@ mod tests {
 		let api = client.runtime_api();
 		api.execute_block(&block_id, proposal.block).unwrap();
 
-		let state = backend.state_at(&genesis_hash).unwrap();
+		let state = backend.state_at(genesis_hash).unwrap();
 
 		let storage_changes = api.into_storage_changes(&state, genesis_hash).unwrap();
 

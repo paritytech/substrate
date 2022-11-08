@@ -225,10 +225,13 @@ impl CollectionSettings {
 
 impl_codec_bitflags!(CollectionSettings, u64, CollectionSetting);
 
+/// Mint type. Can the NFT be create by anyone, or only the creator of the collection,
+/// or only by wallets that already hold an NFT from a certain collection?
+/// The ownership of a privately minted NFT is still publicly visible.
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum MintType<CollectionId> {
 	/// Only an `Issuer` could mint items.
-	Private,
+	Issuer,
 	/// Anyone could mint items.
 	Public,
 	/// Only holders of items in specified collection could mint new items.
@@ -237,7 +240,7 @@ pub enum MintType<CollectionId> {
 
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct MintSettings<Price, BlockNumber, CollectionId> {
-	/// Mint type.
+	/// Whether anyone can mint or if minters are restricted to some subset.
 	pub(super) mint_type: MintType<CollectionId>,
 	/// An optional price per mint.
 	pub(super) price: Option<Price>,
@@ -252,7 +255,7 @@ pub struct MintSettings<Price, BlockNumber, CollectionId> {
 impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumber, CollectionId> {
 	fn default() -> Self {
 		Self {
-			mint_type: MintType::Private,
+			mint_type: MintType::Issuer,
 			price: None,
 			start_block: None,
 			end_block: None,

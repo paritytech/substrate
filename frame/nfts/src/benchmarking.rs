@@ -20,6 +20,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use enumflags2::{BitFlag, BitFlags};
 use frame_benchmarking::{
 	account, benchmarks_instance_pallet, whitelist_account, whitelisted_caller,
 };
@@ -38,10 +39,7 @@ use crate::Pallet as Nfts;
 const SEED: u32 = 0;
 
 fn create_collection<T: Config<I>, I: 'static>(
-) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>)
-where
-	<T as Config<I>>::CollectionId: sp_std::default::Default,
-{
+) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
@@ -130,12 +128,22 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	assert_eq!(event, &system_event);
 }
 
-fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<T, I> {
+fn make_collection_config<T: Config<I>, I: 'static>(
+	disable_settings: BitFlags<CollectionSetting>,
+) -> CollectionConfigFor<T, I> {
 	CollectionConfig {
-		settings: CollectionSettings::all_enabled(),
+		settings: CollectionSettings::from_disabled(disable_settings),
 		max_supply: None,
 		mint_settings: MintSettings::default(),
 	}
+}
+
+fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<T, I> {
+	make_collection_config::<T, I>(CollectionSetting::empty())
+}
+
+fn default_item_config() -> ItemConfig {
+	ItemConfig { settings: ItemSettings::all_enabled() }
 }
 
 benchmarks_instance_pallet! {
@@ -184,6 +192,14 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
 	}
 
+	force_mint {
+		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let item = T::Helper::item(0);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, default_item_config())
+	verify {
+		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
+	}
+
 	burn {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
@@ -198,6 +214,7 @@ benchmarks_instance_pallet! {
 
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
+		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, target_lookup)
 	verify {
 		assert_last_event::<T, I>(Event::Transferred { collection, item, from: caller, to: target }.into());
@@ -214,7 +231,7 @@ benchmarks_instance_pallet! {
 			caller_lookup.clone(),
 			caller_lookup.clone(),
 			caller_lookup,
-			CollectionConfig { settings: CollectionSetting::DepositRequired.into(), ..Default::default() },
+			make_collection_config::<T, I>(CollectionSetting::DepositRequired.into()),
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
 	verify {
@@ -247,7 +264,8 @@ benchmarks_instance_pallet! {
 		let lock_settings = CollectionSettings::from_disabled(
 			CollectionSetting::TransferableItems |
 				CollectionSetting::UnlockedMetadata |
-				CollectionSetting::UnlockedAttributes,
+				CollectionSetting::UnlockedAttributes |
+				CollectionSetting::UnlockedMaxSupply,
 		);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_settings)
 	verify {
@@ -290,7 +308,7 @@ benchmarks_instance_pallet! {
 			issuer: caller_lookup.clone(),
 			admin: caller_lookup.clone(),
 			freezer: caller_lookup,
-			config: CollectionConfig { settings: CollectionSetting::DepositRequired.into(), ..Default::default() },
+			config: make_collection_config::<T, I>(CollectionSetting::DepositRequired.into()),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
@@ -424,6 +442,20 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
+	update_mint_settings {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let mint_settings = MintSettings {
+			mint_type: MintType::HolderOf(T::Helper::collection(0)),
+			start_block: Some(One::one()),
+			end_block: Some(One::one()),
+			price: Some(ItemPrice::<T, I>::from(1u32)),
+			default_item_settings: ItemSettings::all_enabled(),
+		};
+	}: _(SystemOrigin::Signed(caller.clone()), collection, mint_settings)
+	verify {
+		assert_last_event::<T, I>(Event::CollectionMintSettingsUpdated { collection }.into());
+	}
+
 	set_price {
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
@@ -538,6 +570,7 @@ benchmarks_instance_pallet! {
 		let duration = T::MaxDeadlineDuration::get();
 		let target: T::AccountId = account("target", 0, SEED);
 		let target_lookup = T::Lookup::unlookup(target.clone());
+		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let origin = SystemOrigin::Signed(caller.clone());
 		frame_system::Pallet::<T>::set_block_number(One::one());
 		Nfts::<T, I>::transfer(origin.clone().into(), collection, item2, target_lookup)?;

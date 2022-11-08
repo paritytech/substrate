@@ -277,7 +277,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Price of an asset instance.
+	/// A price of an item.
 	#[pallet::storage]
 	pub(super) type ItemPriceOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
 		_,
@@ -722,7 +722,7 @@ pub mod pallet {
 					}
 
 					match mint_settings.mint_type {
-						MintType::Private => {
+						MintType::Issuer => {
 							ensure!(
 								Self::has_role(&collection, &caller, CollectionRole::Issuer),
 								Error::<T, I>::NoPermission
@@ -770,7 +770,7 @@ pub mod pallet {
 		/// Emits `Issued` event when successful.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::mint())]
+		#[pallet::weight(T::WeightInfo::force_mint())]
 		pub fn force_mint(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
@@ -1409,7 +1409,7 @@ pub mod pallet {
 		/// - `mint_settings`: The new mint settings.
 		///
 		/// Emits `CollectionMintSettingsUpdated` event when successful.
-		#[pallet::weight(T::WeightInfo::set_collection_max_supply())]
+		#[pallet::weight(T::WeightInfo::update_mint_settings())]
 		pub fn update_mint_settings(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
