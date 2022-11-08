@@ -654,10 +654,62 @@ frame_benchmarking::benchmarks! {
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
+	set_commission {
+		// Create a pool
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		// set a max commission
+		Pools::<T>::set_max_commission(RuntimeOrigin::Signed(depositor.clone()).into(), 1, Perbill::from_percent(50));
+		// set a commission throttle
+		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1, CommissionThrottlePrefs {
+			max_increase: Perbill::from_percent(20),
+			min_delay: 1000_u64,
+		});
+	}:_(RuntimeOrigin::Signed(depositor.clone(), 1, Perbill::from_percent(100), depositor))
+	verify {
+		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
+			current: Some(Perbill::from_percent(100), depositor),
+			max: None,
+			throttle: None,
+		});
+	}
+
+	set_max_commission {
+		// Create a pool
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		// Set a commission that will update when max commission is set.
+		Pools::<T>::set_commission(RuntimeOrigin::Signed(depositor.clone()).into(), Perbill::from_percent(100), depositor);
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1, Perbill::from_percent(50))
+	verify {
+		assert_eq!(
+			BondedPools::<T>::get(1).unwrap().commission, Commission {
+			current: Some(Perbill::from_percent(50), depositor),
+			max: Some(Perbill::from_percent(50)),
+			throttle: None,
+		});
+	}
+
+	set_commission_throttle {
+		// Create a pool
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1, CommissionThrottlePrefs {
+		max_increase: Perbill::from_percent(50),
+		min_delay: 1000_u64,
+	})
+	verify {
+		assert_eq!(
+			BondedPools::<T>::get(1).unwrap().commission, Commission {
+			current: None,
+			max: None,
+			throttle: CommissionThrottlePrefs {
+				max_increase: Perbill::from_percent(50),
+				min_delay: 1000_u64,
+			},
+		});
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),
 		crate::mock::Runtime
 	);
 }
-
