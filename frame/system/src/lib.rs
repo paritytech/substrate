@@ -75,7 +75,7 @@ use sp_runtime::{
 		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
-	DispatchError, RuntimeDebug,
+	DispatchError, Perbill, RuntimeDebug,
 };
 #[cfg(any(feature = "std", test))]
 use sp_std::map;
@@ -369,6 +369,13 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// Do not use.
+		#[pallet::weight(T::BlockWeights::get().max_block)]
+		pub fn removed_call_do_not_use(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
+			ensure_signed_or_root(origin)?;
+			Ok(())
+		}
+
 		/// Make some on-chain remark.
 		///
 		/// # <weight>
