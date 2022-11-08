@@ -248,6 +248,7 @@ pub enum IdentityField {
 	PgpFingerprint = 0b0000000000000000000000000000000000000000000000000000000000100000,
 	Image = 0b0000000000000000000000000000000000000000000000000000000001000000,
 	Twitter = 0b0000000000000000000000000000000000000000000000000000000010000000,
+	Discord = 0b0000000000000000000000000000000000000000000000000000000100000000u64,
 }
 
 /// Wrapper type for `BitFlags<IdentityField>` that implements `Codec`.
@@ -337,6 +338,9 @@ pub struct IdentityInfo<FieldLimit: Get<u32>> {
 
 	/// The Twitter identity. The leading `@` character may be elided.
 	pub twitter: Data,
+
+	/// The Discord identity.
+	pub discord: Data,
 }
 
 impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
@@ -365,6 +369,9 @@ impl<FieldLimit: Get<u32>> IdentityInfo<FieldLimit> {
 		}
 		if !self.twitter.is_none() {
 			res.insert(IdentityField::Twitter);
+		}
+		if !self.discord.is_none() {
+			res.insert(IdentityField::Discord);
 		}
 		IdentityFields(res)
 	}

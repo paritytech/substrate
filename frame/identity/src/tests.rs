@@ -517,3 +517,16 @@ fn test_has_identity() {
 		));
 	});
 }
+
+#[test]
+fn test_set_identity_works_for_discord() {
+	new_test_ext().execute_with(|| {
+		let discord_ident = Data::Raw(b"foobar".to_vec().try_into().unwrap());
+		assert_ok!(Identity::set_identity(
+			Origin::signed(10),
+			Box::new(IdentityInfo { discord: discord_ident.clone(), ..Default::default() })
+		));
+		assert!(Identity::has_identity(&10, IdentityField::Discord as u64));
+		assert_eq!(Identity::identity(10).unwrap().info.discord, discord_ident);
+	});
+}
