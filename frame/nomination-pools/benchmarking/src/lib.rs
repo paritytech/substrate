@@ -509,15 +509,16 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			new_pool,
 			BondedPoolInner {
-				points: min_create_bond,
-				state: PoolState::Open,
+				commission: Commission::default(),
 				member_counter: 1,
+				points: min_create_bond,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
 					root: Some(depositor.clone()),
 					nominator: Some(depositor.clone()),
 					state_toggler: Some(depositor.clone()),
 				},
+				state: PoolState::Open,
 			}
 		);
 		assert_eq!(
@@ -548,15 +549,16 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(
 			new_pool,
 			BondedPoolInner {
-				points: min_create_bond,
-				state: PoolState::Open,
+				commission: Commission::default(),
 				member_counter: 1,
+				points: min_create_bond,
 				roles: PoolRoles {
 					depositor: depositor.clone(),
 					root: Some(depositor.clone()),
 					nominator: Some(depositor.clone()),
 					state_toggler: Some(depositor.clone()),
-				}
+				},
+				state: PoolState::Open,
 			}
 		);
 		assert_eq!(
@@ -658,3 +660,4 @@ frame_benchmarking::benchmarks! {
 		crate::mock::Runtime
 	);
 }
+
