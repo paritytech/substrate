@@ -2185,7 +2185,7 @@ pub mod pallet {
 		/// If the max commission has _not yet_ been set, then the commission is not
 		/// restricted.
 		/// A `payee` must already be present before commission can be set.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_commission())]
 		#[transactional]
 		pub fn set_commission(
 			origin: OriginFor<T>,
@@ -2221,7 +2221,7 @@ pub mod pallet {
 		///
 		/// This call also updates the pool's current commission to the new maximum if the
 		/// current commission is higher than the supplied maximum.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_commission_max())]
 		#[transactional]
 		pub fn set_commission_max(
 			origin: OriginFor<T>,
@@ -2245,7 +2245,7 @@ pub mod pallet {
 		/// throttle configuration is given.
 		///
 		/// If a throttle configuration does not yet exist, the values are set.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::set_commission_throttle())]
 		#[transactional]
 		pub fn set_commission_throttle(
 			origin: OriginFor<T>,
