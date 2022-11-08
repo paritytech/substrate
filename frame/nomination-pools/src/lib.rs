@@ -573,6 +573,11 @@ impl<T: Config> Commission<T> {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 
+	/// check if the current commission is a non-zero amount
+	fn commission_set(&self) -> bool {
+		self.percent() > Perbill::zero()
+	}
+
 	/// Gets the current commission payee of this pool as a reference.
 	fn payee(&self) -> Option<&T::AccountId> {
 		self.current.as_ref().map(|(_, p)| p).or(None)
@@ -667,14 +672,13 @@ impl<T: Config> Commission<T> {
 		&self,
 		pending_rewards: &BalanceOf<T>,
 	) -> (BalanceOf<T>, Option<T::AccountId>) {
-		let commission_percent = self.percent();
-		if commission_percent > Perbill::zero() {
-			let payee = self.payee().map(|p| p.clone()).or(None);
-			if payee.is_some() {
-				return (commission_percent * *pending_rewards, payee)
-			}
+		if self.commission_set() {
+			self.payee().map_or((Zero::zero(), None), |p| {
+				(self.percent() * *pending_rewards, Some(p.clone()))
+			})
+		} else {
+			(Zero::zero(), None)
 		}
-		(Zero::zero(), None)
 	}
 }
 
@@ -2578,8 +2582,12 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
+		// Gets the commission percentage and payee to be paid if commission has
+		// been set. Otherwise, a zero commission and payee of `None` is returned.
 		let (pool_commission, payee) =
 			&bonded_pool.commission.get_commission_and_payee(&pending_rewards);
+
+		// Deduct any outstanding commission from the reward being claimed.
 		pending_rewards = pending_rewards.saturating_sub(*pool_commission);
 
 		// If a non-zero commission has been applied to the pool, deduct the share from
