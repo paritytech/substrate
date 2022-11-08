@@ -606,7 +606,17 @@ impl<T: Config> Commission<T> {
 	/// If throttle is present, record the current block as the previously updated commission.
 	///
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
-	fn update_current(&mut self, commission: &Perbill, payee: T::AccountId) {
+	fn maybe_update_current(
+		&mut self,
+		commission: &Perbill,
+		payee: T::AccountId,
+	) -> DispatchResult {
+		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
+		ensure!(
+			self.max.map(|m| commission <= &m).unwrap_or(true),
+			Error::<T>::CommissionExceedsMaximum
+		);
+
 		self.current =
 			if commission > &Perbill::zero() { Some((*commission, payee)) } else { None };
 
@@ -617,6 +627,7 @@ impl<T: Config> Commission<T> {
 				t.register_change(<frame_system::Pallet<T>>::block_number());
 			})
 			.or(None);
+		Ok(())
 	}
 
 	/// Set the pool's maximum commission.
@@ -651,7 +662,6 @@ impl<T: Config> CommissionThrottle<T> {
 		self.previous_set_at = Some(now);
 	}
 }
-
 
 /// Pool commission throttle preferences.
 ///
@@ -2163,13 +2173,7 @@ pub mod pallet {
 
 			let commission = &mut bonded_pool.commission;
 
-			ensure!(!commission.throttling(&new_commission), Error::<T>::CommissionChangeThrottled);
-			ensure!(
-				commission.max.map(|m| new_commission <= m).unwrap_or(true),
-				Error::<T>::CommissionExceedsMaximum
-			);
-
-			commission.update_current(&new_commission, final_payee.clone());
+			commission.maybe_update_current(&new_commission, final_payee.clone())?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
