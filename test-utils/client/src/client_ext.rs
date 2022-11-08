@@ -29,7 +29,7 @@ pub trait ClientExt<Block: BlockT>: Sized {
 	/// Finalize a block.
 	fn finalize_block(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
@@ -75,7 +75,7 @@ where
 {
 	fn finalize_block(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()> {
 		Finalizer::finalize_block(self, hash, justification, true)
