@@ -262,6 +262,18 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// A map of staking participant accounts to their total approval stake. This is needed to make
+	/// sure we can track a user's approval stake even if they cease to be a validator for a while
+	/// in order to be able to reinstate them to their former position in TargetList. This value is
+	/// hard-to-impossible to recalculate, which means it has to precisely reflect all the changes
+	/// happening to one's approval stake.
+	/// Note that this has to be cleared when `kill_stash` is called and the user is no longer a
+	/// part of the staking system. What this means is if they ever want to become a validator -
+	/// their approval stake is going to start at 0.
+	#[pallet::storage]
+	#[pallet::getter(fn approval_stake)]
+	pub type ApprovalStake<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>>;
+
 	/// The ideal number of active validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]
