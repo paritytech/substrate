@@ -424,8 +424,7 @@ pub mod pallet {
 				c.try_insert(index, (who, T::CandidacyBond::get()))
 					.map_err(|_| Error::<T>::TooManyCandidates)?;
 				Ok(())
-			})?;
-			Ok(())
+			})
 		}
 
 		/// Renounce one's intention to be a candidate for the next election round. 3 potential
