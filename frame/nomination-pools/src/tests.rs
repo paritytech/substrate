@@ -334,36 +334,47 @@ mod bonded_pool {
 				}
 			);
 
-			// We now try to increase commission to 5% (5% increase): this should be throttled.
+			// Set the initial commission to 5%.
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(5),
+				Some(900)
+			));
+
+			// We now try to increase commission to 10% (5% increase): this should be throttled.
 			assert_noop!(
 				Pools::set_commission(
 					RuntimeOrigin::signed(900),
 					1,
-					Perbill::from_percent(5),
+					Perbill::from_percent(10),
 					Some(900)
 				),
 				Error::<Runtime>::CommissionChangeThrottled
 			);
+
+			// Run 2 blocks into the future.
+			run_blocks(2);
 
 			// We now try to increase commission by 1%, and provide an initial payee.
 			// This should work, and set the `previous_set_at` field.
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),
 				1,
-				Perbill::from_percent(1),
+				Perbill::from_percent(6),
 				Some(900)
 			));
 			assert_eq!(
 				BondedPool::<Runtime>::get(1).unwrap().commission,
 				Commission {
-					current: Some((Perbill::from_percent(1), 900)),
+					current: Some((Perbill::from_percent(6), 900)),
 					max: None,
 					throttle: Some(CommissionThrottle {
 						change_rate: CommissionThrottlePrefs {
 							max_increase: Perbill::from_percent(1),
 							min_delay: 2_u64
 						},
-						previous_set_at: Some(1_u64),
+						previous_set_at: Some(3_u64),
 					})
 				}
 			);
@@ -439,7 +450,12 @@ mod bonded_pool {
 					Event::Bonded { member: 10, pool_id: 1, bonded: 10, joined: true },
 					Event::PoolCommissionUpdated {
 						pool_id: 1,
-						commission: Perbill::from_percent(1),
+						commission: Perbill::from_percent(5),
+						payee: 900
+					},
+					Event::PoolCommissionUpdated {
+						pool_id: 1,
+						commission: Perbill::from_percent(6),
 						payee: 900
 					},
 					Event::PoolCommissionUpdated {
