@@ -3913,15 +3913,15 @@ pub(crate) mod tests {
 		// Block tree:
 		//   0 -> 1
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &hash_1).unwrap();
-		op.mark_finalized(&hash_0, None).unwrap();
-		op.mark_finalized(&hash_1, None).unwrap();
+		backend.begin_state_operation(&mut op, hash_1).unwrap();
+		op.mark_finalized(hash_0, None).unwrap();
+		op.mark_finalized(hash_1, None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		let bc = backend.blockchain();
 		// Delayed pruning must keep both blocks around.
-		assert_eq!(Some(vec![0.into()]), bc.body(&hash_0).unwrap());
-		assert_eq!(Some(vec![1.into()]), bc.body(&hash_1).unwrap());
+		assert_eq!(Some(vec![0.into()]), bc.body(hash_0).unwrap());
+		assert_eq!(Some(vec![1.into()]), bc.body(hash_1).unwrap());
 
 		// Block tree:
 		//   0 -> 1 -> 2 -> 3 -> 4
@@ -3930,18 +3930,18 @@ pub(crate) mod tests {
 		let hash_4 = insert_block(&backend, 4, hash_3, None, ext, vec![4.into()], None).unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &hash_4).unwrap();
-		op.mark_finalized(&hash_2, None).unwrap();
-		op.mark_finalized(&hash_3, None).unwrap();
-		op.mark_finalized(&hash_4, None).unwrap();
+		backend.begin_state_operation(&mut op, hash_4).unwrap();
+		op.mark_finalized(hash_2, None).unwrap();
+		op.mark_finalized(hash_3, None).unwrap();
+		op.mark_finalized(hash_4, None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		// We keep 3 blocks around: 1 from `BlocksPruning` mode and 2 from delayed pruning.
-		assert!(bc.body(&hash_0).unwrap().is_none());
-		assert!(bc.body(&hash_1).unwrap().is_none());
-		assert_eq!(Some(vec![2.into()]), bc.body(&hash_2).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(&hash_3).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(&hash_4).unwrap());
+		assert!(bc.body(hash_0).unwrap().is_none());
+		assert!(bc.body(hash_1).unwrap().is_none());
+		assert_eq!(Some(vec![2.into()]), bc.body(hash_2).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(hash_3).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(hash_4).unwrap());
 	}
 
 	#[test]
@@ -3977,58 +3977,58 @@ pub(crate) mod tests {
 				.unwrap();
 
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
-		op.mark_head(&blocks[4]).unwrap();
+		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+		op.mark_head(blocks[4]).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		// Mark blocks 0, 1, 2, 3 as finalized.
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &blocks[3]).unwrap();
-		op.mark_finalized(&blocks[0], None).unwrap();
-		op.mark_finalized(&blocks[1], None).unwrap();
-		op.mark_finalized(&blocks[2], None).unwrap();
-		op.mark_finalized(&blocks[3], None).unwrap();
+		backend.begin_state_operation(&mut op, blocks[3]).unwrap();
+		op.mark_finalized(blocks[0], None).unwrap();
+		op.mark_finalized(blocks[1], None).unwrap();
+		op.mark_finalized(blocks[2], None).unwrap();
+		op.mark_finalized(blocks[3], None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		let bc = backend.blockchain();
 		// Block 0 is pruned.
-		assert!(bc.body(&blocks[0]).unwrap().is_none());
-		assert_eq!(Some(vec![1.into()]), bc.body(&blocks[1]).unwrap());
-		assert_eq!(Some(vec![2.into()]), bc.body(&blocks[2]).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
-		assert_eq!(Some(vec![5.into()]), bc.body(&blocks[5]).unwrap());
-		assert_eq!(Some(vec![6.into()]), bc.body(&blocks[6]).unwrap());
-		assert_eq!(Some(vec![31.into()]), bc.body(&fork_hash_root).unwrap());
+		assert!(bc.body(blocks[0]).unwrap().is_none());
+		assert_eq!(Some(vec![1.into()]), bc.body(blocks[1]).unwrap());
+		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(blocks[6]).unwrap());
+		assert_eq!(Some(vec![31.into()]), bc.body(fork_hash_root).unwrap());
 
 		// Mark block 4 as finalized.
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &blocks[4]).unwrap();
-		op.mark_finalized(&blocks[4], None).unwrap();
+		backend.begin_state_operation(&mut op, blocks[4]).unwrap();
+		op.mark_finalized(blocks[4], None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		// Block 1 is pruned.
-		assert!(bc.body(&blocks[1]).unwrap().is_none());
-		assert_eq!(Some(vec![2.into()]), bc.body(&blocks[2]).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
-		assert_eq!(Some(vec![5.into()]), bc.body(&blocks[5]).unwrap());
-		assert_eq!(Some(vec![6.into()]), bc.body(&blocks[6]).unwrap());
-		assert_eq!(Some(vec![31.into()]), bc.body(&fork_hash_root).unwrap());
+		assert!(bc.body(blocks[1]).unwrap().is_none());
+		assert_eq!(Some(vec![2.into()]), bc.body(blocks[2]).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(blocks[6]).unwrap());
+		assert_eq!(Some(vec![31.into()]), bc.body(fork_hash_root).unwrap());
 
 		// Mark block 5 as finalized.
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &blocks[5]).unwrap();
-		op.mark_finalized(&blocks[5], None).unwrap();
+		backend.begin_state_operation(&mut op, blocks[5]).unwrap();
+		op.mark_finalized(blocks[5], None).unwrap();
 		backend.commit_operation(op).unwrap();
 
 		// Block 2 is pruned along with its fork.
-		assert!(bc.body(&blocks[2]).unwrap().is_none());
-		assert_eq!(Some(vec![31.into()]), bc.body(&fork_hash_root).unwrap());
-		assert_eq!(Some(vec![3.into()]), bc.body(&blocks[3]).unwrap());
-		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
-		assert_eq!(Some(vec![5.into()]), bc.body(&blocks[5]).unwrap());
-		assert_eq!(Some(vec![6.into()]), bc.body(&blocks[6]).unwrap());
+		assert!(bc.body(blocks[2]).unwrap().is_none());
+		assert_eq!(Some(vec![31.into()]), bc.body(fork_hash_root).unwrap());
+		assert_eq!(Some(vec![3.into()]), bc.body(blocks[3]).unwrap());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(blocks[6]).unwrap());
 
 		// Ensure the forked leaf 3 is properly stated here.
 		let displaced = backend.blockchain().displaced_leaves_after_finalizing(6).unwrap();
@@ -4041,15 +4041,15 @@ pub(crate) mod tests {
 		// at hight (block number - 1) = 3. This is the time when the fork
 		// is picked up for pruning.
 		let mut op = backend.begin_operation().unwrap();
-		backend.begin_state_operation(&mut op, &blocks[6]).unwrap();
-		op.mark_finalized(&blocks[6], None).unwrap();
+		backend.begin_state_operation(&mut op, blocks[6]).unwrap();
+		op.mark_finalized(blocks[6], None).unwrap();
 		backend.commit_operation(op).unwrap();
 
-		assert!(bc.body(&blocks[3]).unwrap().is_none());
-		assert!(bc.body(&fork_hash_root).unwrap().is_none());
-		assert_eq!(Some(vec![4.into()]), bc.body(&blocks[4]).unwrap());
-		assert_eq!(Some(vec![5.into()]), bc.body(&blocks[5]).unwrap());
-		assert_eq!(Some(vec![6.into()]), bc.body(&blocks[6]).unwrap());
+		assert!(bc.body(blocks[3]).unwrap().is_none());
+		assert!(bc.body(fork_hash_root).unwrap().is_none());
+		assert_eq!(Some(vec![4.into()]), bc.body(blocks[4]).unwrap());
+		assert_eq!(Some(vec![5.into()]), bc.body(blocks[5]).unwrap());
+		assert_eq!(Some(vec![6.into()]), bc.body(blocks[6]).unwrap());
 
 		// No leaves to report for theoretical node 7.
 		let displaced = backend.blockchain().displaced_leaves_after_finalizing(7).unwrap();
