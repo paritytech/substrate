@@ -43,8 +43,8 @@ use jsonrpsee::{
 use log::error;
 use parking_lot::RwLock;
 use sc_client_api::{
-	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
-	StorageProvider,
+	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, CallExecutor, ChildInfo,
+	ExecutorProvider, FinalityNotification, StorageKey, StorageProvider,
 };
 use serde::Serialize;
 use sp_api::CallApiAt;
@@ -311,6 +311,127 @@ async fn submit_events<EventStream, T>(
 	}
 }
 
+/// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
+/// every notification.
+fn handle_import_blocks<Client, Block>(
+	client: &Arc<Client>,
+	subscriptions: &Arc<SubscriptionManagement<Block>>,
+	best_block: &Arc<RwLock<Option<Block::Hash>>>,
+	sub_id: &String,
+	runtime_updates: bool,
+	notification: BlockImportNotification<Block>,
+) -> (FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>)
+where
+	Block: BlockT + 'static,
+	Client: CallApiAt<Block> + 'static,
+{
+	let new_runtime = generate_runtime_event(
+		&client,
+		runtime_updates,
+		&BlockId::Hash(notification.hash),
+		Some(&BlockId::Hash(*notification.header.parent_hash())),
+	);
+
+	let _ = subscriptions.pin_block(&sub_id, notification.hash);
+
+	// Note: `Block::Hash` will serialize to hexadecimal encoded string.
+	let new_block = FollowEvent::NewBlock(NewBlock {
+		block_hash: notification.hash,
+		parent_block_hash: *notification.header.parent_hash(),
+		new_runtime,
+		runtime_updates,
+	});
+
+	if !notification.is_new_best {
+		return (new_block, None)
+	}
+
+	// If this is the new best block, then we need to generate two events.
+	let best_block_event =
+		FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash: notification.hash });
+
+	let mut best_block_cache = best_block.write();
+	match *best_block_cache {
+		Some(block_cache) => {
+			// The RPC layer has not reported this block as best before.
+			// Note: This handles the race with the finalized branch.
+			if block_cache != notification.hash {
+				*best_block_cache = Some(notification.hash);
+				(new_block, Some(best_block_event))
+			} else {
+				(new_block, None)
+			}
+		},
+		None => {
+			*best_block_cache = Some(notification.hash);
+			(new_block, Some(best_block_event))
+		},
+	}
+}
+
+/// Generate the "Finalized" event and potentially the "BestBlockChanged" for
+/// every notification.
+fn handle_finalized_blocks<Client, Block>(
+	client: &Arc<Client>,
+	subscriptions: &Arc<SubscriptionManagement<Block>>,
+	best_block: &Arc<RwLock<Option<Block::Hash>>>,
+	sub_id: &String,
+	notification: FinalityNotification<Block>,
+) -> (FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>)
+where
+	Block: BlockT + 'static,
+	Client: HeaderBackend<Block> + 'static,
+{
+	// We might not receive all new blocks reports, also pin the block here.
+	let _ = subscriptions.pin_block(&sub_id, notification.hash);
+
+	// The tree route contains the exclusive path from the latest finalized block
+	// to the block reported by the notification. Ensure the finalized block is
+	// properly reported to that path.
+	let mut finalized_block_hashes = notification.tree_route.iter().cloned().collect::<Vec<_>>();
+	finalized_block_hashes.push(notification.hash);
+
+	let pruned_block_hashes: Vec<_> = notification.stale_heads.iter().cloned().collect();
+
+	let finalized_event = FollowEvent::Finalized(Finalized {
+		finalized_block_hashes,
+		pruned_block_hashes: pruned_block_hashes.clone(),
+	});
+
+	let mut best_block_cache = best_block.write();
+	match *best_block_cache {
+		Some(block_cache) => {
+			// Check if the current best block is also reported as pruned.
+			let reported_pruned = pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
+			if reported_pruned.is_none() {
+				return (finalized_event, None)
+			}
+
+			// The best block is reported as pruned. Therefore, we need to signal a new
+			// best block event before submitting the finalized event.
+			let best_block_hash = client.info().best_hash;
+			if best_block_hash == block_cache {
+				// The client doest not have any new information about the best block.
+				// The information from `.info()` is updated from the DB as the last
+				// step of the finalization and it should be up to date. Also, the
+				// displaced nodes (list of nodes reported) should be reported with
+				// an offset of 32 blocks for substrate.
+				// If the info is outdated, there is nothing the RPC can do for now.
+				error!(target: "rpc-spec-v2", "Client does not contain different best block");
+				(finalized_event, None)
+			} else {
+				// The RPC needs to also submit a new best block changed before the
+				// finalized event.
+				*best_block_cache = Some(best_block_hash);
+				let best_block_event =
+					FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
+				(finalized_event, Some(best_block_event))
+			}
+		},
+		None => (finalized_event, None),
+	}
+}
+
 #[async_trait]
 impl<BE, Block, Client> ChainHeadApiServer<Block::Hash> for ChainHead<BE, Block, Client>
 where
@@ -348,48 +469,16 @@ where
 			.client
 			.import_notification_stream()
 			.map(move |notification| {
-				let new_runtime = generate_runtime_event(
+				match handle_import_blocks(
 					&client,
+					&subscriptions,
+					&best_reported_block,
+					&sub_id_import,
 					runtime_updates,
-					&BlockId::Hash(notification.hash),
-					Some(&BlockId::Hash(*notification.header.parent_hash())),
-				);
-
-				let _ = subscriptions.pin_block(&sub_id_import, notification.hash);
-
-				// Note: `Block::Hash` will serialize to hexadecimal encoded string.
-				let new_block = FollowEvent::NewBlock(NewBlock {
-					block_hash: notification.hash,
-					parent_block_hash: *notification.header.parent_hash(),
-					new_runtime,
-					runtime_updates,
-				});
-
-				if !notification.is_new_best {
-					return stream::iter(vec![new_block])
-				}
-
-				// If this is the new best block, then we need to generate two events.
-				let best_block = FollowEvent::BestBlockChanged(BestBlockChanged {
-					best_block_hash: notification.hash,
-				});
-
-				let mut best_block_cache = best_reported_block.write();
-				match *best_block_cache {
-					Some(block_cache) => {
-						// The RPC layer has not reported this block as best before.
-						// Note: This handles the race with the finalized branch.
-						if block_cache != notification.hash {
-							*best_block_cache = Some(notification.hash);
-							stream::iter(vec![new_block, best_block])
-						} else {
-							stream::iter(vec![new_block])
-						}
-					},
-					None => {
-						*best_block_cache = Some(notification.hash);
-						stream::iter(vec![new_block, best_block])
-					},
+					notification,
+				) {
+					(new_block, None) => stream::iter(vec![new_block]),
+					(new_block, Some(best_block)) => stream::iter(vec![new_block, best_block]),
 				}
 			})
 			.flatten();
@@ -403,56 +492,16 @@ where
 			.client
 			.finality_notification_stream()
 			.map(move |notification| {
-				// We might not receive all new blocks reports, also pin the block here.
-				let _ = subscriptions.pin_block(&sub_id_finalized, notification.hash);
-
-				// The tree route contains the exclusive path from the latest finalized block
-				// to the block reported by the notification. Ensure the finalized block is
-				// properly reported to that path.
-				let mut finalized_block_hashes =
-					notification.tree_route.iter().cloned().collect::<Vec<_>>();
-				finalized_block_hashes.push(notification.hash);
-
-				let pruned_block_hashes: Vec<_> =
-					notification.stale_heads.iter().cloned().collect();
-
-				let finalized_event = FollowEvent::Finalized(Finalized {
-					finalized_block_hashes,
-					pruned_block_hashes: pruned_block_hashes.clone(),
-				});
-
-				let mut best_block_cache = best_reported_block.write();
-				match *best_block_cache {
-					Some(block_cache) => {
-						// Check if the current best block is also reported as pruned.
-						let reported_pruned =
-							pruned_block_hashes.iter().find(|&&hash| hash == block_cache);
-						if reported_pruned.is_none() {
-							return stream::iter(vec![finalized_event])
-						}
-
-						// The best block is reported as pruned. Therefore, we need to signal a new
-						// best block event before submitting the finalized event.
-						let best_block_hash = client.info().best_hash;
-						if best_block_hash == block_cache {
-							// The client doest not have any new information about the best block.
-							// The information from `.info()` is updated from the DB as the last
-							// step of the finalization and it should be up to date. Also, the
-							// displaced nodes (list of nodes reported) should be reported with
-							// an offset of 32 blocks for substrate.
-							// If the info is outdated, there is nothing the RPC can do for now.
-							error!(target: "rpc-spec-v2", "Client does not contain different best block");
-							stream::iter(vec![finalized_event])
-						} else {
-							// The RPC needs to also submit a new best block changed before the
-							// finalized event.
-							*best_block_cache = Some(best_block_hash);
-							let best_block =
-								FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
-							stream::iter(vec![best_block, finalized_event])
-						}
-					},
-					None => stream::iter(vec![finalized_event]),
+				match handle_finalized_blocks(
+					&client,
+					&subscriptions,
+					&best_reported_block,
+					&sub_id_finalized,
+					notification,
+				) {
+					(finalized_event, None) => stream::iter(vec![finalized_event]),
+					(finalized_event, Some(best_block)) =>
+						stream::iter(vec![best_block, finalized_event]),
 				}
 			})
 			.flatten();
