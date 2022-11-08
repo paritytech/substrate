@@ -23,6 +23,7 @@ pub mod v1 {
 		weights::Weight,
 	};
 	use sp_staking::EraIndex;
+	use sp_std::prelude::*;
 
 	pub struct MigrateToV1<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV1<T> {
@@ -56,19 +57,21 @@ pub mod v1 {
 					T::DbWeight::get().reads(2)
 				}
 			} else {
-				log!(info, "Migration did not executed. This probably should be removed");
+				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
 			}
 		}
 
 		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 0);
+			Ok(Default::default())
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			assert_eq!(Pallet::<T>::on_chain_storage_version(), 1);
+			Ok(())
 		}
 	}
 }
