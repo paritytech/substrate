@@ -340,19 +340,6 @@ sp_core::wasm_export_functions! {
 	}
 }
 
-#[cfg(not(feature = "std"))]
-mod tasks {
-	use sp_std::prelude::*;
-
-	pub fn incrementer(data: Vec<u8>) -> Vec<u8> {
-		data.into_iter().map(|v| v + 1).collect()
-	}
-
-	pub fn panicker(_: Vec<u8>) -> Vec<u8> {
-		panic!()
-	}
-}
-
 /// A macro to define a test entrypoint for each available sandbox executor.
 macro_rules! wasm_export_sandbox_test_functions {
 	(
