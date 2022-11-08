@@ -26,8 +26,8 @@
 //! and allow another configurable origin: [`Config::DispatchWhitelistedOrigin`] to dispatch them
 //! with the root origin.
 //!
-//! In the meantime the call corresponding to the hash must have been submitted to the to the
-//! pre-image handler [`PreimageProvider`].
+//! In the meantime the call corresponding to the hash must have been submitted to the pre-image
+//! handler [`PreimageProvider`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

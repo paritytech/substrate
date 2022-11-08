@@ -34,7 +34,7 @@ use frame_support::{
 	traits::{
 		AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, Currency, EitherOfDiverse,
 		EqualPrivilegeOnly, Everything, Imbalance, InstanceFilter, KeyOwnerProofSystem,
-		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote,
+		LockIdentifier, Nothing, OnUnbalanced, U128CurrencyToVote, WithdrawReasons,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -65,7 +65,7 @@ use sp_runtime::{
 	curve::PiecewiseLinear,
 	generic, impl_opaque_keys,
 	traits::{
-		self, BlakeTwo256, Block as BlockT, ConvertInto, NumberFor, OpaqueKeys,
+		self, BlakeTwo256, Block as BlockT, Bounded, ConvertInto, NumberFor, OpaqueKeys,
 		SaturatedConversion, StaticLookup,
 	},
 	transaction_validity::{TransactionPriority, TransactionSource, TransactionValidity},
@@ -249,7 +249,7 @@ impl pallet_multisig::Config for Runtime {
 	type Currency = Balances;
 	type DepositBase = DepositBase;
 	type DepositFactor = DepositFactor;
-	type MaxSignatories = ConstU16<100>;
+	type MaxSignatories = ConstU32<100>;
 	type WeightInfo = pallet_multisig::weights::SubstrateWeight<Runtime>;
 }
 
@@ -443,6 +443,7 @@ parameter_types! {
 	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
 	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(1, 100_000);
 	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 1_000_000_000u128);
+	pub MaximumMultiplier: Multiplier = Bounded::max_value();
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -451,8 +452,13 @@ impl pallet_transaction_payment::Config for Runtime {
 	type OperationalFeeMultiplier = OperationalFeeMultiplier;
 	type WeightToFee = IdentityFee<Balance>;
 	type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
-	type FeeMultiplierUpdate =
-		TargetedFeeAdjustment<Self, TargetBlockFullness, AdjustmentVariable, MinimumMultiplier>;
+	type FeeMultiplierUpdate = TargetedFeeAdjustment<
+		Self,
+		TargetBlockFullness,
+		AdjustmentVariable,
+		MinimumMultiplier,
+		MaximumMultiplier,
+	>;
 }
 
 impl pallet_asset_tx_payment::Config for Runtime {
@@ -579,7 +585,8 @@ impl pallet_fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ControlOrigin = frame_system::EnsureRoot<AccountId>;
 	type Deposit = ConstU128<{ DOLLARS }>;
-	type DepositCurrency = Balances;
+	type Currency = Balances;
+	type Staking = Staking;
 	type WeightInfo = ();
 }
 
@@ -767,11 +774,10 @@ impl pallet_nomination_pools::Config for Runtime {
 	type WeightInfo = ();
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
 	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type StakingInterface = pallet_staking::Pallet<Self>;
+	type Staking = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
@@ -1368,6 +1374,8 @@ impl pallet_society::Config for Runtime {
 
 parameter_types! {
 	pub const MinVestedTransfer: Balance = 100 * DOLLARS;
+	pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+		WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
 }
 
 impl pallet_vesting::Config for Runtime {
@@ -1376,6 +1384,7 @@ impl pallet_vesting::Config for Runtime {
 	type BlockNumberToBalance = ConvertInto;
 	type MinVestedTransfer = MinVestedTransfer;
 	type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
+	type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
 	// `VestingInfo` encode length is 36bytes. 28 schedules gets encoded as 1009 bytes, which is the
 	// highest number of schedules that encodes less than 2^10.
 	const MAX_VESTING_SCHEDULES: u32 = 28;
@@ -1939,49 +1948,75 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_contracts_runtime_api::ContractsApi<
-		Block, AccountId, Balance, BlockNumber, Hash,
-	>
-		for Runtime
+	impl pallet_contracts::ContractsApi<Block, AccountId, Balance, BlockNumber, Hash> for Runtime
 	{
 		fn call(
 			origin: AccountId,
 			dest: AccountId,
 			value: Balance,
-			gas_limit: u64,
+			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			input_data: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractExecResult<Balance> {
-			Contracts::bare_call(origin, dest, value, Weight::from_ref_time(gas_limit), storage_deposit_limit, input_data, true)
+			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
+			Contracts::bare_call(
+				origin,
+				dest,
+				value,
+				gas_limit,
+				storage_deposit_limit,
+				input_data,
+				true,
+				pallet_contracts::Determinism::Deterministic,
+			)
 		}
 
 		fn instantiate(
 			origin: AccountId,
 			value: Balance,
-			gas_limit: u64,
+			gas_limit: Option<Weight>,
 			storage_deposit_limit: Option<Balance>,
 			code: pallet_contracts_primitives::Code<Hash>,
 			data: Vec<u8>,
 			salt: Vec<u8>,
 		) -> pallet_contracts_primitives::ContractInstantiateResult<AccountId, Balance>
 		{
-			Contracts::bare_instantiate(origin, value, Weight::from_ref_time(gas_limit), storage_deposit_limit, code, data, salt, true)
+			let gas_limit = gas_limit.unwrap_or(RuntimeBlockWeights::get().max_block);
+			Contracts::bare_instantiate(
+				origin,
+				value,
+				gas_limit,
+				storage_deposit_limit,
+				code,
+				data,
+				salt,
+				true
+			)
 		}
 
 		fn upload_code(
 			origin: AccountId,
 			code: Vec<u8>,
 			storage_deposit_limit: Option<Balance>,
+			determinism: pallet_contracts::Determinism,
 		) -> pallet_contracts_primitives::CodeUploadResult<Hash, Balance>
 		{
-			Contracts::bare_upload_code(origin, code, storage_deposit_limit)
+			Contracts::bare_upload_code(
+				origin,
+				code,
+				storage_deposit_limit,
+				determinism,
+			)
 		}
 
 		fn get_storage(
 			address: AccountId,
 			key: Vec<u8>,
 		) -> pallet_contracts_primitives::GetStorageResult {
-			Contracts::get_storage(address, key)
+			Contracts::get_storage(
+				address,
+				key
+			)
 		}
 	}
 
@@ -2008,11 +2043,15 @@ impl_runtime_apis! {
 		}
 	}
 
-	impl pallet_mmr::primitives::MmrApi<Block, mmr::Hash> for Runtime {
-		fn generate_proof(leaf_index: pallet_mmr::primitives::LeafIndex)
+	impl pallet_mmr::primitives::MmrApi<
+		Block,
+		mmr::Hash,
+		BlockNumber,
+	> for Runtime {
+		fn generate_proof(block_number: BlockNumber)
 			-> Result<(mmr::EncodableOpaqueLeaf, mmr::Proof<mmr::Hash>), mmr::Error>
 		{
-			Mmr::generate_batch_proof(vec![leaf_index]).and_then(|(leaves, proof)|
+			Mmr::generate_batch_proof(vec![block_number]).and_then(|(leaves, proof)|
 				Ok((
 					mmr::EncodableOpaqueLeaf::from_leaf(&leaves[0]),
 					mmr::BatchProof::into_single_leaf_proof(proof)?
@@ -2044,9 +2083,9 @@ impl_runtime_apis! {
 		}
 
 		fn generate_batch_proof(
-			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
+			block_numbers: Vec<BlockNumber>,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_batch_proof(leaf_indices).map(|(leaves, proof)| {
+			Mmr::generate_batch_proof(block_numbers).map(|(leaves, proof)| {
 				(
 					leaves
 						.into_iter()
@@ -2058,10 +2097,10 @@ impl_runtime_apis! {
 		}
 
 		fn generate_historical_batch_proof(
-			leaf_indices: Vec<pallet_mmr::primitives::LeafIndex>,
-			leaves_count: pallet_mmr::primitives::LeafIndex,
+			block_numbers: Vec<BlockNumber>,
+			best_known_block_number: BlockNumber,
 		) -> Result<(Vec<mmr::EncodableOpaqueLeaf>, mmr::BatchProof<mmr::Hash>), mmr::Error> {
-			Mmr::generate_historical_batch_proof(leaf_indices, leaves_count).map(
+			Mmr::generate_historical_batch_proof(block_numbers, best_known_block_number).map(
 				|(leaves, proof)| {
 					(
 						leaves

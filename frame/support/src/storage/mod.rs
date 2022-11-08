@@ -27,7 +27,7 @@ use crate::{
 use codec::{Decode, Encode, EncodeLike, FullCodec, FullEncode};
 use sp_core::storage::ChildInfo;
 use sp_runtime::generic::{Digest, DigestItem};
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, marker::PhantomData, prelude::*};
 
 pub use self::{
 	transactional::{
@@ -1303,6 +1303,7 @@ mod private {
 	impl<T, S> Sealed for WeakBoundedVec<T, S> {}
 	impl<K, V, S> Sealed for bounded_btree_map::BoundedBTreeMap<K, V, S> {}
 	impl<T, S> Sealed for bounded_btree_set::BoundedBTreeSet<T, S> {}
+	impl<T: Encode> Sealed for BTreeSet<T> {}
 
 	macro_rules! impl_sealed_for_tuple {
 		($($elem:ident),+) => {
@@ -1334,6 +1335,9 @@ mod private {
 
 impl<T: Encode> StorageAppend<T> for Vec<T> {}
 impl<T: Encode> StorageDecodeLength for Vec<T> {}
+
+impl<T: Encode> StorageAppend<T> for BTreeSet<T> {}
+impl<T: Encode> StorageDecodeLength for BTreeSet<T> {}
 
 /// We abuse the fact that SCALE does not put any marker into the encoding, i.e. we only encode the
 /// internal vec and we can append to this vec. We have a test that ensures that if the `Digest`
@@ -1830,6 +1834,24 @@ mod test {
 				FooDoubleMap::get(2, 1).unwrap(),
 				BoundedVec::<u32, ConstU32<7>>::try_from(vec![4, 5]).unwrap(),
 			);
+		});
+	}
+
+	#[crate::storage_alias]
+	type FooSet = StorageValue<Prefix, BTreeSet<u32>>;
+
+	#[test]
+	fn btree_set_append_and_decode_len_works() {
+		TestExternalities::default().execute_with(|| {
+			let btree = BTreeSet::from([1, 2, 3]);
+			FooSet::put(btree);
+
+			FooSet::append(4);
+			FooSet::append(5);
+			FooSet::append(6);
+			FooSet::append(7);
+
+			assert_eq!(FooSet::decode_len().unwrap(), 7);
 		});
 	}
 }

@@ -22,7 +22,7 @@ use ahash::AHashSet;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Counter, PrometheusError, Registry, U64};
-use sc_network_common::protocol::{event::ObservedRole, ProtocolName};
+use sc_network_common::protocol::{role::ObservedRole, ProtocolName};
 use sp_runtime::traits::{Block as BlockT, Hash, HashFor};
 use std::{collections::HashMap, iter, sync::Arc, time, time::Instant};
 

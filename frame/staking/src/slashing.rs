@@ -414,16 +414,6 @@ fn slash_nominators<T: Config>(
 			}
 		}
 
-		// in any case, remove the nomination.
-		<Pallet<T> as Store>::Nominators::mutate(
-			&nominator.who,
-			|maybe_nomination: &mut Option<crate::Nominations<T>>| {
-				if let Some(nomination) = maybe_nomination.as_mut() {
-					nomination.targets.retain(|t| t != params.stash)
-				}
-			},
-		);
-
 		nominators_slashed.push((stash.clone(), nom_slashed));
 	}
 

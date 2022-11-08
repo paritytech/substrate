@@ -262,7 +262,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-	/// The ideal number of staking participants.
+	/// The ideal number of active validators.
 	#[pallet::storage]
 	#[pallet::getter(fn validator_count)]
 	pub type ValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
