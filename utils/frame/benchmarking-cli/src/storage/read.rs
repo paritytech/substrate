@@ -43,7 +43,7 @@ impl StorageCmd {
 		info!("Preparing keys from block {}", best_hash);
 		// Load all keys and randomly shuffle them.
 		let empty_prefix = StorageKey(Vec::new());
-		let mut keys = client.storage_keys(&best_hash, &empty_prefix)?;
+		let mut keys = client.storage_keys(best_hash, &empty_prefix)?;
 		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
@@ -55,7 +55,7 @@ impl StorageCmd {
 			match (self.params.include_child_trees, self.is_child_key(key.clone().0)) {
 				(true, Some(info)) => {
 					// child tree key
-					let child_keys = client.child_storage_keys(&best_hash, &info, &empty_prefix)?;
+					let child_keys = client.child_storage_keys(best_hash, &info, &empty_prefix)?;
 					for ck in child_keys {
 						child_nodes.push((ck.clone(), info.clone()));
 					}
@@ -64,7 +64,7 @@ impl StorageCmd {
 					// regular key
 					let start = Instant::now();
 					let v = client
-						.storage(&best_hash, &key)
+						.storage(best_hash, &key)
 						.expect("Checked above to exist")
 						.ok_or("Value unexpectedly empty")?;
 					record.append(v.0.len(), start.elapsed())?;
@@ -79,7 +79,7 @@ impl StorageCmd {
 			for (key, info) in child_nodes.as_slice() {
 				let start = Instant::now();
 				let v = client
-					.child_storage(&best_hash, info, key)
+					.child_storage(best_hash, info, key)
 					.expect("Checked above to exist")
 					.ok_or("Value unexpectedly empty")?;
 				record.append(v.0.len(), start.elapsed())?;
