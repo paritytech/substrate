@@ -1493,7 +1493,7 @@ pub mod pallet {
 					},
 					Some(item) => {
 						// NOTE: if the item was previously burned, the ItemConfigOf record might
-						// not exists. In that case, we allow to clear the attribute.
+						// not exist. In that case, we allow to clear the attribute.
 						let maybe_is_locked = Self::get_item_config(&collection, &item)
 							.map_or(false, |c| {
 								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
