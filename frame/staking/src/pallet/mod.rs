@@ -49,6 +49,7 @@ use crate::{
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
+const SLASHING_SPANS_AUTO_WITHDRAW: u32 = 0;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -942,8 +943,7 @@ pub mod pallet {
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		#[pallet::weight(
-            T::WeightInfo::withdraw_unbonded_kill(T::BondingDuration::get()) + 
-            T::WeightInfo::unbond())
+            T::WeightInfo::withdraw_unbonded_kill(SLASHING_SPANS_AUTO_WITHDRAW) + T::WeightInfo::unbond())
         ]
 		pub fn unbond(
 			origin: OriginFor<T>,
@@ -951,13 +951,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			let controller = ensure_signed(origin.clone())?;
 
+
 			// ensure that there's chunk slots available by requesting the staking interface to
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
 			if Self::chunk_slots_filled(&controller)? == T::MaxUnlockingChunks::get() as usize {
-				let num_slashing_spans = T::BondingDuration::get();
-
-				Self::withdraw_unbonded(origin, num_slashing_spans)
+				Self::withdraw_unbonded(origin, SLASHING_SPANS_AUTO_WITHDRAW)
 					.map_err(|with_post| with_post.error)?;
 			};
 

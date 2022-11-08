@@ -1367,7 +1367,7 @@ fn many_unbond_calls_should_work() {
 		current_era += 1;
 		mock::start_active_era(current_era);
 
-		// This chunk is locked at `current_era` through `current_era + 2` (because BondingDuration
+		// This chunk is locked at `current_era` through `current_era + 2` (because `BondingDuration`
 		// == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
@@ -1384,7 +1384,7 @@ fn many_unbond_calls_should_work() {
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		}
 
-		// only slots of unbonds within last BondingDuration are filled.
+		// only slots of unbonds within last `BondingDuration` are filled.
 		assert_eq!(
 			Staking::chunk_slots_filled(&10).unwrap(),
 			<<Test as Config>::BondingDuration>::get() as usize
