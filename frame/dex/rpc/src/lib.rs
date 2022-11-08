@@ -70,7 +70,6 @@ impl From<Error> for i32 {
 	}
 }
 
-#[async_trait]
 impl<Client, Block, Balance> DexApiServer<Balance> for Dex<Client, Block>
 where
 	Block: BlockT,

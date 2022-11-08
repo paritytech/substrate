@@ -18,7 +18,7 @@
 use crate::{mock::*, *};
 
 use frame_support::{
-	assert_ok,
+	assert_ok, assert_noop,
 	traits::{fungibles::InspectEnumerable, Currency},
 };
 
@@ -27,7 +27,7 @@ fn events() -> Vec<Event<Test>> {
 		.into_iter()
 		.map(|r| r.event)
 		.filter_map(|e| if let mock::Event::Dex(inner) = e { Some(inner) } else { None })
-		.collect::<Vec<_>>();
+		.collect();
 
 	System::reset_events();
 
@@ -258,5 +258,45 @@ fn swap_should_work() {
 		assert_eq!(balance(user, token_1), expect_receive);
 		assert_eq!(balance(pallet_account, token_1), liquidity1 - expect_receive);
 		assert_eq!(balance(pallet_account, token_2), liquidity2 + exchange_amount);
+	});
+}
+
+#[test]
+fn same_asset_swap_should_fail() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = 1;
+		let lp_token = 3;
+		topup_pallet();
+
+		create_tokens(user, vec![token_1]);
+		assert_noop!(Dex::create_pool(Origin::signed(user), token_1, token_1, lp_token), Error::<Test>::EqualAssets);
+
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		
+		let liquidity1 = 1000;
+		let liquidity2 = 20;
+		assert_noop!(Dex::add_liquidity(
+			Origin::signed(user),
+			token_1,
+			token_1,
+			liquidity1,
+			liquidity2,
+			1,
+			1,
+			user,
+			2
+		),Error::<Test>::PoolNotFound);
+
+		let exchange_amount = 10;
+		assert_noop!(Dex::swap_exact_tokens_for_tokens(
+			Origin::signed(user),
+			token_1,
+			token_1,
+			exchange_amount,
+			1,
+			user,
+			3
+		), Error::<Test>::PoolNotFound);
 	});
 }

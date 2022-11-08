@@ -35,7 +35,6 @@ pub const MIN_LIQUIDITY: u64 = 1;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -251,7 +250,7 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
+		#[transactional] // TODO: Do we need to say transactional any more?
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
