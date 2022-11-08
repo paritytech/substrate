@@ -1,6 +1,6 @@
-# Phragmén Election Module.
+# Generic Elections Module.
 
-An election module based on sequential phragmen.
+A generic elections module.
 
 ### Term and Round
 
@@ -60,7 +60,7 @@ being re-elected at the end of each round.
 
 ### Module Information
 
-- [`election_sp_phragmen::Config`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/trait.Config.html)
+- [`elections::Config`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/trait.Config.html)
 - [`Call`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/enum.Call.html)
 - [`Module`](https://docs.rs/pallet-elections-phragmen/latest/pallet_elections_phragmen/struct.Module.html)
 

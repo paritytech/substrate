@@ -28,7 +28,7 @@ substrate-rpc-client = { path = "../rpc/client" }
 [dev-dependencies]
 tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
-pallet-elections-phragmen = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
+pallet-elections = { version = "5.0.0-dev", path = "../../../frame/elections-phragmen" }
 
 [features]
 remote-test = ["frame-support"]

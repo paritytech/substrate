@@ -3390,7 +3390,7 @@ dependencies = [
  "pallet-democracy",
  "pallet-election-provider-multi-phase",
  "pallet-election-provider-support-benchmarking",
- "pallet-elections-phragmen",
+ "pallet-elections",
  "pallet-fast-unstake",
  "pallet-gilt",
  "pallet-grandpa",
@@ -5483,7 +5483,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-elections-phragmen"
+name = "pallet-elections"
 version = "5.0.0-dev"
 dependencies = [
  "frame-benchmarking",
@@ -7336,7 +7336,7 @@ dependencies = [
  "env_logger",
  "frame-support",
  "log",
- "pallet-elections-phragmen",
+ "pallet-elections",
  "parity-scale-codec",
  "serde",
  "serde_json",
