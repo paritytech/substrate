@@ -126,7 +126,7 @@ struct Opt {
 	at: Option<Hash>,
 
 	/// The node to connect to.
-	#[structopt(long, default_value = "ws://localhost:9944")]
+	#[structopt(long, default_value = "wss://rpc.polkadot.io:443")]
 	uri: String,
 
 	/// If true, intermediate values will be printed.
@@ -157,12 +157,14 @@ pub fn pallet_prefix_raw(module: &[u8], storage: &[u8]) -> Vec<u8> {
 
 type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> () {
+	tracing_subscriber::fmt::try_init().unwrap();
 	let opt = Opt::from_args();
 
 	let mut cfg = OnlineConfig::default();
 	cfg.transport = Transport::Uri(opt.uri);
+	cfg.transport.map_uri().await.unwrap();
 
 	// connect to a node.
 	let ext = remote_externalities::Builder::<Block>::new().mode(Mode::Online(cfg));

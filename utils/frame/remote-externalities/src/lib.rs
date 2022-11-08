@@ -98,7 +98,7 @@ impl Transport {
 	}
 
 	// Open a new WebSocket connection if it's not connected.
-	async fn map_uri(&mut self) -> Result<(), &'static str> {
+	pub async fn map_uri(&mut self) -> Result<(), &'static str> {
 		if let Self::Uri(uri) = self {
 			log::debug!(target: LOG_TARGET, "initializing remote client to {:?}", uri);
 
