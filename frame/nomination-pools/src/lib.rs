@@ -667,11 +667,11 @@ impl<T: Config> Commission<T> {
 		&self,
 		pending_rewards: &BalanceOf<T>,
 	) -> (BalanceOf<T>, Option<T::AccountId>) {
-		let commission_percent = &self.percent();
-		if commission_percent > &Perbill::zero() {
+		let commission_percent = self.percent();
+		if commission_percent > Perbill::zero() {
 			let payee = self.payee().map(|p| p.clone()).or(None);
 			if payee.is_some() {
-				return (*commission_percent * *pending_rewards, payee)
+				return (commission_percent * *pending_rewards, payee)
 			}
 		}
 		(Zero::zero(), None)
