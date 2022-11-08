@@ -899,7 +899,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Run an election with all required side processes and state updates, if election
 	/// succeeds. Else, it will emit an `ElectionError` event. The election algorithm is defined
-	/// by the implementor of `Self::NposSolver`.
+	/// by the implementor of `Self::ElectionSolver`.
 	///
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	fn do_election() -> Weight {
