@@ -258,7 +258,7 @@ mod bonded_pool {
 
 			let commission = BondedPool::<Runtime>::get(1).unwrap().commission;
 
-			assert_eq!(commission.as_percent(), Perbill::from_percent(50));
+			assert_eq!(commission.percent(), Perbill::from_percent(50));
 			// Commission change events triggered successfully
 			assert_eq!(
 				pool_events_since_last_call(),

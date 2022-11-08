@@ -569,7 +569,7 @@ impl<T: Config> Default for Commission<T> {
 impl<T: Config> Commission<T> {
 	/// Get the current commission percentage of this pool.
 	/// Returns zero if commission has not yet been configured.
-	fn as_percent(&self) -> Perbill {
+	fn percent(&self) -> Perbill {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 
@@ -593,7 +593,7 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			(*to).saturating_sub(self.as_percent()) > t.change_rate.max_increase
+			(*to).saturating_sub(self.percent()) > t.change_rate.max_increase
 		} else {
 			return false
 		}
@@ -660,6 +660,21 @@ impl<T: Config> Commission<T> {
 				Some(CommissionThrottle { change_rate, ..*t })
 			});
 		Ok(())
+	}
+
+	/// Gets the current commission (if any) and payee to be paid.
+	fn get_commission_and_payee(
+		&self,
+		pending_rewards: &BalanceOf<T>,
+	) -> (BalanceOf<T>, Option<T::AccountId>) {
+		let commission_percent = &self.percent();
+		if commission_percent > &Perbill::zero() {
+			let payee = self.payee().map(|p| p.clone()).or(None);
+			if payee.is_some() {
+				return (*commission_percent * *pending_rewards, payee)
+			}
+		}
+		(Zero::zero(), None)
 	}
 }
 
@@ -2563,32 +2578,22 @@ impl<T: Config> Pallet<T> {
 		member.last_recorded_reward_counter = current_reward_counter;
 		reward_pool.register_claimed_reward(pending_rewards);
 
-		let get_commission_and_payee = |b: &BondedPool<T>| -> (BalanceOf<T>, Option<T::AccountId>) {
-			let commission_percent = &b.commission.as_percent();
-			if commission_percent > &Perbill::zero() {
-				let payee = b.commission.payee().map(|p| p.clone()).or(None);
-				if payee.is_some() {
-					return (*commission_percent * pending_rewards, payee)
-				}
-			}
-			(Zero::zero(), None)
-		};
-
-		let (pool_commission, payee) = get_commission_and_payee(&bonded_pool);
-		pending_rewards = pending_rewards.saturating_sub(pool_commission);
+		let (pool_commission, payee) =
+			&bonded_pool.commission.get_commission_and_payee(&pending_rewards);
+		pending_rewards = pending_rewards.saturating_sub(*pool_commission);
 
 		// If a non-zero commission has been applied to the pool, deduct the share from
 		// `reward_pool` and send the amount to the commission `payee`.
 		// Defensive: The commission payee is also checked for existence.
-		if pool_commission != BalanceOf::<T>::zero() {
+		if pool_commission != &BalanceOf::<T>::zero() {
 			if let Some(p) = payee {
 				T::Currency::withdraw(
 					&bonded_pool.reward_account(),
-					pool_commission,
+					*pool_commission,
 					WithdrawReasons::FEE,
 					ExistenceRequirement::KeepAlive,
 				)?;
-				T::Currency::deposit_creating(&p, pool_commission);
+				T::Currency::deposit_creating(&p, *pool_commission);
 			}
 		}
 
@@ -2604,7 +2609,7 @@ impl<T: Config> Pallet<T> {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
-			commission: pool_commission,
+			commission: *pool_commission,
 		});
 
 		Ok(pending_rewards)
