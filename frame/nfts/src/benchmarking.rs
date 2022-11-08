@@ -142,6 +142,10 @@ fn default_collection_config<T: Config<I>, I: 'static>() -> CollectionConfigFor<
 	make_collection_config::<T, I>(CollectionSetting::empty())
 }
 
+fn default_item_config() -> ItemConfig {
+	ItemConfig { settings: ItemSettings::all_enabled() }
+}
+
 benchmarks_instance_pallet! {
 	create {
 		let collection = T::Helper::collection(0);
@@ -184,6 +188,14 @@ benchmarks_instance_pallet! {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let item = T::Helper::item(0);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, item, None)
+	verify {
+		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
+	}
+
+	force_mint {
+		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let item = T::Helper::item(0);
+	}: _(SystemOrigin::Signed(caller.clone()), collection, item, caller_lookup, default_item_config())
 	verify {
 		assert_last_event::<T, I>(Event::Issued { collection, item, owner: caller }.into());
 	}
@@ -252,7 +264,8 @@ benchmarks_instance_pallet! {
 		let lock_settings = CollectionSettings::from_disabled(
 			CollectionSetting::TransferableItems |
 				CollectionSetting::UnlockedMetadata |
-				CollectionSetting::UnlockedAttributes,
+				CollectionSetting::UnlockedAttributes |
+				CollectionSetting::UnlockedMaxSupply,
 		);
 	}: _(SystemOrigin::Signed(caller.clone()), collection, lock_settings)
 	verify {
@@ -427,6 +440,20 @@ benchmarks_instance_pallet! {
 			collection,
 			max_supply: u32::MAX,
 		}.into());
+	}
+
+	update_mint_settings {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let mint_settings = MintSettings {
+			mint_type: MintType::HolderOf(T::Helper::collection(0)),
+			start_block: Some(One::one()),
+			end_block: Some(One::one()),
+			price: Some(ItemPrice::<T, I>::from(1u32)),
+			default_item_settings: ItemSettings::all_enabled(),
+		};
+	}: _(SystemOrigin::Signed(caller.clone()), collection, mint_settings)
+	verify {
+		assert_last_event::<T, I>(Event::CollectionMintSettingsUpdated { collection }.into());
 	}
 
 	set_price {
