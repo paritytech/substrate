@@ -604,7 +604,7 @@ pub mod pallet {
 				qs[queue_index].1.saturating_reduce(bid.amount);
 			});
 
-			let _ = T::Currency::unreserve(&bid.who, bid.amount);
+			let _ = T::Currency::unreserve(&bid.who, bid.amount).defensive();
 			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(())
