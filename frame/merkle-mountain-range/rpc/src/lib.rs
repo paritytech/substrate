@@ -40,11 +40,6 @@ pub use sp_mmr_primitives::MmrApi as MmrRuntimeApi;
 
 const RUNTIME_ERROR: i32 = 8000;
 const MMR_ERROR: i32 = 8010;
-const LEAF_NOT_FOUND_ERROR: i32 = MMR_ERROR + 1;
-const GENERATE_PROOF_ERROR: i32 = MMR_ERROR + 2;
-const VERIFY_PROOF_ERROR: i32 = MMR_ERROR + 3;
-const BLOCK_NUM_TO_LEAF_INDEX_ERROR: i32 = MMR_ERROR + 4;
-const INVALID_BEST_KNOWN_BLOCK_ERROR: i32 = MMR_ERROR + 5;
 
 /// Retrieved MMR leaves and their proof.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -238,35 +233,19 @@ where
 
 /// Converts an mmr-specific error into a [`CallError`].
 fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
-	let data = format!("{:?}", err);
-	match err {
-		MmrError::LeafNotFound => CallError::Custom(ErrorObject::owned(
-			LEAF_NOT_FOUND_ERROR,
-			"Leaf was not found",
-			Some(data),
-		)),
-		MmrError::GenerateProof => CallError::Custom(ErrorObject::owned(
-			GENERATE_PROOF_ERROR,
-			"Error while generating the proof",
-			Some(data),
-		)),
-		MmrError::Verify => CallError::Custom(ErrorObject::owned(
-			VERIFY_PROOF_ERROR,
-			"Error while verifying the proof",
-			Some(data),
-		)),
-		MmrError::BlockNumToLeafIndex => CallError::Custom(ErrorObject::owned(
-			BLOCK_NUM_TO_LEAF_INDEX_ERROR,
-			"Error while converting block number to leaf index",
-			Some(data),
-		)),
-		MmrError::InvalidBestKnownBlock => CallError::Custom(ErrorObject::owned(
-			INVALID_BEST_KNOWN_BLOCK_ERROR,
-			"Invalid best known block",
-			Some(data),
-		)),
-		_ => CallError::Custom(ErrorObject::owned(MMR_ERROR, "Unexpected MMR error", Some(data))),
-	}
+	let error_code = MMR_ERROR + match err {
+		MmrError::LeafNotFound => 1,
+		MmrError::GenerateProof => 2,
+		MmrError::Verify => 3,
+		MmrError::BlockNumToLeafIndex => 4,
+		MmrError::InvalidBestKnownBlock => 5,
+		_ => 0,
+	};
+
+	CallError::Custom(ErrorObject::owned(
+		error_code,
+		err.to_string(),
+		Some(format!("{:?}", err))))
 }
 
 /// Converts a runtime trap into a [`CallError`].

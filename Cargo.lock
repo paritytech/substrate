@@ -9816,6 +9816,7 @@ dependencies = [
  "sp-debug-derive",
  "sp-runtime",
  "sp-std",
+ "thiserror",
 ]
 
 [[package]]

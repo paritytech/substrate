@@ -353,27 +353,38 @@ pub struct Proof<Hash> {
 }
 
 /// Merkle Mountain Range operation error.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
 	/// Error during translation of a block number into a leaf index.
+	#[cfg_attr(feature = "std", error("Error translation block number into leaf index"))]
 	BlockNumToLeafIndex,
 	/// Error while pushing new node.
+	#[cfg_attr(feature = "std", error("Error pushing new node"))]
 	Push,
 	/// Error getting the new root.
+	#[cfg_attr(feature = "std", error("Error getting new root"))]
 	GetRoot,
-	/// Error commiting changes.
+	/// Error committing changes.
+	#[cfg_attr(feature = "std", error("Error committing changes"))]
 	Commit,
 	/// Error during proof generation.
+	#[cfg_attr(feature = "std", error("Error generating proof"))]
 	GenerateProof,
 	/// Proof verification error.
+	#[cfg_attr(feature = "std", error("Invalid proof"))]
 	Verify,
 	/// Leaf not found in the storage.
+	#[cfg_attr(feature = "std", error("Leaf was not found"))]
 	LeafNotFound,
 	/// Mmr Pallet not included in runtime
+	#[cfg_attr(feature = "std", error("MMR pallet not included in runtime"))]
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
+	#[cfg_attr(feature = "std", error("Requested leaf index invalid"))]
 	InvalidLeafIndex,
 	/// The provided best know block number is invalid.
+	#[cfg_attr(feature = "std", error("Provided best known block number invalid"))]
 	InvalidBestKnownBlock,
 }
 
