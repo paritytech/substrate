@@ -187,11 +187,11 @@ where
 	fn verify_proof(&self, proof: LeavesProof<<Block as BlockT>::Hash>) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
 
-		let leaves =
-			Decode::decode(&mut &proof.leaves.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
+		let leaves = Decode::decode(&mut &proof.leaves.0[..])
+			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
-		let decoded_proof =
-			Decode::decode(&mut &proof.proof.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
+		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
+			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		api.verify_proof_with_context(
 			&BlockId::hash(proof.block_hash),
@@ -212,11 +212,11 @@ where
 	) -> RpcResult<bool> {
 		let api = self.client.runtime_api();
 
-		let leaves =
-			Decode::decode(&mut &proof.leaves.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
+		let leaves = Decode::decode(&mut &proof.leaves.0[..])
+			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
-		let decoded_proof =
-			Decode::decode(&mut &proof.proof.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
+		let decoded_proof = Decode::decode(&mut &proof.proof.0[..])
+			.map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		api.verify_proof_stateless(
 			&BlockId::hash(proof.block_hash),
