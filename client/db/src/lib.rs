@@ -1994,15 +1994,15 @@ impl<Block: BlockT> sc_client_api::backend::Backend<Block> for Backend<Block> {
 		let usage = operation.old_state.usage_info();
 		self.state_usage.merge_sm(usage);
 
-		match self.try_commit_operation(operation) {
-			Ok(_) => {
-				self.storage.state_db.apply_pending();
-				Ok(())
-			},
-			e @ Err(_) => {
-				self.storage.state_db.revert_pending();
-				e
-			},
+		if let Err(e) = self.try_commit_operation(operation) {
+			let state_meta_db = StateMetaDb(self.storage.db.clone());
+			self.storage
+				.state_db
+				.reset(state_meta_db)
+				.map_err(sp_blockchain::Error::from_state_db)?;
+			Err(e)
+		} else {
+			Ok(())
 		}
 	}
 
