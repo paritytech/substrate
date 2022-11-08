@@ -1021,7 +1021,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[unstable]
+	#[version(2)]
 	#[prefixed_alias]
 	fn set_storage(
 		ctx: Runtime<E>,
@@ -1053,7 +1053,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[unstable]
+	#[version(1)]
 	#[prefixed_alias]
 	fn clear_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.clear_storage(KeyType::Variable(key_len), key_ptr)
@@ -1102,7 +1102,7 @@ pub mod env {
 	/// # Errors
 	///
 	/// `ReturnCode::KeyNotFound`
-	#[unstable]
+	#[version(1)]
 	#[prefixed_alias]
 	fn get_storage(
 		ctx: Runtime<E>,
@@ -1145,7 +1145,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[unstable]
+	#[version(1)]
 	#[prefixed_alias]
 	fn contains_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
