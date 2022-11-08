@@ -413,7 +413,6 @@ fn slash_nominators<T: Config>(
 				spans.end_span(params.now);
 			}
 		}
-
 		nominators_slashed.push((stash.clone(), nom_slashed));
 	}
 
