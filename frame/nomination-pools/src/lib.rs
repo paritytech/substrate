@@ -651,11 +651,7 @@ impl<T: Config> Commission<T> {
 		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
 	) -> DispatchResult {
 		if let Some(t) = &self.throttle {
-			ensure!(
-				!(change_rate.max_increase > t.change_rate.max_increase ||
-					change_rate.min_delay < t.change_rate.min_delay),
-				Error::<T>::CommissionThrottleNotAllowed
-			);
+			ensure!(!t.restricted(&change_rate), Error::<T>::CommissionThrottleNotAllowed);
 		}
 		self.throttle = self
 			.throttle
@@ -679,6 +675,11 @@ pub struct CommissionThrottle<T: Config> {
 }
 
 impl<T: Config> CommissionThrottle<T> {
+	fn restricted(&self, change_rate: &CommissionThrottlePrefs<T::BlockNumber>) -> bool {
+		change_rate.max_increase > self.change_rate.max_increase ||
+			change_rate.min_delay < self.change_rate.min_delay
+	}
+
 	fn register_change(&mut self, now: T::BlockNumber) {
 		self.previous_set_at = Some(now);
 	}
