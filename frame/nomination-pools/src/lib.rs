@@ -598,7 +598,8 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			(*to).saturating_sub(self.percent()) > t.change_rate.max_increase
+			(*to).saturating_sub(self.percent()) > t.change_rate.max_increase &&
+				self.current.is_some()
 		} else {
 			return false
 		}
@@ -622,8 +623,7 @@ impl<T: Config> Commission<T> {
 			Error::<T>::CommissionExceedsMaximum
 		);
 
-		self.current =
-			if commission > &Perbill::zero() { Some((*commission, payee)) } else { None };
+		self.current = Some((*commission, payee));
 
 		let _ = self
 			.throttle
