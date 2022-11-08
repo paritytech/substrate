@@ -233,19 +233,17 @@ where
 
 /// Converts an mmr-specific error into a [`CallError`].
 fn mmr_error_into_rpc_error(err: MmrError) -> CallError {
-	let error_code = MMR_ERROR + match err {
-		MmrError::LeafNotFound => 1,
-		MmrError::GenerateProof => 2,
-		MmrError::Verify => 3,
-		MmrError::BlockNumToLeafIndex => 4,
-		MmrError::InvalidBestKnownBlock => 5,
-		_ => 0,
-	};
+	let error_code = MMR_ERROR +
+		match err {
+			MmrError::LeafNotFound => 1,
+			MmrError::GenerateProof => 2,
+			MmrError::Verify => 3,
+			MmrError::BlockNumToLeafIndex => 4,
+			MmrError::InvalidBestKnownBlock => 5,
+			_ => 0,
+		};
 
-	CallError::Custom(ErrorObject::owned(
-		error_code,
-		err.to_string(),
-		Some(format!("{:?}", err))))
+	CallError::Custom(ErrorObject::owned(error_code, err.to_string(), Some(format!("{:?}", err))))
 }
 
 /// Converts a runtime trap into a [`CallError`].
