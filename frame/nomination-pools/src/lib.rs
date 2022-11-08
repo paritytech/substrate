@@ -644,6 +644,24 @@ impl<T: Config> Commission<T> {
 		};
 		Ok(())
 	}
+
+	/// Set the pool's commission throttle settings.
+	fn maybe_update_throttle(&mut self, change_rate: CommissionThrottlePrefs<T::BlockNumber>) -> DispatchResult {
+		if let Some(throttle) = &self.throttle {
+			ensure!(
+				!(change_rate.max_increase > throttle.change_rate.max_increase ||
+					change_rate.min_delay < throttle.change_rate.min_delay),
+				Error::<T>::CommissionThrottleNotAllowed
+			);
+		}
+		self.throttle = self
+			.throttle
+			.as_ref()
+			.map_or(Some(CommissionThrottle { change_rate, previous_set_at: None }), |t| {
+				Some(CommissionThrottle { change_rate, ..*t })
+			});
+		Ok(())
+	}
 }
 
 /// The pool root is able to set a commission throttle for their pool.
@@ -824,17 +842,6 @@ impl<T: Config> BondedPool<T> {
 		let account = self.bonded_account();
 		T::Currency::free_balance(&account)
 			.saturating_sub(T::Staking::active_stake(&account).unwrap_or_default())
-	}
-
-	/// Set the pool's commission throttle settings.
-	fn set_commission_throttle(&mut self, change_rate: CommissionThrottlePrefs<T::BlockNumber>) {
-		self.commission.throttle = self
-			.commission
-			.throttle
-			.as_ref()
-			.map_or(Some(CommissionThrottle { change_rate, previous_set_at: None }), |t| {
-				Some(CommissionThrottle { change_rate, ..*t })
-			});
 	}
 
 	fn is_root(&self, who: &T::AccountId) -> bool {
@@ -2171,9 +2178,7 @@ pub mod pallet {
 				.or(bonded_pool.commission.payee().cloned())
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
-			let commission = &mut bonded_pool.commission;
-
-			commission.maybe_update_current(&new_commission, final_payee.clone())?;
+			bonded_pool.commission.maybe_update_current(&new_commission, final_payee.clone())?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
@@ -2226,15 +2231,7 @@ pub mod pallet {
 			let mut bonded_pool = BondedPool::<T>::get(pool_id).ok_or(Error::<T>::PoolNotFound)?;
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
-			if let Some(throttle) = &bonded_pool.commission.throttle {
-				ensure!(
-					!(prefs.max_increase > throttle.change_rate.max_increase ||
-						prefs.min_delay < throttle.change_rate.min_delay),
-					Error::<T>::CommissionThrottleNotAllowed
-				);
-			}
-
-			bonded_pool.set_commission_throttle(prefs);
+			bonded_pool.commission.maybe_update_throttle(prefs)?;
 			bonded_pool.put();
 			Ok(())
 		}
