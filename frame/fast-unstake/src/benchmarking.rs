@@ -39,7 +39,8 @@ type CurrencyOf<T> = <T as Config>::Currency;
 fn create_unexposed_nominators<T: Config>() -> Vec<T::AccountId> {
 	(0..T::BatchSize::get())
 		.map(|i| {
-			let account = frame_benchmarking::account::<T::AccountId>("unexposed_nominator", i, USER_SEED);
+			let account =
+				frame_benchmarking::account::<T::AccountId>("unexposed_nominator", i, USER_SEED);
 			fund_and_bond_account::<T>(&account);
 			account
 		})
