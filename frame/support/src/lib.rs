@@ -1624,8 +1624,7 @@ pub mod pallet_prelude {
 /// want to write an alternative to the `frame_system` pallet.
 ///
 /// Also see
-/// [`pallet::disable_frame_system_supertrait_check`](`frame_support::pallet_macros::
-/// disable_frame_system_supertrait_check`)
+/// [`pallet::disable_frame_system_supertrait_check`](`frame_support::pallet_macros::disable_frame_system_supertrait_check`)
 ///
 /// ## Macro expansion:
 ///
@@ -1669,8 +1668,7 @@ pub mod pallet_prelude {
 /// storages can opt-out from this constraint by using `#[pallet::unbounded]` (see
 /// `#[pallet::storage]` for more info).
 ///
-/// Also see [`pallet::generate_storage_info`](`frame_support::pallet_macros::
-/// generate_storage_info`)
+/// Also see [`pallet::generate_storage_info`](`frame_support::pallet_macros::generate_storage_info`)
 ///
 /// # `pallet::storage_version`
 ///
