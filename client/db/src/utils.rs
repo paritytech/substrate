@@ -293,7 +293,7 @@ fn open_parity_db<Block: BlockT>(path: &Path, db_type: DatabaseType, create: boo
 	}
 }
 
-#[cfg(feature = "rocksdb")]
+#[cfg(any(feature = "rocksdb", test))]
 fn open_kvdb_rocksdb<Block: BlockT>(
 	path: &Path,
 	db_type: DatabaseType,
@@ -343,7 +343,7 @@ fn open_kvdb_rocksdb<Block: BlockT>(
 	Ok(sp_database::as_database(db))
 }
 
-#[cfg(not(feature = "rocksdb"))]
+#[cfg(not(any(feature = "rocksdb", test)))]
 fn open_kvdb_rocksdb<Block: BlockT>(
 	_path: &Path,
 	_db_type: DatabaseType,
@@ -583,11 +583,10 @@ mod tests {
 	use super::*;
 	use codec::Input;
 	use sp_runtime::testing::{Block as RawBlock, ExtrinsicWrapper};
-	#[cfg(feature = "rocksdb")]
 	use std::path::PathBuf;
 	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
-	#[cfg(feature = "rocksdb")]
+	#[cfg(any(feature = "rocksdb", test))]
 	#[test]
 	fn database_type_subdir_migration() {
 		type Block = RawBlock<ExtrinsicWrapper<u64>>;
@@ -686,7 +685,6 @@ mod tests {
 		assert_eq!(joined.remaining_len().unwrap(), Some(0));
 	}
 
-	#[cfg(feature = "rocksdb")]
 	#[test]
 	fn test_open_database_auto_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();
@@ -732,7 +730,6 @@ mod tests {
 		}
 	}
 
-	#[cfg(feature = "rocksdb")]
 	#[test]
 	fn test_open_database_rocksdb_new() {
 		let db_dir = tempfile::TempDir::new().unwrap();
@@ -805,7 +802,6 @@ mod tests {
 		}
 
 		// it should fail to open existing pairtydb database
-		#[cfg(feature = "rocksdb")]
 		{
 			let db_res = open_database::<Block>(
 				&DatabaseSource::RocksDb { path: rocksdb_path.clone(), cache_size: 128 },

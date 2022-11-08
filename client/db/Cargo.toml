@@ -36,6 +36,7 @@ sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 
 [dev-dependencies]
 criterion = "0.3.3"
+kvdb-rocksdb = "0.16.0"
 rand = "0.8.4"
 tempfile = "3.1.0"
 quickcheck = { version = "1.0.3", default-features = false }
