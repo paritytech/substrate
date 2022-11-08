@@ -1371,7 +1371,7 @@ fn many_unbond_calls_should_work() {
 		// == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
-			Staking::chunk_slots_filled(&10).unwrap(),
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
 
@@ -1386,7 +1386,7 @@ fn many_unbond_calls_should_work() {
 
 		// only slots of unbonds within last `BondingDuration` are filled.
 		assert_eq!(
-			Staking::chunk_slots_filled(&10).unwrap(),
+			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::BondingDuration>::get() as usize
 		);
 	})

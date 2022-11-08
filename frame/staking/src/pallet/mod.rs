@@ -950,18 +950,19 @@ pub mod pallet {
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResult {
 			let controller = ensure_signed(origin.clone())?;
-
+			let unlocking = Self::ledger(&controller)
+				.map(|l| l.unlocking.len())
+				.ok_or(Error::<T>::NotController)?;
 
 			// ensure that there's chunk slots available by requesting the staking interface to
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
-			if Self::chunk_slots_filled(&controller)? == T::MaxUnlockingChunks::get() as usize {
-				Self::withdraw_unbonded(origin, SLASHING_SPANS_AUTO_WITHDRAW)
+			if unlocking == T::MaxUnlockingChunks::get() as usize {
+				Self::do_withdraw_unbonded(&controller, SLASHING_SPANS_AUTO_WITHDRAW)
 					.map_err(|with_post| with_post.error)?;
-			};
+			}
 
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-
 			let mut value = value.min(ledger.active);
 
 			if !value.is_zero() {
@@ -1035,40 +1036,7 @@ pub mod pallet {
 			num_slashing_spans: u32,
 		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin)?;
-			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-			let (stash, old_total) = (ledger.stash.clone(), ledger.total);
-			if let Some(current_era) = Self::current_era() {
-				ledger = ledger.consolidate_unlocked(current_era)
-			}
-
-			let post_info_weight = if ledger.unlocking.is_empty() &&
-				ledger.active < T::Currency::minimum_balance()
-			{
-				// This account must have called `unbond()` with some value that caused the active
-				// portion to fall below existential deposit + will have no more unlocking chunks
-				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash, num_slashing_spans)?;
-				// Remove the lock.
-				T::Currency::remove_lock(STAKING_ID, &stash);
-				// This is worst case scenario, so we use the full weight and return None
-				None
-			} else {
-				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
-
-				// This is only an update, so we use less overall weight.
-				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-			};
-
-			// `old_total` should never be less than the new total because
-			// `consolidate_unlocked` strictly subtracts balance.
-			if ledger.total < old_total {
-				// Already checked that this won't overflow by entry condition.
-				let value = old_total - ledger.total;
-				Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
-			}
-
-			Ok(post_info_weight.into())
+			Self::do_withdraw_unbonded(&controller, num_slashing_spans)
 		}
 
 		/// Declare the desire to validate for the origin controller.
