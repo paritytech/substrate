@@ -646,11 +646,14 @@ impl<T: Config> Commission<T> {
 	}
 
 	/// Set the pool's commission throttle settings.
-	fn maybe_update_throttle(&mut self, change_rate: CommissionThrottlePrefs<T::BlockNumber>) -> DispatchResult {
-		if let Some(throttle) = &self.throttle {
+	fn maybe_update_throttle(
+		&mut self,
+		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
+	) -> DispatchResult {
+		if let Some(t) = &self.throttle {
 			ensure!(
-				!(change_rate.max_increase > throttle.change_rate.max_increase ||
-					change_rate.min_delay < throttle.change_rate.min_delay),
+				!(change_rate.max_increase > t.change_rate.max_increase ||
+					change_rate.min_delay < t.change_rate.min_delay),
 				Error::<T>::CommissionThrottleNotAllowed
 			);
 		}
@@ -2178,7 +2181,9 @@ pub mod pallet {
 				.or(bonded_pool.commission.payee().cloned())
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
-			bonded_pool.commission.maybe_update_current(&new_commission, final_payee.clone())?;
+			bonded_pool
+				.commission
+				.maybe_update_current(&new_commission, final_payee.clone())?;
 			bonded_pool.put();
 			Self::deposit_event(Event::<T>::PoolCommissionUpdated {
 				pool_id,
