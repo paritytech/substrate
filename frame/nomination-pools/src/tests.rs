@@ -1343,6 +1343,21 @@ mod claim_payout {
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 7, commission: 3 },]
 			);
 
+			// The pool earns 17 points
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 17));
+			assert_ok!(Pools::do_reward_payout(
+				&10,
+				&mut member,
+				&mut BondedPool::<Runtime>::get(1).unwrap(),
+				&mut reward_pool
+			));
+
+			// Then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 11, commission: 6 },]
+			);
+
 			// The pool earns 50 points
 			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 50));
 			assert_ok!(Pools::do_reward_payout(
@@ -1356,6 +1371,21 @@ mod claim_payout {
 			assert_eq!(
 				pool_events_since_last_call(),
 				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 34, commission: 16 },]
+			);
+
+			// The pool earns 10439 points
+			assert_ok!(Balances::mutate_account(&default_reward_account(), |a| a.free += 10439));
+			assert_ok!(Pools::do_reward_payout(
+				&10,
+				&mut member,
+				&mut BondedPool::<Runtime>::get(1).unwrap(),
+				&mut reward_pool
+			));
+
+			// Then
+			assert_eq!(
+				pool_events_since_last_call(),
+				vec![Event::PaidOut { member: 10, pool_id: 1, payout: 6994, commission: 3445 },]
 			);
 		})
 	}
