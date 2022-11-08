@@ -551,13 +551,13 @@ pub struct PoolRoles<AccountId> {
 #[scale_info(skip_type_params(T))]
 pub struct Commission<T: Config> {
 	/// The active commission rate of the pool along with the account commission is paid to.
-	current: Option<(Perbill, T::AccountId)>,
+	pub current: Option<(Perbill, T::AccountId)>,
 	/// An optional maximum commission that can be set by the pool root. Once set, this value
 	/// cannot be updated.
-	max: Option<Perbill>,
+	pub max: Option<Perbill>,
 	/// Configiration around how often the commission can be updated, and metadata around the
 	/// previous round of updates.
-	throttle: Option<CommissionThrottle<T>>,
+	pub throttle: Option<CommissionThrottle<T>>,
 }
 
 impl<T: Config> Default for Commission<T> {
@@ -635,6 +635,24 @@ impl<T: Config> Commission<T> {
 	}
 }
 
+/// The pool root is able to set a commission throttle for their pool.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
+#[codec(mel_bound(T: Config))]
+#[scale_info(skip_type_params(T))]
+pub struct CommissionThrottle<T: Config> {
+	///  The change rate dictates how often and by how much commission can be updated.
+	pub change_rate: CommissionThrottlePrefs<T::BlockNumber>,
+	/// The block the previous commission update took place.
+	pub previous_set_at: Option<T::BlockNumber>,
+}
+
+impl<T: Config> CommissionThrottle<T> {
+	fn register_change(&mut self, now: T::BlockNumber) {
+		self.previous_set_at = Some(now);
+	}
+}
+
+
 /// Pool commission throttle preferences.
 ///
 /// Throttle prefs need to be passed and configured together. This struct is used in
@@ -645,23 +663,6 @@ pub struct CommissionThrottlePrefs<BlockNumber> {
 	pub max_increase: Perbill,
 	/// How often an update can take place.
 	pub min_delay: BlockNumber,
-}
-
-/// The pool root is able to set a commission throttle for their pool.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
-#[codec(mel_bound(T: Config))]
-#[scale_info(skip_type_params(T))]
-pub struct CommissionThrottle<T: Config> {
-	///  The change rate dictates how often and by how much commission can be updated.
-	pub change_rate: CommissionThrottlePrefs<T::BlockNumber>,
-	/// The block the previous commission update took place.
-	previous_set_at: Option<T::BlockNumber>,
-}
-
-impl<T: Config> CommissionThrottle<T> {
-	fn register_change(&mut self, now: T::BlockNumber) {
-		self.previous_set_at = Some(now);
-	}
 }
 
 /// Pool permissions and state

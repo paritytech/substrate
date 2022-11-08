@@ -28,11 +28,15 @@ use frame_election_provider_support::SortedListProvider;
 use frame_support::{assert_ok, ensure, traits::Get};
 use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
-	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
-	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
+	BalanceOf, BondExtra, BondedPoolInner, BondedPools, Commission, CommissionThrottle,
+	CommissionThrottlePrefs, ConfigOp, MaxPoolMembers, MaxPoolMembersPerPool, MaxPools, Metadata,
+	MinCreateBond, MinJoinBond, Pallet as Pools, PoolMembers, PoolRoles, PoolState, RewardPools,
+	SubPoolsStorage,
 };
-use sp_runtime::traits::{Bounded, StaticLookup, Zero};
+use sp_runtime::{
+	traits::{Bounded, StaticLookup, Zero},
+	Perbill,
+};
 use sp_staking::{EraIndex, StakingInterface};
 // `frame_benchmarking::benchmarks!` macro needs this
 use pallet_nomination_pools::Call;
@@ -133,13 +137,28 @@ impl<T: Config> ListScenario<T> {
 
 		// Create accounts with the origin weight
 		let (pool_creator1, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
+		Pools::<T>::set_commission(
+			RuntimeOrigin::Signed(pool_creator1.clone()).into(),
+			1,
+			Perbill::from_percent(50),
+			Some(pool_creator1.clone()),
+		)
+		.unwrap();
+
 		T::Staking::nominate(
 			&pool_origin1,
 			// NOTE: these don't really need to be validators.
 			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
-		let (_, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
+		let (pool_creator2, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
+		Pools::<T>::set_commission(
+			RuntimeOrigin::Signed(pool_creator2.clone()).into(),
+			1,
+			Perbill::from_percent(50),
+			Some(pool_creator2),
+		)
+		.unwrap();
 		T::Staking::nominate(
 			&pool_origin2,
 			vec![account("random_validator", 0, USER_SEED)].clone(),
@@ -155,7 +174,15 @@ impl<T: Config> ListScenario<T> {
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
 
 		// Create an account with the worst case destination weight
-		let (_, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
+		let (pool_creator3, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
+		Pools::<T>::set_commission(
+			RuntimeOrigin::Signed(pool_creator3.clone()).into(),
+			1,
+			Perbill::from_percent(50),
+			Some(pool_creator3),
+		)
+		.unwrap();
+
 		T::Staking::nominate(&pool_dest1, vec![account("random_validator", 0, USER_SEED)])?;
 
 		let weight_of = pallet_staking::Pallet::<T>::weight_of_fn();
@@ -658,16 +685,17 @@ frame_benchmarking::benchmarks! {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 		// set a max commission
-		Pools::<T>::set_commission_max(RuntimeOrigin::Signed(depositor.clone()).into(), 1, Perbill::from_percent(50));
+		Pools::<T>::set_commission_max(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(50)).unwrap();
 		// set a commission throttle
-		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1, CommissionThrottlePrefs {
+		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), CommissionThrottlePrefs {
 			max_increase: Perbill::from_percent(20),
-			min_delay: 1000_u64,
-		});
-	}:_(RuntimeOrigin::Signed(depositor.clone(), 1, Perbill::from_percent(100), depositor))
+			min_delay: 1000u32.into(),
+		}).unwrap();
+
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Perbill::from_percent(100), Some(depositor.clone()))
 	verify {
 		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
-			current: Some(Perbill::from_percent(100), depositor),
+			current: Some((Perbill::from_percent(100), depositor)),
 			max: None,
 			throttle: None,
 		});
@@ -677,12 +705,12 @@ frame_benchmarking::benchmarks! {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 		// Set a commission that will update when max commission is set.
-		Pools::<T>::set_commission(RuntimeOrigin::Signed(depositor.clone()).into(), Perbill::from_percent(100), depositor);
-	}:_(RuntimeOrigin::Signed(depositor.clone()), 1, Perbill::from_percent(50))
+		Pools::<T>::set_commission(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(100), Some(depositor.clone())).unwrap();
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Perbill::from_percent(50))
 	verify {
 		assert_eq!(
 			BondedPools::<T>::get(1).unwrap().commission, Commission {
-			current: Some(Perbill::from_percent(50), depositor),
+			current: Some((Perbill::from_percent(50), depositor)),
 			max: Some(Perbill::from_percent(50)),
 			throttle: None,
 		});
@@ -691,19 +719,22 @@ frame_benchmarking::benchmarks! {
 	set_commission_throttle {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
-	}:_(RuntimeOrigin::Signed(depositor.clone()), 1, CommissionThrottlePrefs {
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), CommissionThrottlePrefs {
 		max_increase: Perbill::from_percent(50),
-		min_delay: 1000_u64,
+		min_delay: 1000u32.into(),
 	})
 	verify {
 		assert_eq!(
 			BondedPools::<T>::get(1).unwrap().commission, Commission {
 			current: None,
 			max: None,
-			throttle: CommissionThrottlePrefs {
-				max_increase: Perbill::from_percent(50),
-				min_delay: 1000_u64,
-			},
+			throttle: Some(CommissionThrottle {
+				change_rate: CommissionThrottlePrefs {
+					max_increase: Perbill::from_percent(50),
+					min_delay: 1000u32.into(),
+				},
+				previous_set_at: Some(1u32.into()),
+			}),
 		});
 	}
 
