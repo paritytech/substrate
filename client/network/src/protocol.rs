@@ -360,7 +360,7 @@ where
 		let cache_capacity = NonZeroUsize::new(
 			(network_config.default_peers_set.in_peers as usize +
 				network_config.default_peers_set.out_peers as usize)
-				.min(1),
+				.max(1),
 		)
 		.expect("cache capacity is not zero");
 		let block_announce_data_cache = LruCache::new(cache_capacity);

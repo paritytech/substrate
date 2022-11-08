@@ -187,7 +187,7 @@ impl RuntimeCache {
 		runtime_cache_size: u8,
 	) -> RuntimeCache {
 		let cap =
-			NonZeroUsize::new(runtime_cache_size.min(1) as usize).expect("cache size is not zero");
+			NonZeroUsize::new(runtime_cache_size.max(1) as usize).expect("cache size is not zero");
 		RuntimeCache { runtimes: Mutex::new(LruCache::new(cap)), max_runtime_instances, cache_path }
 	}
 
