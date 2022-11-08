@@ -269,7 +269,7 @@ pub mod pallet {
 		/// Something that will calculate the result of elections.
 		type ElectionSolver: NposSolver<AccountId = Self::AccountId>;
 
-		/// Weight information for the `ElectionSolver`.
+		/// Weight information for the [`Config::ElectionSolver`].
 		type SolverWeightInfo: frame_election_provider_support::WeightInfo;
 
 		/// Weight information for extrinsics in this pallet.
