@@ -18,7 +18,7 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{weights::WeightInfo, Config};
+use crate::{wasm::Determinism, weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
 use frame_support::DefaultNoBound;
@@ -193,6 +193,13 @@ pub struct InstructionWeights<T: Config> {
 	/// Changes to other parts of the schedule should not increment the version in
 	/// order to avoid unnecessary re-instrumentations.
 	pub version: u32,
+	/// Weight to be used for instructions which don't have benchmarks assigned.
+	///
+	/// This weight is used whenever a code is uploaded with [`Determinism::AllowIndeterminism`]
+	/// and an instruction (usually a float instruction) is encountered. This weight is **not**
+	/// used if a contract is uploaded with [`Determinism::Deterministic`]. If this field is set to
+	/// `0` (the default) only deterministic codes are allowed to be uploaded.
+	pub fallback: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -526,6 +533,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 		let max_pages = Limits::default().memory_pages;
 		Self {
 			version: 3,
+			fallback: 0,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
 			i64store: cost_instr!(instr_i64store, 2),
@@ -659,10 +667,15 @@ impl<T: Config> Default for HostFnWeights<T> {
 struct ScheduleRules<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 	params: Vec<u32>,
+	determinism: Determinism,
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
+	pub(crate) fn rules(
+		&self,
+		module: &elements::Module,
+		determinism: Determinism,
+	) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
 			schedule: self,
 			params: module
@@ -674,6 +687,7 @@ impl<T: Config> Schedule<T> {
 					func.params().len() as u32
 				})
 				.collect(),
+			determinism,
 		}
 	}
 }
@@ -756,7 +770,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 			I32Rotr | I64Rotr => w.i64rotr,
 
 			// Returning None makes the gas instrumentation fail which we intend for
-			// unsupported or unknown instructions.
+			// unsupported or unknown instructions. Offchain we might allow indeterminism and hence
+			// use the fallback weight for those instructions.
+			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 =>
+				w.fallback,
 			_ => return None,
 		};
 		Some(weight)

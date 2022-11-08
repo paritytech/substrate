@@ -19,10 +19,12 @@
 //! Network packet message types. These get serialized and put into the lower level protocol
 //! payload.
 
+use crate::protocol::role::Roles;
+
 use bitflags::bitflags;
 use codec::{Decode, Encode, Error, Input, Output};
 pub use generic::{BlockAnnounce, FromBlock};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Type alias for using the block request type using block type parameters.
 pub type BlockRequest<B> =
@@ -216,5 +218,29 @@ pub mod generic {
 			let data = Vec::decode(input).ok();
 			Ok(Self { header, state, data })
 		}
+	}
+}
+
+/// Handshake sent when we open a block announces substream.
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+pub struct BlockAnnouncesHandshake<B: BlockT> {
+	/// Roles of the node.
+	pub roles: Roles,
+	/// Best block number.
+	pub best_number: NumberFor<B>,
+	/// Best block hash.
+	pub best_hash: B::Hash,
+	/// Genesis block hash.
+	pub genesis_hash: B::Hash,
+}
+
+impl<B: BlockT> BlockAnnouncesHandshake<B> {
+	pub fn build(
+		roles: Roles,
+		best_number: NumberFor<B>,
+		best_hash: B::Hash,
+		genesis_hash: B::Hash,
+	) -> Self {
+		Self { genesis_hash, roles, best_number, best_hash }
 	}
 }

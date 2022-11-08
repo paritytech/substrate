@@ -26,10 +26,8 @@ use scale_info::TypeInfo;
 use sp_staking::EraIndex;
 use sp_std::prelude::*;
 
-pub type BalanceOf<T> = <<T as pallet_staking::Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::Balance;
-
+pub type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 /// An unstake request.
 #[derive(
 	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,

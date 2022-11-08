@@ -1340,7 +1340,7 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
@@ -1369,7 +1369,7 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		runtime_api.test_storage(&block_id).unwrap();
 	}
@@ -1396,7 +1396,7 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		runtime_api.test_witness(&block_id, proof, root).unwrap();
 	}

@@ -328,7 +328,6 @@ where
 	}
 
 	/// Returns the code hash of the contract specified by `account` ID.
-	#[cfg(test)]
 	pub fn code_hash(account: &AccountIdOf<T>) -> Option<CodeHash<T>> {
 		<ContractInfoOf<T>>::get(account).map(|i| i.code_hash)
 	}

@@ -179,7 +179,8 @@ parameter_types! {
 impl fast_unstake::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Deposit = Deposit;
-	type DepositCurrency = Balances;
+	type Currency = Balances;
+	type Staking = Staking;
 	type ControlOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type BatchSize = BatchSize;
 	type WeightInfo = ();
