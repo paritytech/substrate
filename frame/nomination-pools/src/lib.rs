@@ -2188,7 +2188,7 @@ pub mod pallet {
 		/// current commission is higher than the supplied maximum.
 		#[pallet::weight(0)]
 		#[transactional]
-		pub fn set_max_commission(
+		pub fn set_commission_max(
 			origin: OriginFor<T>,
 			pool_id: PoolId,
 			max_commission: Perbill,

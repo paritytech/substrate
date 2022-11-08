@@ -409,7 +409,7 @@ mod bonded_pool {
 			);
 
 			// We will now set a max commission to the current 2%
-			assert_ok!(Pools::set_max_commission(
+			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(2)
@@ -457,11 +457,11 @@ mod bonded_pool {
 	}
 
 	#[test]
-	fn set_max_commission_works_with_error_tests() {
+	fn set_commission_max_works_with_error_tests() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Provided pool does not exist
 			assert_noop!(
-				Pools::set_max_commission(
+				Pools::set_commission_max(
 					RuntimeOrigin::signed(900),
 					9999,
 					Perbill::from_percent(1)
@@ -470,12 +470,12 @@ mod bonded_pool {
 			);
 			// Sender does not have permission to set commission
 			assert_noop!(
-				Pools::set_max_commission(RuntimeOrigin::signed(1), 1, Perbill::from_percent(5)),
+				Pools::set_commission_max(RuntimeOrigin::signed(1), 1, Perbill::from_percent(5)),
 				Error::<Runtime>::DoesNotHavePermission
 			);
 
 			// Set a max commission commission pool 1 to 90%
-			assert_ok!(Pools::set_max_commission(
+			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(90)
@@ -487,7 +487,7 @@ mod bonded_pool {
 
 			// We attempt to increase the max commission to 100%, but increasing is disallowed.
 			assert_noop!(
-				Pools::set_max_commission(
+				Pools::set_commission_max(
 					RuntimeOrigin::signed(900),
 					1,
 					Perbill::from_percent(100)
@@ -503,7 +503,7 @@ mod bonded_pool {
 				Perbill::from_percent(75),
 				Some(900),
 			));
-			assert_ok!(Pools::set_max_commission(
+			assert_ok!(Pools::set_commission_max(
 				RuntimeOrigin::signed(900),
 				1,
 				Perbill::from_percent(50)

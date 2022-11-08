@@ -658,7 +658,7 @@ frame_benchmarking::benchmarks! {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 		// set a max commission
-		Pools::<T>::set_max_commission(RuntimeOrigin::Signed(depositor.clone()).into(), 1, Perbill::from_percent(50));
+		Pools::<T>::set_commission_max(RuntimeOrigin::Signed(depositor.clone()).into(), 1, Perbill::from_percent(50));
 		// set a commission throttle
 		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1, CommissionThrottlePrefs {
 			max_increase: Perbill::from_percent(20),
@@ -673,7 +673,7 @@ frame_benchmarking::benchmarks! {
 		});
 	}
 
-	set_max_commission {
+	set_commission_max {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 		// Set a commission that will update when max commission is set.
