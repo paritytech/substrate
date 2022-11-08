@@ -119,11 +119,13 @@ where
 	T::Api: SessionKeys<Block>,
 {
 	if !seeds.is_empty() {
-		let runtime_api = client.runtime_api();
+		return Ok(())
+	}
 
-		for seed in seeds {
-			runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
-		}
+	let runtime_api = client.runtime_api();
+
+	for seed in seeds {
+		runtime_api.generate_session_keys(at, Some(seed.as_bytes().to_vec()))?;
 	}
 
 	Ok(())
