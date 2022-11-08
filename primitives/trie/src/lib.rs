@@ -1001,6 +1001,7 @@ mod tests {
 		check(u16::MAX as usize / 2 + 1); // value over old limit still works
 	}
 
+	#[test]
 	fn node_with_no_children_fail_decoding() {
 		let branch = NodeCodec::<Blake2Hasher>::branch_node_nibbled(
 			b"some_partial".iter().copied(),
