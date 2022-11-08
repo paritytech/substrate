@@ -33,10 +33,10 @@ use crate::{
 use codec::Encode;
 use futures::{
 	future::FutureExt,
-	stream::{self, StreamExt},
+	stream::{self, Stream, StreamExt},
 };
 use jsonrpsee::{
-	core::{async_trait, error::SubscriptionClosed, RpcResult},
+	core::{async_trait, RpcResult},
 	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
@@ -46,6 +46,7 @@ use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, CallExecutor, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
+use serde::Serialize;
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
 use sp_core::{hexdisplay::HexDisplay, Bytes};
@@ -54,6 +55,9 @@ use sp_runtime::{
 	traits::{Block as BlockT, Header},
 };
 use std::{marker::PhantomData, sync::Arc};
+
+use futures::channel::oneshot;
+use futures_util::future::Either;
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -271,6 +275,42 @@ fn get_initial_blocks<BE, Block>(
 	}
 }
 
+/// Submit the events from the provided stream to the RPC client
+/// for as long as the `rx_stop` event was not called.
+async fn submit_events<EventStream, T>(
+	sink: &mut SubscriptionSink,
+	mut stream: EventStream,
+	rx_stop: oneshot::Receiver<()>,
+) where
+	EventStream: Stream<Item = T> + Unpin,
+	T: Serialize,
+{
+	let mut stream_item = stream.next();
+	let mut stop_event = rx_stop;
+
+	loop {
+		match futures_util::future::select(stream_item, stop_event).await {
+			// Pipe from the event stream.
+			Either::Left((Some(event), next_stop_event)) => {
+				if let Err(_) = sink.send(&event) {
+					// Sink failed to submit the event.
+					let _ = sink.send(&FollowEvent::<String>::Stop);
+					break
+				}
+
+				stream_item = stream.next();
+				stop_event = next_stop_event;
+			},
+			// Event stream does not produce any more events or the stop
+			// event was triggered.
+			Either::Left((None, _)) | Either::Right((_, _)) => {
+				let _ = sink.send(&FollowEvent::<String>::Stop);
+				break
+			},
+		}
+	}
+}
+
 #[async_trait]
 impl<BE, Block, Client> ChainHeadApiServer<Block::Hash> for ChainHead<BE, Block, Client>
 where
@@ -292,7 +332,7 @@ where
 	) -> SubscriptionResult {
 		let sub_id = self.accept_subscription(&mut sink)?;
 		// Keep track of the subscription.
-		let Ok(_rx_stop) = self.subscriptions.insert_subscription(sub_id.clone()) else {
+		let Ok(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone()) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
@@ -424,11 +464,7 @@ where
 
 		let subscriptions = self.subscriptions.clone();
 		let fut = async move {
-			if let SubscriptionClosed::Failed(_) = sink.pipe_from_stream(stream.boxed()).await {
-				// The subscription failed to pipe from the stream.
-				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-			}
-
+			submit_events(&mut sink, stream.boxed(), rx_stop).await;
 			// The client disconnected or called the unsubscribe method.
 			subscriptions.remove_subscription(&sub_id);
 		};

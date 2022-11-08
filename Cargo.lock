@@ -8558,6 +8558,7 @@ dependencies = [
  "array-bytes",
  "assert_matches",
  "futures",
+ "futures-util",
  "hex",
  "jsonrpsee",
  "log",
