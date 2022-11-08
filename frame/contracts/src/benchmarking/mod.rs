@@ -371,7 +371,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-	}: _(origin, code, None)
+	}: _(origin, code, None, Determinism::Deterministic)
 	verify {
 		// uploading the code reserves some balance in the callers account
 		assert!(T::Currency::reserved_balance(&caller) > 0u32.into());
@@ -386,7 +386,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None)?;
+		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None, Determinism::Deterministic)?;
 		assert_eq!(uploaded.code_hash, hash);
 		assert_eq!(uploaded.deposit, T::Currency::reserved_balance(&caller));
 		assert!(<Contract<T>>::code_exists(&hash));
@@ -919,7 +919,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal2",
 				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -967,7 +967,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal2",
 				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1015,7 +1015,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal2",
 				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1067,7 +1067,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal1",
 				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1114,7 +1114,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal1",
 				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1162,7 +1162,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal1",
 				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1216,7 +1216,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal1",
 				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1271,7 +1271,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal1",
 				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1318,7 +1318,7 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
+				module: "seal1",
 				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
@@ -1890,7 +1890,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_sha2_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1908,7 +1908,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_keccak_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1926,7 +1926,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1944,7 +1944,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_128 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1963,7 +1963,7 @@ benchmarks! {
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
@@ -2011,7 +2011,7 @@ benchmarks! {
 	// Only calling the function itself for the list of
 	// generated different ECDSA keys.
 	seal_ecdsa_to_eth_address {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|_| {
@@ -2894,6 +2894,7 @@ benchmarks! {
 			None,
 			data,
 			false,
+			Determinism::Deterministic,
 		)
 		.result?;
 	}
@@ -2941,6 +2942,7 @@ benchmarks! {
 			None,
 			data,
 			false,
+			Determinism::Deterministic,
 		)
 		.result?;
 	}

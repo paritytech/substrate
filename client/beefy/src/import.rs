@@ -78,7 +78,7 @@ where
 	Block: BlockT,
 	BE: Backend<Block>,
 	Runtime: ProvideRuntimeApi<Block>,
-	Runtime::Api: BeefyApi<Block> + Send + Sync,
+	Runtime::Api: BeefyApi<Block> + Send,
 {
 	fn decode_and_verify(
 		&self,

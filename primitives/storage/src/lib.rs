@@ -19,6 +19,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::fmt::Display;
+
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_debug_derive::RuntimeDebug;
@@ -410,6 +412,15 @@ pub enum StateVersion {
 	V0 = 0,
 	/// New state version can use value nodes.
 	V1 = 1,
+}
+
+impl Display for StateVersion {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			StateVersion::V0 => f.write_str("0"),
+			StateVersion::V1 => f.write_str("1"),
+		}
+	}
 }
 
 impl Default for StateVersion {
