@@ -328,13 +328,13 @@ use frame_support::{
 		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
 		ExistenceRequirement, Get,
 	},
+	DefaultNoBound,
 };
 use scale_info::TypeInfo;
 use sp_core::U256;
 use sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup,
-		Zero,
+		AccountIdConversion, CheckedAdd, CheckedSub, Convert, Saturating, StaticLookup, Zero,
 	},
 	FixedPointNumber,
 };
@@ -1956,9 +1956,7 @@ pub mod pallet {
 
 			if bonded_pool.can_toggle_state(&who) {
 				bonded_pool.set_state(state);
-			} else if bonded_pool.ok_to_be_open().is_err() &&
-				state == PoolState::Destroying
-			{
+			} else if bonded_pool.ok_to_be_open().is_err() && state == PoolState::Destroying {
 				// If the pool has bad properties, then anyone can set it as destroying
 				bonded_pool.set_state(PoolState::Destroying);
 			} else {
