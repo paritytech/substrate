@@ -318,24 +318,6 @@ sp_core::wasm_export_functions! {
 		message_slice.copy_from_slice(test_message);
 	}
 
-	fn test_spawn() {
-		let data = vec![1u8, 2u8];
-		let data_new = sp_tasks::spawn(tasks::incrementer, data).join();
-
-		assert_eq!(data_new, vec![2u8, 3u8]);
-	}
-
-	fn test_nested_spawn() {
-		let data = vec![7u8, 13u8];
-		let data_new = sp_tasks::spawn(tasks::parallel_incrementer, data).join();
-
-		assert_eq!(data_new, vec![10u8, 16u8]);
-	}
-
-	fn test_panic_in_spawned() {
-		sp_tasks::spawn(tasks::panicker, vec![]).join();
-	}
-
 	fn test_return_i8() -> i8 {
 		-66
 	}
@@ -368,12 +350,6 @@ mod tasks {
 
 	pub fn panicker(_: Vec<u8>) -> Vec<u8> {
 		panic!()
-	}
-
-	pub fn parallel_incrementer(data: Vec<u8>) -> Vec<u8> {
-		let first = data.into_iter().map(|v| v + 2).collect::<Vec<_>>();
-		let second = sp_tasks::spawn(incrementer, first).join();
-		second
 	}
 }
 

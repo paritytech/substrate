@@ -31,7 +31,6 @@ sp-externalities = { version = "0.12.0", path = "../../primitives/externalities"
 sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
 sp-runtime-interface = { version = "6.0.0", path = "../../primitives/runtime-interface" }
-sp-tasks = { version = "4.0.0-dev", path = "../../primitives/tasks" }
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 sp-wasm-interface = { version = "6.0.0", path = "../../primitives/wasm-interface" }
