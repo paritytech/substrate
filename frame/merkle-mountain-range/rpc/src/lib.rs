@@ -188,10 +188,10 @@ where
 		let api = self.client.runtime_api();
 
 		let leaves =
-			Decode::decode(&mut &proof.leaves.0[..]).map_err(runtime_error_into_rpc_error)?;
+			Decode::decode(&mut &proof.leaves.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		let decoded_proof =
-			Decode::decode(&mut &proof.proof.0[..]).map_err(runtime_error_into_rpc_error)?;
+			Decode::decode(&mut &proof.proof.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		api.verify_proof_with_context(
 			&BlockId::hash(proof.block_hash),
@@ -213,10 +213,10 @@ where
 		let api = self.client.runtime_api();
 
 		let leaves =
-			Decode::decode(&mut &proof.leaves.0[..]).map_err(runtime_error_into_rpc_error)?;
+			Decode::decode(&mut &proof.leaves.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		let decoded_proof =
-			Decode::decode(&mut &proof.proof.0[..]).map_err(runtime_error_into_rpc_error)?;
+			Decode::decode(&mut &proof.proof.0[..]).map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
 
 		api.verify_proof_stateless(
 			&BlockId::hash(proof.block_hash),
