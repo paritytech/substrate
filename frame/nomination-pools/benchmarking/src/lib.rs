@@ -289,9 +289,10 @@ frame_benchmarking::benchmarks! {
 
 	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
 	verify {
+		 // commission of 50% deducted here.
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
-			scenario.dest_weight
+			scenario.dest_weight / 2u32.into()
 		);
 	}
 
@@ -689,15 +690,21 @@ frame_benchmarking::benchmarks! {
 		// set a commission throttle
 		Pools::<T>::set_commission_throttle(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), CommissionThrottlePrefs {
 			max_increase: Perbill::from_percent(20),
-			min_delay: 1000u32.into(),
+			min_delay: 0u32.into(),
 		}).unwrap();
 
-	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Perbill::from_percent(100), Some(depositor.clone()))
+	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Perbill::from_percent(40), Some(depositor.clone()))
 	verify {
 		assert_eq!(BondedPools::<T>::get(1).unwrap().commission, Commission {
-			current: Some((Perbill::from_percent(100), depositor)),
-			max: None,
-			throttle: None,
+			current: Some((Perbill::from_percent(40), depositor)),
+			max: Some(Perbill::from_percent(50)),
+			throttle: Some(CommissionThrottle {
+				change_rate: CommissionThrottlePrefs {
+					max_increase: Perbill::from_percent(20),
+					min_delay: 0u32.into()
+				},
+				previous_set_at: Some(1u32.into())
+			}),
 		});
 	}
 
@@ -705,7 +712,7 @@ frame_benchmarking::benchmarks! {
 		// Create a pool
 		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
 		// Set a commission that will update when max commission is set.
-		Pools::<T>::set_commission(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(100), Some(depositor.clone())).unwrap();
+		Pools::<T>::set_commission(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(50), Some(depositor.clone())).unwrap();
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Perbill::from_percent(50))
 	verify {
 		assert_eq!(
@@ -733,7 +740,7 @@ frame_benchmarking::benchmarks! {
 					max_increase: Perbill::from_percent(50),
 					min_delay: 1000u32.into(),
 				},
-				previous_set_at: Some(1u32.into()),
+				previous_set_at: None
 			}),
 		});
 	}
