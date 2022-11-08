@@ -154,7 +154,7 @@ impl<T: Config> ListScenario<T> {
 		let (pool_creator2, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
 		Pools::<T>::set_commission(
 			RuntimeOrigin::Signed(pool_creator2.clone()).into(),
-			1,
+			2,
 			Perbill::from_percent(50),
 			Some(pool_creator2),
 		)
@@ -177,7 +177,7 @@ impl<T: Config> ListScenario<T> {
 		let (pool_creator3, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
 		Pools::<T>::set_commission(
 			RuntimeOrigin::Signed(pool_creator3.clone()).into(),
-			1,
+			3,
 			Perbill::from_percent(50),
 			Some(pool_creator3),
 		)
