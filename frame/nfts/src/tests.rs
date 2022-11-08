@@ -149,6 +149,7 @@ fn basic_minting_should_work() {
 fn lifecycle_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
 		assert_ok!(Nfts::create(
 			RuntimeOrigin::signed(1),
 			1,
@@ -164,9 +165,14 @@ fn lifecycle_should_work() {
 		assert_eq!(Balances::reserved_balance(&1), 6);
 		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(1), 0, 69, 20, default_item_config()));
 		assert_eq!(Balances::reserved_balance(&1), 7);
-		assert_eq!(items(), vec![(10, 0, 42), (20, 0, 69)]);
-		assert_eq!(Collection::<Test>::get(0).unwrap().items, 2);
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 70, None));
+		assert_eq!(items(), vec![(1, 0, 70), (10, 0, 42), (20, 0, 69)]);
+		assert_eq!(Collection::<Test>::get(0).unwrap().items, 3);
 		assert_eq!(Collection::<Test>::get(0).unwrap().item_metadatas, 0);
+
+		assert_eq!(Balances::reserved_balance(&2), 0);
+		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(1), 0, 70, 2));
+		assert_eq!(Balances::reserved_balance(&2), 1);
 
 		assert_ok!(Nfts::set_metadata(RuntimeOrigin::signed(1), 0, 42, bvec![42, 42]));
 		assert_eq!(Balances::reserved_balance(&1), 10);
@@ -176,7 +182,7 @@ fn lifecycle_should_work() {
 		assert!(ItemMetadataOf::<Test>::contains_key(0, 69));
 
 		let w = Nfts::get_destroy_witness(&0).unwrap();
-		assert_eq!(w.items, 2);
+		assert_eq!(w.items, 3);
 		assert_eq!(w.item_metadatas, 2);
 		assert_ok!(Nfts::destroy(RuntimeOrigin::signed(1), 0, w));
 		assert_eq!(Balances::reserved_balance(&1), 0);
