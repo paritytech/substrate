@@ -999,7 +999,7 @@ mod tests {
 		};
 		check(u16::MAX as usize / 2); // old limit
 		check(u16::MAX as usize / 2 + 1); // value over old limit still works
-  }
+	}
 
 	fn node_with_no_children_fail_decoding() {
 		let branch = NodeCodec::<Blake2Hasher>::branch_node_nibbled(
