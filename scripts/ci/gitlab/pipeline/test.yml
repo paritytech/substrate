@@ -233,6 +233,7 @@ test-linux-stable:
                              --features runtime-benchmarks
                              --features sc-cli/rocksdb
                              --features sc-client-db/rocksdb
+                             --features node-testing/rocksdb
                              --manifest-path ./bin/node/cli/Cargo.toml
                              --exclude node-cli
                              --partition count:${CI_NODE_INDEX}/${CI_NODE_TOTAL}
