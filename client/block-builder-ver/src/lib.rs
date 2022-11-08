@@ -164,7 +164,6 @@ where
 pub struct BlockBuilder<'a, Block: BlockT, A: ProvideRuntimeApi<Block>, B> {
 	inherents: Vec<Block::Extrinsic>,
 	extrinsics: Vec<Block::Extrinsic>,
-	all_previous_block_txs_executed: bool,
 	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
 	parent_hash: Block::Hash,
@@ -219,7 +218,6 @@ where
 			parent_hash,
 			inherents: Vec::new(),
 			extrinsics: Vec::new(),
-			all_previous_block_txs_executed: false,
 			api,
 			block_id,
 			backend,
@@ -240,9 +238,7 @@ where
 	) -> Result<BuiltBlock<Block, backend::StateBackendFor<B, Block>>, Error> {
 		let block_id = self.block_id;
 
-		let valid_txs = if self.all_previous_block_txs_executed &&
-			self.api.can_enqueue_txs(&block_id).unwrap()
-		{
+		let mut valid_txs = if self.api.can_enqueue_txs(&block_id).unwrap() {
 			self.api.execute_in_transaction(|api| {
 				let next_header = api
 					.finalize_block_with_context(&block_id, ExecutionContext::BlockConstruction)
@@ -277,6 +273,9 @@ where
 			log::info!(target:"block_builder", "storage queue is full, no room for new txs");
 			vec![]
 		};
+
+		// that should be improved at some point
+		valid_txs.truncate(std::cmp::max(valid_txs.len() * 90 / 100, 1));
 
 		let valid_txs_count = valid_txs.len();
 		let store_txs_inherent = self
@@ -428,76 +427,7 @@ where
 		}
 
 		self.api.pop_txs(&block_id, extrinsics.len() as u64).unwrap();
-
-		if extrinsics.len() == previous_block_txs_count {
-			//
-			self.all_previous_block_txs_executed = true;
-			log::info!(target: "block_builder", "executed all previous block transactions");
-			// fetch more txs one by one
-			loop {
-				let current_block_size = *block_size;
-				let execution_status =
-						self.api
-						.execute_in_transaction(|api| // pop single tx
-							match api.pop_txs(&block_id, 1_u64).unwrap().get(0) {
-								Some(tx_bytes) if (tx_bytes.len() + current_block_size + sp_core::H256::len_bytes()) <= max_block_size => {
-									if let Ok(xt) = <Block as BlockT>::Extrinsic::decode(&mut tx_bytes.as_slice()) {
-										log::debug!(target: "block_builder", "executing extrinsic :{:?}", BlakeTwo256::hash(&xt.encode()));
-										if !api.execute_in_transaction(|api| { // execute tx to get execution status
-											match apply_transaction_wrapper::<Block, A>(
-												api,
-												block_id,
-												xt.clone(),
-												ExecutionContext::BlockConstruction,
-											) {
-												_ if is_timer_expired() => {
-													log::debug!(target: "block_builder", "timer expired no room for other txs from queue");
-													TransactionOutcome::Commit(false)
-												},
-												Ok(Err(validity_err)) if validity_err.exhausted_resources() => {
-													log::debug!(target: "block_builder", "exhaust resources no room for other txs from queue");
-													TransactionOutcome::Rollback(false)
-												},
-												Ok(Ok(_)) => {TransactionOutcome::Commit(true)}
-												Ok(Err(validity_err)) => {
-													log::warn!(target: "block_builder", "enqueued tx execution {} failed '${}'", BlakeTwo256::hash(&xt.encode()), validity_err);
-													TransactionOutcome::Commit(true)
-												},
-												Err(_e) => {
-													log::warn!(target: "block_builder", "enqueued tx execution {} failed - unknwown execution problem", BlakeTwo256::hash(&xt.encode()));
-													TransactionOutcome::Commit(true)
-												}
-											}
-										}) {
-											TransactionOutcome::Rollback(false)
-										}else{
-											extrinsics.push(xt);
-											*block_size += tx_bytes.len() + sp_core::H256::len_bytes();
-											log::trace!(target: "block_builder", "fetched txs from storage queue");
-											TransactionOutcome::Commit(true)
-										}
-									} else {
-										log::warn!(target: "block_builder", "couldnt deserialize tx from queue, ignoring it");
-										TransactionOutcome::Commit(true)
-									}
-
-								},
-								Some(_) => {
-									log::debug!(target: "block_builder", "fetching txs from storage queue would exceed block limit");
-									TransactionOutcome::Rollback(false)
-								},
-								None => {
-									log::info!(target: "block_builder", "storage queue is empty - no more txs for executiong");
-									TransactionOutcome::Rollback(false)
-								}
-							});
-				if !execution_status {
-					break
-				}
-			}
-		} else {
-			log::info!(target: "block_builder", "executed {}/{} previous block transactions", extrinsics.len(), previous_block_txs_count)
-		}
+		log::info!(target: "block_builder", "executed {}/{} previous block transactions", extrinsics.len(), previous_block_txs_count);
 	}
 
 	/// Create the inherents for the block.

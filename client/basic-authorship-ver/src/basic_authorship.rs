@@ -472,23 +472,24 @@ where
 		let left_micros: u64 = left.as_micros().saturated_into();
 		let soft_deadline =
 			now + time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros));
-		let soft_queue_deadline = now +
-			(time::Duration::from_micros(self.soft_deadline_percent.mul_floor(left_micros)) / 2);
+		let first_slot_limit =
+			futures_timer::Delay::new(time::Duration::from_micros(left_micros * 55 / 100));
+
+		// let queue_processing_deadline = now + time::Duration::from_micros(left_micros / 2);
+		let queue_processing_deadline = now + time::Duration::from_micros(left_micros * 55 / 100);
+
 		let block_timer = time::Instant::now();
 		let mut skipped = 0;
 		let mut unqueue_invalid = Vec::new();
 
 		let mut t1 = self.transaction_pool.ready_at(self.parent_number).fuse();
-		// NOTE reduce deadline by half ('/16' instead of '/8') as we want to avoid situation where
-		// fully filled previous block does not allow for any extrinsic to be included in following
-		// one
 		let mut t2 = futures_timer::Delay::new(deadline.saturating_duration_since(now) / 8).fuse();
 
 		let mut block_size = block_builder
 			.estimate_block_size_without_extrinsics(self.include_proof_in_block_size_estimation);
 
 		let get_current_time = &self.now;
-		let is_expired = || get_current_time() > soft_queue_deadline;
+		let is_expired = || get_current_time() > queue_processing_deadline;
 
 		let block_size_limit = block_size_limit.unwrap_or(self.default_block_size_limit);
 		block_builder.apply_previous_block_extrinsics(
@@ -497,6 +498,9 @@ where
 			block_size_limit / 2, // txs from queue should not occupy more than half of the block
 			is_expired,
 		);
+
+		debug!(target: "block_builder", "sleeping by the end of the slot");
+		first_slot_limit.await;
 
 		let mut pending_iterator = select! {
 			res = t1 => res,
