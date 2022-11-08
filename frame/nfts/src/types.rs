@@ -237,7 +237,7 @@ pub enum MintType<CollectionId> {
 
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct MintSettings<Price, BlockNumber, CollectionId> {
-	/// Mint type.
+	/// Whether anyone can mint or if minters are restricted to some subset.
 	pub(super) mint_type: MintType<CollectionId>,
 	/// An optional price per mint.
 	pub(super) price: Option<Price>,
