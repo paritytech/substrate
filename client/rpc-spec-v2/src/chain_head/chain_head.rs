@@ -292,13 +292,18 @@ where
 	) -> SubscriptionResult {
 		let sub_id = self.accept_subscription(&mut sink)?;
 		// Keep track of the subscription.
-		self.subscriptions.insert_subscription(sub_id.clone());
+		let Ok(_rx_stop) = self.subscriptions.insert_subscription(sub_id.clone()) else {
+			// Inserting the subscription can only fail if the JsonRPSee
+			// generated a duplicate subscription ID.
+			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
+			return Ok(())
+		};
 
 		let client = self.client.clone();
 		let subscriptions = self.subscriptions.clone();
 		let best_reported_block = self.best_block.clone();
-
 		let sub_id_import = sub_id.clone();
+
 		let stream_import = self
 			.client
 			.import_notification_stream()
@@ -457,6 +462,7 @@ where
 					},
 					Ok(None) => {
 						// The block's body was pruned. This subscription ID has become invalid.
+						let _ = subscriptions.stop(&follow_subscription);
 						ChainHeadEvent::<String>::Disjoint
 					},
 					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
