@@ -40,6 +40,9 @@ use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use sp_state_machine::StateMachine;
 use std::{collections::HashMap, fmt::Debug, fs, sync::Arc, time};
 
+/// Logging target
+const LOG_TARGET: &'static str = "frame::benchmark::pallet";
+
 /// The inclusive range of a component.
 #[derive(Serialize, Debug, Clone, Eq, PartialEq)]
 pub(crate) struct ComponentRange {
@@ -242,7 +245,8 @@ impl PalletCmd {
 		let mut component_ranges = HashMap::<(Vec<u8>, Vec<u8>), Vec<ComponentRange>>::new();
 
 		for (pallet, extrinsic, components) in benchmarks_to_run {
-			println!(
+			log::info!(
+				target: LOG_TARGET,
 				"Starting benchmark: {}::{}",
 				String::from_utf8(pallet.clone()).expect("Encoded from String; qed"),
 				String::from_utf8(extrinsic.clone()).expect("Encoded from String; qed"),
@@ -402,7 +406,9 @@ impl PalletCmd {
 					if let Ok(elapsed) = timer.elapsed() {
 						if elapsed >= time::Duration::from_secs(5) {
 							timer = time::SystemTime::now();
-							println!(
+
+							log::info!(
+								target: LOG_TARGET,
 								"Running Benchmark: {}.{}({} args) {}/{} {}/{}",
 								String::from_utf8(pallet.clone())
 									.expect("Encoded from String; qed"),
@@ -492,7 +498,7 @@ impl PalletCmd {
 			if let Some(path) = &self.json_file {
 				fs::write(path, json)?;
 			} else {
-				println!("{}", json);
+				print!("{json}");
 				return Ok(true)
 			}
 		}
