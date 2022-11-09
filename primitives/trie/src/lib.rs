@@ -527,7 +527,6 @@ where
 /// Constants used into trie simplification codec.
 mod trie_constants {
 	const FIRST_PREFIX: u8 = 0b_00 << 6;
-	pub const NIBBLE_SIZE_BOUND: usize = u16::max_value() as usize;
 	pub const LEAF_PREFIX_MASK: u8 = 0b_01 << 6;
 	pub const BRANCH_WITHOUT_MASK: u8 = 0b_10 << 6;
 	pub const BRANCH_WITH_MASK: u8 = 0b_11 << 6;
@@ -985,6 +984,21 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(first_storage_root, second_storage_root);
+	}
+
+	#[test]
+	fn big_key() {
+		let check = |keysize: usize| {
+			let mut memdb = PrefixedMemoryDB::<Blake2Hasher>::default();
+			let mut root = Default::default();
+			let mut t = TrieDBMutBuilder::<LayoutV1>::new(&mut memdb, &mut root).build();
+			t.insert(&vec![0x01u8; keysize][..], &[0x01u8, 0x23]).unwrap();
+			std::mem::drop(t);
+			let t = TrieDBBuilder::<LayoutV1>::new(&memdb, &root).build();
+			assert_eq!(t.get(&vec![0x01u8; keysize][..]).unwrap(), Some(vec![0x01u8, 0x23]));
+		};
+		check(u16::MAX as usize / 2); // old limit
+		check(u16::MAX as usize / 2 + 1); // value over old limit still works
 	}
 
 	#[test]

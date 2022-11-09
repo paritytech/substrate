@@ -315,12 +315,12 @@ impl sc_transaction_pool::ChainApi for TestApi {
 		Self::hash_and_length_inner(ex)
 	}
 
-	fn block_body(&self, hash: &<Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+	fn block_body(&self, hash: <Self::Block as BlockT>::Hash) -> Self::BodyFuture {
 		futures::future::ready(Ok(self
 			.chain
 			.read()
 			.block_by_hash
-			.get(hash)
+			.get(&hash)
 			.map(|b| b.extrinsics().to_vec())))
 	}
 

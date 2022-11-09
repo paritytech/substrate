@@ -424,8 +424,8 @@ where
 	}
 
 	/// Read current set id form a given state.
-	fn current_set_id(&self, hash: &Block::Hash) -> Result<SetId, ConsensusError> {
-		let id = &BlockId::hash(*hash);
+	fn current_set_id(&self, hash: Block::Hash) -> Result<SetId, ConsensusError> {
+		let id = &BlockId::hash(hash);
 		let runtime_version = self.inner.runtime_api().version(id).map_err(|e| {
 			ConsensusError::ClientImport(format!(
 				"Unable to retrieve current runtime version. {}",
@@ -480,7 +480,7 @@ where
 					.runtime_api()
 					.grandpa_authorities(&BlockId::hash(hash))
 					.map_err(|e| ConsensusError::ClientImport(e.to_string()))?;
-				let set_id = self.current_set_id(&hash)?;
+				let set_id = self.current_set_id(hash)?;
 				let authority_set = AuthoritySet::new(
 					authorities.clone(),
 					set_id,

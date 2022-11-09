@@ -41,6 +41,7 @@ use sp_runtime::{
 use std::{
 	cmp::min,
 	hash::{Hash, Hasher},
+	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -164,7 +165,9 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let seen_requests = LruCache::new(num_peer_hint * 2);
+		let capacity =
+			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
+		let seen_requests = LruCache::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}
@@ -332,7 +335,7 @@ where
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
 			let justifications =
-				if get_justification { self.client.justifications(&hash)? } else { None };
+				if get_justification { self.client.justifications(hash)? } else { None };
 
 			let (justifications, justification, is_empty_justification) =
 				if support_multiple_justifications {
@@ -361,7 +364,7 @@ where
 				};
 
 			let body = if get_body {
-				match self.client.block_body(&hash)? {
+				match self.client.block_body(hash)? {
 					Some(mut extrinsics) =>
 						extrinsics.iter_mut().map(|extrinsic| extrinsic.encode()).collect(),
 					None => {
@@ -374,7 +377,7 @@ where
 			};
 
 			let indexed_body = if get_indexed_body {
-				match self.client.block_indexed_body(&hash)? {
+				match self.client.block_indexed_body(hash)? {
 					Some(transactions) => transactions,
 					None => {
 						log::trace!(
