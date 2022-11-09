@@ -91,7 +91,7 @@ pub trait ChainApi: Send + Sync {
 	fn hash_and_length(&self, uxt: &ExtrinsicFor<Self>) -> (ExtrinsicHash<Self>, usize);
 
 	/// Returns a block body given the block.
-	fn block_body(&self, at: &<Self::Block as BlockT>::Hash) -> Self::BodyFuture;
+	fn block_body(&self, at: <Self::Block as BlockT>::Hash) -> Self::BodyFuture;
 
 	/// Returns a block header given the block id.
 	fn block_header(

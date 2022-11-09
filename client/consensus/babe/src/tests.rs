@@ -822,7 +822,7 @@ fn revert_not_allowed_for_finalized() {
 	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 3);
 
 	// Finalize best block
-	client.finalize_block(&canon[2], None, false).unwrap();
+	client.finalize_block(canon[2], None, false).unwrap();
 
 	// Revert canon chain to last finalized block
 	revert(client.clone(), backend, 100).expect("revert should work for baked test scenario");
@@ -884,7 +884,7 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
-	client.finalize_block(&canon[12], None, false).unwrap();
+	client.finalize_block(canon[12], None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 7);
 
 	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
@@ -897,7 +897,7 @@ fn importing_epoch_change_block_prunes_tree() {
 	assert!(nodes.iter().any(|h| fork_3.contains(h)));
 
 	// finalizing block #25 from the canon chain should prune out the second fork
-	client.finalize_block(&canon[24], None, false).unwrap();
+	client.finalize_block(canon[24], None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 8);
 
 	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
@@ -1029,7 +1029,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork3_hashes, true));
 
 	// Finalize A3
-	client.finalize_block(&fork1_hashes[2], None, true).unwrap();
+	client.finalize_block(fork1_hashes[2], None, true).unwrap();
 
 	// Wiped: A1, A2
 	assert!(aux_data_check(&fork1_hashes[..2], false));
@@ -1040,7 +1040,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
 
-	client.finalize_block(&fork1_hashes[3], None, true).unwrap();
+	client.finalize_block(fork1_hashes[3], None, true).unwrap();
 
 	// Wiped: A3
 	assert!(aux_data_check(&fork1_hashes[2..3], false));
