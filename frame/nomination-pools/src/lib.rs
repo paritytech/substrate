@@ -584,7 +584,7 @@ impl<T: Config> Commission<T> {
 	/// 1. not enough blocks have passed since the previous commission update took place, and
 	/// 2. the new commission is larger than the maximum allowed increase.
 	///
-	/// Throttlnig is not applied to commission updates if `current` is still `None`.
+	/// Throttling is not applied to commission updates if `current` is still `None`.
 	fn throttling(&self, to: &Perbill) -> bool {
 		let throttle = self.throttle.as_ref().map(|t| t).or(None);
 		if let Some(t) = throttle {
@@ -623,10 +623,7 @@ impl<T: Config> Commission<T> {
 		let _ = self
 			.throttle
 			.as_mut()
-			.map(|t| {
-				t.register_change(<frame_system::Pallet<T>>::block_number());
-			})
-			.or(None);
+			.map(|t| t.register_change(<frame_system::Pallet<T>>::block_number()));
 		Ok(())
 	}
 
