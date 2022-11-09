@@ -49,7 +49,7 @@ pub mod pallet {
 			},
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
-		transactional, PalletId,
+		PalletId,
 	};
 	use sp_runtime::traits::{
 		AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub,
@@ -201,7 +201,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn setup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let pallet_account = Self::account_id();
@@ -225,7 +224,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn create_pool(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>, // TODO: convert into MultiToken
@@ -260,7 +258,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional] // TODO: Do we need to say transactional any more?
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -369,7 +366,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -445,7 +441,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -509,7 +504,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,

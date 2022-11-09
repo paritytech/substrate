@@ -46,7 +46,7 @@ construct_runtime!(
 	{
 		System: frame_system,
 		Balances: pallet_balances,
-		LocalAssets: pallet_assets::<Instance1>,
+		Assets: pallet_assets::<Instance1>,
 		PoolAssets:  pallet_assets::<Instance2>,
 		Dex: pallet_dex,
 	}
@@ -134,7 +134,7 @@ impl Config for Test {
 	type Event = Event;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
-	type Assets = LocalAssets;
+	type Assets = Assets;
 	type PoolAssets = PoolAssets;
 	type AssetId = u32;
 	type PalletId = DexPalletId;

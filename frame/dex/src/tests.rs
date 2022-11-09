@@ -58,7 +58,7 @@ fn pool_assets() -> Vec<u32> {
 
 fn create_tokens(owner: u64, tokens: Vec<u32>) {
 	for token_id in tokens {
-		assert_ok!(LocalAssets::force_create(Origin::root(), token_id, owner, true, 1));
+		assert_ok!(Assets::force_create(Origin::root(), token_id, owner, true, 1));
 	}
 }
 
@@ -109,8 +109,8 @@ fn add_liquidity_should_work() {
 		create_tokens(user, vec![token_1, token_2]);
 		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_1, user, 1000));
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
 			Origin::signed(user),
@@ -154,8 +154,8 @@ fn remove_liquidity_should_work() {
 		create_tokens(user, vec![token_1, token_2]);
 		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_1, user, 1000));
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
 			Origin::signed(user),
@@ -204,8 +204,8 @@ fn quote_price_should_work() {
 		create_tokens(user, vec![token_1, token_2]);
 		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_1, user, 1000));
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
 			Origin::signed(user),
@@ -235,8 +235,8 @@ fn swap_should_work() {
 		create_tokens(user, vec![token_1, token_2]);
 		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_1, user, 1000));
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		let liquidity1 = 1000;
 		let liquidity2 = 20;
@@ -288,7 +288,7 @@ fn same_asset_swap_should_fail() {
 			Error::<Test>::EqualAssets
 		);
 
-		assert_ok!(LocalAssets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
 
 		let liquidity1 = 1000;
 		let liquidity2 = 20;
