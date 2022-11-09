@@ -11,7 +11,11 @@ use sc_client_api::ChildInfo;
 use sp_api::BlockId;
 use sp_blockchain::HeaderBackend;
 use sp_consensus::BlockOrigin;
-use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys::CODE, testing::TaskExecutor};
+use sp_core::{
+	hexdisplay::HexDisplay,
+	storage::well_known_keys::{self, CODE},
+	testing::TaskExecutor,
+};
 use sp_version::RuntimeVersion;
 use std::sync::Arc;
 use substrate_test_runtime::Transfer;
@@ -532,6 +536,57 @@ async fn get_storage() {
 		.unwrap();
 	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
 	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result == expected_value);
+}
+
+#[tokio::test]
+async fn get_storage_wrong_key() {
+	let (mut _client, api, mut _block_sub, sub_id, block) = setup_api().await;
+	let block_hash = format!("{:?}", block.header.hash());
+	let key = format!("0x{:?}", HexDisplay::from(&KEY));
+
+	// Key is prefixed by CHILD_STORAGE_KEY_PREFIX.
+	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+	prefixed_key.extend_from_slice(&KEY);
+	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+
+	// Key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
+	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
+	prefixed_key.extend_from_slice(&KEY);
+	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &prefixed_key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+
+	// Child key is prefixed by CHILD_STORAGE_KEY_PREFIX.
+	let mut prefixed_key = well_known_keys::CHILD_STORAGE_KEY_PREFIX.to_vec();
+	prefixed_key.extend_from_slice(b"child");
+	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key, &prefixed_key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
+
+	// Child key is prefixed by DEFAULT_CHILD_STORAGE_KEY_PREFIX.
+	let mut prefixed_key = well_known_keys::DEFAULT_CHILD_STORAGE_KEY_PREFIX.to_vec();
+	prefixed_key.extend_from_slice(b"child");
+	let prefixed_key = format!("0x{:?}", HexDisplay::from(&prefixed_key));
+	let mut sub = api
+		.subscribe("chainHead_unstable_storage", [&sub_id, &block_hash, &key, &prefixed_key])
+		.await
+		.unwrap();
+	let event: ChainHeadEvent<Option<String>> = get_next_event(&mut sub).await;
+	assert_matches!(event, ChainHeadEvent::<Option<String>>::Done(done) if done.result.is_none());
 }
 
 #[tokio::test]
