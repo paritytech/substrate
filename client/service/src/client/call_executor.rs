@@ -156,7 +156,8 @@ where
 		let mut changes = OverlayedChanges::default();
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
 		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
-		let state = self.backend.state_at(&at_hash)?;
+		let state = self.backend.state_at(at_hash)?;
+
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
@@ -199,7 +200,7 @@ where
 
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
 		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
-		let state = self.backend.state_at(&at_hash)?;
+		let state = self.backend.state_at(at_hash)?;
 
 		let (execution_manager, extensions) =
 			self.execution_extensions.manager_and_extensions(at_hash, at_number, context);
@@ -260,7 +261,7 @@ where
 		let mut overlay = OverlayedChanges::default();
 
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
-		let state = self.backend.state_at(&at_hash)?;
+		let state = self.backend.state_at(at_hash)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -279,7 +280,7 @@ where
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
 		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
 		let at_number = self.backend.blockchain().expect_block_number_from_id(at)?;
-		let state = self.backend.state_at(&at_hash)?;
+		let state = self.backend.state_at(at_hash)?;
 
 		let trie_backend = state.as_trie_backend();
 

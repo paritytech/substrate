@@ -17,7 +17,9 @@
 
 //! Staking FRAME Pallet.
 
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
+use frame_election_provider_support::{
+	ElectionProvider, ElectionProviderBase, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	dispatch::Codec,
 	pallet_prelude::*,
@@ -32,7 +34,7 @@ use frame_support::{
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use sp_runtime::{
 	traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
-	Perbill, Percent,
+	ArithmeticError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::prelude::*;
@@ -107,7 +109,7 @@ pub mod pallet {
 		type CurrencyToVote: CurrencyToVote<BalanceOf<Self>>;
 
 		/// Something that provides the election functionality.
-		type ElectionProvider: frame_election_provider_support::ElectionProvider<
+		type ElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			// we only accept an election provider that has staking as data provider.
@@ -115,7 +117,7 @@ pub mod pallet {
 		>;
 
 		/// Something that provides the election functionality at genesis.
-		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
+		type GenesisElectionProvider: ElectionProvider<
 			AccountId = Self::AccountId,
 			BlockNumber = Self::BlockNumber,
 			DataProvider = Pallet<Self>,
@@ -646,6 +648,10 @@ pub mod pallet {
 					),
 					_ => Ok(()),
 				});
+				assert!(
+					ValidatorCount::<T>::get() <=
+						<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get()
+				);
 			}
 
 			// all voters are reported to the `VoterList`.
@@ -743,8 +749,8 @@ pub mod pallet {
 		/// There are too many nominators in the system. Governance needs to adjust the staking
 		/// settings to keep things safe for the runtime.
 		TooManyNominators,
-		/// There are too many validators in the system. Governance needs to adjust the staking
-		/// settings to keep things safe for the runtime.
+		/// There are too many validator candidates in the system. Governance needs to adjust the
+		/// staking settings to keep things safe for the runtime.
 		TooManyValidators,
 		/// Commission is too low. Must be at least `MinCommission`.
 		CommissionTooLow,
@@ -781,6 +787,12 @@ pub mod pallet {
 			);
 			// and that MaxNominations is always greater than 1, since we count on this.
 			assert!(!T::MaxNominations::get().is_zero());
+
+			// ensure election results are always bounded with the same value
+			assert!(
+				<T::ElectionProvider as ElectionProviderBase>::MaxWinners::get() ==
+					<T::GenesisElectionProvider as ElectionProviderBase>::MaxWinners::get()
+			);
 
 			sp_std::if_std! {
 				sp_io::TestExternalities::new_empty().execute_with(||
@@ -1264,11 +1276,18 @@ pub mod pallet {
 			#[pallet::compact] new: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			// ensure new validator count does not exceed maximum winners
+			// support by election provider.
+			ensure!(
+				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				Error::<T>::TooManyValidators
+			);
 			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
 
-		/// Increments the ideal number of validators.
+		/// Increments the ideal number of validators upto maximum of
+		/// `ElectionProviderBase::MaxWinners`.
 		///
 		/// The dispatch origin must be Root.
 		///
@@ -1281,11 +1300,19 @@ pub mod pallet {
 			#[pallet::compact] additional: u32,
 		) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += additional);
+			let old = ValidatorCount::<T>::get();
+			let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
+			ensure!(
+				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				Error::<T>::TooManyValidators
+			);
+
+			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
 
-		/// Scale up the ideal number of validators by a factor.
+		/// Scale up the ideal number of validators by a factor upto maximum of
+		/// `ElectionProviderBase::MaxWinners`.
 		///
 		/// The dispatch origin must be Root.
 		///
@@ -1295,7 +1322,15 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_validator_count())]
 		pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
 			ensure_root(origin)?;
-			ValidatorCount::<T>::mutate(|n| *n += factor * *n);
+			let old = ValidatorCount::<T>::get();
+			let new = old.checked_add(factor.mul_floor(old)).ok_or(ArithmeticError::Overflow)?;
+
+			ensure!(
+				new <= <T::ElectionProvider as ElectionProviderBase>::MaxWinners::get(),
+				Error::<T>::TooManyValidators
+			);
+
+			ValidatorCount::<T>::put(new);
 			Ok(())
 		}
 

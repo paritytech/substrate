@@ -258,7 +258,7 @@ where
 
 		let proof = self.api.extract_proof();
 
-		let state = self.backend.state_at(&self.parent_hash)?;
+		let state = self.backend.state_at(self.parent_hash)?;
 
 		let storage_changes = self
 			.api
