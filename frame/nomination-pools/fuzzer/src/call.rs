@@ -27,7 +27,7 @@ use frame_support::{
 	assert_ok,
 	traits::{Currency, GetCallName, UnfilteredDispatchable},
 };
-use honggfuzz::{arbitrary::Arbitrary, fuzz};
+use honggfuzz::fuzz;
 use pallet_nomination_pools::{
 	log,
 	mock::*,
@@ -155,26 +155,6 @@ fn random_call<R: Rng>(mut rng: &mut R) -> (pools::Call<T>, RuntimeOrigin) {
 			(PoolsCall::<T>::nominate { pool_id, validators }, origin)
 		},
 		_ => unreachable!(),
-	}
-}
-
-// TODO: not particularly making things more ergonomic.. might ditch.
-struct Fuzzable {
-	call: pools::Call<T>,
-	origin: RuntimeOrigin,
-}
-
-impl<'a> Arbitrary<'a> for Fuzzable {
-	fn arbitrary(
-		u: &mut honggfuzz::arbitrary::Unstructured<'a>,
-	) -> honggfuzz::arbitrary::Result<Self> {
-		use ::rand::{rngs::SmallRng, SeedableRng};
-		let mut seed = [0u8; 32];
-		let rand_seed = u.bytes(32).unwrap();
-		seed.copy_from_slice(rand_seed);
-		let mut rng = SmallRng::from_seed(seed);
-		let (call, origin) = random_call(&mut rng);
-		Ok(Fuzzable { call, origin })
 	}
 }
 
