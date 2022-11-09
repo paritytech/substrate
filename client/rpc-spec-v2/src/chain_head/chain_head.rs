@@ -32,9 +32,11 @@ use crate::{
 };
 use codec::Encode;
 use futures::{
+	channel::oneshot,
 	future::FutureExt,
 	stream::{self, Stream, StreamExt},
 };
+use futures_util::future::Either;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	types::{SubscriptionEmptyError, SubscriptionResult},
@@ -48,15 +50,12 @@ use sc_client_api::{
 use serde::Serialize;
 use sp_api::CallApiAt;
 use sp_blockchain::HeaderBackend;
-use sp_core::{hexdisplay::HexDisplay, Bytes};
+use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, Header},
 };
 use std::{marker::PhantomData, sync::Arc};
-
-use futures::channel::oneshot;
-use futures_util::future::Either;
 
 /// An API for chain head RPC calls.
 pub struct ChainHead<BE, Block: BlockT, Client> {
@@ -595,6 +594,16 @@ where
 
 			// The child key is provided, use the key to query the child trie.
 			if let Some(child_key) = child_key {
+				// The child key must not be prefixed with ":child_storage:" nor
+				// ":child_storage:default:".
+				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
+					well_known_keys::is_child_storage_key(child_key.storage_key())
+				{
+					let _ = sink
+						.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
+					return
+				}
+
 				let res = client
 					.child_storage(&hash, &child_key, &key)
 					.map(|result| {
@@ -606,6 +615,16 @@ where
 						ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
 					});
 				let _ = sink.send(&res);
+				return
+			}
+
+			// The main key must not be prefixed with b":child_storage:" nor
+			// b":child_storage:default:".
+			if well_known_keys::is_default_child_storage_key(&key.0) ||
+				well_known_keys::is_child_storage_key(&key.0)
+			{
+				let _ =
+					sink.send(&ChainHeadEvent::Done(ChainHeadResult { result: None::<String> }));
 				return
 			}
 
