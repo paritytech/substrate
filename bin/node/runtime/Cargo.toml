@@ -66,7 +66,7 @@ pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, pa
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
 pallet-election-provider-support-benchmarking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-support/benchmarking", optional = true }
-pallet-elections = { version = "5.0.0-dev", default-features = false, path = "../../../frame/elections-phragmen" }
+pallet-elections = { version = "5.0.0-dev", default-features = false, path = "../../../frame/elections" }
 pallet-fast-unstake = { version = "4.0.0-dev", default-features = false, path = "../../../frame/fast-unstake" }
 pallet-gilt = { version = "4.0.0-dev", default-features = false, path = "../../../frame/gilt" }
 pallet-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../../frame/grandpa" }
