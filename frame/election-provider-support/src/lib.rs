@@ -82,6 +82,7 @@
 //! # use frame_election_provider_support::{*, data_provider};
 //! # use sp_npos_elections::{Support, Assignment};
 //! # use frame_support::traits::ConstU32;
+//! # use frame_support::bounded_vec;
 //!
 //! type AccountId = u64;
 //! type Balance = u64;
@@ -137,15 +138,16 @@
 //!         type BlockNumber = BlockNumber;
 //!         type Error = &'static str;
 //!         type DataProvider = T::DataProvider;
-//! 	        fn ongoing() -> bool { false }
-//!        
+//!         type MaxWinners = ConstU32<{ u32::MAX }>;
+//!
 //!     }
 //!
 //!     impl<T: Config> ElectionProvider for GenericElectionProvider<T> {
-//!         fn elect() -> Result<Supports<AccountId>, Self::Error> {
+//!         fn ongoing() -> bool { false }
+//!         fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
 //!             Self::DataProvider::electable_targets(None)
 //!                 .map_err(|_| "failed to elect")
-//!                 .map(|t| vec![(t[0], Support::default())])
+//!                 .map(|t| bounded_vec![(t[0], Support::default())])
 //!         }
 //!     }
 //! }
@@ -354,11 +356,7 @@ pub trait ElectionDataProvider {
 	fn clear() {}
 }
 
-/// Base trait for [`ElectionProvider`] and [`BoundedElectionProvider`]. It is
-/// meant to be used only with an extension trait that adds an election
-/// functionality.
-///
-/// Data can be bounded or unbounded and is fetched from [`Self::DataProvider`].
+/// Base trait for types that can provide election
 pub trait ElectionProviderBase {
 	/// The account identifier type.
 	type AccountId;
@@ -369,90 +367,109 @@ pub trait ElectionProviderBase {
 	/// The error type that is returned by the provider.
 	type Error: Debug;
 
+	/// The upper bound on election winners that can be returned.
+	///
+	/// # WARNING
+	///
+	/// when communicating with the data provider, one must ensure that
+	/// `DataProvider::desired_targets` returns a value less than this bound. An
+	/// implementation can chose to either return an error and/or sort and
+	/// truncate the output to meet this bound.
+	type MaxWinners: Get<u32>;
+
 	/// The data provider of the election.
 	type DataProvider: ElectionDataProvider<
 		AccountId = Self::AccountId,
 		BlockNumber = Self::BlockNumber,
 	>;
 
-	/// Indicate if this election provider is currently ongoing an asynchronous election or not.
-	fn ongoing() -> bool;
+	/// checked call to `Self::DataProvider::desired_targets()` ensuring the value never exceeds
+	/// [`Self::MaxWinners`].
+	fn desired_targets_checked() -> data_provider::Result<u32> {
+		match Self::DataProvider::desired_targets() {
+			Ok(desired_targets) =>
+				if desired_targets <= Self::MaxWinners::get() {
+					Ok(desired_targets)
+				} else {
+					Err("desired_targets should not be greater than MaxWinners")
+				},
+			Err(e) => Err(e),
+		}
+	}
 }
 
 /// Elect a new set of winners, bounded by `MaxWinners`.
 ///
-/// Returns a result in bounded, target major format, namely as
-/// *BoundedVec<(AccountId, Vec<Support>), MaxWinners>*.   
-pub trait BoundedElectionProvider: ElectionProviderBase {
-	/// The upper bound on election winners.
-	type MaxWinners: Get<u32>;
+/// It must always use [`ElectionProviderBase::DataProvider`] to fetch the data it needs.
+///
+/// This election provider that could function asynchronously. This implies that this election might
+/// needs data ahead of time (ergo, receives no arguments to `elect`), and might be `ongoing` at
+/// times.
+pub trait ElectionProvider: ElectionProviderBase {
+	/// Indicate if this election provider is currently ongoing an asynchronous election or not.
+	fn ongoing() -> bool;
+
 	/// Performs the election. This should be implemented as a self-weighing function. The
 	/// implementor should register its appropriate weight at the end of execution with the
 	/// system pallet directly.
-	fn elect() -> Result<BoundedSupports<Self::AccountId, Self::MaxWinners>, Self::Error>;
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
-/// Same a [`BoundedElectionProvider`], but no bounds are imposed on the number
-/// of winners.
+/// A (almost) marker trait that signifies an election provider as working synchronously. i.e. being
+/// *instant*.
 ///
-/// The result is returned in a target major format, namely as
-///*Vec<(AccountId, Vec<Support>)>*.
-pub trait ElectionProvider: ElectionProviderBase {
-	/// Performs the election. This should be implemented as a self-weighing
-	/// function, similar to [`BoundedElectionProvider::elect()`].
-	fn elect() -> Result<Supports<Self::AccountId>, Self::Error>;
+/// This must still use the same data provider as with [`ElectionProviderBase::DataProvider`].
+/// However, it can optionally overwrite the amount of voters and targets that are fetched from the
+/// data provider at runtime via `forced_input_voters_bound` and `forced_input_target_bound`.
+pub trait InstantElectionProvider: ElectionProviderBase {
+	fn instant_elect(
+		forced_input_voters_bound: Option<u32>,
+		forced_input_target_bound: Option<u32>,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error>;
 }
 
-/// A sub-trait of the [`ElectionProvider`] for cases where we need to be sure
-/// an election needs to happen instantly, not asynchronously.
-///
-/// The same `DataProvider` is assumed to be used.
-///
-/// Consequently, allows for control over the amount of data that is being
-/// fetched from the [`ElectionProviderBase::DataProvider`].
-pub trait InstantElectionProvider: ElectionProvider {
-	/// Elect a new set of winners, but unlike [`ElectionProvider::elect`] which cannot enforce
-	/// bounds, this trait method can enforce bounds on the amount of data provided by the
-	/// `DataProvider`.
-	///
-	/// An implementing type, if itself bounded, should choose the minimum of the two bounds to
-	/// choose the final value of `max_voters` and `max_targets`. In other words, an implementation
-	/// should guarantee that `max_voter` and `max_targets` provided to this method are absolutely
-	/// respected.
-	fn elect_with_bounds(
-		max_voters: usize,
-		max_targets: usize,
-	) -> Result<Supports<Self::AccountId>, Self::Error>;
-}
-
-/// An election provider to be used only for testing.
-#[cfg(feature = "std")]
+/// An election provider that does nothing whatsoever.
 pub struct NoElection<X>(sp_std::marker::PhantomData<X>);
 
-#[cfg(feature = "std")]
-impl<AccountId, BlockNumber, DataProvider> ElectionProviderBase
-	for NoElection<(AccountId, BlockNumber, DataProvider)>
+impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProviderBase
+	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxWinners: Get<u32>,
 {
 	type AccountId = AccountId;
 	type BlockNumber = BlockNumber;
 	type Error = &'static str;
+	type MaxWinners = MaxWinners;
 	type DataProvider = DataProvider;
+}
 
+impl<AccountId, BlockNumber, DataProvider, MaxWinners> ElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
+where
+	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxWinners: Get<u32>,
+{
 	fn ongoing() -> bool {
 		false
 	}
+
+	fn elect() -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		Err("`NoElection` cannot do anything.")
+	}
 }
 
-#[cfg(feature = "std")]
-impl<AccountId, BlockNumber, DataProvider> ElectionProvider
-	for NoElection<(AccountId, BlockNumber, DataProvider)>
+impl<AccountId, BlockNumber, DataProvider, MaxWinners> InstantElectionProvider
+	for NoElection<(AccountId, BlockNumber, DataProvider, MaxWinners)>
 where
 	DataProvider: ElectionDataProvider<AccountId = AccountId, BlockNumber = BlockNumber>,
+	MaxWinners: Get<u32>,
 {
-	fn elect() -> Result<Supports<AccountId>, Self::Error> {
-		Err("<NoElection as ElectionProvider> cannot do anything.")
+	fn instant_elect(
+		_: Option<u32>,
+		_: Option<u32>,
+	) -> Result<BoundedSupportsOf<Self>, Self::Error> {
+		Err("`NoElection` cannot do anything.")
 	}
 }
 
@@ -650,3 +667,9 @@ pub type Voter<AccountId, Bound> = (AccountId, VoteWeight, BoundedVec<AccountId,
 /// Same as [`Voter`], but parameterized by an [`ElectionDataProvider`].
 pub type VoterOf<D> =
 	Voter<<D as ElectionDataProvider>::AccountId, <D as ElectionDataProvider>::MaxVotesPerVoter>;
+
+/// Same as `BoundedSupports` but parameterized by a `ElectionProviderBase`.
+pub type BoundedSupportsOf<E> = BoundedSupports<
+	<E as ElectionProviderBase>::AccountId,
+	<E as ElectionProviderBase>::MaxWinners,
+>;

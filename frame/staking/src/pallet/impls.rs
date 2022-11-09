@@ -18,15 +18,15 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, ElectionDataProvider, ElectionProvider, ElectionProviderBase, ScoreProvider,
-	SortedListProvider, Supports, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
+	SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, EstimateNextNewSession, Get,
-		Imbalance, LockableCurrency, OnUnbalanced, UnixTime, WithdrawReasons,
+		Imbalance, LockableCurrency, OnUnbalanced, TryCollect, UnixTime, WithdrawReasons,
 	},
 	weights::Weight,
 };
@@ -44,7 +44,7 @@ use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
 use crate::{
 	log, slashing, weights::WeightInfo, ActiveEraInfo, BalanceOf, EraPayout, Exposure, ExposureOf,
-	Forcing, IndividualExposure, Nominations, PositiveImbalanceOf, RewardDestination,
+	Forcing, IndividualExposure, MaxWinnersOf, Nominations, PositiveImbalanceOf, RewardDestination,
 	SessionInterface, StakingLedger, ValidatorPrefs,
 };
 
@@ -267,7 +267,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Plan a new session potentially trigger a new era.
-	fn new_session(session_index: SessionIndex, is_genesis: bool) -> Option<Vec<T::AccountId>> {
+	fn new_session(
+		session_index: SessionIndex,
+		is_genesis: bool,
+	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
 		if let Some(current_era) = Self::current_era() {
 			// Initial era has been set.
 			let current_era_start_session_index = Self::eras_start_session_index(current_era)
@@ -426,8 +429,11 @@ impl<T: Config> Pallet<T> {
 	/// Returns the new validator set.
 	pub fn trigger_new_era(
 		start_session_index: SessionIndex,
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
-	) -> Vec<T::AccountId> {
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			MaxWinnersOf<T>,
+		>,
+	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
 		// Increment or set current era.
 		let new_planned_era = CurrentEra::<T>::mutate(|s| {
 			*s = Some(s.map(|s| s + 1).unwrap_or(0));
@@ -453,19 +459,26 @@ impl<T: Config> Pallet<T> {
 	pub(crate) fn try_trigger_new_era(
 		start_session_index: SessionIndex,
 		is_genesis: bool,
-	) -> Option<Vec<T::AccountId>> {
-		let election_result = if is_genesis {
-			T::GenesisElectionProvider::elect().map_err(|e| {
+	) -> Option<BoundedVec<T::AccountId, MaxWinnersOf<T>>> {
+		let election_result: BoundedVec<_, MaxWinnersOf<T>> = if is_genesis {
+			let result = <T::GenesisElectionProvider>::elect().map_err(|e| {
 				log!(warn, "genesis election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
-			})
+			});
+
+			result
+				.ok()?
+				.into_inner()
+				.try_into()
+				// both bounds checked in integrity test to be equal
+				.defensive_unwrap_or_default()
 		} else {
-			T::ElectionProvider::elect().map_err(|e| {
+			let result = <T::ElectionProvider>::elect().map_err(|e| {
 				log!(warn, "election provider failed due to {:?}", e);
 				Self::deposit_event(Event::StakingElectionFailed);
-			})
-		}
-		.ok()?;
+			});
+			result.ok()?
+		};
 
 		let exposures = Self::collect_exposures(election_result);
 		if (exposures.len() as u32) < Self::minimum_validator_count().max(1) {
@@ -502,10 +515,19 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Store staking information for the new planned era
 	pub fn store_stakers_info(
-		exposures: Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)>,
+		exposures: BoundedVec<
+			(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>),
+			MaxWinnersOf<T>,
+		>,
 		new_planned_era: EraIndex,
-	) -> Vec<T::AccountId> {
-		let elected_stashes = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
+	) -> BoundedVec<T::AccountId, MaxWinnersOf<T>> {
+		let elected_stashes: BoundedVec<_, MaxWinnersOf<T>> = exposures
+			.iter()
+			.cloned()
+			.map(|(x, _)| x)
+			.collect::<Vec<_>>()
+			.try_into()
+			.expect("since we only map through exposures, size of elected_stashes is always same as exposures; qed");
 
 		// Populate stakers, exposures, and the snapshot of validator prefs.
 		let mut total_stake: BalanceOf<T> = Zero::zero();
@@ -543,11 +565,11 @@ impl<T: Config> Pallet<T> {
 		elected_stashes
 	}
 
-	/// Consume a set of [`Supports`] from [`sp_npos_elections`] and collect them into a
+	/// Consume a set of [`BoundedSupports`] from [`sp_npos_elections`] and collect them into a
 	/// [`Exposure`].
 	fn collect_exposures(
-		supports: Supports<T::AccountId>,
-	) -> Vec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>)> {
+		supports: BoundedSupportsOf<T::ElectionProvider>,
+	) -> BoundedVec<(T::AccountId, Exposure<T::AccountId, BalanceOf<T>>), MaxWinnersOf<T>> {
 		let total_issuance = T::Currency::total_issuance();
 		let to_currency = |e: frame_election_provider_support::ExtendedBalance| {
 			T::CurrencyToVote::to_currency(e, total_issuance)
@@ -576,7 +598,8 @@ impl<T: Config> Pallet<T> {
 				let exposure = Exposure { own, others, total };
 				(validator, exposure)
 			})
-			.collect::<Vec<(T::AccountId, Exposure<_, _>)>>()
+			.try_collect()
+			.expect("we only map through support vector which cannot change the size; qed")
 	}
 
 	/// Remove all associated data of a stash account from the staking system.
@@ -1085,12 +1108,12 @@ impl<T: Config> pallet_session::SessionManager<T::AccountId> for Pallet<T> {
 	fn new_session(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		log!(trace, "planning new session {}", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
-		Self::new_session(new_index, false)
+		Self::new_session(new_index, false).map(|v| v.into_inner())
 	}
 	fn new_session_genesis(new_index: SessionIndex) -> Option<Vec<T::AccountId>> {
 		log!(trace, "planning new session {} at genesis", new_index);
 		CurrentPlannedSession::<T>::put(new_index);
-		Self::new_session(new_index, true)
+		Self::new_session(new_index, true).map(|v| v.into_inner())
 	}
 	fn start_session(start_index: SessionIndex) {
 		log!(trace, "starting session {}", start_index);
@@ -1500,7 +1523,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	fn election_ongoing() -> bool {
-		<T::ElectionProvider as ElectionProviderBase>::ongoing()
+		T::ElectionProvider::ongoing()
 	}
 
 	fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
@@ -1625,6 +1648,12 @@ impl<T: Config> Pallet<T> {
 			<T as Config>::VoterList::count() ==
 				Nominators::<T>::count() + Validators::<T>::count(),
 			"wrong external count"
+		);
+
+		ensure!(
+			ValidatorCount::<T>::get() <=
+				<T::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners::get(),
+			"validator count exceeded election max winners"
 		);
 		Ok(())
 	}
