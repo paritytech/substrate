@@ -558,6 +558,68 @@ mod bonded_pool {
 	}
 
 	#[test]
+	fn do_not_throttle_initial_commission_set() {
+		ExtBuilder::default().build_and_execute(|| {
+			// Set a commission throttle for pool 1
+			assert_ok!(Pools::set_commission_throttle(
+				RuntimeOrigin::signed(900),
+				1,
+				CommissionThrottlePrefs {
+					max_increase: Perbill::from_percent(5),
+					min_delay: 5_u64
+				}
+			));
+			assert_eq!(
+				BondedPools::<Runtime>::get(1).unwrap().commission.throttle,
+				Some(CommissionThrottle {
+					change_rate: CommissionThrottlePrefs {
+						max_increase: Perbill::from_percent(5),
+						min_delay: 5_u64
+					},
+					previous_set_at: None
+				})
+			);
+
+			// add commission that is beyond the throttle boundaries
+			// setting on same block as throttle update (`min_delay` of 5 blocks should not fail tx)
+			// `None` -> 50% commission ( `max_increase` of 5% should not fail tx)
+			assert_ok!(Pools::set_commission(
+				RuntimeOrigin::signed(900),
+				1,
+				Perbill::from_percent(25),
+				Some(900)
+			));
+
+			// now throttle should take effect.
+
+			// attempt 1% commission increase on same block
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(26),
+					Some(900)
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+
+			// move to a block beyond `min_delay`
+			run_blocks(5);
+
+			// attempt 26% commission increase
+			assert_noop!(
+				Pools::set_commission(
+					RuntimeOrigin::signed(900),
+					1,
+					Perbill::from_percent(51),
+					Some(900)
+				),
+				Error::<Runtime>::CommissionChangeThrottled
+			);
+		})
+	}
+
+	#[test]
 	fn set_commission_throttle_works_with_error_tests() {
 		ExtBuilder::default().build_and_execute(|| {
 			// Provided pool does not exist
