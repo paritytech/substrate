@@ -9525,7 +9525,6 @@ dependencies = [
  "merlin",
  "num-traits",
  "parity-scale-codec",
- "parity-util-mem",
  "parking_lot 0.12.1",
  "primitive-types",
  "rand 0.7.3",
