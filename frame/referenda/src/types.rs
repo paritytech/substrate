@@ -207,9 +207,12 @@ impl<
 	>
 	ReferendumStatus<TrackId, RuntimeOrigin, Moment, Call, Balance, Tally, AccountId, ScheduleAddress>
 {
+	/// Return whether referendum status is deciding.
+	/// confirming => deciding so deciding does not preclude confirming
 	pub fn is_deciding(&self) -> bool {
 		self.deciding.is_some()
 	}
+	/// Return whether referendum status is confirming.
 	pub fn is_confirming(&self) -> bool {
 		if let Some(deciding_status) = &self.deciding {
 			deciding_status.confirming.is_some()
