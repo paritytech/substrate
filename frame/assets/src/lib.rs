@@ -36,15 +36,15 @@
 //!
 //! ### Terminology
 //!
-//! * **Admin**: An account ID uniquely privileged to be able to unfreeze (thaw) an account and it's
+//! * **Admin**: An account ID uniquely privileged to be able to unfreeze (thaw) an account and its
 //!   assets, as well as forcibly transfer a particular class of assets between arbitrary accounts
 //!   and reduce the balance of a particular class of assets of arbitrary accounts.
 //! * **Asset issuance/minting**: The creation of a new asset, whose total supply will belong to the
-//!   account that issues the asset. This is a privileged operation.
+//!   account designated as the beneficiary of the asset. This is a privileged operation.
 //! * **Asset transfer**: The reduction of the balance of an asset of one account with the
 //!   corresponding increase in the balance of another.
-//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is a
-//!   privileged operation.
+//! * **Asset destruction**: The process of reducing the balance of an asset of one account. This is
+//!   a privileged operation.
 //! * **Fungible asset**: An asset whose units are interchangeable.
 //! * **Issuer**: An account ID uniquely privileged to be able to mint a particular class of assets.
 //! * **Freezer**: An account ID uniquely privileged to be able to freeze an account from
@@ -63,12 +63,12 @@
 //!
 //! The assets system in Substrate is designed to make the following possible:
 //!
-//! * Issue a new assets in a permissioned or permissionless way, if permissionless, then with a
+//! * Issue new assets in a permissioned or permissionless way, if permissionless, then with a
 //!   deposit required.
 //! * Allow accounts to be delegated the ability to transfer assets without otherwise existing
 //!   on-chain (*approvals*).
 //! * Move assets between accounts.
-//! * Update the asset's total supply.
+//! * Update an asset class's total supply.
 //! * Allow administrative activities by specially privileged accounts including freezing account
 //!   balances and minting/burning assets.
 //!
@@ -92,6 +92,7 @@
 //! * `force_cancel_approval`: Rescind a previous approval.
 //!
 //! ### Privileged Functions
+//!
 //! * `destroy`: Destroys an entire asset class; called by the asset class's Owner.
 //! * `mint`: Increases the asset balance of an account; called by the asset class's Issuer.
 //! * `burn`: Decreases the asset balance of an account; called by the asset class's Admin.
@@ -156,7 +157,7 @@ use frame_support::{
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
 		BalanceStatus::Reserved,
-		Currency, ReservableCurrency, StoredMap,
+		Currency, EnsureOriginWithArg, ReservableCurrency, StoredMap,
 	},
 };
 use frame_system::Config as SystemConfig;
@@ -205,6 +206,14 @@ pub mod pallet {
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
+
+		/// Standard asset class creation is only allowed if the origin attempting it and the
+		/// asset class are in this set.
+		type CreateOrigin: EnsureOriginWithArg<
+			Self::RuntimeOrigin,
+			Self::AssetId,
+			Success = Self::AccountId,
+		>;
 
 		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
 		/// attributes.
@@ -485,7 +494,7 @@ pub mod pallet {
 		///
 		/// This new asset class has no assets initially and its owner is the origin.
 		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
+		/// The origin must conform to the configured `CreateOrigin` and have sufficient funds free.
 		///
 		/// Funds of sender are reserved by `AssetDeposit`.
 		///
@@ -507,7 +516,7 @@ pub mod pallet {
 			admin: AccountIdLookupOf<T>,
 			min_balance: T::Balance,
 		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
+			let owner = T::CreateOrigin::ensure_origin(origin, &id)?;
 			let admin = T::Lookup::lookup(admin)?;
 
 			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);

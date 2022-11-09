@@ -172,7 +172,7 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let response = match self.client.execution_proof(&block, &request.method, &request.data) {
+		let response = match self.client.execution_proof(block, &request.method, &request.data) {
 			Ok((_, proof)) => {
 				let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
 				Some(schema::v1::light::response::Response::RemoteCallResponse(r))
@@ -212,7 +212,7 @@ where
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let response =
-			match self.client.read_proof(&block, &mut request.keys.iter().map(AsRef::as_ref)) {
+			match self.client.read_proof(block, &mut request.keys.iter().map(AsRef::as_ref)) {
 				Ok(proof) => {
 					let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
 					Some(schema::v1::light::response::Response::RemoteReadResponse(r))
@@ -259,7 +259,7 @@ where
 		};
 		let response = match child_info.and_then(|child_info| {
 			self.client.read_child_proof(
-				&block,
+				block,
 				&child_info,
 				&mut request.keys.iter().map(AsRef::as_ref),
 			)

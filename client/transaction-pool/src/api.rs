@@ -126,7 +126,7 @@ where
 		Pin<Box<dyn Future<Output = error::Result<TransactionValidity>> + Send>>;
 	type BodyFuture = Ready<error::Result<Option<Vec<<Self::Block as BlockT>::Extrinsic>>>>;
 
-	fn block_body(&self, hash: &Block::Hash) -> Self::BodyFuture {
+	fn block_body(&self, hash: Block::Hash) -> Self::BodyFuture {
 		ready(self.client.block_body(hash).map_err(error::Error::from))
 	}
 

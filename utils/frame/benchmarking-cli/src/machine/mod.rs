@@ -30,11 +30,11 @@ use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
-	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit,
+	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit, Throughput,
 };
 
 use crate::shared::check_build_profile;
-pub use hardware::{Metric, Requirement, Requirements, Throughput, SUBSTRATE_REFERENCE_HARDWARE};
+pub use hardware::{Metric, Requirement, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
 
 /// Command to benchmark the hardware.
 ///
@@ -128,8 +128,9 @@ impl MachineCmd {
 	/// Benchmarks a specific metric of the hardware and judges the resulting score.
 	fn run_benchmark(&self, requirement: &Requirement, dir: &Path) -> Result<BenchResult> {
 		// Dispatch the concrete function from `sc-sysinfo`.
+
 		let score = self.measure(&requirement.metric, dir)?;
-		let rel_score = score.to_bs() / requirement.minimum.to_bs();
+		let rel_score = score.as_bytes() / requirement.minimum.as_bytes();
 
 		// Sanity check if the result is off by factor >100x.
 		if rel_score >= 100.0 || rel_score <= 0.01 {
@@ -147,13 +148,11 @@ impl MachineCmd {
 		let memory_limit = ExecutionLimit::from_secs_f32(self.memory_duration);
 
 		let score = match metric {
-			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu(hash_limit) as f64),
-			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
-			Metric::MemCopy => Throughput::MiBs(benchmark_memory(memory_limit) as f64),
-			Metric::DiskSeqWrite =>
-				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
-			Metric::DiskRndWrite =>
-				Throughput::MiBs(benchmark_disk_random_writes(disk_limit, dir)? as f64),
+			Metric::Blake2256 => benchmark_cpu(hash_limit),
+			Metric::Sr25519Verify => benchmark_sr25519_verify(verify_limit),
+			Metric::MemCopy => benchmark_memory(memory_limit),
+			Metric::DiskSeqWrite => benchmark_disk_sequential_writes(disk_limit, dir)?,
+			Metric::DiskRndWrite => benchmark_disk_random_writes(disk_limit, dir)?,
 		};
 		Ok(score)
 	}

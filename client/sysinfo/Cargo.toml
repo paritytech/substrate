@@ -26,3 +26,6 @@ sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../primitives/io" }
 sp-std = { version = "4.0.0", path = "../../primitives/std" }
+
+[dev-dependencies]
+sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
