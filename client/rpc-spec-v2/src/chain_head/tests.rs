@@ -57,7 +57,7 @@ async fn setup_api() -> (
 		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
 			.into_rpc();
 
-	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
 	// TODO: Jsonrpsee release for sub_id.
 	// let sub_id = sub.subscription_id();
 	// let sub_id = serde_json::to_string(&sub_id).unwrap();
@@ -411,6 +411,56 @@ async fn call_runtime() {
 	assert_matches!(
 			get_next_event::<ChainHeadEvent<String>>(&mut sub).await,
 			ChainHeadEvent::Error(event) if event.error.contains("Execution failed")
+	);
+}
+
+#[tokio::test]
+async fn call_runtime_without_flag() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let api =
+		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
+			.into_rpc();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	// TODO: Jsonrpsee release for sub_id.
+	// let sub_id = sub.subscription_id();
+	// let sub_id = serde_json::to_string(&sub_id).unwrap();
+	let sub_id: String = "A".into();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_hash = format!("{:?}", block.header.hash());
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Valid runtime call on a subscription started with `runtime_updates` false.
+	let alice_id = AccountKeyring::Alice.to_account_id();
+	let call_parameters = format!("0x{:?}", HexDisplay::from(&alice_id.encode()));
+	let err = api
+		.subscribe(
+			"chainHead_unstable_call",
+			[&sub_id, &block_hash, "AccountNonceApi_account_nonce", &call_parameters],
+		)
+		.await
+		.unwrap_err();
+
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2003 && err.message().contains("The runtime updates flag must be set")
 	);
 }
 
