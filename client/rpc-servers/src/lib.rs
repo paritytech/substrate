@@ -21,17 +21,21 @@
 #![warn(missing_docs)]
 
 use jsonrpsee::{
-	http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle},
-	ws_server::{WsServerBuilder, WsServerHandle},
+	server::{
+		middleware::proxy_get_request::ProxyGetRequestLayer, AllowHosts, ServerBuilder,
+		ServerHandle,
+	},
 	RpcModule,
 };
 use std::{error::Error as StdError, net::SocketAddr};
 
-pub use crate::middleware::{RpcMetrics, RpcMiddleware};
+pub use crate::middleware::RpcMetrics;
+use http::header::HeaderValue;
 pub use jsonrpsee::core::{
 	id_providers::{RandomIntegerIdProvider, RandomStringIdProvider},
 	traits::IdProvider,
 };
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 const MEGABYTE: usize = 1024 * 1024;
 
@@ -46,13 +50,12 @@ const WS_MAX_SUBS_PER_CONN: usize = 1024;
 
 pub mod middleware;
 
-/// Type alias for http server
-pub type HttpServer = HttpServerHandle;
-/// Type alias for ws server
-pub type WsServer = WsServerHandle;
+/// Type alias JSON-RPC server
+pub type Server = ServerHandle;
 
-/// WebSocket specific settings on the server.
-pub struct WsConfig {
+/// Server config.
+#[derive(Debug, Clone)]
+pub struct Config {
 	/// Maximum connections.
 	pub max_connections: Option<usize>,
 	/// Maximum subscriptions per connection.
@@ -63,12 +66,12 @@ pub struct WsConfig {
 	pub max_payload_out_mb: Option<usize>,
 }
 
-impl WsConfig {
+impl Config {
 	// Deconstructs the config to get the finalized inner values.
 	//
 	// `Payload size` or `max subs per connection` bigger than u32::MAX will be truncated.
-	fn deconstruct(self) -> (u32, u32, u64, u32) {
-		let max_conns = self.max_connections.unwrap_or(WS_MAX_CONNECTIONS) as u64;
+	fn deconstruct(self) -> (u32, u32, u32, u32) {
+		let max_conns = self.max_connections.unwrap_or(WS_MAX_CONNECTIONS) as u32;
 		let max_payload_in_mb = payload_size_or_default(self.max_payload_in_mb) as u32;
 		let max_payload_out_mb = payload_size_or_default(self.max_payload_out_mb) as u32;
 		let max_subs_per_conn = self.max_subs_per_conn.unwrap_or(WS_MAX_SUBS_PER_CONN) as u32;
@@ -77,87 +80,46 @@ impl WsConfig {
 	}
 }
 
-/// Start HTTP server listening on given address.
-pub async fn start_http<M: Send + Sync + 'static>(
-	addrs: [SocketAddr; 2],
-	cors: Option<&Vec<String>>,
-	max_payload_in_mb: Option<usize>,
-	max_payload_out_mb: Option<usize>,
-	metrics: Option<RpcMetrics>,
-	rpc_api: RpcModule<M>,
-	rt: tokio::runtime::Handle,
-) -> Result<HttpServerHandle, Box<dyn StdError + Send + Sync>> {
-	let max_payload_in = payload_size_or_default(max_payload_in_mb);
-	let max_payload_out = payload_size_or_default(max_payload_out_mb);
-
-	let mut acl = AccessControlBuilder::new();
-
-	if let Some(cors) = cors {
-		// Whitelist listening address.
-		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
-		acl = acl.set_allowed_hosts(format_allowed_hosts(&addrs[..]))?;
-		acl = acl.set_allowed_origins(cors)?;
-	};
-
-	let builder = HttpServerBuilder::new()
-		.max_request_body_size(max_payload_in as u32)
-		.max_response_body_size(max_payload_out as u32)
-		.set_access_control(acl.build())
-		.health_api("/health", "system_health")?
-		.custom_tokio_runtime(rt);
-
-	let rpc_api = build_rpc_api(rpc_api);
-	let (handle, addr) = if let Some(metrics) = metrics {
-		let middleware = RpcMiddleware::new(metrics, "http".into());
-		let builder = builder.set_middleware(middleware);
-		let server = builder.build(&addrs[..]).await?;
-		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
-	} else {
-		let server = builder.build(&addrs[..]).await?;
-		let addr = server.local_addr();
-		(server.start(rpc_api)?, addr)
-	};
-
-	log::info!(
-		"Running JSON-RPC HTTP server: addr={}, allowed origins={:?}",
-		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
-		cors
-	);
-
-	Ok(handle)
-}
-
 /// Start WS server listening on given address.
-pub async fn start_ws<M: Send + Sync + 'static>(
+pub async fn start_server<M: Send + Sync + 'static>(
 	addrs: [SocketAddr; 2],
 	cors: Option<&Vec<String>>,
-	ws_config: WsConfig,
+	config: Config,
 	metrics: Option<RpcMetrics>,
 	rpc_api: RpcModule<M>,
 	rt: tokio::runtime::Handle,
 	id_provider: Option<Box<dyn IdProvider>>,
-) -> Result<WsServerHandle, Box<dyn StdError + Send + Sync>> {
+) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
 	let (max_payload_in, max_payload_out, max_connections, max_subs_per_conn) =
-		ws_config.deconstruct();
+		config.deconstruct();
 
-	let mut acl = AccessControlBuilder::new();
-
-	if let Some(cors) = cors {
-		// Whitelist listening address.
-		// NOTE: set_allowed_hosts will whitelist both ports but only one will used.
-		acl = acl.set_allowed_hosts(format_allowed_hosts(&addrs[..]))?;
-		acl = acl.set_allowed_origins(cors)?;
+	let (allow_hosts, cors) = {
+		if let Some(cors) = cors {
+			let mut list = Vec::new();
+			for origin in cors {
+				list.push(HeaderValue::from_str(origin.as_str())?);
+			}
+			(allowed_hosts(&addrs), CorsLayer::new().allow_origin(AllowOrigin::list(list)))
+		} else {
+			// allow all cors
+			(AllowHosts::Any, CorsLayer::permissive())
+		}
 	};
 
-	let mut builder = WsServerBuilder::new()
+	let middleware = tower::ServiceBuilder::new()
+		// Proxy `GET /health` requests to internal `system_health` method.
+		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
+		.layer(cors.clone());
+
+	let mut builder = ServerBuilder::new()
 		.max_request_body_size(max_payload_in)
 		.max_response_body_size(max_payload_out)
 		.max_connections(max_connections)
 		.max_subscriptions_per_connection(max_subs_per_conn)
 		.ping_interval(std::time::Duration::from_secs(30))
-		.custom_tokio_runtime(rt)
-		.set_access_control(acl.build());
+		.set_host_filtering(allow_hosts)
+		.set_middleware(middleware)
+		.custom_tokio_runtime(rt);
 
 	if let Some(provider) = id_provider {
 		builder = builder.set_id_provider(provider);
@@ -167,8 +129,7 @@ pub async fn start_ws<M: Send + Sync + 'static>(
 
 	let rpc_api = build_rpc_api(rpc_api);
 	let (handle, addr) = if let Some(metrics) = metrics {
-		let middleware = RpcMiddleware::new(metrics, "ws".into());
-		let builder = builder.set_middleware(middleware);
+		let builder = builder.set_logger(metrics);
 		let server = builder.build(&addrs[..]).await?;
 		let addr = server.local_addr();
 		(server.start(rpc_api)?, addr)
@@ -179,7 +140,7 @@ pub async fn start_ws<M: Send + Sync + 'static>(
 	};
 
 	log::info!(
-		"Running JSON-RPC WS server: addr={}, allowed origins={:?}",
+		"Running JSON-RPC server: addr={}, cors={:?}",
 		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
 		cors
 	);
@@ -187,13 +148,13 @@ pub async fn start_ws<M: Send + Sync + 'static>(
 	Ok(handle)
 }
 
-fn format_allowed_hosts(addrs: &[SocketAddr]) -> Vec<String> {
+fn allowed_hosts(addrs: &[SocketAddr]) -> AllowHosts {
 	let mut hosts = Vec::with_capacity(addrs.len() * 2);
 	for addr in addrs {
-		hosts.push(format!("localhost:{}", addr.port()));
-		hosts.push(format!("127.0.0.1:{}", addr.port()));
+		hosts.push(format!("localhost:{}", addr.port()).into());
+		hosts.push(format!("127.0.0.1:{}", addr.port()).into());
 	}
-	hosts
+	AllowHosts::Only(hosts)
 }
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
