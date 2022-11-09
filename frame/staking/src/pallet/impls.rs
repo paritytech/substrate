@@ -102,23 +102,44 @@ impl<T: Config> Pallet<T> {
 			ledger = ledger.consolidate_unlocked(current_era)
 		}
 
-		let post_info_weight =
-			if ledger.unlocking.is_empty() && ledger.active < T::Currency::minimum_balance() {
-				// This account must have called `unbond()` with some value that caused the active
-				// portion to fall below existential deposit + will have no more unlocking chunks
-				// left. We can now safely remove all staking-related information.
-				Self::kill_stash(&stash, num_slashing_spans)?;
-				// Remove the lock.
-				T::Currency::remove_lock(STAKING_ID, &stash);
-				// This is worst case scenario, so we use the full weight and return None
-				None
-			} else {
-				// This was the consequence of a partial unbond. just update the ledger and move on.
-				Self::update_ledger(&controller, &ledger);
+		let mut dispatch_weight = Weight::zero();
 
-				// This is only an update, so we use less overall weight.
-				Some(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans))
-			};
+		let num_slashing_spans = {
+			// if using the speculative number of spans, get real number of slashing spans and
+			// calculate weight associated with fetching real number of slashing spans.
+			if num_slashing_spans == crate::SPECULATIVE_NUM_SPANS {
+				let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
+				dispatch_weight = T::DbWeight::get()
+					.reads(1 as u64)
+					.saturating_mul(real_num_slashing_spans as u64);
+
+				real_num_slashing_spans as u32
+			} else {
+				num_slashing_spans
+			}
+		};
+
+		let post_info_weight = if ledger.unlocking.is_empty() &&
+			ledger.active < T::Currency::minimum_balance()
+		{
+			// This account must have called `unbond()` with some value that caused the active
+			// portion to fall below existential deposit + will have no more unlocking chunks
+			// left. We can now safely remove all staking-related information.
+			Self::kill_stash(&stash, num_slashing_spans)?;
+			// Remove the lock.
+			T::Currency::remove_lock(STAKING_ID, &stash);
+			// This is worst case scenario, so we use the full weight and return None
+			None
+		} else {
+			// This was the consequence of a partial unbond. just update the ledger and move on.
+			Self::update_ledger(&controller, &ledger);
+
+			// This is only an update, so we use less overall weight.
+			Some(
+				dispatch_weight
+					.saturating_add(T::WeightInfo::withdraw_unbonded_update(num_slashing_spans)),
+			)
+		};
 
 		// `old_total` should never be less than the new total because
 		// `consolidate_unlocked` strictly subtracts balance.
@@ -128,7 +149,10 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::Withdrawn { stash, amount: value });
 		}
 
-		Ok(post_info_weight.into())
+		Ok(post_info_weight
+			.map(|weight| weight.saturating_add(dispatch_weight))
+			.or_else(|| Some(dispatch_weight))
+			.into())
 	}
 
 	pub(super) fn do_payout_stakers(

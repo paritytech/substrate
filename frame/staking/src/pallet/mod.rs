@@ -49,7 +49,7 @@ use crate::{
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
-const SLASHING_SPANS_AUTO_WITHDRAW: u32 = 0;
+pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 10_000;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -114,7 +114,6 @@ pub mod pallet {
 			// we only accept an election provider that has staking as data provider.
 			DataProvider = Pallet<Self>,
 		>;
-
 		/// Something that provides the election functionality at genesis.
 		type GenesisElectionProvider: frame_election_provider_support::ElectionProvider<
 			AccountId = Self::AccountId,
@@ -943,7 +942,7 @@ pub mod pallet {
 		///
 		/// See also [`Call::withdraw_unbonded`].
 		#[pallet::weight(
-            T::WeightInfo::withdraw_unbonded_kill(SLASHING_SPANS_AUTO_WITHDRAW) + T::WeightInfo::unbond())
+            T::WeightInfo::withdraw_unbonded_kill(SPECULATIVE_NUM_SPANS).saturating_add(T::WeightInfo::unbond()))
         ]
 		pub fn unbond(
 			origin: OriginFor<T>,
@@ -958,7 +957,7 @@ pub mod pallet {
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
 			if unlocking == T::MaxUnlockingChunks::get() as usize {
-				Self::do_withdraw_unbonded(&controller, SLASHING_SPANS_AUTO_WITHDRAW)
+				Self::do_withdraw_unbonded(&controller, SPECULATIVE_NUM_SPANS)
 					.map_err(|with_post| with_post.error)?;
 			}
 
