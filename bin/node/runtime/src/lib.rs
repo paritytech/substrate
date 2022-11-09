@@ -750,7 +750,7 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 }
 
 parameter_types! {
-	pub const BagThresholdsBalance: &'static [u128] = &voter_bags::THRESHOLDS_BALANCES;
+	pub const BagThresholdsBalance: &'static [Balance] = &voter_bags::THRESHOLDS_BALANCES;
 }
 
 type TargetBagsListInstance = pallet_bags_list::Instance2;
