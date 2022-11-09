@@ -41,7 +41,6 @@ use jsonrpsee::{
 	SubscriptionSink,
 };
 use log::error;
-use parking_lot::RwLock;
 use sc_client_api::{
 	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, CallExecutor, ChildInfo,
 	ExecutorProvider, FinalityNotification, StorageKey, StorageProvider,
@@ -71,12 +70,6 @@ pub struct ChainHead<BE, Block: BlockT, Client> {
 	subscriptions: Arc<SubscriptionManagement<Block>>,
 	/// The hexadecimal encoded hash of the genesis block.
 	genesis_hash: String,
-	/// Best block reported by the RPC layer.
-	/// This is used to determine if the previously reported best
-	/// block is also pruned with the current finalization. In that
-	/// case, the RPC should report a new best block before reporting
-	/// the finalization event.
-	best_block: Arc<RwLock<Option<Block::Hash>>>,
 	/// Phantom member to pin the block type.
 	_phantom: PhantomData<Block>,
 }
@@ -97,7 +90,6 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 			executor,
 			subscriptions: Arc::new(SubscriptionManagement::new()),
 			genesis_hash,
-			best_block: Default::default(),
 			_phantom: PhantomData,
 		}
 	}
@@ -315,7 +307,6 @@ async fn submit_events<EventStream, T>(
 fn handle_import_blocks<Client, Block>(
 	client: &Arc<Client>,
 	handle: &SubscriptionHandle<Block>,
-	best_block: &Arc<RwLock<Option<Block::Hash>>>,
 	runtime_updates: bool,
 	notification: BlockImportNotification<Block>,
 ) -> (FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>)
@@ -348,7 +339,7 @@ where
 	let best_block_event =
 		FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash: notification.hash });
 
-	let mut best_block_cache = best_block.write();
+	let mut best_block_cache = handle.best_block_write();
 	match *best_block_cache {
 		Some(block_cache) => {
 			// The RPC layer has not reported this block as best before.
@@ -372,7 +363,6 @@ where
 fn handle_finalized_blocks<Client, Block>(
 	client: &Arc<Client>,
 	handle: &SubscriptionHandle<Block>,
-	best_block: &Arc<RwLock<Option<Block::Hash>>>,
 	notification: FinalityNotification<Block>,
 ) -> (FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>)
 where
@@ -395,7 +385,7 @@ where
 		pruned_block_hashes: pruned_block_hashes.clone(),
 	});
 
-	let mut best_block_cache = best_block.write();
+	let mut best_block_cache = handle.best_block_write();
 	match *best_block_cache {
 		Some(block_cache) => {
 			// Check if the current best block is also reported as pruned.
@@ -459,19 +449,12 @@ where
 
 		let client = self.client.clone();
 		let handle = sub_handle.clone();
-		let best_reported_block = self.best_block.clone();
 
 		let stream_import = self
 			.client
 			.import_notification_stream()
 			.map(move |notification| {
-				match handle_import_blocks(
-					&client,
-					&handle,
-					&best_reported_block,
-					runtime_updates,
-					notification,
-				) {
+				match handle_import_blocks(&client, &handle, runtime_updates, notification) {
 					(new_block, None) => stream::iter(vec![new_block]),
 					(new_block, Some(best_block)) => stream::iter(vec![new_block, best_block]),
 				}
@@ -480,14 +463,12 @@ where
 
 		let client = self.client.clone();
 		let handle = sub_handle.clone();
-		let best_reported_block = self.best_block.clone();
 
 		let stream_finalized = self
 			.client
 			.finality_notification_stream()
 			.map(move |notification| {
-				match handle_finalized_blocks(&client, &handle, &best_reported_block, notification)
-				{
+				match handle_finalized_blocks(&client, &handle, notification) {
 					(finalized_event, None) => stream::iter(vec![finalized_event]),
 					(finalized_event, Some(best_block)) =>
 						stream::iter(vec![best_block, finalized_event]),
