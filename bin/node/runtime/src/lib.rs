@@ -572,8 +572,7 @@ impl pallet_staking::Config for Runtime {
 	type ElectionProvider = ElectionProviderMultiPhase;
 	type GenesisElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type VoterList = VoterList;
-	// This a placeholder, to be introduced in the next PR as an instance of bags-list
-	type TargetList = pallet_staking::UseValidatorsMap<Self>;
+	type TargetList = TargetList;
 	type MaxUnlockingChunks = ConstU32<32>;
 	type HistoryDepth = HistoryDepth;
 	type OnStakerSlash = NominationPools;
@@ -747,6 +746,24 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	pub const BagThresholdsBalance: &'static [u128] = &voter_bags::THRESHOLDS_BALANCES;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	// The bags-list itself will be the source of truth about the approval stakes. This implies that
+	// staking should keep the approval stakes up to date at all times.
+	// NOTE: This is being revisited as we will be keeping track of total approval stake in a
+	// staking pallet storage. This way we'll be able to add/remove users from TargetList without
+	// losing their approval stake, should they chill or become a nominator.
+	type ScoreProvider = TargetList;
+	type BagThresholds = BagThresholdsBalance;
+	type Score = Balance;
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
@@ -1658,6 +1675,7 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
+		TargetList: pallet_bags_list::<Instance2>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
