@@ -22,8 +22,10 @@ use super::*;
 use authorship::claim_slot;
 use futures::executor::block_on;
 use log::debug;
-use rand::RngCore;
-use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
+use rand_chacha::{
+	rand_core::{RngCore, SeedableRng},
+	ChaChaRng,
+};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
