@@ -540,23 +540,28 @@ pub struct PoolRoles<AccountId> {
 
 /// Pool commission.
 ///
-/// The pool depositor can set a commission upon a pool creation, from which the pool owner can
-/// update thereafter. The `max` commission value can only be decreased after the initial value is
-/// set, as to prevent the commission from repeatedly increasing.
+/// The pool `root` can set commission configuration after pool creation. By default, all commission
+/// values are `None`. Pool `root`s can set `max` and `throttle` configurations before setting an
+/// initial commission `current` value - the commission percentage and payee of commission.
 ///
-/// A commission throttle is also optional, allowing the pool to set strict limits to how much
+/// The `max` commission value can only be decreased after the initial value is
+/// set, to prevent commission from repeatedly increasing.
+///
+/// An optional commission throttle allows the pool to set strict limits to how much
 /// commission can change in each update, and how often updates can take place.
+/// If a `throttle` is set *before* a commission `current` is set, the initial commission `current`
+/// value will *not* be subject to throttling. Subsequent commission updates will be.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Commission<T: Config> {
-	/// The active commission rate of the pool along with the account commission is paid to.
+	/// Optional commission rate of the pool along with the account commission is paid to.
 	pub current: Option<(Perbill, T::AccountId)>,
-	/// An optional maximum commission that can be set by the pool root. Once set, this value
-	/// cannot be updated.
+	/// Optional maximum commission that can be set by the pool `root`. Once set, this value
+	/// can only be updated to a decreased value.
 	pub max: Option<Perbill>,
-	/// Configiration around how often the commission can be updated, and metadata around the
-	/// previous round of updates.
+	/// Optional configiration around how often commission can be updated, and when the last
+	/// commission update took place.
 	pub throttle: Option<CommissionThrottle<T>>,
 }
 
@@ -584,9 +589,12 @@ impl<T: Config> Commission<T> {
 	}
 
 	/// Returns true if a commission percentage updating to `to` would exhaust the throttle limit.
+	///
 	/// A commission update will be throttled (disallowed) if:
 	/// 1. not enough blocks have passed since the previous commission update took place, and
 	/// 2. the new commission is larger than the maximum allowed increase.
+	///
+	/// Throttlnig is not applied to commission updates if `current` is still `None`.
 	fn throttling(&self, to: &Perbill) -> bool {
 		let throttle = self.throttle.as_ref().map(|t| t).or(None);
 		if let Some(t) = throttle {
@@ -606,11 +614,8 @@ impl<T: Config> Commission<T> {
 	}
 
 	/// Set the pool's commission.
-	///
 	/// Update commission accordingly based on `commission` and `payee`.
-	///
 	/// If throttle is present, record the current block as the previously updated commission.
-	///
 	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
 	fn maybe_update_current(
 		&mut self,
@@ -636,13 +641,17 @@ impl<T: Config> Commission<T> {
 	}
 
 	/// Set the pool's maximum commission.
+	/// The pool's maximum commission can be set to any value initially, and only smaller values
+	/// thereafter. If larger values are attempted, this function will return a dispatch error.
+	///
+	/// If `current.0` is larger than an updated max commission value, then `current.0` will also be
+	/// updated to the new maximum.
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
 				return Err(Error::<T>::MaxCommissionRestricted.into())
 			}
 			*old = new_max;
-			// ensure current is also less then the new maximum.
 			let _ = self.current.as_mut().map(|(x, _)| *x = (*x).min(new_max));
 		} else {
 			self.max = Some(new_max)
@@ -651,6 +660,9 @@ impl<T: Config> Commission<T> {
 	}
 
 	/// Set the pool's commission throttle settings.
+	/// Once a throttle configuration has been set, only more restrictive values can be set
+	/// thereafter. These restrictions translate to increased `min_delay` values and decreased
+	/// `max_increase` values.
 	fn maybe_update_throttle(
 		&mut self,
 		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
@@ -668,6 +680,8 @@ impl<T: Config> Commission<T> {
 	}
 
 	/// Gets the current commission (if any) and payee to be paid.
+	/// A zero commission along with a `None` payee is returned in the event a commission has not
+	/// been configured to the pool.
 	fn get_commission_and_payee(
 		&self,
 		pending_rewards: &BalanceOf<T>,
@@ -705,6 +719,8 @@ impl<T: Config> CommissionThrottle<T> {
 }
 
 /// Pool commission throttle preferences.
+/// A commission throttle consists of 2 values; (1) the maximum allowed commission change, and (2)
+/// the minimum amount of blocks that must elapse before commission updates are allowed again.
 ///
 /// Throttle prefs need to be passed and configured together. This struct is used in
 /// the `set_commission_throttle` call as well as in CommissionThrottle.
@@ -2178,13 +2194,15 @@ pub mod pallet {
 
 		/// Set the commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the root role of the pool.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
 		/// If the pool has a max commission set, the commission supplied must be less or
-		/// equal to the max.
+		/// equal to that value.
 		///
-		/// If the max commission has _not yet_ been set, then the commission is not
-		/// restricted.
-		/// A `payee` must already be present before commission can be set.
+		/// If the max commission has _not yet_ been set, then the commission range is not
+		/// bounded.
+		/// A `payee` must be provided if commission has not yet been set (still `None`). Once
+		/// commission has been set, the `payee` can be omitted in further calls. If a `payee`
+		/// update is desired, the commission must still be passed into the call.
 		#[pallet::weight(T::WeightInfo::set_commission())]
 		#[transactional]
 		pub fn set_commission(
@@ -2215,12 +2233,12 @@ pub mod pallet {
 
 		/// Set the maximum commission of a pool.
 		///
-		/// The dispatch origin of this call must be signed by the root role of the pool.
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
 		/// If a maximum commission already exists prior to this call, then the updated
-		/// max commission must be lower, otherwise this call will fail.
+		/// max commission must be *lower*, otherwise this call will fail.
 		///
 		/// This call also updates the pool's current commission to the new maximum if the
-		/// current commission is higher than the supplied maximum.
+		/// current commission is higher than the maximum supplied.
 		#[pallet::weight(T::WeightInfo::set_commission_max())]
 		#[transactional]
 		pub fn set_commission_max(
@@ -2240,11 +2258,11 @@ pub mod pallet {
 
 		/// Set the commission throttle for a pool.
 		///
-		/// The dispatch origin of this call must be signed by the root role of the pool.
-		/// If a throttle is already present, this call will only succeed if a more restrictive
+		/// The dispatch origin of this call must be signed by the `root` role of the pool.
+		/// If a throttle is already present, this call will only succeed if a more *restrictive*
 		/// throttle configuration is given.
 		///
-		/// If a throttle configuration does not yet exist, the values are set.
+		/// If a throttle configuration does not yet exist, the provided values are set.
 		#[pallet::weight(T::WeightInfo::set_commission_throttle())]
 		#[transactional]
 		pub fn set_commission_throttle(
