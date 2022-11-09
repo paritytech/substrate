@@ -26,15 +26,6 @@ use std::{
 	sync::Arc,
 };
 
-#[derive(Debug)]
-/// The subscription management error.
-pub enum SubscriptionError {
-	/// The subscription ID is invalid.
-	InvalidSubId,
-	/// The block hash is invalid.
-	InvalidBlock,
-}
-
 /// Inner subscription data structure.
 struct SubscriptionInner<Block: BlockT> {
 	/// Signals the "Stop" event.
@@ -64,12 +55,7 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 	///
 	/// This can happen on internal failure (ie, the pruning deleted the block from memory)
 	/// or if the user exceeded the amount of available pinned blocks.
-	///
-	/// # Note
-	///
-	/// The stop event must be generated only once and this method does nothing when called multiple
-	/// times.
-	pub fn stop(&self) {
+	pub fn stop(self) {
 		let mut inner = self.inner.write();
 
 		if let Some(tx_stop) = inner.tx_stop.take() {
@@ -149,97 +135,6 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		let subs = self.inner.write();
 		subs.get(subscription_id).map(|handle| Some(handle.clone())).flatten()
 	}
-
-	/// Pin a new block for the given subscription ID.
-	///
-	/// Fails if the subscription ID is not present.
-	///
-	/// # Note
-	///
-	/// It does not fail for pinning the same block multiple times.
-	/// This is useful when having a `new_block` event followed
-	/// by a `finalized` event.
-	pub fn pin_block(
-		&self,
-		subscription_id: &String,
-		hash: Block::Hash,
-	) -> Result<(), SubscriptionError> {
-		let mut subs = self.inner.write();
-
-		match subs.get_mut(subscription_id) {
-			Some(handle) => {
-				let mut sub_handle = handle.inner.write();
-				sub_handle.blocks.insert(hash);
-				Ok(())
-			},
-			None => Err(SubscriptionError::InvalidSubId),
-		}
-	}
-
-	/// Unpin a new block for the given subscription ID.
-	///
-	/// Fails if either the subscription ID or the block hash is not present.
-	pub fn unpin_block(
-		&self,
-		subscription_id: &String,
-		hash: &Block::Hash,
-	) -> Result<(), SubscriptionError> {
-		let mut subs = self.inner.write();
-
-		match subs.get_mut(subscription_id) {
-			Some(handle) => {
-				let mut sub_handle = handle.inner.write();
-				if !sub_handle.blocks.remove(hash) {
-					Err(SubscriptionError::InvalidBlock)
-				} else {
-					Ok(())
-				}
-			},
-			None => Err(SubscriptionError::InvalidSubId),
-		}
-	}
-
-	/// Check if the block hash is present for the provided subscription ID.
-	///
-	/// Fails if either the subscription ID or the block hash is not present.
-	pub fn contains(
-		&self,
-		subscription_id: &String,
-		hash: &Block::Hash,
-	) -> Result<(), SubscriptionError> {
-		let subs = self.inner.read();
-
-		match subs.get(subscription_id) {
-			Some(handle) => {
-				let sub_handle = handle.inner.read();
-				if sub_handle.blocks.contains(hash) {
-					Ok(())
-				} else {
-					Err(SubscriptionError::InvalidBlock)
-				}
-			},
-			None => Err(SubscriptionError::InvalidSubId),
-		}
-	}
-
-	/// Trigger the stop event for the current subscription.
-	///
-	/// This can happen on internal failure (ie, the pruning deleted the block from memory)
-	/// or if the user exceeded the amount of available pinned blocks.
-	pub fn stop(&self, subscription_id: &String) -> Result<(), SubscriptionError> {
-		let mut subs = self.inner.write();
-
-		match subs.get_mut(subscription_id) {
-			Some(handle) => {
-				let mut sub_handle = handle.inner.write();
-				if let Some(tx_stop) = sub_handle.tx_stop.take() {
-					let _ = tx_stop.send(());
-				}
-				Ok(())
-			},
-			None => Err(SubscriptionError::InvalidSubId),
-		}
-	}
 }
 
 #[cfg(test)]
@@ -255,17 +150,16 @@ mod tests {
 		let id = "abc".to_string();
 		let hash = H256::random();
 
-		let res = subs.contains(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+		let handle = subs.get_subscription(&id);
+		assert!(handle.is_none());
 
-		let _ = subs.insert_subscription(id.clone());
-		let res = subs.contains(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+		let (_, handle) = subs.insert_subscription(id.clone()).unwrap();
+		assert!(!handle.contains_block(&hash));
 
 		subs.remove_subscription(&id);
 
-		let res = subs.contains(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+		let handle = subs.get_subscription(&id);
+		assert!(handle.is_none());
 	}
 
 	#[test]
@@ -275,39 +169,19 @@ mod tests {
 		let id = "abc".to_string();
 		let hash = H256::random();
 
-		// Check without subscription.
-		let res = subs.pin_block(&id, hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
-
-		let res = subs.unpin_block(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
-
 		// Check with subscription.
-		let _ = subs.insert_subscription(id.clone());
-		// No block pinned.
-		let res = subs.contains(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+		let (_, handle) = subs.insert_subscription(id.clone()).unwrap();
+		assert!(!handle.contains_block(&hash));
+		assert!(!handle.unpin_block(&hash));
 
-		let res = subs.unpin_block(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
-
-		// Check with subscription and pinned block.
-		let res = subs.pin_block(&id, hash);
-		assert!(matches!(res, Ok(())));
-
-		let res = subs.contains(&id, &hash);
-		assert!(matches!(res, Ok(())));
-
+		handle.pin_block(hash);
+		assert!(handle.contains_block(&hash));
 		// Unpin an invalid block.
-		let res = subs.unpin_block(&id, &H256::random());
-		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+		assert!(!handle.unpin_block(&H256::random()));
 
-		let res = subs.unpin_block(&id, &hash);
-		assert!(matches!(res, Ok(())));
-
-		// No block pinned.
-		let res = subs.contains(&id, &hash);
-		assert!(matches!(res, Err(SubscriptionError::InvalidBlock)));
+		// Unpin the valid block.
+		assert!(handle.unpin_block(&hash));
+		assert!(!handle.contains_block(&hash));
 	}
 
 	#[test]
@@ -317,7 +191,7 @@ mod tests {
 		let id = "abc".to_string();
 
 		// Check with subscription.
-		let (mut rx_stop, _sub_handle) = subs.insert_subscription(id.clone()).unwrap();
+		let (mut rx_stop, sub_handle) = subs.insert_subscription(id.clone()).unwrap();
 
 		// Check the stop signal was not received.
 		let res = rx_stop.try_recv().unwrap();
@@ -327,8 +201,7 @@ mod tests {
 		let res = subs.insert_subscription(id.clone());
 		assert!(res.is_none());
 
-		// Stop must be successful.
-		subs.stop(&id).unwrap();
+		sub_handle.stop();
 
 		// Check the signal was received.
 		let res = rx_stop.try_recv().unwrap();

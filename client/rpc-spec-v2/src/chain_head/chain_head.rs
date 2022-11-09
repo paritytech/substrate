@@ -26,7 +26,7 @@ use crate::{
 			BestBlockChanged, ChainHeadEvent, ChainHeadResult, ErrorEvent, Finalized, FollowEvent,
 			Initialized, NetworkConfig, NewBlock, RuntimeEvent, RuntimeVersionEvent,
 		},
-		subscription::{SubscriptionError, SubscriptionManagement},
+		subscription::{SubscriptionHandle, SubscriptionManagement},
 	},
 	SubscriptionTaskExecutor,
 };
@@ -149,7 +149,7 @@ where
 	/// blocks via "NewBlock" and the "BestBlockChanged".
 	fn generate_initial_events(
 		&self,
-		sub_id: &String,
+		handle: &SubscriptionHandle<Block>,
 		runtime_updates: bool,
 	) -> Vec<FollowEvent<Block::Hash>> {
 		// The initialized event is the first one sent.
@@ -161,7 +161,7 @@ where
 			None,
 		);
 
-		let _ = self.subscriptions.pin_block(&sub_id, finalized_block_hash);
+		handle.pin_block(finalized_block_hash);
 
 		let initialized_event = FollowEvent::Initialized(Initialized {
 			finalized_block_hash,
@@ -171,7 +171,6 @@ where
 
 		let mut initial_blocks = Vec::new();
 		get_initial_blocks(&self.backend, finalized_block_hash, &mut initial_blocks);
-		let sub_id = sub_id.clone();
 		let mut in_memory_blocks: Vec<_> = std::iter::once(initialized_event)
 			.chain(initial_blocks.into_iter().map(|(child, parent)| {
 				let new_runtime = generate_runtime_event(
@@ -181,7 +180,7 @@ where
 					Some(&BlockId::Hash(parent)),
 				);
 
-				let _ = self.subscriptions.pin_block(&sub_id, child);
+				handle.pin_block(child);
 
 				FollowEvent::NewBlock(NewBlock {
 					block_hash: child,
@@ -315,9 +314,8 @@ async fn submit_events<EventStream, T>(
 /// every notification.
 fn handle_import_blocks<Client, Block>(
 	client: &Arc<Client>,
-	subscriptions: &Arc<SubscriptionManagement<Block>>,
+	handle: &SubscriptionHandle<Block>,
 	best_block: &Arc<RwLock<Option<Block::Hash>>>,
-	sub_id: &String,
 	runtime_updates: bool,
 	notification: BlockImportNotification<Block>,
 ) -> (FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>)
@@ -332,7 +330,7 @@ where
 		Some(&BlockId::Hash(*notification.header.parent_hash())),
 	);
 
-	let _ = subscriptions.pin_block(&sub_id, notification.hash);
+	handle.pin_block(notification.hash);
 
 	// Note: `Block::Hash` will serialize to hexadecimal encoded string.
 	let new_block = FollowEvent::NewBlock(NewBlock {
@@ -373,9 +371,8 @@ where
 /// every notification.
 fn handle_finalized_blocks<Client, Block>(
 	client: &Arc<Client>,
-	subscriptions: &Arc<SubscriptionManagement<Block>>,
+	handle: &SubscriptionHandle<Block>,
 	best_block: &Arc<RwLock<Option<Block::Hash>>>,
-	sub_id: &String,
 	notification: FinalityNotification<Block>,
 ) -> (FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>)
 where
@@ -383,7 +380,7 @@ where
 	Client: HeaderBackend<Block> + 'static,
 {
 	// We might not receive all new blocks reports, also pin the block here.
-	let _ = subscriptions.pin_block(&sub_id, notification.hash);
+	handle.pin_block(notification.hash);
 
 	// The tree route contains the exclusive path from the latest finalized block
 	// to the block reported by the notification. Ensure the finalized block is
@@ -453,7 +450,7 @@ where
 	) -> SubscriptionResult {
 		let sub_id = self.accept_subscription(&mut sink)?;
 		// Keep track of the subscription.
-		let Some((rx_stop, _sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone()) else {
+		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone()) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
@@ -461,9 +458,8 @@ where
 		};
 
 		let client = self.client.clone();
-		let subscriptions = self.subscriptions.clone();
+		let handle = sub_handle.clone();
 		let best_reported_block = self.best_block.clone();
-		let sub_id_import = sub_id.clone();
 
 		let stream_import = self
 			.client
@@ -471,9 +467,8 @@ where
 			.map(move |notification| {
 				match handle_import_blocks(
 					&client,
-					&subscriptions,
+					&handle,
 					&best_reported_block,
-					&sub_id_import,
 					runtime_updates,
 					notification,
 				) {
@@ -484,21 +479,15 @@ where
 			.flatten();
 
 		let client = self.client.clone();
-		let subscriptions = self.subscriptions.clone();
-		let sub_id_finalized = sub_id.clone();
+		let handle = sub_handle.clone();
 		let best_reported_block = self.best_block.clone();
 
 		let stream_finalized = self
 			.client
 			.finality_notification_stream()
 			.map(move |notification| {
-				match handle_finalized_blocks(
-					&client,
-					&subscriptions,
-					&best_reported_block,
-					&sub_id_finalized,
-					notification,
-				) {
+				match handle_finalized_blocks(&client, &handle, &best_reported_block, notification)
+				{
 					(finalized_event, None) => stream::iter(vec![finalized_event]),
 					(finalized_event, Some(best_block)) =>
 						stream::iter(vec![best_block, finalized_event]),
@@ -508,7 +497,7 @@ where
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
 
-		let initial_events = self.generate_initial_events(&sub_id, runtime_updates);
+		let initial_events = self.generate_initial_events(&sub_handle, runtime_updates);
 		let stream = stream::iter(initial_events).chain(merged);
 
 		let subscriptions = self.subscriptions.clone();
@@ -533,29 +522,32 @@ where
 		let subscriptions = self.subscriptions.clone();
 
 		let fut = async move {
-			let res = match subscriptions.contains(&follow_subscription, &hash) {
-				Err(SubscriptionError::InvalidBlock) => {
-					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-					return
-				},
-				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<String>::Disjoint,
-				Ok(()) => match client.block(&BlockId::Hash(hash)) {
-					Ok(Some(signed_block)) => {
-						let extrinsics = signed_block.block.extrinsics();
-						let result = format!("0x{}", HexDisplay::from(&extrinsics.encode()));
-						ChainHeadEvent::Done(ChainHeadResult { result })
-					},
-					Ok(None) => {
-						// The block's body was pruned. This subscription ID has become invalid.
-						let _ = subscriptions.stop(&follow_subscription);
-						ChainHeadEvent::<String>::Disjoint
-					},
-					Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
-				},
+			let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
+				// Invalid invalid subscription ID.
+				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				return
 			};
 
-			let stream = stream::once(async move { res });
-			sink.pipe_from_stream(stream.boxed()).await;
+			// Block is not part of the subscription.
+			if !handle.contains_block(&hash) {
+				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+				return
+			}
+
+			let event = match client.block(&BlockId::Hash(hash)) {
+				Ok(Some(signed_block)) => {
+					let extrinsics = signed_block.block.extrinsics();
+					let result = format!("0x{}", HexDisplay::from(&extrinsics.encode()));
+					ChainHeadEvent::Done(ChainHeadResult { result })
+				},
+				Ok(None) => {
+					// The block's body was pruned. This subscription ID has become invalid.
+					handle.stop();
+					ChainHeadEvent::<String>::Disjoint
+				},
+				Err(error) => ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
+			};
+			let _ = sink.send(&event);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -567,12 +559,15 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<Option<String>> {
-		match self.subscriptions.contains(&follow_subscription, &hash) {
-			Err(SubscriptionError::InvalidBlock) =>
-				return Err(ChainHeadRpcError::InvalidBlock.into()),
-			Err(SubscriptionError::InvalidSubId) => return Ok(None),
-			_ => (),
+		let Some(handle) = self.subscriptions.get_subscription(&follow_subscription) else {
+			// Invalid invalid subscription ID.
+			return Ok(None)
 		};
+
+		// Block is not part of the subscription.
+		if !handle.contains_block(&hash) {
+			return Err(ChainHeadRpcError::InvalidBlock.into())
+		}
 
 		self.client
 			.header(BlockId::Hash(hash))
@@ -605,42 +600,46 @@ where
 		let subscriptions = self.subscriptions.clone();
 
 		let fut = async move {
-			let res = match subscriptions.contains(&follow_subscription, &hash) {
-				Err(SubscriptionError::InvalidBlock) => {
-					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-					return
-				},
-				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<Option<String>>::Disjoint,
-				Ok(()) => {
-					if let Some(child_key) = child_key {
-						// The child key is provided, use the key to query the child trie.
-						client
-							.child_storage(&hash, &child_key, &key)
-							.map(|result| {
-								let result = result
-									.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
-								ChainHeadEvent::Done(ChainHeadResult { result })
-							})
-							.unwrap_or_else(|error| {
-								ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-							})
-					} else {
-						client
-							.storage(&hash, &key)
-							.map(|result| {
-								let result = result
-									.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
-								ChainHeadEvent::Done(ChainHeadResult { result })
-							})
-							.unwrap_or_else(|error| {
-								ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
-							})
-					}
-				},
+			let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
+				// Invalid invalid subscription ID.
+				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				return
 			};
 
-			let stream = stream::once(async move { res });
-			sink.pipe_from_stream(stream.boxed()).await;
+			// Block is not part of the subscription.
+			if !handle.contains_block(&hash) {
+				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+				return
+			}
+
+			// The child key is provided, use the key to query the child trie.
+			if let Some(child_key) = child_key {
+				let res = client
+					.child_storage(&hash, &child_key, &key)
+					.map(|result| {
+						let result =
+							result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+						ChainHeadEvent::Done(ChainHeadResult { result })
+					})
+					.unwrap_or_else(|error| {
+						ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
+					});
+				let _ = sink.send(&res);
+				return
+			}
+
+			// Main root trie storage query.
+			let res = client
+				.storage(&hash, &key)
+				.map(|result| {
+					let result =
+						result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+					ChainHeadEvent::Done(ChainHeadResult { result })
+				})
+				.unwrap_or_else(|error| {
+					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
+				});
+			let _ = sink.send(&res);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -662,33 +661,37 @@ where
 		let subscriptions = self.subscriptions.clone();
 
 		let fut = async move {
-			let res = match subscriptions.contains(&follow_subscription, &hash) {
-				// TODO: Reject subscription if runtime_updates is false.
-				Err(SubscriptionError::InvalidBlock) => {
-					let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
-					return
-				},
-				Err(SubscriptionError::InvalidSubId) => ChainHeadEvent::<String>::Disjoint,
-				Ok(()) => {
-					match client.executor().call(
-						&BlockId::Hash(hash),
-						&function,
-						&call_parameters,
-						client.execution_extensions().strategies().other,
-						None,
-					) {
-						Ok(result) => {
-							let result = format!("0x{}", HexDisplay::from(&result));
-							ChainHeadEvent::Done(ChainHeadResult { result })
-						},
-						Err(error) =>
-							ChainHeadEvent::Error(ErrorEvent { error: error.to_string() }),
-					}
-				},
+			let Some(handle) = subscriptions.get_subscription(&follow_subscription) else {
+				// Invalid invalid subscription ID.
+				let _ = sink.send(&ChainHeadEvent::<String>::Disjoint);
+				return
 			};
 
-			let stream = stream::once(async move { res });
-			sink.pipe_from_stream(stream.boxed()).await;
+			// Block is not part of the subscription.
+			if !handle.contains_block(&hash) {
+				let _ = sink.reject(ChainHeadRpcError::InvalidBlock);
+				return
+			}
+
+			// TODO: Reject subscription if runtime_updates is false.
+			let res = client
+				.executor()
+				.call(
+					&BlockId::Hash(hash),
+					&function,
+					&call_parameters,
+					client.execution_extensions().strategies().other,
+					None,
+				)
+				.map(|result| {
+					let result = format!("0x{}", HexDisplay::from(&result));
+					ChainHeadEvent::Done(ChainHeadResult { result })
+				})
+				.unwrap_or_else(|error| {
+					ChainHeadEvent::Error(ErrorEvent { error: error.to_string() })
+				});
+
+			let _ = sink.send(&res);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -700,9 +703,15 @@ where
 		follow_subscription: String,
 		hash: Block::Hash,
 	) -> RpcResult<()> {
-		match self.subscriptions.unpin_block(&follow_subscription, &hash) {
-			Err(SubscriptionError::InvalidBlock) => Err(ChainHeadRpcError::InvalidBlock.into()),
-			_ => Ok(()),
+		let Some(handle) = self.subscriptions.get_subscription(&follow_subscription) else {
+			// Invalid invalid subscription ID.
+			return Ok(())
+		};
+
+		if !handle.unpin_block(&hash) {
+			return Err(ChainHeadRpcError::InvalidBlock.into())
 		}
+
+		Ok(())
 	}
 }
