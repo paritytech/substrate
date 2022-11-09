@@ -1686,6 +1686,7 @@ mod tests {
 			let mut ext = Ext::new(&mut overlay, &mut cache, backend, None);
 
 			ext.storage_append(key.clone(), reference_data[0].encode());
+
 			assert_eq!(ext.storage(key.as_slice()), Some(vec![reference_data[0].clone()].encode()));
 		}
 		overlay.start_transaction();
