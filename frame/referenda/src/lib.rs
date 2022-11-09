@@ -701,6 +701,48 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	/// Return the current approval, support requirements and the current tally
+	pub fn referendum_threshold(ref_index: ReferendumIndex) -> () {
+		let info =
+			if let Some(i) = ReferendumInfoFor::<T, I>::get(ref_index) { i } else { return false };
+		let track = if let Some(t) = Self::track(status.track) { t } else { return false };
+		let elapsed = if let Some(deciding) = status.deciding {
+			frame_system::Pallet::<T>::block_number().saturating_sub(deciding.since)
+		} else {
+			Zero::zero()
+		};
+		let period = track.decision_period;
+		let x = Perbill::from_rational(elapsed.min(period), period);
+		// TODO
+		()
+	}// TODO: referendum_decision_time to expose fn decision_time
+
+	/// Return whether the given referendum is in a passing state or already approved
+	pub fn is_referendum_passing(ref_index: ReferendumIndex) -> bool {
+		let info =
+			if let Some(i) = ReferendumInfoFor::<T, I>::get(ref_index) { i } else { return false };
+		match info {
+			ReferendumInfo::Ongoing(status) => {
+				let track = if let Some(t) = Self::track(status.track) { t } else { return false };
+				let elapsed = if let Some(deciding) = status.deciding {
+					frame_system::Pallet::<T>::block_number().saturating_sub(deciding.since)
+				} else {
+					Zero::zero()
+				};
+				Self::is_passing(
+					&status.tally,
+					elapsed,
+					track.decision_period,
+					&track.min_support,
+					&track.min_approval,
+					status.track,
+				)
+			},
+			ReferendumInfo::Approved(..) => true,
+			_ => false,
+		}
+	}
+
 	// Enqueue a proposal from a referendum which has presumably passed.
 	fn schedule_enactment(
 		index: ReferendumIndex,
