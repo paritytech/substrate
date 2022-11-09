@@ -699,6 +699,16 @@ pub struct Nominations<T: Config> {
 	pub suppressed: bool,
 }
 
+/// An unbounded version of `Nominations`, use for some really wacky hacks.
+#[derive(PartialEqNoBound, EqNoBound, Clone, Encode, Decode, RuntimeDebugNoBound, TypeInfo)]
+#[codec(mel_bound())]
+#[scale_info(skip_type_params(T))]
+struct UnboundedNominations<T: Config> {
+	pub targets: Vec<T::AccountId>,
+	pub submitted_in: EraIndex,
+	pub suppressed: bool,
+}
+
 /// The amount of exposure (to slashing) than an individual nominator has.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {

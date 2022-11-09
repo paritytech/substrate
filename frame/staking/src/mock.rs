@@ -98,6 +98,7 @@ frame_support::construct_runtime!(
 		Session: pallet_session::{Pallet, Call, Storage, Event, Config<T>},
 		Historical: pallet_session::historical::{Pallet, Storage},
 		VoterBagsList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
+		TargetBagsList: pallet_bags_list::<Instance2>::{Pallet, Call, Storage, Event<T>},
 	}
 );
 
@@ -231,8 +232,12 @@ impl OnUnbalanced<NegativeImbalanceOf<Test>> for RewardRemainderMock {
 const THRESHOLDS: [sp_npos_elections::VoteWeight; 9] =
 	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 
+const THRESHOLDS_BALANCE: [sp_npos_elections::ExtendedBalance; 9] =
+	[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
+
 parameter_types! {
 	pub static BagThresholds: &'static [sp_npos_elections::VoteWeight] = &THRESHOLDS;
+	pub static BagThresholdsBalance: &'static [sp_npos_elections::ExtendedBalance] = &THRESHOLDS_BALANCE;
 	pub static MaxNominations: u32 = 16;
 	pub static HistoryDepth: u32 = 80;
 	pub static MaxUnlockingChunks: u32 = 32;
@@ -248,6 +253,18 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Test {
 	type ScoreProvider = Staking;
 	type BagThresholds = BagThresholds;
 	type Score = VoteWeight;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = ();
+	// Target bags-list are always kept up to date, and in fact Staking does not know them at all!
+	// NOTE: This is going to change now as we are planning to keep track of approval stake in a
+	// separate storage in Staking pallet.
+	type ScoreProvider = pallet_bags_list::Pallet<Self, TargetBagsListInstance>;
+	type BagThresholds = BagThresholdsBalance;
+	type Score = Balance;
 }
 
 pub struct OnChainSeqPhragmen;
