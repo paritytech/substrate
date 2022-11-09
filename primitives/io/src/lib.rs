@@ -710,7 +710,7 @@ decl_extension! {
 	/// that `ed25519-dalek` should be used for verification. The extension can be registered
 	/// in the following way:
 	///
-	/// ```rust,nocompile
+	/// ```nocompile
 	/// client.execution_extensions().set_extensions_factory(
 	/// 	// Let the `UseDalekExt` extension being registered for each runtime invocation
 	/// 	// until the execution happens in the context of block `1000`.
