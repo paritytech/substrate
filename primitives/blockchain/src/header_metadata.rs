@@ -21,6 +21,7 @@
 use lru::LruCache;
 use parking_lot::RwLock;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
+use std::num::NonZeroUsize;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -239,14 +240,15 @@ pub struct HeaderMetadataCache<Block: BlockT> {
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
 	/// Creates a new LRU header metadata cache with `capacity`.
-	pub fn new(capacity: usize) -> Self {
+	pub fn new(capacity: NonZeroUsize) -> Self {
 		HeaderMetadataCache { cache: RwLock::new(LruCache::new(capacity)) }
 	}
 }
 
 impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	fn default() -> Self {
-		HeaderMetadataCache { cache: RwLock::new(LruCache::new(LRU_CACHE_SIZE)) }
+		let cap = NonZeroUsize::new(LRU_CACHE_SIZE).expect("cache capacity is not zero");
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(cap)) }
 	}
 }
 

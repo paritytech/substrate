@@ -77,7 +77,7 @@ impl StorageCmd {
 			match (self.params.include_child_trees, self.is_child_key(k.to_vec())) {
 				(true, Some(info)) => {
 					let child_keys =
-						client.child_storage_keys_iter(&best_hash, info.clone(), None, None)?;
+						client.child_storage_keys_iter(best_hash, info.clone(), None, None)?;
 					for ck in child_keys {
 						child_nodes.push((ck.clone(), info.clone()));
 					}
@@ -124,7 +124,7 @@ impl StorageCmd {
 
 			for (key, info) in child_nodes {
 				if let Some(original_v) = client
-					.child_storage(&best_hash, &info.clone(), &key)
+					.child_storage(best_hash, &info.clone(), &key)
 					.expect("Checked above to exist")
 				{
 					let mut new_v = vec![0; original_v.0.len()];
