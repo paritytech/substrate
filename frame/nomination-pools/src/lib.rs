@@ -574,13 +574,8 @@ impl<T: Config> Default for Commission<T> {
 impl<T: Config> Commission<T> {
 	/// Get the current commission percentage of this pool.
 	/// Returns zero if commission has not yet been configured.
-	fn percent(&self) -> Perbill {
+	fn commission_or_zero(&self) -> Perbill {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
-	}
-
-	/// check if the current commission is a non-zero amount
-	fn commission_set(&self) -> bool {
-		self.percent() > Perbill::zero()
 	}
 
 	/// Gets the current commission payee of this pool as a reference.
@@ -606,7 +601,7 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			(*to).saturating_sub(self.percent()) > t.change_rate.max_increase &&
+			(*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase &&
 				self.current.is_some()
 		} else {
 			return false
@@ -686,13 +681,10 @@ impl<T: Config> Commission<T> {
 		&self,
 		pending_rewards: &BalanceOf<T>,
 	) -> (BalanceOf<T>, Option<T::AccountId>) {
-		if self.commission_set() {
-			self.payee().map_or((Zero::zero(), None), |p| {
-				(self.percent() * *pending_rewards, Some(p.clone()))
-			})
-		} else {
-			(Zero::zero(), None)
-		}
+		self.current
+			.as_ref()
+			.map(|(commission, payee)| (*commission * *pending_rewards, Some(payee.clone())))
+			.unwrap_or((Zero::zero(), None))
 	}
 }
 
