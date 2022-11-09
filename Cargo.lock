@@ -5667,6 +5667,7 @@ dependencies = [
 name = "pallet-mmr-rpc"
 version = "3.0.0"
 dependencies = [
+ "anyhow",
  "jsonrpsee",
  "parity-scale-codec",
  "serde",
@@ -9707,6 +9708,7 @@ dependencies = [
  "sp-debug-derive",
  "sp-runtime",
  "sp-std",
+ "thiserror",
 ]
 
 [[package]]
