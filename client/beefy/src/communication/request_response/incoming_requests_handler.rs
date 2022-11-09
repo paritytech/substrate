@@ -153,7 +153,7 @@ where
 			self.client.block_hash(request.payload.begin).map_err(Error::Client)?
 		{
 			self.client
-				.justifications(&hash)
+				.justifications(hash)
 				.map_err(Error::Client)?
 				.and_then(|justifs| justifs.get(BEEFY_ENGINE_ID).cloned())
 				// No BEEFY justification present.

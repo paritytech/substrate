@@ -17,15 +17,14 @@
 
 //! Types used in the Fast Unstake pallet.
 
-use crate::Config;
+use crate::{Config, MaxChecking};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
-	traits::{Currency, Get},
-	BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
+	traits::Currency, BoundedVec, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use scale_info::TypeInfo;
 use sp_staking::EraIndex;
-use sp_std::{fmt::Debug, prelude::*};
+use sp_std::prelude::*;
 
 pub type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
@@ -33,15 +32,10 @@ pub type BalanceOf<T> =
 #[derive(
 	Encode, Decode, EqNoBound, PartialEqNoBound, Clone, TypeInfo, RuntimeDebugNoBound, MaxEncodedLen,
 )]
-pub struct UnstakeRequest<
-	AccountId: Eq + PartialEq + Debug,
-	MaxChecked: Get<u32>,
-	Balance: PartialEq + Debug,
-> {
-	/// Their stash account.
-	pub(crate) stash: AccountId,
+#[scale_info(skip_type_params(T))]
+pub struct UnstakeRequest<T: Config> {
+	/// This list of stashes being processed in this request, and their corresponding deposit.
+	pub(crate) stashes: BoundedVec<(T::AccountId, BalanceOf<T>), T::BatchSize>,
 	/// The list of eras for which they have been checked.
-	pub(crate) checked: BoundedVec<EraIndex, MaxChecked>,
-	/// Deposit to be slashed if the unstake was unsuccessful.
-	pub(crate) deposit: Balance,
+	pub(crate) checked: BoundedVec<EraIndex, MaxChecking<T>>,
 }

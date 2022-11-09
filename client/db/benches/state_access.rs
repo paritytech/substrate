@@ -66,7 +66,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 	for i in 0..10 {
 		let mut op = db.begin_operation().unwrap();
 
-		db.begin_state_operation(&mut op, &parent_hash).unwrap();
+		db.begin_state_operation(&mut op, parent_hash).unwrap();
 
 		let mut header = Header {
 			number,
@@ -83,7 +83,7 @@ fn insert_blocks(db: &Backend<Block>, storage: Vec<(Vec<u8>, Vec<u8>)>) -> H256 
 			.map(|(k, v)| (k.clone(), Some(v.clone())))
 			.collect::<Vec<_>>();
 
-		let (state_root, tx) = db.state_at(&parent_hash).unwrap().storage_root(
+		let (state_root, tx) = db.state_at(parent_hash).unwrap().storage_root(
 			changes.iter().map(|(k, v)| (k.as_slice(), v.as_deref())),
 			StateVersion::V1,
 		);
@@ -175,7 +175,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 		group.bench_function(desc, |b| {
 			b.iter_batched(
-				|| backend.state_at(&block_hash).expect("Creates state"),
+				|| backend.state_at(block_hash).expect("Creates state"),
 				|state| {
 					for key in keys.iter().cycle().take(keys.len() * multiplier) {
 						let _ = state.storage(&key).expect("Doesn't fail").unwrap();
@@ -213,7 +213,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 		group.bench_function(desc, |b| {
 			b.iter_batched(
-				|| backend.state_at(&block_hash).expect("Creates state"),
+				|| backend.state_at(block_hash).expect("Creates state"),
 				|state| {
 					for key in keys.iter().take(1).cycle().take(multiplier) {
 						let _ = state.storage(&key).expect("Doesn't fail").unwrap();
@@ -251,7 +251,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 		group.bench_function(desc, |b| {
 			b.iter_batched(
-				|| backend.state_at(&block_hash).expect("Creates state"),
+				|| backend.state_at(block_hash).expect("Creates state"),
 				|state| {
 					for key in keys.iter().take(1).cycle().take(multiplier) {
 						let _ = state.storage_hash(&key).expect("Doesn't fail").unwrap();
@@ -289,7 +289,7 @@ fn state_access_benchmarks(c: &mut Criterion) {
 
 		group.bench_function(desc, |b| {
 			b.iter_batched(
-				|| backend.state_at(&block_hash).expect("Creates state"),
+				|| backend.state_at(block_hash).expect("Creates state"),
 				|state| {
 					let _ = state
 						.storage_hash(sp_core::storage::well_known_keys::CODE)

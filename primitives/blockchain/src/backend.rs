@@ -89,9 +89,9 @@ pub trait Backend<Block: BlockT>:
 	HeaderBackend<Block> + HeaderMetadata<Block, Error = Error>
 {
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, hash: &Block::Hash) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	fn body(&self, hash: Block::Hash) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justifications. Returns `None` if no justification exists.
-	fn justifications(&self, hash: &Block::Hash) -> Result<Option<Justifications>>;
+	fn justifications(&self, hash: Block::Hash) -> Result<Option<Justifications>>;
 	/// Get last finalized block hash.
 	fn last_finalized(&self) -> Result<Block::Hash>;
 
@@ -231,14 +231,14 @@ pub trait Backend<Block: BlockT>:
 
 	/// Get single indexed transaction by content hash. Note that this will only fetch transactions
 	/// that are indexed by the runtime with `storage_index_transaction`.
-	fn indexed_transaction(&self, hash: &Block::Hash) -> Result<Option<Vec<u8>>>;
+	fn indexed_transaction(&self, hash: Block::Hash) -> Result<Option<Vec<u8>>>;
 
 	/// Check if indexed transaction exists.
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> Result<bool> {
+	fn has_indexed_transaction(&self, hash: Block::Hash) -> Result<bool> {
 		Ok(self.indexed_transaction(hash)?.is_some())
 	}
 
-	fn block_indexed_body(&self, hash: &Block::Hash) -> Result<Option<Vec<Vec<u8>>>>;
+	fn block_indexed_body(&self, hash: Block::Hash) -> Result<Option<Vec<Vec<u8>>>>;
 }
 
 /// Blockchain info

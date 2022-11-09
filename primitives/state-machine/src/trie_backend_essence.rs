@@ -177,7 +177,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 		) -> R,
 	) -> R {
 		let storage_root = storage_root.unwrap_or_else(|| self.root);
-		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
+		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
 		let recorder = match recorder.as_mut() {
 			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
 			None => None,
@@ -209,16 +209,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 	/// This function must only be used when the operation in `callback` is
 	/// calculating a `storage_root`. It is expected that `callback` returns
 	/// the new storage root. This is required to register the changes in the cache
-	/// for the correct storage root.
+	/// for the correct storage root. The given `storage_root` corresponds to the root of the "old"
+	/// trie. If the value is not given, `self.root` is used.
 	#[cfg(feature = "std")]
 	fn with_recorder_and_cache_for_storage_root<R>(
 		&self,
+		storage_root: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
 		) -> (Option<H::Out>, R),
 	) -> R {
-		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder());
+		let storage_root = storage_root.unwrap_or_else(|| self.root);
+		let mut recorder = self.recorder.as_ref().map(|r| r.as_trie_recorder(storage_root));
 		let recorder = match recorder.as_mut() {
 			Some(recorder) => Some(recorder as &mut dyn TrieRecorder<H::Out>),
 			None => None,
@@ -244,6 +247,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H>> TrieBackendEss
 	#[cfg(not(feature = "std"))]
 	fn with_recorder_and_cache_for_storage_root<R>(
 		&self,
+		_: Option<H::Out>,
 		callback: impl FnOnce(
 			Option<&mut dyn TrieRecorder<H::Out>>,
 			Option<&mut dyn TrieCache<NodeCodec<H>>>,
@@ -675,7 +679,7 @@ where
 	) -> (H::Out, S::Overlay) {
 		let mut write_overlay = S::Overlay::default();
 
-		let root = self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
+		let root = self.with_recorder_and_cache_for_storage_root(None, |recorder, cache| {
 			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 			let res = match state_version {
 				StateVersion::V0 => delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _>(
@@ -719,35 +723,36 @@ where
 			},
 		};
 
-		let new_child_root = self.with_recorder_and_cache_for_storage_root(|recorder, cache| {
-			let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
-			match match state_version {
-				StateVersion::V0 =>
-					child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
-						child_info.keyspace(),
-						&mut eph,
-						child_root,
-						delta,
-						recorder,
-						cache,
-					),
-				StateVersion::V1 =>
-					child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
-						child_info.keyspace(),
-						&mut eph,
-						child_root,
-						delta,
-						recorder,
-						cache,
-					),
-			} {
-				Ok(ret) => (Some(ret), ret),
-				Err(e) => {
-					warn!(target: "trie", "Failed to write to trie: {}", e);
-					(None, child_root)
-				},
-			}
-		});
+		let new_child_root =
+			self.with_recorder_and_cache_for_storage_root(Some(child_root), |recorder, cache| {
+				let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
+				match match state_version {
+					StateVersion::V0 =>
+						child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
+							child_info.keyspace(),
+							&mut eph,
+							child_root,
+							delta,
+							recorder,
+							cache,
+						),
+					StateVersion::V1 =>
+						child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
+							child_info.keyspace(),
+							&mut eph,
+							child_root,
+							delta,
+							recorder,
+							cache,
+						),
+				} {
+					Ok(ret) => (Some(ret), ret),
+					Err(e) => {
+						warn!(target: "trie", "Failed to write to trie: {}", e);
+						(None, child_root)
+					},
+				}
+			});
 
 		let is_default = new_child_root == default_root;
 
