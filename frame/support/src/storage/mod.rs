@@ -47,6 +47,7 @@ pub mod generator;
 pub mod hashed;
 pub mod migration;
 pub mod storage_noop_guard;
+pub mod stream_iter;
 pub mod transactional;
 pub mod types;
 pub mod unhashed;
