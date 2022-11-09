@@ -1904,16 +1904,12 @@ fn use_dalek_ext_works() {
 	block_on(client.import(BlockOrigin::NetworkInitialSync, a1.clone())).unwrap();
 
 	// On block zero it will use dalek and then on block 1 it will use zebra
-	assert!(!client.runtime_api().verify_ed25519(
-		&BlockId::Number(0),
-		zero_ed_sig(),
-		zero_ed_pub(),
-		vec![]
-	).unwrap());
-	assert!(client.runtime_api().verify_ed25519(
-		&BlockId::Number(1),
-		zero_ed_sig(),
-		zero_ed_pub(),
-		vec![]
-	).unwrap());
+	assert!(!client
+		.runtime_api()
+		.verify_ed25519(&BlockId::Number(0), zero_ed_sig(), zero_ed_pub(), vec![])
+		.unwrap());
+	assert!(client
+		.runtime_api()
+		.verify_ed25519(&BlockId::Number(1), zero_ed_sig(), zero_ed_pub(), vec![])
+		.unwrap());
 }

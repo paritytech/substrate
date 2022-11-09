@@ -29,7 +29,6 @@
 	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
 )]
 
-use sp_externalities::decl_extension;
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -700,7 +699,7 @@ pub trait Misc {
 }
 
 #[cfg(feature = "std")]
-decl_extension! {
+sp_externalities::decl_extension! {
 	/// Extension to signal to [`crypt::ed25519_verify`] to use the dalek crate.
 	///
 	/// The switch from `ed25519-dalek` to `ed25519-zebra` was a breaking change.

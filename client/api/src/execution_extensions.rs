@@ -29,7 +29,7 @@ use sp_core::{
 	offchain::{self, OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	ExecutionContext,
 };
-use sp_externalities::{Extensions, Extension};
+use sp_externalities::{Extension, Extensions};
 use sp_keystore::{KeystoreExt, SyncCryptoStorePtr};
 use sp_runtime::{
 	generic::BlockId,
@@ -121,10 +121,7 @@ impl<Block: BlockT, Ext> ExtensionBeforeBlock<Block, Ext> {
 	///
 	/// - `before`: The block number until the extension should be registered.
 	pub fn new(before: NumberFor<Block>) -> Self {
-		Self {
-			before,
-			_marker: PhantomData,
-		}
+		Self { before, _marker: PhantomData }
 	}
 }
 
