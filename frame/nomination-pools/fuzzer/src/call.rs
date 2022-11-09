@@ -142,9 +142,9 @@ fn random_call<R: Rng>(mut rng: &mut R) -> (pools::Call<T>, RuntimeOrigin) {
 			let (origin, who) = random_signed_origin(&mut rng);
 			let amount = random_ed_multiple(&mut rng);
 			fund_account(&mut rng, &who);
-			let root = who.clone();
-			let state_toggler = who.clone();
-			let nominator = who.clone();
+			let root = who;
+			let state_toggler = who;
+			let nominator = who;
 			(PoolsCall::<T>::create { amount, root, state_toggler, nominator }, origin)
 		},
 		7 => {

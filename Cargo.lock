@@ -2908,7 +2908,7 @@ checksum = "848e9c511092e0daa0a35a63e8e6e475a3e8f870741448b9f6028d69b142f18e"
 dependencies = [
  "arbitrary",
  "lazy_static",
- "memmap2 0.5.0",
+ "memmap2",
  "rustc_version 0.4.0",
 ]
 
