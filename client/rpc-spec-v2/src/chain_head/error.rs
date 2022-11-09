@@ -31,10 +31,10 @@ pub enum Error {
 	#[error("Invalid block hash")]
 	InvalidBlock,
 	/// Fetch block header error.
-	#[error("Could not fetch block header {0}")]
+	#[error("Could not fetch block header: {0}")]
 	FetchBlockHeader(BlockchainError),
 	/// Invalid parameter provided to the RPC method.
-	#[error("Invalid parameter {0}")]
+	#[error("Invalid parameter: {0}")]
 	InvalidParam(String),
 }
 
