@@ -502,11 +502,6 @@ pub mod pallet {
 		/// The dispatch origin of this call must be root.
 		///
 		/// Note that this does not affect the designated block number of the next election.
-		///
-		/// # <weight>
-		/// If we have a replacement, we use a small weight. Else, since this is a root call and
-		/// will go into the `NposSolver` election, we assume full block for now.
-		/// # </weight>
 		#[pallet::weight(if *rerun_election {
 			T::WeightInfo::remove_member_without_replacement()
 		} else {
@@ -1168,7 +1163,7 @@ impl<T: Config> ContainsLengthBound for Pallet<T> {
 mod tests {
 	use super::*;
 	use crate as elections;
-	use frame_election_provider_support::SequentialPhragmen;
+	use frame_election_provider_support::{weights::SubstrateWeight, SequentialPhragmen};
 	use frame_support::{
 		assert_noop, assert_ok,
 		dispatch::DispatchResultWithPostInfo,
@@ -1310,18 +1305,7 @@ mod tests {
 		type MaxVoters = MaxVoters;
 		type MaxCandidates = MaxCandidates;
 		type ElectionSolver = SequentialPhragmen<Self::AccountId, Perbill>;
-		type SolverWeightInfo = NposWeightInfo;
-	}
-
-	pub struct NposWeightInfo;
-	impl frame_election_provider_support::WeightInfo for NposWeightInfo {
-		fn phragmen(_v: u32, _t: u32, _d: u32) -> Weight {
-			Weight::zero()
-		}
-
-		fn phragmms(_v: u32, _t: u32, _d: u32) -> Weight {
-			Weight::zero()
-		}
+		type SolverWeightInfo = SubstrateWeight<Test>;
 	}
 
 	pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
@@ -3239,6 +3223,25 @@ mod tests {
 			));
 
 			assert_ok!(Elections::clean_defunct_voters(RuntimeOrigin::root(), 4, 2));
+		})
+	}
+
+	#[test]
+	fn verify_weights() {
+		ExtBuilder::default().build_and_execute(|| {
+			assert_eq!(Elections::on_initialize(System::block_number()), Weight::zero());
+
+			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
+			assert_ok!(submit_candidacy(RuntimeOrigin::signed(5)));
+			assert_ok!(vote(RuntimeOrigin::signed(4), vec![4], 40));
+			assert_ok!(vote(RuntimeOrigin::signed(5), vec![5], 50));
+
+			System::set_block_number(5);
+
+			let election_weight = Elections::on_initialize(System::block_number());
+			let expected_weight: Weight = <() as WeightInfo>::election_phragmen(2, 2, 2);
+
+			assert_eq!(expected_weight, election_weight);
 		})
 	}
 }
