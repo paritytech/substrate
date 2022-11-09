@@ -453,7 +453,7 @@ where
 	) -> SubscriptionResult {
 		let sub_id = self.accept_subscription(&mut sink)?;
 		// Keep track of the subscription.
-		let Ok(rx_stop) = self.subscriptions.insert_subscription(sub_id.clone()) else {
+		let Some((rx_stop, _sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone()) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
 			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);

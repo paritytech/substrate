@@ -21,7 +21,10 @@
 use futures::channel::oneshot;
 use parking_lot::RwLock;
 use sp_runtime::traits::Block as BlockT;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::{
+	collections::{hash_map::Entry, HashMap, HashSet},
+	sync::Arc,
+};
 
 #[derive(Debug)]
 /// The subscription management error.
@@ -35,15 +38,69 @@ pub enum SubscriptionError {
 /// Inner subscription data structure.
 struct SubscriptionInner<Block: BlockT> {
 	/// Signals the "Stop" event.
-	pub tx_stop: Option<oneshot::Sender<()>>,
+	tx_stop: Option<oneshot::Sender<()>>,
 	/// The blocks pinned.
-	pub blocks: HashSet<Block::Hash>,
+	blocks: HashSet<Block::Hash>,
 }
 
-impl<Block: BlockT> SubscriptionInner<Block> {
-	/// Construct a new [`SubscriptionInner`].
+/// Manage the blocks of a specific subscription ID.
+#[derive(Clone)]
+pub struct SubscriptionHandle<Block: BlockT> {
+	inner: Arc<RwLock<SubscriptionInner<Block>>>,
+}
+
+impl<Block: BlockT> SubscriptionHandle<Block> {
+	/// Construct a new [`SubscriptionHandle`].
 	fn new(tx_stop: oneshot::Sender<()>) -> Self {
-		SubscriptionInner { tx_stop: Some(tx_stop), blocks: HashSet::new() }
+		SubscriptionHandle {
+			inner: Arc::new(RwLock::new(SubscriptionInner {
+				tx_stop: Some(tx_stop),
+				blocks: HashSet::new(),
+			})),
+		}
+	}
+
+	/// Trigger the stop event for the current subscription.
+	///
+	/// This can happen on internal failure (ie, the pruning deleted the block from memory)
+	/// or if the user exceeded the amount of available pinned blocks.
+	///
+	/// # Note
+	///
+	/// The stop event must be generated only once and this method does nothing when called multiple
+	/// times.
+	pub fn stop(&self) {
+		let mut inner = self.inner.write();
+
+		if let Some(tx_stop) = inner.tx_stop.take() {
+			let _ = tx_stop.send(());
+		}
+	}
+
+	/// Pin a new block for the current subscription ID.
+	///
+	/// Returns whether the value was newly inserted. That is:
+	/// - If the set did not previously contain this value, `true` is returned.
+	/// - If the set already contained this value, `false` is returned.
+	pub fn pin_block(&self, hash: Block::Hash) -> bool {
+		let mut inner = self.inner.write();
+		inner.blocks.insert(hash)
+	}
+
+	/// Unpin a new block for the current subscription ID.
+	///
+	/// Returns whether the value was present in the set.
+	pub fn unpin_block(&self, hash: &Block::Hash) -> bool {
+		let mut inner = self.inner.write();
+		inner.blocks.remove(hash)
+	}
+
+	/// Check if the block hash is present for the provided subscription ID.
+	///
+	/// Returns `true` if the set contains the block.
+	pub fn contains_block(&self, hash: &Block::Hash) -> bool {
+		let inner = self.inner.read();
+		inner.blocks.contains(hash)
 	}
 }
 
@@ -51,7 +108,7 @@ impl<Block: BlockT> SubscriptionInner<Block> {
 pub struct SubscriptionManagement<Block: BlockT> {
 	/// Manage subscription by mapping the subscription ID
 	/// to a set of block hashes.
-	inner: RwLock<HashMap<String, SubscriptionInner<Block>>>,
+	inner: RwLock<HashMap<String, SubscriptionHandle<Block>>>,
 }
 
 impl<Block: BlockT> SubscriptionManagement<Block> {
@@ -62,21 +119,22 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 
 	/// Insert a new subscription ID.
 	///
-	/// Returns the receiver that is triggered when the "Stop" event should be generated.
-	/// Returns error if the subscription ID was inserted multiple times.
+	/// If the subscription was not previously inserted, the method returns a tuple of
+	/// the receiver that is triggered upon the "Stop" event and the subscription
+	/// handle. Otherwise, when the subscription ID was already inserted returns none.
 	pub fn insert_subscription(
 		&self,
 		subscription_id: String,
-	) -> Result<oneshot::Receiver<()>, SubscriptionError> {
+	) -> Option<(oneshot::Receiver<()>, SubscriptionHandle<Block>)> {
 		let mut subs = self.inner.write();
 
-		let (tx_stop, rx_stop) = oneshot::channel();
-
 		if let Entry::Vacant(entry) = subs.entry(subscription_id) {
-			entry.insert(SubscriptionInner::new(tx_stop));
-			Ok(rx_stop)
+			let (tx_stop, rx_stop) = oneshot::channel();
+			let handle = SubscriptionHandle::<Block>::new(tx_stop);
+			entry.insert(handle.clone());
+			Some((rx_stop, handle))
 		} else {
-			Err(SubscriptionError::InvalidSubId)
+			None
 		}
 	}
 
@@ -84,6 +142,12 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 	pub fn remove_subscription(&self, subscription_id: &String) {
 		let mut subs = self.inner.write();
 		subs.remove(subscription_id);
+	}
+
+	/// Obtain the specific subscription handle.
+	pub fn get_subscription(&self, subscription_id: &String) -> Option<SubscriptionHandle<Block>> {
+		let subs = self.inner.write();
+		subs.get(subscription_id).map(|handle| Some(handle.clone())).flatten()
 	}
 
 	/// Pin a new block for the given subscription ID.
@@ -103,8 +167,9 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		let mut subs = self.inner.write();
 
 		match subs.get_mut(subscription_id) {
-			Some(inner) => {
-				inner.blocks.insert(hash);
+			Some(handle) => {
+				let mut sub_handle = handle.inner.write();
+				sub_handle.blocks.insert(hash);
 				Ok(())
 			},
 			None => Err(SubscriptionError::InvalidSubId),
@@ -122,12 +187,14 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		let mut subs = self.inner.write();
 
 		match subs.get_mut(subscription_id) {
-			Some(inner) =>
-				if !inner.blocks.remove(hash) {
+			Some(handle) => {
+				let mut sub_handle = handle.inner.write();
+				if !sub_handle.blocks.remove(hash) {
 					Err(SubscriptionError::InvalidBlock)
 				} else {
 					Ok(())
-				},
+				}
+			},
 			None => Err(SubscriptionError::InvalidSubId),
 		}
 	}
@@ -143,13 +210,15 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		let subs = self.inner.read();
 
 		match subs.get(subscription_id) {
-			Some(inner) =>
-				if inner.blocks.contains(hash) {
+			Some(handle) => {
+				let sub_handle = handle.inner.read();
+				if sub_handle.blocks.contains(hash) {
 					Ok(())
 				} else {
-					return Err(SubscriptionError::InvalidBlock)
-				},
-			None => return Err(SubscriptionError::InvalidSubId),
+					Err(SubscriptionError::InvalidBlock)
+				}
+			},
+			None => Err(SubscriptionError::InvalidSubId),
 		}
 	}
 
@@ -161,13 +230,14 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		let mut subs = self.inner.write();
 
 		match subs.get_mut(subscription_id) {
-			Some(inner) => {
-				if let Some(tx_stop) = inner.tx_stop.take() {
+			Some(handle) => {
+				let mut sub_handle = handle.inner.write();
+				if let Some(tx_stop) = sub_handle.tx_stop.take() {
 					let _ = tx_stop.send(());
 				}
 				Ok(())
 			},
-			None => return Err(SubscriptionError::InvalidSubId),
+			None => Err(SubscriptionError::InvalidSubId),
 		}
 	}
 }
@@ -247,15 +317,15 @@ mod tests {
 		let id = "abc".to_string();
 
 		// Check with subscription.
-		let mut rx_stop = subs.insert_subscription(id.clone()).unwrap();
+		let (mut rx_stop, _sub_handle) = subs.insert_subscription(id.clone()).unwrap();
 
 		// Check the stop signal was not received.
 		let res = rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
-		// Inserting a second time will error.
+		// Inserting a second time returns None.
 		let res = subs.insert_subscription(id.clone());
-		assert!(matches!(res, Err(SubscriptionError::InvalidSubId)));
+		assert!(res.is_none());
 
 		// Stop must be successful.
 		subs.stop(&id).unwrap();
