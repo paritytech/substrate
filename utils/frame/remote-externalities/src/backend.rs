@@ -1,72 +1,94 @@
-// This file is part of Substrate.
-
-// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-//! State machine backends. These manage the code and storage of contracts.
-
-#[cfg(feature = "std")]
-use crate::trie_backend::TrieBackend;
-use crate::{
-	trie_backend_essence::TrieBackendStorage, ChildStorageCollection, StorageCollection,
-	StorageKey, StorageValue, UsageInfo,
+use codec::{Decode, Encode};
+use sp_core::{storage, storage::ChildInfo};
+use sp_runtime::DeserializeOwned;
+use sp_state_machine::{
+	backend::Hasher, Backend, ChildStorageCollection, InMemoryBackend, StateMachineStats,
+	StorageCollection, StorageKey, StorageValue, UsageInfo,
 };
-use codec::Encode;
-pub use hash_db::Hasher;
-use sp_core::storage::{ChildInfo, StateVersion, TrackedStorageKey};
-#[cfg(feature = "std")]
-use sp_core::traits::RuntimeCode;
-use sp_std::vec::Vec;
+use sp_storage::{StateVersion, TrackedStorageKey};
+use std::marker::PhantomData;
 
-/// A state backend is used to read state data and can have changes committed
-/// to it.
-///
-/// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
+pub struct RemoteExternalitiesBackend<H: Hasher> {
+	inner_backend: InMemoryBackend<H>,
+	rpc: substrate_rpc_client::WsClient,
+	runtime: tokio::runtime::Runtime,
+	at: Option<H>,
+	_marker: PhantomData<H>,
+}
+
+impl<H: Hasher> std::fmt::Debug for RemoteExternalitiesBackend<H> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "RemoteExternalitiesBackend")
+	}
+}
+
+pub trait HasherT: Hasher + Clone + serde::ser::Serialize + DeserializeOwned + 'static {}
+impl<T: Hasher + Clone + serde::ser::Serialize + DeserializeOwned + 'static> HasherT for T {}
+
+impl<H: HasherT>
+	RemoteExternalitiesBackend<H>
+{
+	fn storage_remote(
+		&self,
+		key: &[u8],
+	) -> Result<Option<StorageValue>, sp_state_machine::DefaultError> {
+		self.runtime
+			.block_on(substrate_rpc_client::StateApi::<H>::storage(
+				&self.rpc,
+				sp_core::storage::StorageKey(key.to_vec()),
+				self.at.clone(),
+			))
+			.map(|r| r.map(|x| x.0))
+			.map_err(|e| format!("{:?}", e))
+	}
+}
+
+impl<H: HasherT> Backend<H> for RemoteExternalitiesBackend<H>
+where
+	<H as Hasher>::Out: Ord + Decode + Encode,
+{
 	/// An error type when fetching data is not possible.
-	type Error: super::Error;
+	type Error = <InMemoryBackend<H> as Backend<H>>::Error;
 
 	/// Storage changes to be applied if committing
-	type Transaction: Consolidate + Default + Send;
+	type Transaction = <InMemoryBackend<H> as Backend<H>>::Transaction;
 
 	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H, Overlay = Self::Transaction>;
+	type TrieBackendStorage = <InMemoryBackend<H> as Backend<H>>::TrieBackendStorage;
 
 	/// Get keyed storage or None if there is nothing associated.
-	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error>;
+	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
+		self.inner_backend
+			.storage(key)
+			.map(|opt| opt.or_else(|| self.storage_remote(key).unwrap()))
+	}
 
 	/// Get keyed storage value hash or None if there is nothing associated.
-	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error>;
+	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
+		todo!("check inner_backend, else call remote");
+	}
 
 	/// Get keyed child storage or None if there is nothing associated.
 	fn child_storage(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<StorageValue>, Self::Error>;
+	) -> Result<Option<StorageValue>, Self::Error> {
+		todo!("check inner_backend, else call remote");
+	}
 
 	/// Get child keyed storage value hash or None if there is nothing associated.
 	fn child_storage_hash(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<H::Out>, Self::Error>;
+	) -> Result<Option<H::Out>, Self::Error> {
+		todo!("check inner_backend, else call remote");
+	}
 
 	/// true if a key exists in storage.
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
-		Ok(self.storage_hash(key)?.is_some())
+		todo!("check local, else check remote")
 	}
 
 	/// true if a key exists in child storage.
@@ -79,20 +101,23 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 
 	/// Return the next key in storage in lexicographic order or `None` if there is no value.
-	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error>;
+	fn next_storage_key(&self, key: &[u8]) -> Result<Option<StorageKey>, Self::Error> {
+		todo!("check local, else check remote")
+	}
 
 	/// Return the next key in child storage in lexicographic order or `None` if there is no value.
 	fn next_child_storage_key(
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<StorageKey>, Self::Error>;
+	) -> Result<Option<StorageKey>, Self::Error> {
+		todo!("check local, else check remote")
+	}
 
-	/// Iterate over storage starting at key, for a given prefix and child trie.
-	/// Aborts as soon as `f` returns false.
-	/// Warning, this fails at first error when usual iteration skips errors.
-	/// If `allow_missing` is true, iteration stops when it reaches a missing trie node.
-	/// Otherwise an error is produced.
+	/// Iterate over storage starting at key, for a given prefix and child trie. Aborts as soon as
+	/// `f` returns false. Warning, this fails at first error when usual iteration skips errors. If
+	/// `allow_missing` is true, iteration stops when it reaches a missing trie node. Otherwise an
+	/// error is produced.
 	///
 	/// Returns `true` if trie end is reached.
 	fn apply_to_key_values_while<F: FnMut(Vec<u8>, Vec<u8>) -> bool>(
@@ -102,7 +127,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		start_at: Option<&[u8]>,
 		f: F,
 		allow_missing: bool,
-	) -> Result<bool, Self::Error>;
+	) -> Result<bool, Self::Error> {
+		unimplemented!()
+	}
 
 	/// Retrieve all entries keys of storage and call `f` for each of those keys.
 	/// Aborts as soon as `f` returns false.
@@ -112,7 +139,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		prefix: Option<&[u8]>,
 		start_at: Option<&[u8]>,
 		f: F,
-	);
+	) {
+		unimplemented!()
+	}
 
 	/// Retrieve all entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -122,7 +151,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 
 	/// Retrieve all entries keys and values of which start with the given prefix and
 	/// call `f` for each of those keys.
-	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F);
+	fn for_key_values_with_prefix<F: FnMut(&[u8], &[u8])>(&self, prefix: &[u8], f: F) {
+		unimplemented!()
+	}
 
 	/// Retrieve all child entries keys which start with the given prefix and
 	/// call `f` for each of those keys.
@@ -131,10 +162,13 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		child_info: &ChildInfo,
 		prefix: &[u8],
 		f: F,
-	);
+	) {
+		unimplemented!()
+	}
 
-	/// Calculate the storage root, with given delta over what is already stored in
-	/// the backend, and produce a "transaction" that can be used to commit.
+	/// Calculate the storage root, with given delta over what is already stored in the backend, and
+	/// produce a "transaction" that can be used to commit.
+	///
 	/// Does not include child storage updates.
 	fn storage_root<'a>(
 		&self,
@@ -142,11 +176,15 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		state_version: StateVersion,
 	) -> (H::Out, Self::Transaction)
 	where
-		H::Out: Ord;
+		H::Out: Ord,
+	{
+		todo!();
+	}
 
-	/// Calculate the child storage root, with given delta over what is already stored in
-	/// the backend, and produce a "transaction" that can be used to commit. The second argument
-	/// is true if child storage root equals default storage root.
+	/// Calculate the child storage root, with given delta over what is already stored in the
+	/// backend, and produce a "transaction" that can be used to commit.
+	///
+	/// The second argument is true if child storage root equals default storage root.
 	fn child_storage_root<'a>(
 		&self,
 		child_info: &ChildInfo,
@@ -154,10 +192,15 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 		state_version: StateVersion,
 	) -> (H::Out, bool, Self::Transaction)
 	where
-		H::Out: Ord;
+		H::Out: Ord,
+	{
+		todo!();
+	}
 
 	/// Get all key/value pairs into a Vec.
-	fn pairs(&self) -> Vec<(StorageKey, StorageValue)>;
+	fn pairs(&self) -> Vec<(StorageKey, StorageValue)> {
+		todo!("oh boy");
+	}
 
 	/// Get all keys with given prefix
 	fn keys(&self, prefix: &[u8]) -> Vec<StorageKey> {
@@ -214,13 +257,17 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	/// Register stats from overlay of state machine.
 	///
 	/// By default nothing is registered.
-	fn register_overlay_stats(&self, _stats: &crate::stats::StateMachineStats);
+	fn register_overlay_stats(&self, _stats: &StateMachineStats) {
+		todo!();
+	}
 
 	/// Query backend usage statistics (i/o, memory)
 	///
-	/// Not all implementations are expected to be able to do this. In the
-	/// case when they don't, empty statistics is returned.
-	fn usage_info(&self) -> UsageInfo;
+	/// Not all implementations are expected to be able to do this. In the case when they don't,
+	/// empty statistics is returned.
+	fn usage_info(&self) -> UsageInfo {
+		unimplemented!()
+	}
 
 	/// Wipe the state database.
 	fn wipe(&self) -> Result<(), Self::Error> {
@@ -267,90 +314,9 @@ pub trait Backend<H: Hasher>: sp_std::fmt::Debug {
 	}
 }
 
-/// Something that can be converted into a [`TrieBackend`].
-#[cfg(feature = "std")]
-pub trait AsTrieBackend<H: Hasher, C = sp_trie::cache::LocalTrieCache<H>> {
-	/// Type of trie backend storage.
-	type TrieBackendStorage: TrieBackendStorage<H>;
+#[cfg(test)]
+mod tests {
+	use super::*;
 
-	/// Return the type as [`TrieBackend`].
-	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H, C>;
-}
 
-/// Trait that allows consolidate two transactions together.
-pub trait Consolidate {
-	/// Consolidate two transactions into one.
-	fn consolidate(&mut self, other: Self);
-}
-
-impl Consolidate for () {
-	fn consolidate(&mut self, _: Self) {
-		()
-	}
-}
-
-impl Consolidate for Vec<(Option<ChildInfo>, StorageCollection)> {
-	fn consolidate(&mut self, mut other: Self) {
-		self.append(&mut other);
-	}
-}
-
-impl<H, KF> Consolidate for sp_trie::GenericMemoryDB<H, KF>
-where
-	H: Hasher,
-	KF: sp_trie::KeyFunction<H>,
-{
-	fn consolidate(&mut self, other: Self) {
-		sp_trie::GenericMemoryDB::consolidate(self, other)
-	}
-}
-
-/// Wrapper to create a [`RuntimeCode`] from a type that implements [`Backend`].
-#[cfg(feature = "std")]
-pub struct BackendRuntimeCode<'a, B, H> {
-	backend: &'a B,
-	_marker: std::marker::PhantomData<H>,
-}
-
-#[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> sp_core::traits::FetchRuntimeCode
-	for BackendRuntimeCode<'a, B, H>
-{
-	fn fetch_runtime_code(&self) -> Option<std::borrow::Cow<[u8]>> {
-		self.backend
-			.storage(sp_core::storage::well_known_keys::CODE)
-			.ok()
-			.flatten()
-			.map(Into::into)
-	}
-}
-
-#[cfg(feature = "std")]
-impl<'a, B: Backend<H>, H: Hasher> BackendRuntimeCode<'a, B, H>
-where
-	H::Out: Encode,
-{
-	/// Create a new instance.
-	pub fn new(backend: &'a B) -> Self {
-		Self { backend, _marker: std::marker::PhantomData }
-	}
-
-	/// Return the [`RuntimeCode`] build from the wrapped `backend`.
-	pub fn runtime_code(&self) -> Result<RuntimeCode, &'static str> {
-		let hash = self
-			.backend
-			.storage_hash(sp_core::storage::well_known_keys::CODE)
-			.ok()
-			.flatten()
-			.ok_or("`:code` hash not found")?
-			.encode();
-		let heap_pages = self
-			.backend
-			.storage(sp_core::storage::well_known_keys::HEAP_PAGES)
-			.ok()
-			.flatten()
-			.and_then(|d| codec::Decode::decode(&mut &d[..]).ok());
-
-		Ok(RuntimeCode { code_fetcher: self, hash, heap_pages })
-	}
 }

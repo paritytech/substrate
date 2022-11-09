@@ -38,6 +38,7 @@
 //! ```
 
 use async_trait::async_trait;
+use log::{trace, error};
 use serde::de::DeserializeOwned;
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 use std::collections::VecDeque;

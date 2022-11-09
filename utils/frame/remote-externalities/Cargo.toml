@@ -18,13 +18,16 @@ env_logger = "0.9"
 log = "0.4.17"
 serde = "1.0.136"
 serde_json = "1.0"
-frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
+sp-state-machine = { path = "../../../primitives/state-machine" }
 tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }
+
+frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
 
 [dev-dependencies]
 frame-support = { version = "4.0.0-dev", path = "../../../frame/support" }
