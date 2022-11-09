@@ -274,8 +274,8 @@ use frame_support::{
 	pallet_prelude::{MaxEncodedLen, *},
 	storage::bounded_btree_map::BoundedBTreeMap,
 	traits::{
-		tokens::WithdrawReasons, Currency, Defensive, DefensiveOption, DefensiveResult,
-		DefensiveSaturating, ExistenceRequirement, Get,
+		Currency, Defensive, DefensiveOption, DefensiveResult, DefensiveSaturating,
+		ExistenceRequirement, Get,
 	},
 	transactional, CloneNoBound, DefaultNoBound, RuntimeDebugNoBound,
 };
