@@ -126,6 +126,19 @@ pub mod migrations;
 /// The maximum votes allowed per voter.
 pub const MAXIMUM_VOTE: usize = 16;
 
+pub(crate) const LOG_TARGET: &str = "runtime::elections";
+
+// logging helper.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		log::$level!(
+			target: crate::LOG_TARGET,
+			concat!("[{:?}] 🗳️ ", $patter), <frame_system::Pallet<T>>::block_number() $(, $values)*
+		)
+	};
+}
+
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
@@ -785,10 +798,7 @@ impl<T: Config> Pallet<T> {
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
-					log::error!(
-						target: "runtime::elections",
-						"A member seems to also be a runner-up.",
-					);
+					log!(warn, "A member seems to also be a runner-up.");
 				}
 				next_best
 			});
@@ -1098,16 +1108,13 @@ impl<T: Config> Pallet<T> {
 					// clean candidates.
 					<Candidates<T>>::kill();
 
+					log!(info, "New term election successful.");
 					Self::deposit_event(Event::NewTerm { new_members: new_members_sorted_by_id });
 					<ElectionRounds<T>>::mutate(|v| *v += 1);
 				},
 			)
 			.map_err(|e| {
-				log::error!(
-					target: "runtime::elections",
-					"Failed to run election [{:?}].",
-					e,
-				);
+				log!(warn, "Failed to run election [{:?}].", e);
 				Self::deposit_event(Event::ElectionError);
 			});
 
