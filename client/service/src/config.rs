@@ -87,23 +87,17 @@ pub struct Configuration {
 	pub wasm_runtime_overrides: Option<PathBuf>,
 	/// Execution strategies.
 	pub execution_strategies: ExecutionStrategies,
-	/// RPC over HTTP binding address. `None` if disabled.
-	pub rpc_http: Option<SocketAddr>,
-	/// RPC over Websockets binding address. `None` if disabled.
-	pub rpc_ws: Option<SocketAddr>,
-	/// RPC over IPC binding path. `None` if disabled.
-	pub rpc_ipc: Option<String>,
-	/// Maximum number of connections for WebSockets RPC server. `None` if default.
-	pub rpc_ws_max_connections: Option<usize>,
+	/// JSON-RPC server binding address. `None` if disabled.
+	pub rpc_addr: Option<SocketAddr>,
+	/// Maximum number of connections for JSON-RPC server. `None` if default.
+	pub rpc_max_connections: Option<usize>,
 	/// CORS settings for HTTP & WS servers. `None` if all origins are allowed.
 	pub rpc_cors: Option<Vec<String>>,
 	/// RPC methods to expose (by default only a safe subset or all of them).
 	pub rpc_methods: RpcMethods,
-	/// Maximum payload of rpc request/responses.
-	pub rpc_max_payload: Option<usize>,
 	/// Maximum payload of a rpc request
 	pub rpc_max_request_size: Option<usize>,
-	/// Maximum payload of a rpc request
+	/// Maximum payload of a rpc response.
 	pub rpc_max_response_size: Option<usize>,
 	/// Custom JSON-RPC subscription ID provider.
 	///
@@ -113,8 +107,6 @@ pub struct Configuration {
 	///
 	/// Default: 1024.
 	pub rpc_max_subs_per_conn: Option<usize>,
-	/// Maximum size of the output buffer capacity for websocket connections.
-	pub ws_max_out_buffer_capacity: Option<usize>,
 	/// Prometheus endpoint configuration. `None` if disabled.
 	pub prometheus_config: Option<PrometheusConfig>,
 	/// Telemetry service URL. `None` if disabled.

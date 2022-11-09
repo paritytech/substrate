@@ -37,25 +37,29 @@ pub use jsonrpsee::core::{
 };
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-const MEGABYTE: usize = 1024 * 1024;
+const MEGABYTE: u32 = 1024 * 1024;
 
-/// Maximal payload accepted by RPC servers.
-pub const RPC_MAX_PAYLOAD_DEFAULT: usize = 15 * MEGABYTE;
+/// Maximal payload accepted by JSON-RPC servers.
+pub const RPC_MAX_PAYLOAD_DEFAULT: u32 = 15 * MEGABYTE;
 
-/// Default maximum number of connections for WS RPC servers.
-const WS_MAX_CONNECTIONS: usize = 100;
+/// Default maximum number of connections for JSON-RPC servers.
+const RPC_MAX_CONNECTIONS: u32 = 100;
 
-/// Default maximum number subscriptions per connection for WS RPC servers.
-const WS_MAX_SUBS_PER_CONN: usize = 1024;
+/// Default maximum number subscriptions per connection for JSON-RPC servers.
+const RPC_MAX_SUBS_PER_CONN: u32 = 1024;
 
 pub mod middleware;
 
-/// Type alias JSON-RPC server
+/// Type alias for the JSON-RPC server.
 pub type Server = ServerHandle;
 
 /// Server config.
-#[derive(Debug, Clone)]
-pub struct Config {
+#[derive(Debug)]
+pub struct Config<'a, M: Send + Sync + 'static> {
+	/// Socket addresses.
+	pub addrs: [SocketAddr; 2],
+	/// CORS.
+	pub cors: Option<&'a Vec<String>>,
 	/// Maximum connections.
 	pub max_connections: Option<usize>,
 	/// Maximum subscriptions per connection.
@@ -64,45 +68,44 @@ pub struct Config {
 	pub max_payload_in_mb: Option<usize>,
 	/// Maximum rpc response payload size.
 	pub max_payload_out_mb: Option<usize>,
-}
-
-impl Config {
-	// Deconstructs the config to get the finalized inner values.
-	//
-	// `Payload size` or `max subs per connection` bigger than u32::MAX will be truncated.
-	fn deconstruct(self) -> (u32, u32, u32, u32) {
-		let max_conns = self.max_connections.unwrap_or(WS_MAX_CONNECTIONS) as u32;
-		let max_payload_in_mb = payload_size_or_default(self.max_payload_in_mb) as u32;
-		let max_payload_out_mb = payload_size_or_default(self.max_payload_out_mb) as u32;
-		let max_subs_per_conn = self.max_subs_per_conn.unwrap_or(WS_MAX_SUBS_PER_CONN) as u32;
-
-		(max_payload_in_mb, max_payload_out_mb, max_conns, max_subs_per_conn)
-	}
+	/// Metrics.
+	pub metrics: Option<RpcMetrics>,
+	/// RPC API.
+	pub rpc_api: RpcModule<M>,
+	/// Subscription ID provider.
+	pub id_provider: Option<Box<dyn IdProvider>>,
+	/// Tokio runtime handle.
+	pub tokio_handle: tokio::runtime::Handle,
 }
 
 /// Start WS server listening on given address.
-pub async fn start_server<M: Send + Sync + 'static>(
-	addrs: [SocketAddr; 2],
-	cors: Option<&Vec<String>>,
-	config: Config,
-	metrics: Option<RpcMetrics>,
-	rpc_api: RpcModule<M>,
-	rt: tokio::runtime::Handle,
-	id_provider: Option<Box<dyn IdProvider>>,
+pub async fn start_server<'a, M: Send + Sync + 'static>(
+	config: Config<'a, M>,
 ) -> Result<ServerHandle, Box<dyn StdError + Send + Sync>> {
-	let (max_payload_in, max_payload_out, max_connections, max_subs_per_conn) =
-		config.deconstruct();
+	let Config {
+		addrs,
+		cors,
+		max_payload_in_mb,
+		max_payload_out_mb,
+		max_connections,
+		max_subs_per_conn,
+		metrics,
+		id_provider,
+		tokio_handle,
+		rpc_api,
+	} = config;
 
-	let (allow_hosts, cors) = {
+	let host_filter = hosts_filtering(cors.is_some(), &addrs);
+
+	let cors = {
 		if let Some(cors) = cors {
 			let mut list = Vec::new();
 			for origin in cors {
 				list.push(HeaderValue::from_str(origin.as_str())?);
 			}
-			(allowed_hosts(&addrs), CorsLayer::new().allow_origin(AllowOrigin::list(list)))
+			CorsLayer::new().allow_origin(AllowOrigin::list(list))
 		} else {
-			// allow all cors
-			(AllowHosts::Any, CorsLayer::permissive())
+			CorsLayer::permissive()
 		}
 	};
 
@@ -112,14 +115,16 @@ pub async fn start_server<M: Send + Sync + 'static>(
 		.layer(cors.clone());
 
 	let mut builder = ServerBuilder::new()
-		.max_request_body_size(max_payload_in)
-		.max_response_body_size(max_payload_out)
-		.max_connections(max_connections)
-		.max_subscriptions_per_connection(max_subs_per_conn)
+		.max_request_body_size(payload_size_or_default(max_payload_in_mb))
+		.max_response_body_size(payload_size_or_default(max_payload_out_mb))
+		.max_connections(max_connections.map_or(RPC_MAX_CONNECTIONS, |m| m as u32))
+		.max_subscriptions_per_connection(
+			max_subs_per_conn.map_or(RPC_MAX_SUBS_PER_CONN, |m| m as u32),
+		)
 		.ping_interval(std::time::Duration::from_secs(30))
-		.set_host_filtering(allow_hosts)
+		.set_host_filtering(host_filter)
 		.set_middleware(middleware)
-		.custom_tokio_runtime(rt);
+		.custom_tokio_runtime(tokio_handle);
 
 	if let Some(provider) = id_provider {
 		builder = builder.set_id_provider(provider);
@@ -148,13 +153,18 @@ pub async fn start_server<M: Send + Sync + 'static>(
 	Ok(handle)
 }
 
-fn allowed_hosts(addrs: &[SocketAddr]) -> AllowHosts {
-	let mut hosts = Vec::with_capacity(addrs.len() * 2);
-	for addr in addrs {
-		hosts.push(format!("localhost:{}", addr.port()).into());
-		hosts.push(format!("127.0.0.1:{}", addr.port()).into());
+fn hosts_filtering(enabled: bool, addrs: &[SocketAddr]) -> AllowHosts {
+	if enabled {
+		// NOTE The listening addresses are whitelisted by default.
+		let mut hosts = Vec::with_capacity(addrs.len() * 2);
+		for addr in addrs {
+			hosts.push(format!("localhost:{}", addr.port()).into());
+			hosts.push(format!("127.0.0.1:{}", addr.port()).into());
+		}
+		AllowHosts::Only(hosts)
+	} else {
+		AllowHosts::Any
 	}
-	AllowHosts::Only(hosts)
 }
 
 fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModule<M> {
@@ -172,6 +182,6 @@ fn build_rpc_api<M: Send + Sync + 'static>(mut rpc_api: RpcModule<M>) -> RpcModu
 	rpc_api
 }
 
-fn payload_size_or_default(size_mb: Option<usize>) -> usize {
-	size_mb.map_or(RPC_MAX_PAYLOAD_DEFAULT, |mb| mb.saturating_mul(MEGABYTE))
+fn payload_size_or_default(size_mb: Option<usize>) -> u32 {
+	size_mb.map_or(RPC_MAX_PAYLOAD_DEFAULT, |mb| (mb as u32).saturating_mul(MEGABYTE))
 }
