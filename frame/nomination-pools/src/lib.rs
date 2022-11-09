@@ -363,15 +363,6 @@ enum AccountType {
 	Reward,
 }
 
-/// Actions to be taken
-#[derive(Encode, Decode)]
-enum ClaimableAction {
-	/// Increase the bond of a member
-	Increase,
-	/// Take out rewards
-	Withdraw,
-}
-
 /// A member in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
 #[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound, DefaultNoBound))]
@@ -1285,6 +1276,10 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
+	/// Member decision for operator claimable reward action.
+	#[pallet::storage]
+	pub type ClaimableAction<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, bool, ValueQuery>;
+
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub min_join_bond: BalanceOf<T>,
@@ -1442,6 +1437,8 @@ pub mod pallet {
 		PoolIdInUse,
 		/// Pool id provided is not correct/usable.
 		InvalidPoolId,
+		/// The caller is not the operator for this pool.
+		NotRoot,
 	}
 
 	#[derive(Encode, Decode, PartialEq, TypeInfo, frame_support::PalletError, RuntimeDebug)]
@@ -1571,6 +1568,68 @@ pub mod pallet {
 				joined: false,
 			});
 			Self::put_member_with_pools(&who, member, bonded_pool, reward_pool);
+
+			Ok(())
+		}
+
+		// TODO: Update weight info
+		// Caller to be reinbursed for the transactional fees used?
+		// Investigate adding helper function to remove code duplication.
+		// Explore the proxy pallet alternative, allowing root to spend the specified amout of rewards payout to the member.
+		#[pallet::weight(
+			T::WeightInfo::bond_extra_transfer()
+			.max(T::WeightInfo::bond_extra_reward())
+		)]
+		#[transactional]
+		pub fn root_bond_extra(
+			origin: OriginFor<T>, 
+			member_account: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let member_account = T::Lookup::lookup(member_account)?;
+			let (mut member, mut bonded_pool, mut reward_pool) =
+				Self::get_member_with_pools(&member_account)?;
+
+			ensure!(bonded_pool.is_root(&who), Error::<T>::NotRoot);
+			ensure!(ClaimableAction::<T>::get(&member_account), Error::<T>::DoesNotHavePermission);
+
+			// IMPORTANT: reward pool records must be updated with the old points. why?
+			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
+
+			// TODO: Investigate need.
+			debug_assert_eq!(member.pool_id, bonded_pool.id);
+
+		    // A member who has no skin in the game anymore cannot claim any rewards.
+		    ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
+
+		    let current_reward_counter = 
+				reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
+		    let pending_rewards = member.pending_rewards(current_reward_counter)?;
+
+			// TODO: Investigate adding conditional here for when the pending_rewards is not zero.
+			if !pending_rewards.is_zero() {
+				member.last_recorded_reward_counter = current_reward_counter;
+				reward_pool.register_claimed_reward(pending_rewards);
+			}
+
+			// TODO: Investigate adjusting member reward & points after rebonding.
+			let points_issued = bonded_pool.try_bond_funds(
+				&bonded_pool.reward_account(), 
+				pending_rewards, 
+				BondType::Later
+			)?;
+
+		    bonded_pool.ok_to_be_open(pending_rewards)?;
+			member.points = member.points.saturating_add(points_issued);
+
+			Self::deposit_event(Event::<T>::Bonded {
+				member: member_account.clone(),
+				pool_id: member.pool_id,
+				bonded: pending_rewards,
+				joined: false,
+			});
+
+			Self::put_member_with_pools(&member_account, member, bonded_pool, reward_pool);
 
 			Ok(())
 		}
@@ -2088,6 +2147,19 @@ pub mod pallet {
 			ensure!(bonded_pool.can_nominate(&who), Error::<T>::NotNominator);
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
+
+		// TODO: For when the pool member leaves or is kiked out, clear storage.
+		// Update weight info
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
+		pub fn set_claimable_action(origin: OriginFor<T>, action: bool) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
+			<ClaimableAction::<T>>::mutate(who, |delegate| {
+				*delegate = action;	
+			});
+			Ok(())
+		}
 	}
 
 	#[pallet::hooks]
@@ -2274,7 +2346,7 @@ impl<T: Config> Pallet<T> {
 			// We check for zero above
 			.div(current_points)
 	}
-
+	// TODO: Investigate logic here to add conditional event emission on different account types.
 	/// If the member has some rewards, transfer a payout from the reward pool to the member.
 	// Emits events and potentially modifies pool state if any arithmetic saturates, but does
 	// not persist any of the mutable inputs to storage.
