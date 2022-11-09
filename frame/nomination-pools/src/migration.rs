@@ -517,11 +517,9 @@ pub mod v4 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_: Vec<u8>) -> Result<(), &'static str> {
 			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.contains_key("commission")),
-				"not all BondedPools have a `commission` field"
-			);
-			ensure!(
-				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.is_none()),
+				BondedPools::<T>::iter().all(|(_, inner)| inner.commission.current.is_none() &&
+					inner.commission.max.is_none() &&
+					inner.commission.throttle.is_none()),
 				"a commission value has been incorrectly set"
 			);
 			ensure!(Pallet::<T>::on_chain_storage_version() == 4, "wrong storage version");
