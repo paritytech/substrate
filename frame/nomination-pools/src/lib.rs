@@ -578,11 +578,6 @@ impl<T: Config> Commission<T> {
 		self.current.as_ref().map(|(x, _)| *x).unwrap_or(Perbill::zero())
 	}
 
-	/// Gets the current commission payee of this pool as a reference.
-	fn payee(&self) -> Option<&T::AccountId> {
-		self.current.as_ref().map(|(_, p)| p).or(None)
-	}
-
 	/// Returns true if a commission percentage updating to `to` would exhaust the throttle limit.
 	///
 	/// A commission update will be throttled (disallowed) if:
@@ -2208,7 +2203,7 @@ pub mod pallet {
 			ensure!(bonded_pool.can_set_commission(&who), Error::<T>::DoesNotHavePermission);
 
 			let final_payee = payee
-				.or(bonded_pool.commission.payee().cloned())
+				.or(bonded_pool.commission.current.as_ref().map(|(_, p)| p).cloned())
 				.ok_or(Error::<T>::NoCommissionPayeeSet)?;
 
 			bonded_pool
