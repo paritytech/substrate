@@ -799,7 +799,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	if let Some(path) = maybe_export_proof {
 		let mut file = std::fs::File::create(path)?;
 		use std::io::Write as _;
-		proof.using_encoded(|encoded_proof| file.write_all(encoded_proof))?;
+		file.write_all(storage_proof_to_raw_json(proof))?;
 	}
 
 	let proof_size = proof.encoded_size();
@@ -840,6 +840,18 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 		humanize(compressed_proof.len()),
 	);
 	Ok((changes, encoded_results))
+}
+
+fn storage_proof_to_raw_json(storage_proof: &StorageProof) -> String {
+	serde_json::Value::Object(storage_proof.to_memory_db::<BlakeTwo256>().drain().iter().map(
+		|(key, (value, _n))| {
+			(
+				serde_json::Value::String(format!("0x{}", hex::encode(key.as_bytes()))),
+				serde_json::Value::String(format!("0x{}", hex::encode(value))),
+			)
+		},
+	))
+	.to_string()
 }
 
 /// Get the spec `(name, version)` from the local runtime.
