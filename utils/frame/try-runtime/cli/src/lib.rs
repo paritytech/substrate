@@ -435,7 +435,7 @@ pub struct SharedParams {
 	/// Path to a file to extract the storage proof
 	/// If several blocks are executed, the path is interpreted as a folder
 	/// where one file per block will be written (named `{block_number}-{block_hash}`).
-	#[clap(long, parse(from_os_str))]
+	#[clap(long)]
 	pub export_proof: Option<PathBuf>,
 }
 
@@ -799,7 +799,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	if let Some(path) = maybe_export_proof {
 		let mut file = std::fs::File::create(path)?;
 		use std::io::Write as _;
-		file.write_all(storage_proof_to_raw_json(proof))?;
+		file.write_all(storage_proof_to_raw_json(&proof).as_bytes())?;
 	}
 
 	let proof_size = proof.encoded_size();
@@ -842,15 +842,20 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, D: NativeExecutionDis
 	Ok((changes, encoded_results))
 }
 
-fn storage_proof_to_raw_json(storage_proof: &StorageProof) -> String {
-	serde_json::Value::Object(storage_proof.to_memory_db::<BlakeTwo256>().drain().iter().map(
-		|(key, (value, _n))| {
-			(
-				serde_json::Value::String(format!("0x{}", hex::encode(key.as_bytes()))),
-				serde_json::Value::String(format!("0x{}", hex::encode(value))),
-			)
-		},
-	))
+fn storage_proof_to_raw_json(storage_proof: &sp_state_machine::StorageProof) -> String {
+	serde_json::Value::Object(
+		storage_proof
+			.to_memory_db::<sp_runtime::traits::BlakeTwo256>()
+			.drain()
+			.iter()
+			.map(|(key, (value, _n))| {
+				(
+					format!("0x{}", hex::encode(key.as_bytes())),
+					serde_json::Value::String(format!("0x{}", hex::encode(value))),
+				)
+			})
+			.collect(),
+	)
 	.to_string()
 }
 
