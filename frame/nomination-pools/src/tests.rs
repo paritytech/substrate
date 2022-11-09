@@ -1384,6 +1384,9 @@ mod claim_payout {
 			let (mut member, bonded_pool, mut reward_pool) =
 				Pools::get_member_with_pools(&10).unwrap();
 
+				// top up commission payee account to existential deposit
+				let _ = Balances::deposit_creating(&2, 5);
+
 			// Set a commission pool 1 to 50%, with a payee set to `2`
 			assert_ok!(Pools::set_commission(
 				RuntimeOrigin::signed(900),

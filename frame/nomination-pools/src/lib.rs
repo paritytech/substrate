@@ -2605,13 +2605,12 @@ impl<T: Config> Pallet<T> {
 		// Defensive: The commission payee is also checked for existence.
 		if pool_commission != &BalanceOf::<T>::zero() {
 			if let Some(p) = payee {
-				T::Currency::withdraw(
+				T::Currency::transfer(
 					&bonded_pool.reward_account(),
+					&p,
 					*pool_commission,
-					WithdrawReasons::FEE,
 					ExistenceRequirement::KeepAlive,
 				)?;
-				T::Currency::deposit_creating(&p, *pool_commission);
 			}
 		}
 
