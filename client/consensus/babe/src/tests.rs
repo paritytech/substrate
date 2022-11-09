@@ -869,12 +869,12 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// Create and import the canon chain and keep track of fork blocks (A, C, D)
 	// from the diagram above.
-	let canon_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 30);
+	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 30);
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[0]), 10);
-	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[12]), 15);
-	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[18]), 10);
+	let fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
+	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[12]), 15);
+	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[18]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -884,51 +884,31 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
-	client.finalize_block(canon_hashes[12], None, false).unwrap();
+	client.finalize_block(canon[12], None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 7);
 
-	// at this point no hashes from the first fork must exist on the tree
-	assert!(!epoch_changes
-		.shared_data()
-		.tree()
-		.iter()
-		.map(|(h, _, _)| h)
-		.any(|h| fork_1.contains(h)),);
+	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
+
+	// no hashes from the first fork must exist on the tree
+	assert!(!nodes.iter().any(|h| fork_1.contains(h)));
 
 	// but the epoch changes from the other forks must still exist
-	assert!(epoch_changes
-		.shared_data()
-		.tree()
-		.iter()
-		.map(|(h, _, _)| h)
-		.any(|h| fork_2.contains(h)));
-
-	assert!(epoch_changes
-		.shared_data()
-		.tree()
-		.iter()
-		.map(|(h, _, _)| h)
-		.any(|h| fork_3.contains(h)),);
+	assert!(nodes.iter().any(|h| fork_2.contains(h)));
+	assert!(nodes.iter().any(|h| fork_3.contains(h)));
 
 	// finalizing block #25 from the canon chain should prune out the second fork
-	client.finalize_block(canon_hashes[24], None, false).unwrap();
+	client.finalize_block(canon[24], None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 8);
 
-	// at this point no hashes from the second fork must exist on the tree
-	assert!(!epoch_changes
-		.shared_data()
-		.tree()
-		.iter()
-		.map(|(h, _, _)| h)
-		.any(|h| fork_2.contains(h)),);
+	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
 
-	// while epoch changes from the last fork should still exist
-	assert!(epoch_changes
-		.shared_data()
-		.tree()
-		.iter()
-		.map(|(h, _, _)| h)
-		.any(|h| fork_3.contains(h)),);
+	// no hashes from the other forks must exist on the tree
+	assert!(!nodes.iter().any(|h| fork_2.contains(h)));
+	assert!(!nodes.iter().any(|h| fork_3.contains(h)));
+
+	// Check that we contain the nodes that we care about
+	assert!(nodes.iter().any(|h| *h == canon[18]));
+	assert!(nodes.iter().any(|h| *h == canon[24]));
 }
 
 #[test]
