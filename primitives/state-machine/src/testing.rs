@@ -23,8 +23,10 @@ use std::{
 };
 
 use crate::{
-	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue, TrieBackendBuilder,
+	backend::{AsTrieBackend, Backend},
+	ext::Ext,
+	InMemoryBackend, OverlayedChanges, StorageKey, StorageTransactionCache, StorageValue,
+	TrieBackendBuilder, TrieBackendStorage,
 };
 
 use hash_db::Hasher;
@@ -38,20 +40,19 @@ use sp_core::{
 	traits::TaskExecutorExt,
 };
 use sp_externalities::{Extension, ExtensionStore, Extensions};
-use sp_trie::StorageProof;
+use sp_trie::{MemoryDB, StorageProof};
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H, B>
 where
 	H: Hasher + 'static,
 	H::Out: codec::Codec + Ord,
-	B: Backend<H>
+	B: Backend<H>,
 {
 	/// The overlay changed storage.
 	overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
-	storage_transaction_cache:
-		StorageTransactionCache<<B as Backend<H>>::Transaction, H>,
+	storage_transaction_cache: StorageTransactionCache<<B as Backend<H>>::Transaction, H>,
 	/// Storage backend.
 	pub backend: B,
 	/// Extensions.
@@ -65,37 +66,9 @@ where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
+		+ From<(Storage, StateVersion)>,
 {
-	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, B> {
-		Ext::new(
-			&mut self.overlay,
-			&mut self.storage_transaction_cache,
-			&self.backend,
-			Some(&mut self.extensions),
-		)
-	}
-
-	/// Create a new instance of `TestExternalities` with storage.
-	pub fn new(storage: Storage) -> Self {
-		Self::new_with_code_and_state(&[], storage, Default::default())
-	}
-
-	/// Create a new instance of `TestExternalities` with storage for a given state version.
-	pub fn new_with_state_version(storage: Storage, state_version: StateVersion) -> Self {
-		Self::new_with_code_and_state(&[], storage, state_version)
-	}
-
-	/// New empty test externalities.
-	pub fn new_empty() -> Self {
-		Self::new_with_code_and_state(&[], Storage::default(), Default::default())
-	}
-
-	/// Create a new instance of `TestExternalities` with code and storage.
-	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
-		Self::new_with_code_and_state(code, storage, Default::default())
-	}
-
 	/// Create a new instance of `TestExternalities` with code and storage for a given state
 	/// version.
 	pub fn new_with_code_and_state(
@@ -124,6 +97,44 @@ where
 		}
 	}
 
+	/// Create a new instance of `TestExternalities` with storage.
+	pub fn new(storage: Storage) -> Self {
+		Self::new_with_code_and_state(&[], storage, Default::default())
+	}
+
+	/// Create a new instance of `TestExternalities` with storage for a given state version.
+	pub fn new_with_state_version(storage: Storage, state_version: StateVersion) -> Self {
+		Self::new_with_code_and_state(&[], storage, state_version)
+	}
+
+	/// New empty test externalities.
+	pub fn new_empty() -> Self {
+		Self::new_with_code_and_state(&[], Storage::default(), Default::default())
+	}
+
+	/// Create a new instance of `TestExternalities` with code and storage.
+	pub fn new_with_code(code: &[u8], storage: Storage) -> Self {
+		Self::new_with_code_and_state(code, storage, Default::default())
+	}
+}
+
+impl<H, B> TestExternalities<H, B>
+where
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H, Transaction = <MemoryDB<H> as TrieBackendStorage<H>>::Overlay>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>,
+{
+	/// Get externalities implementation.
+	pub fn ext(&mut self) -> Ext<H, B> {
+		Ext::new(
+			&mut self.overlay,
+			&mut self.storage_transaction_cache,
+			&self.backend,
+			Some(&mut self.extensions),
+		)
+	}
+
 	/// Returns the overlayed changes.
 	pub fn overlayed_changes(&self) -> &OverlayedChanges {
 		&self.overlay
@@ -141,14 +152,18 @@ where
 
 	/// Insert key/value into backend
 	pub fn insert(&mut self, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
+		self.backend
+			.as_trie_backend_mut()
+			.insert(vec![(None, vec![(k, Some(v))])], self.state_version);
 	}
 
 	/// Insert key/value into backend.
 	///
 	/// This only supports inserting keys in child tries.
 	pub fn insert_child(&mut self, c: sp_core::storage::ChildInfo, k: StorageKey, v: StorageValue) {
-		self.backend.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
+		self.backend
+			.as_trie_backend_mut()
+			.insert(vec![(Some(c), vec![(k, Some(v))])], self.state_version);
 	}
 
 	/// Registers the given extension for this instance.
@@ -172,7 +187,7 @@ where
 			))
 		}
 
-		self.backend.update(transaction, self.state_version)
+		self.backend.as_trie_backend().update(transaction, self.state_version)
 	}
 
 	/// Commit all pending changes to the underlying backend.
@@ -188,6 +203,7 @@ where
 		)?;
 
 		self.backend
+			.as_trie_backend_mut()
 			.apply_transaction(changes.transaction_storage_root, changes.transaction);
 		Ok(())
 	}
@@ -206,7 +222,7 @@ where
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let proving_backend = TrieBackendBuilder::wrap(&self.backend)
+		let proving_backend = TrieBackendBuilder::wrap(&self.backend.as_trie_backend())
 			.with_recorder(Default::default())
 			.build();
 		let mut proving_ext = Ext::new(
@@ -238,7 +254,7 @@ where
 	}
 }
 
-impl<H: Hasher, B: Backend<H>> std::fmt::Debug for TestExternalities<H, B>
+impl<H: Hasher, B: Backend<H> + AsTrieBackend<H>> std::fmt::Debug for TestExternalities<H, B>
 where
 	H::Out: Ord + codec::Codec,
 {
@@ -247,9 +263,12 @@ where
 	}
 }
 
-impl<H: Hasher, B: Backend<H>> PartialEq for TestExternalities<H, B>
+impl<H: Hasher, B> PartialEq for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H, Transaction = <MemoryDB<H> as TrieBackendStorage<H>>::Overlay>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
+		+ From<(Storage, StateVersion)>,
 {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
@@ -258,9 +277,12 @@ where
 	}
 }
 
-impl<H: Hasher, B: Backend<H>> Default for TestExternalities<H, B>
+impl<H: Hasher, B> Default for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
+		+ From<(Storage, StateVersion)>,
 {
 	fn default() -> Self {
 		// default to default version.
@@ -268,18 +290,24 @@ where
 	}
 }
 
-impl<H: Hasher, B: Backend<H>> From<Storage> for TestExternalities<H, B>
+impl<H: Hasher, B> From<Storage> for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
+		+ From<(Storage, StateVersion)>,
 {
 	fn from(storage: Storage) -> Self {
 		Self::new_with_state_version(storage, Default::default())
 	}
 }
 
-impl<H: Hasher, B: Backend<H>> From<(Storage, StateVersion)> for TestExternalities<H, B>
+impl<H: Hasher, B> From<(Storage, StateVersion)> for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
+		+ From<(Storage, StateVersion)>,
 {
 	fn from((storage, state_version): (Storage, StateVersion)) -> Self {
 		Self::new_with_state_version(storage, state_version)
@@ -290,7 +318,7 @@ impl<H, B> sp_externalities::ExtensionStore for TestExternalities<H, B>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
-	B: Backend<H>,
+	B: Backend<H> + AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
@@ -320,7 +348,7 @@ impl<H, B> sp_externalities::ExternalitiesExt for TestExternalities<H, B>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
-	B: Backend<H>
+	B: Backend<H> + AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>,
 {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
 		self.extension_by_type_id(TypeId::of::<T>()).and_then(<dyn Any>::downcast_mut)

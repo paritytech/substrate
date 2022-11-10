@@ -227,4 +227,8 @@ impl<S: StateBackend<HashFor<B>> + AsTrieBackend<HashFor<B>>, B: BlockT> AsTrieB
 	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
 		self.state.as_trie_backend()
 	}
+
+	fn as_trie_backend_mut(&mut self) -> &mut TrieBackend<Self::TrieBackendStorage, HashFor<B>, sp_trie::cache::LocalTrieCache<H>> {
+		self.state.as_trie_backend_mut()
+	}
 }

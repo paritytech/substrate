@@ -335,8 +335,6 @@ use super::*;
 			inner_backend: TrieBackendBuilder::new(Default::default(), Default::default()).build(),
 			_marker: Default::default(),
 		};
-
-
 	}
 
 

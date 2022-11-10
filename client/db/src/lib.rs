@@ -301,6 +301,10 @@ impl<B: BlockT> AsTrieBackend<HashFor<B>> for RefTrackingState<B> {
 	) -> &sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>> {
 		&self.state.as_trie_backend()
 	}
+
+	fn as_trie_backend_mut(&mut self) -> &mut sp_state_machine::TrieBackend<Self::TrieBackendStorage, HashFor<B>, sp_trie::cache::LocalTrieCache<H>> {
+		self.state.as_trie_backend_mut()
+	}
 }
 
 /// Database settings.

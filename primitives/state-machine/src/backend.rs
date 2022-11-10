@@ -275,6 +275,8 @@ pub trait AsTrieBackend<H: Hasher, C = sp_trie::cache::LocalTrieCache<H>> {
 
 	/// Return the type as [`TrieBackend`].
 	fn as_trie_backend(&self) -> &TrieBackend<Self::TrieBackendStorage, H, C>;
+
+	fn as_trie_backend_mut(&mut self) -> &mut TrieBackend<Self::TrieBackendStorage, H, C>;
 }
 
 /// Trait that allows consolidate two transactions together.

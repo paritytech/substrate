@@ -361,6 +361,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C> AsTrieBackend<H, C> for TrieBackend
 	fn as_trie_backend(&self) -> &TrieBackend<S, H, C> {
 		self
 	}
+
+	fn as_trie_backend_mut(&mut self) -> &mut TrieBackend<Self::TrieBackendStorage, H, C> {
+		self
+	}
 }
 
 /// Create a backend used for checking the proof, using `H` as hasher.

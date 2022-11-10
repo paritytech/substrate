@@ -29,6 +29,7 @@
 	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
 )]
 
+use sp_state_machine::{InMemoryBackend, TrieBackend};
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]
@@ -1747,7 +1748,10 @@ pub fn oom(_: core::alloc::Layout) -> ! {
 
 /// Type alias for Externalities implementation used in tests.
 #[cfg(feature = "std")]
-pub type TestExternalities = sp_state_machine::TestExternalities<sp_core::Blake2Hasher>;
+pub type TestExternalities = sp_state_machine::TestExternalities<
+	sp_core::Blake2Hasher,
+	InMemoryBackend<sp_core::Blake2Hasher>,
+>;
 
 /// The host functions Substrate provides for the Wasm runtime environment.
 ///
