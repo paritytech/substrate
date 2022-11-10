@@ -37,7 +37,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, NetworkService};
+use sc_network::{bitswap::Bitswap, config::SyncMode, NetworkService};
 use sc_network_common::{
 	service::{NetworkStateInfo, NetworkStatusProvider, NetworkTransaction},
 	sync::warp::WarpSyncProvider,
@@ -206,8 +206,7 @@ where
 
 	let (client, backend) = {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: config.state_cache_size,
-			state_cache_child_ratio: config.state_cache_child_ratio.map(|v| (v, 100)),
+			trie_cache_maximum_size: config.trie_cache_maximum_size,
 			state_pruning: config.state_pruning.clone(),
 			source: config.database.clone(),
 			blocks_pruning: config.blocks_pruning,
@@ -712,7 +711,6 @@ pub struct BuildNetworkParams<'a, TBl: BlockT, TExPool, TImpQu, TCl> {
 	/// An optional warp sync provider.
 	pub warp_sync: Option<Arc<dyn WarpSyncProvider<TBl>>>,
 }
-
 /// Build the network service, the network status sinks and an RPC sender.
 pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 	params: BuildNetworkParams<TBl, TExPool, TImpQu, TCl>,
@@ -858,6 +856,7 @@ where
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
 		import_queue: Box::new(import_queue),
 		chain_sync: Box::new(chain_sync),
+		bitswap: config.network.ipfs_server.then(|| Bitswap::from_client(client.clone())),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_request_protocol_config,
 		state_request_protocol_config,
@@ -924,6 +923,11 @@ where
 pub struct NetworkStarter(oneshot::Sender<()>);
 
 impl NetworkStarter {
+	/// Create a new NetworkStarter
+	pub fn new(sender: oneshot::Sender<()>) -> Self {
+		NetworkStarter(sender)
+	}
+
 	/// Start the network. Call this after all sub-components have been initialized.
 	///
 	/// > **Note**: If you don't call this function, the networking will not work.

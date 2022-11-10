@@ -69,7 +69,7 @@
 use safe_mix::TripletMix;
 
 use codec::Encode;
-use frame_support::traits::Randomness;
+use frame_support::{pallet_prelude::Weight, traits::Randomness};
 use sp_runtime::traits::{Hash, Saturating};
 
 const RANDOM_MATERIAL_LEN: u32 = 81;
@@ -187,7 +187,7 @@ mod tests {
 
 	parameter_types! {
 		pub BlockWeights: limits::BlockWeights = limits::BlockWeights
-			::simple_max(1024);
+			::simple_max(Weight::from_ref_time(1024));
 		pub BlockLength: limits::BlockLength = limits::BlockLength
 			::max(2 * 1024);
 	}

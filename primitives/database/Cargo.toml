@@ -12,4 +12,4 @@ readme = "README.md"
 
 [dependencies]
 kvdb = "0.11.0"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"

@@ -535,7 +535,7 @@ mod tests {
 			_number: BlockNumber,
 			_success: bool,
 		) {
-			self.events.push(Event::JustificationImported(hash.clone()))
+			self.events.push(Event::JustificationImported(*hash))
 		}
 	}
 

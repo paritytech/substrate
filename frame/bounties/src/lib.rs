@@ -114,6 +114,8 @@ type PositiveImbalanceOf<T, I = ()> = pallet_treasury::PositiveImbalanceOf<T, I>
 /// An index of a bounty. Just a `u32`.
 pub type BountyIndex = u32;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 /// A bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Bounty<AccountId, Balance, BlockNumber> {
@@ -381,7 +383,7 @@ pub mod pallet {
 		pub fn propose_curator(
 			origin: OriginFor<T>,
 			#[pallet::compact] bounty_id: BountyIndex,
-			curator: <T::Lookup as StaticLookup>::Source,
+			curator: AccountIdLookupOf<T>,
 			#[pallet::compact] fee: BalanceOf<T, I>,
 		) -> DispatchResult {
 			T::ApproveOrigin::ensure_origin(origin)?;
@@ -553,7 +555,7 @@ pub mod pallet {
 		pub fn award_bounty(
 			origin: OriginFor<T>,
 			#[pallet::compact] bounty_id: BountyIndex,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;

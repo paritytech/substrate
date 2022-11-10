@@ -29,8 +29,6 @@ use crate::Pallet as Elections;
 
 const BALANCE_FACTOR: u32 = 250;
 
-type Lookup<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-
 /// grab new account with infinite balance.
 fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 	let account: T::AccountId = account(name, index, 0);
@@ -46,7 +44,7 @@ fn endowed_account<T: Config>(name: &'static str, index: u32) -> T::AccountId {
 }
 
 /// Account to lookup type of system trait.
-fn as_lookup<T: Config>(account: T::AccountId) -> Lookup<T> {
+fn as_lookup<T: Config>(account: T::AccountId) -> AccountIdLookupOf<T> {
 	T::Lookup::unlookup(account)
 }
 

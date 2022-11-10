@@ -30,7 +30,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -102,7 +102,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::create_swap(
 			Origin::signed(A),
 			B,
-			hashed_proof.clone(),
+			hashed_proof,
 			BalanceSwapAction::new(50),
 			1000,
 		)
@@ -117,7 +117,7 @@ fn two_party_successful_swap() {
 		AtomicSwap::create_swap(
 			Origin::signed(B),
 			A,
-			hashed_proof.clone(),
+			hashed_proof,
 			BalanceSwapAction::new(75),
 			1000,
 		)

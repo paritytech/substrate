@@ -229,7 +229,7 @@ where
 			call_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
-		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
+		let gas_limit: u64 = decode_hex(gas_limit, "weight")?;
 		let storage_deposit_limit: Option<Balance> =
 			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;
@@ -259,7 +259,7 @@ where
 		} = instantiate_request;
 
 		let value: Balance = decode_hex(value, "balance")?;
-		let gas_limit: Weight = decode_hex(gas_limit, "weight")?;
+		let gas_limit: u64 = decode_hex(gas_limit, "weight")?;
 		let storage_deposit_limit: Option<Balance> =
 			storage_deposit_limit.map(|l| decode_hex(l, "balance")).transpose()?;
 		limit_gas(gas_limit)?;

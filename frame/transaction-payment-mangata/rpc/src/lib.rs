@@ -25,7 +25,9 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
-use pallet_transaction_payment_rpc_runtime_api_mangata::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
+use pallet_transaction_payment_rpc_runtime_api_mangata::{
+	FeeDetails, InclusionFee, RuntimeDispatchInfo,
+};
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;

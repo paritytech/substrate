@@ -122,7 +122,7 @@ impl RuntimeBuilder {
 		self
 	}
 
-	fn build<'a>(&'a mut self) -> impl WasmModule + 'a {
+	fn build(&mut self) -> impl WasmModule + '_ {
 		let blob = {
 			let wasm: Vec<u8>;
 

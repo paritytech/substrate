@@ -792,8 +792,8 @@ fn merging_shifts_other_schedules_index() {
 		// The merged schedule will have the max possible starting block,
 		let sched3_start = sched1.starting_block().max(sched2.starting_block());
 		// `locked` equal to the sum of the two schedules locked through the current block,
-		let sched3_locked = sched2.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block)
-			+ sched0.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block);
+		let sched3_locked = sched2.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block) +
+			sched0.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block);
 		// and will end at the max possible block.
 		let sched3_end = sched2
 			.ending_block_as_balance::<<Test as Config>::BlockNumberToBalance>()
@@ -823,9 +823,9 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		assert_eq!(Vesting::vesting(&2, NATIVE_CURRENCY_ID).unwrap(), vec![sched0]);
 
 		// Fast forward to half way through the life of sched1.
-		let mut cur_block = (sched0.starting_block() as Balance
-			+ sched0.ending_block_as_balance::<<Test as Config>::BlockNumberToBalance>())
-			/ 2;
+		let mut cur_block = (sched0.starting_block() as Balance +
+			sched0.ending_block_as_balance::<<Test as Config>::BlockNumberToBalance>()) /
+			2;
 		assert_eq!(cur_block, 20);
 		System::set_block_number(
 			cur_block.saturated_into::<<Test as frame_system::Config>::BlockNumber>(),
@@ -838,9 +838,10 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		Vesting::vest(Some(2).into(), NATIVE_CURRENCY_ID).unwrap();
 
 		// After vesting the usable balance increases by the unlocked amount.
-		let sched0_vested_now = sched0.locked()
-			- sched0
-				.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block.try_into().unwrap());
+		let sched0_vested_now = sched0.locked() -
+			sched0.locked_at::<<Test as Config>::BlockNumberToBalance>(
+				cur_block.try_into().unwrap(),
+			);
 		usable_balance += sched0_vested_now;
 		assert_eq!(usable_native_balance::<Test>(2), usable_balance);
 
@@ -868,9 +869,10 @@ fn merge_ongoing_and_yet_to_be_started_schedules() {
 		let sched2_start = sched1.starting_block();
 		// `locked` equal to the sum of the two schedules locked through the current block,
 		let sched2_locked = sched0
-			.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block.try_into().unwrap())
-			+ sched1
-				.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block.try_into().unwrap());
+			.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block.try_into().unwrap()) +
+			sched1.locked_at::<<Test as Config>::BlockNumberToBalance>(
+				cur_block.try_into().unwrap(),
+			);
 		// and will end at the max possible block.
 		let sched2_end = sched0
 			.ending_block_as_balance::<<Test as Config>::BlockNumberToBalance>()
@@ -933,12 +935,14 @@ fn merge_finished_and_ongoing_schedules() {
 		// sched0 has finished, so its funds are fully unlocked.
 		let sched0_unlocked_now = sched0.locked();
 		// The remaining schedules are ongoing, so their funds are partially unlocked.
-		let sched1_unlocked_now = sched1.locked()
-			- sched1
-				.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block.try_into().unwrap());
-		let sched2_unlocked_now = sched2.locked()
-			- sched2
-				.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block.try_into().unwrap());
+		let sched1_unlocked_now = sched1.locked() -
+			sched1.locked_at::<<Test as Config>::BlockNumberToBalance>(
+				cur_block.try_into().unwrap(),
+			);
+		let sched2_unlocked_now = sched2.locked() -
+			sched2.locked_at::<<Test as Config>::BlockNumberToBalance>(
+				cur_block.try_into().unwrap(),
+			);
 
 		// Since merging also vests all the schedules, the users usable balance after merging
 		// includes all pre-existing schedules unlocked through the current block, including
@@ -1240,8 +1244,8 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 	ExtBuilder::default().existential_deposit(4 * ED).build().execute_with(|| {
 		// MinVestedTransfer is less the ED.
 		assert!(
-			<Test as Config>::Tokens::minimum_balance(NATIVE_CURRENCY_ID)
-				> <Test as Config>::MinVestedTransfer::get().into()
+			<Test as Config>::Tokens::minimum_balance(NATIVE_CURRENCY_ID) >
+				<Test as Config>::MinVestedTransfer::get().into()
 		);
 
 		let sched = VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(
@@ -1251,8 +1255,8 @@ fn vested_transfer_less_than_existential_deposit_fails() {
 		);
 		// The new account balance with the schedule's locked amount would be less than ED.
 		assert!(
-			Tokens::free_balance(0u32, &99) + sched.locked()
-				< <Test as Config>::Tokens::minimum_balance(NATIVE_CURRENCY_ID)
+			Tokens::free_balance(0u32, &99) + sched.locked() <
+				<Test as Config>::Tokens::minimum_balance(NATIVE_CURRENCY_ID)
 		);
 
 		// vested_transfer fails.
@@ -1286,7 +1290,7 @@ fn lock_tokens_works() {
 
 		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<
 			<Test as frame_system::Config>::AccountId,
-			<Test as frame_system::Config>::BlockNumber
+			<Test as frame_system::Config>::BlockNumber,
 		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 11));
 
 		assert_noop!(
@@ -1315,7 +1319,7 @@ fn lock_tokens_works() {
 
 		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<
 			<Test as frame_system::Config>::AccountId,
-			<Test as frame_system::Config>::BlockNumber
+			<Test as frame_system::Config>::BlockNumber,
 		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 21));
 
 		assert_noop!(
@@ -1347,48 +1351,115 @@ fn lock_tokens_works() {
 fn unlock_tokens_works() {
 	ExtBuilder::default().existential_deposit(ED).build().execute_with(|| {
 		let now = <frame_system::Pallet<Test>>::block_number();
-		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(
+			NATIVE_CURRENCY_ID,
+			&999,
+			10000
+		));
 
-		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId, <Test as frame_system::Config>::BlockNumber>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 11));
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<
+			<Test as frame_system::Config>::AccountId,
+			<Test as frame_system::Config>::BlockNumber,
+		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 11));
 
-		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
-		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
-			vec![
-				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
-			]
+		assert_noop!(
+			orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(
+				NATIVE_CURRENCY_ID,
+				&999,
+				1,
+				WithdrawReasons::TRANSFER,
+				Default::default()
+			),
+			orml_tokens::Error::<Test>::LiquidityRestrictions
+		);
+		assert_eq!(
+			Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+			vec![VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(
+				10000, 1000, now
+			),]
 		);
 
-		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(NATIVE_CURRENCY_ID, &999, 10000));
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::mint(
+			NATIVE_CURRENCY_ID,
+			&999,
+			10000
+		));
 
-		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId, <Test as frame_system::Config>::BlockNumber>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 21));
+		assert_ok!(<Pallet<Test> as MultiTokenVestingLocks<
+			<Test as frame_system::Config>::AccountId,
+			<Test as frame_system::Config>::BlockNumber,
+		>>::lock_tokens(&999, NATIVE_CURRENCY_ID, 10000, None, 21));
 
-		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 1, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
+		assert_noop!(
+			orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(
+				NATIVE_CURRENCY_ID,
+				&999,
+				1,
+				WithdrawReasons::TRANSFER,
+				Default::default()
+			),
+			orml_tokens::Error::<Test>::LiquidityRestrictions
+		);
 
-		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+		assert_eq!(
+			Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
 			vec![
-				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
-				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 500, now),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(
+					10000, 1000, now
+				),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(
+					10000, 500, now
+				),
 			]
 		);
 
 		let cur_block = 6;
 		System::set_block_number(cur_block);
 
-		assert_eq!(<Pallet<Test> as MultiTokenVestingLocks<<Test as frame_system::Config>::AccountId, <Test as frame_system::Config>::BlockNumber>>::unlock_tokens(&999, NATIVE_CURRENCY_ID, 6000).unwrap().1, 21);
+		assert_eq!(
+			<Pallet<Test> as MultiTokenVestingLocks<
+				<Test as frame_system::Config>::AccountId,
+				<Test as frame_system::Config>::BlockNumber,
+			>>::unlock_tokens(&999, NATIVE_CURRENCY_ID, 6000)
+			.unwrap()
+			.1,
+			21
+		);
 
-		assert_eq!(Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
+		assert_eq!(
+			Vesting::vesting(&999, NATIVE_CURRENCY_ID).unwrap(),
 			vec![
-				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(10000, 1000, now),
-				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(1500, 100, 6),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(
+					10000, 1000, now
+				),
+				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(
+					1500, 100, 6
+				),
 			]
 		);
 
 		assert_eq!(
-				VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(1500, 100, 6).locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block), 1500
+			VestingInfo::<Balance, <Test as frame_system::Config>::BlockNumber>::new(1500, 100, 6)
+				.locked_at::<<Test as Config>::BlockNumberToBalance>(cur_block),
+			1500
 		);
 
-		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 13500, WithdrawReasons::TRANSFER, Default::default()));
-		assert_noop!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(NATIVE_CURRENCY_ID, &999, 13501, WithdrawReasons::TRANSFER, Default::default()), orml_tokens::Error::<Test>::LiquidityRestrictions);
-
+		assert_ok!(orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(
+			NATIVE_CURRENCY_ID,
+			&999,
+			13500,
+			WithdrawReasons::TRANSFER,
+			Default::default()
+		));
+		assert_noop!(
+			orml_tokens::MultiTokenCurrencyAdapter::<Test>::ensure_can_withdraw(
+				NATIVE_CURRENCY_ID,
+				&999,
+				13501,
+				WithdrawReasons::TRANSFER,
+				Default::default()
+			),
+			orml_tokens::Error::<Test>::LiquidityRestrictions
+		);
 	});
 }

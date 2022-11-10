@@ -341,7 +341,7 @@ pub mod pallet {
 
 		type SystemWeightInfo: WeightInfo;
 
-		/// The designated SS85 prefix of this chain.
+		/// The designated SS58 prefix of this chain.
 		///
 		/// This replaces the "ss58Format" property declared in the chain spec. Reason is
 		/// that the runtime should know about the prefix in order to make use of it as
@@ -1516,9 +1516,10 @@ impl<T: Config> Pallet<T> {
 	pub fn finalize() -> T::Header {
 		log::debug!(
 			target: "runtime::system",
-			"[{:?}] length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight: {} ({}%) \
-			/ op weight {} ({}%) / mandatory weight {} ({}%)",
+			"[{:?}] {} extrinsics, length: {} (normal {}%, op: {}%, mandatory {}%) / normal weight:\
+			 {} ({}%) op weight {} ({}%) / mandatory weight {} ({}%)",
 			Self::block_number(),
+			Self::extrinsic_index().unwrap_or_default(),
 			Self::all_extrinsics_len(),
 			sp_runtime::Percent::from_rational(
 				Self::all_extrinsics_len(),
@@ -1534,18 +1535,18 @@ impl<T: Config> Pallet<T> {
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Normal),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Normal),
-				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Normal).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Normal).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Operational),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Operational),
-				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Operational).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Operational).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 			Self::block_weight().get(DispatchClass::Mandatory),
 			sp_runtime::Percent::from_rational(
-				*Self::block_weight().get(DispatchClass::Mandatory),
-				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value())
+				Self::block_weight().get(DispatchClass::Mandatory).ref_time(),
+				T::BlockWeights::get().get(DispatchClass::Mandatory).max_total.unwrap_or(Bounded::max_value()).ref_time()
 			).deconstruct(),
 		);
 		ExecutionPhase::<T>::kill();

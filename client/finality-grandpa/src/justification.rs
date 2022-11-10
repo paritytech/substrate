@@ -74,7 +74,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			.iter()
 			.map(|signed| &signed.precommit)
 			.min_by_key(|precommit| precommit.target_number)
-			.map(|precommit| (precommit.target_hash.clone(), precommit.target_number))
+			.map(|precommit| (precommit.target_hash, precommit.target_number))
 		{
 			None => return error(),
 			Some(base) => base,
@@ -176,7 +176,7 @@ impl<Block: BlockT> GrandpaJustification<Block> {
 			.iter()
 			.map(|signed| &signed.precommit)
 			.min_by_key(|precommit| precommit.target_number)
-			.map(|precommit| precommit.target_hash.clone())
+			.map(|precommit| precommit.target_hash)
 			.expect(
 				"can only fail if precommits is empty; \
 				 commit has been validated above; \

@@ -24,8 +24,8 @@ use sp_std::prelude::*;
 pub const LOG_TARGET: &str = "runtime::bags-list::remote-tests";
 
 pub mod migration;
-pub mod sanity_check;
 pub mod snapshot;
+pub mod try_state;
 
 /// A wrapper for a runtime that the functions of this crate expect.
 ///

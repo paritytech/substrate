@@ -264,7 +264,10 @@ pub mod transactions;
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::PeerInfo;
 pub use sc_network_common::{
-	protocol::event::{DhtEvent, Event, ObservedRole},
+	protocol::{
+		event::{DhtEvent, Event, ObservedRole},
+		ProtocolName,
+	},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,

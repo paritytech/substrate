@@ -44,7 +44,7 @@ pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>
 
 	ext.execute_with(|| {
 		sp_core::crypto::set_default_ss58_version(Runtime::SS58Prefix::get().try_into().unwrap());
-		pallet_bags_list::Pallet::<Runtime>::sanity_check().unwrap();
+		pallet_bags_list::Pallet::<Runtime>::try_state().unwrap();
 		log::info!(target: crate::LOG_TARGET, "executed bags-list sanity check with no errors.");
 
 		crate::display_and_check_bags::<Runtime>(currency_unit, currency_name);

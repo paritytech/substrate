@@ -855,10 +855,18 @@ mod tests {
 			.expect("header get error")
 			.expect("there should be header");
 
-		let extrinsics_num = 4;
-		let extrinsics = (0..extrinsics_num)
-			.map(|v| Extrinsic::IncludeData(vec![v as u8; 10]))
-			.collect::<Vec<_>>();
+		let extrinsics_num = 5;
+		let extrinsics = std::iter::once(
+			Transfer {
+				from: AccountKeyring::Alice.into(),
+				to: AccountKeyring::Bob.into(),
+				amount: 100,
+				nonce: 0,
+			}
+			.into_signed_tx(),
+		)
+		.chain((0..extrinsics_num - 1).map(|v| Extrinsic::IncludeData(vec![v as u8; 10])))
+		.collect::<Vec<_>>();
 
 		let block_limit = genesis_header.encoded_size() +
 			extrinsics
@@ -922,8 +930,9 @@ mod tests {
 		.unwrap();
 
 		// The block limit didn't changed, but we now include the proof in the estimation of the
-		// block size and thus, one less transaction should fit into the limit.
-		assert_eq!(block.extrinsics().len(), extrinsics_num - 2);
+		// block size and thus, only the `Transfer` will fit into the block. It reads more data
+		// than we have reserved in the block limit.
+		assert_eq!(block.extrinsics().len(), 1);
 	}
 
 	#[test]

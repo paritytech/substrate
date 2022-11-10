@@ -1069,7 +1069,7 @@ mod tests {
 					// Skip the first swarm as all other swarms already know it.
 					.skip(1)
 					.filter(|p| *p != n)
-					.map(|p| Swarm::local_peer_id(&swarms[p].0).clone())
+					.map(|p| *Swarm::local_peer_id(&swarms[p].0))
 					.collect::<HashSet<_>>()
 			})
 			.collect::<Vec<_>>();

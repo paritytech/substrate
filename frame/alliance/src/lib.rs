@@ -60,6 +60,8 @@
 //!
 //! #### For Members (All)
 //!
+//! - `give_retirement_notice` - Give a retirement notice and start a retirement period required to
+//!   pass in order to retire.
 //! - `retire` - Retire from the Alliance and release the caller's deposit.
 //!
 //! #### For Members (Founders/Fellows)
@@ -82,7 +84,8 @@
 //!
 //! #### Root Calls
 //!
-//! - `init_founders` - Initialize the founding members.
+//! - `init_members` - Initialize the Alliance, onboard founders, fellows, and allies.
+//! - `disband` - Disband the Alliance, remove all active members and unreserve deposits.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -93,13 +96,14 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+pub mod migration;
 mod types;
 pub mod weights;
 
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 use sp_runtime::{
-	traits::{StaticLookup, Zero},
+	traits::{Saturating, StaticLookup, Zero},
 	RuntimeDebug,
 };
 use sp_std::{convert::TryInto, prelude::*};
@@ -123,6 +127,9 @@ use pallet_identity::IdentityField;
 pub use pallet::*;
 pub use types::*;
 pub use weights::*;
+
+/// The log target of this pallet.
+pub const LOG_TARGET: &str = "runtime::alliance";
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -166,6 +173,8 @@ impl<AccountId> IdentityVerifier<AccountId> for () {
 
 /// The provider of a collective action interface, for example an instance of `pallet-collective`.
 pub trait ProposalProvider<AccountId, Hash, Proposal> {
+	/// Add a new proposal.
+	/// Returns a proposal length and active proposals count if successful.
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
@@ -173,6 +182,8 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError>;
 
+	/// Add an aye or nay vote for the sender to the given proposal.
+	/// Returns true if the sender votes first time if successful.
 	fn vote_proposal(
 		who: AccountId,
 		proposal: Hash,
@@ -180,8 +191,11 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		approve: bool,
 	) -> Result<bool, DispatchError>;
 
+	/// Veto a proposal, closing and removing it from the system, regardless of its current state.
+	/// Returns an active proposals count, which includes removed proposal.
 	fn veto_proposal(proposal_hash: Hash) -> u32;
 
+	/// Close a proposal that is either approved, disapproved, or whose voting period has ended.
 	fn close_proposal(
 		proposal_hash: Hash,
 		index: ProposalIndex,
@@ -189,6 +203,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		length_bound: u32,
 	) -> DispatchResultWithPostInfo;
 
+	/// Return a proposal of the given hash.
 	fn proposal_of(proposal_hash: Hash) -> Option<Proposal>;
 }
 
@@ -198,6 +213,7 @@ pub enum MemberRole {
 	Founder,
 	Fellow,
 	Ally,
+	Retiring,
 }
 
 /// The type of item that may be deemed unscrupulous.
@@ -210,12 +226,15 @@ pub enum UnscrupulousItem<AccountId, Url> {
 type UnscrupulousItemOf<T, I> =
 	UnscrupulousItem<<T as frame_system::Config>::AccountId, UrlOf<T, I>>;
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub (super) trait Store)]
+	#[pallet::storage_version(migration::STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
 	#[pallet::config]
@@ -306,14 +325,18 @@ pub mod pallet {
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
+
+		/// The number of blocks a member must wait between giving a retirement notice and retiring.
+		/// Supposed to be greater than time required to `kick_member`.
+		type RetirementPeriod: Get<Self::BlockNumber>;
 	}
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		/// The founders/fellows/allies have already been initialized.
-		AllianceAlreadyInitialized,
 		/// The Alliance has not been initialized yet, therefore accounts cannot join it.
 		AllianceNotYetInitialized,
+		/// The Alliance has been initialized, therefore cannot be initialized again.
+		AllianceAlreadyInitialized,
 		/// Account is already a member.
 		AlreadyMember,
 		/// Account is not a member.
@@ -322,8 +345,6 @@ pub mod pallet {
 		NotAlly,
 		/// Account is not a founder.
 		NotFounder,
-		/// This member is up for being kicked from the Alliance and cannot perform this operation.
-		UpForKicking,
 		/// Account does not have voting rights.
 		NoVotingRights,
 		/// Account is already an elevated (fellow) member.
@@ -355,6 +376,16 @@ pub mod pallet {
 		TooManyMembers,
 		/// Number of announcements exceeds `MaxAnnouncementsCount`.
 		TooManyAnnouncements,
+		/// Invalid witness data given.
+		BadWitness,
+		/// Account already gave retirement notice
+		AlreadyRetiring,
+		/// Account did not give a retirement notice required to retire.
+		RetirementNoticeNotGiven,
+		/// Retirement period has not passed.
+		RetirementPeriodNotPassed,
+		/// Founders must be provided to initialize the Alliance.
+		FoundersMissing,
 	}
 
 	#[pallet::event]
@@ -380,6 +411,8 @@ pub mod pallet {
 		},
 		/// An ally has been elevated to Fellow.
 		AllyElevated { ally: T::AccountId },
+		/// A member gave retirement notice and their retirement period started.
+		MemberRetirementPeriodStarted { member: T::AccountId },
 		/// A member has retired with its deposit unreserved.
 		MemberRetired { member: T::AccountId, unreserved: Option<BalanceOf<T, I>> },
 		/// A member has been kicked out with its deposit slashed.
@@ -388,6 +421,8 @@ pub mod pallet {
 		UnscrupulousItemAdded { items: Vec<UnscrupulousItemOf<T, I>> },
 		/// Accounts or websites have been removed from the list of unscrupulous items.
 		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
+		/// Alliance disbanded. Includes number deleted members and unreserved deposits.
+		AllianceDisbanded { voting_members: u32, ally_members: u32, unreserved: u32 },
 	}
 
 	#[pallet::genesis_config]
@@ -431,15 +466,22 @@ pub mod pallet {
 					!Pallet::<T, I>::has_member(MemberRole::Fellow),
 					"Fellows are already initialized!"
 				);
+				assert!(
+					!self.founders.is_empty(),
+					"Founders must be provided to initialize the Alliance"
+				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.fellows.clone().try_into().expect("Too many genesis fellows");
 				Members::<T, I>::insert(MemberRole::Fellow, members);
 			}
 			if !self.allies.is_empty() {
-				// Only allow Allies if the Alliance is "initialized".
 				assert!(
-					Pallet::<T, I>::is_initialized(),
-					"Alliance must have Founders or Fellows to have Allies"
+					!Pallet::<T, I>::has_member(MemberRole::Ally),
+					"Allies are already initialized!"
+				);
+				assert!(
+					!self.founders.is_empty(),
+					"Founders must be provided to initialize the Alliance"
 				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.allies.clone().try_into().expect("Too many genesis allies");
@@ -483,12 +525,12 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// A set of members that are (potentially) being kicked out. They cannot retire until the
-	/// motion is settled.
+	/// A set of members who gave a retirement notice. They can retire after the end of retirement
+	/// period stored as a future block number.
 	#[pallet::storage]
-	#[pallet::getter(fn up_for_kicking)]
-	pub type UpForKicking<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, T::AccountId, bool, ValueQuery>;
+	#[pallet::getter(fn retiring_members)]
+	pub type RetiringMembers<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Blake2_128Concat, T::AccountId, T::BlockNumber, OptionQuery>;
 
 	/// The current list of accounts deemed unscrupulous. These accounts non grata cannot submit
 	/// candidacy.
@@ -522,11 +564,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			let proposor = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&proposor), Error::<T, I>::NoVotingRights);
-
-			if let Some(Call::kick_member { who }) = proposal.is_sub_type() {
-				let strike = T::Lookup::lookup(who.clone())?;
-				<UpForKicking<T, I>>::insert(strike, true);
-			}
 
 			T::ProposalProvider::propose_proposal(proposor, threshold, proposal, length_bound)?;
 			Ok(())
@@ -603,13 +640,15 @@ pub mod pallet {
 			Ok(info.into())
 		}
 
-		/// Initialize the founders, fellows, and allies.
+		/// Initialize the Alliance, onboard founders, fellows, and allies.
 		///
-		/// This should only be called once, and must be called by the Root origin.
+		/// Founders must be not empty.
+		/// The Alliance must be empty.
+		/// Must be called by the Root origin.
 		#[pallet::weight(T::WeightInfo::init_members(
-			T::MaxFounders::get(),
-			T::MaxFellows::get(),
-			T::MaxAllies::get()
+			founders.len() as u32,
+			fellows.len() as u32,
+			allies.len() as u32,
 		))]
 		pub fn init_members(
 			origin: OriginFor<T>,
@@ -619,9 +658,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 
-			// Cannot be called if the Alliance already has Founders or Fellows.
-			// TODO: Remove check and allow Root to set members at any time.
-			// https://github.com/paritytech/substrate/issues/11928
+			ensure!(!founders.is_empty(), Error::<T, I>::FoundersMissing);
 			ensure!(!Self::is_initialized(), Error::<T, I>::AllianceAlreadyInitialized);
 
 			let mut founders: BoundedVec<T::AccountId, T::MaxMembersCount> =
@@ -650,9 +687,11 @@ pub mod pallet {
 			T::InitializeMembers::initialize_members(&voteable_members);
 
 			log::debug!(
-				target: "runtime::alliance",
+				target: LOG_TARGET,
 				"Initialize alliance founders: {:?}, fellows: {:?}, allies: {:?}",
-				founders, fellows, allies
+				founders,
+				fellows,
+				allies
 			);
 
 			Self::deposit_event(Event::MembersInitialized {
@@ -661,6 +700,59 @@ pub mod pallet {
 				allies: allies.into(),
 			});
 			Ok(())
+		}
+
+		/// Disband the Alliance, remove all active members and unreserve deposits.
+		///
+		/// Witness data must be set.
+		#[pallet::weight(T::WeightInfo::disband(
+			witness.voting_members,
+			witness.ally_members,
+			witness.voting_members + witness.ally_members,
+		))]
+		pub fn disband(
+			origin: OriginFor<T>,
+			witness: DisbandWitness,
+		) -> DispatchResultWithPostInfo {
+			ensure_root(origin)?;
+
+			ensure!(!witness.is_zero(), Error::<T, I>::BadWitness);
+			ensure!(
+				Self::voting_members_count() <= witness.voting_members,
+				Error::<T, I>::BadWitness
+			);
+			ensure!(Self::ally_members_count() <= witness.ally_members, Error::<T, I>::BadWitness);
+			ensure!(Self::is_initialized(), Error::<T, I>::AllianceNotYetInitialized);
+
+			let voting_members = Self::voting_members();
+			T::MembershipChanged::change_members_sorted(&[], &voting_members, &[]);
+
+			let ally_members = Self::members_of(MemberRole::Ally);
+			let mut unreserve_count: u32 = 0;
+			for member in voting_members.iter().chain(ally_members.iter()) {
+				if let Some(deposit) = DepositOf::<T, I>::take(&member) {
+					let err_amount = T::Currency::unreserve(&member, deposit);
+					debug_assert!(err_amount.is_zero());
+					unreserve_count += 1;
+				}
+			}
+
+			Members::<T, I>::remove(&MemberRole::Founder);
+			Members::<T, I>::remove(&MemberRole::Fellow);
+			Members::<T, I>::remove(&MemberRole::Ally);
+
+			Self::deposit_event(Event::AllianceDisbanded {
+				voting_members: voting_members.len() as u32,
+				ally_members: ally_members.len() as u32,
+				unreserved: unreserve_count,
+			});
+
+			Ok(Some(T::WeightInfo::disband(
+				voting_members.len() as u32,
+				ally_members.len() as u32,
+				unreserve_count,
+			))
+			.into())
 		}
 
 		/// Set a new IPFS CID to the alliance rule.
@@ -744,10 +836,7 @@ pub mod pallet {
 		/// A founder or fellow can nominate someone to join the alliance as an Ally.
 		/// There is no deposit required to the nominator or nominee.
 		#[pallet::weight(T::WeightInfo::nominate_ally())]
-		pub fn nominate_ally(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn nominate_ally(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
 			ensure!(Self::has_voting_rights(&nominator), Error::<T, I>::NoVotingRights);
 			let who = T::Lookup::lookup(who)?;
@@ -771,10 +860,7 @@ pub mod pallet {
 
 		/// Elevate an ally to fellow.
 		#[pallet::weight(T::WeightInfo::elevate_ally())]
-		pub fn elevate_ally(
-			origin: OriginFor<T>,
-			ally: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn elevate_ally(origin: OriginFor<T>, ally: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let ally = T::Lookup::lookup(ally)?;
 			ensure!(Self::is_ally(&ally), Error::<T, I>::NotAlly);
@@ -787,15 +873,40 @@ pub mod pallet {
 			Ok(())
 		}
 
+		/// As a member, give a retirement notice and start a retirement period required to pass in
+		/// order to retire.
+		#[pallet::weight(T::WeightInfo::give_retirement_notice())]
+		pub fn give_retirement_notice(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			ensure!(role.ne(&MemberRole::Retiring), Error::<T, I>::AlreadyRetiring);
+
+			Self::remove_member(&who, role)?;
+			Self::add_member(&who, MemberRole::Retiring)?;
+			<RetiringMembers<T, I>>::insert(
+				&who,
+				frame_system::Pallet::<T>::block_number()
+					.saturating_add(T::RetirementPeriod::get()),
+			);
+
+			Self::deposit_event(Event::MemberRetirementPeriodStarted { member: who });
+			Ok(())
+		}
+
 		/// As a member, retire from the alliance and unreserve the deposit.
+		/// This can only be done once you have `give_retirement_notice` and it has expired.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			// A member up for kicking cannot retire.
-			ensure!(!Self::is_up_for_kicking(&who), Error::<T, I>::UpForKicking);
+			let retirement_period_end = RetiringMembers::<T, I>::get(&who)
+				.ok_or(Error::<T, I>::RetirementNoticeNotGiven)?;
+			ensure!(
+				frame_system::Pallet::<T>::block_number() >= retirement_period_end,
+				Error::<T, I>::RetirementPeriodNotPassed
+			);
 
-			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
-			Self::remove_member(&who, role)?;
+			Self::remove_member(&who, MemberRole::Retiring)?;
+			<RetiringMembers<T, I>>::remove(&who);
 			let deposit = DepositOf::<T, I>::take(&who);
 			if let Some(deposit) = deposit {
 				let err_amount = T::Currency::unreserve(&who, deposit);
@@ -807,10 +918,7 @@ pub mod pallet {
 
 		/// Kick a member from the alliance and slash its deposit.
 		#[pallet::weight(T::WeightInfo::kick_member())]
-		pub fn kick_member(
-			origin: OriginFor<T>,
-			who: <T::Lookup as StaticLookup>::Source,
-		) -> DispatchResult {
+		pub fn kick_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
 			let member = T::Lookup::lookup(who)?;
 
@@ -820,8 +928,6 @@ pub mod pallet {
 			if let Some(deposit) = deposit {
 				T::Slashed::on_unbalanced(T::Currency::slash_reserved(&member, deposit).0);
 			}
-
-			<UpForKicking<T, I>>::remove(&member);
 
 			Self::deposit_event(Event::MemberKicked { member, slashed: deposit });
 			Ok(())
@@ -884,7 +990,9 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check if the Alliance has been initialized.
 	fn is_initialized() -> bool {
-		Self::has_member(MemberRole::Founder) || Self::has_member(MemberRole::Fellow)
+		Self::has_member(MemberRole::Founder) ||
+			Self::has_member(MemberRole::Fellow) ||
+			Self::has_member(MemberRole::Ally)
 	}
 
 	/// Check if a given role has any members.
@@ -928,18 +1036,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::is_founder(who) || Self::is_fellow(who)
 	}
 
-	/// Collect all members who have voting rights into one list.
-	fn votable_members_sorted() -> Vec<T::AccountId> {
-		let mut founders = Members::<T, I>::get(MemberRole::Founder).into_inner();
-		let mut fellows = Members::<T, I>::get(MemberRole::Fellow).into_inner();
-		founders.append(&mut fellows);
-		founders.sort();
-		founders.into()
+	/// Count of ally members.
+	fn ally_members_count() -> u32 {
+		Members::<T, I>::decode_len(MemberRole::Ally).unwrap_or(0) as u32
 	}
 
-	/// Check if an account's forced removal is up for consideration.
-	fn is_up_for_kicking(who: &T::AccountId) -> bool {
-		<UpForKicking<T, I>>::contains_key(&who)
+	/// Count of all members who have voting rights.
+	fn voting_members_count() -> u32 {
+		Members::<T, I>::decode_len(MemberRole::Founder)
+			.unwrap_or(0)
+			.saturating_add(Members::<T, I>::decode_len(MemberRole::Fellow).unwrap_or(0)) as u32
+	}
+
+	/// Get all members of a given role.
+	fn members_of(role: MemberRole) -> Vec<T::AccountId> {
+		Members::<T, I>::get(role).into_inner()
+	}
+
+	/// Collect all members who have voting rights into one list.
+	fn voting_members() -> Vec<T::AccountId> {
+		let mut founders = Self::members_of(MemberRole::Founder);
+		let mut fellows = Self::members_of(MemberRole::Fellow);
+		founders.append(&mut fellows);
+		founders
+	}
+
+	/// Collect all members who have voting rights into one sorted list.
+	fn voting_members_sorted() -> Vec<T::AccountId> {
+		let mut members = Self::voting_members();
+		members.sort();
+		members
 	}
 
 	/// Add a user to the sorted alliance member set.
@@ -953,7 +1079,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		if role == MemberRole::Founder || role == MemberRole::Fellow {
-			let members = Self::votable_members_sorted();
+			let members = Self::voting_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members[..]);
 		}
 		Ok(())
@@ -968,7 +1094,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})?;
 
 		if matches!(role, MemberRole::Founder | MemberRole::Fellow) {
-			let members = Self::votable_members_sorted();
+			let members = Self::voting_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[], &[who.clone()], &members[..]);
 		}
 		Ok(())

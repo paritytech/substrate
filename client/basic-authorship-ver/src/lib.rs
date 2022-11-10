@@ -16,13 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#![feature(proc_macro_hygiene)]
-
 //! # Docs
 //! [!!! HERE
 //! !!!](https://storage.googleapis.com/mangata-docs-node/sc_basic_authorship_ver/basic_authorship/index.html)
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
+#[cfg(doc)]
 use aquamarine::aquamarine;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

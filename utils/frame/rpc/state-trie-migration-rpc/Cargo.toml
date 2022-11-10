@@ -23,7 +23,7 @@ sp-io = { path = "../../../../primitives/io" }
 sp-core = { path = "../../../../primitives/core" }
 sp-state-machine = { path = "../../../../primitives/state-machine" }
 sp-trie = { path = "../../../../primitives/trie" }
-trie-db = { version = "0.23.1" }
+trie-db = "0.24.0"
 
 jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
 

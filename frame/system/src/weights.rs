@@ -59,44 +59,44 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 	/// The range of component `b` is `[0, 3932160]`.
 	fn remark(_b: u32, ) -> Weight {
-		(1_000_000 as Weight)
+		Weight::from_ref_time(1_000_000 as u64)
 	}
 	/// The range of component `b` is `[0, 3932160]`.
 	fn remark_with_event(b: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add((1_000 as Weight).saturating_mul(b as Weight))
+			.saturating_add(Weight::from_ref_time(1_000 as u64).saturating_mul(b as u64))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
 	fn set_heap_pages() -> Weight {
-		(5_367_000 as Weight)
-			.saturating_add(T::DbWeight::get().reads(1 as Weight))
-			.saturating_add(T::DbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(5_367_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `i` is `[1, 1000]`.
 	fn set_storage(i: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 1_000
-			.saturating_add((603_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(Weight::from_ref_time(603_000 as u64).saturating_mul(i as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(i as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `i` is `[1, 1000]`.
 	fn kill_storage(i: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 1_000
-			.saturating_add((513_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(Weight::from_ref_time(513_000 as u64).saturating_mul(i as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(i as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `p` is `[1, 1000]`.
 	fn kill_prefix(p: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_026_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(T::DbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+			.saturating_add(Weight::from_ref_time(1_026_000 as u64).saturating_mul(p as u64))
+			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(p as u64)))
 	}
 }
 
@@ -104,43 +104,43 @@ impl<T: crate::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	/// The range of component `b` is `[0, 3932160]`.
 	fn remark(_b: u32, ) -> Weight {
-		(1_000_000 as Weight)
+		Weight::from_ref_time(1_000_000 as u64)
 	}
 	/// The range of component `b` is `[0, 3932160]`.
 	fn remark_with_event(b: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 0
-			.saturating_add((1_000 as Weight).saturating_mul(b as Weight))
+			.saturating_add(Weight::from_ref_time(1_000 as u64).saturating_mul(b as u64))
 	}
 	// Storage: System Digest (r:1 w:1)
 	// Storage: unknown [0x3a686561707061676573] (r:0 w:1)
 	fn set_heap_pages() -> Weight {
-		(5_367_000 as Weight)
-			.saturating_add(RocksDbWeight::get().reads(1 as Weight))
-			.saturating_add(RocksDbWeight::get().writes(2 as Weight))
+		Weight::from_ref_time(5_367_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `i` is `[1, 1000]`.
 	fn set_storage(i: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 1_000
-			.saturating_add((603_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(Weight::from_ref_time(603_000 as u64).saturating_mul(i as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(i as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `i` is `[1, 1000]`.
 	fn kill_storage(i: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 1_000
-			.saturating_add((513_000 as Weight).saturating_mul(i as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(i as Weight)))
+			.saturating_add(Weight::from_ref_time(513_000 as u64).saturating_mul(i as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(i as u64)))
 	}
 	// Storage: Skipped Metadata (r:0 w:0)
 	/// The range of component `p` is `[1, 1000]`.
 	fn kill_prefix(p: u32, ) -> Weight {
-		(0 as Weight)
+		Weight::from_ref_time(0 as u64)
 			// Standard Error: 1_000
-			.saturating_add((1_026_000 as Weight).saturating_mul(p as Weight))
-			.saturating_add(RocksDbWeight::get().writes((1 as Weight).saturating_mul(p as Weight)))
+			.saturating_add(Weight::from_ref_time(1_026_000 as u64).saturating_mul(p as u64))
+			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(p as u64)))
 	}
 }

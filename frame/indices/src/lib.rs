@@ -36,6 +36,7 @@ pub use weights::WeightInfo;
 
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 pub use pallet::*;
 
@@ -133,10 +134,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transfer())]
 		pub fn transfer(
 			origin: OriginFor<T>,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 			index: T::AccountIndex,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let new = T::Lookup::lookup(new)?;
 			ensure!(who != new, Error::<T>::NotTransfer);
 
 			Accounts::<T>::try_mutate(index, |maybe_value| -> DispatchResult {
@@ -208,11 +210,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::force_transfer())]
 		pub fn force_transfer(
 			origin: OriginFor<T>,
-			new: T::AccountId,
+			new: AccountIdLookupOf<T>,
 			index: T::AccountIndex,
 			freeze: bool,
 		) -> DispatchResult {
 			ensure_root(origin)?;
+			let new = T::Lookup::lookup(new)?;
 
 			Accounts::<T>::mutate(index, |maybe_value| {
 				if let Some((account, amount, _)) = maybe_value.take() {

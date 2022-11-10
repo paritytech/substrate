@@ -26,12 +26,11 @@ use crate::{
 	traits::Get,
 };
 use codec::{FullCodec, MaxEncodedLen};
-use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member};
-use mangata_types::{Balance as BalancePrimitive, TokenId};
-use sp_std::fmt::Debug;
-use scale_info::TypeInfo;
 use frame_support::Parameter;
-use sp_std::result;
+use mangata_types::{Balance as BalancePrimitive, TokenId};
+use scale_info::TypeInfo;
+use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member};
+use sp_std::{fmt::Debug, result};
 
 mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};
@@ -46,40 +45,40 @@ pub trait MultiTokenImbalanceWithZeroTrait<CurrencyId> {
 pub trait MultiTokenCurrency<AccountId> {
 	/// The balance of an account.
 	type Balance: AtLeast32BitUnsigned
-	+ FullCodec
-	+ Copy
-	+ MaybeSerializeDeserialize
-	+ Debug
-	+ Default
-	+ MaxEncodedLen
-	+ TypeInfo
-	+ From<BalancePrimitive>
-	+ Into<BalancePrimitive>;
+		+ FullCodec
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ Debug
+		+ Default
+		+ MaxEncodedLen
+		+ TypeInfo
+		+ From<BalancePrimitive>
+		+ Into<BalancePrimitive>;
 
 	type CurrencyId: Parameter
-	+ Member
-	+ Copy
-	+ MaybeSerializeDeserialize
-	+ Ord
-	+ Default
-	+ AtLeast32BitUnsigned
-	+ FullCodec
-	+ MaxEncodedLen
-	+ TypeInfo
-	+ From<TokenId>
-	+ Into<TokenId>;
+		+ Member
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ Ord
+		+ Default
+		+ AtLeast32BitUnsigned
+		+ FullCodec
+		+ MaxEncodedLen
+		+ TypeInfo
+		+ From<TokenId>
+		+ Into<TokenId>;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced
 	/// operations and must be dealt with. It may be dropped but cannot be
 	/// cloned.
 	type PositiveImbalance: Imbalance<Self::Balance, Opposite = Self::NegativeImbalance>
-	+ MultiTokenImbalanceWithZeroTrait<Self::CurrencyId>;
+		+ MultiTokenImbalanceWithZeroTrait<Self::CurrencyId>;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced
 	/// operations and must be dealt with. It may be dropped but cannot be
 	/// cloned.
 	type NegativeImbalance: Imbalance<Self::Balance, Opposite = Self::PositiveImbalance>
-	+ MultiTokenImbalanceWithZeroTrait<Self::CurrencyId>;
+		+ MultiTokenImbalanceWithZeroTrait<Self::CurrencyId>;
 
 	// PUBLIC IMMUTABLES
 
@@ -123,10 +122,7 @@ pub trait MultiTokenCurrency<AccountId> {
 		currency_id: Self::CurrencyId,
 		amount: Self::Balance,
 	) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
-		(
-			Self::burn(currency_id, amount.clone()),
-			Self::issue(currency_id, amount),
-		)
+		(Self::burn(currency_id, amount.clone()), Self::issue(currency_id, amount))
 	}
 
 	/// The 'free' balance of a given account.
@@ -217,7 +213,11 @@ pub trait MultiTokenCurrency<AccountId> {
 
 	/// Similar to deposit_creating, only accepts a `NegativeImbalance` and
 	/// returns nothing on success.
-	fn resolve_creating(currency_id: Self::CurrencyId, who: &AccountId, value: Self::NegativeImbalance) {
+	fn resolve_creating(
+		currency_id: Self::CurrencyId,
+		who: &AccountId,
+		value: Self::NegativeImbalance,
+	) {
 		let v = value.peek();
 		drop(value.offset(Self::deposit_creating(currency_id, who, v)));
 	}

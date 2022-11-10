@@ -14,7 +14,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-async-trait = { version = "0.1.50", optional = true }
+async-trait = { version = "0.1.57", optional = true }
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 impl-trait-for-tuples = "0.2.2"
 thiserror = { version = "1.0.30", optional = true }

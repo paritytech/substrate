@@ -45,8 +45,7 @@
 use scale_info::TypeInfo;
 use sp_io::storage;
 use sp_runtime::{traits::Hash, RuntimeDebug};
-use sp_std::vec;
-use sp_std::{marker::PhantomData, prelude::*, result};
+use sp_std::{marker::PhantomData, prelude::*, result, vec};
 
 use frame_support::{
 	codec::{Decode, Encode, MaxEncodedLen},
@@ -753,7 +752,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if position_yes.is_none() {
 				voting.ayes.push(who.clone());
 			} else {
-				return Err(Error::<T, I>::DuplicateVote.into());
+				return Err(Error::<T, I>::DuplicateVote.into())
 			}
 			if let Some(pos) = position_no {
 				voting.nays.swap_remove(pos);
@@ -762,7 +761,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			if position_no.is_none() {
 				voting.nays.push(who.clone());
 			} else {
-				return Err(Error::<T, I>::DuplicateVote.into());
+				return Err(Error::<T, I>::DuplicateVote.into())
 			}
 			if let Some(pos) = position_yes {
 				voting.ayes.swap_remove(pos);
@@ -816,7 +815,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				),
 				Pays::Yes,
 			)
-				.into());
+				.into())
 		} else if disapproved {
 			Self::deposit_event(Event::Closed { proposal_hash, yes: yes_votes, no: no_votes });
 			let proposal_count = Self::do_disapprove_proposal(proposal_hash);
@@ -824,7 +823,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Some(T::WeightInfo::close_early_disapproved(seats, proposal_count)),
 				Pays::No,
 			)
-				.into());
+				.into())
 		}
 
 		// Only allow actual closing of the proposal after the voting period has ended.

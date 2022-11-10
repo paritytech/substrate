@@ -127,7 +127,7 @@ pub struct BenchmarkResult {
 
 impl BenchmarkResult {
 	pub fn from_weight(w: Weight) -> Self {
-		Self { extrinsic_time: (w as u128) / 1_000, ..Default::default() }
+		Self { extrinsic_time: (w.ref_time() / 1_000) as u128, ..Default::default() }
 	}
 }
 

@@ -918,3 +918,14 @@ fn unreachable_intrinsic(wasm_method: WasmExecutionMethod) {
 		error => panic!("unexpected error: {:?}", error),
 	}
 }
+
+test_wasm_execution!(return_value);
+fn return_value(wasm_method: WasmExecutionMethod) {
+	let mut ext = TestExternalities::default();
+	let mut ext = ext.ext();
+
+	assert_eq!(
+		call_in_wasm("test_return_value", &[], wasm_method, &mut ext).unwrap(),
+		(1234u64).encode()
+	);
+}

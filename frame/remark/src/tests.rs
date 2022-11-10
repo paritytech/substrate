@@ -28,7 +28,7 @@ fn generates_event() {
 		let caller = 1;
 		let data = vec![0u8; 100];
 		System::set_block_number(System::block_number() + 1); //otherwise event won't be registered.
-		assert_ok!(Remark::<Test>::store(RawOrigin::Signed(caller.clone()).into(), data.clone(),));
+		assert_ok!(Remark::<Test>::store(RawOrigin::Signed(caller).into(), data.clone(),));
 		let events = System::events();
 		// this one we create as we expect it
 		let system_event: <Test as frame_system::Config>::Event = Event::Stored {
@@ -50,7 +50,7 @@ fn does_not_store_empty() {
 		let data = vec![];
 		System::set_block_number(System::block_number() + 1); //otherwise event won't be registered.
 		assert_noop!(
-			Remark::<Test>::store(RawOrigin::Signed(caller.clone()).into(), data.clone(),),
+			Remark::<Test>::store(RawOrigin::Signed(caller).into(), data.clone(),),
 			Error::<Test>::Empty
 		);
 		assert!(System::events().is_empty());

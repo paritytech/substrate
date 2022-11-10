@@ -31,7 +31,7 @@ use sp_api::{ApiExt, ProvideRuntimeApi};
 use sp_blockchain::HeaderBackend;
 use sp_runtime::{
 	traits::{Block as BlockT, Header as HeaderT},
-	OpaqueExtrinsic,
+	DigestItem, OpaqueExtrinsic,
 };
 use ver_api::VerApi;
 
@@ -100,6 +100,7 @@ impl OverheadCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
+		digest_items: Vec<DigestItem>,
 		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
 	where
@@ -111,7 +112,7 @@ impl OverheadCmd {
 		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
 			return Err(format!("The extrinsic builder is required to build `System::Remark` extrinsics but builds `{}` extrinsics instead", ext_builder.name()).into());
 		}
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, digest_items);
 
 		// per-block execution overhead
 		{
