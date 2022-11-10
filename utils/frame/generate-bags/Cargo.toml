@@ -22,4 +22,4 @@ sp-io = { version = "6.0.0", path = "../../../primitives/io" }
 # third party
 chrono = { version = "0.4.19" }
 git2 = { version = "0.14.2", default-features = false }
-num-format = { version = "0.4.0" }
+num-format = "0.4.3"

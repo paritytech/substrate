@@ -145,6 +145,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxWinners = ConstU32<100>;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
@@ -188,7 +191,7 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
