@@ -429,6 +429,8 @@ pub mod pallet {
 		},
 		/// An automatic funding of the deficit was made.
 		Funded { deficit: BalanceOf<T> },
+		/// A receipt was transfered.
+		Transferred { from: T::AccountId, to: T::AccountId, index: ReceiptIndex },
 	}
 
 	#[pallet::error]
@@ -735,8 +737,10 @@ pub mod pallet {
 	impl<T: Config> NonfungibleTransfer<T::AccountId> for Pallet<T> {
 		fn transfer(index: &ReceiptIndex, destination: &T::AccountId) -> DispatchResult {
 			let mut item = Receipts::<T>::get(index).ok_or(TokenError::UnknownAsset)?;
+			let from = item.who;
 			item.who = destination.clone();
-			Receipts::<T>::insert(index, item);
+			Receipts::<T>::insert(&index, &item);
+			Pallet::<T>::deposit_event(Event::<T>::Transferred { from, to: item.who, index: *index });
 			Ok(())
 		}
 	}
