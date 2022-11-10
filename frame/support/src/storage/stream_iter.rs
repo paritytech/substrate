@@ -15,22 +15,82 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::{BoundedBTreeMap, BoundedBTreeSet, BoundedVec, WeakBoundedVec};
 use sp_std::vec::Vec;
+
+pub trait ScaleContainerType: private::Sealed {
+	type Stored: codec::Decode;
+}
+
+impl<T: codec::Decode> ScaleContainerType for Vec<T> {
+	type Stored = T;
+}
+
+impl<T: codec::Decode> ScaleContainerType for sp_std::collections::btree_set::BTreeSet<T> {
+	type Stored = T;
+}
+
+impl<K: codec::Decode, V: codec::Decode> ScaleContainerType
+	for sp_std::collections::btree_map::BTreeMap<K, V>
+{
+	type Stored = (K, V);
+}
+
+impl<T: codec::Decode, S> ScaleContainerType for BoundedVec<T, S> {
+	type Stored = T;
+}
+
+impl<T: codec::Decode, S> ScaleContainerType for WeakBoundedVec<T, S> {
+	type Stored = T;
+}
+
+impl<K: codec::Decode, V: codec::Decode, S> ScaleContainerType for BoundedBTreeMap<K, V, S> {
+	type Stored = (K, V);
+}
+
+impl<T: codec::Decode, S> ScaleContainerType for BoundedBTreeSet<T, S> {
+	type Stored = T;
+}
+
+mod private {
+	use super::*;
+
+	pub trait Sealed {}
+
+	impl<T: codec::Decode> Sealed for Vec<T> {}
+	impl<T: codec::Decode> Sealed for sp_std::collections::btree_set::BTreeSet<T> {}
+	impl<K: codec::Decode, V: codec::Decode> Sealed for sp_std::collections::btree_map::BTreeMap<K, V> {}
+
+	impl<T: codec::Decode, S> Sealed for BoundedVec<T, S> {}
+	impl<T: codec::Decode, S> Sealed for WeakBoundedVec<T, S> {}
+	impl<K: codec::Decode, V: codec::Decode, S> Sealed for BoundedBTreeMap<K, V, S> {}
+	impl<T: codec::Decode, S> Sealed for BoundedBTreeSet<T, S> {}
+}
 
 pub trait StreamIter {
 	type Iterator: sp_std::iter::Iterator;
 
-	fn stream_iter(key: Vec<u8>) -> Self::Iterator;
+	fn stream_iter() -> Self::Iterator;
 }
 
-pub struct StreamReadVec<T> {
+impl<T: ScaleContainerType, StorageValue: super::generator::StorageValue<T>> StreamIter
+	for StorageValue
+{
+	type Iterator = ScaleContainerStreamIter<T::Stored>;
+
+	fn stream_iter() -> Self::Iterator {
+		ScaleContainerStreamIter::new(Self::storage_value_final_key().into()).unwrap()
+	}
+}
+
+pub struct ScaleContainerStreamIter<T> {
 	marker: sp_std::marker::PhantomData<T>,
 	input: StorageInput,
 	length: u32,
 	read: u32,
 }
 
-impl<T> StreamReadVec<T> {
+impl<T> ScaleContainerStreamIter<T> {
 	pub fn new(key: Vec<u8>) -> Result<Self, codec::Error> {
 		let mut input = StorageInput::new(key)?;
 		let length = if input.exists { codec::Compact::<u32>::decode(&mut input)?.0 } else { 0 };
@@ -39,7 +99,7 @@ impl<T> StreamReadVec<T> {
 	}
 }
 
-impl<T: codec::Decode> sp_std::iter::Iterator for StreamReadVec<T> {
+impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
 	type Item = T;
 
 	fn next(&mut self) -> Option<T> {
@@ -54,12 +114,14 @@ impl<T: codec::Decode> sp_std::iter::Iterator for StreamReadVec<T> {
 }
 
 impl<T: codec::Decode> StreamIter for Vec<T> {
-	type Iterator = StreamReadVec<T>;
+	type Iterator = ScaleContainerStreamIter<T>;
 
 	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
-		StreamReadVec::new(key).unwrap()
+		ScaleContainerStreamIter::new(key).unwrap()
 	}
 }
+
+const STORAGE_INPUT_BUFFER_CAPACITY: usize = 16 * 1024;
 
 pub struct StorageInput {
 	key: Vec<u8>,
@@ -72,9 +134,9 @@ pub struct StorageInput {
 
 impl StorageInput {
 	pub fn new(key: Vec<u8>) -> Result<Self, codec::Error> {
-		let mut buffer = Vec::with_capacity(2048);
+		let mut buffer = Vec::with_capacity(STORAGE_INPUT_BUFFER_CAPACITY);
 		unsafe {
-			buffer.set_len(2048);
+			buffer.set_len(buffer.capacity());
 		}
 
 		let (total_length, exists) =
@@ -84,14 +146,13 @@ impl StorageInput {
 				(0, false)
 			};
 
-		Ok(Self {
-			total_length,
-			offset: 0,
-			key,
-			exists,
-			buffer: Vec::with_capacity(2048),
-			buffer_pos: 0,
-		})
+		if total_length < buffer.len() {
+			unsafe {
+				buffer.set_len(total_length as usize);
+			}
+		}
+
+		Ok(Self { total_length, offset: 0, key, exists, buffer, buffer_pos: 0 })
 	}
 
 	fn fill_buffer(&mut self) -> Result<(), codec::Error> {
