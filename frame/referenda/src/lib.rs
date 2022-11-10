@@ -701,23 +701,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	/// Returns the referendum's current approval/support and TrackId.
-	/// Referendum must be ongoing.
-	pub fn current_referendum_threshold(
-		ref_index: ReferendumIndex,
-	) -> Result<(Perbill, Perbill, Option<T::BlockNumber>, TrackIdOf<T, I>), DispatchError> {
-		let info = ReferendumInfoFor::<T, I>::get(ref_index).ok_or(Error::<T, I>::BadReferendum)?;
-		match info {
-			ReferendumInfo::Ongoing(status) => {
-				let maybe_since = if let Some(d) = status.deciding { Some(d.since) } else { None };
-				let (current_approval, current_support) =
-					(status.tally.approval(status.track), status.tally.support(status.track));
-				Ok((current_approval, current_support, maybe_since, status.track))
-			},
-			_ => Err(Error::<T, I>::NotOngoing.into()),
-		}
-	}
-
 	/// Returns whether the referendum is passing.
 	/// Referendum must be ongoing and its track must exist.
 	pub fn is_referendum_passing(ref_index: ReferendumIndex) -> Result<bool, DispatchError> {
