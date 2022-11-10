@@ -63,6 +63,7 @@ build-linux-substrate:
       artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
+    - cat .git/HEAD
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
@@ -75,6 +76,7 @@ build-linux-substrate:
         ./artifacts/substrate/substrate --version |
           cut -d ' ' -f 2 | tee ./artifacts/substrate/VERSION;
       fi
+    - ./scripts/ci/gitlab/check-version.sh
     - sha256sum ./artifacts/substrate/substrate | tee ./artifacts/substrate/substrate.sha256
     - cp -r ./scripts/ci/docker/substrate.Dockerfile ./artifacts/substrate/
     - printf '\n# building node-template\n\n'
@@ -86,7 +88,7 @@ build-linux-substrate:
   extends:
     - .collect-artifacts
     - .docker-env
-    - .build-refs
+    - .publish-refs
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
