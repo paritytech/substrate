@@ -1,10 +1,10 @@
 # Test design
 The `warp-sync` test works on predefined database which is stored in the cloud and
-fetched by the test. `Alice` and `Bob` nodes are spin up using this database.
+fetched by the test. `alice` and `bob` nodes are spun up using this database snapshot.
 
-As `warp-sync` requires at least 3 peers so the test spawns the `charlie` node which is `--sync full`.
+As `warp-sync` requires at least 3 peers, the test spawns the `charlie` node which is `--sync full`.
 
-The `dave` node executed with `--sync warp` syncs database wit the rest of the network.
+The `dave` node executed with `--sync warp` syncs database with the rest of the network.
 
 
 # How to prepare database
@@ -33,7 +33,7 @@ The zombienet shall be executed with the following command, and run for some per
 ```
 
 Once the zombienet is stopped, the database snapshot
-(`{alice,bob}/data/chains/local_testnet/db/` dirs) was created using following
+(`{alice,bob}/data/chains/local_testnet/db/` dirs) was created using the following
 commands:
 ```bash
 mkdir -p db-snapshot/{alice,bob}/data/chains/local_testnet/db/  
@@ -42,6 +42,7 @@ cp -r db-test-gen/bob/data/chains/local_testnet/db/full   db-snapshot/bob/data/c
 
 ```
 
+# Chain spec
 Chain spec was simply built with:
 ```
 substrate build-spec --chain=local > 0001-chain-spec.json
