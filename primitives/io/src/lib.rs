@@ -40,7 +40,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	offchain::{OffchainDbExt, OffchainWorkerExt, TransactionPoolExt},
 	storage::ChildInfo,
-	traits::{RuntimeSpawnExt, TaskExecutorExt},
+	traits::TaskExecutorExt,
 };
 #[cfg(feature = "std")]
 use sp_keystore::{KeystoreExt, SyncCryptoStore};
@@ -1657,38 +1657,6 @@ pub trait Sandbox {
 	}
 }
 
-/// Wasm host functions for managing tasks.
-///
-/// This should not be used directly. Use `sp_tasks` for running parallel tasks instead.
-#[runtime_interface(wasm_only)]
-pub trait RuntimeTasks {
-	/// Wasm host function for spawning task.
-	///
-	/// This should not be used directly. Use `sp_tasks::spawn` instead.
-	fn spawn(dispatcher_ref: u32, entry: u32, payload: Vec<u8>) -> u64 {
-		sp_externalities::with_externalities(|mut ext| {
-			let runtime_spawn = ext
-				.extension::<RuntimeSpawnExt>()
-				.expect("Cannot spawn without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.spawn_call(dispatcher_ref, entry, payload)
-		})
-		.expect("`RuntimeTasks::spawn`: called outside of externalities context")
-	}
-
-	/// Wasm host function for joining a task.
-	///
-	/// This should not be used directly. Use `join` of `sp_tasks::spawn` result instead.
-	fn join(handle: u64) -> Vec<u8> {
-		sp_externalities::with_externalities(|mut ext| {
-			let runtime_spawn = ext
-				.extension::<RuntimeSpawnExt>()
-				.expect("Cannot join without dynamic runtime dispatcher (RuntimeSpawnExt)");
-			runtime_spawn.join(handle)
-		})
-		.expect("`RuntimeTasks::join`: called outside of externalities context")
-	}
-}
-
 /// Allocator used by Substrate when executing the Wasm runtime.
 #[cfg(all(target_arch = "wasm32", not(feature = "std")))]
 struct WasmAllocator;
@@ -1767,7 +1735,6 @@ pub type SubstrateHostFunctions = (
 	sandbox::HostFunctions,
 	crate::trie::HostFunctions,
 	offchain_index::HostFunctions,
-	runtime_tasks::HostFunctions,
 	transaction_index::HostFunctions,
 );
 
