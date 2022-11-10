@@ -163,25 +163,22 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 ///   - `execute_block_ver` that is responsible for execution of parachain chain blocks (ver mangata
 ///   impl)
 ///
-///
 /// # VER block execution
-///	Upon VER block execution:
-///	- (if any) previous block extrinsics are executed, they are fetched from a queue that is
-///	persisted in runtime storage [`frame_system::Pallet::StorageQueue`]. Block header has dedicated field `count`, it is used for notifying
-///	how many txs were fetched and executed by collator when the block was build. That information
-///	can be used to fetch specific amount of txs at once during block execution process. Every network
-///	participant needs to fetch and execute exactly same amount of txs from the storage queue to
-///	reach exactly the same state as block author.
-///	- (if any) new txs that were just collected from transaction pool are persisted into the storage
-///	queue. Dedicated inherent [`frame_system::Pallet::enqueue_txs`] accepts list of encoded txs as
-///	argument, then txs are pushed into the storage queue [`frame_system::Pallet::StorageQueue`]
 ///
+/// Upon block execution.
+///   - (if any) previous block extrinsics are executed, they are fetched from a queue that is
+/// field `count`, it is used for notifying 	how many txs were fetched and executed by collator when
+/// the block was build. That information 	can be used to fetch specific amount of txs at once during
+/// block execution process. Every network 	participant needs to fetch and execute exactly same
+/// amount of txs from the storage queue to 	reach exactly the same state as block author.
+///   - (if any) new txs that were just collected from transaction pool are persisted into the
+///    storage
 ///
-///	VER block execution includes number of steps that are not present in origin impl:
-///	- shuffling seed validation
-///	- enqueued txs size & weight limits validation
-///	- validation of txs listed in block body
-///	- malicious collator prevention (decoding txs)
+/// VER block execution includes number of steps that are not present in origin impl:
+/// - shuffling seed validation
+/// - enqueued txs size & weight limits validation
+/// - validation of txs listed in block body
+/// - malicious collator prevention (decoding txs)
 ///
 /// ```mermaid
 /// flowchart TD
@@ -195,13 +192,12 @@ pub type OriginOf<E, C> = <CallOf<E, C> as Dispatchable>::Origin;
 ///     G -- No --> E
 ///     G -- Yes --> H{extrinsics from block body<br> == txs popped from<br> StorageQueue }
 ///     H -- No --> E
-///     H -- Yes --> I{Verify that there are no new<br> enqueued txs if collator didnt<br> execute any previous ones}
+///     H -- Yes --> I{Verify that there are no new<br> enqueued txs if there is no room <br> in storage queue}
 ///     I -- Fail --> E
 ///     I -- Ok --> J{validate if local state == Header::state_root}
 ///     J -- OK --> K[Accept block]
 ///     B -- No ----> E[Reject block]
 /// ```
-///
 pub struct Executive<
 	System,
 	Block,
@@ -1863,7 +1859,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"a8d7e7ea29cdd0d5d9a175a0680b43c5f80a8212c594f5d833c7c7d4f4d426b3"
+							"fe2d25a1c581d3687aedf829d9501ced883e3d707df29edfc204840c9cf48f98"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -1952,7 +1948,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"589731472b657aed2b2ce33b12cd966204b51e58f6632a49949633ac5533dfa9"
+							"13051d7e53ff634b944d2f69ddec9bae20a27a4aa38d3b9d3dd07cb6a8bd8562"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2014,7 +2010,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"589731472b657aed2b2ce33b12cd966204b51e58f6632a49949633ac5533dfa9"
+							"13051d7e53ff634b944d2f69ddec9bae20a27a4aa38d3b9d3dd07cb6a8bd8562"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2153,7 +2149,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"a8d7e7ea29cdd0d5d9a175a0680b43c5f80a8212c594f5d833c7c7d4f4d426b3"
+							"fe2d25a1c581d3687aedf829d9501ced883e3d707df29edfc204840c9cf48f98"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2251,7 +2247,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"9e9c73c1e3ea8b931b9c281f726f4b23496381a65379ffc7aa47c5cd3d2a9baf"
+							"926530bbf299279ba239dd0d4e231c8877f0ec6915ef5e12537d852e3b086aa2"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2342,7 +2338,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"a8d7e7ea29cdd0d5d9a175a0680b43c5f80a8212c594f5d833c7c7d4f4d426b3"
+							"fe2d25a1c581d3687aedf829d9501ced883e3d707df29edfc204840c9cf48f98"
 						)
 						.into(),
 						extrinsics_root: hex!(
@@ -2401,7 +2397,7 @@ mod tests {
 						parent_hash: System::parent_hash(),
 						number: 1,
 						state_root: hex!(
-							"a8d7e7ea29cdd0d5d9a175a0680b43c5f80a8212c594f5d833c7c7d4f4d426b3"
+							"fe2d25a1c581d3687aedf829d9501ced883e3d707df29edfc204840c9cf48f98"
 						)
 						.into(),
 						extrinsics_root: hex!(

@@ -394,7 +394,7 @@ pub mod pallet {
 		}
 
 		/// Persists list of encoded txs into the storage queue. There is an dedicated
-		/// check in [`frame_executive::Executeive`] that verifies that passed binary data can be
+		/// check in [Executive](https://storage.googleapis.com/mangata-docs-node/frame_executive/struct.Executive.html) that verifies that passed binary data can be
 		/// decoded into extrinsics.
 		#[pallet::weight((
 			0,
@@ -626,7 +626,7 @@ pub mod pallet {
 	/// Main reason for that storage entry is fact that upon VER block `N` execution it is
 	/// required to fetch & executed transactions from previous block (`N-1`) but due to origin
 	/// substrate design blocks & extrinsics are stored in rocksDB database that is not accessible
-	/// from runtime part of the node ([`URL`]) what makes it impossible to properly implement block
+	/// from runtime part of the node (see [Substrate architecture](https://storage.googleapis.com/mangata-docs-node/frame_executive/struct.Executive.html)) what makes it impossible to properly implement block
 	/// execution logic. As an solution blockchain runtime storage was selected as buffer for txs
 	/// waiting for execution. Main advantage of such approach is fact that storage state is public
 	/// so its impossible to manipulate data stored in there. Storage queue is implemented as double
@@ -641,8 +641,9 @@ pub mod pallet {
 	///
 	/// # Storage Qeueue interaction
 	/// There are two ways to interact with storage queue:
-	/// - enqueuing new txs using [`enqueued_txs`] inherent
-	/// - poping txs from the queue using [`pop_tx`] that is exposed throught RuntimeApi call
+	/// - enqueuing new txs using [`Pallet::enqueue_txs`] inherent
+	/// - poping txs from the queue using [`Pallet::pop_txs`] that is exposed throught RuntimeApi
+	///   call
 	#[pallet::storage]
 	pub type StorageQueue<T: Config> = StorageValue<
 		_,
