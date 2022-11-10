@@ -1143,7 +1143,7 @@ impl<T: Config> SubPools<T> {
 	}
 
 	/// The sum of all unbonding balance, regardless of whether they are actually unlocked or not.
-	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	fn sum_unbonding_balance(&self) -> BalanceOf<T> {
 		self.no_era.balance.saturating_add(
 			self.with_era
