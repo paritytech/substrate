@@ -2989,7 +2989,7 @@ mod tests {
 	fn reentrant_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_reentrant_count" (func $seal_reentrant_count (result i32)))
+	(import "__unstable__" "reentrant_count" (func $reentrant_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
@@ -3002,7 +3002,7 @@ mod tests {
 	(func (export "call")
 		(local $return_val i32)
 		(set_local $return_val
-			(call $seal_reentrant_count)
+			(call $reentrant_count)
 		)
 		(call $assert
 			(i32.eq (get_local $return_val) (i32.const 12))
@@ -3022,7 +3022,7 @@ mod tests {
 	fn account_entrance_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "seal_account_entrance_count" (func $seal_account_entrance_count (param i32) (result i32)))
+	(import "__unstable__" "account_entrance_count" (func $account_entrance_count (param i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
@@ -3035,7 +3035,7 @@ mod tests {
 	(func (export "call")
 		(local $return_val i32)
 		(set_local $return_val
-			(call $seal_account_entrance_count (i32.const 0))
+			(call $account_entrance_count (i32.const 0))
 		)
 		(call $assert
 			(i32.eq (get_local $return_val) (i32.const 12))

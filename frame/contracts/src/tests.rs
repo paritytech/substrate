@@ -4492,6 +4492,5 @@ fn account_entrance_count_works() {
 		.unwrap();
 
 		assert_eq!(result.data, 1.encode());
-		assert_ne!(result.data, 2.encode());
 	});
 }
