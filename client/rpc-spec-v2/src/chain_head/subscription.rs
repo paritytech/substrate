@@ -26,6 +26,15 @@ use std::{
 	sync::Arc,
 };
 
+/// Subscription management error.
+#[derive(Debug)]
+pub enum SubscriptionManagementError {
+	/// The block cannot be pinned into memory because
+	/// the subscription has exceeded the maximum number
+	/// of blocks pinned.
+	ExceededLimits,
+}
+
 /// Inner subscription data structure.
 struct SubscriptionInner<Block: BlockT> {
 	/// The `runtime_updates` parameter flag of the subscription.
@@ -34,6 +43,8 @@ struct SubscriptionInner<Block: BlockT> {
 	tx_stop: Option<oneshot::Sender<()>>,
 	/// The blocks pinned.
 	blocks: HashSet<Block::Hash>,
+	/// The maximum number of pinned blocks allowed per subscription.
+	max_pinned_blocks: usize,
 }
 
 /// Manage the blocks of a specific subscription ID.
@@ -48,12 +59,13 @@ pub struct SubscriptionHandle<Block: BlockT> {
 
 impl<Block: BlockT> SubscriptionHandle<Block> {
 	/// Construct a new [`SubscriptionHandle`].
-	fn new(runtime_updates: bool, tx_stop: oneshot::Sender<()>) -> Self {
+	fn new(runtime_updates: bool, tx_stop: oneshot::Sender<()>, max_pinned_blocks: usize) -> Self {
 		SubscriptionHandle {
 			inner: Arc::new(RwLock::new(SubscriptionInner {
 				runtime_updates,
 				tx_stop: Some(tx_stop),
 				blocks: HashSet::new(),
+				max_pinned_blocks,
 			})),
 			best_block: Arc::new(RwLock::new(None)),
 		}
@@ -63,7 +75,7 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 	///
 	/// This can happen on internal failure (ie, the pruning deleted the block from memory)
 	/// or if the user exceeded the amount of available pinned blocks.
-	pub fn stop(self) {
+	pub fn stop(&self) {
 		let mut inner = self.inner.write();
 
 		if let Some(tx_stop) = inner.tx_stop.take() {
@@ -73,12 +85,21 @@ impl<Block: BlockT> SubscriptionHandle<Block> {
 
 	/// Pin a new block for the current subscription ID.
 	///
-	/// Returns whether the value was newly inserted. That is:
-	/// - If the set did not previously contain this value, `true` is returned.
-	/// - If the set already contained this value, `false` is returned.
-	pub fn pin_block(&self, hash: Block::Hash) -> bool {
+	/// Returns whether the value was newly inserted if the block can be pinned.
+	/// Otherwise, returns an error if the maximum number of blocks has been exceeded.
+	pub fn pin_block(&self, hash: Block::Hash) -> Result<bool, SubscriptionManagementError> {
 		let mut inner = self.inner.write();
-		inner.blocks.insert(hash)
+
+		if inner.blocks.len() == inner.max_pinned_blocks {
+			// We have reached the limit. However, the block can be already inserted.
+			if inner.blocks.contains(&hash) {
+				return Ok(false)
+			} else {
+				return Err(SubscriptionManagementError::ExceededLimits)
+			}
+		}
+
+		Ok(inner.blocks.insert(hash))
 	}
 
 	/// Unpin a new block for the current subscription ID.
@@ -131,12 +152,14 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 		&self,
 		subscription_id: String,
 		runtime_updates: bool,
+		max_pinned_blocks: usize,
 	) -> Option<(oneshot::Receiver<()>, SubscriptionHandle<Block>)> {
 		let mut subs = self.inner.write();
 
 		if let Entry::Vacant(entry) = subs.entry(subscription_id) {
 			let (tx_stop, rx_stop) = oneshot::channel();
-			let handle = SubscriptionHandle::<Block>::new(runtime_updates, tx_stop);
+			let handle =
+				SubscriptionHandle::<Block>::new(runtime_updates, tx_stop, max_pinned_blocks);
 			entry.insert(handle.clone());
 			Some((rx_stop, handle))
 		} else {
@@ -173,7 +196,7 @@ mod tests {
 		let handle = subs.get_subscription(&id);
 		assert!(handle.is_none());
 
-		let (_, handle) = subs.insert_subscription(id.clone(), false).unwrap();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
 		assert!(!handle.contains_block(&hash));
 
 		subs.remove_subscription(&id);
@@ -190,11 +213,11 @@ mod tests {
 		let hash = H256::random();
 
 		// Check with subscription.
-		let (_, handle) = subs.insert_subscription(id.clone(), false).unwrap();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
 		assert!(!handle.contains_block(&hash));
 		assert!(!handle.unpin_block(&hash));
 
-		handle.pin_block(hash);
+		handle.pin_block(hash).unwrap();
 		assert!(handle.contains_block(&hash));
 		// Unpin an invalid block.
 		assert!(!handle.unpin_block(&H256::random()));
@@ -211,17 +234,17 @@ mod tests {
 		let id = "abc".to_string();
 
 		// Check with subscription.
-		let (mut rx_stop, sub_handle) = subs.insert_subscription(id.clone(), false).unwrap();
+		let (mut rx_stop, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
 
 		// Check the stop signal was not received.
 		let res = rx_stop.try_recv().unwrap();
 		assert!(res.is_none());
 
 		// Inserting a second time returns None.
-		let res = subs.insert_subscription(id.clone(), false);
+		let res = subs.insert_subscription(id.clone(), false, 10);
 		assert!(res.is_none());
 
-		sub_handle.stop();
+		handle.stop();
 
 		// Check the signal was received.
 		let res = rx_stop.try_recv().unwrap();
@@ -233,11 +256,27 @@ mod tests {
 		let subs = SubscriptionManagement::<Block>::new();
 
 		let id = "abc".to_string();
-		let (_, sub_handle) = subs.insert_subscription(id.clone(), false).unwrap();
-		assert!(!sub_handle.runtime_updates());
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 10).unwrap();
+		assert!(!handle.runtime_updates());
 
 		let id2 = "abcd".to_string();
-		let (_, sub_handle) = subs.insert_subscription(id2.clone(), true).unwrap();
-		assert!(sub_handle.runtime_updates());
+		let (_, handle) = subs.insert_subscription(id2.clone(), true, 10).unwrap();
+		assert!(handle.runtime_updates());
+	}
+
+	#[test]
+	fn subscription_check_max_pinned() {
+		let subs = SubscriptionManagement::<Block>::new();
+
+		let id = "abc".to_string();
+		let hash = H256::random();
+		let hash_2 = H256::random();
+		let (_, handle) = subs.insert_subscription(id.clone(), false, 1).unwrap();
+
+		handle.pin_block(hash).unwrap();
+		// The same block can be pinned multiple times.
+		handle.pin_block(hash).unwrap();
+		// Exceeded number of pinned blocks.
+		handle.pin_block(hash_2).unwrap_err();
 	}
 }
