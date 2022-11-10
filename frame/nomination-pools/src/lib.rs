@@ -2435,7 +2435,7 @@ impl<T: Config> Pallet<T> {
 	/// To cater for tests that want to escape parts of these checks, this function is split into
 	/// multiple `level`s, where the higher the level, the more checks we performs. So,
 	/// `try_state(255)` is the strongest sanity check, and `0` performs no checks.
-	#[cfg(any(feature = "try-runtime", test, debug_assertions))]
+	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
 			return Ok(())
