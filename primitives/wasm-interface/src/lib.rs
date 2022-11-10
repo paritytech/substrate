@@ -417,6 +417,17 @@ if_wasmtime_is_enabled! {
 
 /// Something that provides implementations for host functions.
 pub trait HostFunctions: 'static + Send + Sync {
+	/// A special flag for trying to enable `RuntimeTasks` by
+	/// pre register some extensions when it's true value.
+	///
+	/// # Note
+	///
+	/// Developer could set it be false by disable some pre register ops every time
+	/// before execute wasm.
+	///
+	/// Default to true.
+	const ENABLE_RUNTIME_TASKS: bool = true;
+
 	/// Returns the host functions `Self` provides.
 	fn host_functions() -> Vec<&'static dyn Function>;
 
@@ -453,15 +464,17 @@ impl HostFunctions for Tuple {
 
 /// A wrapper which merges two sets of host functions, and allows the second set to override
 /// the host functions from the first set.
-pub struct ExtendedHostFunctions<Base, Overlay> {
+pub struct ExtendedHostFunctions<Base, Overlay, const ENABLE_RUNTIME_TASKS: bool = true> {
 	phantom: PhantomData<(Base, Overlay)>,
 }
 
-impl<Base, Overlay> HostFunctions for ExtendedHostFunctions<Base, Overlay>
+impl<Base, Overlay, const ENABLE_RUNTIME_TASKS: bool> HostFunctions for ExtendedHostFunctions<Base, Overlay, ENABLE_RUNTIME_TASKS>
 where
 	Base: HostFunctions,
 	Overlay: HostFunctions,
 {
+	const ENABLE_RUNTIME_TASKS: bool = Base::ENABLE_RUNTIME_TASKS && Overlay::ENABLE_RUNTIME_TASKS && ENABLE_RUNTIME_TASKS;
+
 	fn host_functions() -> Vec<&'static dyn Function> {
 		let mut base = Base::host_functions();
 		let overlay = Overlay::host_functions();

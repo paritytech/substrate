@@ -281,7 +281,7 @@ where
 		let mut allocation_stats_out = AssertUnwindSafe(allocation_stats_out);
 
 		with_externalities_safe(&mut **ext, move || {
-			preregister_builtin_ext(module.clone());
+			preregister_builtin_ext::<H>(module.clone());
 			let (result, allocation_stats) =
 				instance.call_with_allocation_stats(export_name.into(), call_data);
 			**allocation_stats_out = allocation_stats;
@@ -354,7 +354,7 @@ where
 			ext,
 			|module, mut instance, _onchain_version, mut ext| {
 				with_externalities_safe(&mut **ext, move || {
-					preregister_builtin_ext(module.clone());
+					preregister_builtin_ext::<H>(module.clone());
 					instance.call_export(method, data)
 				})
 			},
@@ -567,7 +567,10 @@ impl RuntimeInstanceSpawn {
 /// Pre-registers the built-in extensions to the currently effective externalities.
 ///
 /// Meant to be called each time before calling into the runtime.
-fn preregister_builtin_ext(module: Arc<dyn WasmModule>) {
+fn preregister_builtin_ext<H: HostFunctions>(module: Arc<dyn WasmModule>) {
+	if !H::ENABLE_RUNTIME_TASKS {
+		return;
+	}
 	sp_externalities::with_externalities(move |mut ext| {
 		if let Some(runtime_spawn) =
 			RuntimeInstanceSpawn::with_externalities_and_module(module, ext)
@@ -633,7 +636,7 @@ impl<D: NativeExecutionDispatch + 'static> CodeExecutor for NativeElseWasmExecut
 					}
 
 					with_externalities_safe(&mut **ext, move || {
-						preregister_builtin_ext(module.clone());
+						preregister_builtin_ext::<D::ExtendHostFunctions>(module.clone());
 						instance.call_export(method, data)
 					})
 				}
