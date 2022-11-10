@@ -43,7 +43,7 @@ use beefy_primitives::{
 	KEY_TYPE as BeefyKeyType,
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
-use sp_mmr_primitives::{BatchProof, EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
+use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
@@ -246,47 +246,25 @@ macro_rules! create_test_api {
 				}
 
 				impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
-					fn generate_proof(_block_number: u64)
-						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
+					fn mmr_root() -> Result<MmrRootHash, MmrError> {
+						Ok($mmr_root)
+					}
+
+					fn generate_proof(
+						_block_numbers: Vec<u64>,
+						_best_known_block_number: Option<u64>
+					) -> Result<(Vec<EncodableOpaqueLeaf>, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
 
-					fn verify_proof(_leaf: EncodableOpaqueLeaf, _proof: Proof<MmrRootHash>)
-						-> Result<(), MmrError> {
+					fn verify_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: Proof<MmrRootHash>) -> Result<(), MmrError> {
 						unimplemented!()
 					}
 
 					fn verify_proof_stateless(
 						_root: MmrRootHash,
-						_leaf: EncodableOpaqueLeaf,
-						_proof: Proof<MmrRootHash>
-					) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
-					fn mmr_root() -> Result<MmrRootHash, MmrError> {
-						Ok($mmr_root)
-					}
-
-					fn generate_batch_proof(_block_numbers: Vec<u64>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
-						unimplemented!()
-					}
-
-					fn generate_historical_batch_proof(
-						_block_numbers: Vec<u64>,
-						_best_known_block_number: u64
-					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
-						unimplemented!()
-					}
-
-					fn verify_batch_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
-					fn verify_batch_proof_stateless(
-						_root: MmrRootHash,
 						_leaves: Vec<EncodableOpaqueLeaf>,
-						_proof: BatchProof<MmrRootHash>
+						_proof: Proof<MmrRootHash>
 					) -> Result<(), MmrError> {
 						unimplemented!()
 					}
@@ -512,7 +490,7 @@ fn finalize_block_and_wait_for_beefy(
 		peers.clone().for_each(|(index, _)| {
 			let client = net.lock().peer(index).client().as_client();
 			let finalize = client.expect_block_hash_from_id(&BlockId::number(*block)).unwrap();
-			client.finalize_block(&finalize, None).unwrap();
+			client.finalize_block(finalize, None).unwrap();
 		})
 	}
 
@@ -608,7 +586,7 @@ fn lagging_validators() {
 		.expect_block_hash_from_id(&BlockId::number(25))
 		.unwrap();
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	net.lock().peer(0).client().as_client().finalize_block(&finalize, None).unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
@@ -616,7 +594,7 @@ fn lagging_validators() {
 
 	// Bob catches up and also finalizes #25
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers.clone());
-	net.lock().peer(1).client().as_client().finalize_block(&finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// expected beefy finalizes block #17 from diff-power-of-two
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[23, 24, 25]);
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[23, 24, 25]);
@@ -637,7 +615,7 @@ fn lagging_validators() {
 		.as_client()
 		.expect_block_hash_from_id(&BlockId::number(60))
 		.unwrap();
-	net.lock().peer(0).client().as_client().finalize_block(&finalize, None).unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify nothing gets finalized by BEEFY
 	let timeout = Some(Duration::from_millis(250));
 	streams_empty_after_timeout(best_blocks, &net, &mut runtime, timeout);
@@ -645,7 +623,7 @@ fn lagging_validators() {
 
 	// Bob catches up and also finalizes #60 (and should have buffered Alice's vote on #60)
 	let (best_blocks, versioned_finality_proof) = get_beefy_streams(&mut net.lock(), peers);
-	net.lock().peer(1).client().as_client().finalize_block(&finalize, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(finalize, None).unwrap();
 	// verify beefy skips intermediary votes, and successfully finalizes mandatory block #60
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[60]);
 	wait_for_beefy_signed_commitments(versioned_finality_proof, &net, &mut runtime, &[60]);
@@ -696,9 +674,9 @@ fn correct_beefy_payload() {
 		.as_client()
 		.expect_block_hash_from_id(&BlockId::number(11))
 		.unwrap();
-	net.lock().peer(0).client().as_client().finalize_block(&hashof11, None).unwrap();
-	net.lock().peer(1).client().as_client().finalize_block(&hashof11, None).unwrap();
-	net.lock().peer(3).client().as_client().finalize_block(&hashof11, None).unwrap();
+	net.lock().peer(0).client().as_client().finalize_block(hashof11, None).unwrap();
+	net.lock().peer(1).client().as_client().finalize_block(hashof11, None).unwrap();
+	net.lock().peer(3).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is _not_ reached
 	let timeout = Some(Duration::from_millis(250));
@@ -708,7 +686,7 @@ fn correct_beefy_payload() {
 	// 3rd good validator catches up and votes as well
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());
-	net.lock().peer(2).client().as_client().finalize_block(&hashof11, None).unwrap();
+	net.lock().peer(2).client().as_client().finalize_block(hashof11, None).unwrap();
 
 	// verify consensus is reached
 	wait_for_best_beefy_blocks(best_blocks, &net, &mut runtime, &[11]);
@@ -741,9 +719,9 @@ fn beefy_importing_blocks() {
 
 	let full_client = client.as_client();
 	let parent_id = BlockId::Number(0);
-	let block_id = BlockId::Number(1);
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof1 = block.header.hash();
 
 	// Import without justifications.
 	let mut justif_recv = justif_stream.subscribe();
@@ -760,7 +738,7 @@ fn beefy_importing_blocks() {
 		// none in backend,
 		assert_eq!(
 			full_client
-				.justifications(&block_id)
+				.justifications(hashof1)
 				.unwrap()
 				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
 			None
@@ -784,6 +762,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof2 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -798,7 +777,7 @@ fn beefy_importing_blocks() {
 		// still not in backend (worker is responsible for appending to backend),
 		assert_eq!(
 			full_client
-				.justifications(&block_id)
+				.justifications(hashof2)
 				.unwrap()
 				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
 			None
@@ -826,6 +805,7 @@ fn beefy_importing_blocks() {
 
 	let builder = full_client.new_block_at(&parent_id, Default::default(), false).unwrap();
 	let block = builder.build().unwrap().block;
+	let hashof3 = block.header.hash();
 	let mut justif_recv = justif_stream.subscribe();
 	assert_eq!(
 		block_on(block_import.import_block(params(block, justif), HashMap::new())).unwrap(),
@@ -841,7 +821,7 @@ fn beefy_importing_blocks() {
 		// none in backend,
 		assert_eq!(
 			full_client
-				.justifications(&BlockId::Number(block_num))
+				.justifications(hashof3)
 				.unwrap()
 				.and_then(|j| j.get(BEEFY_ENGINE_ID).cloned()),
 			None
@@ -939,7 +919,7 @@ fn on_demand_beefy_justification_sync() {
 		get_beefy_streams(&mut net.lock(), [(dave_index, BeefyKeyring::Dave)].into_iter());
 	let client = net.lock().peer(dave_index).client().as_client();
 	let hashof1 = client.expect_block_hash_from_id(&BlockId::number(1)).unwrap();
-	client.finalize_block(&hashof1, None).unwrap();
+	client.finalize_block(hashof1, None).unwrap();
 	// Give Dave task some cpu cycles to process the finality notification,
 	run_for(Duration::from_millis(100), &net, &mut runtime);
 	// freshly spun up Dave now needs to listen for gossip to figure out the state of his peers.

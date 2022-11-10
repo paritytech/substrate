@@ -21,6 +21,7 @@ sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+thiserror = "1.0"
 
 [dev-dependencies]
 array-bytes = "4.1"
