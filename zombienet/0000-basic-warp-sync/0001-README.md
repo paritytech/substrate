@@ -8,7 +8,7 @@ The `dave` node executed with `--sync warp` syncs database with the rest of the 
 
 
 # How to prepare database
-Database was prepared using the following zombienet file (`gen-db.toml`):
+Database was prepared using the following zombienet file (`0001-generate-warp-sync-database.toml`):
 ```
 [relaychain]
 default_image = "docker.io/parity/substrate:master"
@@ -29,7 +29,7 @@ chain_spec_path = "0001-chain-spec.json"
 
 The zombienet shall be executed with the following command, and run for some period of time to allow for few grandpa eras.
 ```
-./zombienet-linux spawn --dir ./db-test-gen --provider native gen-db.toml
+./zombienet-linux spawn --dir ./db-test-gen --provider native 0001-generate-warp-sync-database.toml
 ```
 
 Once the zombienet is stopped, the database snapshot
