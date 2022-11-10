@@ -25,6 +25,7 @@ use substrate_test_runtime_client::{
 
 type Header = substrate_test_runtime_client::runtime::Header;
 type Block = substrate_test_runtime_client::runtime::Block;
+const MAX_PINNED_BLOCKS: usize = 32;
 const CHAIN_GENESIS: [u8; 32] = [0; 32];
 const INVALID_HASH: [u8; 32] = [1; 32];
 const KEY: &[u8] = b":mock";
@@ -57,9 +58,14 @@ async fn setup_api() -> (
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
 	// TODO: Jsonrpsee release for sub_id.
@@ -93,9 +99,14 @@ async fn follow_subscription_produces_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
@@ -145,9 +156,14 @@ async fn follow_with_runtime() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 	let mut sub = api.subscribe("chainHead_unstable_follow", [true]).await.unwrap();
@@ -245,9 +261,14 @@ async fn get_genesis() {
 	let backend = builder.backend();
 	let client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
 
 	let genesis: String =
 		api.call("chainHead_unstable_genesisHash", EmptyParams::new()).await.unwrap();
@@ -424,9 +445,14 @@ async fn call_runtime_without_flag() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
 
 	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
 	// TODO: Jsonrpsee release for sub_id.
@@ -595,9 +621,14 @@ async fn follow_generates_initial_blocks() {
 	let backend = builder.backend();
 	let mut client = Arc::new(builder.build());
 
-	let api =
-		ChainHead::new(client.clone(), backend, Arc::new(TaskExecutor::default()), CHAIN_GENESIS)
-			.into_rpc();
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		MAX_PINNED_BLOCKS,
+	)
+	.into_rpc();
 
 	let finalized_hash = client.info().finalized_hash;
 
@@ -710,4 +741,136 @@ async fn follow_generates_initial_blocks() {
 		pruned_block_hashes: vec![format!("{:?}", block_3_hash)],
 	});
 	assert_eq!(event, expected);
+}
+
+#[tokio::test]
+async fn follow_exceeding_pinned_blocks() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		2,
+	)
+	.into_rpc();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Block tree:
+	//   finalized_block -> block -> block2
+	// The first 2 blocks are pinned into the subscription, but the block2 will exceed the limit (2
+	// blocks).
+	let block2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block2.clone()).await.unwrap();
+
+	assert_matches!(get_next_event::<FollowEvent<String>>(&mut sub).await, FollowEvent::Stop);
+
+	// Subscription will not produce any more event for further blocks.
+	let block3 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block3.clone()).await.unwrap();
+
+	assert!(sub.next::<FollowEvent<String>>().await.is_none());
+}
+
+#[tokio::test]
+async fn follow_with_unpin() {
+	let builder = TestClientBuilder::new();
+	let backend = builder.backend();
+	let mut client = Arc::new(builder.build());
+
+	let api = ChainHead::new(
+		client.clone(),
+		backend,
+		Arc::new(TaskExecutor::default()),
+		CHAIN_GENESIS,
+		2,
+	)
+	.into_rpc();
+
+	let mut sub = api.subscribe("chainHead_unstable_follow", [false]).await.unwrap();
+	// TODO: Jsonrpsee release for sub_id.
+	// let sub_id = sub.subscription_id();
+	// let sub_id = serde_json::to_string(&sub_id).unwrap();
+	let sub_id: String = "A".into();
+
+	let block = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_hash = format!("{:?}", block.header.hash());
+	client.import(BlockOrigin::Own, block.clone()).await.unwrap();
+
+	// Ensure the imported block is propagated and pinned for this subscription.
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::Initialized(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	// Unpin an invalid subscription ID must return Ok(()).
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let _res: () = api
+		.call("chainHead_unstable_unpin", ["invalid_sub_id", &invalid_hash])
+		.await
+		.unwrap();
+
+	// Valid subscription with invalid block hash.
+	let invalid_hash = format!("0x{:?}", HexDisplay::from(&INVALID_HASH));
+	let err = api
+		.call::<_, serde_json::Value>("chainHead_unstable_unpin", [&sub_id, &invalid_hash])
+		.await
+		.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 2001 && err.message() == "Invalid block hash"
+	);
+
+	// To not exceed the number of pinned blocks, we need to unpin before the next import.
+	let _res: () = api.call("chainHead_unstable_unpin", [&sub_id, &block_hash]).await.unwrap();
+
+	// Block tree:
+	//   finalized_block -> block -> block2
+	//                      ^ has been unpinned
+	let block2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block2.clone()).await.unwrap();
+
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::NewBlock(_)
+	);
+
+	assert_matches!(
+		get_next_event::<FollowEvent<String>>(&mut sub).await,
+		FollowEvent::BestBlockChanged(_)
+	);
+
+	let block3 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	client.import(BlockOrigin::Own, block3.clone()).await.unwrap();
+
+	assert_matches!(get_next_event::<FollowEvent<String>>(&mut sub).await, FollowEvent::Stop);
+	assert!(sub.next::<FollowEvent<String>>().await.is_none());
 }
