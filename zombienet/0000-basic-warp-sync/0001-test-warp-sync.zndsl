@@ -1,0 +1,27 @@
+Description: Warp sync
+Network: ./0001-test-warp-sync.toml
+Creds: config
+
+
+alice: is up
+bob: is up
+charlie: is up
+dave: is up
+
+alice: reports node_roles is 4
+bob: reports node_roles is 4
+charlie: reports node_roles is 1
+dave: reports node_roles is 1
+
+alice: reports peers count is at least 3
+bob: reports peers count is at least 3
+charlie: reports peers count is at least 3
+dave: reports peers count is at least 3
+
+dave: log line matches "Warp sync is complete" within 5 seconds
+
+#alice: reports block height is at least 12133 within 5 seconds
+#bob: reports block height is at least 12133 within 5 seconds
+#charlie: reports block height is at least 12133 within 5 seconds
+#dave: reports block height is at least 12133 within 5 seconds
+
