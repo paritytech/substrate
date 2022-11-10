@@ -5468,8 +5468,18 @@ mod reward_counter_precision {
 				pool_events_since_last_call(),
 				vec![
 					Event::Bonded { member: 20, pool_id: 1, bonded: 5000000000000, joined: true },
-					Event::PaidOut { member: 10, pool_id: 1, payout: 7333333333333333333 },
-					Event::PaidOut { member: 20, pool_id: 1, payout: 3666666666666666666 }
+					Event::PaidOut {
+						member: 10,
+						pool_id: 1,
+						payout: 7333333333333333333,
+						commission: 0
+					},
+					Event::PaidOut {
+						member: 20,
+						pool_id: 1,
+						payout: 3666666666666666666,
+						commission: 0
+					}
 				]
 			);
 		})
