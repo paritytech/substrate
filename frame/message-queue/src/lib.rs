@@ -540,13 +540,13 @@ impl<T: Config> Pallet<T> {
 	fn do_enqueue_message(
 		origin: &MessageOriginOf<T>,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
-		_origin_data: BoundedSlice<u8, MaxOriginLenOf<T>>,
 	) {
 		let mut book_state = BookStateFor::<T>::get(origin);
 		book_state.message_count.saturating_inc();
 		book_state
 			.size
-			.saturating_accrue((message.len() + origin.encode().len()) as u32);
+			// This should be payload size, but here the payload *is* the message.
+			.saturating_accrue(message.len() as u32);
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
@@ -970,6 +970,10 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		}
 		weight.consumed
 	}
+	// TODO
+/*	fn execute_overweight(weight_limit: Weight) -> Weight {
+
+	}*/
 }
 
 impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
@@ -980,25 +984,16 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		message: BoundedSlice<u8, Self::MaxMessageLen>,
 		origin: <T::MessageProcessor as ProcessMessage>::Origin,
 	) {
-		// the `truncate_from` is just for safety - it will never fail since the bound is the
-		// maximum encoded length of the type.
-		origin.using_encoded(|data| {
-			Self::do_enqueue_message(&origin, message, BoundedSlice::truncate_from(data))
-		})
+		Self::do_enqueue_message(&origin, message)
 	}
 
 	fn enqueue_messages<'a>(
 		messages: impl Iterator<Item = BoundedSlice<'a, u8, Self::MaxMessageLen>>,
 		origin: <T::MessageProcessor as ProcessMessage>::Origin,
 	) {
-		origin.using_encoded(|data| {
-			// the `truncate_from` is just for safety - it will never fail since the bound is the
-			// maximum encoded length of the type.
-			let origin_data = BoundedSlice::truncate_from(data);
-			for message in messages {
-				Self::do_enqueue_message(&origin, message, origin_data);
-			}
-		})
+		for message in messages {
+			Self::do_enqueue_message(&origin, message);
+		}
 	}
 
 	// TODO: test.
