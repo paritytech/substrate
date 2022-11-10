@@ -664,6 +664,7 @@ impl<T: Config> Commission<T> {
 
 		self.current = Some((*commission, payee));
 
+		// update `throttle.previous_set_at` if a throttle has been configured.
 		let _ = self
 			.throttle
 			.as_mut()
