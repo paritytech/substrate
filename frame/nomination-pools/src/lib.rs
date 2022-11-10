@@ -593,8 +593,8 @@ pub struct PoolRoles<AccountId> {
 ///
 /// An optional commission throttle allows the pool to set strict limits to how much
 /// commission can change in each update, and how often updates can take place.
-/// If a `throttle` is set *before* a commission `current` is set, the initial commission `current`
-/// value will *not* be subject to throttling. Subsequent commission updates will be.
+/// If a `throttle` is set before a commission `current` is set, the initial commission `current`
+/// value will not be subject to throttling. Subsequent commission updates will be.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
@@ -2205,7 +2205,7 @@ pub mod pallet {
 		/// If the pool has a max commission set, the commission supplied must be less or
 		/// equal to that value.
 		///
-		/// If the max commission has _not yet_ been set, then the commission range is not
+		/// If the max commission has not yet been set, then the commission range is not
 		/// bounded.
 		/// A `payee` must be provided if commission has not yet been set (still `None`). Once
 		/// commission has been set, the `payee` can be omitted in further calls. If a `payee`
@@ -2241,7 +2241,7 @@ pub mod pallet {
 		///
 		/// The dispatch origin of this call must be signed by the `root` role of the pool.
 		/// If a maximum commission already exists prior to this call, then the updated
-		/// max commission must be *lower*, otherwise this call will fail.
+		/// max commission must be lower, otherwise this call will fail.
 		///
 		/// This call also updates the pool's current commission to the new maximum if the
 		/// current commission is higher than the maximum supplied.
@@ -2264,7 +2264,7 @@ pub mod pallet {
 		/// Set the commission throttle for a pool.
 		///
 		/// The dispatch origin of this call must be signed by the `root` role of the pool.
-		/// If a throttle is already present, this call will only succeed if a more *restrictive*
+		/// If a throttle is already present, this call will only succeed if a more restrictive
 		/// throttle configuration is given.
 		///
 		/// If a throttle configuration does not yet exist, the provided values are set.
