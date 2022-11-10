@@ -129,7 +129,8 @@ pub type CompactCommit<Header> = grandpa::CompactCommit<
 ///
 /// This is meant to be stored in the db and passed around the network to other
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, RuntimeDebug)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct GrandpaJustification<Header: HeaderT> {
 	pub round: u64,
 	pub commit: Commit<Header>,
