@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 lazy_static = "1.4.0"
-lru = "0.7.5"
+lru = "0.8.1"
 parking_lot = "0.12.1"
 tracing = "0.1.29"
 wasmi = "0.13"
@@ -46,7 +46,7 @@ sp-maybe-compressed-blob = { version = "4.1.0-dev", path = "../../primitives/may
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 tracing-subscriber = "0.2.19"
 paste = "1.0"
-regex = "1.5.5"
+regex = "1.6.0"
 criterion = "0.3"
 env_logger = "0.9"
 num_cpus = "1.13.1"

@@ -173,12 +173,12 @@ impl PeersClient {
 			Some(header) => header,
 			None => return false,
 		};
-		self.backend.have_state_at(&header.hash(), *header.number())
+		self.backend.have_state_at(header.hash(), *header.number())
 	}
 
 	pub fn justifications(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 	) -> ClientResult<Option<Justifications>> {
 		self.client.justifications(hash)
 	}
@@ -193,7 +193,7 @@ impl PeersClient {
 
 	pub fn finalize_block(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> ClientResult<()> {
@@ -535,14 +535,14 @@ where
 		self.verifier.failed_verifications.lock().clone()
 	}
 
-	pub fn has_block(&self, hash: &H256) -> bool {
+	pub fn has_block(&self, hash: H256) -> bool {
 		self.backend
 			.as_ref()
-			.map(|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some())
+			.map(|backend| backend.blockchain().header(BlockId::hash(hash)).unwrap().is_some())
 			.unwrap_or(false)
 	}
 
-	pub fn has_body(&self, hash: &H256) -> bool {
+	pub fn has_body(&self, hash: H256) -> bool {
 		self.backend
 			.as_ref()
 			.map(|backend| backend.blockchain().body(hash).unwrap().is_some())
@@ -1124,7 +1124,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0
-			.finalize_block(&hash, Some(justification), true)
+			.finalize_block(hash, Some(justification), true)
 			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }

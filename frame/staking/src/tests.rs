@@ -5624,3 +5624,57 @@ fn reducing_max_unlocking_chunks_abrupt() {
 		MaxUnlockingChunks::set(2);
 	})
 }
+
+#[test]
+fn cannot_set_unsupported_validator_count() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		// set validator count works
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 30));
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 50));
+		// setting validator count above 100 does not work
+		assert_noop!(
+			Staking::set_validator_count(RuntimeOrigin::root(), 51),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}
+
+#[test]
+fn increase_validator_count_errors() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 40));
+
+		// increase works
+		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 6));
+		assert_eq!(ValidatorCount::<Test>::get(), 46);
+
+		// errors
+		assert_noop!(
+			Staking::increase_validator_count(RuntimeOrigin::root(), 5),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}
+
+#[test]
+fn scale_validator_count_errors() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 20));
+
+		// scale value works
+		assert_ok!(Staking::scale_validator_count(
+			RuntimeOrigin::root(),
+			Percent::from_percent(200)
+		));
+		assert_eq!(ValidatorCount::<Test>::get(), 40);
+
+		// errors
+		assert_noop!(
+			Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(126)),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}

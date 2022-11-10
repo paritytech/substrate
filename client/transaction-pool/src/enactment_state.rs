@@ -134,6 +134,16 @@ where
 
 		Ok(Some(tree_route))
 	}
+
+	/// Forces update of the state according to the given `ChainEvent`. Intended to be used as a
+	/// fallback when tree_route cannot be computed.
+	pub fn force_update(&mut self, event: &ChainEvent<Block>) {
+		match event {
+			ChainEvent::NewBestBlock { hash, .. } => self.recent_best_block = *hash,
+			ChainEvent::Finalized { hash, .. } => self.recent_finalized_block = *hash,
+		};
+		log::debug!(target: "txpool", "forced update: {:?}, {:?}", self.recent_best_block, self.recent_finalized_block);
+	}
 }
 
 #[cfg(test)]
@@ -575,5 +585,23 @@ mod enactment_state_tests {
 		let result = trigger_new_best_block(&mut es, a(), c1());
 		assert_eq!(result, false);
 		assert_es_eq(&es, e1(), d1());
+	}
+
+	#[test]
+	fn test_enactment_forced_update_best_block() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		es.force_update(&ChainEvent::NewBestBlock { hash: b1().hash, tree_route: None });
+		assert_es_eq(&es, b1(), a());
+	}
+
+	#[test]
+	fn test_enactment_forced_update_finalize() {
+		sp_tracing::try_init_simple();
+		let mut es = EnactmentState::new(a().hash, a().hash);
+
+		es.force_update(&ChainEvent::Finalized { hash: b1().hash, tree_route: Arc::from([]) });
+		assert_es_eq(&es, a(), b1());
 	}
 }
