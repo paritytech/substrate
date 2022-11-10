@@ -150,12 +150,14 @@ fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Runti
 
 benchmarks_instance_pallet! {
 	create {
-		let caller: T::AccountId = whitelisted_caller();
+		let asset_id = Default::default();
+		let origin = T::CreateOrigin::successful_origin(&asset_id);
+		let caller = T::CreateOrigin::ensure_origin(origin, &asset_id).unwrap();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1u32.into())
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, 1u32.into())
 	verify {
-		assert_last_event::<T, I>(Event::Created { asset_id: Default::default(), creator: caller.clone(), owner: caller }.into());
+		assert_last_event::<T, I>(Event::Created { asset_id, creator: caller.clone(), owner: caller }.into());
 	}
 
 	force_create {

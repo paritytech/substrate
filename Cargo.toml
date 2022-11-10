@@ -116,6 +116,7 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/nomination-pools",
+	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
