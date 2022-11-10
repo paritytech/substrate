@@ -285,22 +285,16 @@ async fn submit_events<EventStream, T>(
 	let mut stream_item = stream.next();
 	let mut stop_event = rx_stop;
 
-	loop {
-		match futures_util::future::select(stream_item, stop_event).await {
-			// Pipe from the event stream.
-			Either::Left((Some(event), next_stop_event)) => {
-				if let Err(_) = sink.send(&event) {
-					// Sink failed to submit the event.
-					break
-				}
-
-				stream_item = stream.next();
-				stop_event = next_stop_event;
-			},
-			// Event stream does not produce any more events or the stop
-			// event was triggered.
-			Either::Left((None, _)) | Either::Right((_, _)) => break,
+	while let Either::Left((Some(event), next_stop_event)) =
+		futures_util::future::select(stream_item, stop_event).await
+	{
+		if let Err(_) = sink.send(&event) {
+			// Sink failed to submit the event.
+			break
 		}
+
+		stream_item = stream.next();
+		stop_event = next_stop_event;
 	}
 
 	let _ = sink.send(&FollowEvent::<String>::Stop);
@@ -623,7 +617,7 @@ where
 				}
 
 				let res = client
-					.child_storage(&hash, &child_key, &key)
+					.child_storage(hash, &child_key, &key)
 					.map(|result| {
 						let result =
 							result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
@@ -648,7 +642,7 @@ where
 
 			// Main root trie storage query.
 			let res = client
-				.storage(&hash, &key)
+				.storage(hash, &key)
 				.map(|result| {
 					let result =
 						result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));

@@ -140,7 +140,7 @@ async fn follow_subscription_produces_blocks() {
 	});
 	assert_eq!(event, expected);
 
-	client.finalize_block(&best_hash, None).unwrap();
+	client.finalize_block(best_hash, None).unwrap();
 
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 	let expected = FollowEvent::Finalized(Finalized {
@@ -210,7 +210,7 @@ async fn follow_with_runtime() {
 	});
 	assert_eq!(event, expected);
 
-	client.finalize_block(&best_hash, None).unwrap();
+	client.finalize_block(best_hash, None).unwrap();
 
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 	let expected = FollowEvent::Finalized(Finalized {
@@ -729,7 +729,7 @@ async fn follow_generates_initial_blocks() {
 	// Check the finalized event:
 	//  - blocks 1, 2, 4 from canonical chain are finalized
 	//  - block 3 from the fork is pruned
-	client.finalize_block(&block_4_hash, None).unwrap();
+	client.finalize_block(block_4_hash, None).unwrap();
 
 	let event: FollowEvent<String> = get_next_event(&mut sub).await;
 	let expected = FollowEvent::Finalized(Finalized {

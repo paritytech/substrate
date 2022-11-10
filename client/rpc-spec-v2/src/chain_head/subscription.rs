@@ -176,7 +176,7 @@ impl<Block: BlockT> SubscriptionManagement<Block> {
 	/// Obtain the specific subscription handle.
 	pub fn get_subscription(&self, subscription_id: &String) -> Option<SubscriptionHandle<Block>> {
 		let subs = self.inner.write();
-		subs.get(subscription_id).map(|handle| Some(handle.clone())).flatten()
+		subs.get(subscription_id).and_then(|handle| Some(handle.clone()))
 	}
 }
 
