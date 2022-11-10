@@ -316,7 +316,28 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use sp_core::H256;
+use sp_runtime::traits::BlakeTwo256;
+use sp_state_machine::TrieBackendBuilder;
+
+use crate::RemoteExternalities;
+
+use super::*;
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn can_build_and_execute_externalities() {
+		let rpc = substrate_rpc_client::ws_client("wss://rpc.polkadot.io:443").await.unwrap();
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let backend = RemoteExternalitiesBackend::<BlakeTwo256> {
+			at: None,
+			rpc,
+			runtime,
+			inner_backend: TrieBackendBuilder::new(Default::default(), Default::default()).build(),
+			_marker: Default::default(),
+		};
+
+
+	}
 
 
 }

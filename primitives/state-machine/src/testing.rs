@@ -41,31 +41,33 @@ use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H>
+pub struct TestExternalities<H, B>
 where
 	H: Hasher + 'static,
 	H::Out: codec::Codec + Ord,
+	B: Backend<H>
 {
 	/// The overlay changed storage.
 	overlay: OverlayedChanges,
 	offchain_db: TestPersistentOffchainDB,
 	storage_transaction_cache:
-		StorageTransactionCache<<InMemoryBackend<H> as Backend<H>>::Transaction, H>,
+		StorageTransactionCache<<B as Backend<H>>::Transaction, H>,
 	/// Storage backend.
-	pub backend: InMemoryBackend<H>,
+	pub backend: B,
 	/// Extensions.
 	pub extensions: Extensions,
 	/// State version to use during tests.
 	pub state_version: StateVersion,
 }
 
-impl<H> TestExternalities<H>
+impl<H, B> TestExternalities<H, B>
 where
 	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>
 {
 	/// Get externalities implementation.
-	pub fn ext(&mut self) -> Ext<H, InMemoryBackend<H>> {
+	pub fn ext(&mut self) -> Ext<H, B> {
 		Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
@@ -236,7 +238,7 @@ where
 	}
 }
 
-impl<H: Hasher> std::fmt::Debug for TestExternalities<H>
+impl<H: Hasher, B: Backend<H>> std::fmt::Debug for TestExternalities<H, B>
 where
 	H::Out: Ord + codec::Codec,
 {
@@ -245,18 +247,18 @@ where
 	}
 }
 
-impl<H: Hasher> PartialEq for TestExternalities<H>
+impl<H: Hasher, B: Backend<H>> PartialEq for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// This doesn't test if they are in the same state, only if they contains the
 	/// same data at this state
-	fn eq(&self, other: &TestExternalities<H>) -> bool {
+	fn eq(&self, other: &TestExternalities<H, B>) -> bool {
 		self.as_backend().eq(&other.as_backend())
 	}
 }
 
-impl<H: Hasher> Default for TestExternalities<H>
+impl<H: Hasher, B: Backend<H>> Default for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -266,7 +268,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<Storage> for TestExternalities<H>
+impl<H: Hasher, B: Backend<H>> From<Storage> for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -275,7 +277,7 @@ where
 	}
 }
 
-impl<H: Hasher> From<(Storage, StateVersion)> for TestExternalities<H>
+impl<H: Hasher, B: Backend<H>> From<(Storage, StateVersion)> for TestExternalities<H, B>
 where
 	H::Out: Ord + 'static + codec::Codec,
 {
@@ -284,10 +286,11 @@ where
 	}
 }
 
-impl<H> sp_externalities::ExtensionStore for TestExternalities<H>
+impl<H, B> sp_externalities::ExtensionStore for TestExternalities<H, B>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
+	B: Backend<H>,
 {
 	fn extension_by_type_id(&mut self, type_id: TypeId) -> Option<&mut dyn Any> {
 		self.extensions.get_mut(type_id)
@@ -313,10 +316,11 @@ where
 	}
 }
 
-impl<H> sp_externalities::ExternalitiesExt for TestExternalities<H>
+impl<H, B> sp_externalities::ExternalitiesExt for TestExternalities<H, B>
 where
 	H: Hasher,
 	H::Out: Ord + codec::Codec,
+	B: Backend<H>
 {
 	fn extension<T: Any + Extension>(&mut self) -> Option<&mut T> {
 		self.extension_by_type_id(TypeId::of::<T>()).and_then(<dyn Any>::downcast_mut)
