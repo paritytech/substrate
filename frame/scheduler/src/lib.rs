@@ -277,15 +277,15 @@ pub mod pallet {
 		/// Dispatched some task.
 		Dispatched {
 			task: TaskAddress<T::BlockNumber>,
-			id: Option<[u8; 32]>,
+			id: Option<TaskName>,
 			result: DispatchResult,
 		},
 		/// The call for the provided hash was not found so the task has been aborted.
-		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
+		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<TaskName> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
-		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
+		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<TaskName> },
 		/// The given task can never be executed since it is overweight.
-		PermanentlyOverweight { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
+		PermanentlyOverweight { task: TaskAddress<T::BlockNumber>, id: Option<TaskName> },
 	}
 
 	#[pallet::error]

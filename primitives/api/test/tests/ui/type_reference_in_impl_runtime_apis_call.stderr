@@ -35,6 +35,5 @@ note: associated function defined here
    |            ^^^^
 help: consider removing the borrow
    |
-19 -         fn test(data: &u64) {
-19 +         fn test(data: &u64) {
+19 |         fn test(data: &u64) {
    |
