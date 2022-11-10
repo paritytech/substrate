@@ -195,33 +195,6 @@ pub struct ReferendumStatus<
 	pub alarm: Option<(Moment, ScheduleAddress)>,
 }
 
-impl<
-		TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-		Call: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-		ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	>
-	ReferendumStatus<TrackId, RuntimeOrigin, Moment, Call, Balance, Tally, AccountId, ScheduleAddress>
-{
-	/// Return whether referendum status is deciding.
-	/// confirming => deciding so deciding does not preclude confirming
-	pub fn is_deciding(&self) -> bool {
-		self.deciding.is_some()
-	}
-	/// Return whether referendum status is confirming.
-	pub fn is_confirming(&self) -> bool {
-		if let Some(deciding_status) = &self.deciding {
-			deciding_status.confirming.is_some()
-		} else {
-			false
-		}
-	}
-}
-
 /// Info regarding a referendum, present or past.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum ReferendumInfo<
