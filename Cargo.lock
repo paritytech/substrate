@@ -2902,13 +2902,14 @@ dependencies = [
 
 [[package]]
 name = "honggfuzz"
-version = "0.5.54"
+version = "0.5.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea09577d948a98a5f59b7c891e274c4fb35ad52f67782b3d0cb53b9c05301f1"
+checksum = "848e9c511092e0daa0a35a63e8e6e475a3e8f870741448b9f6028d69b142f18e"
 dependencies = [
  "arbitrary",
  "lazy_static",
- "memmap",
+ "memmap2",
+ "rustc_version 0.4.0",
 ]
 
 [[package]]
@@ -4133,16 +4134,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "480b5a5de855d11ff13195950bdc8b98b5e942ef47afc447f6615cdcc4e15d80"
 dependencies = [
  "rustix",
-]
-
-[[package]]
-name = "memmap"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -5735,7 +5726,6 @@ dependencies = [
  "log",
  "pallet-balances",
  "parity-scale-codec",
- "rand 0.8.5",
  "scale-info",
  "sp-core",
  "sp-io",
@@ -5767,6 +5757,21 @@ dependencies = [
  "sp-runtime-interface",
  "sp-staking",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-nomination-pools-fuzzer"
+version = "2.0.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "honggfuzz",
+ "log",
+ "pallet-nomination-pools",
+ "rand 0.8.5",
+ "sp-io",
+ "sp-runtime",
+ "sp-tracing",
 ]
 
 [[package]]
