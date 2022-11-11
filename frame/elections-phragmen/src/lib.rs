@@ -325,8 +325,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
 
-			// votes should not be empty and more than `MAXIMUM_VOTE` in any case.
-			ensure!(votes.len() <= MAXIMUM_VOTE, Error::<T>::MaximumVotesExceeded);
 			ensure!(!votes.is_empty(), Error::<T>::NoVotes);
 
 			let candidates_count = <Candidates<T>>::decode_len().unwrap_or(0);
@@ -407,10 +405,6 @@ pub mod pallet {
 
 			let actual_count = <Candidates<T>>::decode_len().unwrap_or(0) as u32;
 			ensure!(actual_count <= candidate_count, Error::<T>::InvalidWitnessData);
-			ensure!(
-				actual_count <= <T as Config>::MaxCandidates::get(),
-				Error::<T>::TooManyCandidates
-			);
 
 			let index = Self::is_candidate(&who).err().ok_or(Error::<T>::DuplicatedCandidate)?;
 
