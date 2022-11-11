@@ -16,10 +16,11 @@
 // limitations under the License.
 
 use crate::traits::fungibles::Inspect;
-use sp_std::boxed::Box;
 
 /// Interface for enumerating assets in existence or owned by a given account.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
+	type AssetsIterator;
+
 	/// Returns an iterator of the collections in existence.
-	fn asset_ids() -> Box<dyn Iterator<Item = Self::AssetId>>;
+	fn asset_ids() -> Self::AssetsIterator;
 }
