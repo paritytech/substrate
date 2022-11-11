@@ -45,18 +45,17 @@ impl BeefyKeystore {
 	pub fn authority_id(&self, keys: &[Public]) -> Option<Public> {
 		let store = self.0.clone()?;
 
-		// we do check for multiple private keys as a key store sanity check.
-		let public: Vec<Public> = keys
-			.iter()
-			.filter(|k| SyncCryptoStore::has_keys(&*store, &[(k.to_raw_vec(), KEY_TYPE)]))
-			.cloned()
-			.collect();
+		let ks: Vec<_> = keys.iter().map(|k| (k.to_raw_vec(), KEY_TYPE)).collect();
 
-		if public.len() > 1 {
-			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({})", public, public.len());
+		// we do check for multiple private keys as a key store sanity check.
+		let indices = SyncCryptoStore::has_keys(&*store, &ks);
+
+		if indices.len() > 1 {
+			warn!(target: "beefy", "🥩 Multiple private keys found for: {:?} ({:?})", keys, indices);
 		}
 
-		public.get(0).cloned()
+		let idx = indices.get(0)?;
+		keys.get(*idx).cloned()
 	}
 
 	/// Sign `message` with the `public` key.
