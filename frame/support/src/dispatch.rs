@@ -31,18 +31,22 @@ pub use crate::{
 	traits::{
 		CallMetadata, GetCallMetadata, GetCallName, GetStorageVersion, UnfilteredDispatchable,
 	},
-	weights::{
-		ClassifyDispatch, DispatchInfo, GetDispatchInfo, PaysFee, PostDispatchInfo,
-		TransactionPriority, WeighData, Weight, WithPostDispatchInfo,
-	},
 };
-pub use sp_runtime::{traits::Dispatchable, DispatchError, RuntimeDebug};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime::{
+	generic::{CheckedExtrinsic, UncheckedExtrinsic},
+	traits::SignedExtension,
+};
+pub use sp_runtime::{
+	traits::Dispatchable, transaction_validity::TransactionPriority, DispatchError, RuntimeDebug,
+};
+pub use sp_weights::Weight;
 
 /// The return type of a `Dispatchable` in frame. When returned explicitly from
 /// a dispatchable function it allows overriding the default `PostDispatchInfo`
 /// returned from a dispatch.
-pub type DispatchResultWithPostInfo =
-	sp_runtime::DispatchResultWithInfo<crate::weights::PostDispatchInfo>;
+pub type DispatchResultWithPostInfo = sp_runtime::DispatchResultWithInfo<PostDispatchInfo>;
 
 /// Unaugmented version of `DispatchResultWithPostInfo` that can be returned from
 /// dispatchable functions and is automatically converted to the augmented type. Should be
@@ -51,17 +55,16 @@ pub type DispatchResultWithPostInfo =
 pub type DispatchResult = Result<(), sp_runtime::DispatchError>;
 
 /// The error type contained in a `DispatchResultWithPostInfo`.
-pub type DispatchErrorWithPostInfo =
-	sp_runtime::DispatchErrorWithPostInfo<crate::weights::PostDispatchInfo>;
+pub type DispatchErrorWithPostInfo = sp_runtime::DispatchErrorWithPostInfo<PostDispatchInfo>;
 
 /// Serializable version of pallet dispatchable.
 pub trait Callable<T> {
-	type Call: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
+	type RuntimeCall: UnfilteredDispatchable + Codec + Clone + PartialEq + Eq;
 }
 
 // dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<A, R> = <A as Callable<R>>::Call;
+pub type CallableCallFor<A, R> = <A as Callable<R>>::RuntimeCall;
 
 /// Origin for the System pallet.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -91,6 +94,552 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 pub trait Parameter: Codec + EncodeLike + Clone + Eq + fmt::Debug + scale_info::TypeInfo {}
 impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + scale_info::TypeInfo {}
 
+/// Means of classifying a dispatchable function.
+pub trait ClassifyDispatch<T> {
+	/// Classify the dispatch function based on input data `target` of type `T`. When implementing
+	/// this for a dispatchable, `T` will be a tuple of all arguments given to the function (except
+	/// origin).
+	fn classify_dispatch(&self, target: T) -> DispatchClass;
+}
+
+/// Indicates if dispatch function should pay fees or not.
+///
+/// If set to `Pays::No`, the block resource limits are applied, yet no fee is deducted.
+pub trait PaysFee<T> {
+	fn pays_fee(&self, _target: T) -> Pays;
+}
+
+/// Explicit enum to denote if a transaction pays fee or not.
+#[derive(Clone, Copy, Eq, PartialEq, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub enum Pays {
+	/// Transactor will pay related fees.
+	Yes,
+	/// Transactor will NOT pay related fees.
+	No,
+}
+
+impl Default for Pays {
+	fn default() -> Self {
+		Self::Yes
+	}
+}
+
+impl From<Pays> for PostDispatchInfo {
+	fn from(pays_fee: Pays) -> Self {
+		Self { actual_weight: None, pays_fee }
+	}
+}
+
+/// A generalized group of dispatch types.
+///
+/// NOTE whenever upgrading the enum make sure to also update
+/// [DispatchClass::all] and [DispatchClass::non_mandatory] helper functions.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode, RuntimeDebug, TypeInfo)]
+pub enum DispatchClass {
+	/// A normal dispatch.
+	Normal,
+	/// An operational dispatch.
+	Operational,
+	/// A mandatory dispatch. These kinds of dispatch are always included regardless of their
+	/// weight, therefore it is critical that they are separately validated to ensure that a
+	/// malicious validator cannot craft a valid but impossibly heavy block. Usually this just
+	/// means ensuring that the extrinsic can only be included once and that it is always very
+	/// light.
+	///
+	/// Do *NOT* use it for extrinsics that can be heavy.
+	///
+	/// The only real use case for this is inherent extrinsics that are required to execute in a
+	/// block for the block to be valid, and it solves the issue in the case that the block
+	/// initialization is sufficiently heavy to mean that those inherents do not fit into the
+	/// block. Essentially, we assume that in these exceptional circumstances, it is better to
+	/// allow an overweight block to be created than to not allow any block at all to be created.
+	Mandatory,
+}
+
+impl Default for DispatchClass {
+	fn default() -> Self {
+		Self::Normal
+	}
+}
+
+impl DispatchClass {
+	/// Returns an array containing all dispatch classes.
+	pub fn all() -> &'static [DispatchClass] {
+		&[DispatchClass::Normal, DispatchClass::Operational, DispatchClass::Mandatory]
+	}
+
+	/// Returns an array of all dispatch classes except `Mandatory`.
+	pub fn non_mandatory() -> &'static [DispatchClass] {
+		&[DispatchClass::Normal, DispatchClass::Operational]
+	}
+}
+
+/// A trait that represents one or many values of given type.
+///
+/// Useful to accept as parameter type to let the caller pass either a single value directly
+/// or an iterator.
+pub trait OneOrMany<T> {
+	/// The iterator type.
+	type Iter: Iterator<Item = T>;
+	/// Convert this item into an iterator.
+	fn into_iter(self) -> Self::Iter;
+}
+
+impl OneOrMany<DispatchClass> for DispatchClass {
+	type Iter = sp_std::iter::Once<DispatchClass>;
+	fn into_iter(self) -> Self::Iter {
+		sp_std::iter::once(self)
+	}
+}
+
+impl<'a> OneOrMany<DispatchClass> for &'a [DispatchClass] {
+	type Iter = sp_std::iter::Cloned<sp_std::slice::Iter<'a, DispatchClass>>;
+	fn into_iter(self) -> Self::Iter {
+		self.iter().cloned()
+	}
+}
+
+/// A bundle of static information collected from the `#[pallet::weight]` attributes.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub struct DispatchInfo {
+	/// Weight of this transaction.
+	pub weight: Weight,
+	/// Class of this transaction.
+	pub class: DispatchClass,
+	/// Does this transaction pay fees.
+	pub pays_fee: Pays,
+}
+
+/// A `Dispatchable` function (aka transaction) that can carry some static information along with
+/// it, using the `#[pallet::weight]` attribute.
+pub trait GetDispatchInfo {
+	/// Return a `DispatchInfo`, containing relevant information of this dispatch.
+	///
+	/// This is done independently of its encoded size.
+	fn get_dispatch_info(&self) -> DispatchInfo;
+}
+
+impl GetDispatchInfo for () {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		DispatchInfo::default()
+	}
+}
+
+/// Extract the actual weight from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_weight(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Weight {
+	match result {
+		Ok(post_info) => post_info,
+		Err(err) => &err.post_info,
+	}
+	.calc_actual_weight(info)
+}
+
+/// Extract the actual pays_fee from a dispatch result if any or fall back to the default weight.
+pub fn extract_actual_pays_fee(result: &DispatchResultWithPostInfo, info: &DispatchInfo) -> Pays {
+	match result {
+		Ok(post_info) => post_info,
+		Err(err) => &err.post_info,
+	}
+	.pays_fee(info)
+}
+
+/// Weight information that is only available post dispatch.
+/// NOTE: This can only be used to reduce the weight or fee, not increase it.
+#[derive(Clone, Copy, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo)]
+pub struct PostDispatchInfo {
+	/// Actual weight consumed by a call or `None` which stands for the worst case static weight.
+	pub actual_weight: Option<Weight>,
+	/// Whether this transaction should pay fees when all is said and done.
+	pub pays_fee: Pays,
+}
+
+impl PostDispatchInfo {
+	/// Calculate how much (if any) weight was not used by the `Dispatchable`.
+	pub fn calc_unspent(&self, info: &DispatchInfo) -> Weight {
+		info.weight - self.calc_actual_weight(info)
+	}
+
+	/// Calculate how much weight was actually spent by the `Dispatchable`.
+	pub fn calc_actual_weight(&self, info: &DispatchInfo) -> Weight {
+		if let Some(actual_weight) = self.actual_weight {
+			actual_weight.min(info.weight)
+		} else {
+			info.weight
+		}
+	}
+
+	/// Determine if user should actually pay fees at the end of the dispatch.
+	pub fn pays_fee(&self, info: &DispatchInfo) -> Pays {
+		// If they originally were not paying fees, or the post dispatch info
+		// says they should not pay fees, then they don't pay fees.
+		// This is because the pre dispatch information must contain the
+		// worst case for weight and fees paid.
+		if info.pays_fee == Pays::No || self.pays_fee == Pays::No {
+			Pays::No
+		} else {
+			// Otherwise they pay.
+			Pays::Yes
+		}
+	}
+}
+
+impl From<()> for PostDispatchInfo {
+	fn from(_: ()) -> Self {
+		Self { actual_weight: None, pays_fee: Default::default() }
+	}
+}
+
+impl sp_runtime::traits::Printable for PostDispatchInfo {
+	fn print(&self) {
+		"actual_weight=".print();
+		match self.actual_weight {
+			Some(weight) => weight.print(),
+			None => "max-weight".print(),
+		};
+		"pays_fee=".print();
+		match self.pays_fee {
+			Pays::Yes => "Yes".print(),
+			Pays::No => "No".print(),
+		}
+	}
+}
+
+/// Allows easy conversion from `DispatchError` to `DispatchErrorWithPostInfo` for dispatchables
+/// that want to return a custom a posterior weight on error.
+pub trait WithPostDispatchInfo {
+	/// Call this on your modules custom errors type in order to return a custom weight on error.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// let who = ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100)))?;
+	/// ensure!(who == me, Error::<T>::NotMe.with_weight(200_000));
+	/// ```
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo;
+}
+
+impl<T> WithPostDispatchInfo for T
+where
+	T: Into<DispatchError>,
+{
+	fn with_weight(self, actual_weight: Weight) -> DispatchErrorWithPostInfo {
+		DispatchErrorWithPostInfo {
+			post_info: PostDispatchInfo {
+				actual_weight: Some(actual_weight),
+				pays_fee: Default::default(),
+			},
+			error: self.into(),
+		}
+	}
+}
+
+/// Implementation for unchecked extrinsic.
+impl<Address, Call, Signature, Extra> GetDispatchInfo
+	for UncheckedExtrinsic<Address, Call, Signature, Extra>
+where
+	Call: GetDispatchInfo,
+	Extra: SignedExtension,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for checked extrinsic.
+impl<AccountId, Call, Extra> GetDispatchInfo for CheckedExtrinsic<AccountId, Call, Extra>
+where
+	Call: GetDispatchInfo,
+{
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		self.function.get_dispatch_info()
+	}
+}
+
+/// Implementation for test extrinsic.
+#[cfg(feature = "std")]
+impl<Call: Encode, Extra: Encode> GetDispatchInfo for sp_runtime::testing::TestXt<Call, Extra> {
+	fn get_dispatch_info(&self) -> DispatchInfo {
+		// for testing: weight == size.
+		DispatchInfo {
+			weight: Weight::from_ref_time(self.encode().len() as _),
+			pays_fee: Pays::Yes,
+			..Default::default()
+		}
+	}
+}
+
+/// A struct holding value for each `DispatchClass`.
+#[derive(Clone, Eq, PartialEq, Default, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct PerDispatchClass<T> {
+	/// Value for `Normal` extrinsics.
+	normal: T,
+	/// Value for `Operational` extrinsics.
+	operational: T,
+	/// Value for `Mandatory` extrinsics.
+	mandatory: T,
+}
+
+impl<T> PerDispatchClass<T> {
+	/// Create new `PerDispatchClass` with the same value for every class.
+	pub fn new(val: impl Fn(DispatchClass) -> T) -> Self {
+		Self {
+			normal: val(DispatchClass::Normal),
+			operational: val(DispatchClass::Operational),
+			mandatory: val(DispatchClass::Mandatory),
+		}
+	}
+
+	/// Get a mutable reference to current value of given class.
+	pub fn get_mut(&mut self, class: DispatchClass) -> &mut T {
+		match class {
+			DispatchClass::Operational => &mut self.operational,
+			DispatchClass::Normal => &mut self.normal,
+			DispatchClass::Mandatory => &mut self.mandatory,
+		}
+	}
+
+	/// Get current value for given class.
+	pub fn get(&self, class: DispatchClass) -> &T {
+		match class {
+			DispatchClass::Normal => &self.normal,
+			DispatchClass::Operational => &self.operational,
+			DispatchClass::Mandatory => &self.mandatory,
+		}
+	}
+}
+
+impl<T: Clone> PerDispatchClass<T> {
+	/// Set the value of given class.
+	pub fn set(&mut self, new: T, class: impl OneOrMany<DispatchClass>) {
+		for class in class.into_iter() {
+			*self.get_mut(class) = new.clone();
+		}
+	}
+}
+
+impl PerDispatchClass<Weight> {
+	/// Returns the total weight consumed by all extrinsics in the block.
+	pub fn total(&self) -> Weight {
+		let mut sum = Weight::zero();
+		for class in DispatchClass::all() {
+			sum = sum.saturating_add(*self.get(*class));
+		}
+		sum
+	}
+
+	/// Add some weight of a specific dispatch class, saturating at the numeric bounds of `Weight`.
+	pub fn add(&mut self, weight: Weight, class: DispatchClass) {
+		let value = self.get_mut(class);
+		*value = value.saturating_add(weight);
+	}
+
+	/// Try to add some weight of a specific dispatch class, returning Err(()) if overflow would
+	/// occur.
+	pub fn checked_add(&mut self, weight: Weight, class: DispatchClass) -> Result<(), ()> {
+		let value = self.get_mut(class);
+		*value = value.checked_add(&weight).ok_or(())?;
+		Ok(())
+	}
+
+	/// Subtract some weight of a specific dispatch class, saturating at the numeric bounds of
+	/// `Weight`.
+	pub fn sub(&mut self, weight: Weight, class: DispatchClass) {
+		let value = self.get_mut(class);
+		*value = value.saturating_sub(weight);
+	}
+}
+
+/// Means of weighing some particular kind of data (`T`).
+pub trait WeighData<T> {
+	/// Weigh the data `T` given by `target`. When implementing this for a dispatchable, `T` will be
+	/// a tuple of all arguments given to the function (except origin).
+	fn weigh_data(&self, target: T) -> Weight;
+}
+
+impl<T> WeighData<T> for Weight {
+	fn weigh_data(&self, _: T) -> Weight {
+		return *self
+	}
+}
+
+impl<T> PaysFee<T> for (Weight, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.2
+	}
+}
+
+impl<T> WeighData<T> for (Weight, DispatchClass) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> WeighData<T> for (Weight, DispatchClass, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (Weight, DispatchClass) {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for (Weight, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (Weight, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for (Weight, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.1
+	}
+}
+
+impl From<(Option<Weight>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<Weight>, Pays)) -> Self {
+		let (actual_weight, pays_fee) = post_weight_info;
+		Self { actual_weight, pays_fee }
+	}
+}
+
+impl From<Option<Weight>> for PostDispatchInfo {
+	fn from(actual_weight: Option<Weight>) -> Self {
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
+
+impl<T> ClassifyDispatch<T> for Weight {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for Weight {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (Weight, DispatchClass, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+// TODO: Eventually remove these
+
+impl From<Option<u64>> for PostDispatchInfo {
+	fn from(maybe_actual_computation: Option<u64>) -> Self {
+		let actual_weight = match maybe_actual_computation {
+			Some(actual_computation) => Some(Weight::zero().set_ref_time(actual_computation)),
+			None => None,
+		};
+		Self { actual_weight, pays_fee: Default::default() }
+	}
+}
+
+impl From<(Option<u64>, Pays)> for PostDispatchInfo {
+	fn from(post_weight_info: (Option<u64>, Pays)) -> Self {
+		let (maybe_actual_time, pays_fee) = post_weight_info;
+		let actual_weight = match maybe_actual_time {
+			Some(actual_time) => Some(Weight::zero().set_ref_time(actual_time)),
+			None => None,
+		};
+		Self { actual_weight, pays_fee }
+	}
+}
+
+impl<T> ClassifyDispatch<T> for u64 {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for u64 {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for u64 {
+	fn weigh_data(&self, _: T) -> Weight {
+		return Weight::zero().set_ref_time(*self)
+	}
+}
+
+impl<T> WeighData<T> for (u64, DispatchClass, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (u64, DispatchClass, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (u64, DispatchClass, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.2
+	}
+}
+
+impl<T> WeighData<T> for (u64, DispatchClass) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (u64, DispatchClass) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		self.1
+	}
+}
+
+impl<T> PaysFee<T> for (u64, DispatchClass) {
+	fn pays_fee(&self, _: T) -> Pays {
+		Pays::Yes
+	}
+}
+
+impl<T> WeighData<T> for (u64, Pays) {
+	fn weigh_data(&self, args: T) -> Weight {
+		return self.0.weigh_data(args)
+	}
+}
+
+impl<T> ClassifyDispatch<T> for (u64, Pays) {
+	fn classify_dispatch(&self, _: T) -> DispatchClass {
+		DispatchClass::Normal
+	}
+}
+
+impl<T> PaysFee<T> for (u64, Pays) {
+	fn pays_fee(&self, _: T) -> Pays {
+		self.1
+	}
+}
+
+// END TODO
+
 /// Declares a `Module` struct and a `Call` enum, which implements the dispatch logic.
 ///
 /// ## Declaration
@@ -101,7 +650,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 ///
 /// 		// Private functions are dispatchable, but not available to other
 /// 		// FRAME pallets.
@@ -128,7 +677,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// * `Module`: The struct generated by the macro, with type `Config`.
 /// * `Call`: The enum generated for every pallet, which implements
 ///   [`Callable`](./dispatch/trait.Callable.html).
-/// * `origin`: Alias of `T::Origin`.
+/// * `origin`: Alias of `T::RuntimeOrigin`.
 /// * `Result`: The expected return type from pallet functions.
 ///
 /// The first parameter of dispatchable functions must always be `origin`.
@@ -144,7 +693,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
 /// 		fn my_long_function(origin) -> dispatch::DispatchResult {
 /// 				// Your implementation
@@ -176,18 +725,18 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// ```
 /// # #[macro_use]
 /// # extern crate frame_support;
-/// # use frame_support::dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo};
+/// # use frame_support::{weights::Weight, dispatch::{DispatchResultWithPostInfo, WithPostDispatchInfo}};
 /// # use frame_system::{Config, ensure_signed};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 1_000_000]
 /// 		fn my_long_function(origin, do_expensive_calc: bool) -> DispatchResultWithPostInfo {
-/// 			ensure_signed(origin).map_err(|e| e.with_weight(100_000))?;
+/// 			ensure_signed(origin).map_err(|e| e.with_weight(Weight::from_ref_time(100_000)))?;
 /// 			if do_expensive_calc {
 /// 				// do the expensive calculation
 /// 				// ...
 /// 				// return None to indicate that we are using all weight (the default)
-/// 				return Ok(None.into());
+/// 				return Ok(None::<Weight>.into());
 /// 			}
 /// 			// expensive calculation not executed: use only a portion of the weight
 /// 			Ok(Some(100_000).into())
@@ -209,7 +758,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// # use frame_support::transactional;
 /// # use frame_system::Config;
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
 /// 		#[transactional]
 /// 		fn my_short_function(origin) {
@@ -230,7 +779,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// # use frame_support::dispatch;
 /// # use frame_system::{Config, ensure_signed, ensure_root};
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin {
 /// 		#[weight = 0]
 /// 			fn my_privileged_function(origin) -> dispatch::DispatchResult {
 /// 			ensure_root(origin)?;
@@ -270,7 +819,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// pub trait Config<I: Instance=DefaultInstance>: frame_system::Config {}
 ///
 /// decl_module! {
-/// 	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::Origin {
+/// 	pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where origin: T::RuntimeOrigin {
 /// 		// Your implementation
 /// 	}
 /// }
@@ -282,7 +831,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// ## Where clause
 ///
-/// Besides the default `origin: T::Origin`, you can also pass other bounds to the module
+/// Besides the default `origin: T::RuntimeOrigin`, you can also pass other bounds to the module
 /// declaration. This where bound will be replicated to all types generated by this macro. The
 /// chaining of multiple trait bounds with `+` is not supported. If multiple bounds for one type are
 /// required, it needs to be split up into multiple bounds.
@@ -295,7 +844,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 /// pub trait Config: system::Config where Self::AccountId: From<u32> {}
 ///
 /// decl_module! {
-/// 	pub struct Module<T: Config> for enum Call where origin: T::Origin, T::AccountId: From<u32> {
+/// 	pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, T::AccountId: From<u32> {
 /// 		// Your implementation
 /// 	}
 /// }
@@ -306,7 +855,7 @@ impl<T> Parameter for T where T: Codec + EncodeLike + Clone + Eq + fmt::Debug + 
 ///
 /// The following are reserved function signatures:
 ///
-/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/v3/runtime/events-and-errors).
+/// * `deposit_event`: Helper function for depositing an [event](https://docs.substrate.io/main-docs/build/events-errors/).
 /// The default behavior is to call `deposit_event` from the [System
 /// module](../frame_system/index.html). However, you can write your own implementation for events
 /// in your runtime. To use the default behavior, add `fn deposit_event() = default;` to your
@@ -1336,7 +1885,7 @@ macro_rules! decl_module {
 			)
 		);
 	};
-	// Ignore any ident which is not `origin` with type `T::Origin`.
+	// Ignore any ident which is not `origin` with type `T::RuntimeOrigin`.
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident$(<I>, I: $instantiable:path $(= $module_default_instance:path)?)?>
@@ -1357,7 +1906,7 @@ macro_rules! decl_module {
 		$(#[weight = $weight:expr])?
 		$(#[$fn_attr:meta])*
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident : T::Origin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
+			$origin:ident : T::RuntimeOrigin $( , $( #[$codec_attr:ident] )* $param_name:ident : $param:ty )* $(,)?
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -1497,7 +2046,7 @@ macro_rules! decl_module {
 		{
 			/// Deposits an event using `frame_system::Pallet::deposit_event`.
 			$vis fn deposit_event(
-				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::Event>
+				event: impl Into<< $trait_instance as $trait_name $(<$instance>)? >::RuntimeEvent>
 			) {
 				<$system::Pallet<$trait_instance>>::deposit_event(event.into())
 			}
@@ -1549,6 +2098,35 @@ macro_rules! decl_module {
 		{}
 	};
 
+	(@impl_try_state_default
+		{ $system:ident }
+		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
+		{ $( $other_where_bounds:tt )* }
+	) => {
+		#[cfg(feature = "try-runtime")]
+		impl<$trait_instance: $system::Config + $trait_name$(<I>, $instance: $instantiable)?>
+			$crate::traits::TryState<<$trait_instance as $system::Config>::BlockNumber>
+			for $module<$trait_instance$(, $instance)?> where $( $other_where_bounds )*
+		{
+			fn try_state(
+				_: <$trait_instance as $system::Config>::BlockNumber,
+				_: $crate::traits::TryStateSelect,
+			) -> Result<(), &'static str> {
+				let pallet_name = <<
+					$trait_instance
+					as
+					$system::Config
+				>::PalletInfo as $crate::traits::PalletInfo>::name::<Self>().unwrap_or("<unknown pallet name>");
+				$crate::log::debug!(
+					target: $crate::LOG_TARGET,
+					"⚠️ pallet {} cannot have try-state because it is using decl_module!",
+					pallet_name,
+				);
+				Ok(())
+			}
+		}
+	};
+
 	(@impl_on_runtime_upgrade
 		{ $system:ident }
 		$module:ident<$trait_instance:ident: $trait_name:ident$(<I>, $instance:ident: $instantiable:path)?>;
@@ -1580,12 +2158,12 @@ macro_rules! decl_module {
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
-				Ok(())
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				Ok(())
 			}
 		}
@@ -1614,16 +2192,16 @@ macro_rules! decl_module {
 					pallet_name,
 				);
 
-				0
+				$crate::dispatch::Weight::zero()
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn pre_upgrade() -> Result<(), &'static str> {
-				Ok(())
+			fn pre_upgrade() -> Result<$crate::sp_std::vec::Vec<u8>, &'static str> {
+				Ok($crate::sp_std::vec::Vec::new())
 			}
 
 			#[cfg(feature = "try-runtime")]
-			fn post_upgrade() -> Result<(), &'static str> {
+			fn post_upgrade(_: $crate::sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
 				Ok(())
 			}
 		}
@@ -1787,9 +2365,11 @@ macro_rules! decl_module {
 		$vis fn $name(
 			$origin: $origin_ty $(, $param: $param_ty )*
 		) -> $crate::dispatch::DispatchResult {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			{ $( $impl )* }
-			Ok(())
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				{ $( $impl )* }
+				Ok(())
+			})
 		}
 	};
 
@@ -1805,8 +2385,10 @@ macro_rules! decl_module {
 	) => {
 		$(#[$fn_attr])*
 		$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
-			$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
-			$( $impl )*
+			$crate::storage::with_storage_layer(|| {
+				$crate::sp_tracing::enter_span!($crate::sp_tracing::trace_span!(stringify!($name)));
+				$( $impl )*
+			})
 		}
 	};
 
@@ -2023,6 +2605,13 @@ macro_rules! decl_module {
 		}
 
 		$crate::decl_module! {
+			@impl_try_state_default
+			{ $system }
+			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
+			{ $( $other_where_bounds )* }
+		}
+
+		$crate::decl_module! {
 			@impl_on_runtime_upgrade
 			{ $system }
 			$mod_type<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?>;
@@ -2203,7 +2792,7 @@ macro_rules! decl_module {
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
 			fn count() -> usize { 1 }
-			fn accumulate(acc: &mut $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData>) {
+			fn infos() -> $crate::sp_std::vec::Vec<$crate::traits::PalletInfoData> {
 				use $crate::traits::PalletInfoAccess;
 				let item = $crate::traits::PalletInfoData {
 					index: Self::index(),
@@ -2211,7 +2800,7 @@ macro_rules! decl_module {
 					module_name: Self::module_name(),
 					crate_version: Self::crate_version(),
 				};
-				acc.push(item);
+				vec![item]
 			}
 		}
 
@@ -2317,8 +2906,8 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::traits::UnfilteredDispatchable
 			for $call_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Origin = $origin_type;
-			fn dispatch_bypass_filter(self, _origin: Self::Origin) -> $crate::dispatch::DispatchResultWithPostInfo {
+			type RuntimeOrigin = $origin_type;
+			fn dispatch_bypass_filter(self, _origin: Self::RuntimeOrigin) -> $crate::dispatch::DispatchResultWithPostInfo {
 				match self {
 					$(
 						$call_type::$fn_name { $( $param_name ),* } => {
@@ -2336,7 +2925,7 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name $(<I>, $instance: $instantiable)?> $crate::dispatch::Callable<$trait_instance>
 			for $mod_type<$trait_instance $(, $instance)?> where $( $other_where_bounds )*
 		{
-			type Call = $call_type<$trait_instance $(, $instance)?>;
+			type RuntimeCall = $call_type<$trait_instance $(, $instance)?>;
 		}
 
 		$crate::__dispatch_impl_metadata! {
@@ -2589,13 +3178,14 @@ macro_rules! __check_reserved_fn_name {
 mod tests {
 	use super::*;
 	use crate::{
+		dispatch::{DispatchClass, DispatchInfo, Pays},
 		metadata::*,
 		traits::{
-			CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle, OnInitialize,
-			OnRuntimeUpgrade, PalletInfo,
+			CallerTrait, CrateVersion, Get, GetCallName, IntegrityTest, OnFinalize, OnIdle,
+			OnInitialize, OnRuntimeUpgrade, PalletInfo,
 		},
-		weights::{DispatchClass, DispatchInfo, Pays, RuntimeDbWeight},
 	};
+	use sp_weights::RuntimeDbWeight;
 
 	pub trait Config: system::Config + Sized
 	where
@@ -2608,9 +3198,9 @@ mod tests {
 
 		pub trait Config: 'static {
 			type AccountId;
-			type Call;
+			type RuntimeCall;
 			type BaseCallFilter;
-			type Origin: crate::traits::OriginTrait<Call = Self::Call>;
+			type RuntimeOrigin: crate::traits::OriginTrait<Call = Self::RuntimeCall>;
 			type BlockNumber: Into<u32>;
 			type PalletInfo: crate::traits::PalletInfo;
 			type DbWeight: Get<RuntimeDbWeight>;
@@ -2622,7 +3212,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system = system, T::AccountId: From<u32> {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system = system, T::AccountId: From<u32> {
 			/// Hi, this is a comment.
 			#[weight = 0]
 			fn aux_0(_origin) -> DispatchResult { unreachable!() }
@@ -2645,13 +3235,13 @@ mod tests {
 			#[weight = (5, DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 
-			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } 7 }
+			fn on_initialize(n: T::BlockNumber,) -> Weight { if n.into() == 42 { panic!("on_initialize") } Weight::from_ref_time(7) }
 			fn on_idle(n: T::BlockNumber, remaining_weight: Weight,) -> Weight {
-				if n.into() == 42 || remaining_weight == 42  { panic!("on_idle") }
-				7
+				if n.into() == 42 || remaining_weight == Weight::from_ref_time(42)  { panic!("on_idle") }
+				Weight::from_ref_time(7)
 			}
 			fn on_finalize(n: T::BlockNumber,) { if n.into() == 42 { panic!("on_finalize") } }
-			fn on_runtime_upgrade() -> Weight { 10 }
+			fn on_runtime_upgrade() -> Weight { Weight::from_ref_time(10) }
 			fn offchain_worker() {}
 			/// Some doc
 			fn integrity_test() { panic!("integrity_test") }
@@ -2710,8 +3300,18 @@ mod tests {
 		}
 	}
 
+	impl CallerTrait<<TraitImpl as system::Config>::AccountId> for OuterOrigin {
+		fn into_system(self) -> Option<RawOrigin<<TraitImpl as system::Config>::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
+
+		fn as_system_ref(&self) -> Option<&RawOrigin<<TraitImpl as system::Config>::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
+	}
+
 	impl crate::traits::OriginTrait for OuterOrigin {
-		type Call = <TraitImpl as system::Config>::Call;
+		type Call = <TraitImpl as system::Config>::RuntimeCall;
 		type PalletsOrigin = OuterOrigin;
 		type AccountId = <TraitImpl as system::Config>::AccountId;
 
@@ -2735,6 +3335,10 @@ mod tests {
 			unimplemented!("Not required in tests!")
 		}
 
+		fn into_caller(self) -> Self::PalletsOrigin {
+			unimplemented!("Not required in tests!")
+		}
+
 		fn try_with_caller<R>(
 			self,
 			_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
@@ -2754,12 +3358,15 @@ mod tests {
 		fn as_signed(self) -> Option<Self::AccountId> {
 			unimplemented!("Not required in tests!")
 		}
+		fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+			unimplemented!("Not required in tests!")
+		}
 	}
 
 	impl system::Config for TraitImpl {
-		type Origin = OuterOrigin;
+		type RuntimeOrigin = OuterOrigin;
 		type AccountId = u32;
-		type Call = ();
+		type RuntimeCall = ();
 		type BaseCallFilter = frame_support::traits::Everything;
 		type BlockNumber = u32;
 		type PalletInfo = Self;
@@ -2810,24 +3417,30 @@ mod tests {
 
 	#[test]
 	fn on_initialize_should_work_2() {
-		assert_eq!(<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10), 7);
+		assert_eq!(
+			<Module<TraitImpl> as OnInitialize<u32>>::on_initialize(10),
+			Weight::from_ref_time(7)
+		);
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_1() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, 9);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(42, Weight::from_ref_time(9));
 	}
 
 	#[test]
 	#[should_panic(expected = "on_idle")]
 	fn on_idle_should_work_2() {
-		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, 42);
+		<Module<TraitImpl> as OnIdle<u32>>::on_idle(9, Weight::from_ref_time(42));
 	}
 
 	#[test]
 	fn on_idle_should_work_3() {
-		assert_eq!(<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, 11), 7);
+		assert_eq!(
+			<Module<TraitImpl> as OnIdle<u32>>::on_idle(10, Weight::from_ref_time(11)),
+			Weight::from_ref_time(7)
+		);
 	}
 
 	#[test]
@@ -2839,7 +3452,10 @@ mod tests {
 	#[test]
 	fn on_runtime_upgrade_should_work() {
 		sp_io::TestExternalities::default().execute_with(|| {
-			assert_eq!(<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(), 10)
+			assert_eq!(
+				<Module<TraitImpl> as OnRuntimeUpgrade>::on_runtime_upgrade(),
+				Weight::from_ref_time(10)
+			)
 		});
 	}
 
@@ -2848,12 +3464,20 @@ mod tests {
 		// operational.
 		assert_eq!(
 			Call::<TraitImpl>::operational {}.get_dispatch_info(),
-			DispatchInfo { weight: 5, class: DispatchClass::Operational, pays_fee: Pays::Yes },
+			DispatchInfo {
+				weight: Weight::from_ref_time(5),
+				class: DispatchClass::Operational,
+				pays_fee: Pays::Yes
+			},
 		);
 		// custom basic
 		assert_eq!(
 			Call::<TraitImpl>::aux_3 {}.get_dispatch_info(),
-			DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes },
+			DispatchInfo {
+				weight: Weight::from_ref_time(3),
+				class: DispatchClass::Normal,
+				pays_fee: Pays::Yes
+			},
 		);
 	}
 
@@ -2881,5 +3505,189 @@ mod tests {
 	#[test]
 	fn test_new_call_variant() {
 		Call::<TraitImpl>::new_call_variant_aux_0();
+	}
+}
+
+#[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
+mod weight_tests {
+	use super::*;
+	use sp_core::{parameter_types, Get};
+	use sp_weights::RuntimeDbWeight;
+
+	pub trait Config: 'static {
+		type RuntimeOrigin;
+		type Balance;
+		type BlockNumber;
+		type DbWeight: Get<RuntimeDbWeight>;
+		type PalletInfo: crate::traits::PalletInfo;
+	}
+
+	pub struct TraitImpl {}
+
+	parameter_types! {
+		pub const DbWeight: RuntimeDbWeight = RuntimeDbWeight {
+			read: 100,
+			write: 1000,
+		};
+	}
+
+	impl Config for TraitImpl {
+		type RuntimeOrigin = u32;
+		type BlockNumber = u32;
+		type Balance = u32;
+		type DbWeight = DbWeight;
+		type PalletInfo = crate::tests::PanicPalletInfo;
+	}
+
+	decl_module! {
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {
+			// no arguments, fixed weight
+			#[weight = 1000]
+			fn f00(_origin) { unimplemented!(); }
+
+			#[weight = (1000, DispatchClass::Mandatory)]
+			fn f01(_origin) { unimplemented!(); }
+
+			#[weight = (1000, Pays::No)]
+			fn f02(_origin) { unimplemented!(); }
+
+			#[weight = (1000, DispatchClass::Operational, Pays::No)]
+			fn f03(_origin) { unimplemented!(); }
+
+			// weight = a x 10 + b
+			#[weight = ((_a * 10 + _eb * 1) as u64, DispatchClass::Normal, Pays::Yes)]
+			fn f11(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = (0, DispatchClass::Operational, Pays::Yes)]
+			fn f12(_origin, _a: u32, _eb: u32) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + Weight::from_ref_time(10_000)]
+			fn f20(_origin) { unimplemented!(); }
+
+			#[weight = T::DbWeight::get().reads_writes(6, 5) + Weight::from_ref_time(40_000)]
+			fn f21(_origin) { unimplemented!(); }
+
+		}
+	}
+
+	#[test]
+	fn weights_are_correct() {
+		// #[weight = 1000]
+		let info = Call::<TraitImpl>::f00 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (1000, DispatchClass::Mandatory)]
+		let info = Call::<TraitImpl>::f01 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Mandatory);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (1000, Pays::No)]
+		let info = Call::<TraitImpl>::f02 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::No);
+
+		// #[weight = (1000, DispatchClass::Operational, Pays::No)]
+		let info = Call::<TraitImpl>::f03 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(1000));
+		assert_eq!(info.class, DispatchClass::Operational);
+		assert_eq!(info.pays_fee, Pays::No);
+
+		// #[weight = ((_a * 10 + _eb * 1) as Weight, DispatchClass::Normal, Pays::Yes)]
+		let info = Call::<TraitImpl>::f11 { _a: 13, _eb: 20 }.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(150)); // 13*10 + 20
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = (0, DispatchClass::Operational, Pays::Yes)]
+		let info = Call::<TraitImpl>::f12 { _a: 10, _eb: 20 }.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(0));
+		assert_eq!(info.class, DispatchClass::Operational);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads(3) + T::DbWeight::get().writes(2) + 10_000]
+		let info = Call::<TraitImpl>::f20 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(12300)); // 100*3 + 1000*2 + 10_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+
+		// #[weight = T::DbWeight::get().reads_writes(6, 5) + 40_000]
+		let info = Call::<TraitImpl>::f21 {}.get_dispatch_info();
+		assert_eq!(info.weight, Weight::from_ref_time(45600)); // 100*6 + 1000*5 + 40_1000
+		assert_eq!(info.class, DispatchClass::Normal);
+		assert_eq!(info.pays_fee, Pays::Yes);
+	}
+
+	#[test]
+	fn extract_actual_weight_works() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_weight(&Ok(Some(7).into()), &pre), Weight::from_ref_time(7));
+		assert_eq!(
+			extract_actual_weight(&Ok(Some(1000).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Weight::from_ref_time(9)
+		);
+	}
+
+	#[test]
+	fn extract_actual_weight_caps_at_pre_weight() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(
+			extract_actual_weight(&Ok(Some(1250).into()), &pre),
+			Weight::from_ref_time(1000)
+		);
+		assert_eq!(
+			extract_actual_weight(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(1300))),
+				&pre
+			),
+			Weight::from_ref_time(1000),
+		);
+	}
+
+	#[test]
+	fn extract_actual_pays_fee_works() {
+		let pre = DispatchInfo { weight: Weight::from_ref_time(1000), ..Default::default() };
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::Yes);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::No).into()), &pre), Pays::No);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchError::BadOrigin.with_weight(Weight::from_ref_time(9))),
+				&pre
+			),
+			Pays::Yes
+		);
+		assert_eq!(
+			extract_actual_pays_fee(
+				&Err(DispatchErrorWithPostInfo {
+					post_info: PostDispatchInfo { actual_weight: None, pays_fee: Pays::No },
+					error: DispatchError::BadOrigin,
+				}),
+				&pre
+			),
+			Pays::No
+		);
+
+		let pre = DispatchInfo {
+			weight: Weight::from_ref_time(1000),
+			pays_fee: Pays::No,
+			..Default::default()
+		};
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(7).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok(Some(1000).into()), &pre), Pays::No);
+		assert_eq!(extract_actual_pays_fee(&Ok((Some(1000), Pays::Yes).into()), &pre), Pays::No);
 	}
 }

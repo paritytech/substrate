@@ -23,13 +23,13 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo,
+	dispatch::{DispatchResultWithPostInfo, Pays},
 	ensure,
 	traits::{
 		ConstU32, DisabledValidators, FindAuthor, Get, KeyOwnerProofSystem, OnTimestampSet,
 		OneSessionHandler,
 	},
-	weights::{Pays, Weight},
+	weights::Weight,
 	BoundedVec, WeakBoundedVec,
 };
 use sp_application_crypto::ByteArray;
@@ -306,6 +306,7 @@ pub mod pallet {
 	/// The configuration for the current epoch. Should never be `None` as it is initialized in
 	/// genesis.
 	#[pallet::storage]
+	#[pallet::getter(fn epoch_config)]
 	pub(super) type EpochConfig<T> = StorageValue<_, BabeEpochConfiguration>;
 
 	/// The configuration for the next epoch, `None` if the config will not change
@@ -336,7 +337,7 @@ pub mod pallet {
 		/// Initialization
 		fn on_initialize(now: BlockNumberFor<T>) -> Weight {
 			Self::initialize(now);
-			0
+			Weight::zero()
 		}
 
 		/// Block finalization
@@ -1008,6 +1009,6 @@ pub mod migrations {
 
 		writes += 3;
 
-		T::DbWeight::get().writes(writes) + T::DbWeight::get().reads(reads)
+		T::DbWeight::get().reads_writes(reads, writes)
 	}
 }

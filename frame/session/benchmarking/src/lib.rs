@@ -18,6 +18,7 @@
 //! Benchmarks for the Session Pallet.
 // This is separated into its own crate due to cyclic dependency issues.
 
+#![cfg(feature = "runtime-benchmarks")]
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod mock;

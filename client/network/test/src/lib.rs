@@ -23,7 +23,6 @@ mod block_import;
 mod sync;
 
 use std::{
-	borrow::Cow,
 	collections::HashMap,
 	marker::PhantomData,
 	pin::Pin,
@@ -45,39 +44,40 @@ use sc_client_api::{
 };
 use sc_consensus::{
 	BasicQueue, BlockCheckParams, BlockImport, BlockImportParams, BoxJustificationImport,
-	ForkChoiceStrategy, ImportResult, JustificationImport, LongestChain, Verifier,
+	ForkChoiceStrategy, ImportResult, JustificationImport, JustificationSyncLink, LongestChain,
+	Verifier,
 };
-pub use sc_network::config::EmptyTransactionPool;
 use sc_network::{
-	config::{
-		MultiaddrWithPeerId, NetworkConfiguration, NonDefaultSetConfig, NonReservedPeerMode, Role,
-		SyncMode, TransportConfig,
-	},
+	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
 	Multiaddr, NetworkService, NetworkWorker,
 };
-pub use sc_network_common::config::ProtocolId;
-use sc_network_common::sync::warp::{
-	AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider,
+use sc_network_common::{
+	config::{
+		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
+	},
+	protocol::{role::Roles, ProtocolName},
+	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
+	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
-	warp_request_handler, ChainSync,
+	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
+	state_request_handler::StateRequestHandler, warp_request_handler, ChainSync,
 };
 use sc_service::client::Client;
 use sp_blockchain::{
 	well_known_cache_keys::{self, Id as CacheKeyId},
-	HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
+	Backend as BlockchainBackend, HeaderBackend, Info as BlockchainInfo, Result as ClientResult,
 };
 use sp_consensus::{
 	block_validation::{BlockAnnounceValidator, DefaultBlockAnnounceValidator},
-	BlockOrigin, Error as ConsensusError,
+	BlockOrigin, Error as ConsensusError, SyncOracle,
 };
 use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
@@ -173,11 +173,14 @@ impl PeersClient {
 			Some(header) => header,
 			None => return false,
 		};
-		self.backend.have_state_at(&header.hash(), *header.number())
+		self.backend.have_state_at(header.hash(), *header.number())
 	}
 
-	pub fn justifications(&self, block: &BlockId<Block>) -> ClientResult<Option<Justifications>> {
-		self.client.justifications(block)
+	pub fn justifications(
+		&self,
+		hash: <Block as BlockT>::Hash,
+	) -> ClientResult<Option<Justifications>> {
+		self.client.justifications(hash)
 	}
 
 	pub fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
@@ -190,11 +193,11 @@ impl PeersClient {
 
 	pub fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: <Block as BlockT>::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> ClientResult<()> {
-		self.client.finalize_block(id, justification, notify)
+		self.client.finalize_block(hash, justification, notify)
 	}
 }
 
@@ -243,7 +246,7 @@ where
 {
 	/// Get this peer ID.
 	pub fn id(&self) -> PeerId {
-		*self.network.service().local_peer_id()
+		self.network.service().local_peer_id()
 	}
 
 	/// Returns true if we're major syncing.
@@ -532,10 +535,17 @@ where
 		self.verifier.failed_verifications.lock().clone()
 	}
 
-	pub fn has_block(&self, hash: &H256) -> bool {
+	pub fn has_block(&self, hash: H256) -> bool {
 		self.backend
 			.as_ref()
-			.map(|backend| backend.blockchain().header(BlockId::hash(*hash)).unwrap().is_some())
+			.map(|backend| backend.blockchain().header(BlockId::hash(hash)).unwrap().is_some())
+			.unwrap_or(false)
+	}
+
+	pub fn has_body(&self, hash: H256) -> bool {
+		self.backend
+			.as_ref()
+			.map(|backend| backend.blockchain().body(hash).unwrap().is_some())
 			.unwrap_or(false)
 	}
 }
@@ -676,11 +686,13 @@ pub struct FullPeerConfig {
 	/// Pruning window size.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	pub keep_blocks: Option<u32>,
+	pub blocks_pruning: Option<u32>,
 	/// Block announce validator.
 	pub block_announce_validator: Option<Box<dyn BlockAnnounceValidator<Block> + Send + Sync>>,
 	/// List of notification protocols that the network must support.
-	pub notifications_protocols: Vec<Cow<'static, str>>,
+	pub notifications_protocols: Vec<ProtocolName>,
+	/// List of request-response protocols that the network must support.
+	pub request_response_protocols: Vec<RequestResponseConfig>,
 	/// The indices of the peers the peer should be connected to.
 	///
 	/// If `None`, it will be connected to all other peers.
@@ -742,10 +754,10 @@ where
 
 	/// Add a full peer.
 	fn add_full_peer_with_config(&mut self, config: FullPeerConfig) {
-		let mut test_client_builder = match (config.keep_blocks, config.storage_chain) {
-			(Some(keep_blocks), true) => TestClientBuilder::with_tx_storage(keep_blocks),
+		let mut test_client_builder = match (config.blocks_pruning, config.storage_chain) {
+			(Some(blocks_pruning), true) => TestClientBuilder::with_tx_storage(blocks_pruning),
 			(None, true) => TestClientBuilder::with_tx_storage(u32::MAX),
-			(Some(keep_blocks), false) => TestClientBuilder::with_pruning_window(keep_blocks),
+			(Some(blocks_pruning), false) => TestClientBuilder::with_pruning_window(blocks_pruning),
 			(None, false) => TestClientBuilder::with_default_backend(),
 		};
 		if let Some(storage) = config.extra_storage {
@@ -783,6 +795,9 @@ where
 		network_config.transport = TransportConfig::MemoryOnly;
 		network_config.listen_addresses = vec![listen_addr.clone()];
 		network_config.allow_non_globals_in_dht = true;
+		network_config
+			.request_response_protocols
+			.extend(config.request_response_protocols);
 		network_config.extra_sets = config
 			.notifications_protocols
 			.into_iter()
@@ -790,6 +805,7 @@ where
 				notifications_protocol: p,
 				fallback_names: Vec::new(),
 				max_notification_size: 1024 * 1024,
+				handshake: None,
 				set_config: Default::default(),
 			})
 			.collect();
@@ -797,7 +813,7 @@ where
 			let addrs = connect_to
 				.iter()
 				.map(|v| {
-					let peer_id = *self.peer(*v).network_service().local_peer_id();
+					let peer_id = self.peer(*v).network_service().local_peer_id();
 					let multiaddr = self.peer(*v).listen_addr.clone();
 					MultiaddrWithPeerId { peer_id, multiaddr }
 				})
@@ -808,23 +824,25 @@ where
 
 		let protocol_id = ProtocolId::from("test-protocol-name");
 
+		let fork_id = Some(String::from("test-fork-id"));
+
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
-				BlockRequestHandler::new(&protocol_id, client.clone(), 50);
+				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
-				StateRequestHandler::new(&protocol_id, client.clone(), 50);
+				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
 
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) =
-				LightClientRequestHandler::new(&protocol_id, client.clone());
+				LightClientRequestHandler::new(&protocol_id, None, client.clone());
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -832,8 +850,16 @@ where
 		let warp_sync = Arc::new(TestWarpSyncProvider(client.clone()));
 
 		let warp_protocol_config = {
-			let (handler, protocol_config) =
-				warp_request_handler::RequestHandler::new(protocol_id.clone(), warp_sync.clone());
+			let (handler, protocol_config) = warp_request_handler::RequestHandler::new(
+				protocol_id.clone(),
+				client
+					.block_hash(0u32.into())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed"),
+				None,
+				warp_sync.clone(),
+			);
 			self.spawn_task(handler.run().boxed());
 			protocol_config
 		};
@@ -841,7 +867,9 @@ where
 		let block_announce_validator = config
 			.block_announce_validator
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
-		let chain_sync = ChainSync::new(
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			NetworkServiceProvider::new();
+		let (chain_sync, chain_sync_service) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -855,34 +883,53 @@ where
 			block_announce_validator,
 			network_config.max_parallel_downloads,
 			Some(warp_sync),
+			chain_sync_network_handle,
 		)
 		.unwrap();
+		let block_announce_config = chain_sync.get_block_announce_proto_config(
+			protocol_id.clone(),
+			&fork_id,
+			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
+			client.info().best_number,
+			client.info().best_hash,
+			client
+				.block_hash(Zero::zero())
+				.ok()
+				.flatten()
+				.expect("Genesis block exists; qed"),
+		);
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
-			transactions_handler_executor: Box::new(|task| {
-				async_std::task::spawn(task);
-			}),
 			network_config,
 			chain: client.clone(),
-			transaction_pool: Arc::new(EmptyTransactionPool),
 			protocol_id,
+			fork_id,
 			import_queue,
 			chain_sync: Box::new(chain_sync),
+			chain_sync_service,
 			metrics_registry: None,
+			block_announce_config,
 			block_request_protocol_config,
 			state_request_protocol_config,
 			light_client_request_protocol_config,
 			warp_sync_protocol_config: Some(warp_protocol_config),
+			request_response_protocol_configs: Vec::new(),
 		})
 		.unwrap();
 
 		trace!(target: "test_network", "Peer identifier: {}", network.service().local_peer_id());
 
+		let service = network.service().clone();
+		async_std::task::spawn(async move {
+			chain_sync_network_provider.run(service).await;
+		});
+
 		self.mut_peers(move |peers| {
 			for peer in peers.iter_mut() {
 				peer.network
-					.add_known_address(*network.service().local_peer_id(), listen_addr.clone());
+					.add_known_address(network.service().local_peer_id(), listen_addr.clone());
 			}
 
 			let imported_blocks_stream = Box::pin(client.import_notification_stream().fuse());
@@ -1077,7 +1124,7 @@ impl JustificationImport<Block> for ForceFinalized {
 		justification: Justification,
 	) -> Result<(), Self::Error> {
 		self.0
-			.finalize_block(BlockId::Hash(hash), Some(justification), true)
+			.finalize_block(hash, Some(justification), true)
 			.map_err(|_| ConsensusError::InvalidJustification)
 	}
 }

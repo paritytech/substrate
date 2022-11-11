@@ -59,9 +59,9 @@ pub struct Metrics {
 	pub incoming_connections_total: Counter<U64>,
 	pub issued_light_requests: Counter<U64>,
 	pub kademlia_query_duration: HistogramVec,
-	pub kademlia_random_queries_total: CounterVec<U64>,
-	pub kademlia_records_count: GaugeVec<U64>,
-	pub kademlia_records_sizes_total: GaugeVec<U64>,
+	pub kademlia_random_queries_total: Counter<U64>,
+	pub kademlia_records_count: Gauge<U64>,
+	pub kademlia_records_sizes_total: Gauge<U64>,
 	pub kbuckets_num_nodes: GaugeVec<U64>,
 	pub listeners_local_addresses: Gauge<U64>,
 	pub listeners_errors_total: Counter<U64>,
@@ -138,33 +138,24 @@ impl Metrics {
 				},
 				&["type"]
 			)?, registry)?,
-			kademlia_random_queries_total: prometheus::register(CounterVec::new(
-				Opts::new(
-					"substrate_sub_libp2p_kademlia_random_queries_total",
-					"Number of random Kademlia queries started"
-				),
-				&["protocol"]
+			kademlia_random_queries_total: prometheus::register(Counter::new(
+				"substrate_sub_libp2p_kademlia_random_queries_total",
+				"Number of random Kademlia queries started",
 			)?, registry)?,
-			kademlia_records_count: prometheus::register(GaugeVec::new(
-				Opts::new(
-					"substrate_sub_libp2p_kademlia_records_count",
-					"Number of records in the Kademlia records store"
-				),
-				&["protocol"]
+			kademlia_records_count: prometheus::register(Gauge::new(
+				"substrate_sub_libp2p_kademlia_records_count",
+				"Number of records in the Kademlia records store",
 			)?, registry)?,
-			kademlia_records_sizes_total: prometheus::register(GaugeVec::new(
-				Opts::new(
-					"substrate_sub_libp2p_kademlia_records_sizes_total",
-					"Total size of all the records in the Kademlia records store"
-				),
-				&["protocol"]
+			kademlia_records_sizes_total: prometheus::register(Gauge::new(
+				"substrate_sub_libp2p_kademlia_records_sizes_total",
+				"Total size of all the records in the Kademlia records store",
 			)?, registry)?,
 			kbuckets_num_nodes: prometheus::register(GaugeVec::new(
 				Opts::new(
 					"substrate_sub_libp2p_kbuckets_num_nodes",
 					"Number of nodes per kbucket per Kademlia instance"
 				),
-				&["protocol", "lower_ilog2_bucket_bound"]
+				&["lower_ilog2_bucket_bound"]
 			)?, registry)?,
 			listeners_local_addresses: prometheus::register(Gauge::new(
 				"substrate_sub_libp2p_listeners_local_addresses",

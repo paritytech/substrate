@@ -38,7 +38,7 @@
 //! });
 //! ```
 
-use crate::import_queue::{Link, Origin};
+use crate::import_queue::{Link, RuntimeOrigin};
 use futures::prelude::*;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -82,7 +82,7 @@ impl<B: BlockT> Clone for BufferedLinkSender<B> {
 /// Internal buffered message.
 enum BlockImportWorkerMsg<B: BlockT> {
 	BlocksProcessed(usize, usize, Vec<(BlockImportResult<B>, B::Hash)>),
-	JustificationImported(Origin, B::Hash, NumberFor<B>, bool),
+	JustificationImported(RuntimeOrigin, B::Hash, NumberFor<B>, bool),
 	RequestJustification(B::Hash, NumberFor<B>),
 }
 
@@ -100,7 +100,7 @@ impl<B: BlockT> Link<B> for BufferedLinkSender<B> {
 
 	fn justification_imported(
 		&mut self,
-		who: Origin,
+		who: RuntimeOrigin,
 		hash: &B::Hash,
 		number: NumberFor<B>,
 		success: bool,

@@ -40,6 +40,13 @@ where
 		info!("There aren't any non-finalized blocks to revert.");
 	} else {
 		info!("Reverted {} blocks. Best: #{} ({})", reverted.0, info.best_number, info.best_hash);
+
+		if reverted.0 > blocks {
+			info!(
+				"Number of reverted blocks is higher than requested \
+				because of reverted leaves higher than the best block."
+			)
+		}
 	}
 	Ok(())
 }

@@ -460,14 +460,14 @@ mod test_iterators {
 	use codec::{Decode, Encode};
 
 	pub trait Config: 'static {
-		type Origin;
+		type RuntimeOrigin;
 		type BlockNumber;
 		type PalletInfo: crate::traits::PalletInfo;
 		type DbWeight: crate::traits::Get<crate::weights::RuntimeDbWeight>;
 	}
 
 	crate::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: T::Origin, system=self {}
+		pub struct Module<T: Config> for enum Call where origin: T::RuntimeOrigin, system=self {}
 	}
 
 	#[derive(PartialEq, Eq, Clone, Encode, Decode)]
