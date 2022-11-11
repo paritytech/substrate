@@ -417,7 +417,9 @@ where
 		if !SyncCryptoStore::has_keys(
 			&*self.keystore,
 			&[(expected_author.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-		).is_empty() {
+		)
+		.is_empty()
+		{
 			return Some(expected_author.clone())
 		}
 		None
