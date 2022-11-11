@@ -1,6 +1,7 @@
 [relaychain]
-default_image = "docker.io/paritypr/substrate-debug:master"
-default_command = "substrate"
+default_image = "docker.io/parity/substrate:master"
+default_command = "/home/miszka/parity/05-zombienet-warp-sync/substrate-wrap.sh"
+# dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/network"
 
 chain = "gen-db"
 chain_spec_path = "0001-chain-spec.json"
@@ -12,6 +13,7 @@ chain_spec_path = "0001-chain-spec.json"
   [[relaychain.nodes]]
   name = "bob"
   validator = true
+  # dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/bob"
 
   #we need at least 3 nodes for warp sync
   [[relaychain.nodes]]

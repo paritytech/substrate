@@ -2,7 +2,6 @@ Description: Warp sync
 Network: ./0001-test-warp-sync.toml
 Creds: config
 
-
 alice: is up
 bob: is up
 charlie: is up
@@ -19,9 +18,13 @@ charlie: reports peers count is at least 3
 dave: reports peers count is at least 3
 
 dave: log line matches "Warp sync is complete" within 5 seconds
+dave: log line matches "Block history download is complete" within 5 seconds
 
-#alice: reports block height is at least 12133 within 5 seconds
-#bob: reports block height is at least 12133 within 5 seconds
-#charlie: reports block height is at least 12133 within 5 seconds
-#dave: reports block height is at least 12133 within 5 seconds
+# db snapshot has 12133 blocks
+dave: reports block height is at least 1 within 5 seconds
+dave: reports block height is at least 12132 within 5 seconds
+dave: reports block height is at least 12133 within 5 seconds
 
+alice: reports block height is at least 12133 within 5 seconds
+bob: reports block height is at least 12133 within 5 seconds
+charlie: reports block height is at least 12133 within 5 seconds
