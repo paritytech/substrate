@@ -164,7 +164,7 @@ impl ChainApi for TestApi {
 		(Hashing::hash(&encoded), len)
 	}
 
-	fn block_body(&self, _id: &<Self::Block as BlockT>::Hash) -> Self::BodyFuture {
+	fn block_body(&self, _id: <Self::Block as BlockT>::Hash) -> Self::BodyFuture {
 		futures::future::ready(Ok(None))
 	}
 

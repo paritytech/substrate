@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A MMR storage implementations.
+//! An MMR storage implementation.
 
 use codec::Encode;
 use frame_support::log::{debug, error, trace};

@@ -135,7 +135,7 @@ impl core::Benchmark for ImportBenchmark {
 		// Sanity checks.
 		context
 			.client
-			.state_at(&hash)
+			.state_at(hash)
 			.expect("state_at failed for block#1")
 			.inspect_state(|| {
 				match self.block_type {
