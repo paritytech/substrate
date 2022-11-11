@@ -163,10 +163,10 @@ fn claim_secondary_slot(
 				} else {
 					None
 				}
-			} else if SyncCryptoStore::has_keys(
+			} else if !SyncCryptoStore::has_keys(
 				&**keystore,
 				&[(authority_id.to_raw_vec(), AuthorityId::ID)],
-			) {
+			).is_empty() {
 				Some(PreDigest::SecondaryPlain(SecondaryPlainPreDigest {
 					slot,
 					authority_index: *authority_index as u32,

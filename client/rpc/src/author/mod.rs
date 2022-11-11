@@ -139,14 +139,15 @@ where
 			.map_err(|e| Error::Client(Box::new(e)))?
 			.ok_or(Error::InvalidSessionKeys)?;
 
-		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys))
+		Ok(SyncCryptoStore::has_keys(&*self.keystore, &keys).len() == keys.len())
 	}
 
 	fn has_key(&self, public_key: Bytes, key_type: String) -> RpcResult<bool> {
 		self.deny_unsafe.check_if_safe()?;
 
 		let key_type = key_type.as_str().try_into().map_err(|_| Error::BadKeyType)?;
-		Ok(SyncCryptoStore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)]))
+		Ok(!SyncCryptoStore::has_keys(&*self.keystore, &[(public_key.to_vec(), key_type)])
+			.is_empty())
 	}
 
 	fn pending_extrinsics(&self) -> RpcResult<Vec<Bytes>> {

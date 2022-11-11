@@ -413,17 +413,14 @@ where
 		slot: Slot,
 		epoch_data: &Self::AuxData,
 	) -> Option<Self::Claim> {
-		let expected_author = slot_author::<P>(slot, epoch_data);
-		expected_author.and_then(|p| {
-			if SyncCryptoStore::has_keys(
-				&*self.keystore,
-				&[(p.to_raw_vec(), sp_application_crypto::key_types::AURA)],
-			) {
-				Some(p.clone())
-			} else {
-				None
-			}
-		})
+		let expected_author = slot_author::<P>(slot, epoch_data)?;
+		if !SyncCryptoStore::has_keys(
+			&*self.keystore,
+			&[(expected_author.to_raw_vec(), sp_application_crypto::key_types::AURA)],
+		).is_empty() {
+			return Some(expected_author.clone())
+		}
+		None
 	}
 
 	fn pre_digest_data(&self, slot: Slot, _claim: &Self::Claim) -> Vec<sp_runtime::DigestItem> {

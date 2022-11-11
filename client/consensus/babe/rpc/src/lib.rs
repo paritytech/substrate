@@ -112,21 +112,11 @@ where
 		let mut claims: HashMap<AuthorityId, EpochAuthorship> = HashMap::new();
 
 		let keys = {
-			epoch
-				.authorities
-				.iter()
-				.enumerate()
-				.filter_map(|(i, a)| {
-					if SyncCryptoStore::has_keys(
-						&*self.keystore,
-						&[(a.0.to_raw_vec(), AuthorityId::ID)],
-					) {
-						Some((a.0.clone(), i))
-					} else {
-						None
-					}
-				})
-				.collect::<Vec<_>>()
+			let keys: Vec<_> = epoch.authorities.iter().map(|a|
+				(a.0.to_raw_vec(), AuthorityId::ID)).collect();
+			SyncCryptoStore::has_keys(&*self.keystore, &keys).into_iter().map(|i|
+				(epoch.authorities[i].0.clone(), i)
+			).collect::<Vec<_>>()
 		};
 
 		for slot in *epoch_start..*epoch_end {

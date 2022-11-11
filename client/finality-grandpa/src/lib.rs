@@ -1119,14 +1119,14 @@ fn local_authority_id(
 	voters: &VoterSet<AuthorityId>,
 	keystore: Option<&SyncCryptoStorePtr>,
 ) -> Option<AuthorityId> {
-	keystore.and_then(|keystore| {
-		voters
-			.iter()
-			.find(|(p, _)| {
-				SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)])
-			})
-			.map(|(p, _)| p.clone())
-	})
+	let keystore = keystore?;
+	for (p, _) in voters.iter() {
+		if !SyncCryptoStore::has_keys(&**keystore, &[(p.to_raw_vec(), AuthorityId::ID)]).is_empty()
+		{
+			return Some(p.clone())
+		}
+	}
+	None
 }
 
 /// Reverts protocol aux data to at most the last finalized block.

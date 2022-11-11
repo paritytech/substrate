@@ -117,7 +117,7 @@ impl CryptoStore for KeyStore {
 		SyncCryptoStore::insert_unknown(self, id, suri, public)
 	}
 
-	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+	async fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize> {
 		SyncCryptoStore::has_keys(self, public_keys)
 	}
 
@@ -313,10 +313,14 @@ impl SyncCryptoStore for KeyStore {
 		Ok(())
 	}
 
-	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-		public_keys
-			.iter()
-			.all(|(k, t)| self.keys.read().get(t).and_then(|s| s.get(k)).is_some())
+	fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> Vec<usize> {
+		let mut indices = Vec::new();
+		for (i, (k, t)) in public_keys.iter().enumerate() {
+			if self.keys.read().get(t).and_then(|s| s.get(k)).is_some() {
+				indices.push(i);
+			}
+		}
+		indices
 	}
 
 	fn supported_keys(
