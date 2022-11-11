@@ -500,6 +500,60 @@ where
 			}
 		}
 	}
+
+	fn partial_translate<O, F>(mut max: usize, cursor: Option<&[u8]>, mut f: F) -> Option<Vec<u8>>
+	where
+		O: Decode,
+		F: FnMut(K1, K2, O) -> Option<V>,
+	{
+		let prefix = G::prefix_hash();
+		let mut previous_key = match cursor {
+			Some(cursor) => cursor.into(),
+			None => prefix.clone(),
+		};
+
+		while let Some(next) =
+			sp_io::storage::next_key(&previous_key).filter(|n| max > 0 && n.starts_with(&prefix))
+		{
+			previous_key = next;
+			let value = match unhashed::get::<O>(&previous_key) {
+				Some(value) => value,
+				None => {
+					log::error!("Invalid partial translate: fail to decode old value");
+					continue
+				},
+			};
+
+			let mut key_material = G::Hasher1::reverse(&previous_key[prefix.len()..]);
+			let key1 = match K1::decode(&mut key_material) {
+				Ok(key1) => key1,
+				Err(_) => {
+					log::error!("Invalid translate: fail to decode key1");
+					continue
+				},
+			};
+
+			let mut key2_material = G::Hasher2::reverse(key_material);
+			let key2 = match K2::decode(&mut key2_material) {
+				Ok(key2) => key2,
+				Err(_) => {
+					log::error!("Invalid translate: fail to decode key2");
+					continue
+				},
+			};
+
+			match f(key1, key2, value) {
+				Some(new) => unhashed::put::<V>(&previous_key, &new),
+				None => unhashed::kill(&previous_key),
+			}
+
+			max = max.saturating_sub(1);
+		}
+
+		sp_io::storage::next_key(&previous_key)
+			.filter(|n| n.starts_with(&prefix))
+			.map(|_| previous_key)
+	}
 }
 
 /// Test iterators for StorageDoubleMap
@@ -677,5 +731,125 @@ mod test_iterators {
 				vec![(3, 3, 6), (0, 0, 0), (2, 2, 4), (1, 1, 2)],
 			);
 		})
+	}
+}
+
+#[cfg(test)]
+mod test_partial_translate {
+	use crate::storage::{generator::StorageDoubleMap, unhashed, IterableStorageDoubleMap};
+
+	#[test]
+	fn partial_translate_works() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			use crate::hash::Identity;
+			#[crate::storage_alias]
+			type MyMap = StorageDoubleMap<MyModule, Identity, u64, Identity, u64, f64>;
+
+			let max_entries: usize = 50;
+			let quarter = max_entries / 4;
+			let prefix = MyMap::prefix_hash();
+
+			// Init the storage with `u64` values
+			for i in 0..max_entries {
+				let final_key = MyMap::storage_double_map_final_key(i as u64, i as u64);
+				unhashed::put(&final_key, &(i as u64 * 10));
+			}
+
+			{
+				// The migration shouldn't execute
+				let cursor =
+					MyMap::partial_translate(0, None, |_, _, v: u64| Some(v as f64 + 1.0)).unwrap();
+
+				// Check nothing is migrated
+				let mut rest_cursor = prefix.clone();
+				for i in 0..max_entries {
+					let cursor_key = sp_io::storage::next_key(&rest_cursor).unwrap();
+
+					assert_eq!(unhashed::get(&cursor_key), Some(i as u64 * 10));
+
+					rest_cursor = cursor_key;
+				}
+
+				// The cursor should point to the initial location since we passed `None`
+				assert_eq!(cursor, prefix);
+			}
+
+			{
+				// Migrate the first quarter
+				let cursor =
+					MyMap::partial_translate(quarter, None, |_, _, v: u64| Some(v as f64 + 1.0))
+						.unwrap();
+				let mut rest_cursor = cursor.clone();
+
+				// The first quarter is migrated
+				for i in 0..quarter {
+					assert_eq!(MyMap::get(i as u64, i as u64), Some((i * 10) as f64 + 1.0));
+				}
+
+				// The rest is untouched
+				for i in quarter..max_entries {
+					let cursor_key = sp_io::storage::next_key(&rest_cursor).unwrap();
+
+					assert_eq!(unhashed::get(&cursor_key), Some(i as u64 * 10));
+
+					rest_cursor = cursor_key;
+				}
+
+				// Migrate the second quarter, remove even key
+				let cursor = MyMap::partial_translate(quarter, Some(&cursor), |k1, k2, v: u64| {
+					((k1 + k2) % 2 != 0).then(|| v as f64 + 1.0)
+				})
+				.unwrap();
+				let mut rest_cursor = cursor.clone();
+
+				// The first quarter is untouched
+				for i in 0..quarter {
+					assert_eq!(MyMap::get(i as u64, i as u64), Some((i * 10) as f64 + 1.0));
+				}
+
+				// The second quarter is migrated
+				for i in quarter..(2 * quarter) {
+					assert_eq!(
+						MyMap::get(i as u64, i as u64),
+						((i + i) % 2 != 0).then(|| (i * 10) as f64 + 1.0)
+					);
+				}
+
+				// The rest is untouched
+				for i in (2 * quarter)..max_entries {
+					let cursor_key = sp_io::storage::next_key(&rest_cursor).unwrap();
+
+					assert_eq!(unhashed::get(&cursor_key), Some(i as u64 * 10));
+
+					rest_cursor = cursor_key;
+				}
+
+				// Migrate the rest using `limit` greater or equal to the number of the rest items.
+				let cursor =
+					MyMap::partial_translate(max_entries, Some(&cursor), |_, _, v: u64| {
+						Some(v as f64 + 1.0)
+					});
+
+				assert!(cursor.is_none());
+
+				// The first quarter is untouched
+				for i in 0..quarter {
+					assert_eq!(MyMap::get(i as u64, i as u64), Some((i * 10) as f64 + 1.0));
+				}
+
+				// The second quarter is untouched
+				for i in quarter..(2 * quarter) {
+					assert_eq!(
+						MyMap::get(i as u64, i as u64),
+						((i + i) % 2 != 0).then(|| (i * 10) as f64 + 1.0)
+					);
+				}
+
+				// The rest is migrated
+				for i in (2 * quarter)..max_entries {
+					assert_eq!(MyMap::get(i as u64, i as u64), Some((i * 10) as f64 + 1.0));
+				}
+			}
+		});
 	}
 }

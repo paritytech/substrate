@@ -295,6 +295,31 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K, O) -> Option<V>>(f: F);
+
+	/// Partially translate items from the map.
+	///
+	/// Returns the current cursor.
+	/// Once the resultant cursor is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be fully translated when the
+	/// resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// Maximum amount of items to migrate.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call).
+	/// Subsequent calls operating on the same map
+	/// should always pass `Some`, and this should be equal to the
+	/// previous call result's cursor.
+	fn partial_translate<O, F>(limit: usize, maybe_cursor: Option<&[u8]>, f: F) -> Option<Vec<u8>>
+	where
+		O: Decode,
+		F: FnMut(K, O) -> Option<V>;
 }
 
 /// A strongly-typed double map in storage whose secondary keys and values can be iterated over.
@@ -370,6 +395,31 @@ pub trait IterableStorageDoubleMap<K1: FullCodec, K2: FullCodec, V: FullCodec>:
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K1, K2, O) -> Option<V>>(f: F);
+
+	/// Partially translate items from the map.
+	///
+	/// Returns the current cursor.
+	/// Once the resultant cursor is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be fully translated when the
+	/// resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// Maximum amount of items to migrate.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call).
+	/// Subsequent calls operating on the same map
+	/// should always pass `Some`, and this should be equal to the
+	/// previous call result's cursor.
+	fn partial_translate<O, F>(limit: usize, maybe_cursor: Option<&[u8]>, f: F) -> Option<Vec<u8>>
+	where
+		O: Decode,
+		F: FnMut(K1, K2, O) -> Option<V>;
 }
 
 /// A strongly-typed map with arbitrary number of keys in storage whose keys and values can be
@@ -450,6 +500,31 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	///
 	/// NOTE: If a value fail to decode because storage is corrupted then it is skipped.
 	fn translate<O: Decode, F: FnMut(K::Key, O) -> Option<V>>(f: F);
+
+	/// Partially translate items from the map.
+	///
+	/// Returns the current cursor.
+	/// Once the resultant cursor is `None`, then no further items remain to be deleted.
+	///
+	/// NOTE: After the initial call, it is important that no further items
+	/// are inserted into the map. If so, then the map may not be fully translated when the
+	/// resultant `maybe_cursor` is `None`.
+	///
+	/// # Limit
+	///
+	/// Maximum amount of items to migrate.
+	///
+	/// # Cursor
+	///
+	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// passed once (in the initial call).
+	/// Subsequent calls operating on the same map
+	/// should always pass `Some`, and this should be equal to the
+	/// previous call result's cursor.
+	fn partial_translate<O, F>(limit: usize, maybe_cursor: Option<&[u8]>, f: F) -> Option<Vec<u8>>
+	where
+		O: Decode,
+		F: FnMut(K::Key, O) -> Option<V>;
 }
 
 /// An implementation of a map with a two keys.
