@@ -180,11 +180,15 @@ impl<Block: BlockT> TreeRoute<Block> {
 	/// Creates a new `TreeRoute`.
 	///
 	/// To preserve the structure safety invariats it is required that `pivot < route.len()`.
-	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Result<Self, &'static str> {
+	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Result<Self, String> {
 		if pivot < route.len() {
 			Ok(TreeRoute { route, pivot })
 		} else {
-			Err("TreeRoute pivot should be less than route length")
+			Err(format!(
+				"TreeRoute pivot ({}) should be less than route length ({})",
+				pivot,
+				route.len()
+			))
 		}
 	}
 
