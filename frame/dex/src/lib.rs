@@ -30,12 +30,14 @@ pub use types::*;
 
 // https://docs.uniswap.org/protocol/V2/concepts/protocol-overview/smart-contracts#minimum-liquidity
 // TODO: make it configurable
+// TODO: weights and benchmarking.
+// TODO: more specific error codes.
+// TODO: remove setup.
 pub const MIN_LIQUIDITY: u64 = 1;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -47,7 +49,7 @@ pub mod pallet {
 			},
 			Currency, ExistenceRequirement, ReservableCurrency,
 		},
-		transactional, PalletId,
+		PalletId,
 	};
 	use sp_runtime::traits::{
 		AccountIdConversion, AtLeast32BitUnsigned, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub,
@@ -87,6 +89,13 @@ pub mod pallet {
 			+ TypeInfo;
 
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
+			+ Create<Self::AccountId>
+			+ InspectEnumerable<Self::AccountId>
+			+ Mutate<Self::AccountId>
+			+ MutateMetadata<Self::AccountId>
+			+ Transfer<Self::AccountId>;
+
+		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
 			+ InspectEnumerable<Self::AccountId>
 			+ Mutate<Self::AccountId>
@@ -192,7 +201,6 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn setup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			let pallet_account = Self::account_id();
@@ -216,7 +224,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn create_pool(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>, // TODO: convert into MultiToken
@@ -231,8 +238,8 @@ pub mod pallet {
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pallet_account = Self::account_id();
-			T::Assets::create(lp_token, pallet_account.clone(), true, MIN_LIQUIDITY.into())?;
-			T::Assets::set(lp_token, &pallet_account, "LP".into(), "LP".into(), 0)?;
+			T::PoolAssets::create(lp_token, pallet_account.clone(), true, MIN_LIQUIDITY.into())?;
+			T::PoolAssets::set(lp_token, &pallet_account, "LP".into(), "LP".into(), 0)?;
 
 			let pool_info = PoolInfo {
 				owner: sender.clone(),
@@ -251,7 +258,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -311,7 +317,7 @@ pub mod pallet {
 				T::Assets::transfer(asset1, &sender, &pallet_account, amount1, false)?;
 				T::Assets::transfer(asset2, &sender, &pallet_account, amount2, false)?;
 
-				let total_supply = T::Assets::total_issuance(pool.lp_token);
+				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
 				let liquidity: AssetBalanceOf<T>;
 				if total_supply.is_zero() {
@@ -321,7 +327,7 @@ pub mod pallet {
 						.integer_sqrt()
 						.checked_sub(&MIN_LIQUIDITY.into())
 						.ok_or(Error::<T>::Overflow)?;
-					T::Assets::mint_into(pool.lp_token, &pallet_account, MIN_LIQUIDITY.into())?;
+					T::PoolAssets::mint_into(pool.lp_token, &pallet_account, MIN_LIQUIDITY.into())?;
 				} else {
 					let side1 = amount1
 						.checked_mul(&total_supply)
@@ -340,7 +346,7 @@ pub mod pallet {
 
 				ensure!(liquidity > MIN_LIQUIDITY.into(), Error::<T>::InsufficientLiquidityMinted);
 
-				T::Assets::mint_into(pool.lp_token, &mint_to, liquidity)?;
+				T::PoolAssets::mint_into(pool.lp_token, &mint_to, liquidity)?;
 
 				pool.balance1 = reserve1 + amount1;
 				pool.balance2 = reserve2 + amount2;
@@ -360,7 +366,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -385,12 +390,12 @@ pub mod pallet {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolNotFound)?;
 
 				let pallet_account = Self::account_id();
-				T::Assets::transfer(pool.lp_token, &sender, &pallet_account, liquidity, false)?;
+				T::PoolAssets::transfer(pool.lp_token, &sender, &pallet_account, liquidity, false)?;
 
 				let reserve1 = pool.balance1;
 				let reserve2 = pool.balance2;
 
-				let total_supply = T::Assets::total_issuance(pool.lp_token);
+				let total_supply = T::PoolAssets::total_issuance(pool.lp_token);
 
 				let amount1 = liquidity
 					.checked_mul(&reserve1)
@@ -413,7 +418,7 @@ pub mod pallet {
 					Error::<T>::InsufficientAmount
 				);
 
-				T::Assets::burn_from(pool.lp_token, &pallet_account, liquidity)?;
+				T::PoolAssets::burn_from(pool.lp_token, &pallet_account, liquidity)?;
 
 				T::Assets::transfer(asset1, &pallet_account, &withdraw_to, amount1, false)?;
 				T::Assets::transfer(asset2, &pallet_account, &withdraw_to, amount2, false)?;
@@ -436,7 +441,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -500,7 +504,6 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		#[transactional]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>,
@@ -630,6 +633,7 @@ pub mod pallet {
 			}
 
 			// TODO: extract 0.3% into config
+			// TODO: could use Permill type
 			let amount_in_with_fee =
 				amount_in.checked_mul(&997u64.into()).ok_or(Error::<T>::Overflow)?;
 

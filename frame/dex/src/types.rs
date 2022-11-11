@@ -28,8 +28,8 @@ pub struct PoolInfo<AccountId, AssetId, Balance> {
 	pub asset1: AssetId,
 	/// The second asset supported by the pool
 	pub asset2: AssetId,
-	/// Pool balance1
+	/// Pool balance of asset1
 	pub balance1: Balance,
-	/// Pool balance2
+	/// Pool balance of asset2
 	pub balance2: Balance,
 }
