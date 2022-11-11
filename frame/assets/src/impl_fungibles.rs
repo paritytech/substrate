@@ -180,11 +180,7 @@ impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> 
 }
 
 impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
-	fn start_destroy(
-		id: T::AssetId,
-		witness: Self::DestroyWitness,
-		maybe_check_owner: Option<T::AccountId>,
-	) -> DispatchResult {
+	fn start_destroy(id: T::AssetId, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
 		Self::do_start_destroy(id, maybe_check_owner)
 	}
 
