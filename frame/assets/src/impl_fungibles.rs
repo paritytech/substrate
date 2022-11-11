@@ -283,3 +283,14 @@ impl<T: Config<I>, I: 'static> fungibles::roles::Inspect<<T as SystemConfig>::Ac
 		Asset::<T, I>::get(asset).map(|x| x.freezer)
 	}
 }
+
+impl<T: Config<I>, I: 'static> fungibles::InspectEnumerable<T::AccountId> for Pallet<T, I> {
+	type AssetsIterator = KeyPrefixIterator<<T as Config<I>>::AssetId>;
+
+	/// Returns an iterator of the assets in existence.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn asset_ids() -> Self::AssetsIterator {
+		Asset::<T, I>::iter_keys()
+	}
+}

@@ -98,7 +98,6 @@ members = [
 	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
-	"frame/examples/parallel",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -116,6 +115,7 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/nomination-pools",
+	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
@@ -204,7 +204,6 @@ members = [
 	"primitives/state-machine",
 	"primitives/std",
 	"primitives/storage",
-	"primitives/tasks",
 	"primitives/test-primitives",
 	"primitives/timestamp",
 	"primitives/tracing",
@@ -254,7 +253,6 @@ members = [
 # This list is ordered alphabetically.
 [profile.dev.package]
 blake2 = { opt-level = 3 }
-blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }

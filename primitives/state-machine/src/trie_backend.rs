@@ -1117,4 +1117,95 @@ pub mod tests {
 			);
 		}
 	}
+
+	/// Test to ensure that recording the same `key` for different tries works as expected.
+	///
+	/// Each trie stores a different value under the same key. The values are big enough to
+	/// be not inlined with `StateVersion::V1`, this is important to test the expected behavior. The
+	/// trie recorder is expected to differentiate key access based on the different storage roots
+	/// of the tries.
+	#[test]
+	fn recording_same_key_access_in_different_tries() {
+		recording_same_key_access_in_different_tries_inner(StateVersion::V0);
+		recording_same_key_access_in_different_tries_inner(StateVersion::V1);
+	}
+	fn recording_same_key_access_in_different_tries_inner(state_version: StateVersion) {
+		let key = b"test_key".to_vec();
+		// Use some big values to ensure that we don't keep them inline
+		let top_trie_val = vec![1; 1024];
+		let child_trie_1_val = vec![2; 1024];
+		let child_trie_2_val = vec![3; 1024];
+
+		let child_info_1 = ChildInfo::new_default(b"sub1");
+		let child_info_2 = ChildInfo::new_default(b"sub2");
+		let child_info_1 = &child_info_1;
+		let child_info_2 = &child_info_2;
+		let contents = vec![
+			(None, vec![(key.clone(), Some(top_trie_val.clone()))]),
+			(Some(child_info_1.clone()), vec![(key.clone(), Some(child_trie_1_val.clone()))]),
+			(Some(child_info_2.clone()), vec![(key.clone(), Some(child_trie_2_val.clone()))]),
+		];
+		let in_memory = new_in_mem::<BlakeTwo256, PrefixedKey<BlakeTwo256>>();
+		let in_memory = in_memory.update(contents, state_version);
+		let child_storage_keys = vec![child_info_1.to_owned(), child_info_2.to_owned()];
+		let in_memory_root = in_memory
+			.full_storage_root(
+				std::iter::empty(),
+				child_storage_keys.iter().map(|k| (k, std::iter::empty())),
+				state_version,
+			)
+			.0;
+		assert_eq!(in_memory.storage(&key).unwrap().unwrap(), top_trie_val);
+		assert_eq!(in_memory.child_storage(child_info_1, &key).unwrap().unwrap(), child_trie_1_val);
+		assert_eq!(in_memory.child_storage(child_info_2, &key).unwrap().unwrap(), child_trie_2_val);
+
+		for cache in [Some(SharedTrieCache::new(CacheSize::Unlimited)), None] {
+			// Run multiple times to have a different cache conditions.
+			for i in 0..5 {
+				eprintln!("Running with cache {}, iteration {}", cache.is_some(), i);
+
+				if let Some(cache) = &cache {
+					if i == 2 {
+						cache.reset_node_cache();
+					} else if i == 3 {
+						cache.reset_value_cache();
+					}
+				}
+
+				let trie = in_memory.as_trie_backend();
+				let trie_root = trie.storage_root(std::iter::empty(), state_version).0;
+				assert_eq!(in_memory_root, trie_root);
+
+				let proving = TrieBackendBuilder::wrap(&trie)
+					.with_recorder(Recorder::default())
+					.with_optional_cache(cache.as_ref().map(|c| c.local_cache()))
+					.build();
+				assert_eq!(proving.storage(&key).unwrap().unwrap(), top_trie_val);
+				assert_eq!(
+					proving.child_storage(child_info_1, &key).unwrap().unwrap(),
+					child_trie_1_val
+				);
+				assert_eq!(
+					proving.child_storage(child_info_2, &key).unwrap().unwrap(),
+					child_trie_2_val
+				);
+
+				let proof = proving.extract_proof().unwrap();
+
+				let proof_check =
+					create_proof_check_backend::<BlakeTwo256>(in_memory_root.into(), proof)
+						.unwrap();
+
+				assert_eq!(proof_check.storage(&key).unwrap().unwrap(), top_trie_val);
+				assert_eq!(
+					proof_check.child_storage(child_info_1, &key).unwrap().unwrap(),
+					child_trie_1_val
+				);
+				assert_eq!(
+					proof_check.child_storage(child_info_2, &key).unwrap().unwrap(),
+					child_trie_2_val
+				);
+			}
+		}
+	}
 }
