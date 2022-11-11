@@ -3,10 +3,6 @@
 
 check-runtime:
   stage:                           check
-  # DAG: this is artificial dependency
-  needs:
-    - job:                         cargo-clippy
-      artifacts:                   false
   extends:
     - .kubernetes-env
     - .test-refs-no-trigger-prs-only
