@@ -262,13 +262,6 @@ mod enactment_state_tests {
 		// some tests for mock tree_route function
 
 		#[test]
-		fn tree_route_mock_test_00() {
-			let result = tree_route(a().hash, a().hash);
-			let expected = TreeRoute::new(vec![a()], 0);
-			assert_treeroute_eq(result, expected);
-		}
-
-		#[test]
 		fn tree_route_mock_test_01() {
 			let result = tree_route(b1().hash, a().hash);
 			let expected = TreeRoute::new(vec![b1(), a()], 1);
