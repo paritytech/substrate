@@ -7388,6 +7388,7 @@ dependencies = [
  "sp-runtime",
  "sp-state-machine",
  "sp-storage",
+ "sp-trie",
  "sp-version",
  "substrate-rpc-client",
  "tokio",

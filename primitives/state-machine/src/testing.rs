@@ -67,6 +67,35 @@ where
 	H::Out: Ord + 'static + codec::Codec,
 	B: Backend<H>
 		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
+{
+	/// Create a new instance of `TestExternalities` with code and storage for a given state
+	/// version.
+	pub fn new_with_backend(
+		backend: B,
+		state_version: StateVersion,
+	) -> Self {
+		let mut extensions = Extensions::default();
+		extensions.register(TaskExecutorExt::new(TaskExecutor::new()));
+
+		let offchain_db = TestPersistentOffchainDB::new();
+
+		TestExternalities {
+			overlay: OverlayedChanges::default(),
+			offchain_db,
+			extensions,
+			backend,
+			storage_transaction_cache: Default::default(),
+			state_version,
+		}
+	}
+}
+
+impl<H, B> TestExternalities<H, B>
+where
+	H: Hasher + 'static,
+	H::Out: Ord + 'static + codec::Codec,
+	B: Backend<H>
+		+ AsTrieBackend<H, TrieBackendStorage = MemoryDB<H>>
 		+ From<(Storage, StateVersion)>,
 {
 	/// Create a new instance of `TestExternalities` with code and storage for a given state

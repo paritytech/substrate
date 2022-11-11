@@ -1,12 +1,14 @@
-use codec::{Decode, Encode};
+use codec::{Codec, Decode, Encode};
 use sp_core::{storage, storage::ChildInfo};
-use sp_runtime::DeserializeOwned;
+use sp_runtime::{DeserializeOwned, Storage};
 use sp_state_machine::{
-	backend::Hasher, Backend, ChildStorageCollection, InMemoryBackend, StateMachineStats,
-	StorageCollection, StorageKey, StorageValue, UsageInfo,
+	backend::{AsTrieBackend, Hasher},
+	Backend, ChildStorageCollection, InMemoryBackend, StateMachineStats, StorageCollection,
+	StorageKey, StorageValue, UsageInfo,
 };
 use sp_storage::{StateVersion, TrackedStorageKey};
 use std::marker::PhantomData;
+use crate::LOG_TARGET;
 
 pub struct RemoteExternalitiesBackend<H: Hasher> {
 	inner_backend: InMemoryBackend<H>,
@@ -25,9 +27,7 @@ impl<H: Hasher> std::fmt::Debug for RemoteExternalitiesBackend<H> {
 pub trait HasherT: Hasher + Clone + serde::ser::Serialize + DeserializeOwned + 'static {}
 impl<T: Hasher + Clone + serde::ser::Serialize + DeserializeOwned + 'static> HasherT for T {}
 
-impl<H: HasherT>
-	RemoteExternalitiesBackend<H>
-{
+impl<H: HasherT> RemoteExternalitiesBackend<H> {
 	fn storage_remote(
 		&self,
 		key: &[u8],
@@ -314,15 +314,43 @@ where
 	}
 }
 
+impl<H: HasherT> AsTrieBackend<H> for RemoteExternalitiesBackend<H>
+where
+	H::Out: Ord + Codec,
+{
+	type TrieBackendStorage = <InMemoryBackend<H> as Backend<H>>::TrieBackendStorage;
+
+	fn as_trie_backend(
+		&self,
+	) -> &sp_state_machine::TrieBackend<
+		Self::TrieBackendStorage,
+		H,
+		sp_trie::cache::LocalTrieCache<H>,
+	> {
+		&self.inner_backend
+	}
+
+	fn as_trie_backend_mut(
+		&mut self,
+	) -> &mut sp_state_machine::TrieBackend<
+		Self::TrieBackendStorage,
+		H,
+		sp_trie::cache::LocalTrieCache<H>,
+	> {
+		&mut self.inner_backend
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use crate::RemoteExternalities;
 	use sp_core::H256;
-use sp_runtime::traits::BlakeTwo256;
-use sp_state_machine::TrieBackendBuilder;
+	use sp_runtime::traits::BlakeTwo256;
+	use sp_state_machine::TrieBackendBuilder;
+use storage::well_known_keys;
 
-use crate::RemoteExternalities;
-
-use super::*;
+	type Hash = BlakeTwo256;
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_and_execute_externalities() {
@@ -335,7 +363,18 @@ use super::*;
 			inner_backend: TrieBackendBuilder::new(Default::default(), Default::default()).build(),
 			_marker: Default::default(),
 		};
+
+		let mut holy_test_externalities = sp_state_machine::TestExternalities::<
+			Hash,
+			RemoteExternalitiesBackend<Hash>,
+		>::new_with_backend(backend, Default::default());
+
+		holy_test_externalities.execute_with(|| {
+			// read the code.
+			let code = sp_io::storage::get(well_known_keys::CODE);
+			dbg!(code);
+		});
+
+		panic!("DONE!");
 	}
-
-
 }
