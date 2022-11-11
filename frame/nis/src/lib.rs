@@ -377,21 +377,6 @@ pub mod pallet {
 	pub type Receipts<T> =
 		StorageMap<_, Blake2_128Concat, ReceiptIndex, ReceiptRecordOf<T>, OptionQuery>;
 
-	#[pallet::genesis_config]
-	#[derive(Default)]
-	pub struct GenesisConfig;
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig {
-		fn build(&self) {
-			let unbounded = vec![(0, BalanceOf::<T>::zero()); T::QueueCount::get() as usize];
-			let bounded: BoundedVec<_, _> = unbounded
-				.try_into()
-				.expect("QueueTotals should support up to QueueCount items. qed");
-			QueueTotals::<T>::put(bounded);
-		}
-	}
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -606,7 +591,7 @@ pub mod pallet {
 				qs[queue_index].1.saturating_reduce(bid.amount);
 			});
 
-			let _ = T::Currency::unreserve(&bid.who, bid.amount).defensive();
+			T::Currency::unreserve(&bid.who, bid.amount);
 			Self::deposit_event(Event::BidRetracted { who: bid.who, amount: bid.amount, duration });
 
 			Ok(())
@@ -740,7 +725,11 @@ pub mod pallet {
 			let from = item.who;
 			item.who = destination.clone();
 			Receipts::<T>::insert(&index, &item);
-			Pallet::<T>::deposit_event(Event::<T>::Transferred { from, to: item.who, index: *index });
+			Pallet::<T>::deposit_event(Event::<T>::Transferred {
+				from,
+				to: item.who,
+				index: *index,
+			});
 			Ok(())
 		}
 	}
@@ -805,8 +794,9 @@ pub mod pallet {
 			let mut queues_hit = 0;
 			let mut bids_hit = 0;
 			let mut totals = QueueTotals::<T>::get();
-			let count = T::QueueCount::get();
-			for duration in (1..=count).rev() {
+			let queue_count = T::QueueCount::get();
+			totals.bounded_resize(queue_count as usize, (0, Zero::zero()));
+			for duration in (1..=queue_count).rev() {
 				if totals[duration as usize - 1].0.is_zero() {
 					continue
 				}

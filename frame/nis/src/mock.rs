@@ -21,10 +21,7 @@ use crate::{self as pallet_nis, Perquintill, WithMaximumOf};
 
 use frame_support::{
 	ord_parameter_types, parameter_types,
-	traits::{
-		ConstU16, ConstU32, ConstU64, Currency, GenesisBuild, OnFinalize, OnInitialize,
-		StorageMapShim,
-	},
+	traits::{ConstU16, ConstU32, ConstU64, Currency, OnFinalize, OnInitialize, StorageMapShim},
 	weights::Weight,
 	PalletId,
 };
@@ -153,7 +150,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
-	GenesisBuild::<Test>::assimilate_storage(&crate::GenesisConfig, &mut t).unwrap();
 	t.into()
 }
 

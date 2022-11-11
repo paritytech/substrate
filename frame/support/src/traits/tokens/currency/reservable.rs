@@ -21,7 +21,10 @@ use scale_info::TypeInfo;
 use sp_core::Get;
 
 use super::{super::misc::BalanceStatus, Currency};
-use crate::{dispatch::{DispatchError, DispatchResult}, traits::{WithdrawReasons, ExistenceRequirement, SignedImbalance}};
+use crate::{
+	dispatch::{DispatchError, DispatchResult},
+	traits::{ExistenceRequirement, SignedImbalance, WithdrawReasons},
+};
 
 /// A currency where funds can be reserved from the user.
 pub trait ReservableCurrency<AccountId>: Currency<AccountId> {
@@ -245,51 +248,80 @@ pub trait NamedReservableCurrency<AccountId>: ReservableCurrency<AccountId> {
 ///
 /// All "anonymous" operations are then implemented as their named counterparts with the given `Id`.
 pub struct WithName<NamedReservable, Id, AccountId>(
-	sp_std::marker::PhantomData<(NamedReservable, Id, AccountId)>
+	sp_std::marker::PhantomData<(NamedReservable, Id, AccountId)>,
 );
 impl<
-	NamedReservable: NamedReservableCurrency<AccountId>,
-	Id: Get<NamedReservable::ReserveIdentifier>,
-	AccountId,
-> Currency<AccountId> for WithName<NamedReservable, Id, AccountId> {
+		NamedReservable: NamedReservableCurrency<AccountId>,
+		Id: Get<NamedReservable::ReserveIdentifier>,
+		AccountId,
+	> Currency<AccountId> for WithName<NamedReservable, Id, AccountId>
+{
 	type Balance = <NamedReservable as Currency<AccountId>>::Balance;
 	type PositiveImbalance = <NamedReservable as Currency<AccountId>>::PositiveImbalance;
 	type NegativeImbalance = <NamedReservable as Currency<AccountId>>::NegativeImbalance;
 
-	fn total_balance(who: &AccountId) -> Self::Balance { NamedReservable::total_balance(who) }
-	fn can_slash(who: &AccountId, value: Self::Balance) -> bool { NamedReservable::can_slash(who, value) }
-	fn total_issuance() -> Self::Balance { NamedReservable::total_issuance() }
-	fn minimum_balance() -> Self::Balance { NamedReservable::minimum_balance() }
-	fn burn(amount: Self::Balance) -> Self::PositiveImbalance { NamedReservable::burn(amount) }
-	fn issue(amount: Self::Balance) -> Self::NegativeImbalance { NamedReservable::issue(amount) }
+	fn total_balance(who: &AccountId) -> Self::Balance {
+		NamedReservable::total_balance(who)
+	}
+	fn can_slash(who: &AccountId, value: Self::Balance) -> bool {
+		NamedReservable::can_slash(who, value)
+	}
+	fn total_issuance() -> Self::Balance {
+		NamedReservable::total_issuance()
+	}
+	fn minimum_balance() -> Self::Balance {
+		NamedReservable::minimum_balance()
+	}
+	fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
+		NamedReservable::burn(amount)
+	}
+	fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
+		NamedReservable::issue(amount)
+	}
 	fn pair(amount: Self::Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
 		NamedReservable::pair(amount)
 	}
-	fn free_balance(who: &AccountId) -> Self::Balance { NamedReservable::free_balance(who) }
+	fn free_balance(who: &AccountId) -> Self::Balance {
+		NamedReservable::free_balance(who)
+	}
 	fn ensure_can_withdraw(
 		who: &AccountId,
 		amount: Self::Balance,
 		reasons: WithdrawReasons,
 		new_balance: Self::Balance,
-	) -> DispatchResult { NamedReservable::ensure_can_withdraw(who, amount, reasons, new_balance) }
+	) -> DispatchResult {
+		NamedReservable::ensure_can_withdraw(who, amount, reasons, new_balance)
+	}
 
 	fn transfer(
 		source: &AccountId,
 		dest: &AccountId,
 		value: Self::Balance,
 		existence_requirement: ExistenceRequirement,
-	) -> DispatchResult { NamedReservable::transfer(source, dest, value, existence_requirement) }
-	fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) { NamedReservable::slash(who, value) }
+	) -> DispatchResult {
+		NamedReservable::transfer(source, dest, value, existence_requirement)
+	}
+	fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+		NamedReservable::slash(who, value)
+	}
 	fn deposit_into_existing(
 		who: &AccountId,
 		value: Self::Balance,
-	) -> Result<Self::PositiveImbalance, DispatchError> { NamedReservable::deposit_into_existing(who, value) }
+	) -> Result<Self::PositiveImbalance, DispatchError> {
+		NamedReservable::deposit_into_existing(who, value)
+	}
 	fn resolve_into_existing(
 		who: &AccountId,
 		value: Self::NegativeImbalance,
-	) -> Result<(), Self::NegativeImbalance> { NamedReservable::resolve_into_existing(who, value) }
-	fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance { NamedReservable::deposit_creating(who, value) }
-	fn resolve_creating(who: &AccountId, value: Self::NegativeImbalance) { NamedReservable::resolve_creating(who, value) }
+	) -> Result<(), Self::NegativeImbalance> {
+		NamedReservable::resolve_into_existing(who, value)
+	}
+	fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance {
+		NamedReservable::deposit_creating(who, value)
+	}
+	fn resolve_creating(who: &AccountId, value: Self::NegativeImbalance) {
+		NamedReservable::resolve_creating(who, value)
+	}
 	fn withdraw(
 		who: &AccountId,
 		value: Self::Balance,
@@ -303,17 +335,22 @@ impl<
 		value: Self::PositiveImbalance,
 		reasons: WithdrawReasons,
 		liveness: ExistenceRequirement,
-	) -> Result<(), Self::PositiveImbalance> { NamedReservable::settle(who, value, reasons, liveness) }
+	) -> Result<(), Self::PositiveImbalance> {
+		NamedReservable::settle(who, value, reasons, liveness)
+	}
 	fn make_free_balance_be(
 		who: &AccountId,
 		balance: Self::Balance,
-	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> { NamedReservable::make_free_balance_be(who, balance) }
+	) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+		NamedReservable::make_free_balance_be(who, balance)
+	}
 }
 impl<
-	NamedReservable: NamedReservableCurrency<AccountId>,
-	Id: Get<NamedReservable::ReserveIdentifier>,
-	AccountId,
-> ReservableCurrency<AccountId> for WithName<NamedReservable, Id, AccountId> {
+		NamedReservable: NamedReservableCurrency<AccountId>,
+		Id: Get<NamedReservable::ReserveIdentifier>,
+		AccountId,
+	> ReservableCurrency<AccountId> for WithName<NamedReservable, Id, AccountId>
+{
 	fn can_reserve(who: &AccountId, value: Self::Balance) -> bool {
 		NamedReservable::can_reserve(who, value)
 	}

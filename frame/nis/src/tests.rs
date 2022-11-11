@@ -58,7 +58,6 @@ fn basic_setup_works() {
 				thawed: Perquintill::zero()
 			}
 		);
-		assert_eq!(QueueTotals::<Test>::get(), vec![(0, 0); 3]);
 	});
 }
 
