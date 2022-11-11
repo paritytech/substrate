@@ -1,0 +1,39 @@
+name: Cargo check (mac)
+
+on:
+  pull_request:
+    branches:
+      - master
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - review_requested
+      - review_request_removed
+      - ready_for_review
+      - converted_to_draft
+
+jobs:
+  carg_check_macos:
+    name: Run tests macos
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3.1.0
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.2.0
+
+      - name: Cargo check
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --locked --release
