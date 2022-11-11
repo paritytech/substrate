@@ -55,7 +55,7 @@ pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy
 #[value(rename_all = "kebab-case")]
 pub enum WasmExecutionMethod {
 	/// Uses an interpreter.
-	#[clap(name="interpreted-i-know-what-i-do")]
+	#[clap(name = "interpreted-i-know-what-i-do")]
 	Interpreted,
 	/// Uses a compiled runtime.
 	Compiled,
