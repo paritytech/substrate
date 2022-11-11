@@ -32,7 +32,7 @@ jobs:
       - name: Install protoc
         id: protoc
         run: |
-          brew install protoc
+          brew install protobuf
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.2.0
