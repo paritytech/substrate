@@ -16,40 +16,71 @@
 // limitations under the License.
 
 use crate::{BoundedBTreeMap, BoundedBTreeSet, BoundedVec, WeakBoundedVec};
+use codec::Decode;
 use sp_std::vec::Vec;
 
-pub trait ScaleContainerType: private::Sealed {
-	type Stored: codec::Decode;
+pub trait StreamIter: private::Sealed {
+	type Iterator: sp_std::iter::Iterator;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator;
 }
 
-impl<T: codec::Decode> ScaleContainerType for Vec<T> {
-	type Stored = T;
+impl<T: codec::Decode> StreamIter for Vec<T> {
+	type Iterator = ScaleContainerStreamIter<T>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
-impl<T: codec::Decode> ScaleContainerType for sp_std::collections::btree_set::BTreeSet<T> {
-	type Stored = T;
+impl<T: codec::Decode> StreamIter for sp_std::collections::btree_set::BTreeSet<T> {
+	type Iterator = ScaleContainerStreamIter<T>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
-impl<K: codec::Decode, V: codec::Decode> ScaleContainerType
+impl<K: codec::Decode, V: codec::Decode> StreamIter
 	for sp_std::collections::btree_map::BTreeMap<K, V>
 {
-	type Stored = (K, V);
+	type Iterator = ScaleContainerStreamIter<(K, V)>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
-impl<T: codec::Decode, S> ScaleContainerType for BoundedVec<T, S> {
-	type Stored = T;
+impl<T: codec::Decode, S> StreamIter for BoundedVec<T, S> {
+	type Iterator = ScaleContainerStreamIter<T>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
-impl<T: codec::Decode, S> ScaleContainerType for WeakBoundedVec<T, S> {
-	type Stored = T;
+impl<T: codec::Decode, S> StreamIter for WeakBoundedVec<T, S> {
+	type Iterator = ScaleContainerStreamIter<T>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
-impl<K: codec::Decode, V: codec::Decode, S> ScaleContainerType for BoundedBTreeMap<K, V, S> {
-	type Stored = (K, V);
+impl<K: codec::Decode, V: codec::Decode, S> StreamIter for BoundedBTreeMap<K, V, S> {
+	type Iterator = ScaleContainerStreamIter<(K, V)>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
-impl<T: codec::Decode, S> ScaleContainerType for BoundedBTreeSet<T, S> {
-	type Stored = T;
+impl<T: codec::Decode, S> StreamIter for BoundedBTreeSet<T, S> {
+	type Iterator = ScaleContainerStreamIter<T>;
+
+	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
+		ScaleContainerStreamIter::new(key).unwrap()
+	}
 }
 
 mod private {
@@ -67,19 +98,15 @@ mod private {
 	impl<T: codec::Decode, S> Sealed for BoundedBTreeSet<T, S> {}
 }
 
-pub trait StreamIter {
-	type Iterator: sp_std::iter::Iterator;
-
-	fn stream_iter() -> Self::Iterator;
+pub trait StreamIterExt<T: StreamIter> {
+	fn stream_iter() -> T::Iterator;
 }
 
-impl<T: ScaleContainerType, StorageValue: super::generator::StorageValue<T>> StreamIter
+impl<T: StreamIter + codec::FullCodec, StorageValue: super::StorageValue<T>> StreamIterExt<T>
 	for StorageValue
 {
-	type Iterator = ScaleContainerStreamIter<T::Stored>;
-
-	fn stream_iter() -> Self::Iterator {
-		ScaleContainerStreamIter::new(Self::storage_value_final_key().into()).unwrap()
+	fn stream_iter() -> T::Iterator {
+		T::stream_iter(Self::hashed_key().into())
 	}
 }
 
@@ -113,17 +140,10 @@ impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
 	}
 }
 
-impl<T: codec::Decode> StreamIter for Vec<T> {
-	type Iterator = ScaleContainerStreamIter<T>;
-
-	fn stream_iter(key: Vec<u8>) -> Self::Iterator {
-		ScaleContainerStreamIter::new(key).unwrap()
-	}
-}
-
 const STORAGE_INPUT_BUFFER_CAPACITY: usize = 16 * 1024;
 
-pub struct StorageInput {
+/// Implementation of [`codec::Input`]
+struct StorageInput {
 	key: Vec<u8>,
 	offset: u32,
 	total_length: u32,
@@ -146,7 +166,7 @@ impl StorageInput {
 				(0, false)
 			};
 
-		if total_length < buffer.len() {
+		if (total_length as usize) < buffer.len() {
 			unsafe {
 				buffer.set_len(total_length as usize);
 			}
@@ -246,11 +266,11 @@ fn stream_read_test() {
 		let data: Vec<u32> = vec![1, 2, 3, 4, 5];
 		StreamReadTest::put(&data);
 
-		assert_eq!(data, StreamReadTest::stream().collect::<Vec<_>>());
+		assert_eq!(data, StreamReadTest::stream_iter().collect::<Vec<_>>());
 
 		let data: Vec<Vec<u8>> = vec![vec![0; 3000], vec![1; 2500]];
 		StreamReadTest2::put(&data);
 
-		assert_eq!(data, StreamReadTest2::stream().collect::<Vec<_>>());
+		assert_eq!(data, StreamReadTest2::stream_iter().collect::<Vec<_>>());
 	})
 }

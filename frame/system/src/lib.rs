@@ -88,7 +88,7 @@ use frame_support::{
 		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
 		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
 	},
-	storage,
+	storage::{self, stream_iter::StreamIterExt},
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
@@ -1434,7 +1434,7 @@ impl<T: Config> Pallet<T> {
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
 	pub fn read_events_no_consensus() -> impl sp_std::iter::Iterator<Item = Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
-		Events::<T>::stream()
+		Events::<T>::stream_iter()
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to

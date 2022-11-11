@@ -199,10 +199,6 @@ where
 	{
 		<Self as crate::storage::TryAppendValue<Value, Item>>::try_append(item)
 	}
-
-	pub fn stream() -> <Value as crate::StreamRead>::Iterator where Value: crate::StreamRead {
-		<Value as crate::StreamRead>::stream(Self::hashed_key().into())
-	}
 }
 
 impl<Prefix, Value, QueryKind, OnEmpty> StorageEntryMetadataBuilder
