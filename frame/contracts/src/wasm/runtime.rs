@@ -261,9 +261,9 @@ pub enum RuntimeCosts {
 
 impl RuntimeCosts {
 	fn token<T>(&self, s: &HostFnWeights<T>) -> RuntimeToken
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+		where
+			T: Config,
+			T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	{
 		use self::RuntimeCosts::*;
 		let weight = match *self {
@@ -369,9 +369,9 @@ struct RuntimeToken {
 }
 
 impl<T> Token<T> for RuntimeToken
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	where
+		T: Config,
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	fn weight(&self) -> Weight {
 		self.weight
@@ -458,9 +458,9 @@ pub struct Runtime<'a, E: Ext + 'a> {
 }
 
 impl<'a, E> Runtime<'a, E>
-where
-	E: Ext + 'a,
-	<E::T as frame_system::Config>::AccountId:
+	where
+		E: Ext + 'a,
+		<E::T as frame_system::Config>::AccountId:
 		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
 	pub fn new(
@@ -694,9 +694,9 @@ where
 		input_len: u32,
 		output_ptr: u32,
 	) -> Result<(), DispatchError>
-	where
-		F: FnOnce(&[u8]) -> R,
-		R: AsRef<[u8]>,
+		where
+			F: FnOnce(&[u8]) -> R,
+			R: AsRef<[u8]>,
 	{
 		// Copy input into supervisor memory.
 		let input = self.read_sandbox_memory(input_ptr, input_len)?;
@@ -1198,6 +1198,7 @@ pub mod env {
 			Ok(ReturnCode::KeyNotFound)
 		}
 	}
+
 	/// Transfer some value to another account.
 	///
 	/// # Parameters
@@ -1364,6 +1365,7 @@ pub mod env {
 			output_len_ptr,
 		)
 	}
+
 	/// Instantiate a contract with the specified code hash.
 	///
 	/// # Deprecation
@@ -2453,32 +2455,35 @@ pub mod env {
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
-	},
+	}
 
-	// Returns the number of times the currently executing contract exists on the call stack in addition
-	// to the calling instance.
-	//
-	// # Return Value
-	//
-	// Returns 0 when there is no reentrancy.
-	[__unstable__] seal_reentrant_count(ctx) -> u32 => {
+	/// Returns the number of times the currently executing contract exists on the call stack in
+	/// addition to the calling instance.
+	///
+	/// # Return Value
+	///
+	/// Returns 0 when there is no reentrancy.
+	#[unstable]
+	fn reentrant_count(ctx: Runtime<E>) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
 		Ok(ctx.ext.reentrant_count())
-	},
+	}
 
-	// Returns the number of times specified contract exists on the call stack. Delegated calls are
-	// not calculated as separate calls.
-	//
-	// # Parameters
-	//
-	// - `account_ptr`: a pointer to the contract address.
-	//
-	// # Return Value
-	//
-	// Returns 0 when the contract does not exist on the call stack.
-	[__unstable__] seal_account_entrance_count(ctx, account_ptr: u32) -> u32 => {
+	/// Returns the number of times specified contract exists on the call stack. Delegated calls are
+	/// not counted as separate calls.
+	///
+	/// # Parameters
+	///
+	/// - `account_ptr`: a pointer to the contract address.
+	///
+	/// # Return Value
+	///
+	/// Returns 0 when the contract does not exist on the call stack.
+	#[unstable]
+	fn account_entrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
-		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId = ctx.read_sandbox_memory_as(account_ptr)?;
+		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
 		Ok(ctx.ext.account_entrance_count(&account_id))
-	},
-);
+	}
+}

@@ -166,9 +166,9 @@ impl Default for TestExtension {
 
 impl ChainExtension<Test> for TestExtension {
 	fn call<E>(&mut self, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
-	where
-		E: Ext<T = Test>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+		where
+			E: Ext<T = Test>,
+			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		let func_id = env.func_id();
 		let id = env.ext_id() as u32 | func_id as u32;
@@ -211,9 +211,9 @@ impl RegisteredChainExtension<Test> for TestExtension {
 
 impl ChainExtension<Test> for RevertingExtension {
 	fn call<E>(&mut self, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
-	where
-		E: Ext<T = Test>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+		where
+			E: Ext<T = Test>,
+			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		Ok(RetVal::Diverging { flags: ReturnFlags::REVERT, data: vec![0x4B, 0x1D] })
 	}
@@ -229,9 +229,9 @@ impl RegisteredChainExtension<Test> for RevertingExtension {
 
 impl ChainExtension<Test> for DisabledExtension {
 	fn call<E>(&mut self, _env: Environment<E, InitState>) -> ExtensionResult<RetVal>
-	where
-		E: Ext<T = Test>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+		where
+			E: Ext<T = Test>,
+			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		panic!("Disabled chain extensions are never called")
 	}
@@ -247,9 +247,9 @@ impl RegisteredChainExtension<Test> for DisabledExtension {
 
 impl ChainExtension<Test> for TempStorageExtension {
 	fn call<E>(&mut self, env: Environment<E, InitState>) -> ExtensionResult<RetVal>
-	where
-		E: Ext<T = Test>,
-		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
+		where
+			E: Ext<T = Test>,
+			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 	{
 		let func_id = env.func_id();
 		match func_id {
@@ -398,7 +398,7 @@ impl Config for Test {
 	type WeightPrice = Self;
 	type WeightInfo = ();
 	type ChainExtension =
-		(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
+	(TestExtension, DisabledExtension, RevertingExtension, TempStorageExtension);
 	type DeletionQueueDepth = ConstU32<1024>;
 	type DeletionWeightLimit = DeletionWeightLimit;
 	type Schedule = MySchedule;
@@ -453,8 +453,8 @@ impl ExtBuilder {
 ///
 /// The fixture files are located under the `fixtures/` directory.
 fn compile_module<T>(fixture_name: &str) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
-where
-	T: frame_system::Config,
+	where
+		T: frame_system::Config,
 {
 	let fixture_path = ["fixtures/", fixture_name, ".wat"].concat();
 	let wasm_binary = wat::parse_file(fixture_path)?;
@@ -702,7 +702,7 @@ fn instantiate_unique_trie_id() {
 			None,
 			Determinism::Deterministic,
 		)
-		.unwrap();
+			.unwrap();
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		// Instantiate the contract and store its trie id for later comparison.
@@ -1399,8 +1399,8 @@ fn crypto_hashes() {
 				false,
 				Determinism::Deterministic,
 			)
-			.result
-			.unwrap();
+				.result
+				.unwrap();
 			assert!(!result.did_revert());
 			let expected = hash_fn(input.as_ref());
 			assert_eq!(&result.data[..*expected_size], &*expected);
@@ -1438,8 +1438,8 @@ fn transfer_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough total balance in order to not go below the min balance
@@ -1457,8 +1457,8 @@ fn transfer_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 	});
 }
@@ -1495,8 +1495,8 @@ fn call_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::NotCallable);
 
 		assert_ok!(Contracts::instantiate_with_code(
@@ -1526,8 +1526,8 @@ fn call_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough total balance in order to not go below the min balance
@@ -1549,8 +1549,8 @@ fn call_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
@@ -1569,8 +1569,8 @@ fn call_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
 		// Contract has enough balance but callee traps because "2" is passed.
@@ -1588,8 +1588,8 @@ fn call_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 	});
 }
@@ -1637,8 +1637,8 @@ fn instantiate_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough total balance in order to not go below the min_balance
@@ -1656,8 +1656,8 @@ fn instantiate_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::TransferFailed);
 
 		// Contract has enough balance but the passed code hash is invalid
@@ -1672,8 +1672,8 @@ fn instantiate_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CodeNotFound);
 
 		// Contract has enough balance but callee reverts because "1" is passed.
@@ -1687,8 +1687,8 @@ fn instantiate_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeReverted);
 
 		// Contract has enough balance but callee traps because "2" is passed.
@@ -1702,8 +1702,8 @@ fn instantiate_return_code() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, RuntimeReturnCode::CalleeTrapped);
 	});
 }
@@ -1797,8 +1797,8 @@ fn chain_extension_works() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		// those values passed in the fixture
 		assert_eq!(TestExtension::last_seen_inputs(), (4, 4, 16, 12));
 
@@ -1851,8 +1851,8 @@ fn chain_extension_works() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, vec![42, 99]);
 
@@ -1869,8 +1869,8 @@ fn chain_extension_works() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_eq!(result.flags, ReturnFlags::REVERT);
 		assert_eq!(result.data, vec![0x4B, 0x1D]);
 
@@ -2092,7 +2092,7 @@ fn lazy_removal_partial_remove_works() {
 				None,
 				false,
 			)
-			.unwrap();
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2278,7 +2278,7 @@ fn lazy_removal_does_not_use_all_weight() {
 				None,
 				false,
 			)
-			.unwrap();
+				.unwrap();
 		}
 		<ContractInfoOf<Test>>::insert(&addr, info.clone());
 
@@ -2780,22 +2780,22 @@ fn ecdsa_recover() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		#[rustfmt::skip]
-		let signature: [u8; 65] = [
+			let signature: [u8; 65] = [
 			161, 234, 203,  74, 147, 96,  51, 212,   5, 174, 231,   9, 142,  48, 137, 201,
 			162, 118, 192,  67, 239, 16,  71, 216, 125,  86, 167, 139,  70,   7,  86, 241,
-			 33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
+			33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
 			211, 234, 100, 115, 230, 47,  80,  44, 152, 166,  62,  50,   8,  13,  86, 175,
-			 28,
+			28,
 		];
 		#[rustfmt::skip]
-		let message_hash: [u8; 32] = [
+			let message_hash: [u8; 32] = [
 			162, 28, 244, 179, 96, 76, 244, 178, 188,  83, 230, 248, 143, 106,  77, 117,
 			239, 95, 244, 171, 65, 95,  62, 153, 174, 166, 182,  28, 130,  73, 196, 208
 		];
 		#[rustfmt::skip]
 		const EXPECTED_COMPRESSED_PUBLIC_KEY: [u8; 33] = [
-			  2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160,  98, 149, 206, 135, 11,
-			  7,   2, 155, 252, 219,  45, 206,  40, 217, 89, 242, 129,  91,  22, 248, 23,
+			2, 121, 190, 102, 126, 249, 220, 187, 172, 85, 160,  98, 149, 206, 135, 11,
+			7,   2, 155, 252, 219,  45, 206,  40, 217, 89, 242, 129,  91,  22, 248, 23,
 			152,
 		];
 		let mut params = vec![];
@@ -2812,8 +2812,8 @@ fn ecdsa_recover() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert!(!result.did_revert());
 		assert_eq!(result.data, EXPECTED_COMPRESSED_PUBLIC_KEY);
 	})
@@ -3666,8 +3666,8 @@ fn contract_reverted() {
 			vec![],
 			false,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_eq!(result.result.flags, flags);
 		assert_eq!(result.result.data, buffer);
 		assert!(!<ContractInfoOf<Test>>::contains_key(result.account_id));
@@ -3683,9 +3683,9 @@ fn contract_reverted() {
 			vec![],
 			false,
 		)
-		.result
-		.unwrap()
-		.account_id;
+			.result
+			.unwrap()
+			.account_id;
 
 		// Calling extrinsic: revert leads to an error
 		assert_err_ignore_postinfo!(
@@ -3711,8 +3711,8 @@ fn contract_reverted() {
 			false,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_eq!(result.flags, flags);
 		assert_eq!(result.data, buffer);
 	});
@@ -3793,8 +3793,8 @@ fn set_code_hash() {
 			true,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, 1);
 
 		// Second calls new contract code that returns 2
@@ -3808,8 +3808,8 @@ fn set_code_hash() {
 			true,
 			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
 		assert_return_code!(result, 2);
 
 		// Checking for the last event only
@@ -4235,9 +4235,9 @@ fn cannot_instantiate_indeterministic_code() {
 			vec![],
 			false,
 		)
-		.result
-		.unwrap()
-		.account_id;
+			.result
+			.unwrap()
+			.account_id;
 
 		// Try to instantiate `code_hash` from another contract in deterministic mode
 		assert_err!(
@@ -4299,9 +4299,9 @@ fn cannot_set_code_indeterministic_code() {
 			vec![],
 			false,
 		)
-		.result
-		.unwrap()
-		.account_id;
+			.result
+			.unwrap()
+			.account_id;
 
 		// We do not allow to set the code hash to a non determinstic wasm
 		assert_err!(
@@ -4347,9 +4347,9 @@ fn delegate_call_indeterministic_code() {
 			vec![],
 			false,
 		)
-		.result
-		.unwrap()
-		.account_id;
+			.result
+			.unwrap()
+			.account_id;
 
 		// The delegate call will fail in deterministic mode
 		assert_err!(
@@ -4394,7 +4394,7 @@ fn reentrant_count_works_with_call() {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			300_000,
 			GAS_LIMIT,
 			None,
@@ -4406,7 +4406,16 @@ fn reentrant_count_works_with_call() {
 		// passing reentrant count to the input
 		let input = 0.encode();
 
-		Contracts::bare_call(ALICE, contract_addr, 0, GAS_LIMIT, None, input, true)
+		Contracts::bare_call(
+			ALICE,
+			contract_addr,
+			0,
+			GAS_LIMIT,
+			None,
+			input,
+			true,
+			Determinism::Deterministic,
+		)
 			.result
 			.unwrap();
 	});
@@ -4422,7 +4431,7 @@ fn reentrant_count_works_with_delegated_call() {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			300_000,
 			GAS_LIMIT,
 			None,
@@ -4434,7 +4443,16 @@ fn reentrant_count_works_with_delegated_call() {
 		// adding a callstack height to the input
 		let input = (code_hash, 1).encode();
 
-		Contracts::bare_call(ALICE, contract_addr.clone(), 0, GAS_LIMIT, None, input, true)
+		Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			input,
+			true,
+			Determinism::Deterministic,
+		)
 			.result
 			.unwrap();
 	});
@@ -4444,13 +4462,12 @@ fn reentrant_count_works_with_delegated_call() {
 #[cfg(feature = "unstable-interface")]
 fn account_entrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_entrance_count_call").unwrap();
-	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
 
 		assert_ok!(Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
+			RuntimeOrigin::signed(ALICE),
 			300_000,
 			GAS_LIMIT,
 			None,
@@ -4459,7 +4476,9 @@ fn account_entrance_count_works() {
 			vec![],
 		));
 
-		Contracts::bare_call(
+		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+
+		let result = Contracts::bare_call(
 			ALICE,
 			contract_addr.clone(),
 			0,
@@ -4467,8 +4486,11 @@ fn account_entrance_count_works() {
 			None,
 			contract_addr.encode(),
 			true,
+			Determinism::Deterministic,
 		)
-		.result
-		.unwrap();
+			.result
+			.unwrap();
+
+		assert_eq!(result.data, 1.encode());
 	});
 }

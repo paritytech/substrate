@@ -54,8 +54,8 @@ pub type VarSizedKey<T> = BoundedVec<u8, <T as Config>::MaxStorageKeyLen>;
 
 /// Trait for hashing storage keys.
 pub trait StorageKey<T>
-where
-	T: Config,
+	where
+		T: Config,
 {
 	fn hash(&self) -> Vec<u8>;
 }
@@ -67,8 +67,8 @@ impl<T: Config> StorageKey<T> for FixSizedKey {
 }
 
 impl<T> StorageKey<T> for VarSizedKey<T>
-where
-	T: Config,
+	where
+		T: Config,
 {
 	fn hash(&self) -> Vec<u8> {
 		Blake2_128Concat::hash(self.as_slice())
@@ -591,10 +591,10 @@ impl<T: Config> CachedContract<T> {
 }
 
 impl<'a, T, E> Stack<'a, T, E>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	E: Executable<T>,
+	where
+		T: Config,
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+		E: Executable<T>,
 {
 	/// Create and run a new call stack by calling into `dest`.
 	///
@@ -796,7 +796,7 @@ where
 		// from its own constructor.
 		let frame = self.top_frame();
 		if let (CachedContract::Cached(contract), ExportedFunction::Call) =
-			(&frame.contract_info, frame.entry_point)
+		(&frame.contract_info, frame.entry_point)
 		{
 			<ContractInfoOf<T>>::insert(frame.account_id.clone(), contract.clone());
 		}
@@ -1084,10 +1084,10 @@ where
 }
 
 impl<'a, T, E> Ext for Stack<'a, T, E>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	E: Executable<T>,
+	where
+		T: Config,
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+		E: Executable<T>,
 {
 	type T = T;
 
@@ -1662,7 +1662,7 @@ mod tests {
 				None,
 				Determinism::Deterministic,
 			)
-			.unwrap();
+				.unwrap();
 
 			assert_eq!(get_balance(&origin), 100 - value);
 			assert_eq!(get_balance(&dest), balance + value);
@@ -1704,7 +1704,7 @@ mod tests {
 				None,
 				Determinism::Deterministic,
 			)
-			.unwrap();
+				.unwrap();
 
 			assert_eq!(get_balance(&origin), 100 - value);
 			assert_eq!(get_balance(&dest), balance + value);
@@ -1740,7 +1740,7 @@ mod tests {
 				None,
 				Determinism::Deterministic,
 			)
-			.unwrap();
+				.unwrap();
 
 			assert!(output.did_revert());
 			assert_eq!(get_balance(&origin), 100);
@@ -2524,7 +2524,7 @@ mod tests {
 				Some(&mut debug_buffer),
 				Determinism::Deterministic,
 			)
-			.unwrap();
+				.unwrap();
 		});
 
 		assert_eq!(&String::from_utf8(debug_buffer).unwrap(), "This is a testMore text");
@@ -2680,7 +2680,7 @@ mod tests {
 				None,
 				Determinism::Deterministic,
 			)
-			.unwrap();
+				.unwrap();
 
 			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello World");
 			assert_eq!(
@@ -2763,7 +2763,7 @@ mod tests {
 				None,
 				Determinism::Deterministic,
 			)
-			.unwrap();
+				.unwrap();
 
 			let remark_hash = <Test as frame_system::Config>::Hashing::hash(b"Hello");
 			assert_eq!(
@@ -2865,7 +2865,7 @@ mod tests {
 				&[],
 				None,
 			)
-			.ok();
+				.ok();
 			assert_eq!(<Nonce<Test>>::get(), 0);
 
 			assert_ok!(MockStack::run_instantiate(

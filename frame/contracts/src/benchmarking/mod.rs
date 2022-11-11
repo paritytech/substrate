@@ -62,10 +62,10 @@ struct Contract<T: Config> {
 }
 
 impl<T: Config> Contract<T>
-where
-	T: Config,
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
+	where
+		T: Config,
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 {
 	/// Create new contract and use a default account id as instantiator.
 	fn new(module: WasmModule<T>, data: Vec<u8>) -> Result<Contract<T>, &'static str> {
@@ -142,7 +142,7 @@ where
 				None,
 				false,
 			)
-			.map_err(|_| "Failed to write storage to restoration dest")?;
+				.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info);
 		Ok(())
@@ -2086,13 +2086,13 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_reentrant_count {
+	reentrant_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_reentrant_count",
+				name: "reentrant_count",
 				params: vec![],
 				return_type: Some(ValueType::I32),
 			}],
@@ -2106,7 +2106,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_account_entrance_count {
+	account_entrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
 		let accounts = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -2118,7 +2118,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_account_entrance_count",
+				name: "account_entrance_count",
 				params: vec![ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
