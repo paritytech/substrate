@@ -13,7 +13,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 tracing = "0.1.29"
-tracing-core = "0.1.26"
+tracing-core = "0.1.28"
 sc-executor = { version = "0.10.0-dev", path = "../../../client/executor" }
 sc-executor-common = { version = "0.10.0-dev", path = "../../../client/executor/common" }
 sp-io = { version = "6.0.0", path = "../../io" }

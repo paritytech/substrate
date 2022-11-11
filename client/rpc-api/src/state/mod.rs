@@ -265,7 +265,7 @@ pub trait StateApi<Hash> {
 	/// [substrate storage][1], [transparent keys in substrate][2],
 	/// [querying substrate storage via rpc][3].
 	///
-	/// [1]: https://docs.substrate.io/v3/advanced/storage#storage-map-keys
+	/// [1]: https://docs.substrate.io/main-docs/fundamentals/state-transitions-and-storage/
 	/// [2]: https://www.shawntabrizi.com/substrate/transparent-keys-in-substrate/
 	/// [3]: https://www.shawntabrizi.com/substrate/querying-substrate-storage-via-rpc/
 	///

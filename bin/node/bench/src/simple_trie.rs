@@ -33,7 +33,7 @@ pub struct SimpleTrie<'a> {
 
 impl<'a> AsHashDB<Hasher, DBValue> for SimpleTrie<'a> {
 	fn as_hash_db(&self) -> &dyn hash_db::HashDB<Hasher, DBValue> {
-		&*self
+		self
 	}
 
 	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (dyn HashDB<Hasher, DBValue> + 'b) {

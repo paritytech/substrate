@@ -43,6 +43,7 @@ members = [
 	"client/keystore",
 	"client/network",
 	"client/network-gossip",
+	"client/network/bitswap",
 	"client/network/common",
 	"client/network/light",
 	"client/network/sync",
@@ -54,6 +55,7 @@ members = [
 	"client/rpc",
 	"client/rpc-api",
 	"client/rpc-servers",
+	"client/rpc-spec-v2",
 	"client/service",
 	"client/service/test",
 	"client/state-db",
@@ -84,10 +86,10 @@ members = [
 	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
-	"frame/contracts/rpc",
-	"frame/contracts/rpc/runtime-api",
+	"frame/contracts/primitives",
 	"frame/conviction-voting",
 	"frame/democracy",
+	"frame/fast-unstake",
 	"frame/try-runtime",
 	"frame/election-provider-multi-phase",
 	"frame/election-provider-support",
@@ -96,7 +98,6 @@ members = [
 	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
-	"frame/examples/parallel",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -114,8 +115,10 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/nomination-pools",
+	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
+	"frame/nomination-pools/runtime-api",
 	"frame/randomness-collective-flip",
 	"frame/ranked-collective",
 	"frame/recovery",
@@ -131,6 +134,7 @@ members = [
 	"frame/staking/reward-fn",
 	"frame/state-trie-migration",
 	"frame/sudo",
+	"frame/root-offences",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
@@ -200,7 +204,6 @@ members = [
 	"primitives/state-machine",
 	"primitives/std",
 	"primitives/storage",
-	"primitives/tasks",
 	"primitives/test-primitives",
 	"primitives/timestamp",
 	"primitives/tracing",
@@ -210,6 +213,7 @@ members = [
 	"primitives/version",
 	"primitives/version/proc-macro",
 	"primitives/wasm-interface",
+	"primitives/weights",
 	"test-utils/client",
 	"test-utils/derive",
 	"test-utils/runtime",
@@ -227,6 +231,7 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
 	"utils/frame/generate-bags/node-runtime",
+	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -248,7 +253,6 @@ members = [
 # This list is ordered alphabetically.
 [profile.dev.package]
 blake2 = { opt-level = 3 }
-blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
@@ -257,7 +261,7 @@ crc32fast = { opt-level = 3 }
 crossbeam-deque = { opt-level = 3 }
 crypto-mac = { opt-level = 3 }
 curve25519-dalek = { opt-level = 3 }
-ed25519-dalek = { opt-level = 3 }
+ed25519-zebra = { opt-level = 3 }
 flate2 = { opt-level = 3 }
 futures-channel = { opt-level = 3 }
 hashbrown = { opt-level = 3 }

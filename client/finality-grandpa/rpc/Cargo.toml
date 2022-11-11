@@ -12,7 +12,7 @@ homepage = "https://substrate.io"
 [dependencies]
 finality-grandpa = { version = "0.16.0", features = ["derive-codec"] }
 futures = "0.3.16"
-jsonrpsee = { version = "0.14.0", features = ["server", "macros"] }
+jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
 log = "0.4.8"
 parity-scale-codec = { version = "3.0.0", features = ["derive"] }
 serde = { version = "1.0.105", features = ["derive"] }

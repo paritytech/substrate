@@ -74,7 +74,7 @@ pub fn expand(mut def: Def) -> proc_macro2::TokenStream {
 		def.item.attrs.push(syn::parse_quote!(
 			#[doc = r"
 			The module that hosts all the
-			[FRAME](https://docs.substrate.io/v3/runtime/frame)
+			[FRAME](https://docs.substrate.io/main-docs/build/events-errors/)
 			types needed to add this pallet to a
 			runtime.
 			"]

@@ -36,15 +36,15 @@
 //!
 //! ### Terminology
 //!
-//! * **Admin**: An account ID uniquely privileged to be able to unfreeze (thaw) an account and it's
+//! * **Admin**: An account ID uniquely privileged to be able to unfreeze (thaw) an account and its
 //!   assets, as well as forcibly transfer a particular class of assets between arbitrary accounts
 //!   and reduce the balance of a particular class of assets of arbitrary accounts.
 //! * **Asset issuance/minting**: The creation of a new asset, whose total supply will belong to the
-//!   account that issues the asset. This is a privileged operation.
+//!   account designated as the beneficiary of the asset. This is a privileged operation.
 //! * **Asset transfer**: The reduction of the balance of an asset of one account with the
 //!   corresponding increase in the balance of another.
-//! * **Asset destruction**: The process of reduce the balance of an asset of one account. This is a
-//!   privileged operation.
+//! * **Asset destruction**: The process of reducing the balance of an asset of one account. This is
+//!   a privileged operation.
 //! * **Fungible asset**: An asset whose units are interchangeable.
 //! * **Issuer**: An account ID uniquely privileged to be able to mint a particular class of assets.
 //! * **Freezer**: An account ID uniquely privileged to be able to freeze an account from
@@ -63,12 +63,12 @@
 //!
 //! The assets system in Substrate is designed to make the following possible:
 //!
-//! * Issue a new assets in a permissioned or permissionless way, if permissionless, then with a
+//! * Issue new assets in a permissioned or permissionless way, if permissionless, then with a
 //!   deposit required.
 //! * Allow accounts to be delegated the ability to transfer assets without otherwise existing
 //!   on-chain (*approvals*).
 //! * Move assets between accounts.
-//! * Update the asset's total supply.
+//! * Update an asset class's total supply.
 //! * Allow administrative activities by specially privileged accounts including freezing account
 //!   balances and minting/burning assets.
 //!
@@ -79,8 +79,6 @@
 //! * `create`: Creates a new asset class, taking the required deposit.
 //! * `transfer`: Transfer sender's assets to another account.
 //! * `transfer_keep_alive`: Transfer sender's assets to another account, keeping the sender alive.
-//! * `set_metadata`: Set the metadata of an asset class.
-//! * `clear_metadata`: Remove the metadata of an asset class.
 //! * `approve_transfer`: Create or increase an delegated transfer.
 //! * `cancel_approval`: Rescind a previous approval.
 //! * `transfer_approved`: Transfer third-party's assets to another account.
@@ -94,6 +92,7 @@
 //! * `force_cancel_approval`: Rescind a previous approval.
 //!
 //! ### Privileged Functions
+//!
 //! * `destroy`: Destroys an entire asset class; called by the asset class's Owner.
 //! * `mint`: Increases the asset balance of an account; called by the asset class's Issuer.
 //! * `burn`: Decreases the asset balance of an account; called by the asset class's Admin.
@@ -103,6 +102,8 @@
 //! * `transfer_ownership`: Changes an asset class's Owner; called by the asset class's Owner.
 //! * `set_team`: Changes an asset class's Admin, Freezer and Issuer; called by the asset class's
 //!   Owner.
+//! * `set_metadata`: Set the metadata of an asset class; called by the asset class's Owner.
+//! * `clear_metadata`: Remove the metadata of an asset class; called by the asset class's Owner.
 //!
 //! Please refer to the [`Call`] enum and its associated variants for documentation on each
 //! function.
@@ -156,13 +157,15 @@ use frame_support::{
 	traits::{
 		tokens::{fungibles, DepositConsequence, WithdrawConsequence},
 		BalanceStatus::Reserved,
-		Currency, ReservableCurrency, StoredMap,
+		Currency, EnsureOriginWithArg, ReservableCurrency, StoredMap,
 	},
 };
 use frame_system::Config as SystemConfig;
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -178,7 +181,8 @@ pub mod pallet {
 	/// The module configuration trait.
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The units in which we record balances.
 		type Balance: Member
@@ -203,9 +207,17 @@ pub mod pallet {
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
+		/// Standard asset class creation is only allowed if the origin attempting it and the
+		/// asset class are in this set.
+		type CreateOrigin: EnsureOriginWithArg<
+			Self::RuntimeOrigin,
+			Self::AssetId,
+			Success = Self::AccountId,
+		>;
+
 		/// The origin which may forcibly create or destroy an asset or otherwise alter privileged
 		/// attributes.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The basic amount of funds that must be reserved for an asset.
 		#[pallet::constant]
@@ -482,7 +494,7 @@ pub mod pallet {
 		///
 		/// This new asset class has no assets initially and its owner is the origin.
 		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
+		/// The origin must conform to the configured `CreateOrigin` and have sufficient funds free.
 		///
 		/// Funds of sender are reserved by `AssetDeposit`.
 		///
@@ -501,10 +513,10 @@ pub mod pallet {
 		pub fn create(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			admin: <T::Lookup as StaticLookup>::Source,
+			admin: AccountIdLookupOf<T>,
 			min_balance: T::Balance,
 		) -> DispatchResult {
-			let owner = ensure_signed(origin)?;
+			let owner = T::CreateOrigin::ensure_origin(origin, &id)?;
 			let admin = T::Lookup::lookup(admin)?;
 
 			ensure!(!Asset::<T, I>::contains_key(id), Error::<T, I>::InUse);
@@ -557,7 +569,7 @@ pub mod pallet {
 		pub fn force_create(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 			is_sufficient: bool,
 			#[pallet::compact] min_balance: T::Balance,
 		) -> DispatchResult {
@@ -623,7 +635,7 @@ pub mod pallet {
 		pub fn mint(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			beneficiary: <T::Lookup as StaticLookup>::Source,
+			beneficiary: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -651,7 +663,7 @@ pub mod pallet {
 		pub fn burn(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -684,7 +696,7 @@ pub mod pallet {
 		pub fn transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -716,7 +728,7 @@ pub mod pallet {
 		pub fn transfer_keep_alive(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			target: <T::Lookup as StaticLookup>::Source,
+			target: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let source = ensure_signed(origin)?;
@@ -749,8 +761,8 @@ pub mod pallet {
 		pub fn force_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			source: <T::Lookup as StaticLookup>::Source,
-			dest: <T::Lookup as StaticLookup>::Source,
+			source: AccountIdLookupOf<T>,
+			dest: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
@@ -775,7 +787,7 @@ pub mod pallet {
 		pub fn freeze(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -806,7 +818,7 @@ pub mod pallet {
 		pub fn thaw(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			who: <T::Lookup as StaticLookup>::Source,
+			who: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 
@@ -891,7 +903,7 @@ pub mod pallet {
 		pub fn transfer_ownership(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
@@ -932,9 +944,9 @@ pub mod pallet {
 		pub fn set_team(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			issuer: AccountIdLookupOf<T>,
+			admin: AccountIdLookupOf<T>,
+			freezer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let issuer = T::Lookup::lookup(issuer)?;
@@ -1117,10 +1129,10 @@ pub mod pallet {
 		pub fn force_asset_status(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			issuer: <T::Lookup as StaticLookup>::Source,
-			admin: <T::Lookup as StaticLookup>::Source,
-			freezer: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			issuer: AccountIdLookupOf<T>,
+			admin: AccountIdLookupOf<T>,
+			freezer: AccountIdLookupOf<T>,
 			#[pallet::compact] min_balance: T::Balance,
 			is_sufficient: bool,
 			is_frozen: bool,
@@ -1167,7 +1179,7 @@ pub mod pallet {
 		pub fn approve_transfer(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
@@ -1192,7 +1204,7 @@ pub mod pallet {
 		pub fn cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let owner = ensure_signed(origin)?;
 			let delegate = T::Lookup::lookup(delegate)?;
@@ -1225,8 +1237,8 @@ pub mod pallet {
 		pub fn force_cancel_approval(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			delegate: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let mut d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			T::ForceOrigin::try_origin(origin)
@@ -1272,8 +1284,8 @@ pub mod pallet {
 		pub fn transfer_approved(
 			origin: OriginFor<T>,
 			#[pallet::compact] id: T::AssetId,
-			owner: <T::Lookup as StaticLookup>::Source,
-			destination: <T::Lookup as StaticLookup>::Source,
+			owner: AccountIdLookupOf<T>,
+			destination: AccountIdLookupOf<T>,
 			#[pallet::compact] amount: T::Balance,
 		) -> DispatchResult {
 			let delegate = ensure_signed(origin)?;

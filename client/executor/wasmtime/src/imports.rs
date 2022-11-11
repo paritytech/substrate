@@ -112,7 +112,7 @@ impl<'a, 'b> sp_wasm_interface::HostFunctionRegistry for Registry<'a, 'b> {
 		if self.pending_func_imports.remove(fn_name).is_some() {
 			self.linker.func_wrap("env", fn_name, func).map_err(|error| {
 				WasmError::Other(format!(
-					"failed to register host function '{}' with the WASM linker: {}",
+					"failed to register host function '{}' with the WASM linker: {:#}",
 					fn_name, error
 				))
 			})?;

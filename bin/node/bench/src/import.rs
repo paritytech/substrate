@@ -34,7 +34,7 @@ use std::borrow::Cow;
 
 use node_primitives::Block;
 use node_testing::bench::{BenchDb, BlockType, DatabaseType, KeyTypes, Profile};
-use sc_client_api::backend::Backend;
+use sc_client_api::{backend::Backend, HeaderBackend};
 use sp_runtime::generic::BlockId;
 use sp_state_machine::InspectState;
 
@@ -127,10 +127,15 @@ impl core::Benchmark for ImportBenchmark {
 		context.import_block(self.block.clone());
 		let elapsed = start.elapsed();
 
+		let hash = context
+			.client
+			.expect_block_hash_from_id(&BlockId::number(1))
+			.expect("Block 1 was imported; qed");
+
 		// Sanity checks.
 		context
 			.client
-			.state_at(&BlockId::number(1))
+			.state_at(hash)
 			.expect("state_at failed for block#1")
 			.inspect_state(|| {
 				match self.block_type {
@@ -148,13 +153,13 @@ impl core::Benchmark for ImportBenchmark {
 						//      the transaction fee into the treasury
 						//    - extrinsic success
 						assert_eq!(
-							node_runtime::System::events().len(),
+							kitchensink_runtime::System::events().len(),
 							(self.block.extrinsics.len() - 1) * 8 + 1,
 						);
 					},
 					BlockType::Noop => {
 						assert_eq!(
-							node_runtime::System::events().len(),
+							kitchensink_runtime::System::events().len(),
 							// should be 2 per signed extrinsic + 1 per unsigned
 							// we have 1 unsigned and the rest are signed in the block
 							// those 2 events per signed are:

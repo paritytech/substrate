@@ -21,9 +21,10 @@
 
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
+	dispatch::DispatchInfo,
 	parameter_types,
 	traits::{ConstU32, ConstU64, ConstU8, StorageMapShim},
-	weights::{DispatchInfo, IdentityFee, Weight},
+	weights::{IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
@@ -34,7 +35,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-	pub enum Test where
+	pub struct Test where
 		Block = Block,
 		NodeBlock = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic,
@@ -47,7 +48,9 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(1024);
+		frame_system::limits::BlockWeights::simple_max(
+			frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
+		);
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
@@ -55,16 +58,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -78,7 +81,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_transaction_payment::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<u64>;
@@ -89,7 +92,7 @@ impl pallet_transaction_payment::Config for Test {
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore =
 		StorageMapShim<super::Account<Test>, system::Provider<Test>, u64, super::AccountData<u64>>;
@@ -158,9 +161,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(
 			events(),
 			[
-				Event::System(system::Event::NewAccount { account: 1 }),
-				Event::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
-				Event::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
+				RuntimeEvent::System(system::Event::NewAccount { account: 1 }),
+				RuntimeEvent::Balances(crate::Event::Endowed { account: 1, free_balance: 100 }),
+				RuntimeEvent::Balances(crate::Event::BalanceSet { who: 1, free: 100, reserved: 0 }),
 			]
 		);
 
@@ -168,7 +171,10 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(res, (NegativeImbalance::new(98), 0));
 
 		// no events
-		assert_eq!(events(), [Event::Balances(crate::Event::Slashed { who: 1, amount: 98 })]);
+		assert_eq!(
+			events(),
+			[RuntimeEvent::Balances(crate::Event::Slashed { who: 1, amount: 98 })]
+		);
 
 		let res = Balances::slash(&1, 1);
 		assert_eq!(res, (NegativeImbalance::new(1), 0));
@@ -176,9 +182,9 @@ fn emit_events_with_no_existential_deposit_suicide_with_dust() {
 		assert_eq!(
 			events(),
 			[
-				Event::System(system::Event::KilledAccount { account: 1 }),
-				Event::Balances(crate::Event::DustLost { account: 1, amount: 1 }),
-				Event::Balances(crate::Event::Slashed { who: 1, amount: 1 })
+				RuntimeEvent::System(system::Event::KilledAccount { account: 1 }),
+				RuntimeEvent::Balances(crate::Event::DustLost { account: 1, amount: 1 }),
+				RuntimeEvent::Balances(crate::Event::Slashed { who: 1, amount: 1 })
 			]
 		);
 	});

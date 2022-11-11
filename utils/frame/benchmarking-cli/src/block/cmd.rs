@@ -22,6 +22,7 @@ use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::{Backend as ClientBackend, BlockBackend, StorageProvider, UsageProvider};
 use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_blockchain::HeaderBackend;
 use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
 
 use clap::Parser;
@@ -67,6 +68,12 @@ pub struct BlockCmd {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub params: BenchmarkParams,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[arg(long)]
+	pub enable_trie_cache: bool,
 }
 
 impl BlockCmd {
@@ -81,7 +88,8 @@ impl BlockCmd {
 			+ BlockBackend<Block>
 			+ ProvideRuntimeApi<Block>
 			+ StorageProvider<Block, BA>
-			+ UsageProvider<Block>,
+			+ UsageProvider<Block>
+			+ HeaderBackend<Block>,
 		C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 	{
 		// Put everything in the benchmark type to have the generic types handy.
@@ -97,5 +105,13 @@ impl CliConfiguration for BlockCmd {
 
 	fn import_params(&self) -> Option<&ImportParams> {
 		Some(&self.import_params)
+	}
+
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.enable_trie_cache {
+			Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
+		} else {
+			Ok(None)
+		}
 	}
 }
