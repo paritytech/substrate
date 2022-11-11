@@ -16,7 +16,7 @@ on:
 
 jobs:
   carg_check_macos:
-    name: Run tests macos
+    name: Run cargo check macos
     runs-on: macos-latest
     steps:
       - name: Checkout sources
@@ -28,6 +28,11 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+
+      - name: Install protoc
+        id: protoc
+        run: |
+          brew install protoc
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.2.0
