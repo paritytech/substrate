@@ -23,9 +23,9 @@
 use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 use sp_runtime::traits;
+use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
-use sp_std::{fmt, vec};
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
@@ -67,17 +67,6 @@ pub trait OnNewRoot<Hash> {
 /// No-op implementation of [OnNewRoot].
 impl<Hash> OnNewRoot<Hash> for () {
 	fn on_new_root(_root: &Hash) {}
-}
-
-/// A MMR proof data for one of the leaves.
-#[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
-pub struct Proof<Hash> {
-	/// The index of the leaf the proof is for.
-	pub leaf_index: LeafIndex,
-	/// Number of leaves in MMR, when the proof was generated.
-	pub leaf_count: NodeIndex,
-	/// Proof elements (hashes of siblings of inner nodes on the path to the leaf).
-	pub items: Vec<Hash>,
 }
 
 /// A full leaf content stored in the offchain-db.
@@ -352,9 +341,9 @@ impl_leaf_data_for_tuple!(A:0, B:1, C:2);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3);
 impl_leaf_data_for_tuple!(A:0, B:1, C:2, D:3, E:4);
 
-/// A MMR proof data for a group of leaves.
+/// An MMR proof data for a group of leaves.
 #[derive(codec::Encode, codec::Decode, RuntimeDebug, Clone, PartialEq, Eq, TypeInfo)]
-pub struct BatchProof<Hash> {
+pub struct Proof<Hash> {
 	/// The indices of the leaves the proof is for.
 	pub leaf_indices: Vec<LeafIndex>,
 	/// Number of leaves in MMR, when the proof was generated.
@@ -363,49 +352,39 @@ pub struct BatchProof<Hash> {
 	pub items: Vec<Hash>,
 }
 
-impl<Hash> BatchProof<Hash> {
-	/// Converts batch proof to single leaf proof
-	pub fn into_single_leaf_proof(proof: BatchProof<Hash>) -> Result<Proof<Hash>, Error> {
-		Ok(Proof {
-			leaf_index: *proof.leaf_indices.get(0).ok_or(Error::InvalidLeafIndex)?,
-			leaf_count: proof.leaf_count,
-			items: proof.items,
-		})
-	}
-}
-
-impl<Hash> Proof<Hash> {
-	/// Converts a single leaf proof into a batch proof
-	pub fn into_batch_proof(proof: Proof<Hash>) -> BatchProof<Hash> {
-		BatchProof {
-			leaf_indices: vec![proof.leaf_index],
-			leaf_count: proof.leaf_count,
-			items: proof.items,
-		}
-	}
-}
 /// Merkle Mountain Range operation error.
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
 	/// Error during translation of a block number into a leaf index.
+	#[cfg_attr(feature = "std", error("Error translation block number into leaf index"))]
 	BlockNumToLeafIndex,
 	/// Error while pushing new node.
+	#[cfg_attr(feature = "std", error("Error pushing new node"))]
 	Push,
 	/// Error getting the new root.
+	#[cfg_attr(feature = "std", error("Error getting new root"))]
 	GetRoot,
-	/// Error commiting changes.
+	/// Error committing changes.
+	#[cfg_attr(feature = "std", error("Error committing changes"))]
 	Commit,
 	/// Error during proof generation.
+	#[cfg_attr(feature = "std", error("Error generating proof"))]
 	GenerateProof,
 	/// Proof verification error.
+	#[cfg_attr(feature = "std", error("Invalid proof"))]
 	Verify,
 	/// Leaf not found in the storage.
+	#[cfg_attr(feature = "std", error("Leaf was not found"))]
 	LeafNotFound,
 	/// Mmr Pallet not included in runtime
+	#[cfg_attr(feature = "std", error("MMR pallet not included in runtime"))]
 	PalletNotIncluded,
 	/// Cannot find the requested leaf index
+	#[cfg_attr(feature = "std", error("Requested leaf index invalid"))]
 	InvalidLeafIndex,
 	/// The provided best know block number is invalid.
+	#[cfg_attr(feature = "std", error("Provided best known block number invalid"))]
 	InvalidBestKnownBlock,
 }
 
@@ -437,53 +416,31 @@ impl Error {
 sp_api::decl_runtime_apis! {
 	/// API to interact with MMR pallet.
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
-		/// Generate MMR proof for a block with a specified `block_number`.
-		fn generate_proof(block_number: BlockNumber) -> Result<(EncodableOpaqueLeaf, Proof<Hash>), Error>;
-
-		/// Verify MMR proof against on-chain MMR.
-		///
-		/// Note this function will use on-chain MMR root hash and check if the proof
-		/// matches the hash.
-		/// See [Self::verify_proof_stateless] for a stateless verifier.
-		fn verify_proof(leaf: EncodableOpaqueLeaf, proof: Proof<Hash>) -> Result<(), Error>;
-
-		/// Verify MMR proof against given root hash.
-		///
-		/// Note this function does not require any on-chain storage - the
-		/// proof is verified against given MMR root hash.
-		///
-		/// The leaf data is expected to be encoded in its compact form.
-		fn verify_proof_stateless(root: Hash, leaf: EncodableOpaqueLeaf, proof: Proof<Hash>)
-			-> Result<(), Error>;
-
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
 
-		/// Generate MMR proof for a series of blocks with the specified block numbers.
-		fn generate_batch_proof(block_numbers: Vec<BlockNumber>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
-
-		/// Generate MMR proof for a series of `block_numbers`, given the `best_known_block_number`.
-		fn generate_historical_batch_proof(
+		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
+		/// use historical MMR state at given block height `n`. Else, use current MMR state.
+		fn generate_proof(
 			block_numbers: Vec<BlockNumber>,
-			best_known_block_number: BlockNumber
-		) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<Hash>), Error>;
+			best_known_block_number: Option<BlockNumber>
+		) -> Result<(Vec<EncodableOpaqueLeaf>, Proof<Hash>), Error>;
 
 		/// Verify MMR proof against on-chain MMR for a batch of leaves.
 		///
-		/// Note this function will use on-chain MMR root hash and check if the proof
-		/// matches the hash.
+		/// Note this function will use on-chain MMR root hash and check if the proof matches the hash.
 		/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
-		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
-		fn verify_batch_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>) -> Result<(), Error>;
+		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [Proof]
+		fn verify_proof(leaves: Vec<EncodableOpaqueLeaf>, proof: Proof<Hash>) -> Result<(), Error>;
 
-		/// Verify MMR proof against given root hash or a batch of leaves.
+		/// Verify MMR proof against given root hash for a batch of leaves.
 		///
 		/// Note this function does not require any on-chain storage - the
 		/// proof is verified against given MMR root hash.
 		///
 		/// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
-		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [BatchProof]
-		fn verify_batch_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: BatchProof<Hash>)
+		/// same position in both the `leaves` vector and the `leaf_indices` vector contained in the [Proof]
+		fn verify_proof_stateless(root: Hash, leaves: Vec<EncodableOpaqueLeaf>, proof: Proof<Hash>)
 			-> Result<(), Error>;
 	}
 }
@@ -508,7 +465,7 @@ mod tests {
 	fn should_encode_decode_proof() {
 		// given
 		let proof: TestProof = Proof {
-			leaf_index: 5,
+			leaf_indices: vec![5],
 			leaf_count: 10,
 			items: vec![
 				hex("c3e7ba6b511162fead58f2c8b5764ce869ed1118011ac37392522ed16720bbcd"),

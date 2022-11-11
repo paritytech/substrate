@@ -17,6 +17,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../transaction-payment" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../../primitives/runtime" }
+sp-weights = { version = "4.0.0", default-features = false, path = "../../../../primitives/weights" }
 
 [features]
 default = ["std"]
@@ -25,4 +26,5 @@ std = [
 	"pallet-transaction-payment/std",
 	"sp-api/std",
 	"sp-runtime/std",
+	"sp-weights/std",
 ]
