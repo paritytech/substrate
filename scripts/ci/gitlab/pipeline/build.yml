@@ -127,6 +127,8 @@ build-subkey-macos:
     - sha256sum ./artifacts/subkey/subkey | tee ./artifacts/subkey/subkey.sha256
     - cp -r ./scripts/ci/docker/subkey.Dockerfile ./artifacts/subkey/
   after_script: [""]
+  # remove after https://github.com/paritytech/ci_cd/issues/669
+  allow_failure:                   true
   tags:
     - osx
 

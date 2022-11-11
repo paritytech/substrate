@@ -416,6 +416,8 @@ cargo-check-macos:
     - !reference [.rust-info-script, script]
   script:
     - SKIP_WASM_BUILD=1 time cargo check --locked --release -j 10
+  # remove after https://github.com/paritytech/ci_cd/issues/669
+  allow_failure:                   true
   tags:
     - osx
 
