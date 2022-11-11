@@ -34,11 +34,11 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use futures::executor;
-use node_primitives::Block;
-use node_runtime::{
-	constants::currency::DOLLARS, AccountId, BalancesCall, Call, CheckedExtrinsic, MinimumPeriod,
-	Signature, SystemCall, UncheckedExtrinsic,
+use kitchensink_runtime::{
+	constants::currency::DOLLARS, AccountId, BalancesCall, CheckedExtrinsic, MinimumPeriod,
+	RuntimeCall, Signature, SystemCall, UncheckedExtrinsic,
 };
+use node_primitives::Block;
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::{
 	execution_extensions::{ExecutionExtensions, ExecutionStrategies},
@@ -304,23 +304,25 @@ impl<'a> Iterator for BlockContentIterator<'a> {
 			CheckedExtrinsic {
 				signed: Some((
 					sender,
-					signed_extra(0, node_runtime::ExistentialDeposit::get() + 1),
+					signed_extra(0, kitchensink_runtime::ExistentialDeposit::get() + 1),
 				)),
 				function: match self.content.block_type {
 					BlockType::RandomTransfersKeepAlive =>
-						Call::Balances(BalancesCall::transfer_keep_alive {
+						RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
 							dest: sp_runtime::MultiAddress::Id(receiver),
-							value: node_runtime::ExistentialDeposit::get() + 1,
+							value: kitchensink_runtime::ExistentialDeposit::get() + 1,
 						}),
 					BlockType::RandomTransfersReaping => {
-						Call::Balances(BalancesCall::transfer {
+						RuntimeCall::Balances(BalancesCall::transfer {
 							dest: sp_runtime::MultiAddress::Id(receiver),
 							// Transfer so that ending balance would be 1 less than existential
 							// deposit so that we kill the sender account.
-							value: 100 * DOLLARS - (node_runtime::ExistentialDeposit::get() - 1),
+							value: 100 * DOLLARS -
+								(kitchensink_runtime::ExistentialDeposit::get() - 1),
 						})
 					},
-					BlockType::Noop => Call::System(SystemCall::remark { remark: Vec::new() }),
+					BlockType::Noop =>
+						RuntimeCall::System(SystemCall::remark { remark: Vec::new() }),
 				},
 			},
 			self.runtime_version.spec_version,
@@ -387,11 +389,10 @@ impl BenchDb {
 		keyring: &BenchKeyring,
 	) -> (Client, std::sync::Arc<Backend>, TaskExecutor) {
 		let db_config = sc_client_db::DatabaseSettings {
-			state_cache_size: 16 * 1024 * 1024,
-			state_cache_child_ratio: Some((0, 100)),
+			trie_cache_maximum_size: Some(16 * 1024 * 1024),
 			state_pruning: Some(PruningMode::ArchiveAll),
 			source: database_type.into_settings(dir.into()),
-			keep_blocks: sc_client_db::KeepBlocks::All,
+			blocks_pruning: sc_client_db::BlocksPruning::KeepAll,
 		};
 		let task_executor = TaskExecutor::new();
 
@@ -592,9 +593,9 @@ impl BenchKeyring {
 	}
 
 	/// Generate genesis with accounts from this keyring endowed with some balance.
-	pub fn generate_genesis(&self) -> node_runtime::GenesisConfig {
+	pub fn generate_genesis(&self) -> kitchensink_runtime::GenesisConfig {
 		crate::genesis::config_endowed(
-			Some(node_runtime::wasm_binary_unwrap()),
+			Some(kitchensink_runtime::wasm_binary_unwrap()),
 			self.collect_account_ids(),
 		)
 	}

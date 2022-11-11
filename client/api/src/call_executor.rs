@@ -18,13 +18,11 @@
 
 //! A method call executor interface.
 
-use codec::{Decode, Encode};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
-use sp_core::NativeOrEncoded;
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{ExecutionManager, ExecutionStrategy, OverlayedChanges, StorageProof};
-use std::{cell::RefCell, panic::UnwindSafe, result};
+use std::cell::RefCell;
 
 use crate::execution_extensions::ExecutionExtensions;
 use sp_api::{ProofRecorder, StorageTransactionCache};
@@ -68,11 +66,9 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// of the execution context.
 	fn contextual_call<
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>,
+		) -> Result<Vec<u8>, Self::Error>,
 	>(
 		&self,
 		at: &BlockId<B>,
@@ -85,10 +81,9 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 			>,
 		>,
 		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
 		proof_recorder: &Option<ProofRecorder<B>>,
 		extensions: Option<Extensions>,
-	) -> sp_blockchain::Result<NativeOrEncoded<R>>
+	) -> sp_blockchain::Result<Vec<u8>>
 	where
 		ExecutionManager<EM>: Clone;
 

@@ -512,8 +512,8 @@ impl KeystoreInner {
 	/// Returns `None` if the keystore only exists in-memory and there isn't any path to provide.
 	fn key_file_path(&self, public: &[u8], key_type: KeyTypeId) -> Option<PathBuf> {
 		let mut buf = self.path.as_ref()?.clone();
-		let key_type = hex::encode(key_type.0);
-		let key = hex::encode(public);
+		let key_type = array_bytes::bytes2hex("", &key_type.0);
+		let key = array_bytes::bytes2hex("", public);
 		buf.push(key_type + key.as_str());
 		Some(buf)
 	}
@@ -534,7 +534,7 @@ impl KeystoreInner {
 
 				// skip directories and non-unicode file names (hex is unicode)
 				if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-					match hex::decode(name) {
+					match array_bytes::hex2bytes(name) {
 						Ok(ref hex) if hex.len() > 4 => {
 							if hex[0..4] != id.0 {
 								continue
@@ -739,7 +739,7 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let store = LocalKeystore::open(temp_dir.path(), None).unwrap();
 
-		let file_name = temp_dir.path().join(hex::encode(&SR25519.0[..2]));
+		let file_name = temp_dir.path().join(array_bytes::bytes2hex("", &SR25519.0[..2]));
 		fs::write(file_name, "test").expect("Invalid file is written");
 
 		assert!(SyncCryptoStore::sr25519_public_keys(&store, SR25519).is_empty());

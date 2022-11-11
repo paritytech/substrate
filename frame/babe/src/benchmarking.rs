@@ -17,6 +17,8 @@
 
 //! Benchmarks for the BABE Pallet.
 
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 use frame_benchmarking::benchmarks;
 
@@ -69,31 +71,4 @@ benchmarks! {
 		crate::mock::new_test_ext(3),
 		crate::mock::Test,
 	)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use crate::mock::*;
-
-	#[test]
-	fn test_generate_equivocation_report_blob() {
-		let (pairs, mut ext) = new_test_ext_with_pairs(3);
-
-		let offending_authority_index = 0;
-		let offending_authority_pair = &pairs[0];
-
-		ext.execute_with(|| {
-			start_era(1);
-
-			let equivocation_proof = generate_equivocation_proof(
-				offending_authority_index,
-				offending_authority_pair,
-				CurrentSlot::<Test>::get() + 1,
-			);
-
-			println!("equivocation_proof: {:?}", equivocation_proof);
-			println!("equivocation_proof.encode(): {:?}", equivocation_proof.encode());
-		});
-	}
 }

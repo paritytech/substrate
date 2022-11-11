@@ -28,7 +28,9 @@ mod keyword {
 	syn::custom_keyword!(getter);
 	syn::custom_keyword!(storage_prefix);
 	syn::custom_keyword!(unbounded);
+	syn::custom_keyword!(whitelist_storage);
 	syn::custom_keyword!(OptionQuery);
+	syn::custom_keyword!(ResultQuery);
 	syn::custom_keyword!(ValueQuery);
 }
 
@@ -36,16 +38,21 @@ mod keyword {
 /// * `#[pallet::getter(fn dummy)]`
 /// * `#[pallet::storage_prefix = "CustomName"]`
 /// * `#[pallet::unbounded]`
+/// * `#[pallet::whitelist_storage]
 pub enum PalletStorageAttr {
 	Getter(syn::Ident, proc_macro2::Span),
 	StorageName(syn::LitStr, proc_macro2::Span),
 	Unbounded(proc_macro2::Span),
+	WhitelistStorage(proc_macro2::Span),
 }
 
 impl PalletStorageAttr {
 	fn attr_span(&self) -> proc_macro2::Span {
 		match self {
-			Self::Getter(_, span) | Self::StorageName(_, span) | Self::Unbounded(span) => *span,
+			Self::Getter(_, span) |
+			Self::StorageName(_, span) |
+			Self::Unbounded(span) |
+			Self::WhitelistStorage(span) => *span,
 		}
 	}
 }
@@ -83,6 +90,9 @@ impl syn::parse::Parse for PalletStorageAttr {
 			content.parse::<keyword::unbounded>()?;
 
 			Ok(Self::Unbounded(attr_span))
+		} else if lookahead.peek(keyword::whitelist_storage) {
+			content.parse::<keyword::whitelist_storage>()?;
+			Ok(Self::WhitelistStorage(attr_span))
 		} else {
 			Err(lookahead.error())
 		}
@@ -93,6 +103,7 @@ struct PalletStorageAttrInfo {
 	getter: Option<syn::Ident>,
 	rename_as: Option<syn::LitStr>,
 	unbounded: bool,
+	whitelisted: bool,
 }
 
 impl PalletStorageAttrInfo {
@@ -100,12 +111,14 @@ impl PalletStorageAttrInfo {
 		let mut getter = None;
 		let mut rename_as = None;
 		let mut unbounded = false;
+		let mut whitelisted = false;
 		for attr in attrs {
 			match attr {
 				PalletStorageAttr::Getter(ident, ..) if getter.is_none() => getter = Some(ident),
 				PalletStorageAttr::StorageName(name, ..) if rename_as.is_none() =>
 					rename_as = Some(name),
 				PalletStorageAttr::Unbounded(..) if !unbounded => unbounded = true,
+				PalletStorageAttr::WhitelistStorage(..) if !whitelisted => whitelisted = true,
 				attr =>
 					return Err(syn::Error::new(
 						attr.attr_span(),
@@ -114,7 +127,7 @@ impl PalletStorageAttrInfo {
 			}
 		}
 
-		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded })
+		Ok(PalletStorageAttrInfo { getter, rename_as, unbounded, whitelisted })
 	}
 }
 
@@ -129,6 +142,7 @@ pub enum Metadata {
 
 pub enum QueryKind {
 	OptionQuery,
+	ResultQuery(syn::Path, syn::Ident),
 	ValueQuery,
 }
 
@@ -153,7 +167,7 @@ pub struct StorageDef {
 	/// Optional expression that evaluates to a type that can be used as StoragePrefix instead of
 	/// ident.
 	pub rename_as: Option<syn::LitStr>,
-	/// Whereas the querytype of the storage is OptionQuery or ValueQuery.
+	/// Whereas the querytype of the storage is OptionQuery, ResultQuery or ValueQuery.
 	/// Note that this is best effort as it can't be determined when QueryKind is generic, and
 	/// result can be false if user do some unexpected type alias.
 	pub query_kind: Option<QueryKind>,
@@ -169,6 +183,8 @@ pub struct StorageDef {
 	pub named_generics: Option<StorageGenerics>,
 	/// If the value stored in this storage is unbounded.
 	pub unbounded: bool,
+	/// Whether or not reads to this storage key will be ignored by benchmarking
+	pub whitelisted: bool,
 }
 
 /// The parsed generic from the
@@ -539,8 +555,8 @@ fn process_generics(
 		found => {
 			let msg = format!(
 				"Invalid pallet::storage, expected ident: `StorageValue` or \
-				`StorageMap` or `StorageDoubleMap` or `StorageNMap` in order to expand metadata, \
-				found `{}`.",
+				`StorageMap` or `CountedStorageMap` or `StorageDoubleMap` or `StorageNMap` \
+				in order to expand metadata, found `{}`.",
 				found,
 			);
 			return Err(syn::Error::new(segment.ident.span(), msg))
@@ -662,6 +678,7 @@ impl StorageDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		dev_mode: bool,
 	) -> syn::Result<Self> {
 		let item = if let syn::Item::Type(item) = item {
 			item
@@ -670,9 +687,11 @@ impl StorageDef {
 		};
 
 		let attrs: Vec<PalletStorageAttr> = helper::take_item_pallet_attrs(&mut item.attrs)?;
-		let PalletStorageAttrInfo { getter, rename_as, unbounded } =
+		let PalletStorageAttrInfo { getter, rename_as, mut unbounded, whitelisted } =
 			PalletStorageAttrInfo::from_attrs(attrs)?;
 
+		// set all storages to be unbounded if dev_mode is enabled
+		unbounded |= dev_mode;
 		let cfg_attrs = helper::get_item_cfg_attrs(&item.attrs);
 
 		let instances = vec![helper::check_type_def_gen(&item.generics, item.ident.span())?];
@@ -695,21 +714,105 @@ impl StorageDef {
 		let (named_generics, metadata, query_kind) = process_generics(&typ.path.segments[0])?;
 
 		let query_kind = query_kind
-			.map(|query_kind| match query_kind {
-				syn::Type::Path(path)
-					if path.path.segments.last().map_or(false, |s| s.ident == "OptionQuery") =>
-					Some(QueryKind::OptionQuery),
-				syn::Type::Path(path)
-					if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery") =>
-					Some(QueryKind::ValueQuery),
-				_ => None,
+			.map(|query_kind| {
+				use syn::{
+					AngleBracketedGenericArguments, GenericArgument, Path, PathArguments, Type,
+					TypePath,
+				};
+
+				let result_query = match query_kind {
+					Type::Path(path)
+						if path
+							.path
+							.segments
+							.last()
+							.map_or(false, |s| s.ident == "OptionQuery") =>
+						return Ok(Some(QueryKind::OptionQuery)),
+					Type::Path(TypePath { path: Path { segments, .. }, .. })
+						if segments.last().map_or(false, |s| s.ident == "ResultQuery") =>
+						segments
+							.last()
+							.expect("segments is checked to have the last value; qed")
+							.clone(),
+					Type::Path(path)
+						if path.path.segments.last().map_or(false, |s| s.ident == "ValueQuery") =>
+						return Ok(Some(QueryKind::ValueQuery)),
+					_ => return Ok(None),
+				};
+
+				let error_type = match result_query.arguments {
+					PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+						args, ..
+					}) => {
+						if args.len() != 1 {
+							let msg = format!(
+								"Invalid pallet::storage, unexpected number of generic arguments \
+								for ResultQuery, expected 1 type argument, found {}",
+								args.len(),
+							);
+							return Err(syn::Error::new(args.span(), msg))
+						}
+
+						args[0].clone()
+					},
+					args => {
+						let msg = format!(
+							"Invalid pallet::storage, unexpected generic args for ResultQuery, \
+							expected angle-bracketed arguments, found `{}`",
+							args.to_token_stream().to_string()
+						);
+						return Err(syn::Error::new(args.span(), msg))
+					},
+				};
+
+				match error_type {
+					GenericArgument::Type(Type::Path(TypePath {
+						path: Path { segments: err_variant, leading_colon },
+						..
+					})) => {
+						if err_variant.len() < 2 {
+							let msg = format!(
+								"Invalid pallet::storage, unexpected number of path segments for \
+								the generics in ResultQuery, expected a path with at least 2 \
+								segments, found {}",
+								err_variant.len(),
+							);
+							return Err(syn::Error::new(err_variant.span(), msg))
+						}
+						let mut error = err_variant.clone();
+						let err_variant = error
+							.pop()
+							.expect("Checked to have at least 2; qed")
+							.into_value()
+							.ident;
+
+						// Necessary here to eliminate the last double colon
+						let last =
+							error.pop().expect("Checked to have at least 2; qed").into_value();
+						error.push_value(last);
+
+						Ok(Some(QueryKind::ResultQuery(
+							syn::Path { leading_colon, segments: error },
+							err_variant,
+						)))
+					},
+					gen_arg => {
+						let msg = format!(
+							"Invalid pallet::storage, unexpected generic argument kind, expected a \
+							type path to a `PalletError` enum variant, found `{}`",
+							gen_arg.to_token_stream().to_string(),
+						);
+						Err(syn::Error::new(gen_arg.span(), msg))
+					},
+				}
 			})
-			.unwrap_or(Some(QueryKind::OptionQuery)); // This value must match the default generic.
+			.transpose()?
+			.unwrap_or(Some(QueryKind::OptionQuery));
 
 		if let (None, Some(getter)) = (query_kind.as_ref(), getter.as_ref()) {
 			let msg = "Invalid pallet::storage, cannot generate getter because QueryKind is not \
-				identifiable. QueryKind must be `OptionQuery`, `ValueQuery`, or default one to be \
-				identifiable.";
+				identifiable. QueryKind must be `OptionQuery`, `ResultQuery`, `ValueQuery`, or default \
+				one to be identifiable.";
 			return Err(syn::Error::new(getter.span(), msg))
 		}
 
@@ -728,6 +831,7 @@ impl StorageDef {
 			cfg_attrs,
 			named_generics,
 			unbounded,
+			whitelisted,
 		})
 	}
 }

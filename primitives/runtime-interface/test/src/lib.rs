@@ -23,7 +23,7 @@ use sp_runtime_interface::*;
 use sp_runtime_interface_test_wasm::{test_api::HostFunctions, wasm_binary_unwrap};
 use sp_runtime_interface_test_wasm_deprecated::wasm_binary_unwrap as wasm_binary_deprecated_unwrap;
 
-use sc_executor_common::runtime_blob::RuntimeBlob;
+use sc_executor_common::{runtime_blob::RuntimeBlob, wasm_runtime::AllocationStats};
 use sp_wasm_interface::{ExtendedHostFunctions, HostFunctions as HostFunctionsT};
 
 use std::{
@@ -36,7 +36,7 @@ type TestExternalities = sp_state_machine::TestExternalities<sp_runtime::traits:
 fn call_wasm_method_with_result<HF: HostFunctionsT>(
 	binary: &[u8],
 	method: &str,
-) -> Result<TestExternalities, String> {
+) -> (Result<TestExternalities, String>, Option<AllocationStats>) {
 	let mut ext = TestExternalities::default();
 	let mut ext_ext = ext.ext();
 
@@ -44,20 +44,21 @@ fn call_wasm_method_with_result<HF: HostFunctionsT>(
 		ExtendedHostFunctions<sp_io::SubstrateHostFunctions, HF>,
 	>::new(sc_executor::WasmExecutionMethod::Interpreted, Some(8), 8, None, 2);
 
-	executor
-		.uncached_call(
-			RuntimeBlob::uncompress_if_needed(binary).expect("Failed to parse binary"),
-			&mut ext_ext,
-			false,
-			method,
-			&[],
-		)
-		.map_err(|e| format!("Failed to execute `{}`: {}", method, e))?;
-	Ok(ext)
+	let (result, allocation_stats) = executor.uncached_call_with_allocation_stats(
+		RuntimeBlob::uncompress_if_needed(binary).expect("Failed to parse binary"),
+		&mut ext_ext,
+		false,
+		method,
+		&[],
+	);
+	let result = result
+		.map_err(|e| format!("Failed to execute `{}`: {}", method, e))
+		.map(|_| ext);
+	(result, allocation_stats)
 }
 
 fn call_wasm_method<HF: HostFunctionsT>(binary: &[u8], method: &str) -> TestExternalities {
-	call_wasm_method_with_result::<HF>(binary, method).unwrap()
+	call_wasm_method_with_result::<HF>(binary, method).0.unwrap()
 }
 
 #[test]
@@ -103,8 +104,9 @@ fn test_return_input_public_key() {
 
 #[test]
 fn host_function_not_found() {
-	let err =
-		call_wasm_method_with_result::<()>(wasm_binary_unwrap(), "test_return_data").unwrap_err();
+	let err = call_wasm_method_with_result::<()>(wasm_binary_unwrap(), "test_return_data")
+		.0
+		.unwrap_err();
 
 	assert!(err.contains("Instantiation: Export "));
 	assert!(err.contains(" not found"));
@@ -235,4 +237,44 @@ fn test_tracing() {
 #[test]
 fn test_return_input_as_tuple() {
 	call_wasm_method::<HostFunctions>(wasm_binary_unwrap(), "test_return_input_as_tuple");
+}
+
+#[test]
+fn test_returning_option_bytes_from_a_host_function_is_efficient() {
+	let (result, stats_vec) = call_wasm_method_with_result::<HostFunctions>(
+		wasm_binary_unwrap(),
+		"test_return_option_vec",
+	);
+	result.unwrap();
+	let (result, stats_bytes) = call_wasm_method_with_result::<HostFunctions>(
+		wasm_binary_unwrap(),
+		"test_return_option_bytes",
+	);
+	result.unwrap();
+
+	let stats_vec = stats_vec.unwrap();
+	let stats_bytes = stats_bytes.unwrap();
+
+	// The way we currently implement marshaling of `Option<Vec<u8>>` through
+	// the WASM FFI boundary from the host to the runtime requires that it is
+	// marshaled through SCALE. This is quite inefficient as it requires two
+	// memory allocations inside of the runtime:
+	//
+	//   1) the first allocation to copy the SCALE-encoded blob into the runtime;
+	//   2) and another allocation for the resulting `Vec<u8>` when decoding that blob.
+	//
+	// Both of these allocations are are as big as the `Vec<u8>` which is being
+	// passed to the runtime. This is especially bad when fetching big values
+	// from storage, as it can lead to an out-of-memory situation.
+	//
+	// Our `Option<Bytes>` marshaling is better; it still must go through SCALE,
+	// and it still requires two allocations, however since `Bytes` is zero-copy
+	// only the first allocation is `Vec<u8>`-sized, and the second allocation
+	// which creates the deserialized `Bytes` is tiny, and is only necessary because
+	// the underlying `Bytes` buffer from which we're deserializing gets automatically
+	// turned into an `Arc`.
+	//
+	// So this assertion tests that deserializing `Option<Bytes>` allocates less than
+	// deserializing `Option<Vec<u8>>`.
+	assert_eq!(stats_bytes.bytes_allocated_sum + 16 * 1024 + 8, stats_vec.bytes_allocated_sum);
 }

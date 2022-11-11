@@ -18,6 +18,7 @@
 //! Merkle Mountain Range utilities.
 
 use crate::primitives::{LeafIndex, NodeIndex};
+use mmr_lib::helper;
 
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {
@@ -45,33 +46,80 @@ impl NodesUtils {
 		2 * self.no_of_leaves - self.number_of_peaks()
 	}
 
-	/// Calculate maximal depth of the MMR.
-	pub fn depth(&self) -> u32 {
-		if self.no_of_leaves == 0 {
+	/// Calculate `LeafIndex` for the leaf that added `node_index` to the MMR.
+	pub fn leaf_index_that_added_node(node_index: NodeIndex) -> LeafIndex {
+		let rightmost_leaf_pos = Self::rightmost_leaf_node_index_from_pos(node_index);
+		Self::leaf_node_index_to_leaf_index(rightmost_leaf_pos)
+	}
+
+	// Translate a _leaf_ `NodeIndex` to its `LeafIndex`.
+	fn leaf_node_index_to_leaf_index(pos: NodeIndex) -> LeafIndex {
+		if pos == 0 {
 			return 0
 		}
+		let peaks = helper::get_peaks(pos);
+		(pos + peaks.len() as u64) >> 1
+	}
 
-		64 - self.no_of_leaves.next_power_of_two().leading_zeros()
+	// Starting from any node position get position of rightmost leaf; this is the leaf
+	// responsible for the addition of node `pos`.
+	fn rightmost_leaf_node_index_from_pos(pos: NodeIndex) -> NodeIndex {
+		pos - (helper::pos_height_in_tree(pos) as u64)
+	}
+
+	/// Starting from any leaf index, get the sequence of positions of the nodes added
+	/// to the mmr when this leaf was added (inclusive of the leaf's position itself).
+	/// That is, all of these nodes are right children of their respective parents.
+	pub fn right_branch_ending_in_leaf(leaf_index: LeafIndex) -> crate::Vec<NodeIndex> {
+		let pos = helper::leaf_index_to_pos(leaf_index);
+		let num_parents = leaf_index.trailing_ones() as u64;
+		return (pos..=pos + num_parents).collect()
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use mmr_lib::helper::leaf_index_to_pos;
 
 	#[test]
-	fn should_calculate_number_of_leaves_correctly() {
-		assert_eq!(
-			vec![0, 1, 2, 3, 4, 9, 15, 21]
-				.into_iter()
-				.map(|n| NodesUtils::new(n).depth())
-				.collect::<Vec<_>>(),
-			vec![0, 1, 2, 3, 3, 5, 5, 6]
-		);
+	fn should_calculate_node_index_from_leaf_index() {
+		for index in 0..100000 {
+			let pos = leaf_index_to_pos(index);
+			assert_eq!(NodesUtils::leaf_node_index_to_leaf_index(pos), index);
+		}
 	}
 
 	#[test]
-	fn should_calculate_depth_correclty() {
+	fn should_calculate_right_branch_correctly() {
+		fn left_jump_sequence(leaf_index: LeafIndex) -> Vec<u64> {
+			let pos = leaf_index_to_pos(leaf_index);
+			let mut right_branch_ending_in_leaf = vec![pos];
+			let mut next_pos = pos + 1;
+			while mmr_lib::helper::pos_height_in_tree(next_pos) > 0 {
+				right_branch_ending_in_leaf.push(next_pos);
+				next_pos += 1;
+			}
+			right_branch_ending_in_leaf
+		}
+
+		for leaf_index in 0..100000 {
+			let pos = mmr_lib::helper::leaf_index_to_pos(leaf_index);
+			assert_eq!(NodesUtils::right_branch_ending_in_leaf(pos), left_jump_sequence(pos));
+		}
+	}
+
+	#[test]
+	fn should_calculate_rightmost_leaf_node_index_from_pos() {
+		for pos in 0..100000 {
+			let leaf_pos = NodesUtils::rightmost_leaf_node_index_from_pos(pos);
+			let leaf_index = NodesUtils::leaf_node_index_to_leaf_index(leaf_pos);
+			assert!(NodesUtils::right_branch_ending_in_leaf(leaf_index).contains(&pos));
+		}
+	}
+
+	#[test]
+	fn should_calculate_depth_correctly() {
 		assert_eq!(
 			vec![0, 1, 2, 3, 4, 9, 15, 21]
 				.into_iter()

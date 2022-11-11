@@ -20,20 +20,21 @@ rocksdb = ["sc-client-db/rocksdb"]
 wasmtime = ["sc-executor/wasmtime"]
 # exposes the client type
 test-helpers = []
+runtime-benchmarks = ["sc-client-db/runtime-benchmarks"]
 
 [dependencies]
-jsonrpsee = { version = "0.14.0", features = ["server"] }
+jsonrpsee = { version = "0.15.1", features = ["server"] }
 thiserror = "1.0.30"
 futures = "0.3.21"
 rand = "0.7.3"
-parking_lot = "0.12.0"
+parking_lot = "0.12.1"
 log = "0.4.17"
 futures-timer = "3.0.1"
 exit-future = "0.2.0"
-pin-project = "1.0.10"
+pin-project = "1.0.12"
 hash-db = "0.15.2"
 serde = "1.0.136"
-serde_json = "1.0.79"
+serde_json = "1.0.85"
 sc-keystore = { version = "4.0.0-dev", path = "../keystore" }
 sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
 sp-trie = { version = "6.0.0", path = "../../primitives/trie" }
@@ -50,8 +51,12 @@ sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/comm
 sc-consensus = { version = "0.10.0-dev", path = "../../client/consensus/common" }
 sp-inherents = { version = "4.0.0-dev", path = "../../primitives/inherents" }
 sp-storage = { version = "6.0.0", path = "../../primitives/storage" }
-sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-network = { version = "0.10.0-dev", path = "../network" }
+sc-network-bitswap = { version = "0.10.0-dev", path = "../network/bitswap" }
+sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
+sc-network-light = { version = "0.10.0-dev", path = "../network/light" }
+sc-network-sync = { version = "0.10.0-dev", path = "../network/sync" }
+sc-network-transactions = { version = "0.10.0-dev", path = "../network/transactions" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
@@ -64,6 +69,7 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sp-transaction-storage-proof = { version = "4.0.0-dev", path = "../../primitives/transaction-storage-proof" }
 sc-rpc-server = { version = "4.0.0-dev", path = "../rpc-servers" }
 sc-rpc = { version = "4.0.0-dev", path = "../rpc" }
+sc-rpc-spec-v2 = { version = "0.10.0-dev", path = "../rpc-spec-v2" }
 sc-block-builder = { version = "0.10.0-dev", path = "../block-builder" }
 sp-block-builder = { version = "4.0.0-dev", path = "../../primitives/block-builder" }
 sc-informant = { version = "0.10.0-dev", path = "../informant" }
@@ -75,13 +81,14 @@ sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 sc-sysinfo = { version = "6.0.0-dev", path = "../sysinfo" }
 tracing = "0.1.29"
 tracing-futures = { version = "0.2.4" }
-parity-util-mem = { version = "0.11.0", default-features = false, features = [
+parity-util-mem = { version = "0.12.0", default-features = false, features = [
 	"primitive-types",
 ] }
-async-trait = "0.1.50"
+async-trait = "0.1.57"
 tokio = { version = "1.17.0", features = ["time", "rt-multi-thread", "parking_lot"] }
 tempfile = "3.1.0"
 directories = "4.0.1"
+static_init = "1.0.3"
 
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }

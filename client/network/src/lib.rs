@@ -249,39 +249,39 @@ mod discovery;
 mod peer_info;
 mod protocol;
 mod request_responses;
-mod schema;
 mod service;
 mod transport;
-mod utils;
 
-pub mod bitswap;
 pub mod config;
-pub mod error;
 pub mod network_state;
-pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::{
-	event::{DhtEvent, Event, ObservedRole},
-	PeerInfo,
-};
-pub use sc_network_light::light_client_requests;
-pub use sc_network_sync::{
-	block_request_handler,
-	state::StateDownloadProgress,
-	state_request_handler,
-	warp::{WarpSyncPhase, WarpSyncProgress},
-	warp_request_handler, SyncState,
+pub use protocol::PeerInfo;
+pub use sc_network_common::{
+	protocol::{
+		event::{DhtEvent, Event},
+		role::ObservedRole,
+		ProtocolName,
+	},
+	request_responses::{IfDisconnected, RequestFailure},
+	service::{
+		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
+		SigningError,
+	},
+	sync::{
+		warp::{WarpSyncPhase, WarpSyncProgress},
+		StateDownloadProgress, SyncState,
+	},
 };
 pub use service::{
-	DecodingError, IfDisconnected, KademliaKey, Keypair, NetworkService, NetworkWorker,
-	NotificationSender, NotificationSenderReady, OutboundFailure, PublicKey, RequestFailure,
-	Signature, SigningError,
+	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
+	NotificationSenderReady, OutboundFailure, PublicKey,
 };
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 pub use sc_peerset::ReputationChange;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// The maximum allowed number of established connections per peer.
 ///
@@ -295,40 +295,13 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
-
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
-
-/// Trait for providing information about the local network state
-pub trait NetworkStateInfo {
-	/// Returns the local external addresses.
-	fn external_addresses(&self) -> Vec<Multiaddr>;
-
-	/// Returns the local Peer ID.
-	fn local_peer_id(&self) -> PeerId;
+/// Abstraction over syncing-related services
+pub trait ChainSyncInterface<B: BlockT>:
+	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + Send + Sync
+{
 }
 
-/// Overview status of the network.
-#[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
-	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
-	/// The total number of bytes received.
-	pub total_bytes_inbound: u64,
-	/// The total number of bytes sent.
-	pub total_bytes_outbound: u64,
-	/// State sync in progress.
-	pub state_sync: Option<StateDownloadProgress>,
-	/// Warp sync in progress.
-	pub warp_sync: Option<WarpSyncProgress<B>>,
+impl<T, B: BlockT> ChainSyncInterface<B> for T where
+	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>> + Send + Sync
+{
 }

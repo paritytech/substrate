@@ -69,11 +69,11 @@ use frame_support::{
 	ensure,
 	traits::{
 		schedule::{
-			v2::{Anon as ScheduleAnon, Named as ScheduleNamed},
-			DispatchTime, MaybeHashed,
+			v3::{Anon as ScheduleAnon, Named as ScheduleNamed},
+			DispatchTime,
 		},
-		Currency, Get, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling,
-		ReservableCurrency, VoteTally,
+		Currency, LockIdentifier, OnUnbalanced, OriginTrait, PollStatus, Polling, QueryPreimage,
+		ReservableCurrency, StorePreimage, VoteTally,
 	},
 	BoundedVec,
 };
@@ -92,10 +92,10 @@ use self::branch::{BeginDecidingBranch, OneFewerDecidingBranch, ServiceBranch};
 pub use self::{
 	pallet::*,
 	types::{
-		BalanceOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit, InsertSorted,
-		NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo, ReferendumInfoOf,
-		ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf, TrackIdOf, TrackInfo,
-		TrackInfoOf, TracksInfo, VotesOf,
+		BalanceOf, BoundedCallOf, CallOf, Curve, DecidingStatus, DecidingStatusOf, Deposit,
+		InsertSorted, NegativeImbalanceOf, PalletsOriginOf, ReferendumIndex, ReferendumInfo,
+		ReferendumInfoOf, ReferendumStatus, ReferendumStatusOf, ScheduleAddressOf, TallyOf,
+		TrackIdOf, TrackInfo, TrackInfoOf, TracksInfo, VotesOf,
 	},
 	weights::WeightInfo,
 };
@@ -107,6 +107,30 @@ mod tests;
 
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
+
+pub use frame_support::traits::Get;
+pub use sp_std::vec::Vec;
+
+#[macro_export]
+macro_rules! impl_tracksinfo_get {
+	($tracksinfo:ty, $balance:ty, $blocknumber:ty) => {
+		impl
+			$crate::Get<
+				$crate::Vec<(
+					<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
+					$crate::TrackInfo<$balance, $blocknumber>,
+				)>,
+			> for $tracksinfo
+		{
+			fn get() -> $crate::Vec<(
+				<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::Id,
+				$crate::TrackInfo<$balance, $blocknumber>,
+			)> {
+				<$tracksinfo as $crate::TracksInfo<$balance, $blocknumber>>::tracks().to_vec()
+			}
+		}
+	};
+}
 
 const ASSEMBLY_ID: LockIdentifier = *b"assembly";
 
@@ -123,31 +147,27 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Call: Parameter + Dispatchable<Origin = Self::Origin> + From<Call<Self, I>>;
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ From<Call<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeCall>
+			+ From<frame_system::Call<Self>>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// The Scheduler.
-		type Scheduler: ScheduleAnon<
-				Self::BlockNumber,
-				CallOf<Self, I>,
-				PalletsOriginOf<Self>,
-				Hash = Self::Hash,
-			> + ScheduleNamed<
-				Self::BlockNumber,
-				CallOf<Self, I>,
-				PalletsOriginOf<Self>,
-				Hash = Self::Hash,
-			>;
+		type Scheduler: ScheduleAnon<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>
+			+ ScheduleNamed<Self::BlockNumber, CallOf<Self, I>, PalletsOriginOf<Self>>;
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>;
 		// Origins and unbalances.
 		/// Origin from which proposals may be submitted.
-		type SubmitOrigin: EnsureOrigin<Self::Origin, Success = Self::AccountId>;
+		type SubmitOrigin: EnsureOrigin<Self::RuntimeOrigin, Success = Self::AccountId>;
 		/// Origin from which any vote may be cancelled.
-		type CancelOrigin: EnsureOrigin<Self::Origin>;
+		type CancelOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Origin from which any vote may be killed.
-		type KillOrigin: EnsureOrigin<Self::Origin>;
+		type KillOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Handler for the unbalanced reduction when slashing a preimage deposit.
 		type Slash: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 		/// The counting type for votes. Usually just balance.
@@ -183,11 +203,20 @@ pub mod pallet {
 
 		// The other stuff.
 		/// Information concerning the different referendum tracks.
-		type Tracks: TracksInfo<
-			BalanceOf<Self, I>,
-			Self::BlockNumber,
-			Origin = <Self::Origin as OriginTrait>::PalletsOrigin,
-		>;
+		#[pallet::constant]
+		type Tracks: Get<
+				Vec<(
+					<Self::Tracks as TracksInfo<BalanceOf<Self, I>, Self::BlockNumber>>::Id,
+					TrackInfo<BalanceOf<Self, I>, Self::BlockNumber>,
+				)>,
+			> + TracksInfo<
+				BalanceOf<Self, I>,
+				Self::BlockNumber,
+				RuntimeOrigin = <Self::RuntimeOrigin as OriginTrait>::PalletsOrigin,
+			>;
+
+		/// The preimage provider.
+		type Preimages: QueryPreimage + StorePreimage;
 	}
 
 	/// The next free referendum index, aka the number of referenda started so far.
@@ -220,14 +249,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A referendum has being submitted.
+		/// A referendum has been submitted.
 		Submitted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
 			/// The track (and by extension proposal dispatch origin) of this referendum.
 			track: TrackIdOf<T, I>,
-			/// The hash of the proposal up for referendum.
-			proposal_hash: T::Hash,
+			/// The proposal for the referendum.
+			proposal: BoundedCallOf<T, I>,
 		},
 		/// The decision deposit has been placed.
 		DecisionDepositPlaced {
@@ -260,8 +289,8 @@ pub mod pallet {
 			index: ReferendumIndex,
 			/// The track (and by extension proposal dispatch origin) of this referendum.
 			track: TrackIdOf<T, I>,
-			/// The hash of the proposal up for referendum.
-			proposal_hash: T::Hash,
+			/// The proposal for the referendum.
+			proposal: BoundedCallOf<T, I>,
 			/// The current tally of votes in this referendum.
 			tally: T::Tally,
 		},
@@ -323,7 +352,7 @@ pub mod pallet {
 		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
-		/// There are already a full complement of referendums in progress for this track.
+		/// There are already a full complement of referenda in progress for this track.
 		Full,
 		/// The queue of the track is empty.
 		QueueEmpty,
@@ -348,7 +377,7 @@ pub mod pallet {
 		/// - `origin`: must be `SubmitOrigin` and the account must have `SubmissionDeposit` funds
 		///   available.
 		/// - `proposal_origin`: The origin from which the proposal should be executed.
-		/// - `proposal_hash`: The hash of the proposal preimage.
+		/// - `proposal`: The proposal.
 		/// - `enactment_moment`: The moment that the proposal should be enacted.
 		///
 		/// Emits `Submitted`.
@@ -356,7 +385,7 @@ pub mod pallet {
 		pub fn submit(
 			origin: OriginFor<T>,
 			proposal_origin: Box<PalletsOriginOf<T>>,
-			proposal_hash: T::Hash,
+			proposal: BoundedCallOf<T, I>,
 			enactment_moment: DispatchTime<T::BlockNumber>,
 		) -> DispatchResult {
 			let who = T::SubmitOrigin::ensure_origin(origin)?;
@@ -370,11 +399,12 @@ pub mod pallet {
 				r
 			});
 			let now = frame_system::Pallet::<T>::block_number();
-			let nudge_call = Call::nudge_referendum { index };
+			let nudge_call =
+				T::Preimages::bound(CallOf::<T, I>::from(Call::nudge_referendum { index }))?;
 			let status = ReferendumStatus {
 				track,
 				origin: *proposal_origin,
-				proposal_hash,
+				proposal: proposal.clone(),
 				enactment: enactment_moment,
 				submitted: now,
 				submission_deposit,
@@ -386,7 +416,7 @@ pub mod pallet {
 			};
 			ReferendumInfoFor::<T, I>::insert(index, ReferendumInfo::Ongoing(status));
 
-			Self::deposit_event(Event::<T, I>::Submitted { index, track, proposal_hash });
+			Self::deposit_event(Event::<T, I>::Submitted { index, track, proposal });
 			Ok(())
 		}
 
@@ -618,7 +648,8 @@ impl<T: Config<I>, I: 'static> Polling<T::Tally> for Pallet<T, I> {
 		let mut status = ReferendumStatusOf::<T, I> {
 			track: class,
 			origin: frame_support::dispatch::RawOrigin::Root.into(),
-			proposal_hash: <T::Hashing as sp_runtime::traits::Hash>::hash_of(&index),
+			proposal: T::Preimages::bound(CallOf::<T, I>::from(Call::nudge_referendum { index }))
+				.map_err(|_| ())?,
 			enactment: DispatchTime::After(Zero::zero()),
 			submitted: now,
 			submission_deposit: Deposit { who: dummy_account_id, amount: Zero::zero() },
@@ -676,18 +707,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		track: &TrackInfoOf<T, I>,
 		desired: DispatchTime<T::BlockNumber>,
 		origin: PalletsOriginOf<T>,
-		call_hash: T::Hash,
+		call: BoundedCallOf<T, I>,
 	) {
 		let now = frame_system::Pallet::<T>::block_number();
 		let earliest_allowed = now.saturating_add(track.min_enactment_period);
 		let desired = desired.evaluate(now);
 		let ok = T::Scheduler::schedule_named(
-			(ASSEMBLY_ID, "enactment", index).encode(),
+			(ASSEMBLY_ID, "enactment", index).using_encoded(sp_io::hashing::blake2_256),
 			DispatchTime::At(desired.max(earliest_allowed)),
 			None,
 			63,
 			origin,
-			MaybeHashed::Hash(call_hash),
+			call,
 		)
 		.is_ok();
 		debug_assert!(ok, "LOGIC ERROR: bake_referendum/schedule_named failed");
@@ -695,17 +726,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Set an alarm to dispatch `call` at block number `when`.
 	fn set_alarm(
-		call: impl Into<CallOf<T, I>>,
+		call: BoundedCallOf<T, I>,
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = (when + alarm_interval - One::one()) / alarm_interval * alarm_interval;
+		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
+			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
-			MaybeHashed::Value(call.into()),
+			call,
 		)
 		.ok()
 		.map(|x| (when, x));
@@ -742,7 +774,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::DecisionStarted {
 			index,
 			tally: status.tally.clone(),
-			proposal_hash: status.proposal_hash,
+			proposal: status.proposal.clone(),
 			track: status.track,
 		});
 		let confirming = if is_passing {
@@ -752,7 +784,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			None
 		};
 		let deciding_status = DecidingStatus { since: now, confirming };
-		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track);
+		let alarm = Self::decision_time(&deciding_status, &status.tally, status.track, track)
+			.max(now.saturating_add(One::one()));
 		status.deciding = Some(deciding_status);
 		let branch =
 			if is_passing { BeginDecidingBranch::Passing } else { BeginDecidingBranch::Failing };
@@ -808,12 +841,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
 		let when = (next_block + alarm_interval - One::one()) / alarm_interval * alarm_interval;
 
+		let call = match T::Preimages::bound(CallOf::<T, I>::from(Call::one_fewer_deciding {
+			track,
+		})) {
+			Ok(c) => c,
+			Err(_) => {
+				debug_assert!(false, "Unable to create a bounded call from `one_fewer_deciding`??",);
+				return
+			},
+		};
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
 			128u8,
 			frame_system::RawOrigin::Root.into(),
-			MaybeHashed::Value(Call::one_fewer_deciding { track }.into()),
+			call,
 		);
 		debug_assert!(
 			maybe_result.is_ok(),
@@ -836,7 +878,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if status.alarm.as_ref().map_or(true, |&(when, _)| when != alarm) {
 			// Either no alarm or one that was different
 			Self::ensure_no_alarm(status);
-			status.alarm = Self::set_alarm(Call::nudge_referendum { index }, alarm);
+			let call =
+				match T::Preimages::bound(CallOf::<T, I>::from(Call::nudge_referendum { index })) {
+					Ok(c) => c,
+					Err(_) => {
+						debug_assert!(
+							false,
+							"Unable to create a bounded call from `nudge_referendum`??",
+						);
+						return false
+					},
+				};
+			status.alarm = Self::set_alarm(call, alarm);
 			true
 		} else {
 			false
@@ -855,7 +908,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// In terms of storage, every call to it is expected to access:
 	/// - The scheduler, either to insert, remove or alter an entry;
-	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16).
+	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16);
 	/// - `DecidingCount`.
 	///
 	/// Both of the two storage items will only have as many items as there are different tracks,
@@ -952,14 +1005,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							// Passed!
 							Self::ensure_no_alarm(&mut status);
 							Self::note_one_fewer_deciding(status.track);
-							let (desired, call_hash) = (status.enactment, status.proposal_hash);
-							Self::schedule_enactment(
-								index,
-								track,
-								desired,
-								status.origin,
-								call_hash,
-							);
+							let (desired, call) = (status.enactment, status.proposal);
+							Self::schedule_enactment(index, track, desired, status.origin, call);
 							Self::deposit_event(Event::<T, I>::Confirmed {
 								index,
 								tally: status.tally,

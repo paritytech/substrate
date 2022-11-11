@@ -21,19 +21,19 @@ use serde::{Deserialize, Serialize};
 
 use sp_runtime::traits::Block as BlockT;
 
-/// An encoded signed commitment proving that the given header has been finalized.
+/// An encoded finality proof proving that the given header has been finalized.
 /// The given bytes should be the SCALE-encoded representation of a
-/// `beefy_primitives::SignedCommitment`.
+/// `beefy_primitives::VersionedFinalityProof`.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct EncodedSignedCommitment(sp_core::Bytes);
+pub struct EncodedVersionedFinalityProof(sp_core::Bytes);
 
-impl EncodedSignedCommitment {
+impl EncodedVersionedFinalityProof {
 	pub fn new<Block>(
-		signed_commitment: beefy_gadget::notification::BeefySignedCommitment<Block>,
+		finality_proof: beefy_gadget::justification::BeefyVersionedFinalityProof<Block>,
 	) -> Self
 	where
 		Block: BlockT,
 	{
-		EncodedSignedCommitment(signed_commitment.encode().into())
+		EncodedVersionedFinalityProof(finality_proof.encode().into())
 	}
 }
