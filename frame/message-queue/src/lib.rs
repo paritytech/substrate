@@ -31,7 +31,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		DefensiveTruncateFrom, EnqueueMessage, Footprint, ProcessMessage, ProcessMessageError,
-		ServiceQueues,
+		ServiceQueues, ExecuteOverweightError,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -405,7 +405,8 @@ pub mod pallet {
 			weight_limit: Weight,
 		) -> DispatchResult {
 			let _ = ensure_signed(origin)?;
-			Self::do_execute_overweight(message_origin, page, index, weight_limit)
+			Self::do_execute_overweight(message_origin, page, index, weight_limit)?;
+			Ok(())
 		}
 	}
 }
@@ -587,7 +588,7 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		index: T::Size,
 		weight_limit: Weight,
-	) -> DispatchResult {
+	) -> Result<Weight, Error::<T>> {
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, payload) =
@@ -625,7 +626,7 @@ impl<T: Config> Pallet<T> {
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
-				Ok(())
+				Ok(weight_counter.consumed)
 			},
 		}
 	}
@@ -935,6 +936,8 @@ impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
 }
 
 impl<T: Config> ServiceQueues for Pallet<T> {
+	type OverweightMessageAddress = (MessageOriginOf<T>, PageIndex, T::Size);
+
 	fn service_queues(weight_limit: Weight) -> Weight {
 		// The maximum weight that processing a single message may take.
 		let overweight_limit = weight_limit;
@@ -970,10 +973,17 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		}
 		weight.consumed
 	}
-	// TODO
-/*	fn execute_overweight(weight_limit: Weight) -> Weight {
 
-	}*/
+	fn execute_overweight(
+		weight_limit: Weight,
+		(message_origin, page, index): Self::OverweightMessageAddress,
+	) -> Result<Weight, ExecuteOverweightError> {
+		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight_limit)
+			.map_err(|e| match e {
+				Error::<T>::InsufficientWeight => ExecuteOverweightError::InsufficientWeight,
+				_ => ExecuteOverweightError::NotFound,
+			})
+	}
 }
 
 impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {

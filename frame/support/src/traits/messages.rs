@@ -50,13 +50,27 @@ pub trait ProcessMessage {
 	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
+pub enum ExecuteOverweightError {
+	NotFound,
+	InsufficientWeight,
+}
+
 pub trait ServiceQueues {
+	type OverweightMessageAddress;
+
 	/// Service all message queues in some fair manner.
 	///
 	/// - `weight_limit`: The maximum amount of dynamic weight that this call can use.
 	///
 	/// Returns the dynamic weight used by this call; is never greater than `weight_limit`.
 	fn service_queues(weight_limit: Weight) -> Weight;
+
+	fn execute_overweight(
+		_weight_limit: Weight,
+		_address: Self::OverweightMessageAddress,
+	) -> Result<Weight, ExecuteOverweightError> {
+		Err(ExecuteOverweightError::NotFound)
+	}
 }
 
 #[derive(Default, Copy, Clone, Eq, PartialEq, RuntimeDebug)]
