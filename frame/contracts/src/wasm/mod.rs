@@ -109,7 +109,7 @@ pub struct OwnerInfo<T: Config> {
 
 /// Defines the required determinism level of a wasm blob when either running or uploading code.
 #[derive(
-Clone, Copy, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen, RuntimeDebug, PartialEq, Eq,
+	Clone, Copy, Encode, Decode, scale_info::TypeInfo, MaxEncodedLen, RuntimeDebug, PartialEq, Eq,
 )]
 pub enum Determinism {
 	/// The execution should be deterministic and hence no indeterministic instructions are
@@ -139,8 +139,8 @@ impl ExportedFunction {
 }
 
 impl<T: Config> PrefabWasmModule<T>
-	where
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	/// Create the module by checking and instrumenting `original_code`.
 	///
@@ -222,8 +222,8 @@ impl<T: Config> OwnerInfo<T> {
 }
 
 impl<T: Config> Executable<T> for PrefabWasmModule<T>
-	where
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	fn from_storage(
 		code_hash: CodeHash<T>,
@@ -595,7 +595,7 @@ mod tests {
 			ALICE,
 			Determinism::Deterministic,
 		)
-			.unwrap();
+		.unwrap();
 		executable.execute(ext.borrow_mut(), &ExportedFunction::Call, input_data)
 	}
 
@@ -947,13 +947,13 @@ mod tests {
 			Some(vec![42u8]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 		ext.set_storage_transparent(
 			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 
 		//value does not exist (wrong key length)
 		let input = (63, [1u8; 64]).encode();
@@ -2095,7 +2095,7 @@ mod tests {
 			array_bytes::hex2bytes_unchecked("00000000445566778899"),
 			MockExt::default(),
 		)
-			.unwrap();
+		.unwrap();
 
 		assert_eq!(
 			output,
@@ -2114,7 +2114,7 @@ mod tests {
 			array_bytes::hex2bytes_unchecked("010000005566778899"),
 			MockExt::default(),
 		)
-			.unwrap();
+		.unwrap();
 
 		assert_eq!(
 			output,
@@ -2426,14 +2426,14 @@ mod tests {
 			Some(vec![42u8]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 
 		ext.set_storage_transparent(
 			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 
 		// value does not exist
 		let input = (63, [1u8; 64]).encode();
@@ -2510,13 +2510,13 @@ mod tests {
 			Some(vec![42u8]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 		ext.set_storage_transparent(
 			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 
 		// value did not exist
 		let input = (32, [3u8; 32]).encode();
@@ -2608,14 +2608,14 @@ mod tests {
 			Some(vec![42u8]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 
 		ext.set_storage_transparent(
 			&VarSizedKey::<Test>::try_from([2u8; 19].to_vec()).unwrap(),
 			Some(vec![]),
 			false,
 		)
-			.unwrap();
+		.unwrap();
 
 		// value does not exist -> error returned
 		let input = (63, [1u8; 64]).encode();

@@ -62,10 +62,10 @@ struct Contract<T: Config> {
 }
 
 impl<T: Config> Contract<T>
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-		<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	<BalanceOf<T> as HasCompact>::Type: Clone + Eq + PartialEq + Debug + TypeInfo + Encode,
 {
 	/// Create new contract and use a default account id as instantiator.
 	fn new(module: WasmModule<T>, data: Vec<u8>) -> Result<Contract<T>, &'static str> {
@@ -142,7 +142,7 @@ impl<T: Config> Contract<T>
 				None,
 				false,
 			)
-				.map_err(|_| "Failed to write storage to restoration dest")?;
+			.map_err(|_| "Failed to write storage to restoration dest")?;
 		}
 		<ContractInfoOf<T>>::insert(&self.account_id, info);
 		Ok(())

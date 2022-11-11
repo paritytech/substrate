@@ -261,9 +261,9 @@ pub enum RuntimeCosts {
 
 impl RuntimeCosts {
 	fn token<T>(&self, s: &HostFnWeights<T>) -> RuntimeToken
-		where
-			T: Config,
-			T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+	where
+		T: Config,
+		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 	{
 		use self::RuntimeCosts::*;
 		let weight = match *self {
@@ -369,9 +369,9 @@ struct RuntimeToken {
 }
 
 impl<T> Token<T> for RuntimeToken
-	where
-		T: Config,
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+where
+	T: Config,
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
 {
 	fn weight(&self) -> Weight {
 		self.weight
@@ -458,9 +458,9 @@ pub struct Runtime<'a, E: Ext + 'a> {
 }
 
 impl<'a, E> Runtime<'a, E>
-	where
-		E: Ext + 'a,
-		<E::T as frame_system::Config>::AccountId:
+where
+	E: Ext + 'a,
+	<E::T as frame_system::Config>::AccountId:
 		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
 	pub fn new(
@@ -694,9 +694,9 @@ impl<'a, E> Runtime<'a, E>
 		input_len: u32,
 		output_ptr: u32,
 	) -> Result<(), DispatchError>
-		where
-			F: FnOnce(&[u8]) -> R,
-			R: AsRef<[u8]>,
+	where
+		F: FnOnce(&[u8]) -> R,
+		R: AsRef<[u8]>,
 	{
 		// Copy input into supervisor memory.
 		let input = self.read_sandbox_memory(input_ptr, input_len)?;
