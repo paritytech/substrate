@@ -30,8 +30,8 @@ use frame_support::{
 	defensive,
 	pallet_prelude::*,
 	traits::{
-		DefensiveTruncateFrom, EnqueueMessage, Footprint, ProcessMessage, ProcessMessageError,
-		ServiceQueues, ExecuteOverweightError,
+		DefensiveTruncateFrom, EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage,
+		ProcessMessageError, ServiceQueues,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -588,7 +588,7 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		index: T::Size,
 		weight_limit: Weight,
-	) -> Result<Weight, Error::<T>> {
+	) -> Result<Weight, Error<T>> {
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		let mut page = Pages::<T>::get(&origin, page_index).ok_or(Error::<T>::NoPage)?;
 		let (pos, is_processed, payload) =
@@ -978,11 +978,12 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		weight_limit: Weight,
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
-		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight_limit)
-			.map_err(|e| match e {
+		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight_limit).map_err(|e| {
+			match e {
 				Error::<T>::InsufficientWeight => ExecuteOverweightError::InsufficientWeight,
 				_ => ExecuteOverweightError::NotFound,
-			})
+			}
+		})
 	}
 }
 
