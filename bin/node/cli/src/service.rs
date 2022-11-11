@@ -317,7 +317,7 @@ pub fn new_full_base(
 		&sc_consensus_babe::BabeLink<Block>,
 	),
 ) -> Result<NewFullBase, ServiceError> {
-	let hwbench = if !disable_hardware_benchmarks || config.role.is_authority() {
+	let hwbench = if !disable_hardware_benchmarks {
 		config.database.path().map(|database_path| {
 			let _ = std::fs::create_dir_all(&database_path);
 			sc_sysinfo::gather_hwbench(Some(database_path))

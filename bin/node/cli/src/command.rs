@@ -166,14 +166,8 @@ pub fn run() -> Result<()> {
 							&ext_factory,
 						)
 					},
-					BenchmarkCmd::Machine(cmd) => {
-						// the hardware benchmark is run automatically if the validator flag
-						// is being used.
-						if !cli.run.validator {
-							return cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone())
-						}
-						Ok(())
-					},
+					BenchmarkCmd::Machine(cmd) =>
+						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),
 				}
 			})
 		},

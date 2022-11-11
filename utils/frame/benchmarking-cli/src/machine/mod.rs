@@ -184,7 +184,7 @@ impl MachineCmd {
 		);
 		// Print the final result.
 		if failed != 0 {
-			info!("The hardware fails to meet the requirements");
+			warn!("The hardware fails to meet the requirements");
 			self.check_failed(Error::UnmetRequirement)?;
 		} else {
 			info!("The hardware meets the requirements ");
