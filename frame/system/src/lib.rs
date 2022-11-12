@@ -369,13 +369,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Do not use.
-		#[pallet::weight(T::BlockWeights::get().max_block)]
-		pub fn removed_call_do_not_use(origin: OriginFor<T>, _ratio: Perbill) -> DispatchResult {
-			ensure_signed_or_root(origin)?;
-			Ok(())
-		}
-
 		/// Make some on-chain remark.
 		///
 		/// # <weight>
