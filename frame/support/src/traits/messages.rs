@@ -50,6 +50,7 @@ pub trait ProcessMessage {
 	) -> Result<(bool, Weight), ProcessMessageError>;
 }
 
+#[derive(Eq, PartialEq, RuntimeDebug)]
 pub enum ExecuteOverweightError {
 	NotFound,
 	InsufficientWeight,

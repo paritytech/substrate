@@ -47,12 +47,8 @@ use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
 use sp_weights::WeightCounter;
 pub use weights::WeightInfo;
 
-/// Type for identifying an overweight message.
-type OverweightIndex = u64;
 /// Type for identifying a page.
 type PageIndex = u32;
-
-const LOG_TARGET: &'static str = "runtime::message-queue";
 
 /// Data encoded and prefixed to the encoded `MessageItem`.
 #[derive(Encode, Decode, PartialEq, MaxEncodedLen, Debug)]
@@ -76,6 +72,8 @@ pub struct Page<Size: Into<u32> + Debug + Clone + Default, HeapSize: Get<Size>> 
 	remaining: Size,
 	/// The size of all remaining messages to be processed.
 	remaining_size: Size,
+	/// The number of items before the `first` item in this page.
+	first_index: Size,
 	/// The heap-offset of the header of the first message item in this page which is ready for
 	/// processing.
 	first: Size,
@@ -104,6 +102,7 @@ impl<
 		Page {
 			remaining: One::one(),
 			remaining_size: payload_len,
+			first_index: Zero::zero(),
 			first: Zero::zero(),
 			last: Zero::zero(),
 			heap: BoundedVec::defensive_truncate_from(heap),
@@ -170,6 +169,7 @@ impl<
 			self.first
 				.saturating_accrue(ItemHeader::<Size>::max_encoded_len().saturated_into());
 			self.first.saturating_accrue(h.payload_len);
+			self.first_index.saturating_inc();
 		}
 	}
 
@@ -285,6 +285,14 @@ pub mod pallet {
 		/// dropped, even if they contain unprocessed overweight messages.
 		#[pallet::constant]
 		type MaxStale: Get<u32>;
+
+		/// The amount of weight (if any) which should be provided to the message queue for
+		/// servicing enqueued items.
+		///
+		/// This may be legitimately `None` in the case that you will call
+		/// `ServiceQueues::service_queues` manually.
+		#[pallet::constant]
+		type ServiceWeight: Get<Option<Weight>>;
 	}
 
 	#[pallet::event]
@@ -309,10 +317,11 @@ pub mod pallet {
 			success: bool,
 		},
 		/// Message placed in overweight queue.
-		Overweight {
+		OverweightEnqueued {
 			hash: T::Hash,
 			origin: MessageOriginOf<T>,
-			index: OverweightIndex,
+			page_index: PageIndex,
+			message_index: T::Size,
 		},
 		PageReaped {
 			origin: MessageOriginOf<T>,
@@ -358,18 +367,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			let weight_used = Weight::zero();
-			weight_used
-		}
-
-		/// Check all pre-conditions about the [`crate::Config`] types.
-		fn integrity_test() {
-			// TODO currently disabled since it fails.
-			// None of the weight functions can be zero.
-			// Otherwise we risk getting stuck in a no-progress situation (= infinite loop).
-			/*weights::WeightMetaInfo::<<T as Config>::WeightInfo>::visit_weight_functions(
-				|name, w| assert!(!w.is_zero(), "Weight function is zero: {}", name),
-			);*/
+			if let Some(weight_limit) = T::ServiceWeight::get() {
+				Self::service_queues(weight_limit)
+			} else {
+				Weight::zero()
+			}
 		}
 	}
 
@@ -416,7 +418,7 @@ pub struct ReadyRing<T: Config> {
 	next: Option<MessageOriginOf<T>>,
 }
 impl<T: Config> ReadyRing<T> {
-	fn new() -> Self {
+	pub fn new() -> Self {
 		Self { first: ServiceHead::<T>::get(), next: ServiceHead::<T>::get() }
 	}
 }
@@ -599,14 +601,18 @@ impl<T: Config> Pallet<T> {
 				(page_index == book_state.begin && pos < page.first.into() as usize),
 			Error::<T>::Queued
 		);
-		ensure!(is_processed, Error::<T>::AlreadyProcessed);
+		ensure!(!is_processed, Error::<T>::AlreadyProcessed);
 		use MessageExecutionStatus::*;
 		let mut weight_counter = WeightCounter::from_limit(weight_limit);
 		match Self::process_message_payload(
 			origin.clone(),
+			page_index,
+			index,
 			payload,
 			&mut weight_counter,
-			weight_limit,
+			Weight::MAX,
+			// ^^^ We never recognise it as permanently overweight, since that would result in an
+			// additional overweight event being deposited.
 		) {
 			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight.into()),
 			Unprocessable | Processed => {
@@ -743,7 +749,14 @@ impl<T: Config> Pallet<T> {
 
 		// Execute as many messages as possible.
 		let status = loop {
-			match Self::service_page_item(origin, book_state, &mut page, weight, overweight_limit) {
+			match Self::service_page_item(
+				origin,
+				page_index,
+				book_state,
+				&mut page,
+				weight,
+				overweight_limit,
+			) {
 				s @ Bailed | s @ NoMore => break s,
 				// Keep going as long as we make progress...
 				Partial => {
@@ -771,6 +784,7 @@ impl<T: Config> Pallet<T> {
 	/// Execute the next message of a page.
 	pub(crate) fn service_page_item(
 		origin: &MessageOriginOf<T>,
+		page_index: PageIndex,
 		book_state: &mut BookStateOf<T>,
 		page: &mut PageOf<T>,
 		weight: &mut WeightCounter,
@@ -784,6 +798,7 @@ impl<T: Config> Pallet<T> {
 		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
 			return PageExecutionStatus::Bailed
 		}
+
 		let payload = &match page.peek_first() {
 			Some(m) => m,
 			None => return PageExecutionStatus::NoMore,
@@ -792,6 +807,8 @@ impl<T: Config> Pallet<T> {
 		use MessageExecutionStatus::*;
 		let is_processed = match Self::process_message_payload(
 			origin.clone(),
+			page_index,
+			page.first_index,
 			payload.deref(),
 			weight,
 			overweight_limit,
@@ -824,7 +841,7 @@ impl<T: Config> Pallet<T> {
 	///   page 5: ["\0bigbig 3", ]
 	/// ```
 	#[cfg(feature = "std")]
-	fn debug_info() -> String {
+	pub fn debug_info() -> String {
 		let mut info = String::new();
 		for (origin, book_state) in BookStateFor::<T>::iter() {
 			let mut queue = format!("queue {:?}:\n", &origin);
@@ -867,6 +884,8 @@ impl<T: Config> Pallet<T> {
 
 	fn process_message_payload(
 		origin: MessageOriginOf<T>,
+		page_index: PageIndex,
+		message_index: T::Size,
 		message: &[u8],
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
@@ -876,7 +895,12 @@ impl<T: Config> Pallet<T> {
 		match T::MessageProcessor::process_message(message, origin.clone(), weight.remaining()) {
 			Err(Overweight(w)) if w.any_gt(overweight_limit) => {
 				// Permanently overweight.
-				Self::deposit_event(Event::<T>::Overweight { hash, origin, index: 0 }); // TODO page + index
+				Self::deposit_event(Event::<T>::OverweightEnqueued {
+					hash,
+					origin,
+					page_index,
+					message_index,
+				});
 				MessageExecutionStatus::Overweight
 			},
 			Err(Overweight(_)) => {
