@@ -160,8 +160,7 @@ pub type StorageMap = std::collections::BTreeMap<Vec<u8>, Vec<u8>>;
 pub struct StorageChild {
 	/// Child data for storage.
 	pub data: StorageMap,
-	/// Associated child info for a child
-	/// trie.
+	/// Associated child info for a child trie.
 	pub child_info: ChildInfo,
 }
 

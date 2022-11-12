@@ -162,12 +162,13 @@ impl<H: Hasher, I: DerefMut<Target = RecorderInner<H::Out>>> trie_db::TrieRecord
 				tracing::trace!(
 					target: LOG_TARGET,
 					hash = ?hash,
-					"Recording node",
+					"Recording encoded node",
 				);
 
 				self.inner.accessed_nodes.entry(hash).or_insert_with(|| {
 					let node = encoded_node.into_owned();
 
+					dbg!(&node, node.encoded_size());
 					encoded_size_update += node.encoded_size();
 
 					node

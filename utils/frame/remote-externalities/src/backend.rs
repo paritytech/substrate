@@ -1,4 +1,6 @@
+use crate::LOG_TARGET;
 use codec::{Codec, Decode, Encode};
+use log::debug;
 use sp_core::{storage, storage::ChildInfo};
 use sp_runtime::{DeserializeOwned, Storage};
 use sp_state_machine::{
@@ -7,13 +9,11 @@ use sp_state_machine::{
 	StorageKey, StorageValue, UsageInfo,
 };
 use sp_storage::{StateVersion, TrackedStorageKey};
-use std::marker::PhantomData;
-use crate::LOG_TARGET;
+use std::{collections::BTreeMap, marker::PhantomData};
 
 pub struct RemoteExternalitiesBackend<H: Hasher> {
 	inner_backend: InMemoryBackend<H>,
 	rpc: substrate_rpc_client::WsClient,
-	runtime: tokio::runtime::Runtime,
 	at: Option<H>,
 	_marker: PhantomData<H>,
 }
@@ -32,14 +32,15 @@ impl<H: HasherT> RemoteExternalitiesBackend<H> {
 		&self,
 		key: &[u8],
 	) -> Result<Option<StorageValue>, sp_state_machine::DefaultError> {
-		self.runtime
-			.block_on(substrate_rpc_client::StateApi::<H>::storage(
-				&self.rpc,
-				sp_core::storage::StorageKey(key.to_vec()),
-				self.at.clone(),
-			))
-			.map(|r| r.map(|x| x.0))
-			.map_err(|e| format!("{:?}", e))
+		debug!(target: LOG_TARGET, "fetching key {:?} from remote.", key);
+		// TODO: new runtime per RPC, sucks, also can't use tokio runtime.
+		async_std::task::block_on(substrate_rpc_client::StateApi::<H>::storage(
+			&self.rpc,
+			sp_core::storage::StorageKey(key.to_vec()),
+			self.at.clone(),
+		))
+		.map(|r| r.map(|x| x.0))
+		.map_err(|e| format!("{:?}", e))
 	}
 }
 
@@ -47,25 +48,32 @@ impl<H: HasherT> Backend<H> for RemoteExternalitiesBackend<H>
 where
 	<H as Hasher>::Out: Ord + Decode + Encode,
 {
-	/// An error type when fetching data is not possible.
 	type Error = <InMemoryBackend<H> as Backend<H>>::Error;
-
-	/// Storage changes to be applied if committing
 	type Transaction = <InMemoryBackend<H> as Backend<H>>::Transaction;
-
-	/// Type of trie backend storage.
 	type TrieBackendStorage = <InMemoryBackend<H> as Backend<H>>::TrieBackendStorage;
 
-	/// Get keyed storage or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
-		self.inner_backend
-			.storage(key)
-			.map(|opt| opt.or_else(|| self.storage_remote(key).unwrap()))
+		self.inner_backend.storage(key).map(|opt| {
+			opt.or_else(|| {
+				self.storage_remote(key).unwrap().map(|v| {
+					let inner = unsafe {
+						let x = &self.inner_backend as *const InMemoryBackend<H>;
+						let y = x as *mut InMemoryBackend<H>;
+						&mut *y
+					};
+					inner.insert(
+						vec![(None, vec![(key.to_vec(), Some(v.clone()))])],
+						StateVersion::V1,
+					);
+					v
+				})
+			})
+		})
 	}
 
 	/// Get keyed storage value hash or None if there is nothing associated.
 	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		todo!("check inner_backend, else call remote");
+		self.storage(key).map(|o| o.map(|v| H::hash(&v)))
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
@@ -345,36 +353,78 @@ where
 mod tests {
 	use super::*;
 	use crate::RemoteExternalities;
+	use serde::__private::de;
 	use sp_core::H256;
 	use sp_runtime::traits::BlakeTwo256;
-	use sp_state_machine::TrieBackendBuilder;
-use storage::well_known_keys;
+	use sp_state_machine::{LayoutV1, TestExternalities, TrieBackend, TrieBackendBuilder};
+	use sp_trie::{empty_trie_root, GenericMemoryDB};
+	use storage::well_known_keys;
 
 	type Hash = BlakeTwo256;
 
-	#[tokio::test(flavor = "multi_thread")]
-	async fn can_build_and_execute_externalities() {
+	async fn holy_test_externalities() -> TestExternalities<Hash, RemoteExternalitiesBackend<Hash>>
+	{
 		let rpc = substrate_rpc_client::ws_client("wss://rpc.polkadot.io:443").await.unwrap();
-		let runtime = tokio::runtime::Runtime::new().unwrap();
+
+		// TODO: we have to put at least something into storage, otherwise shit breaks. Default
+		// TestExternalities seems to do the same..
+		let db = GenericMemoryDB::default();
+		let mut inner_backend = TrieBackendBuilder::new(db, empty_trie_root::<LayoutV1<Hash>>())
+			.with_recorder(Default::default())
+			.build();
+		inner_backend.insert(
+			vec![(None, vec![(storage::well_known_keys::CODE.to_vec(), Some(vec![]))])],
+			sp_storage::StateVersion::default(),
+		);
+
 		let backend = RemoteExternalitiesBackend::<BlakeTwo256> {
 			at: None,
 			rpc,
-			runtime,
-			inner_backend: TrieBackendBuilder::new(Default::default(), Default::default()).build(),
+			inner_backend,
 			_marker: Default::default(),
 		};
 
-		let mut holy_test_externalities = sp_state_machine::TestExternalities::<
-			Hash,
-			RemoteExternalitiesBackend<Hash>,
-		>::new_with_backend(backend, Default::default());
+		sp_state_machine::TestExternalities::new_with_backend(backend, Default::default())
+	}
 
-		holy_test_externalities.execute_with(|| {
-			// read the code.
-			let code = sp_io::storage::get(well_known_keys::CODE);
-			dbg!(code);
+	#[tokio::test(flavor = "multi_thread")]
+	async fn can_build_and_execute() {
+		crate::test_prelude::init_logger();
+
+		let mut ext = holy_test_externalities().await;
+		ext.execute_with(|| {
+			// staking nominator count
+			let key = hex_literal::hex![
+				"5f3e4907f716ac89b6347d15ececedcaf99b25852d3d69419882da651375cdb3"
+			];
+			let mut data = sp_io::storage::get(&key).unwrap();
+			dbg!(<u32 as Decode>::decode(&mut &*data), data);
+			// this should not go to remote anymore
+			let _ = sp_io::storage::get(&key).unwrap();
+		});
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn can_prove_reads() {
+		crate::test_prelude::init_logger();
+
+		let mut ext = holy_test_externalities().await;
+		let _ = ext.execute_with(|| {
+			// staking nominator count
+			let key = hex_literal::hex![
+				"5f3e4907f716ac89b6347d15ececedcaf99b25852d3d69419882da651375cdb3"
+			];
+			let _ = sp_io::storage::get(&key).unwrap();
+			let _ = sp_io::storage::get(&key).unwrap();
 		});
 
-		panic!("DONE!");
+		let proof = ext.backend.inner_backend.extract_proof();
+		dbg!(proof);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn can_build_and_execute_child() {
+		crate::test_prelude::init_logger();
+		let mut ext = holy_test_externalities().await;
 	}
 }
