@@ -234,7 +234,7 @@ benchmarks! {
 
 	submit_candidacy {
 		// number of already existing candidates.
-		let c in 1 .. T::MaxCandidates::get();
+		let c in 1 .. T::MaxCandidates::get() - 1;
 		// we fix the number of members to the number of desired members and runners-up. We'll be in
 		// this state almost always.
 		let m = T::DesiredMembers::get() + T::DesiredRunnersUp::get();
@@ -244,6 +244,9 @@ benchmarks! {
 
 		// create m members and runners combined.
 		let _ = fill_seats_up_to::<T>(m)?;
+
+		// create previous candidates;
+		let _ = submit_candidates::<T>(c, "candidates")?;
 
 		// we assume worse case that: extrinsic is successful and candidate is not duplicate.
 		let candidate_account = endowed_account::<T>("caller", 0);
