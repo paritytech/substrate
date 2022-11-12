@@ -18,40 +18,7 @@
 //! Contains types to define hardware requirements.
 
 use lazy_static::lazy_static;
-use sc_sysinfo::{Metric, Throughput};
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
-use sp_std::{fmt, fmt::Formatter};
-
-/// Serializes throughput into MiBs and represents it as `f64`.
-fn serialize_throughput_as_f64<S>(throughput: &Throughput, serializer: S) -> Result<S::Ok, S::Error>
-where
-	S: Serializer,
-{
-	serializer.serialize_f64(throughput.as_mibs())
-}
-
-struct ThroughputVisitor;
-impl<'de> Visitor<'de> for ThroughputVisitor {
-	type Value = Throughput;
-
-	fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-		formatter.write_str("A value that is a f64.")
-	}
-
-	fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
-	where
-		E: serde::de::Error,
-	{
-		Ok(Throughput::from_mibs(value))
-	}
-}
-
-fn deserialize_throughput<'de, D>(deserializer: D) -> Result<Throughput, D::Error>
-where
-	D: Deserializer<'de>,
-{
-	Ok(deserializer.deserialize_f64(ThroughputVisitor))?
-}
+use sc_sysinfo::Requirements;
 
 lazy_static! {
 	/// The hardware requirements as measured on reference hardware.
@@ -65,23 +32,6 @@ lazy_static! {
 		let raw = include_bytes!("reference_hardware.json").as_slice();
 		serde_json::from_slice(raw).expect("Hardcoded data is known good; qed")
 	};
-}
-
-/// Multiple requirements for the hardware.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct Requirements(pub Vec<Requirement>);
-
-/// A single requirement for the hardware.
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq)]
-pub struct Requirement {
-	/// The metric to measure.
-	pub metric: Metric,
-	/// The minimal throughput that needs to be archived for this requirement.
-	#[serde(
-		serialize_with = "serialize_throughput_as_f64",
-		deserialize_with = "deserialize_throughput"
-	)]
-	pub minimum: Throughput,
 }
 
 #[cfg(test)]

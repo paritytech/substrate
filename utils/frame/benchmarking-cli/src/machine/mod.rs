@@ -30,11 +30,12 @@ use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
-	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit, Metric, Throughput,
+	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit, Metric, Requirement, Requirements,
+	Throughput,
 };
 
 use crate::shared::check_build_profile;
-pub use hardware::{Requirement, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
+pub use hardware::SUBSTRATE_REFERENCE_HARDWARE;
 
 /// Command to benchmark the hardware.
 ///
@@ -184,7 +185,7 @@ impl MachineCmd {
 		);
 		// Print the final result.
 		if failed != 0 {
-			warn!("The hardware fails to meet the requirements");
+			info!("The hardware fails to meet the requirements");
 			self.check_failed(Error::UnmetRequirement)?;
 		} else {
 			info!("The hardware meets the requirements ");
