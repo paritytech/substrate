@@ -5311,7 +5311,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "wasm-instrument",
- "wasmi 0.19.0",
+ "wasmi 0.20.0",
  "wasmparser-nostd",
  "wat",
 ]
@@ -11612,13 +11612,13 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7428e8361e19d3affa9221ad674014b4a29381b07c755aab9b1cd4f74610221a"
+checksum = "01bf50edb2ea9d922aa75a7bf3c15e26a6c9e2d18c56e862b49737a582901729"
 dependencies = [
  "spin 0.9.4",
  "wasmi_arena",
- "wasmi_core 0.4.0",
+ "wasmi_core 0.5.0",
  "wasmparser-nostd",
 ]
 
@@ -11652,13 +11652,12 @@ dependencies = [
 
 [[package]]
 name = "wasmi_core"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c9559a70c22f27793520b9e098baea45915088fb5093dd7041fcfe238b95d4e"
+checksum = "c5bf998ab792be85e20e771fe14182b4295571ad1d4f89d3da521c1bef5f597a"
 dependencies = [
  "downcast-rs",
  "libm",
- "memory_units",
  "num-traits",
 ]
 
