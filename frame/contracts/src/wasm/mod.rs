@@ -215,7 +215,7 @@ where
 		let mut linker = Linker::new();
 		E::define(&mut store, &mut linker)?;
 		let memory = Memory::new(&mut store, MemoryType::new(memory.0, Some(memory.1))?).expect(
-			"Memory bounds are defined as `u32`. Hence the cannot be larger than u32::MAX; qed",
+			"The limits defined in our `Schedule` limit the amount of memory well below u32::MAX; qed",
 		);
 		linker
 			.define("env", "memory", memory)
