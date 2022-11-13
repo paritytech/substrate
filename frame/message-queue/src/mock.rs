@@ -16,17 +16,19 @@
 
 #![cfg(any(test, feature = "std"))]
 
-use super::*;
 pub use super::mock_helpers::*;
+use super::*;
 
 use crate as pallet_message_queue;
 use frame_support::{
-	assert_noop, assert_ok, parameter_types,
+	parameter_types,
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
-use sp_runtime::testing::Header;
-use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
+use sp_runtime::{
+	testing::Header,
+	traits::{BlakeTwo256, IdentityLookup},
+};
 use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -80,7 +82,7 @@ parameter_types! {
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = MockedWeightInfo;
-	type MessageProcessor = TestMessageProcessor;
+	type MessageProcessor = RecordingMessageProcessor;
 	type Size = u32;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
@@ -142,8 +144,8 @@ parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
 }
 
-pub struct TestMessageProcessor;
-impl ProcessMessage for TestMessageProcessor {
+pub struct RecordingMessageProcessor;
+impl ProcessMessage for RecordingMessageProcessor {
 	/// The transport from where a message originates.
 	type Origin = MessageOrigin;
 
@@ -185,17 +187,17 @@ parameter_types! {
 	pub static NumMessagesProcessed: usize = 0;
 }
 
-/// Similar to [`TestMessageProcessor`] but only counts the number of messages processed and does
-/// always consume one weight per message.
+/// Similar to [`RecordingMessageProcessor`] but only counts the number of messages processed and
+/// does always consume one weight per message.
 ///
-/// The [`TestMessageProcessor`] is a bit too slow for the integration tests.
+/// The [`RecordingMessageProcessor`] is a bit too slow for the integration tests.
 pub struct CountingMessageProcessor;
 impl ProcessMessage for CountingMessageProcessor {
 	type Origin = MessageOrigin;
 
 	fn process_message(
-		message: &[u8],
-		origin: Self::Origin,
+		_message: &[u8],
+		_origin: Self::Origin,
 		weight_limit: Weight,
 	) -> Result<(bool, Weight), ProcessMessageError> {
 		let weight = Weight::from_parts(1, 1);

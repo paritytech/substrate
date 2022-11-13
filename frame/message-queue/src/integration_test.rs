@@ -21,25 +21,23 @@
 
 use crate::{
 	mock::{
-		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
-		NumMessagesProcessed,
+		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
 	},
 	*,
 };
 
 use crate as pallet_message_queue;
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, parameter_types,
+	parameter_types,
 	traits::{ConstU32, ConstU64},
 };
-use rand::{prelude::*, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;

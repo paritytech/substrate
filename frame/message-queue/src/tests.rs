@@ -396,7 +396,7 @@ fn sweep_queue_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		let origin = MessageOrigin::Here;
 		let (page, _) = full_page::<Test>();
-		let mut book = book_for::<Test>(&page);
+		let book = book_for::<Test>(&page);
 		assert!(book.begin != book.end, "pre-condition: the book is not empty");
 		Pages::<Test>::insert(&origin, &0, &page);
 		BookStateFor::<Test>::insert(&origin, &book);
@@ -414,7 +414,7 @@ fn footprint_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		let origin = MessageOrigin::Here;
 		let (page, msgs) = full_page::<Test>();
-		let mut book = book_for::<Test>(&page);
+		let book = book_for::<Test>(&page);
 		BookStateFor::<Test>::insert(&origin, &book);
 
 		let info = MessageQueue::footprint(origin);
