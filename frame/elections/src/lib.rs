@@ -3246,7 +3246,7 @@ mod tests {
 			System::set_block_number(5);
 
 			let election_weight = Elections::on_initialize(System::block_number());
-			let expected_weight: Weight = <() as WeightInfo>::election_phragmen(2, 2, 2);
+			let expected_weight: Weight = <() as WeightInfo>::election(2, 2, 2);
 
 			assert_eq!(expected_weight, election_weight);
 		})
