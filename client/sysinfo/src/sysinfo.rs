@@ -622,6 +622,19 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 	hwbench
 }
 
+/// Checks whether the benchmark passed and returns a tuple `(passed, rel_score)`.
+pub fn bench_result(requirement: &Requirement, score: Throughput, tolerance: f64) -> (bool, f64) {
+	let rel_score = score.as_bytes() / requirement.minimum.as_bytes();
+
+	// Sanity check if the result is off by factor >100x.
+	if rel_score >= 100.0 || rel_score <= 0.01 {
+		log::warn!("Bad benchmark result.");
+	}
+
+	let passed = rel_score == (1.0 - (tolerance / 100.0));
+	(passed, rel_score)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
