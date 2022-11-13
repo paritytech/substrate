@@ -169,7 +169,7 @@ impl HostFnReturn {
 	fn to_wasm_sig(&self) -> TokenStream2 {
 		let ok = match self {
 			Self::Unit => quote! { () },
-			Self::U32 | Self::ReturnCode => quote! { u32 },
+			Self::U32 | Self::ReturnCode => quote! { ::core::primitive::u32 },
 		};
 		quote! {
 			Result<#ok, wasmi::core::Trap>
@@ -400,7 +400,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 
 		impl crate::wasm::Environment<()> for Env
 		{
-			fn define(store: &mut wasmi::Store<()>, linker: &mut wasmi::Linker<()>) -> Result<(), wasmi::errors::LinkerError> {
+			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>) -> Result<(), ::wasmi::errors::LinkerError> {
 				#dummy_impls
 				Ok(())
 			}
@@ -443,7 +443,7 @@ fn expand_functions(
 			} }
 		} else {
 			quote! { || -> #wasm_output {
-				unreachable!()
+				::core::unreachable!()
 			} }
 		};
 		let map_err = if expand_blocks {
