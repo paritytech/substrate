@@ -258,9 +258,6 @@ pub struct Builder<B: BlockT> {
 	///
 	/// Overwrite only with care.
 	overwrite_state_version: Option<StateVersion>,
-	/// the final hash of the block who's state is set in the externalities. This is always
-	/// `Some(_)` after calling `build`.
-	final_state_block_hash: Option<B::Hash>,
 }
 
 // NOTE: ideally we would use `DefaultNoBound` here, but not worth bringing in frame-support for
@@ -272,7 +269,6 @@ impl<B: BlockT> Default for Builder<B> {
 			hashed_key_values: Default::default(),
 			hashed_blacklist: Default::default(),
 			overwrite_state_version: None,
-			final_state_block_hash: None,
 		}
 	}
 }
@@ -385,6 +381,7 @@ where
 		&self,
 		prefix: StorageKey,
 		at: B::Hash,
+		pending_ext: &mut TestExternalities,
 	) -> Result<Vec<KeyValue>, &'static str> {
 		let now = std::time::Instant::now();
 		let keys = self.rpc_get_keys_paged(prefix, at).await?;
@@ -404,8 +401,16 @@ where
 		let mut handles = Vec::new();
 		let keys_chunked: Vec<Vec<StorageKey>> =
 			keys.chunks(thread_chunk_size).map(|s| s.into()).collect::<Vec<_>>();
+
+		enum Message {
+			Terminated,
+			Batch(Vec<(Vec<u8>, Vec<u8>)>),
+		}
+		let (tx, rx) = std::sync::mpsc::channel::<Message>();
+
 		for thread_keys in keys_chunked {
 			let thread_client = client.clone();
+			let thread_sender = tx.clone();
 			let handle = std::thread::spawn(move || {
 				let rt = tokio::runtime::Runtime::new().unwrap();
 				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
@@ -429,34 +434,63 @@ where
 						})
 						.unwrap();
 
-					for (idx, key) in chunk_keys.iter().enumerate() {
-						let maybe_value = values[idx].clone();
-						let value = maybe_value.unwrap_or_else(|| {
-							log::warn!(
-								target: LOG_TARGET,
-								"key {:?} had none corresponding value.",
-								&key
-							);
-							StorageData(vec![])
-						});
-						thread_key_values.push((key.clone(), value));
-						if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
-							let ratio: f64 =
-								thread_key_values.len() as f64 / thread_keys.len() as f64;
-							log::debug!(
-								target: LOG_TARGET,
-								"[thread = {:?}] progress = {:.2} [{} / {}]",
-								std::thread::current().id(),
-								ratio,
-								thread_key_values.len(),
-								thread_keys.len(),
-							);
-						}
-					}
+					let batch_kv = chunk_keys
+						.into_iter()
+						.enumerate()
+						.map(|(idx, key)| {
+							let maybe_value = values[idx].clone();
+							let value = maybe_value.unwrap_or_else(|| {
+								log::warn!(
+									target: LOG_TARGET,
+									"key {:?} had none corresponding value.",
+									&key
+								);
+								StorageData(vec![])
+							});
+							thread_key_values.push((key.clone(), value.clone()));
+							if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
+								let ratio: f64 =
+									thread_key_values.len() as f64 / thread_keys.len() as f64;
+								log::debug!(
+									target: LOG_TARGET,
+									"[thread = {:?}] progress = {:.2} [{} / {}]",
+									std::thread::current().id(),
+									ratio,
+									thread_key_values.len(),
+									thread_keys.len(),
+								);
+							}
+							(key.clone().0, value.0)
+						})
+						.collect::<Vec<_>>();
+
+					// send this batch to the main thread to start inserting.
+					thread_sender.send(Message::Batch(batch_kv)).unwrap();
 				}
+
+				thread_sender.send(Message::Terminated).unwrap();
 				thread_key_values
 			});
+
 			handles.push(handle);
+		}
+
+		// first, wait until all threads send a `Terminated` message, in the meantime populate
+		// `pending_ext`.
+		let mut terminated = 0usize;
+		loop {
+			match rx.recv().unwrap() {
+				Message::Batch(kv) =>
+					for (k, v) in kv {
+						pending_ext.insert(k, v);
+					},
+				Message::Terminated => {
+					terminated += 1;
+					if terminated == handles.len() {
+						break
+					}
+				},
+			}
 		}
 
 		let keys_and_values =
@@ -547,7 +581,6 @@ where
 	}
 }
 
-// Internal methods
 impl<B: BlockT + DeserializeOwned> Builder<B>
 where
 	B::Hash: DeserializeOwned,
@@ -558,13 +591,17 @@ where
 	///
 	/// `top_kv` need not be only child-bearing top keys. It should be all of the top keys that are
 	/// included thus far.
+	///
+	/// This function concurrently populates `pending_ext`. the return value is only for writing to
+	/// cache, we can also optimize further.
 	async fn load_child_remote(
 		&self,
-		top_kv: Vec<KeyValue>,
+		top_kv: &Vec<KeyValue>,
+		pending_ext: &mut TestExternalities,
 	) -> Result<ChildKeyValues, &'static str> {
 		let child_roots = top_kv
 			.into_iter()
-			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k))
+			.filter_map(|(k, _)| is_default_child_storage_key(k.as_ref()).then(|| k.clone()))
 			.collect::<Vec<_>>();
 
 		if child_roots.is_empty() {
@@ -591,12 +628,19 @@ where
 		let client = self.as_online().transport.remote_client.clone().unwrap();
 		let at = self.as_online().at_expected();
 
+		enum Message {
+			Terminated,
+			Batch((ChildInfo, Vec<(Vec<u8>, Vec<u8>)>)),
+		}
+		let (tx, rx) = std::sync::mpsc::channel::<Message>();
+
 		for thread_child_roots in child_roots
 			.chunks(child_roots_per_thread)
 			.map(|x| x.into())
 			.collect::<Vec<Vec<_>>>()
 		{
 			let thread_client = client.clone();
+			let thread_sender = tx.clone();
 			let handle = thread::spawn(move || {
 				let rt = tokio::runtime::Runtime::new().unwrap();
 				let mut thread_child_kv = vec![];
@@ -623,12 +667,37 @@ where
 						},
 					};
 
+					// TODO: we should get rid of this StorageKey and StorageData wrapper types as
+					// they are just annoyance.
+					thread_sender.send(Message::Batch((
+						ChildInfo::new_default(un_prefixed),
+						child_kv_inner.iter().cloned().map(|(k, v)| (k.0, v.0)).collect::<Vec<_>>(),
+					))).unwrap();
 					thread_child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
 				}
 
+				thread_sender.send(Message::Terminated).unwrap();
 				Ok(thread_child_kv)
 			});
 			handles.push(handle);
+		}
+
+		// first, wait until all threads send a `Terminated` message, in the meantime populate
+		// `pending_ext`.
+		let mut terminated = 0usize;
+		loop {
+			match rx.recv().unwrap() {
+				Message::Batch((info, kvs)) =>
+					for (k, v) in kvs {
+						pending_ext.insert_child(info.clone(), k, v);
+					},
+				Message::Terminated => {
+					terminated += 1;
+					if terminated == handles.len() {
+						break
+					}
+				},
+			}
 		}
 
 		let child_kv = handles
@@ -641,19 +710,25 @@ where
 	}
 
 	/// Build `Self` from a network node denoted by `uri`.
-	async fn load_top_remote(&self) -> Result<TopKeyValues, &'static str> {
+	///
+	/// This function concurrently populates `pending_ext`. the return value is only for writing to
+	/// cache, we can also optimize further.
+	async fn load_top_remote(
+		&self,
+		pending_ext: &mut TestExternalities,
+	) -> Result<TopKeyValues, &'static str> {
 		let config = self.as_online();
 		let at = self
 			.as_online()
 			.at
 			.expect("online config must be initialized by this point; qed.");
-		log::info!(target: LOG_TARGET, "scraping key-pairs from remote @{:?}", at);
+		log::info!(target: LOG_TARGET, "scraping key-pairs from remote at block height {:?}", at);
 
 		let mut keys_and_values = Vec::new();
 		for prefix in &config.hashed_prefixes {
 			let now = std::time::Instant::now();
 			let additional_key_values =
-				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at).await?;
+				self.rpc_get_pairs_paged(StorageKey(prefix.to_vec()), at, pending_ext).await?;
 			let elapsed = now.elapsed();
 			log::info!(
 				target: LOG_TARGET,
@@ -672,6 +747,7 @@ where
 				HexDisplay::from(&key)
 			);
 			let value = self.rpc_get_storage(key.clone(), Some(at)).await?;
+			pending_ext.insert(key.clone().0, value.clone().0);
 			keys_and_values.push((key, value));
 		}
 
@@ -724,9 +800,7 @@ where
 
 	pub(crate) async fn load_remote_and_maybe_save(
 		&mut self,
-	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
-		let top_kv = self.load_top_remote().await?;
-		let child_kv = self.load_child_remote(top_kv.clone()).await?;
+	) -> Result<TestExternalities, &'static str> {
 		let state_version =
 			StateApi::<B::Hash>::runtime_version(self.as_online().rpc_client(), None)
 				.await
@@ -735,12 +809,19 @@ where
 					"rpc runtime_version failed."
 				})
 				.map(|v| v.state_version())?;
+		let mut pending_ext = TestExternalities::new_with_code_and_state(
+			Default::default(),
+			Default::default(),
+			state_version,
+		);
+		let top_kv = self.load_top_remote(&mut pending_ext).await?;
+		let child_kv = self.load_child_remote(&top_kv, &mut pending_ext).await?;
 
 		if let Some(path) = self.as_online().state_snapshot.clone().map(|c| c.path) {
 			let snapshot = Snapshot::<B> {
 				state_version,
-				top: top_kv.clone(),
-				child: child_kv.clone(),
+				top: top_kv,
+				child: child_kv,
 				block_hash: self
 					.as_online()
 					.at
@@ -756,7 +837,7 @@ where
 			std::fs::write(path, encoded).map_err(|_| "fs::write failed")?;
 		}
 
-		Ok((top_kv, child_kv, state_version))
+		Ok(pending_ext)
 	}
 
 	pub(crate) fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
@@ -765,28 +846,52 @@ where
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
-	async fn do_load_remote(
-		&mut self,
-	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
+	async fn do_load_remote(&mut self) -> Result<RemoteExternalities<B>, &'static str> {
 		self.init_remote_client().await?;
-		self.final_state_block_hash = Some(self.as_online().at_expected());
-		Ok(self.load_remote_and_maybe_save().await?)
+		let block_hash = self.as_online().at_expected();
+		let inner_ext = self.load_remote_and_maybe_save().await?;
+		Ok(RemoteExternalities { block_hash, inner_ext })
 	}
 
 	fn do_load_offline(
 		&mut self,
 		config: OfflineConfig,
-	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
+	) -> Result<RemoteExternalities<B>, &'static str> {
 		let Snapshot { block_hash, top, child, state_version } =
 			self.load_snapshot(config.state_snapshot.path.clone())?;
-		self.final_state_block_hash = Some(block_hash);
-		Ok((top, child, state_version))
+
+		let mut inner_ext = TestExternalities::new_with_code_and_state(
+			Default::default(),
+			Default::default(),
+			state_version,
+		);
+
+		info!(target: LOG_TARGET, "injecting a total of {} top keys", top.len());
+		for (k, v) in top {
+			// skip writing the child root data.
+			if is_default_child_storage_key(k.as_ref()) {
+				continue
+			}
+			inner_ext.insert(k.0, v.0);
+		}
+
+		info!(
+			target: LOG_TARGET,
+			"injecting a total of {} child keys",
+			child.iter().flat_map(|(_, kv)| kv).count()
+		);
+
+		for (info, key_values) in child {
+			for (k, v) in key_values {
+				inner_ext.insert_child(info.clone(), k.0, v.0);
+			}
+		}
+
+		Ok(RemoteExternalities { inner_ext, block_hash })
 	}
 
-	pub(crate) async fn pre_build(
-		&mut self,
-	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
-		let (mut top_kv, child_kv, state_version) = match self.mode.clone() {
+	pub(crate) async fn pre_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
+		let mut ext = match self.mode.clone() {
 			Mode::Offline(config) => self.do_load_offline(config)?,
 			Mode::Online(_) => self.do_load_remote().await?,
 			Mode::OfflineOrElseOnline(offline_config, _) => {
@@ -804,7 +909,9 @@ where
 				"extending externalities with {} manually injected key-values",
 				self.hashed_key_values.len()
 			);
-			top_kv.extend(self.hashed_key_values.clone());
+			for (k, v) in self.hashed_key_values {
+				ext.insert(k.0, v.0);
+			}
 		}
 
 		// exclude manual key values.
@@ -814,10 +921,13 @@ where
 				"excluding externalities from {} keys",
 				self.hashed_blacklist.len()
 			);
-			top_kv.retain(|(k, _)| !self.hashed_blacklist.contains(&k.0))
+			for k in self.hashed_blacklist {
+				todo!();
+				// ext.remove(k);
+			}
 		}
 
-		Ok((top_kv, child_kv, state_version))
+		Ok(ext)
 	}
 }
 
@@ -859,37 +969,10 @@ where
 		self
 	}
 
-	pub async fn build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
-		let (top_kv, child_kv, state_version) = self.pre_build().await?;
-		let mut ext = TestExternalities::new_with_code_and_state(
-			Default::default(),
-			Default::default(),
-			self.overwrite_state_version.unwrap_or(state_version),
-		);
-
-		// OPTIMIZATION: we can do this while child keys are being fetched.
-		info!(target: LOG_TARGET, "injecting a total of {} top keys", top_kv.len());
-		for (k, v) in top_kv {
-			// skip writing the child root data.
-			if is_default_child_storage_key(k.as_ref()) {
-				continue
-			}
-			ext.insert(k.0, v.0);
-		}
-
-		info!(
-			target: LOG_TARGET,
-			"injecting a total of {} child keys",
-			child_kv.iter().flat_map(|(_, kv)| kv).count()
-		);
-
-		for (info, key_values) in child_kv {
-			for (k, v) in key_values {
-				ext.insert_child(info.clone(), k.0, v.0);
-			}
-		}
-
+	pub async fn build(self) -> Result<RemoteExternalities<B>, &'static str> {
+		let mut ext = self.pre_build().await?;
 		ext.commit_all().unwrap();
+
 		info!(
 			target: LOG_TARGET,
 			"initialized state externalities with storage root {:?} and state_version {:?}",
@@ -897,7 +980,7 @@ where
 			ext.state_version
 		);
 
-		Ok(RemoteExternalities { inner_ext: ext, block_hash: self.final_state_block_hash.unwrap() })
+		Ok(ext)
 	}
 }
 
@@ -1211,7 +1294,6 @@ mod remote_tests {
 				transport: std::option_env!("TEST_WS").unwrap().into(),
 				pallets: vec!["Staking".to_owned()],
 				child_trie: false,
-				threads: 2,
 				..Default::default()
 			}))
 			.build()
