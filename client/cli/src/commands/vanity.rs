@@ -29,10 +29,10 @@ use utils::print_from_uri;
 
 /// The `vanity` command
 #[derive(Debug, Clone, Parser)]
-#[clap(name = "vanity", about = "Generate a seed that provides a vanity address")]
+#[command(name = "vanity", about = "Generate a seed that provides a vanity address")]
 pub struct VanityCmd {
 	/// Desired pattern
-	#[clap(long, parse(try_from_str = assert_non_empty_string))]
+	#[arg(long, value_parser = assert_non_empty_string)]
 	pattern: String,
 
 	#[allow(missing_docs)]

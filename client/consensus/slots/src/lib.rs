@@ -1118,7 +1118,7 @@ mod test {
 
 		// But lets assert all distances, which we expect to grow linearly until `max_interval + 1`
 		let expected_intervals: Vec<_> =
-			(0..497).map(|i| (i / 2).max(1).min(expected_distance)).collect();
+			(0..497).map(|i| (i / 2).clamp(1, expected_distance)).collect();
 
 		assert_eq!(intervals, expected_intervals);
 	}

@@ -26,13 +26,17 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
 log = { version = "0.4.0", default-features = false }
 
+# Optional: usef for testing and/or fuzzing
+pallet-balances = { version = "4.0.0-dev", path = "../balances", optional = true }
+sp-tracing = { version = "5.0.0", path = "../../primitives/tracing", optional = true }
+
 [dev-dependencies]
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
-rand = { version = "0.8.5", features = ["small_rng"] }
 
 [features]
 default = ["std"]
+fuzzing = ["pallet-balances", "sp-tracing"]
 std = [
 	"codec/std",
 	"scale-info/std",
@@ -51,4 +55,3 @@ runtime-benchmarks = [
 try-runtime = [
 	"frame-support/try-runtime"
 ]
-fuzz-test = []

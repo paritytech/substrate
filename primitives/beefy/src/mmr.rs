@@ -64,7 +64,7 @@ pub struct MmrLeaf<BlockNumber, Hash, MerkleRoot, ExtraData> {
 	pub leaf_extra: ExtraData,
 }
 
-/// A MMR leaf versioning scheme.
+/// An MMR leaf versioning scheme.
 ///
 /// Version is a single byte that constist of two components:
 /// - `major` - 3 bits
@@ -101,6 +101,7 @@ impl MmrLeafVersion {
 
 /// Details of a BEEFY authority set.
 #[derive(Debug, Default, PartialEq, Eq, Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct BeefyAuthoritySet<MerkleRoot> {
 	/// Id of the set.
 	///

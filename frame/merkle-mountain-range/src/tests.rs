@@ -27,7 +27,7 @@ use sp_core::{
 	offchain::{testing::TestOffchainExt, OffchainDbExt, OffchainWorkerExt},
 	H256,
 };
-use sp_mmr_primitives::{BatchProof, Compact};
+use sp_mmr_primitives::{Compact, Proof};
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 	frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into()
@@ -169,25 +169,22 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 	ext.persist_offchain_overlay();
 
 	let offchain_db = ext.offchain_db();
-	assert_eq!(
-		offchain_db.get(&MMR::node_offchain_key(parent_b1, 0)).map(decode_node),
-		Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1),)))
-	);
-	assert_eq!(
-		offchain_db.get(&MMR::node_offchain_key(parent_b2, 1)).map(decode_node),
-		Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2),)))
-	);
-	assert_eq!(
-		offchain_db.get(&MMR::node_offchain_key(parent_b2, 2)).map(decode_node),
-		Some(mmr::Node::Hash(hex(
-			"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"
-		)))
-	);
-	assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_b2, 3)), None);
 
-	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(0)), None);
-	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(1)), None);
-	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(2)), None);
+	let expected = Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1))));
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(0, parent_b1)).map(decode_node), expected);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(0)).map(decode_node), expected);
+
+	let expected = Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2))));
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(1, parent_b2)).map(decode_node), expected);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(1)).map(decode_node), expected);
+
+	let expected = Some(mmr::Node::Hash(hex(
+		"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854",
+	)));
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(2, parent_b2)).map(decode_node), expected);
+	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(2)).map(decode_node), expected);
+
+	assert_eq!(offchain_db.get(&MMR::node_offchain_key(3, parent_b2)), None);
 	assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(3)), None);
 }
 
@@ -239,18 +236,18 @@ fn should_generate_proofs_correctly() {
 		// when generate proofs for all leaves.
 		let proofs = (1_u64..=best_block_number)
 			.into_iter()
-			.map(|block_num| crate::Pallet::<Test>::generate_batch_proof(vec![block_num]).unwrap())
+			.map(|block_num| crate::Pallet::<Test>::generate_proof(vec![block_num], None).unwrap())
 			.collect::<Vec<_>>();
 		// when generate historical proofs for all leaves
 		let historical_proofs = (1_u64..best_block_number)
 			.into_iter()
 			.map(|block_num| {
 				let mut proofs = vec![];
-				for leaves_count in block_num..=num_blocks {
+				for historical_best_block in block_num..=num_blocks {
 					proofs.push(
-						crate::Pallet::<Test>::generate_historical_batch_proof(
+						crate::Pallet::<Test>::generate_proof(
 							vec![block_num],
-							leaves_count,
+							Some(historical_best_block),
 						)
 						.unwrap(),
 					)
@@ -264,7 +261,7 @@ fn should_generate_proofs_correctly() {
 			proofs[0],
 			(
 				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![0],
 					leaf_count: 7,
 					items: vec![
@@ -279,7 +276,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[0][0],
 			(
 				vec![Compact::new(((0, H256::repeat_byte(1)).into(), LeafData::new(1).into(),))],
-				BatchProof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
+				Proof { leaf_indices: vec![0], leaf_count: 1, items: vec![] }
 			)
 		);
 
@@ -295,7 +292,7 @@ fn should_generate_proofs_correctly() {
 			proofs[2],
 			(
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![2],
 					leaf_count: 7,
 					items: vec![
@@ -315,7 +312,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[2][0],
 			(
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![2],
 					leaf_count: 3,
 					items: vec![hex(
@@ -335,7 +332,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[2][2],
 			(
 				vec![Compact::new(((2, H256::repeat_byte(3)).into(), LeafData::new(3).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![2],
 					leaf_count: 5,
 					items: vec![
@@ -353,7 +350,7 @@ fn should_generate_proofs_correctly() {
 			(
 				// NOTE: the leaf index is equivalent to the block number(in this case 5) - 1
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![4],
 					leaf_count: 7,
 					items: vec![
@@ -368,7 +365,7 @@ fn should_generate_proofs_correctly() {
 			historical_proofs[4][0],
 			(
 				vec![Compact::new(((4, H256::repeat_byte(5)).into(), LeafData::new(5).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![4],
 					leaf_count: 5,
 					items: vec![hex(
@@ -383,7 +380,7 @@ fn should_generate_proofs_correctly() {
 			proofs[6],
 			(
 				vec![Compact::new(((6, H256::repeat_byte(7)).into(), LeafData::new(7).into(),))],
-				BatchProof {
+				Proof {
 					leaf_indices: vec![6],
 					leaf_count: 7,
 					items: vec![
@@ -410,11 +407,11 @@ fn should_generate_batch_proof_correctly() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when generate proofs for a batch of leaves
-		let (.., proof) = crate::Pallet::<Test>::generate_batch_proof(vec![1, 5, 6]).unwrap();
+		let (.., proof) = crate::Pallet::<Test>::generate_proof(vec![1, 5, 6], None).unwrap();
 		// then
 		assert_eq!(
 			proof,
-			BatchProof {
+			Proof {
 				// the leaf indices are equivalent to the above specified block numbers - 1.
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 7,
@@ -428,11 +425,11 @@ fn should_generate_batch_proof_correctly() {
 
 		// when generate historical proofs for a batch of leaves
 		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 5, 6], 6).unwrap();
+			crate::Pallet::<Test>::generate_proof(vec![1, 5, 6], Some(6)).unwrap();
 		// then
 		assert_eq!(
 			historical_proof,
-			BatchProof {
+			Proof {
 				leaf_indices: vec![0, 4, 5],
 				leaf_count: 6,
 				items: vec![
@@ -444,7 +441,7 @@ fn should_generate_batch_proof_correctly() {
 
 		// when generate historical proofs for a batch of leaves
 		let (.., historical_proof) =
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 5, 6], 7).unwrap();
+			crate::Pallet::<Test>::generate_proof(vec![1, 5, 6], None).unwrap();
 		// then
 		assert_eq!(historical_proof, proof);
 	});
@@ -465,15 +462,15 @@ fn should_verify() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_batch_proof(vec![5]).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![5], None).unwrap()
 	});
 	let (simple_historical_leaves, simple_historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 6).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![5], Some(6)).unwrap()
 	});
 	let (advanced_historical_leaves, advanced_historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 7).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![5], Some(7)).unwrap()
 	});
 
 	ext.execute_with(|| {
@@ -505,22 +502,18 @@ fn should_verify_batch_proofs() {
 		blocks_to_add: usize,
 	) {
 		let (leaves, proof) = ext.execute_with(|| {
-			crate::Pallet::<Test>::generate_batch_proof(block_numbers.to_vec()).unwrap()
+			crate::Pallet::<Test>::generate_proof(block_numbers.to_vec(), None).unwrap()
 		});
 
-		let mmr_size = ext.execute_with(|| crate::Pallet::<Test>::mmr_leaves());
-		let min_mmr_size = block_numbers.iter().max().unwrap() + 1;
+		let max_block_number = ext.execute_with(|| frame_system::Pallet::<Test>::block_number());
+		let min_block_number = block_numbers.iter().max().unwrap();
 
-		// generate historical proofs for all possible mmr sizes,
-		// lower bound being index of highest leaf to be proven
-		let historical_proofs = (min_mmr_size..=mmr_size)
-			.map(|mmr_size| {
+		// generate all possible historical proofs for the given blocks
+		let historical_proofs = (*min_block_number..=max_block_number)
+			.map(|best_block| {
 				ext.execute_with(|| {
-					crate::Pallet::<Test>::generate_historical_batch_proof(
-						block_numbers.to_vec(),
-						mmr_size,
-					)
-					.unwrap()
+					crate::Pallet::<Test>::generate_proof(block_numbers.to_vec(), Some(best_block))
+						.unwrap()
 				})
 			})
 			.collect::<Vec<_>>();
@@ -605,11 +598,11 @@ fn verification_should_be_stateless() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_batch_proof(vec![5]).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![5], None).unwrap()
 	});
 	let (_, historical_proof5) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![5], 6).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![5], Some(6)).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
@@ -653,11 +646,11 @@ fn should_verify_batch_proof_statelessly() {
 	register_offchain_ext(&mut ext);
 	let (leaves, proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_batch_proof(vec![1, 4, 5]).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![1, 4, 5], None).unwrap()
 	});
 	let (historical_leaves, historical_proof) = ext.execute_with(|| {
 		// when
-		crate::Pallet::<Test>::generate_historical_batch_proof(vec![1, 4, 5], 6).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![1, 4, 5], Some(6)).unwrap()
 	});
 
 	// Verify proof without relying on any on-chain data.
@@ -697,7 +690,7 @@ fn should_verify_on_the_next_block_since_there_is_no_pruning_yet() {
 
 	ext.execute_with(|| {
 		// when
-		let (leaves, proof5) = crate::Pallet::<Test>::generate_batch_proof(vec![5]).unwrap();
+		let (leaves, proof5) = crate::Pallet::<Test>::generate_proof(vec![5], None).unwrap();
 		new_block();
 
 		// then
@@ -815,16 +808,20 @@ fn should_canonicalize_offchain() {
 			let parent_num: BlockNumber = (block_num - 1).into();
 			let leaf_index = u64::from(block_num - 1);
 			let pos = helper::leaf_index_to_pos(leaf_index.into());
-			// not canon,
-			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
-			// but available in fork-proof storage.
+			// Available in offchain db under both fork-proof key and canon key.
+			// We'll later check it is pruned from fork-proof key.
+			let expected = Some(mmr::Node::Data((
+				(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
+				LeafData::new(block_num.into()),
+			)));
 			assert_eq!(
-				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
-				Some(mmr::Node::Data((
-					(leaf_index, H256::repeat_byte(u8::try_from(block_num).unwrap())),
-					LeafData::new(block_num.into()),
-				)))
+				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
+				expected
+			);
+			assert_eq!(
+				offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)).map(decode_node),
+				expected
 			);
 		}
 
@@ -835,12 +832,16 @@ fn should_canonicalize_offchain() {
 		let verify = |pos: NodeIndex, leaf_index: LeafIndex, expected: H256| {
 			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
-			// not canon,
-			assert_eq!(offchain_db.get(&MMR::node_canon_offchain_key(pos)), None);
-			// but available in fork-proof storage.
+			// Available in offchain db under both fork-proof key and canon key.
+			// We'll later check it is pruned from fork-proof key.
+			let expected = Some(mmr::Node::Hash(expected));
 			assert_eq!(
-				offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)).map(decode_node),
-				Some(mmr::Node::Hash(expected))
+				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
+				expected
+			);
+			assert_eq!(
+				offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)).map(decode_node),
+				expected
 			);
 		};
 		verify(2, 1, hex("672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854"));
@@ -867,7 +868,7 @@ fn should_canonicalize_offchain() {
 			let parent_num: BlockNumber = (block_num - 1).into();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
 			// no longer available in fork-proof storage (was pruned),
-			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)), None);
 			// but available using canon key.
 			assert_eq!(
 				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
@@ -886,7 +887,7 @@ fn should_canonicalize_offchain() {
 			let parent_num: BlockNumber = leaf_index.try_into().unwrap();
 			let parent_hash = <frame_system::Pallet<Test>>::block_hash(parent_num);
 			// no longer available in fork-proof storage (was pruned),
-			assert_eq!(offchain_db.get(&MMR::node_offchain_key(parent_hash, pos)), None);
+			assert_eq!(offchain_db.get(&MMR::node_offchain_key(pos, parent_hash)), None);
 			// but available using canon key.
 			assert_eq!(
 				offchain_db.get(&MMR::node_canon_offchain_key(pos)).map(decode_node),
@@ -923,7 +924,7 @@ fn should_verify_canonicalized() {
 
 	// Generate proofs for some blocks.
 	let (leaves, proofs) =
-		ext.execute_with(|| crate::Pallet::<Test>::generate_batch_proof(vec![1, 4, 5, 7]).unwrap());
+		ext.execute_with(|| crate::Pallet::<Test>::generate_proof(vec![1, 4, 5, 7], None).unwrap());
 	// Verify all previously generated proofs.
 	ext.execute_with(|| {
 		assert_eq!(crate::Pallet::<Test>::verify_leaves(leaves, proofs), Ok(()));
@@ -931,7 +932,7 @@ fn should_verify_canonicalized() {
 
 	// Generate proofs for some new blocks.
 	let (leaves, proofs) = ext.execute_with(|| {
-		crate::Pallet::<Test>::generate_batch_proof(vec![block_hash_size + 7]).unwrap()
+		crate::Pallet::<Test>::generate_proof(vec![block_hash_size + 7], None).unwrap()
 	});
 	// Add some more blocks then verify all previously generated proofs.
 	ext.execute_with(|| {
@@ -955,19 +956,19 @@ fn does_not_panic_when_generating_historical_proofs() {
 	ext.execute_with(|| {
 		// when leaf index is invalid
 		assert_eq!(
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 7),
+			crate::Pallet::<Test>::generate_proof(vec![10], None),
 			Err(Error::BlockNumToLeafIndex),
 		);
 
 		// when leaves count is invalid
 		assert_eq!(
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![3], 100),
+			crate::Pallet::<Test>::generate_proof(vec![3], Some(100)),
 			Err(Error::BlockNumToLeafIndex),
 		);
 
 		// when both leaf index and leaves count are invalid
 		assert_eq!(
-			crate::Pallet::<Test>::generate_historical_batch_proof(vec![10], 100),
+			crate::Pallet::<Test>::generate_proof(vec![10], Some(100)),
 			Err(Error::BlockNumToLeafIndex),
 		);
 	});
