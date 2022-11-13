@@ -21,6 +21,7 @@
 //! Service implementation. Specialized wrapper over substrate service.
 
 use codec::Encode;
+use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use frame_system_rpc_runtime_api::AccountNonceApi;
 use futures::prelude::*;
 use kitchensink_runtime::RuntimeApi;
@@ -32,7 +33,6 @@ use sc_executor::NativeElseWasmExecutor;
 use sc_network::NetworkService;
 use sc_network_common::{protocol::event::Event, service::NetworkEventStream};
 use sc_service::{config::Configuration, error::Error as ServiceError, RpcHandlers, TaskManager};
-use sc_sysinfo::Requirements;
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::ProvideRuntimeApi;
 use sp_core::crypto::Pair;
@@ -318,11 +318,14 @@ pub fn new_full_base(
 		&sc_consensus_babe::BabeLink<Block>,
 	),
 ) -> Result<NewFullBase, ServiceError> {
-	let requirements: Requirements = Requirements(vec![]);
 	let hwbench = if !disable_hardware_benchmarks {
 		config.database.path().map(|database_path| {
 			let _ = std::fs::create_dir_all(&database_path);
-			sc_sysinfo::gather_hwbench(Some(database_path), requirements)
+			sc_sysinfo::gather_hwbench(
+				Some(database_path),
+				SUBSTRATE_REFERENCE_HARDWARE.clone(),
+				config.role.is_authority(),
+			)
 		})
 	} else {
 		None

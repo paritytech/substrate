@@ -589,7 +589,11 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> Throughput {
 /// Benchmarks the hardware and returns the results of those benchmarks.
 ///
 /// Optionally accepts a path to a `scratch_directory` to use to benchmark the disk.
-pub fn gather_hwbench(scratch_directory: Option<&Path>, requirements: Requirements) -> HwBench {
+pub fn gather_hwbench(
+	scratch_directory: Option<&Path>,
+	requirements: Requirements,
+	is_authority: bool,
+) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
 		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT),
@@ -618,8 +622,10 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>, requirements: Requiremen
 				},
 			};
 	}
-	// if validator
-	ensure_requirements(hwbench.clone(), requirements);
+
+	if is_authority {
+		ensure_requirements(hwbench.clone(), requirements);
+	}
 
 	hwbench
 }
