@@ -443,6 +443,9 @@ fn expand_functions(
 			} }
 		} else {
 			quote! { || -> #wasm_output {
+				// This is part of the implementation for `Environment<()>` which is not
+				// meant to be actually executed. It is only for validation which will
+				// never call host functions.
 				::core::unreachable!()
 			} }
 		};
