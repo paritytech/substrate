@@ -1123,30 +1123,18 @@ impl pallet_bounties::Config for Runtime {
 parameter_types! {
 	pub const HeapSize: u32 = 64 * 1024; // 64 KiB
 	pub const MaxStale: u32 = 128;
-}
-
-/// Processes any message while consuming no weight.
-pub struct NoOpMessageProcessor;
-
-impl pallet_message_queue::ProcessMessage for NoOpMessageProcessor {
-	type Origin = u32;
-
-	fn process_message(
-		_message: &[u8],
-		_origin: Self::Origin,
-		_weight_limit: Weight,
-	) -> Result<(bool, Weight), pallet_message_queue::ProcessMessageError> {
-		Ok((true, Weight::zero()))
-	}
+	pub const ServiceWeight: Option<Weight> = None;
 }
 
 impl pallet_message_queue::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
-	type MessageProcessor = NoOpMessageProcessor;
+	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
+	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor;
 	type Size = u32;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
+	type ServiceWeight = ServiceWeight;
 }
 
 parameter_types! {

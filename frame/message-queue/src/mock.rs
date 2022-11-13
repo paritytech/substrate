@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-#![cfg(any(test, feature = "runtime-benchmarks"))]
+#![cfg(any(test, feature = "std"))]
 
 use super::*;
+pub use super::mock_helpers::*;
 
 use crate as pallet_message_queue;
 use frame_support::{
@@ -24,10 +25,8 @@ use frame_support::{
 	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
-use sp_runtime::{
-	testing::Header,
-	traits::{BlakeTwo256, IdentityLookup},
-};
+use sp_runtime::testing::Header;
+use sp_runtime::traits::{BlakeTwo256, IdentityLookup};
 use sp_std::collections::btree_map::BTreeMap;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -43,7 +42,6 @@ frame_support::construct_runtime!(
 		MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>},
 	}
 );
-
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
@@ -74,12 +72,11 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
-
 parameter_types! {
 	pub const HeapSize: u32 = 24;
 	pub const MaxStale: u32 = 2;
+	pub const ServiceWeight: Option<Weight> = Some(Weight::from_parts(10, 10));
 }
-
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = MockedWeightInfo;
@@ -87,6 +84,7 @@ impl Config for Test {
 	type Size = u32;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
+	type ServiceWeight = ServiceWeight;
 }
 
 /// Mocked `WeightInfo` impl with allows to set the weight per call.
@@ -108,6 +106,12 @@ impl MockedWeightInfo {
 }
 
 impl crate::weights::WeightInfo for MockedWeightInfo {
+	fn reap_page() -> Weight {
+		WeightForCall::get().get("reap_page").copied().unwrap_or_default()
+	}
+	fn execute_overweight() -> Weight {
+		WeightForCall::get().get("execute_overweight").copied().unwrap_or_default()
+	}
 	fn service_page_base() -> Weight {
 		WeightForCall::get().get("service_page_base").copied().unwrap_or_default()
 	}
@@ -128,6 +132,9 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	}
 	fn ready_ring_unknit() -> Weight {
 		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
+	}
+	fn process_message_payload(_: u32) -> Weight {
+		WeightForCall::get().get("process_message_payload").copied().unwrap_or_default()
 	}
 }
 
@@ -182,8 +189,8 @@ parameter_types! {
 /// always consume one weight per message.
 ///
 /// The [`TestMessageProcessor`] is a bit too slow for the integration tests.
-pub struct SimpleTestMessageProcessor;
-impl ProcessMessage for SimpleTestMessageProcessor {
+pub struct CountingMessageProcessor;
+impl ProcessMessage for CountingMessageProcessor {
 	type Origin = MessageOrigin;
 
 	fn process_message(
@@ -205,11 +212,11 @@ impl ProcessMessage for SimpleTestMessageProcessor {
 /// Create new test externalities.
 ///
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
+#[cfg(test)]
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
 	<T as frame_system::Config>::BlockNumber: From<u32>,
 {
-	#[cfg(test)] // Only log in tests, not in in benchmarks.
 	sp_tracing::try_init_simple();
 	WeightForCall::set(Default::default());
 	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
@@ -221,81 +228,4 @@ where
 /// Set the weight of a specific weight function.
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, MaxEncodedLen, TypeInfo, Debug)]
-pub enum MessageOrigin {
-	Here,
-	There,
-	Everywhere(u32),
-}
-
-impl From<u32> for MessageOrigin {
-	fn from(i: u32) -> Self {
-		Self::Everywhere(i)
-	}
-}
-
-/// Converts `Self` into a `Weight` by using `Self` for all components.
-pub trait IntoWeight {
-	fn into_weight(self) -> Weight;
-}
-
-impl IntoWeight for u64 {
-	fn into_weight(self) -> Weight {
-		Weight::from_parts(self, self)
-	}
-}
-
-pub fn msg<N: Get<u32>>(x: &'static str) -> BoundedSlice<u8, N> {
-	BoundedSlice::defensive_truncate_from(x.as_bytes())
-}
-
-pub fn vmsg(x: &'static str) -> Vec<u8> {
-	x.as_bytes().to_vec()
-}
-
-pub fn page<T: Config>(msg: &[u8]) -> PageOf<T> {
-	PageOf::<T>::from_message::<T>(msg.try_into().unwrap())
-}
-
-pub fn single_page_book<T: Config>() -> BookStateOf<T> {
-	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
-}
-
-/// Returns a page filled with empty messages and the number of messages.
-pub fn full_page<T: Config>() -> (PageOf<T>, usize) {
-	let mut msgs = 0;
-	let mut page = PageOf::<T>::default();
-	for i in 0..u32::MAX {
-		let r = i.using_encoded(|d| page.try_append_message::<T>(d.try_into().unwrap()));
-		if r.is_err() {
-			break
-		} else {
-			msgs += 1;
-		}
-	}
-	assert!(msgs > 0, "page must hold at least one message");
-	(page, msgs)
-}
-
-/// Returns a page filled with empty messages and the number of messages.
-pub fn book_for<T: Config>(page: &PageOf<T>) -> BookStateOf<T> {
-	BookState {
-		count: 1,
-		begin: 0,
-		end: 1,
-		ready_neighbours: None,
-		message_count: page.remaining.into(),
-		size: page.remaining_size.into(),
-	}
-}
-
-#[allow(dead_code)]
-pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
-	assert!(
-		!frame_system::Pallet::<T>::block_number().is_zero(),
-		"The genesis block has n o events"
-	);
-	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }

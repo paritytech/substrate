@@ -163,7 +163,7 @@ fn reap_page_permanent_overweight_works() {
 		use MessageOrigin::*;
 		// Create pages with messages with a weight of two.
 		// TODO why do we need `+ 2` here?
-		for _ in 0..(MaxStale::get() + 2) {
+		for _ in 0..(MaxStale::get() * MaxStale::get()) {
 			MessageQueue::enqueue_message(msg(&"weight=2"), Here);
 		}
 
@@ -175,7 +175,6 @@ fn reap_page_permanent_overweight_works() {
 		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
 		// Cannot reap again.
 		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
 	});
 }
 
@@ -295,6 +294,7 @@ fn service_page_item_bails() {
 		assert_eq!(
 			MessageQueue::service_page_item(
 				&MessageOrigin::Here,
+				0,
 				&mut book_for::<Test>(&page),
 				&mut page,
 				&mut weight,
@@ -316,6 +316,7 @@ fn service_page_consumes_correct_weight() {
 		assert_eq!(
 			MessageQueue::service_page_item(
 				&MessageOrigin::Here,
+				0,
 				&mut book_for::<Test>(&page),
 				&mut page,
 				&mut weight,
@@ -339,6 +340,7 @@ fn service_page_skips_perm_overweight_message() {
 		assert_eq!(
 			MessageQueue::service_page_item(
 				&MessageOrigin::Here,
+				0,
 				&mut book_for::<Test>(&page),
 				&mut page,
 				&mut weight,
@@ -387,4 +389,44 @@ fn page_from_message_max_len_works() {
 	let page = PageOf::<Test>::from_message::<Test>(vec![1; max_msg_len][..].try_into().unwrap());
 
 	assert_eq!(page.remaining, 1);
+}
+
+#[test]
+fn sweep_queue_works() {
+	new_test_ext::<Test>().execute_with(|| {
+		let origin = MessageOrigin::Here;
+		let (page, _) = full_page::<Test>();
+		let mut book = book_for::<Test>(&page);
+		assert!(book.begin != book.end, "pre-condition: the book is not empty");
+		Pages::<Test>::insert(&origin, &0, &page);
+		BookStateFor::<Test>::insert(&origin, &book);
+
+		MessageQueue::sweep_queue(origin);
+		// The book still exits, but has updated begin and end.
+		let book = BookStateFor::<Test>::get(&origin);
+		assert_eq!(book.begin, book.end, "Begin and end are now the same");
+		assert!(Pages::<Test>::contains_key(&origin, &0), "Page was not swept");
+	})
+}
+
+#[test]
+fn footprint_works() {
+	new_test_ext::<Test>().execute_with(|| {
+		let origin = MessageOrigin::Here;
+		let (page, msgs) = full_page::<Test>();
+		let mut book = book_for::<Test>(&page);
+		BookStateFor::<Test>::insert(&origin, &book);
+
+		let info = MessageQueue::footprint(origin);
+		assert_eq!(info.count as usize, msgs);
+		assert_eq!(info.size, page.remaining_size);
+	})
+}
+
+#[test]
+fn footprint_default_works() {
+	new_test_ext::<Test>().execute_with(|| {
+		let origin = MessageOrigin::Here;
+		assert_eq!(MessageQueue::footprint(origin), Default::default());
+	})
 }

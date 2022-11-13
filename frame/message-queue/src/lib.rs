@@ -21,7 +21,7 @@
 mod benchmarking;
 mod integration_test;
 mod mock;
-#[cfg(test)]
+pub mod mock_helpers;
 mod tests;
 pub mod weights;
 
@@ -252,8 +252,8 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
 
-	#[pallet::config]
 	/// The module configuration trait.
+	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -262,6 +262,11 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Processor for a message.
+		///
+		/// Must be set to [`mock_helpers::NoopMessageProcessor`] for benchmarking.
+		/// Other message processors that consumes exactly (1, 1) weight for any give message will
+		/// work as well. Otherwise the benchmarking will also measure the weight of the message
+		/// processor, which is not desired.
 		type MessageProcessor: ProcessMessage;
 
 		/// Page/heap size type.
@@ -373,12 +378,19 @@ pub mod pallet {
 				Weight::zero()
 			}
 		}
+
+		/// Check all assumptions about [`crate::Config`].
+		fn integrity_test() {
+			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
+			// This value is squared and should not overflow.
+			assert!(T::MaxStale::get() <= u16::MAX as u32, "MaxStale too large");
+		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// Remove a page which has no more messages remaining to be processed or is stale.
-		#[pallet::weight(150_000_000_000)]
+		#[pallet::weight(T::WeightInfo::reap_page())]
 		pub fn reap_page(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,
@@ -398,7 +410,7 @@ pub mod pallet {
 		///   of the message.
 		///
 		/// Benchmark complexity considerations: O(index + weight_limit).
-		#[pallet::weight(150_000_000_000)]
+		#[pallet::weight(T::WeightInfo::execute_overweight())]
 		pub fn execute_overweight(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,
@@ -1031,7 +1043,9 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		}
 	}
 
-	// TODO: test.
+	/// Force removes a queue from the ready ring.
+	///
+	/// Does not remove its pages from the storage.
 	fn sweep_queue(origin: MessageOriginOf<T>) {
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		book_state.begin = book_state.end;
@@ -1041,7 +1055,7 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		BookStateFor::<T>::insert(&origin, &book_state);
 	}
 
-	// TODO: test.
+	/// Returns the [`Footprint`] of a queue.
 	fn footprint(origin: MessageOriginOf<T>) -> Footprint {
 		let book_state = BookStateFor::<T>::get(&origin);
 		Footprint { count: book_state.message_count, size: book_state.size }

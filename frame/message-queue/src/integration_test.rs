@@ -21,8 +21,8 @@
 
 use crate::{
 	mock::{
-		new_test_ext, IntoWeight, MockedWeightInfo, NumMessagesProcessed,
-		SimpleTestMessageProcessor,
+		new_test_ext, CountingMessageProcessor, IntoWeight, MockedWeightInfo,
+		NumMessagesProcessed,
 	},
 	*,
 };
@@ -87,27 +87,49 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-	pub const HeapSize: u32 = 64 * 1024;
-	pub const MaxStale: u32 = 256;
+	pub const HeapSize: u32 = 32 * 1024;
+	pub const MaxStale: u32 = 32;
+	pub const ServiceWeight: Option<Weight> = Some(Weight::from_parts(10, 10));
 }
 
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = MockedWeightInfo;
-	type MessageProcessor = SimpleTestMessageProcessor;
+	type MessageProcessor = CountingMessageProcessor;
 	type Size = u32;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
+	type ServiceWeight = ServiceWeight;
 }
 
 /// Simulates heavy usage by enqueueing and processing large amounts of messages.
+///
+/// Best to run with `--release`.
+///
+/// # Example output
+///
+/// Each block produces a print in this form:
+///
+/// ```pre
+/// Enqueued 35298 messages across 5266 queues. Total payload 621.85 KiB
+/// Processing 20758 messages...
+/// Processing 2968 messages...
+/// Processing 7686 messages...
+/// Processing 3287 messages...
+/// Processing 461 messages...
+/// Processing 14 messages...
+/// Processing 112 messages...
+/// Processing 5 messages...
+/// Processing 6 messages...
+/// Processing 1 messages...
+/// ```
 #[test]
 fn stress_test_enqueue_and_service() {
 	let blocks = 10;
 	let max_queues = 10_000;
 	let max_messages_per_queue = 100_000;
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+	let mut rng = rand::rngs::StdRng::seed_from_u64(2);
 
 	new_test_ext::<Test>().execute_with(|| {
 		for _ in 0..blocks {
@@ -141,8 +163,8 @@ fn stress_test_enqueue_and_service() {
 
 			let mut msgs_remaining = num_messages as u64;
 			while !msgs_remaining.is_zero() {
-				// We have to use at least 1 here since otherwise messages will be as permanently
-				// marked overweight.
+				// We have to use at least 1 here since otherwise messages will marked as
+				// permanently overweight.
 				let weight = rng.gen_range(1..=msgs_remaining).into_weight();
 
 				log::info!("Processing {} messages...", weight.ref_time());
@@ -150,7 +172,9 @@ fn stress_test_enqueue_and_service() {
 				if consumed != weight {
 					panic!(
 						"consumed != weight: {} != {}\n{}",
-						consumed, weight, "MessageQueue::debug_info()"
+						consumed,
+						weight,
+						MessageQueue::debug_info()
 					);
 				}
 				let processed = NumMessagesProcessed::take();
