@@ -210,6 +210,7 @@ skip-if-draft:
      - echo "Ref is ${CI_COMMIT_REF_NAME}"
      - echo "pipeline source is ${CI_PIPELINE_SOURCE}"
      - ./scripts/ci/gitlab/skip_if_draft.sh
+  allow_failure:                   true
 
 include:
   # check jobs
