@@ -26,6 +26,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+extern crate self as sp_weights;
+
+mod weight_meter;
 mod weight_v2;
 
 use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
@@ -40,6 +43,7 @@ use sp_arithmetic::{
 use sp_core::Get;
 use sp_debug_derive::RuntimeDebug;
 
+pub use weight_meter::*;
 pub use weight_v2::*;
 
 pub mod constants {
