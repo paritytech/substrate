@@ -29,7 +29,7 @@ use log::{error, info, warn};
 use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
-	bench_result, benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
+	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
 	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit, Metric, Requirement, Requirements,
 	Throughput,
 };
@@ -131,12 +131,13 @@ impl MachineCmd {
 		// Dispatch the concrete function from `sc-sysinfo`.
 
 		let score = self.measure(&requirement.metric, dir)?;
-		let (passed, rel_score) = bench_result(requirement, score, self.tolerance);
+		let rel_score = score.as_bytes() / requirement.minimum.as_bytes();
 
 		// Sanity check if the result is off by factor >100x.
 		if rel_score >= 100.0 || rel_score <= 0.01 {
 			self.check_failed(Error::BadResults)?;
 		}
+		let passed = rel_score >= (1.0 - (self.tolerance / 100.0));
 
 		Ok(BenchResult { passed, score, rel_score })
 	}

@@ -27,7 +27,7 @@ mod sysinfo;
 mod sysinfo_linux;
 
 pub use sysinfo::{
-	bench_result, benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
+	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
 	benchmark_memory, benchmark_sr25519_verify, gather_hwbench, gather_sysinfo,
 	serialize_throughput, serialize_throughput_option, Metric, Requirement, Requirements,
 	Throughput,

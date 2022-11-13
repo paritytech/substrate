@@ -589,7 +589,7 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> Throughput {
 /// Benchmarks the hardware and returns the results of those benchmarks.
 ///
 /// Optionally accepts a path to a `scratch_directory` to use to benchmark the disk.
-pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
+pub fn gather_hwbench(scratch_directory: Option<&Path>, requirements: Requirements) -> HwBench {
 	#[allow(unused_mut)]
 	let mut hwbench = HwBench {
 		cpu_hashrate_score: benchmark_cpu(DEFAULT_CPU_EXECUTION_LIMIT),
@@ -618,21 +618,42 @@ pub fn gather_hwbench(scratch_directory: Option<&Path>) -> HwBench {
 				},
 			};
 	}
+	// if validator
+	ensure_requirements(hwbench.clone(), requirements);
 
 	hwbench
 }
 
-/// Checks whether the benchmark passed and returns a tuple `(passed, rel_score)`.
-pub fn bench_result(requirement: &Requirement, score: Throughput, tolerance: f64) -> (bool, f64) {
-	let rel_score = score.as_bytes() / requirement.minimum.as_bytes();
-
-	// Sanity check if the result is off by factor >100x.
-	if rel_score >= 100.0 || rel_score <= 0.01 {
-		log::warn!("Bad benchmark result.");
+fn ensure_requirements(hwbench: HwBench, requirements: Requirements) {
+	let mut failed = 0;
+	for requirement in requirements.0.iter() {
+		match requirement.metric {
+			Metric::Blake2256 =>
+				if requirement.minimum > hwbench.cpu_hashrate_score {
+					failed += 1;
+				},
+			Metric::MemCopy =>
+				if requirement.minimum > hwbench.memory_memcpy_score {
+					failed += 1;
+				},
+			Metric::DiskSeqWrite =>
+				if let Some(score) = hwbench.disk_sequential_write_score {
+					if requirement.minimum > score {
+						failed += 1;
+					}
+				},
+			Metric::DiskRndWrite =>
+				if let Some(score) = hwbench.disk_random_write_score {
+					if requirement.minimum > score {
+						failed += 1;
+					}
+				},
+			_ => (),
+		}
 	}
-
-	let passed = rel_score == (1.0 - (tolerance / 100.0));
-	(passed, rel_score)
+	if failed != 0 {
+		log::warn!("The hardware fails to meet the requirements");
+	}
 }
 
 #[cfg(test)]
