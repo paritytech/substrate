@@ -162,7 +162,6 @@ fn reap_page_permanent_overweight_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		// Create pages with messages with a weight of two.
-		// TODO why do we need `+ 2` here?
 		for _ in 0..(MaxStale::get() * MaxStale::get()) {
 			MessageQueue::enqueue_message(msg(&"weight=2"), Here);
 		}
@@ -332,13 +331,13 @@ fn service_page_consumes_correct_weight() {
 #[test]
 fn service_page_skips_perm_overweight_message() {
 	new_test_ext::<Test>().execute_with(|| {
-		let mut page = page::<Test>(b"weight=6");
-		let mut weight = WeightCounter::from_limit(7.into_weight());
-		let overweight_limit = 5.into_weight();
+		let mut page = page::<Test>(b"TooMuch");
+		let mut weight = WeightCounter::from_limit(2.into_weight());
+		let overweight_limit = 0.into_weight();
 		set_weight("service_page_item", 2.into_weight());
 
 		assert_eq!(
-			MessageQueue::service_page_item(
+			crate::Pallet::<Test>::service_page_item(
 				&MessageOrigin::Here,
 				0,
 				&mut book_for::<Test>(&page),
@@ -349,26 +348,113 @@ fn service_page_skips_perm_overweight_message() {
 			PageExecutionStatus::Partial
 		);
 		assert_eq!(weight.consumed, 2.into_weight());
+		assert_last_event::<Test>(
+			Event::OverweightEnqueued {
+				hash: <Test as frame_system::Config>::Hashing::hash(b"TooMuch"),
+				origin: MessageOrigin::Here,
+				message_index: 0,
+				page_index: 0,
+			}
+			.into(),
+		);
+
 		// Check that the message was skipped.
 		let (pos, processed, payload) = page.peek_index(0).unwrap();
 		assert_eq!(pos, 0);
 		assert_eq!(processed, false);
-		assert_eq!(payload, b"weight=6".encode());
+		assert_eq!(payload, b"TooMuch".encode());
 	});
 }
 
 #[test]
 fn peek_index_works() {
+	use super::integration_test::Test; // Run with larger page size.
 	new_test_ext::<Test>().execute_with(|| {
+		// Fill a page with messages.
 		let (mut page, msgs) = full_page::<Test>();
-		assert!(msgs > 1, "precondition unmet");
+		let msg_enc_len = ItemHeader::<<Test as Config>::Size>::max_encoded_len() + 4;
 
 		for i in 0..msgs {
+			// Skip all even messages.
 			page.skip_first(i % 2 == 0);
+			// Peek each message and check that it is correct.
 			let (pos, processed, payload) = page.peek_index(i).unwrap();
-			assert_eq!(pos, 9 * i);
+			assert_eq!(pos, msg_enc_len * i);
 			assert_eq!(processed, i % 2 == 0);
+			// `full_page` uses the index as payload.
 			assert_eq!(payload, (i as u32).encode());
+		}
+	});
+}
+
+#[test]
+fn peek_first_works() {
+	use super::integration_test::Test; // Run with larger page size.
+	new_test_ext::<Test>().execute_with(|| {
+		// Fill a page with messages.
+		let (mut page, msgs) = full_page::<Test>();
+
+		for i in 0..msgs {
+			let msg = page.peek_first().unwrap();
+			// `full_page` uses the index as payload.
+			assert_eq!(msg.deref(), (i as u32).encode());
+			page.skip_first(i % 2 == 0); // True of False should not matter here.
+		}
+		assert!(page.peek_first().is_none(), "Page must be at the end");
+	});
+}
+
+#[test]
+fn note_processed_at_pos_works() {
+	use super::integration_test::Test; // Run with larger page size.
+	new_test_ext::<Test>().execute_with(|| {
+		let (mut page, msgs) = full_page::<Test>();
+
+		for i in 0..msgs {
+			let (pos, processed, _) = page.peek_index(i).unwrap();
+			assert_eq!(processed, false);
+			assert_eq!(page.remaining as usize, msgs - i);
+
+			page.note_processed_at_pos(pos);
+
+			let (_, processed, _) = page.peek_index(i).unwrap();
+			assert_eq!(processed, true);
+			assert_eq!(page.remaining as usize, msgs - i - 1);
+		}
+	});
+}
+
+#[test]
+fn is_complete_works() {
+	use super::integration_test::Test; // Run with larger page size.
+	new_test_ext::<Test>().execute_with(|| {
+		let (mut page, msgs) = full_page::<Test>();
+		assert!(msgs > 3, "Boring");
+		let msg_enc_len = ItemHeader::<<Test as Config>::Size>::max_encoded_len() + 4;
+
+		assert!(!page.is_complete());
+		for i in 0..msgs {
+			if i % 2 == 0 {
+				page.skip_first(false);
+			} else {
+				page.note_processed_at_pos(msg_enc_len * i);
+			}
+		}
+		// Not complete since `skip_first` was called with `false`.
+		assert!(!page.is_complete());
+		for i in 0..msgs {
+			if i % 2 == 0 {
+				assert!(!page.is_complete());
+				let (pos, _, _) = page.peek_index(i).unwrap();
+				page.note_processed_at_pos(pos);
+			}
+		}
+		assert!(page.is_complete());
+		assert_eq!(page.remaining_size, 0);
+		// Each message is marked as processed.
+		for i in 0..msgs {
+			let (_, processed, _) = page.peek_index(i).unwrap();
+			assert_eq!(processed, true);
 		}
 	});
 }

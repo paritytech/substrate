@@ -173,8 +173,7 @@ impl<
 		}
 	}
 
-	/// Return the unprocessed encoded (origin, message) pair of `index` into the page's
-	/// messages if and only if it was skipped (i.e. of location prior to `first`).
+	/// Return the message with index `index` in the form of `(position, processed, message)`.
 	fn peek_index(&self, index: usize) -> Option<(usize, bool, &[u8])> {
 		let mut pos = 0;
 		let mut item_slice = &self.heap[..];
@@ -382,8 +381,8 @@ pub mod pallet {
 		/// Check all assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
-			// This value is squared and should not overflow.
-			assert!(T::MaxStale::get() <= u16::MAX as u32, "MaxStale too large");
+			// This value gets squared and should not overflow.
+			assert!(T::MaxStale::get().checked_pow(2).is_some(), "MaxStale too large");
 		}
 	}
 
@@ -859,17 +858,12 @@ impl<T: Config> Pallet<T> {
 			let mut queue = format!("queue {:?}:\n", &origin);
 			let mut pages = Pages::<T>::iter_prefix(&origin).collect::<Vec<_>>();
 			pages.sort_by(|(a, _), (b, _)| a.cmp(b));
-			for (page_index, page) in pages.into_iter() {
-				let mut page = page;
+			for (page_index, mut page) in pages.into_iter() {
+				let page_info = if book_state.begin == page_index { ">" } else { " " };
 				let mut page_info = format!(
-					"page {} ({:?} first, {:?} last, {:?} remain): [",
-					page_index, page.first, page.last, page.remaining
+					"{} page {} ({:?} first, {:?} last, {:?} remain): [ ",
+					page_info, page_index, page.first, page.last, page.remaining
 				);
-				if book_state.begin == page_index {
-					page_info = format!("> {}", page_info);
-				} else {
-					page_info = format!("  {}", page_info);
-				}
 				for i in 0..u32::MAX {
 					if let Some((_, processed, message)) =
 						page.peek_index(i.try_into().expect("std-only code"))
@@ -877,8 +871,6 @@ impl<T: Config> Pallet<T> {
 						let msg = String::from_utf8_lossy(message.deref());
 						if processed {
 							page_info.push_str("*");
-						} else {
-							page_info.push_str(" ");
 						}
 						page_info.push_str(&format!("{:?}, ", msg));
 						page.skip_first(true);

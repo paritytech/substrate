@@ -228,6 +228,7 @@ where
 }
 
 /// Set the weight of a specific weight function.
+#[allow(dead_code)]
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);
 }

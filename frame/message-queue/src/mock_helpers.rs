@@ -74,6 +74,7 @@ pub fn vmsg(x: &'static str) -> Vec<u8> {
 	x.as_bytes().to_vec()
 }
 
+/// Create a page from a single message.
 pub fn page<T: Config>(msg: &[u8]) -> PageOf<T> {
 	PageOf::<T>::from_message::<T>(msg.try_into().unwrap())
 }
@@ -82,7 +83,7 @@ pub fn single_page_book<T: Config>() -> BookStateOf<T> {
 	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
 }
 
-/// Returns a page filled with empty messages and the number of messages.
+/// Returns a full page of messages with their index as payload and the number of messages.
 pub fn full_page<T: Config>() -> (PageOf<T>, usize) {
 	let mut msgs = 0;
 	let mut page = PageOf::<T>::default();
