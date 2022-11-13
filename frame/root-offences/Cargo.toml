@@ -1,12 +1,13 @@
 [package]
 name = "pallet-root-offences"
-version = "1.0.0"
+version = "1.0.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
 homepage = "https://substrate.io"
 repository = "https://github.com/paritytech/substrate/"
 description = "FRAME root offences pallet"
+readme = "README.md"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,11 +18,10 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../frame/session", default-features = false }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../frame/staking" }
-pallet-offences = { version = "4.0.0-dev", default-features = false, path = "../../frame/offences" }
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
 [dev-dependencies]
@@ -45,7 +45,6 @@ std = [
     "frame-system/std",
 	"pallet-session/std",
 	"pallet-staking/std",
-	"pallet-offences/std",
 	"scale-info/std",
 	"sp-runtime/std",
 ]
