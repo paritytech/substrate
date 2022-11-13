@@ -273,7 +273,6 @@ impl<B: BlockT> Default for Builder<B> {
 			hashed_blacklist: Default::default(),
 			overwrite_state_version: None,
 			final_state_block_hash: None,
-			maybe_remote_ext: None,
 		}
 	}
 }
