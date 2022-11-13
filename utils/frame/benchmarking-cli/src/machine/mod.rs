@@ -138,7 +138,6 @@ impl MachineCmd {
 			self.check_failed(Error::BadResults)?;
 		}
 		let passed = rel_score >= (1.0 - (self.tolerance / 100.0));
-
 		Ok(BenchResult { passed, score, rel_score })
 	}
 
