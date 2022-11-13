@@ -172,7 +172,7 @@ impl HostFnReturn {
 			Self::U32 | Self::ReturnCode => quote! { ::core::primitive::u32 },
 		};
 		quote! {
-			Result<#ok, wasmi::core::Trap>
+			Result<#ok, ::wasmi::core::Trap>
 		}
 	}
 }
@@ -392,7 +392,7 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 			<E::T as frame_system::Config>::AccountId:
 				sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 		{
-			fn define(store: &mut wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut wasmi::Linker<crate::wasm::Runtime<E>>) -> Result<(), wasmi::errors::LinkerError> {
+			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>) -> Result<(), ::wasmi::errors::LinkerError> {
 				#impls
 				Ok(())
 			}
@@ -449,7 +449,7 @@ fn expand_functions(
 		let map_err = if expand_blocks {
 			quote! {
 				|reason| {
-					wasmi::core::Trap::host(reason)
+					::wasmi::core::Trap::host(reason)
 				}
 			}
 		} else {
@@ -467,7 +467,7 @@ fn expand_functions(
 		quote! {
 			#unstable_feat
 			#allow_unused
-			linker.define(#module, #name, wasmi::Func::wrap(&mut*store, |mut __caller__: wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+			linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
 				let mut func = #inner;
 				func()
 					.map_err(#map_err)
