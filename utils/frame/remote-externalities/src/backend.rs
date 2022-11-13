@@ -1,33 +1,57 @@
 use crate::LOG_TARGET;
 use codec::{Codec, Decode, Encode};
 use log::debug;
-use sp_core::{storage, storage::ChildInfo};
-use sp_runtime::{DeserializeOwned, Storage};
+use sp_core::{storage, storage::ChildInfo, Hasher};
+use sp_runtime::DeserializeOwned;
 use sp_state_machine::{
-	backend::{AsTrieBackend, Hasher},
-	Backend, ChildStorageCollection, InMemoryBackend, StateMachineStats, StorageCollection,
-	StorageKey, StorageValue, UsageInfo,
+	backend::AsTrieBackend, Backend, ChildStorageCollection, InMemoryBackend, LayoutV1,
+	StateMachineStats, StorageCollection, StorageKey, StorageValue, TestExternalities,
+	TrieBackendBuilder, UsageInfo,
 };
 use sp_storage::{StateVersion, TrackedStorageKey};
-use std::{collections::BTreeMap, marker::PhantomData};
+use sp_trie::{empty_trie_root, GenericMemoryDB};
+use storage::well_known_keys;
 
-pub struct RemoteExternalitiesBackend<H: Hasher> {
-	inner_backend: InMemoryBackend<H>,
-	rpc: substrate_rpc_client::WsClient,
-	at: Option<H>,
-	_marker: PhantomData<H>,
+pub type DefaultHasher = sp_core::Blake2Hasher;
+
+pub async fn new_on_demand_test_ext<
+	H: serde::ser::Serialize + DeserializeOwned + Send + Sync + Clone + 'static,
+>(
+	ws: impl AsRef<str>,
+	state_version: StateVersion,
+) -> TestExternalities<DefaultHasher, RemoteExternalitiesBackend<H>> {
+	let rpc = substrate_rpc_client::ws_client(ws).await.unwrap();
+	let db = GenericMemoryDB::default();
+	let mut inner_backend =
+		TrieBackendBuilder::new(db, empty_trie_root::<LayoutV1<DefaultHasher>>())
+			.with_recorder(Default::default())
+			.build();
+
+	let backend = RemoteExternalitiesBackend { rpc, inner_backend, at: None };
+	let code = backend.storage_remote(&well_known_keys::CODE).unwrap().unwrap();
+
+	let mut ext = sp_state_machine::TestExternalities::new_with_backend(backend, state_version);
+	// TODO: we have to put at least something into storage, otherwise shit breaks. Default
+	// TestExternalities seems to do the same..
+	ext.insert(well_known_keys::CODE.to_vec(), code);
+	ext
 }
 
-impl<H: Hasher> std::fmt::Debug for RemoteExternalitiesBackend<H> {
+pub struct RemoteExternalitiesBackend<H> {
+	inner_backend: InMemoryBackend<DefaultHasher>,
+	rpc: substrate_rpc_client::WsClient,
+	at: Option<H>,
+}
+
+impl<H> std::fmt::Debug for RemoteExternalitiesBackend<H> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "RemoteExternalitiesBackend")
 	}
 }
 
-pub trait HasherT: Hasher + Clone + serde::ser::Serialize + DeserializeOwned + 'static {}
-impl<T: Hasher + Clone + serde::ser::Serialize + DeserializeOwned + 'static> HasherT for T {}
-
-impl<H: HasherT> RemoteExternalitiesBackend<H> {
+impl<H: serde::ser::Serialize + DeserializeOwned + Send + Sync + Clone + 'static>
+	RemoteExternalitiesBackend<H>
+{
 	fn storage_remote(
 		&self,
 		key: &[u8],
@@ -44,21 +68,21 @@ impl<H: HasherT> RemoteExternalitiesBackend<H> {
 	}
 }
 
-impl<H: HasherT> Backend<H> for RemoteExternalitiesBackend<H>
-where
-	<H as Hasher>::Out: Ord + Decode + Encode,
+impl<H: serde::ser::Serialize + DeserializeOwned + Send + Sync + Clone + 'static>
+	Backend<DefaultHasher> for RemoteExternalitiesBackend<H>
 {
-	type Error = <InMemoryBackend<H> as Backend<H>>::Error;
-	type Transaction = <InMemoryBackend<H> as Backend<H>>::Transaction;
-	type TrieBackendStorage = <InMemoryBackend<H> as Backend<H>>::TrieBackendStorage;
+	type Error = <InMemoryBackend<DefaultHasher> as Backend<DefaultHasher>>::Error;
+	type Transaction = <InMemoryBackend<DefaultHasher> as Backend<DefaultHasher>>::Transaction;
+	type TrieBackendStorage =
+		<InMemoryBackend<DefaultHasher> as Backend<DefaultHasher>>::TrieBackendStorage;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<StorageValue>, Self::Error> {
 		self.inner_backend.storage(key).map(|opt| {
 			opt.or_else(|| {
 				self.storage_remote(key).unwrap().map(|v| {
 					let inner = unsafe {
-						let x = &self.inner_backend as *const InMemoryBackend<H>;
-						let y = x as *mut InMemoryBackend<H>;
+						let x = &self.inner_backend as *const InMemoryBackend<DefaultHasher>;
+						let y = x as *mut InMemoryBackend<DefaultHasher>;
 						&mut *y
 					};
 					inner.insert(
@@ -72,8 +96,11 @@ where
 	}
 
 	/// Get keyed storage value hash or None if there is nothing associated.
-	fn storage_hash(&self, key: &[u8]) -> Result<Option<H::Out>, Self::Error> {
-		self.storage(key).map(|o| o.map(|v| H::hash(&v)))
+	fn storage_hash(
+		&self,
+		key: &[u8],
+	) -> Result<Option<<DefaultHasher as Hasher>::Out>, Self::Error> {
+		self.storage(key).map(|o| o.map(|v| DefaultHasher::hash(&v)))
 	}
 
 	/// Get keyed child storage or None if there is nothing associated.
@@ -90,7 +117,7 @@ where
 		&self,
 		child_info: &ChildInfo,
 		key: &[u8],
-	) -> Result<Option<H::Out>, Self::Error> {
+	) -> Result<Option<<DefaultHasher as Hasher>::Out>, Self::Error> {
 		todo!("check inner_backend, else call remote");
 	}
 
@@ -182,9 +209,9 @@ where
 		&self,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, Self::Transaction)
+	) -> (<DefaultHasher as Hasher>::Out, Self::Transaction)
 	where
-		H::Out: Ord,
+		<DefaultHasher as Hasher>::Out: Ord,
 	{
 		todo!();
 	}
@@ -198,9 +225,9 @@ where
 		child_info: &ChildInfo,
 		delta: impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>,
 		state_version: StateVersion,
-	) -> (H::Out, bool, Self::Transaction)
+	) -> (<DefaultHasher as Hasher>::Out, bool, Self::Transaction)
 	where
-		H::Out: Ord,
+		<DefaultHasher as Hasher>::Out: Ord,
 	{
 		todo!();
 	}
@@ -234,9 +261,9 @@ where
 			Item = (&'a ChildInfo, impl Iterator<Item = (&'a [u8], Option<&'a [u8]>)>),
 		>,
 		state_version: StateVersion,
-	) -> (H::Out, Self::Transaction)
+	) -> (<DefaultHasher as Hasher>::Out, Self::Transaction)
 	where
-		H::Out: Ord + Encode,
+		<DefaultHasher as Hasher>::Out: Ord + Encode,
 	{
 		let mut txs: Self::Transaction = Default::default();
 		let mut child_roots: Vec<_> = Default::default();
@@ -285,7 +312,7 @@ where
 	/// Commit given transaction to storage.
 	fn commit(
 		&self,
-		_: H::Out,
+		_: <DefaultHasher as Hasher>::Out,
 		_: Self::Transaction,
 		_: StorageCollection,
 		_: ChildStorageCollection,
@@ -322,18 +349,16 @@ where
 	}
 }
 
-impl<H: HasherT> AsTrieBackend<H> for RemoteExternalitiesBackend<H>
-where
-	H::Out: Ord + Codec,
-{
-	type TrieBackendStorage = <InMemoryBackend<H> as Backend<H>>::TrieBackendStorage;
+impl<H> AsTrieBackend<DefaultHasher> for RemoteExternalitiesBackend<H> {
+	type TrieBackendStorage =
+		<InMemoryBackend<DefaultHasher> as Backend<DefaultHasher>>::TrieBackendStorage;
 
 	fn as_trie_backend(
 		&self,
 	) -> &sp_state_machine::TrieBackend<
 		Self::TrieBackendStorage,
-		H,
-		sp_trie::cache::LocalTrieCache<H>,
+		DefaultHasher,
+		sp_trie::cache::LocalTrieCache<DefaultHasher>,
 	> {
 		&self.inner_backend
 	}
@@ -342,8 +367,8 @@ where
 		&mut self,
 	) -> &mut sp_state_machine::TrieBackend<
 		Self::TrieBackendStorage,
-		H,
-		sp_trie::cache::LocalTrieCache<H>,
+		DefaultHasher,
+		sp_trie::cache::LocalTrieCache<DefaultHasher>,
 	> {
 		&mut self.inner_backend
 	}
@@ -351,47 +376,18 @@ where
 
 #[cfg(test)]
 mod tests {
+	use sp_runtime::traits::sp_core::H256;
+
 	use super::*;
-	use crate::RemoteExternalities;
-	use serde::__private::de;
-	use sp_core::H256;
-	use sp_runtime::traits::BlakeTwo256;
-	use sp_state_machine::{LayoutV1, TestExternalities, TrieBackend, TrieBackendBuilder};
-	use sp_trie::{empty_trie_root, GenericMemoryDB};
-	use storage::well_known_keys;
 
-	type Hash = BlakeTwo256;
-
-	async fn holy_test_externalities() -> TestExternalities<Hash, RemoteExternalitiesBackend<Hash>>
-	{
-		let rpc = substrate_rpc_client::ws_client("wss://rpc.polkadot.io:443").await.unwrap();
-
-		// TODO: we have to put at least something into storage, otherwise shit breaks. Default
-		// TestExternalities seems to do the same..
-		let db = GenericMemoryDB::default();
-		let mut inner_backend = TrieBackendBuilder::new(db, empty_trie_root::<LayoutV1<Hash>>())
-			.with_recorder(Default::default())
-			.build();
-		inner_backend.insert(
-			vec![(None, vec![(storage::well_known_keys::CODE.to_vec(), Some(vec![]))])],
-			sp_storage::StateVersion::default(),
-		);
-
-		let backend = RemoteExternalitiesBackend::<BlakeTwo256> {
-			at: None,
-			rpc,
-			inner_backend,
-			_marker: Default::default(),
-		};
-
-		sp_state_machine::TestExternalities::new_with_backend(backend, Default::default())
-	}
+	const WS: &'static str = "wss://rpc.polkadot.io";
+	const V: StateVersion = StateVersion::default();
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_and_execute() {
 		crate::test_prelude::init_logger();
 
-		let mut ext = holy_test_externalities().await;
+		let mut ext = new_on_demand_test_ext::<sp_core::H256>(WS, V).await;
 		ext.execute_with(|| {
 			// staking nominator count
 			let key = hex_literal::hex![
@@ -408,7 +404,7 @@ mod tests {
 	async fn can_prove_reads() {
 		crate::test_prelude::init_logger();
 
-		let mut ext = holy_test_externalities().await;
+		let mut ext = new_on_demand_test_ext::<sp_core::H256>(WS, V).await;
 		let _ = ext.execute_with(|| {
 			// staking nominator count
 			let key = hex_literal::hex![
@@ -425,6 +421,6 @@ mod tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn can_build_and_execute_child() {
 		crate::test_prelude::init_logger();
-		let mut ext = holy_test_externalities().await;
+		let mut ext = new_on_demand_test_ext::<sp_core::H256>(WS, V).await;
 	}
 }

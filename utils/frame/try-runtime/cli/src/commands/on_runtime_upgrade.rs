@@ -55,7 +55,7 @@ where
 	let executor = build_executor(&shared, &config);
 	let ext = command.state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
 
-	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
+	let (_, encoded_result) = state_machine_call_with_proof::<Block, HostFns, _>(
 		&ext,
 		&executor,
 		"TryRuntime_on_runtime_upgrade",

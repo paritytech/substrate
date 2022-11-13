@@ -28,8 +28,9 @@
 	not(feature = "std"),
 	doc = "Substrate's runtime standard library as compiled without Rust's standard library."
 )]
+#[cfg(feature = "std")]
+use sp_state_machine::InMemoryBackend;
 
-use sp_state_machine::{InMemoryBackend, TrieBackend};
 use sp_std::vec::Vec;
 
 #[cfg(feature = "std")]

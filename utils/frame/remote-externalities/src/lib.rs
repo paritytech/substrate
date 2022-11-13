@@ -32,7 +32,7 @@ use sp_core::{
 	},
 };
 pub use sp_io::TestExternalities;
-use sp_runtime::{traits::Block as BlockT, StateVersion};
+use sp_runtime::{traits::{Block as BlockT, BlakeTwo256}, StateVersion};
 use std::{
 	fs,
 	thread,
@@ -43,7 +43,10 @@ use std::{
 
 use substrate_rpc_client::{rpc_params, ws_client, ChainApi, ClientT, StateApi, WsClient};
 
+use crate::backend::new_on_demand_test_ext;
+
 pub mod backend;
+// pub mod on_demand_ext;
 
 type KeyValue = (StorageKey, StorageData);
 type TopKeyValues = Vec<KeyValue>;
@@ -855,25 +858,16 @@ where
 		self
 	}
 
-	/// The state version to use.
+	/// Overwrite the state version to use.
+	///
+	/// Otherwise, the correct state-version associated with the remote node or snapshot is used.
 	pub fn overwrite_state_version(mut self, version: StateVersion) -> Self {
 		self.overwrite_state_version = Some(version);
 		self
 	}
 
-	pub async fn build(self) -> Result<RemoteExternalities<B>, &'static str> {
-		self.do_build().await
-	}
-}
-
-// Public methods
-impl<B: BlockT + DeserializeOwned> Builder<B>
-where
-	B::Hash: DeserializeOwned,
-	B::Header: DeserializeOwned,
-{
 	/// Build the test externalities.
-	async fn do_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
+	pub async fn build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
 		let (top_kv, child_kv, state_version) = self.pre_build().await?;
 		let mut ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
@@ -913,7 +907,9 @@ where
 
 		Ok(RemoteExternalities { inner_ext: ext, block_hash: self.final_state_block_hash.unwrap() })
 	}
+
 }
+
 
 #[cfg(test)]
 mod test_prelude {

@@ -7391,6 +7391,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-core",
+ "sp-externalities",
  "sp-io",
  "sp-runtime",
  "sp-state-machine",

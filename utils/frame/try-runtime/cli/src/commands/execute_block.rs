@@ -135,7 +135,7 @@ where
 	let block = Block::new(header, extrinsics);
 	let payload = (block.clone(), !command.no_state_root_check, command.try_state).encode();
 
-	let _ = state_machine_call_with_proof::<Block, HostFns>(
+	let _ = state_machine_call_with_proof::<Block, HostFns, _>(
 		&ext,
 		&executor,
 		"TryRuntime_execute_block",

@@ -285,7 +285,7 @@ use sp_core::{
 	storage::well_known_keys,
 	testing::TaskExecutor,
 	traits::{ReadRuntimeVersion, TaskExecutorExt},
-	twox_128, H256,
+	twox_128, Blake2Hasher, H256,
 };
 use sp_externalities::Extensions;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
@@ -293,7 +293,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	DeserializeOwned,
 };
-use sp_state_machine::{OverlayedChanges, StateMachine, TrieBackendBuilder};
+use sp_state_machine::{Backend as BackendT, OverlayedChanges, StateMachine, TrieBackendBuilder, backend::AsTrieBackend};
 use sp_version::StateVersion;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
@@ -764,8 +764,12 @@ pub(crate) fn state_machine_call<Block: BlockT, HostFns: HostFunctions>(
 /// size and formats.
 ///
 /// Make sure [`LOG_TARGET`] is enabled in logging.
-pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunctions>(
-	ext: &TestExternalities,
+pub(crate) fn state_machine_call_with_proof<
+	Block: BlockT,
+	HostFns: HostFunctions,
+	Backend: BackendT<Blake2Hasher> + AsTrieBackend<Blake2Hasher>,
+>(
+	ext: &sp_state_machine::TestExternalities<Blake2Hasher, Backend>,
 	executor: &WasmExecutor<HostFns>,
 	method: &'static str,
 	data: &[u8],
@@ -775,13 +779,13 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	use sp_core::hexdisplay::HexDisplay;
 
 	let mut changes = Default::default();
-	let backend = ext.backend.clone();
-	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(&backend);
+	let trie_backend = ext.backend.as_trie_backend();
+	let runtime_code_backend = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 	let proving_backend =
-		TrieBackendBuilder::wrap(&backend).with_recorder(Default::default()).build();
+		TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 	let runtime_code = runtime_code_backend.runtime_code()?;
 
-	let pre_root = *backend.root();
+	let pre_root = trie_backend.root();
 	let encoded_results = StateMachine::new(
 		&proving_backend,
 		&mut changes,
@@ -802,7 +806,7 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 	let proof_size = proof.encoded_size();
 	let compact_proof = proof
 		.clone()
-		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(pre_root)
+		.into_compact_proof::<sp_runtime::traits::BlakeTwo256>(*pre_root)
 		.map_err(|e| format!("failed to generate compact proof {}: {:?}", method, e))?;
 
 	let compact_proof_size = compact_proof.encoded_size();

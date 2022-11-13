@@ -17,12 +17,13 @@ codec = { package = "parity-scale-codec", version = "3.0.0" }
 log = "0.4.17"
 serde = "1.0.136"
 serde_json = "1.0"
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-storage = { version = "6.0.0", path = "../../../primitives/storage" }
-sp-trie = { version = "6.0.0", path = "../../../primitives/trie" }
-sp-version = { version = "5.0.0", path = "../../../primitives/version" }
+sp-core = { path = "../../../primitives/core" }
+sp-io = { path = "../../../primitives/io" }
+sp-runtime = { path = "../../../primitives/runtime" }
+sp-storage = { path = "../../../primitives/storage" }
+sp-trie = { path = "../../../primitives/trie" }
+sp-externalities = { path  = "../../../primitives/externalities" }
+sp-version = { path = "../../../primitives/version" }
 sp-state-machine = { path = "../../../primitives/state-machine" }
 tokio = { version = "1.17.0", features = ["macros", "rt-multi-thread"] }
 substrate-rpc-client = { path = "../rpc/client" }

@@ -23,11 +23,12 @@ use parity_scale_codec::{Decode, Encode};
 use sc_executor::sp_wasm_interface::HostFunctions;
 use sc_service::Configuration;
 use serde::{de::DeserializeOwned, Serialize};
-use sp_core::H256;
+use sp_core::{H256, storage::well_known_keys};
 use sp_runtime::{
 	generic::SignedBlock,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 };
+use sp_state_machine::backend::AsTrieBackend;
 use std::{fmt::Debug, str::FromStr};
 use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, WsClient};
 
@@ -97,8 +98,20 @@ where
 	let mut finalized_headers: FinalizedHeaders<Block, _, _> =
 		FinalizedHeaders::new(&rpc, subscription);
 
-	let mut maybe_state_ext = None;
 	let executor = build_executor::<HostFns>(&shared, &config);
+	let mut state_ext =
+		remote_externalities::backend::new_on_demand_test_ext::<Block::Hash>(&command.uri, Default::default())
+			.await;
+	let local_code = config
+		.chain_spec
+		.build_storage()
+		.unwrap()
+		.top
+		.get(well_known_keys::CODE)
+		.unwrap()
+		.to_vec();
+	state_ext.insert(well_known_keys::CODE.to_vec(), local_code);
+	// let mut maybe_state_ext = None;
 
 	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
@@ -120,24 +133,24 @@ where
 		);
 
 		// create an ext at the state of this block, whatever is the first subscription event.
-		if maybe_state_ext.is_none() {
-			let state = State::Live(LiveState {
-				uri: command.uri.clone(),
-				// a bit dodgy, we have to un-parse the has to a string again and re-parse it inside.
-				at: Some(hex::encode(header.parent_hash().encode())),
-				pallet: vec![],
-				child_tree: true,
-				threads: 8,
-			});
-			let ext = state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
-			maybe_state_ext = Some(ext);
-		}
+		// if maybe_state_ext.is_none() {
+		// 	let state = State::Live(LiveState {
+		// 		uri: command.uri.clone(),
+		// 		// a bit dodgy, we have to un-parse the has to a string again and re-parse it inside.
+		// 		at: Some(hex::encode(header.parent_hash().encode())),
+		// 		pallet: vec![],
+		// 		child_tree: true,
+		// 		threads: 8,
+		// 	});
+		// 	let ext = state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
+		// 	maybe_state_ext = Some(ext);
+		// }
 
-		let state_ext =
-			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
+		// let state_ext =
+		// 	maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
-			state_ext,
+		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, HostFns, _>(
+			&state_ext,
 			&executor,
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
@@ -158,7 +171,7 @@ where
 			)
 			.unwrap();
 
-		state_ext.backend.apply_transaction(
+		state_ext.backend.as_trie_backend_mut().apply_transaction(
 			storage_changes.transaction_storage_root,
 			storage_changes.transaction,
 		);
