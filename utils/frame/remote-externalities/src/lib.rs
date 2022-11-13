@@ -273,6 +273,7 @@ impl<B: BlockT> Default for Builder<B> {
 			hashed_blacklist: Default::default(),
 			overwrite_state_version: None,
 			final_state_block_hash: None,
+			maybe_remote_ext: None,
 		}
 	}
 }
@@ -765,7 +766,7 @@ where
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")
 	}
 
-	async fn do_load_online(
+	async fn do_load_remote(
 		&mut self,
 	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
 		self.init_remote_client().await?;
@@ -788,11 +789,11 @@ where
 	) -> Result<(TopKeyValues, ChildKeyValues, StateVersion), &'static str> {
 		let (mut top_kv, child_kv, state_version) = match self.mode.clone() {
 			Mode::Offline(config) => self.do_load_offline(config)?,
-			Mode::Online(_) => self.do_load_online().await?,
+			Mode::Online(_) => self.do_load_remote().await?,
 			Mode::OfflineOrElseOnline(offline_config, _) => {
 				match self.do_load_offline(offline_config) {
 					Ok(x) => x,
-					Err(_) => self.do_load_online().await?,
+					Err(_) => self.do_load_remote().await?,
 				}
 			},
 		};
@@ -859,19 +860,7 @@ where
 		self
 	}
 
-	pub async fn build(self) -> Result<RemoteExternalities<B>, &'static str> {
-		self.do_build().await
-	}
-}
-
-// Public methods
-impl<B: BlockT + DeserializeOwned> Builder<B>
-where
-	B::Hash: DeserializeOwned,
-	B::Header: DeserializeOwned,
-{
-	/// Build the test externalities.
-	async fn do_build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
+	pub async fn build(mut self) -> Result<RemoteExternalities<B>, &'static str> {
 		let (top_kv, child_kv, state_version) = self.pre_build().await?;
 		let mut ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
