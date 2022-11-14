@@ -414,8 +414,10 @@ cargo-check-macos:
   extends:                         .test-refs-no-trigger
   before_script:
     - !reference [.rust-info-script, script]
+  variables:
+    SKIP_WASM_BUILD:               1
   script:
-    - SKIP_WASM_BUILD=1 time cargo check --locked --release
+    - time cargo check --locked --release
   tags:
     - osx
 
