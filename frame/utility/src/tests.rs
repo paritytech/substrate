@@ -184,7 +184,6 @@ impl pallet_balances::Config for Test {
 	type WeightInfo = ();
 }
 
-
 impl pallet_root_testing::Config for Test {}
 
 impl pallet_timestamp::Config for Test {
@@ -195,7 +194,6 @@ impl pallet_timestamp::Config for Test {
 }
 
 const MOTION_DURATION_IN_BLOCKS: BlockNumber = 3;
-
 parameter_types! {
 	pub const MultisigDepositBase: u64 = 1;
 	pub const MultisigDepositFactor: u64 = 1;
@@ -252,7 +250,6 @@ type UtilityCall = crate::Call<Test>;
 
 use frame_system::Call as SystemCall;
 use pallet_balances::{Call as BalancesCall, Error as BalancesError};
-
 use pallet_root_testing::Call as RootTestingCall;
 use pallet_timestamp::Call as TimestampCall;
 
