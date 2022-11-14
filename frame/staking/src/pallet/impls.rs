@@ -1605,6 +1605,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
+            .map_err(|with_post| with_post.error)
+            .map(|_| ())
 	}
 
 	fn chill(who: &Self::AccountId) -> DispatchResult {

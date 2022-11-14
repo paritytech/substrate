@@ -947,7 +947,7 @@ pub mod pallet {
 		pub fn unbond(
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
-		) -> DispatchResult {
+		) -> DispatchResultWithPostInfo {
 			let controller = ensure_signed(origin.clone())?;
 			let unlocking = Self::ledger(&controller)
 				.map(|l| l.unlocking.len())
@@ -957,8 +957,7 @@ pub mod pallet {
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
 			if unlocking == T::MaxUnlockingChunks::get() as usize {
-				Self::do_withdraw_unbonded(&controller, SPECULATIVE_NUM_SPANS)
-					.map_err(|with_post| with_post.error)?;
+				Self::do_withdraw_unbonded(&controller, SPECULATIVE_NUM_SPANS)?;
 			}
 
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -977,7 +976,8 @@ pub mod pallet {
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&ledger.stash) {
 					MinValidatorBond::<T>::get()
-				} else {
+
+                } else {
 					Zero::zero()
 				};
 
@@ -1011,7 +1011,7 @@ pub mod pallet {
 
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
-			Ok(())
+			Ok(().into())
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
