@@ -32,6 +32,7 @@ use sp_mmr_primitives::MmrApi;
 use sp_runtime::traits::Block;
 use std::{marker::PhantomData, sync::Arc};
 
+mod aux_schema;
 mod error;
 mod keystore;
 mod metrics;

@@ -42,7 +42,7 @@ use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor},
+	traits::{Block, Header, NumberFor, Zero},
 	SaturatedConversion,
 };
 
@@ -75,6 +75,7 @@ enum RoundAction {
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
+#[derive(Debug, Decode, Encode)]
 struct VoterOracle<B: Block> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
@@ -226,7 +227,8 @@ pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N> {
 	pub min_block_delta: u32,
 }
 
-struct PersistedState<B: Block> {
+#[derive(Debug, Decode, Encode)]
+pub(crate) struct PersistedState<B: Block> {
 	/// Best block we received a GRANDPA finality for.
 	best_grandpa_block_header: <B as Block>::Header,
 	/// Best block a BEEFY voting round has been concluded for.
@@ -234,6 +236,20 @@ struct PersistedState<B: Block> {
 	/// Chooses which incoming votes to accept and which votes to generate.
 	/// Keeps track of voting seen for current and future rounds.
 	voting_oracle: VoterOracle<B>,
+}
+
+impl<B: Block> PersistedState<B> {
+	pub fn new(
+		best_grandpa_header: <B as Block>::Header,
+		best_beefy: NumberFor<B>,
+		min_block_delta: u32,
+	) -> Self {
+		PersistedState {
+			best_grandpa_block_header: best_grandpa_header,
+			best_beefy_block: best_beefy,
+			voting_oracle: VoterOracle::new(min_block_delta),
+		}
+	}
 }
 
 /// A BEEFY worker plays the BEEFY protocol
@@ -305,12 +321,22 @@ where
 			.expect_header(BlockId::number(backend.blockchain().info().finalized_number))
 			.expect("latest block always has header available; qed.");
 
-		// TODO: load this from aux db
-		let persisted_state = PersistedState {
-			best_grandpa_block_header: last_finalized_header,
-			best_beefy_block: 0u32.into(),
-			voting_oracle: VoterOracle::new(min_block_delta),
-		};
+		// TODO: get these from runtime? how do we set the initial BEEFY authorities and block?
+		let genesis_number = Zero::zero();
+		let genesis_validator_set =
+			|| Err(sp_blockchain::Error::Backend("FIXME: get from pallet?".into()));
+
+		let mut persisted_state = crate::aux_schema::load_persistent(
+			&*backend,
+			last_finalized_header,
+			genesis_number,
+			genesis_validator_set,
+			min_block_delta,
+		)
+		.expect("FIXME: bubble up this error.");
+
+		// Overwrite persisted data with new client min_block_delta.
+		persisted_state.voting_oracle.min_block_delta = min_block_delta;
 
 		BeefyWorker {
 			client: client.clone(),
@@ -527,9 +553,10 @@ where
 	}
 
 	/// Provide BEEFY finality for block based on `finality_proof`:
-	/// 1. Prune irrelevant past sessions from the oracle,
+	/// 1. Prune now-irrelevant past sessions from the oracle,
 	/// 2. Set BEEFY best block,
-	/// 3. Send best block hash and `finality_proof` to RPC worker.
+	/// 3. Persist voter state,
+	/// 4. Send best block hash and `finality_proof` to RPC worker.
 	///
 	/// Expects `finality proof` to be valid.
 	fn finalize(&mut self, finality_proof: BeefyVersionedFinalityProof<B>) -> Result<(), Error> {
@@ -543,6 +570,9 @@ where
 		if block_num > self.best_beefy_block() {
 			// Set new best BEEFY block number.
 			self.persisted_state.best_beefy_block = block_num;
+			crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
+				.map_err(|e| Error::Backend(e.to_string()))?;
+
 			metric_set!(self, beefy_best_block, block_num);
 
 			self.on_demand_justifications.cancel_requests_older_than(block_num);
