@@ -23,50 +23,59 @@ use super::*;
 fn veto_external_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 		assert!(<NextExternal<Test>>::exists());
 
-		let h = set_balance_proposal(2).hash();
-		assert_ok!(Democracy::veto_external(RuntimeOrigin::signed(3), h));
+		let h = set_balance_proposal_hash_and_note(2);
+		assert_ok!(Democracy::veto_external(Origin::signed(3), h.clone()));
 		// cancelled.
 		assert!(!<NextExternal<Test>>::exists());
 		// fails - same proposal can't be resubmitted.
 		assert_noop!(
-			Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),),
+			Democracy::external_propose(Origin::signed(2), set_balance_proposal_hash(2),),
 			Error::<Test>::ProposalBlacklisted
 		);
 
 		fast_forward_to(1);
 		// fails as we're still in cooloff period.
 		assert_noop!(
-			Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),),
+			Democracy::external_propose(Origin::signed(2), set_balance_proposal_hash(2),),
 			Error::<Test>::ProposalBlacklisted
 		);
 
 		fast_forward_to(2);
 		// works; as we're out of the cooloff period.
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 		assert!(<NextExternal<Test>>::exists());
 
 		// 3 can't veto the same thing twice.
 		assert_noop!(
-			Democracy::veto_external(RuntimeOrigin::signed(3), h),
+			Democracy::veto_external(Origin::signed(3), h.clone()),
 			Error::<Test>::AlreadyVetoed
 		);
 
 		// 4 vetoes.
-		assert_ok!(Democracy::veto_external(RuntimeOrigin::signed(4), h));
+		assert_ok!(Democracy::veto_external(Origin::signed(4), h.clone()));
 		// cancelled again.
 		assert!(!<NextExternal<Test>>::exists());
 
 		fast_forward_to(3);
 		// same proposal fails as we're still in cooloff
 		assert_noop!(
-			Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2)),
+			Democracy::external_propose(Origin::signed(2), set_balance_proposal_hash(2),),
 			Error::<Test>::ProposalBlacklisted
 		);
 		// different proposal works fine.
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(3),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(3),
+		));
 	});
 }
 
@@ -75,16 +84,19 @@ fn external_blacklisting_should_work() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 
-		let hash = set_balance_proposal(2).hash();
-		assert_ok!(Democracy::blacklist(RuntimeOrigin::root(), hash, None));
+		let hash = set_balance_proposal_hash(2);
+		assert_ok!(Democracy::blacklist(Origin::root(), hash, None));
 
 		fast_forward_to(2);
 		assert_noop!(Democracy::referendum_status(0), Error::<Test>::ReferendumInvalid);
 
 		assert_noop!(
-			Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2)),
+			Democracy::external_propose(Origin::signed(2), set_balance_proposal_hash_and_note(2),),
 			Error::<Test>::ProposalBlacklisted,
 		);
 	});
@@ -95,12 +107,15 @@ fn external_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_noop!(
-			Democracy::external_propose(RuntimeOrigin::signed(1), set_balance_proposal(2),),
+			Democracy::external_propose(Origin::signed(1), set_balance_proposal_hash(2),),
 			BadOrigin,
 		);
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(2),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(2),
+		));
 		assert_noop!(
-			Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(1),),
+			Democracy::external_propose(Origin::signed(2), set_balance_proposal_hash(1),),
 			Error::<Test>::DuplicateProposal
 		);
 		fast_forward_to(2);
@@ -108,7 +123,7 @@ fn external_referendum_works() {
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: 4,
-				proposal: set_balance_proposal(2),
+				proposal_hash: set_balance_proposal_hash(2),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
@@ -122,19 +137,19 @@ fn external_majority_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_noop!(
-			Democracy::external_propose_majority(RuntimeOrigin::signed(1), set_balance_proposal(2)),
+			Democracy::external_propose_majority(Origin::signed(1), set_balance_proposal_hash(2)),
 			BadOrigin,
 		);
 		assert_ok!(Democracy::external_propose_majority(
-			RuntimeOrigin::signed(3),
-			set_balance_proposal(2)
+			Origin::signed(3),
+			set_balance_proposal_hash_and_note(2)
 		));
 		fast_forward_to(2);
 		assert_eq!(
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: 4,
-				proposal: set_balance_proposal(2),
+				proposal_hash: set_balance_proposal_hash(2),
 				threshold: VoteThreshold::SimpleMajority,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
@@ -148,19 +163,19 @@ fn external_default_referendum_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
 		assert_noop!(
-			Democracy::external_propose_default(RuntimeOrigin::signed(3), set_balance_proposal(2)),
+			Democracy::external_propose_default(Origin::signed(3), set_balance_proposal_hash(2)),
 			BadOrigin,
 		);
 		assert_ok!(Democracy::external_propose_default(
-			RuntimeOrigin::signed(1),
-			set_balance_proposal(2)
+			Origin::signed(1),
+			set_balance_proposal_hash_and_note(2)
 		));
 		fast_forward_to(2);
 		assert_eq!(
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: 4,
-				proposal: set_balance_proposal(2),
+				proposal_hash: set_balance_proposal_hash(2),
 				threshold: VoteThreshold::SuperMajorityAgainst,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
@@ -173,8 +188,11 @@ fn external_default_referendum_works() {
 fn external_and_public_interleaving_works() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(0);
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(1),));
-		assert_ok!(propose_set_balance(6, 2, 2));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(1),
+		));
+		assert_ok!(propose_set_balance_and_note(6, 2, 2));
 
 		fast_forward_to(2);
 
@@ -183,14 +201,17 @@ fn external_and_public_interleaving_works() {
 			Democracy::referendum_status(0),
 			Ok(ReferendumStatus {
 				end: 4,
-				proposal: set_balance_proposal(1),
+				proposal_hash: set_balance_proposal_hash_and_note(1),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
 			})
 		);
 		// replenish external
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(3),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(3),
+		));
 
 		fast_forward_to(4);
 
@@ -199,7 +220,7 @@ fn external_and_public_interleaving_works() {
 			Democracy::referendum_status(1),
 			Ok(ReferendumStatus {
 				end: 6,
-				proposal: set_balance_proposal(2),
+				proposal_hash: set_balance_proposal_hash_and_note(2),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
@@ -214,14 +235,17 @@ fn external_and_public_interleaving_works() {
 			Democracy::referendum_status(2),
 			Ok(ReferendumStatus {
 				end: 8,
-				proposal: set_balance_proposal(3),
+				proposal_hash: set_balance_proposal_hash_and_note(3),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
 			})
 		);
 		// replenish external
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(5),));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(5),
+		));
 
 		fast_forward_to(8);
 
@@ -230,15 +254,18 @@ fn external_and_public_interleaving_works() {
 			Democracy::referendum_status(3),
 			Ok(ReferendumStatus {
 				end: 10,
-				proposal: set_balance_proposal(5),
+				proposal_hash: set_balance_proposal_hash_and_note(5),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
 			})
 		);
 		// replenish both
-		assert_ok!(Democracy::external_propose(RuntimeOrigin::signed(2), set_balance_proposal(7),));
-		assert_ok!(propose_set_balance(6, 4, 2));
+		assert_ok!(Democracy::external_propose(
+			Origin::signed(2),
+			set_balance_proposal_hash_and_note(7),
+		));
+		assert_ok!(propose_set_balance_and_note(6, 4, 2));
 
 		fast_forward_to(10);
 
@@ -247,17 +274,17 @@ fn external_and_public_interleaving_works() {
 			Democracy::referendum_status(4),
 			Ok(ReferendumStatus {
 				end: 12,
-				proposal: set_balance_proposal(4),
+				proposal_hash: set_balance_proposal_hash_and_note(4),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },
 			})
 		);
 		// replenish public again
-		assert_ok!(propose_set_balance(6, 6, 2));
+		assert_ok!(propose_set_balance_and_note(6, 6, 2));
 		// cancel external
-		let h = set_balance_proposal(7).hash();
-		assert_ok!(Democracy::veto_external(RuntimeOrigin::signed(3), h));
+		let h = set_balance_proposal_hash_and_note(7);
+		assert_ok!(Democracy::veto_external(Origin::signed(3), h));
 
 		fast_forward_to(12);
 
@@ -266,7 +293,7 @@ fn external_and_public_interleaving_works() {
 			Democracy::referendum_status(5),
 			Ok(ReferendumStatus {
 				end: 14,
-				proposal: set_balance_proposal(6),
+				proposal_hash: set_balance_proposal_hash_and_note(6),
 				threshold: VoteThreshold::SuperMajorityApprove,
 				delay: 2,
 				tally: Tally { ayes: 0, nays: 0, turnout: 0 },

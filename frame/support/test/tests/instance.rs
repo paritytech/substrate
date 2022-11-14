@@ -50,15 +50,15 @@ mod module1 {
 	where
 		<Self as system::Config>::BlockNumber: From<u32>,
 	{
-		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
-		type RuntimeOrigin: From<Origin<Self, I>>;
+		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
+		type Origin: From<Origin<Self, I>>;
 		type SomeParameter: Get<u32>;
 		type GenericType: Default + Clone + Codec + EncodeLike + TypeInfo;
 	}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance> for enum Call where
-			origin: <T as system::Config>::RuntimeOrigin,
+			origin: <T as system::Config>::Origin,
 			system = system,
 			T::BlockNumber: From<u32>
 		{
@@ -154,15 +154,15 @@ mod module2 {
 
 	pub trait Config<I = DefaultInstance>: system::Config {
 		type Amount: Parameter + Default;
-		type RuntimeEvent: From<Event<Self, I>> + Into<<Self as system::Config>::RuntimeEvent>;
-		type RuntimeOrigin: From<Origin<Self, I>>;
+		type Event: From<Event<Self, I>> + Into<<Self as system::Config>::Event>;
+		type Origin: From<Origin<Self, I>>;
 	}
 
 	impl<T: Config<I>, I: Instance> Currency for Module<T, I> {}
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config<I>, I: Instance=DefaultInstance> for enum Call where
-			origin: <T as system::Config>::RuntimeOrigin,
+			origin: <T as system::Config>::Origin,
 			system = system
 		{
 			fn deposit_event() = default;
@@ -228,41 +228,41 @@ mod module3 {
 	}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::RuntimeOrigin, system=system {}
+		pub struct Module<T: Config> for enum Call where origin: <T as system::Config>::Origin, system=system {}
 	}
 }
 
 impl module1::Config<module1::Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Event = Event;
+	type Origin = Origin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module1::Config<module1::Instance2> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Event = Event;
+	type Origin = Origin;
 	type SomeParameter = ConstU32<100>;
 	type GenericType = u32;
 }
 impl module2::Config for Runtime {
 	type Amount = u16;
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Event = Event;
+	type Origin = Origin;
 }
 impl module2::Config<module2::Instance1> for Runtime {
 	type Amount = u32;
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Event = Event;
+	type Origin = Origin;
 }
 impl module2::Config<module2::Instance2> for Runtime {
 	type Amount = u32;
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Event = Event;
+	type Origin = Origin;
 }
 impl module2::Config<module2::Instance3> for Runtime {
 	type Amount = u64;
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Event = Event;
+	type Origin = Origin;
 }
 impl module3::Config for Runtime {
 	type Currency = Module2_2;
@@ -277,12 +277,12 @@ pub type Index = u64;
 impl system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type Hash = H256;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type PalletInfo = PalletInfo;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type DbWeight = ();
 }
 
@@ -315,7 +315,7 @@ frame_support::construct_runtime!(
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig {

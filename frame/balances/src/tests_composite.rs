@@ -21,10 +21,9 @@
 
 use crate::{self as pallet_balances, decl_tests, Config, Pallet};
 use frame_support::{
-	dispatch::DispatchInfo,
 	parameter_types,
 	traits::{ConstU32, ConstU64, ConstU8},
-	weights::{IdentityFee, Weight},
+	weights::{DispatchInfo, IdentityFee, Weight},
 };
 use pallet_transaction_payment::CurrencyAdapter;
 use sp_core::H256;
@@ -47,9 +46,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(
-			frame_support::weights::Weight::from_ref_time(1024).set_proof_size(u64::MAX),
-		);
+		frame_system::limits::BlockWeights::simple_max(1024);
 	pub static ExistentialDeposit: u64 = 0;
 }
 impl frame_system::Config for Test {
@@ -57,16 +54,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = BlockWeights;
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -80,7 +77,7 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_transaction_payment::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type OnChargeTransaction = CurrencyAdapter<Pallet<Test>, ()>;
 	type OperationalFeeMultiplier = ConstU8<5>;
 	type WeightToFee = IdentityFee<u64>;
@@ -91,7 +88,7 @@ impl pallet_transaction_payment::Config for Test {
 impl Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = frame_system::Pallet<Test>;
 	type MaxLocks = ();

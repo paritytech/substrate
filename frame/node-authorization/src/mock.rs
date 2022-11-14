@@ -52,16 +52,16 @@ impl frame_system::Config for Test {
 	type DbWeight = ();
 	type BlockWeights = ();
 	type BlockLength = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -82,7 +82,7 @@ ord_parameter_types! {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type MaxWellKnownNodes = ConstU32<4>;
 	type MaxPeerIdLength = ConstU32<2>;
 	type AddOrigin = EnsureSignedBy<One, u64>;

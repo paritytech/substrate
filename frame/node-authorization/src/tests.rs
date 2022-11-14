@@ -26,27 +26,19 @@ use sp_runtime::traits::BadOrigin;
 fn add_well_known_node_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NodeAuthorization::add_well_known_node(RuntimeOrigin::signed(2), test_node(15), 15),
+			NodeAuthorization::add_well_known_node(Origin::signed(2), test_node(15), 15),
 			BadOrigin
 		);
 		assert_noop!(
-			NodeAuthorization::add_well_known_node(
-				RuntimeOrigin::signed(1),
-				PeerId(vec![1, 2, 3]),
-				15
-			),
+			NodeAuthorization::add_well_known_node(Origin::signed(1), PeerId(vec![1, 2, 3]), 15),
 			Error::<Test>::PeerIdTooLong
 		);
 		assert_noop!(
-			NodeAuthorization::add_well_known_node(RuntimeOrigin::signed(1), test_node(20), 20),
+			NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(20), 20),
 			Error::<Test>::AlreadyJoined
 		);
 
-		assert_ok!(NodeAuthorization::add_well_known_node(
-			RuntimeOrigin::signed(1),
-			test_node(15),
-			15
-		));
+		assert_ok!(NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(15), 15));
 		assert_eq!(
 			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(10), test_node(15), test_node(20), test_node(30)])
@@ -57,7 +49,7 @@ fn add_well_known_node_works() {
 		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
 
 		assert_noop!(
-			NodeAuthorization::add_well_known_node(RuntimeOrigin::signed(1), test_node(25), 25),
+			NodeAuthorization::add_well_known_node(Origin::signed(1), test_node(25), 25),
 			Error::<Test>::TooManyNodes
 		);
 	});
@@ -67,18 +59,15 @@ fn add_well_known_node_works() {
 fn remove_well_known_node_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NodeAuthorization::remove_well_known_node(RuntimeOrigin::signed(3), test_node(20)),
+			NodeAuthorization::remove_well_known_node(Origin::signed(3), test_node(20)),
 			BadOrigin
 		);
 		assert_noop!(
-			NodeAuthorization::remove_well_known_node(
-				RuntimeOrigin::signed(2),
-				PeerId(vec![1, 2, 3])
-			),
+			NodeAuthorization::remove_well_known_node(Origin::signed(2), PeerId(vec![1, 2, 3])),
 			Error::<Test>::PeerIdTooLong
 		);
 		assert_noop!(
-			NodeAuthorization::remove_well_known_node(RuntimeOrigin::signed(2), test_node(40)),
+			NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(40)),
 			Error::<Test>::NotExist
 		);
 
@@ -88,10 +77,7 @@ fn remove_well_known_node_works() {
 		);
 		assert!(AdditionalConnections::<Test>::contains_key(test_node(20)));
 
-		assert_ok!(NodeAuthorization::remove_well_known_node(
-			RuntimeOrigin::signed(2),
-			test_node(20)
-		));
+		assert_ok!(NodeAuthorization::remove_well_known_node(Origin::signed(2), test_node(20)));
 		assert_eq!(
 			WellKnownNodes::<Test>::get(),
 			BTreeSet::from_iter(vec![test_node(10), test_node(30)])
@@ -105,16 +91,12 @@ fn remove_well_known_node_works() {
 fn swap_well_known_node_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NodeAuthorization::swap_well_known_node(
-				RuntimeOrigin::signed(4),
-				test_node(20),
-				test_node(5)
-			),
+			NodeAuthorization::swap_well_known_node(Origin::signed(4), test_node(20), test_node(5)),
 			BadOrigin
 		);
 		assert_noop!(
 			NodeAuthorization::swap_well_known_node(
-				RuntimeOrigin::signed(3),
+				Origin::signed(3),
 				PeerId(vec![1, 2, 3]),
 				test_node(20)
 			),
@@ -122,7 +104,7 @@ fn swap_well_known_node_works() {
 		);
 		assert_noop!(
 			NodeAuthorization::swap_well_known_node(
-				RuntimeOrigin::signed(3),
+				Origin::signed(3),
 				test_node(20),
 				PeerId(vec![1, 2, 3])
 			),
@@ -130,7 +112,7 @@ fn swap_well_known_node_works() {
 		);
 
 		assert_ok!(NodeAuthorization::swap_well_known_node(
-			RuntimeOrigin::signed(3),
+			Origin::signed(3),
 			test_node(20),
 			test_node(20)
 		));
@@ -140,16 +122,12 @@ fn swap_well_known_node_works() {
 		);
 
 		assert_noop!(
-			NodeAuthorization::swap_well_known_node(
-				RuntimeOrigin::signed(3),
-				test_node(15),
-				test_node(5)
-			),
+			NodeAuthorization::swap_well_known_node(Origin::signed(3), test_node(15), test_node(5)),
 			Error::<Test>::NotExist
 		);
 		assert_noop!(
 			NodeAuthorization::swap_well_known_node(
-				RuntimeOrigin::signed(3),
+				Origin::signed(3),
 				test_node(20),
 				test_node(30)
 			),
@@ -161,7 +139,7 @@ fn swap_well_known_node_works() {
 			BTreeSet::from_iter(vec![test_node(15)]),
 		);
 		assert_ok!(NodeAuthorization::swap_well_known_node(
-			RuntimeOrigin::signed(3),
+			Origin::signed(3),
 			test_node(20),
 			test_node(5)
 		));
@@ -184,14 +162,14 @@ fn reset_well_known_nodes_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			NodeAuthorization::reset_well_known_nodes(
-				RuntimeOrigin::signed(3),
+				Origin::signed(3),
 				vec![(test_node(15), 15), (test_node(5), 5), (test_node(20), 20)]
 			),
 			BadOrigin
 		);
 		assert_noop!(
 			NodeAuthorization::reset_well_known_nodes(
-				RuntimeOrigin::signed(4),
+				Origin::signed(4),
 				vec![
 					(test_node(15), 15),
 					(test_node(5), 5),
@@ -203,7 +181,7 @@ fn reset_well_known_nodes_works() {
 		);
 
 		assert_ok!(NodeAuthorization::reset_well_known_nodes(
-			RuntimeOrigin::signed(4),
+			Origin::signed(4),
 			vec![(test_node(15), 15), (test_node(5), 5), (test_node(20), 20)]
 		));
 		assert_eq!(
@@ -220,15 +198,15 @@ fn reset_well_known_nodes_works() {
 fn claim_node_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NodeAuthorization::claim_node(RuntimeOrigin::signed(1), PeerId(vec![1, 2, 3])),
+			NodeAuthorization::claim_node(Origin::signed(1), PeerId(vec![1, 2, 3])),
 			Error::<Test>::PeerIdTooLong
 		);
 		assert_noop!(
-			NodeAuthorization::claim_node(RuntimeOrigin::signed(1), test_node(20)),
+			NodeAuthorization::claim_node(Origin::signed(1), test_node(20)),
 			Error::<Test>::AlreadyClaimed
 		);
 
-		assert_ok!(NodeAuthorization::claim_node(RuntimeOrigin::signed(15), test_node(15)));
+		assert_ok!(NodeAuthorization::claim_node(Origin::signed(15), test_node(15)));
 		assert_eq!(Owners::<Test>::get(test_node(15)), Some(15));
 	});
 }
@@ -237,21 +215,21 @@ fn claim_node_works() {
 fn remove_claim_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NodeAuthorization::remove_claim(RuntimeOrigin::signed(15), PeerId(vec![1, 2, 3])),
+			NodeAuthorization::remove_claim(Origin::signed(15), PeerId(vec![1, 2, 3])),
 			Error::<Test>::PeerIdTooLong
 		);
 		assert_noop!(
-			NodeAuthorization::remove_claim(RuntimeOrigin::signed(15), test_node(15)),
+			NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)),
 			Error::<Test>::NotClaimed
 		);
 
 		assert_noop!(
-			NodeAuthorization::remove_claim(RuntimeOrigin::signed(15), test_node(20)),
+			NodeAuthorization::remove_claim(Origin::signed(15), test_node(20)),
 			Error::<Test>::NotOwner
 		);
 
 		assert_noop!(
-			NodeAuthorization::remove_claim(RuntimeOrigin::signed(20), test_node(20)),
+			NodeAuthorization::remove_claim(Origin::signed(20), test_node(20)),
 			Error::<Test>::PermissionDenied
 		);
 
@@ -260,7 +238,7 @@ fn remove_claim_works() {
 			test_node(15),
 			BTreeSet::from_iter(vec![test_node(20)]),
 		);
-		assert_ok!(NodeAuthorization::remove_claim(RuntimeOrigin::signed(15), test_node(15)));
+		assert_ok!(NodeAuthorization::remove_claim(Origin::signed(15), test_node(15)));
 		assert!(!Owners::<Test>::contains_key(test_node(15)));
 		assert!(!AdditionalConnections::<Test>::contains_key(test_node(15)));
 	});
@@ -270,20 +248,20 @@ fn remove_claim_works() {
 fn transfer_node_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			NodeAuthorization::transfer_node(RuntimeOrigin::signed(15), PeerId(vec![1, 2, 3]), 10),
+			NodeAuthorization::transfer_node(Origin::signed(15), PeerId(vec![1, 2, 3]), 10),
 			Error::<Test>::PeerIdTooLong
 		);
 		assert_noop!(
-			NodeAuthorization::transfer_node(RuntimeOrigin::signed(15), test_node(15), 10),
+			NodeAuthorization::transfer_node(Origin::signed(15), test_node(15), 10),
 			Error::<Test>::NotClaimed
 		);
 
 		assert_noop!(
-			NodeAuthorization::transfer_node(RuntimeOrigin::signed(15), test_node(20), 10),
+			NodeAuthorization::transfer_node(Origin::signed(15), test_node(20), 10),
 			Error::<Test>::NotOwner
 		);
 
-		assert_ok!(NodeAuthorization::transfer_node(RuntimeOrigin::signed(20), test_node(20), 15));
+		assert_ok!(NodeAuthorization::transfer_node(Origin::signed(20), test_node(20), 15));
 		assert_eq!(Owners::<Test>::get(test_node(20)), Some(15));
 	});
 }
@@ -293,7 +271,7 @@ fn add_connections_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			NodeAuthorization::add_connections(
-				RuntimeOrigin::signed(15),
+				Origin::signed(15),
 				PeerId(vec![1, 2, 3]),
 				vec![test_node(5)]
 			),
@@ -301,7 +279,7 @@ fn add_connections_works() {
 		);
 		assert_noop!(
 			NodeAuthorization::add_connections(
-				RuntimeOrigin::signed(15),
+				Origin::signed(15),
 				test_node(15),
 				vec![test_node(5)]
 			),
@@ -310,7 +288,7 @@ fn add_connections_works() {
 
 		assert_noop!(
 			NodeAuthorization::add_connections(
-				RuntimeOrigin::signed(15),
+				Origin::signed(15),
 				test_node(20),
 				vec![test_node(5)]
 			),
@@ -318,7 +296,7 @@ fn add_connections_works() {
 		);
 
 		assert_ok!(NodeAuthorization::add_connections(
-			RuntimeOrigin::signed(20),
+			Origin::signed(20),
 			test_node(20),
 			vec![test_node(15), test_node(5), test_node(25), test_node(20)]
 		));
@@ -334,7 +312,7 @@ fn remove_connections_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			NodeAuthorization::remove_connections(
-				RuntimeOrigin::signed(15),
+				Origin::signed(15),
 				PeerId(vec![1, 2, 3]),
 				vec![test_node(5)]
 			),
@@ -342,7 +320,7 @@ fn remove_connections_works() {
 		);
 		assert_noop!(
 			NodeAuthorization::remove_connections(
-				RuntimeOrigin::signed(15),
+				Origin::signed(15),
 				test_node(15),
 				vec![test_node(5)]
 			),
@@ -351,7 +329,7 @@ fn remove_connections_works() {
 
 		assert_noop!(
 			NodeAuthorization::remove_connections(
-				RuntimeOrigin::signed(15),
+				Origin::signed(15),
 				test_node(20),
 				vec![test_node(5)]
 			),
@@ -363,7 +341,7 @@ fn remove_connections_works() {
 			BTreeSet::from_iter(vec![test_node(5), test_node(15), test_node(25)]),
 		);
 		assert_ok!(NodeAuthorization::remove_connections(
-			RuntimeOrigin::signed(20),
+			Origin::signed(20),
 			test_node(20),
 			vec![test_node(15), test_node(5)]
 		));

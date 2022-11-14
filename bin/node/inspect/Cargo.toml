@@ -2,7 +2,6 @@
 name = "node-inspect"
 version = "0.9.0-dev"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Substrate node block inspection tool."
 edition = "2021"
 license = "GPL-3.0-or-later WITH Classpath-exception-2.0"
 homepage = "https://substrate.io"
@@ -12,7 +11,7 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-clap = { version = "4.0.9", features = ["derive"] }
+clap = { version = "3.1.6", features = ["derive"] }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 thiserror = "1.0"
 sc-cli = { version = "0.10.0-dev", path = "../../../client/cli" }

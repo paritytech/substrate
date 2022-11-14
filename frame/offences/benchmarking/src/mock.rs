@@ -40,9 +40,7 @@ type Balance = u64;
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(
-			2u64 * WEIGHT_PER_SECOND
-		);
+		frame_system::limits::BlockWeights::simple_max(2 * WEIGHT_PER_SECOND);
 }
 
 impl frame_system::Config for Test {
@@ -50,16 +48,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = sp_core::H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -77,7 +75,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<10>;
 	type AccountStore = System;
@@ -128,7 +126,7 @@ impl pallet_session::Config for Test {
 	type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type SessionHandler = TestSessionHandler;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ValidatorId = AccountId;
 	type ValidatorIdOf = pallet_staking::StashOf<Test>;
 	type WeightInfo = ();
@@ -148,7 +146,7 @@ parameter_types! {
 	pub const RewardCurve: &'static sp_runtime::curve::PiecewiseLinear<'static> = &I_NPOS;
 }
 
-pub type Extrinsic = sp_runtime::testing::TestXt<RuntimeCall, ()>;
+pub type Extrinsic = sp_runtime::testing::TestXt<Call, ()>;
 
 pub struct OnChainSeqPhragmen;
 impl onchain::Config for OnChainSeqPhragmen {
@@ -156,9 +154,6 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
-	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 impl pallet_staking::Config for Test {
@@ -168,7 +163,7 @@ impl pallet_staking::Config for Test {
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -180,12 +175,10 @@ impl pallet_staking::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
-	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
-	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
-	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
@@ -193,7 +186,7 @@ impl pallet_staking::Config for Test {
 
 impl pallet_im_online::Config for Test {
 	type AuthorityId = UintAuthorityId;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ValidatorSet = Historical;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type ReportUnresponsiveness = Offences;
@@ -205,23 +198,23 @@ impl pallet_im_online::Config for Test {
 }
 
 impl pallet_offences::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 }
 
 impl<T> frame_system::offchain::SendTransactionTypes<T> for Test
 where
-	RuntimeCall: From<T>,
+	Call: From<T>,
 {
 	type Extrinsic = Extrinsic;
-	type OverarchingCall = RuntimeCall;
+	type OverarchingCall = Call;
 }
 
 impl crate::Config for Test {}
 
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, u64, ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, u64, ()>;
 
 frame_support::construct_runtime!(
 	pub enum Test where

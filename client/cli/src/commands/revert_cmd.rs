@@ -31,7 +31,7 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 #[derive(Debug, Parser)]
 pub struct RevertCmd {
 	/// Number of blocks to revert.
-	#[arg(default_value = "256")]
+	#[clap(default_value = "256")]
 	pub num: GenericNumber,
 
 	#[allow(missing_docs)]

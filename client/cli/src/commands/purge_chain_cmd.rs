@@ -33,7 +33,7 @@ use std::{
 #[derive(Debug, Clone, Parser)]
 pub struct PurgeChainCmd {
 	/// Skip interactive prompt by answering yes automatically.
-	#[arg(short = 'y')]
+	#[clap(short = 'y')]
 	pub yes: bool,
 
 	#[allow(missing_docs)]

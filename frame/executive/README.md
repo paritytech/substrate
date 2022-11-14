@@ -56,7 +56,7 @@ struct CustomOnRuntimeUpgrade;
 impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
     fn on_runtime_upgrade() -> frame_support::weights::Weight {
         // Do whatever you want.
-        frame_support::weights::Weight::zero()
+        0
     }
 }
 

@@ -31,7 +31,6 @@ sp-core = { version = "6.0.0", default-features = false, path = "../../primitive
 default = ["std"]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 std = [
-	"frame-benchmarking?/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",
@@ -42,4 +41,3 @@ std = [
 	"sp-runtime/std",
 	"sp-std/std",
 ]
-try-runtime = [ "frame-support/try-runtime" ]

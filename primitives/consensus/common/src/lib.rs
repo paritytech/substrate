@@ -25,6 +25,7 @@ use std::{sync::Arc, time::Duration};
 
 use futures::prelude::*;
 use sp_runtime::{
+	generic::BlockId,
 	traits::{Block as BlockT, HashFor},
 	Digest,
 };
@@ -235,10 +236,10 @@ pub trait Proposer<B: BlockT> {
 pub trait SyncOracle {
 	/// Whether the synchronization service is undergoing major sync.
 	/// Returns true if so.
-	fn is_major_syncing(&self) -> bool;
+	fn is_major_syncing(&mut self) -> bool;
 	/// Whether the synchronization service is offline.
 	/// Returns true if so.
-	fn is_offline(&self) -> bool;
+	fn is_offline(&mut self) -> bool;
 }
 
 /// A synchronization oracle for when there is no network.
@@ -246,10 +247,10 @@ pub trait SyncOracle {
 pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
-	fn is_major_syncing(&self) -> bool {
+	fn is_major_syncing(&mut self) -> bool {
 		false
 	}
-	fn is_offline(&self) -> bool {
+	fn is_offline(&mut self) -> bool {
 		false
 	}
 }
@@ -257,13 +258,71 @@ impl SyncOracle for NoNetwork {
 impl<T> SyncOracle for Arc<T>
 where
 	T: ?Sized,
-	T: SyncOracle,
+	for<'r> &'r T: SyncOracle,
 {
-	fn is_major_syncing(&self) -> bool {
-		T::is_major_syncing(self)
+	fn is_major_syncing(&mut self) -> bool {
+		<&T>::is_major_syncing(&mut &**self)
 	}
 
-	fn is_offline(&self) -> bool {
-		T::is_offline(self)
+	fn is_offline(&mut self) -> bool {
+		<&T>::is_offline(&mut &**self)
+	}
+}
+
+/// Checks if the current active native block authoring implementation can author with the runtime
+/// at the given block.
+pub trait CanAuthorWith<Block: BlockT> {
+	/// See trait docs for more information.
+	///
+	/// # Return
+	///
+	/// - Returns `Ok(())` when authoring is supported.
+	/// - Returns `Err(_)` when authoring is not supported.
+	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String>;
+}
+
+/// Checks if the node can author blocks by using
+/// [`NativeVersion::can_author_with`](sp_version::NativeVersion::can_author_with).
+#[derive(Clone)]
+pub struct CanAuthorWithNativeVersion<T>(T);
+
+impl<T> CanAuthorWithNativeVersion<T> {
+	/// Creates a new instance of `Self`.
+	pub fn new(inner: T) -> Self {
+		Self(inner)
+	}
+}
+
+impl<T: sp_version::GetRuntimeVersionAt<Block> + sp_version::GetNativeVersion, Block: BlockT>
+	CanAuthorWith<Block> for CanAuthorWithNativeVersion<T>
+{
+	fn can_author_with(&self, at: &BlockId<Block>) -> Result<(), String> {
+		match self.0.runtime_version(at) {
+			Ok(version) => self.0.native_version().can_author_with(&version),
+			Err(e) => Err(format!(
+				"Failed to get runtime version at `{}` and will disable authoring. Error: {}",
+				at, e,
+			)),
+		}
+	}
+}
+
+/// Returns always `true` for `can_author_with`. This is useful for tests.
+#[derive(Clone)]
+pub struct AlwaysCanAuthor;
+
+impl<Block: BlockT> CanAuthorWith<Block> for AlwaysCanAuthor {
+	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
+		Ok(())
+	}
+}
+
+/// Never can author.
+#[derive(Clone)]
+pub struct NeverCanAuthor;
+
+impl<Block: BlockT> CanAuthorWith<Block> for NeverCanAuthor {
+	fn can_author_with(&self, _: &BlockId<Block>) -> Result<(), String> {
+		Err("Authoring is always disabled.".to_string())
 	}
 }

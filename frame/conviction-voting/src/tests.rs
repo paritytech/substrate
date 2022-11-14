@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 use frame_support::{
 	assert_noop, assert_ok, parameter_types,
 	traits::{ConstU32, ConstU64, Contains, Polling, VoteTally},
-	weights::Weight,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -50,31 +49,31 @@ frame_support::construct_runtime!(
 
 // Test that a fitlered call can be dispatched.
 pub struct BaseFilter;
-impl Contains<RuntimeCall> for BaseFilter {
-	fn contains(call: &RuntimeCall) -> bool {
-		!matches!(call, &RuntimeCall::Balances(pallet_balances::Call::set_balance { .. }))
+impl Contains<Call> for BaseFilter {
+	fn contains(call: &Call) -> bool {
+		!matches!(call, &Call::Balances(pallet_balances::Call::set_balance { .. }))
 	}
 }
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(Weight::from_ref_time(1_000_000));
+		frame_system::limits::BlockWeights::simple_max(1_000_000);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = BaseFilter;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -92,7 +91,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type MaxLocks = ConstU32<10>;
 	type Balance = u64;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -187,7 +186,7 @@ impl Polling<TallyOf<Test>> for TestPolls {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Currency = pallet_balances::Pallet<Self>;
 	type VoteLockingPeriod = ConstU64<3>;
 	type MaxVotes = ConstU32<3>;
@@ -269,28 +268,28 @@ fn basic_stuff() {
 #[test]
 fn basic_voting_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(2, 5)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(2, 5)));
 		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(2, 5)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(2, 5)));
 		assert_eq!(tally(3), Tally::from_parts(0, 10, 0));
 		assert_eq!(Balances::usable_balance(1), 8);
 
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(5, 1)));
 		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(5, 1)));
 		assert_eq!(tally(3), Tally::from_parts(0, 5, 0));
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
 		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(10, 0)));
 		assert_eq!(tally(3), Tally::from_parts(0, 1, 0));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), None, 3));
 		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
 
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -298,28 +297,28 @@ fn basic_voting_works() {
 #[test]
 fn voting_balance_gets_locked() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(2, 5)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(2, 5)));
 		assert_eq!(tally(3), Tally::from_parts(10, 0, 2));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(2, 5)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(2, 5)));
 		assert_eq!(tally(3), Tally::from_parts(0, 10, 0));
 		assert_eq!(Balances::usable_balance(1), 8);
 
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(5, 1)));
 		assert_eq!(tally(3), Tally::from_parts(5, 0, 5));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(5, 1)));
 		assert_eq!(tally(3), Tally::from_parts(0, 5, 0));
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
 		assert_eq!(tally(3), Tally::from_parts(1, 0, 10));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, nay(10, 0)));
 		assert_eq!(tally(3), Tally::from_parts(0, 1, 0));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), None, 3));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), None, 3));
 		assert_eq!(tally(3), Tally::from_parts(0, 0, 0));
 
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), class(3), 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), class(3), 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -327,12 +326,12 @@ fn voting_balance_gets_locked() {
 #[test]
 fn successful_but_zero_conviction_vote_balance_can_be_unlocked() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(1, 1)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 3, nay(20, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(1, 1)));
+		assert_ok!(Voting::vote(Origin::signed(2), 3, nay(20, 0)));
 		let c = class(3);
 		Polls::set(vec![(3, Completed(3, false))].into_iter().collect());
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(2), Some(c), 3));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(2), c, 2));
+		assert_ok!(Voting::remove_vote(Origin::signed(2), Some(c), 3));
+		assert_ok!(Voting::unlock(Origin::signed(2), c, 2));
 		assert_eq!(Balances::usable_balance(2), 20);
 	});
 }
@@ -340,12 +339,12 @@ fn successful_but_zero_conviction_vote_balance_can_be_unlocked() {
 #[test]
 fn unsuccessful_conviction_vote_balance_can_be_unlocked() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(1, 1)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 3, nay(20, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(1, 1)));
+		assert_ok!(Voting::vote(Origin::signed(2), 3, nay(20, 0)));
 		let c = class(3);
 		Polls::set(vec![(3, Completed(3, false))].into_iter().collect());
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(c), 3));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), c, 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(c), 3));
+		assert_ok!(Voting::unlock(Origin::signed(1), c, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -354,17 +353,17 @@ fn unsuccessful_conviction_vote_balance_can_be_unlocked() {
 fn successful_conviction_vote_balance_stays_locked_for_correct_time() {
 	new_test_ext().execute_with(|| {
 		for i in 1..=5 {
-			assert_ok!(Voting::vote(RuntimeOrigin::signed(i), 3, aye(10, i as u8)));
+			assert_ok!(Voting::vote(Origin::signed(i), 3, aye(10, i as u8)));
 		}
 		let c = class(3);
 		Polls::set(vec![(3, Completed(3, true))].into_iter().collect());
 		for i in 1..=5 {
-			assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(i), Some(c), 3));
+			assert_ok!(Voting::remove_vote(Origin::signed(i), Some(c), 3));
 		}
 		for block in 1..=(3 + 5 * 3) {
 			run_to(block);
 			for i in 1..=5 {
-				assert_ok!(Voting::unlock(RuntimeOrigin::signed(i), c, i));
+				assert_ok!(Voting::unlock(Origin::signed(i), c, i));
 				let expired = block >= (3 << (i - 1)) + 3;
 				assert_eq!(Balances::usable_balance(i), i * 10 - if expired { 0 } else { 10 });
 			}
@@ -385,20 +384,20 @@ fn classwise_delegation_works() {
 			.into_iter()
 			.collect(),
 		);
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 5));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 1, 3, Conviction::Locked1x, 5));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 2, 4, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 5));
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 0, aye(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 1, nay(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 2, nay(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(3), 0, nay(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(3), 1, aye(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(3), 2, nay(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(4), 0, nay(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(4), 1, nay(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(4), 2, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(2), 0, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(2), 1, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(2), 2, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(3), 0, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(3), 1, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(3), 2, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 0, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 1, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 2, aye(10, 0)));
 		// 4 hasn't voted yet
 
 		assert_eq!(
@@ -414,7 +413,7 @@ fn classwise_delegation_works() {
 		);
 
 		// 4 votes nay to 3.
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(4), 3, nay(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(4), 3, nay(10, 0)));
 		assert_eq!(
 			Polls::get(),
 			vec![
@@ -428,8 +427,8 @@ fn classwise_delegation_works() {
 		);
 
 		// Redelegate for class 2 to account 3.
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 2));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 2, 3, Conviction::Locked1x, 5));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 2));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 3, Conviction::Locked1x, 5));
 		assert_eq!(
 			Polls::get(),
 			vec![
@@ -443,12 +442,12 @@ fn classwise_delegation_works() {
 		);
 
 		// Redelegating with a lower lock does not forget previous lock and updates correctly.
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 1));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 2));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 3));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 1, 3, Conviction::Locked1x, 3));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 2, 4, Conviction::Locked1x, 3));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 1));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 2));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 3));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 3));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 3));
 		assert_eq!(
 			Polls::get(),
 			vec![
@@ -462,24 +461,24 @@ fn classwise_delegation_works() {
 		);
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		// unlock does nothing since the delegation already took place.
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		// Redelegating with higher amount extends previous lock.
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 6));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 6));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 4);
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 1));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 1, 3, Conviction::Locked1x, 7));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 1));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 3, Conviction::Locked1x, 7));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
 		assert_eq!(Balances::usable_balance(1), 3);
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 2));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 2, 4, Conviction::Locked1x, 8));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 2));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 4, Conviction::Locked1x, 8));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 2);
 		assert_eq!(
 			Polls::get(),
@@ -499,14 +498,14 @@ fn classwise_delegation_works() {
 fn redelegation_after_vote_ending_should_keep_lock() {
 	new_test_ext().execute_with(|| {
 		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 5));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(2), 0, aye(10, 1)));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::vote(Origin::signed(2), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
 		assert_eq!(Balances::usable_balance(1), 5);
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 3, Conviction::Locked1x, 3));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 3, Conviction::Locked1x, 3));
 		assert_eq!(Balances::usable_balance(1), 5);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 	});
 }
@@ -523,9 +522,9 @@ fn lock_amalgamation_valid_with_multiple_removed_votes() {
 			.into_iter()
 			.collect(),
 		);
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(5, 1)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 1, aye(10, 1)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 2, aye(5, 2)));
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(5, 2)));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		Polls::set(
@@ -533,28 +532,28 @@ fn lock_amalgamation_valid_with_multiple_removed_votes() {
 				.into_iter()
 				.collect(),
 		);
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 0));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 2));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 2));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(3);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(6);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert!(Balances::usable_balance(1) <= 5);
 
 		run_to(7);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -562,25 +561,25 @@ fn lock_amalgamation_valid_with_multiple_removed_votes() {
 #[test]
 fn lock_amalgamation_valid_with_multiple_delegations() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 5));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 10));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked2x, 5));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 10));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked2x, 5));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
 
 		run_to(3);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(6);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert!(Balances::usable_balance(1) <= 5);
 
 		run_to(7);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -589,32 +588,32 @@ fn lock_amalgamation_valid_with_multiple_delegations() {
 fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
 	new_test_ext().execute_with(|| {
 		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 0));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 10));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 10));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		Polls::set(vec![(1, Ongoing(Tally::new(0), 0))].into_iter().collect());
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 1, aye(5, 2)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(5, 2)));
 		Polls::set(vec![(1, Completed(1, true))].into_iter().collect());
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 1));
 
 		run_to(3);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(6);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert!(Balances::usable_balance(1) <= 5);
 
 		run_to(7);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -622,33 +621,33 @@ fn lock_amalgamation_valid_with_move_roundtrip_to_delegation() {
 #[test]
 fn lock_amalgamation_valid_with_move_roundtrip_to_casting() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 5));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
 
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		Polls::set(vec![(0, Ongoing(Tally::new(0), 0))].into_iter().collect());
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(10, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(10, 1)));
 		Polls::set(vec![(0, Completed(1, true))].into_iter().collect());
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 0));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
 
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked2x, 10));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked2x, 10));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
 
 		run_to(3);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(6);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert!(Balances::usable_balance(1) <= 5);
 
 		run_to(7);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -656,30 +655,30 @@ fn lock_amalgamation_valid_with_move_roundtrip_to_casting() {
 #[test]
 fn lock_aggregation_over_different_classes_with_delegation_works() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::Locked1x, 5));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 1, 2, Conviction::Locked2x, 5));
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 2, 2, Conviction::Locked1x, 10));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::Locked1x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 1, 2, Conviction::Locked2x, 5));
+		assert_ok!(Voting::delegate(Origin::signed(1), 2, 2, Conviction::Locked1x, 10));
 
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 1));
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 2));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 1));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 2));
 
 		run_to(3);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(6);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		run_to(7);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -696,34 +695,34 @@ fn lock_aggregation_over_different_classes_with_casting_works() {
 			.into_iter()
 			.collect(),
 		);
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(5, 1)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 1, aye(10, 1)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 2, aye(5, 2)));
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(5, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 1)));
+		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(5, 2)));
 		Polls::set(
 			vec![(0, Completed(1, true)), (1, Completed(1, true)), (2, Completed(1, true))]
 				.into_iter()
 				.collect(),
 		);
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 0));
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(1), 1));
-		assert_ok!(Voting::remove_vote(RuntimeOrigin::signed(1), Some(2), 2));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(0), 0));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(1), 1));
+		assert_ok!(Voting::remove_vote(Origin::signed(1), Some(2), 2));
 
 		run_to(3);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 0);
 
 		run_to(6);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 5);
 
 		run_to(7);
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 0, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 1, 1));
-		assert_ok!(Voting::unlock(RuntimeOrigin::signed(1), 2, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 0, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 1, 1));
+		assert_ok!(Voting::unlock(Origin::signed(1), 2, 1));
 		assert_eq!(Balances::usable_balance(1), 10);
 	});
 }
@@ -731,30 +730,21 @@ fn lock_aggregation_over_different_classes_with_casting_works() {
 #[test]
 fn errors_with_vote_work() {
 	new_test_ext().execute_with(|| {
+		assert_noop!(Voting::vote(Origin::signed(1), 0, aye(10, 0)), Error::<Test>::NotOngoing);
+		assert_noop!(Voting::vote(Origin::signed(1), 1, aye(10, 0)), Error::<Test>::NotOngoing);
+		assert_noop!(Voting::vote(Origin::signed(1), 2, aye(10, 0)), Error::<Test>::NotOngoing);
 		assert_noop!(
-			Voting::vote(RuntimeOrigin::signed(1), 0, aye(10, 0)),
-			Error::<Test>::NotOngoing
-		);
-		assert_noop!(
-			Voting::vote(RuntimeOrigin::signed(1), 1, aye(10, 0)),
-			Error::<Test>::NotOngoing
-		);
-		assert_noop!(
-			Voting::vote(RuntimeOrigin::signed(1), 2, aye(10, 0)),
-			Error::<Test>::NotOngoing
-		);
-		assert_noop!(
-			Voting::vote(RuntimeOrigin::signed(1), 3, aye(11, 0)),
+			Voting::vote(Origin::signed(1), 3, aye(11, 0)),
 			Error::<Test>::InsufficientFunds
 		);
 
-		assert_ok!(Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::None, 10));
+		assert_ok!(Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10));
 		assert_noop!(
-			Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)),
+			Voting::vote(Origin::signed(1), 3, aye(10, 0)),
 			Error::<Test>::AlreadyDelegating
 		);
 
-		assert_ok!(Voting::undelegate(RuntimeOrigin::signed(1), 0));
+		assert_ok!(Voting::undelegate(Origin::signed(1), 0));
 		Polls::set(
 			vec![
 				(0, Ongoing(Tally::new(0), 0)),
@@ -765,11 +755,11 @@ fn errors_with_vote_work() {
 			.into_iter()
 			.collect(),
 		);
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 0, aye(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 1, aye(10, 0)));
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 2, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 0, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 1, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 2, aye(10, 0)));
 		assert_noop!(
-			Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)),
+			Voting::vote(Origin::signed(1), 3, aye(10, 0)),
 			Error::<Test>::MaxVotesReached
 		);
 	});
@@ -779,21 +769,21 @@ fn errors_with_vote_work() {
 fn errors_with_delegating_work() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::None, 11),
+			Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 11),
 			Error::<Test>::InsufficientFunds
 		);
 		assert_noop!(
-			Voting::delegate(RuntimeOrigin::signed(1), 3, 2, Conviction::None, 10),
+			Voting::delegate(Origin::signed(1), 3, 2, Conviction::None, 10),
 			Error::<Test>::BadClass
 		);
 
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 0)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 0)));
 		assert_noop!(
-			Voting::delegate(RuntimeOrigin::signed(1), 0, 2, Conviction::None, 10),
+			Voting::delegate(Origin::signed(1), 0, 2, Conviction::None, 10),
 			Error::<Test>::AlreadyVoting
 		);
 
-		assert_noop!(Voting::undelegate(RuntimeOrigin::signed(1), 0), Error::<Test>::NotDelegating);
+		assert_noop!(Voting::undelegate(Origin::signed(1), 0), Error::<Test>::NotDelegating);
 	});
 }
 
@@ -801,37 +791,31 @@ fn errors_with_delegating_work() {
 fn remove_other_vote_works() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Voting::remove_other_vote(RuntimeOrigin::signed(2), 1, 0, 3),
+			Voting::remove_other_vote(Origin::signed(2), 1, 0, 3),
 			Error::<Test>::NotVoter
 		);
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 2)));
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 2)));
 		assert_noop!(
-			Voting::remove_other_vote(RuntimeOrigin::signed(2), 1, 0, 3),
+			Voting::remove_other_vote(Origin::signed(2), 1, 0, 3),
 			Error::<Test>::NoPermission
 		);
 		Polls::set(vec![(3, Completed(1, true))].into_iter().collect());
 		run_to(6);
 		assert_noop!(
-			Voting::remove_other_vote(RuntimeOrigin::signed(2), 1, 0, 3),
+			Voting::remove_other_vote(Origin::signed(2), 1, 0, 3),
 			Error::<Test>::NoPermissionYet
 		);
 		run_to(7);
-		assert_ok!(Voting::remove_other_vote(RuntimeOrigin::signed(2), 1, 0, 3));
+		assert_ok!(Voting::remove_other_vote(Origin::signed(2), 1, 0, 3));
 	});
 }
 
 #[test]
 fn errors_with_remove_vote_work() {
 	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Voting::remove_vote(RuntimeOrigin::signed(1), Some(0), 3),
-			Error::<Test>::NotVoter
-		);
-		assert_ok!(Voting::vote(RuntimeOrigin::signed(1), 3, aye(10, 2)));
+		assert_noop!(Voting::remove_vote(Origin::signed(1), Some(0), 3), Error::<Test>::NotVoter);
+		assert_ok!(Voting::vote(Origin::signed(1), 3, aye(10, 2)));
 		Polls::set(vec![(3, Completed(1, true))].into_iter().collect());
-		assert_noop!(
-			Voting::remove_vote(RuntimeOrigin::signed(1), None, 3),
-			Error::<Test>::ClassNeeded
-		);
+		assert_noop!(Voting::remove_vote(Origin::signed(1), None, 3), Error::<Test>::ClassNeeded);
 	});
 }

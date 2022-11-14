@@ -143,7 +143,10 @@ where
 	}
 
 	/// Store a value to be associated with the given key from the map.
-	pub fn insert<KeyArg: EncodeLike<Key>, ValArg: EncodeLike<Value>>(key: KeyArg, val: ValArg) {
+	pub fn insert<KeyArg: EncodeLike<Key> + Clone, ValArg: EncodeLike<Value>>(
+		key: KeyArg,
+		val: ValArg,
+	) {
 		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
@@ -151,7 +154,7 @@ where
 	}
 
 	/// Remove the value under a key.
-	pub fn remove<KeyArg: EncodeLike<Key>>(key: KeyArg) {
+	pub fn remove<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) {
 		if <Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
@@ -159,7 +162,7 @@ where
 	}
 
 	/// Mutate the value under a key.
-	pub fn mutate<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut QueryKind::Query) -> R>(
+	pub fn mutate<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut QueryKind::Query) -> R>(
 		key: KeyArg,
 		f: F,
 	) -> R {
@@ -170,7 +173,7 @@ where
 	/// Mutate the item, only if an `Ok` value is returned.
 	pub fn try_mutate<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
-		KeyArg: EncodeLike<Key>,
+		KeyArg: EncodeLike<Key> + Clone,
 		F: FnOnce(&mut QueryKind::Query) -> Result<R, E>,
 	{
 		Self::try_mutate_exists(key, |option_value_ref| {
@@ -184,7 +187,7 @@ where
 	}
 
 	/// Mutate the value under a key. Deletes the item if mutated to a `None`.
-	pub fn mutate_exists<KeyArg: EncodeLike<Key>, R, F: FnOnce(&mut Option<Value>) -> R>(
+	pub fn mutate_exists<KeyArg: EncodeLike<Key> + Clone, R, F: FnOnce(&mut Option<Value>) -> R>(
 		key: KeyArg,
 		f: F,
 	) -> R {
@@ -197,7 +200,7 @@ where
 	/// or if the storage item does not exist (`None`), independent of the `QueryType`.
 	pub fn try_mutate_exists<KeyArg, R, E, F>(key: KeyArg, f: F) -> Result<R, E>
 	where
-		KeyArg: EncodeLike<Key>,
+		KeyArg: EncodeLike<Key> + Clone,
 		F: FnOnce(&mut Option<Value>) -> Result<R, E>,
 	{
 		<Self as MapWrapper>::Map::try_mutate_exists(key, |option_value| {
@@ -219,7 +222,7 @@ where
 	}
 
 	/// Take the value under a key.
-	pub fn take<KeyArg: EncodeLike<Key>>(key: KeyArg) -> QueryKind::Query {
+	pub fn take<KeyArg: EncodeLike<Key> + Clone>(key: KeyArg) -> QueryKind::Query {
 		let removed_value = <Self as MapWrapper>::Map::mutate_exists(key, |value| value.take());
 		if removed_value.is_some() {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
@@ -237,7 +240,7 @@ where
 	/// `[item]`. Any default value set for the storage item will be ignored on overwrite.
 	pub fn append<Item, EncodeLikeItem, EncodeLikeKey>(key: EncodeLikeKey, item: EncodeLikeItem)
 	where
-		EncodeLikeKey: EncodeLike<Key>,
+		EncodeLikeKey: EncodeLike<Key> + Clone,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>,
@@ -352,7 +355,7 @@ where
 	/// Is only available if `Value` of the storage implements [`StorageTryAppend`].
 	pub fn try_append<KArg, Item, EncodeLikeItem>(key: KArg, item: EncodeLikeItem) -> Result<(), ()>
 	where
-		KArg: EncodeLike<Key>,
+		KArg: EncodeLike<Key> + Clone,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageTryAppend<Item>,

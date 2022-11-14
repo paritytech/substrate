@@ -21,8 +21,9 @@ mod schema_v1 {
 }
 
 use super::*;
-use libp2p::{multiaddr::Multiaddr, PeerId};
+use libp2p::multiaddr::Multiaddr;
 use prost::Message;
+use sc_network::PeerId;
 
 #[test]
 fn v2_decodes_v1() {
@@ -55,7 +56,7 @@ fn v2_decodes_v1() {
 
 #[test]
 fn v1_decodes_v2() {
-	let peer_secret = libp2p::identity::Keypair::generate_ed25519();
+	let peer_secret = sc_network::Keypair::generate_ed25519();
 	let peer_public = peer_secret.public();
 	let peer_id = peer_public.to_peer_id();
 	let multiaddress: Multiaddr =

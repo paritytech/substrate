@@ -36,7 +36,6 @@ substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 [features]
 default = ["std"]
 std = [
-	"frame-benchmarking?/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",

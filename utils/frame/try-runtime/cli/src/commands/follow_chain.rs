@@ -19,15 +19,17 @@ use crate::{
 	build_executor, ensure_matching_spec, extract_code, full_extensions, local_spec, parse,
 	state_machine_call_with_proof, SharedParams, LOG_TARGET,
 };
-use parity_scale_codec::{Decode, Encode};
-use remote_externalities::{Builder, Mode, OnlineConfig};
+use jsonrpsee::{
+	core::client::{Subscription, SubscriptionClientT},
+	ws_client::WsClientBuilder,
+};
+use parity_scale_codec::Decode;
+use remote_externalities::{rpc_api, Builder, Mode, OnlineConfig};
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
-use serde::{de::DeserializeOwned, Serialize};
 use sp_core::H256;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
-use substrate_rpc_client::{ws_client, ChainApi, FinalizedHeaders, Subscription, WsClient};
 
 const SUB: &str = "chain_subscribeFinalizedHeads";
 const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
@@ -36,45 +38,8 @@ const UN_SUB: &str = "chain_unsubscribeFinalizedHeads";
 #[derive(Debug, Clone, clap::Parser)]
 pub struct FollowChainCmd {
 	/// The url to connect to.
-	#[arg(short, long, value_parser = parse::url)]
+	#[clap(short, long, parse(try_from_str = parse::url))]
 	uri: String,
-
-	/// If set, then the state root check is enabled.
-	#[arg(long)]
-	state_root_check: bool,
-
-	/// Which try-state targets to execute when running this command.
-	///
-	/// Expected values:
-	/// - `all`
-	/// - `none`
-	/// - A comma separated list of pallets, as per pallet names in `construct_runtime!()` (e.g.
-	///   `Staking, System`).
-	/// - `rr-[x]` where `[x]` is a number. Then, the given number of pallets are checked in a
-	///   round-robin fashion.
-	#[arg(long, default_value = "none")]
-	try_state: frame_try_runtime::TryStateSelect,
-
-	/// If present, a single connection to a node will be kept and reused for fetching blocks.
-	#[arg(long)]
-	keep_connection: bool,
-}
-
-/// Start listening for with `SUB` at `url`.
-///
-/// Returns a pair `(client, subscription)` - `subscription` alone will be useless, because it
-/// relies on the related alive `client`.
-async fn start_subscribing<Header: DeserializeOwned + Serialize + Send + Sync + 'static>(
-	url: &str,
-) -> sc_cli::Result<(WsClient, Subscription<Header>)> {
-	let client = ws_client(url).await.map_err(|e| sc_cli::Error::Application(e.into()))?;
-
-	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
-
-	let sub = ChainApi::<(), (), Header, ()>::subscribe_finalized_heads(&client)
-		.await
-		.map_err(|e| sc_cli::Error::Application(e.into()))?;
-	Ok((client, sub))
 }
 
 pub(crate) async fn follow_chain<Block, ExecDispatch>(
@@ -83,32 +48,49 @@ pub(crate) async fn follow_chain<Block, ExecDispatch>(
 	config: Configuration,
 ) -> sc_cli::Result<()>
 where
-	Block: BlockT<Hash = H256> + DeserializeOwned,
+	Block: BlockT<Hash = H256> + serde::de::DeserializeOwned,
 	Block::Hash: FromStr,
-	Block::Header: DeserializeOwned,
+	Block::Header: serde::de::DeserializeOwned,
 	<Block::Hash as FromStr>::Err: Debug,
 	NumberFor<Block>: FromStr,
 	<NumberFor<Block> as FromStr>::Err: Debug,
 	ExecDispatch: NativeExecutionDispatch + 'static,
 {
 	let mut maybe_state_ext = None;
-	let (rpc, subscription) = start_subscribing::<Block::Header>(&command.uri).await?;
+
+	let client = WsClientBuilder::default()
+		.connection_timeout(std::time::Duration::new(20, 0))
+		.max_notifs_per_subscription(1024)
+		.max_request_body_size(u32::MAX)
+		.build(&command.uri)
+		.await
+		.unwrap();
+
+	log::info!(target: LOG_TARGET, "subscribing to {:?} / {:?}", SUB, UN_SUB);
+	let mut subscription: Subscription<Block::Header> =
+		client.subscribe(SUB, None, UN_SUB).await.unwrap();
 
 	let (code_key, code) = extract_code(&config.chain_spec)?;
 	let executor = build_executor::<ExecDispatch>(&shared, &config);
 	let execution = shared.execution;
 
-	let mut finalized_headers: FinalizedHeaders<Block, _, _> =
-		FinalizedHeaders::new(&rpc, subscription);
+	loop {
+		let header = match subscription.next().await {
+			Some(Ok(header)) => header,
+			None => {
+				log::warn!("subscription closed");
+				break
+			},
+			Some(Err(why)) => {
+				log::warn!("subscription returned error: {:?}. Probably decoding has failed.", why);
+				continue
+			},
+		};
 
-	while let Some(header) = finalized_headers.next().await {
 		let hash = header.hash();
 		let number = header.number();
 
-		let block: Block = ChainApi::<(), Block::Hash, Block::Header, _>::block(&rpc, Some(hash))
-			.await
-			.unwrap()
-			.unwrap();
+		let block = rpc_api::get_block::<Block, _>(&command.uri, hash).await.unwrap();
 
 		log::debug!(
 			target: LOG_TARGET,
@@ -120,13 +102,11 @@ where
 
 		// create an ext at the state of this block, whatever is the first subscription event.
 		if maybe_state_ext.is_none() {
-			let builder = Builder::<Block>::new()
-				.mode(Mode::Online(OnlineConfig {
-					transport: command.uri.clone().into(),
-					at: Some(*header.parent_hash()),
-					..Default::default()
-				}))
-				.state_version(shared.state_version);
+			let builder = Builder::<Block>::new().mode(Mode::Online(OnlineConfig {
+				transport: command.uri.clone().into(),
+				at: Some(*header.parent_hash()),
+				..Default::default()
+			}));
 
 			let new_ext = builder
 				.inject_hashed_key_value(&[(code_key.clone(), code.clone())])
@@ -145,7 +125,7 @@ where
 				command.uri.clone(),
 				expected_spec_name,
 				expected_spec_version,
-				shared.no_spec_check_panic,
+				shared.no_spec_name_check,
 			)
 			.await;
 
@@ -159,13 +139,13 @@ where
 			state_ext,
 			&executor,
 			execution,
-			"TryRuntime_execute_block",
-			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
+			"TryRuntime_execute_block_no_check",
+			block.encode().as_ref(),
 			full_extensions(),
 		)?;
 
-		let consumed_weight = <sp_weights::Weight as Decode>::decode(&mut &*encoded_result)
-			.map_err(|e| format!("failed to decode weight: {:?}", e))?;
+		let consumed_weight = <u64 as Decode>::decode(&mut &*encoded_result)
+			.map_err(|e| format!("failed to decode output: {:?}", e))?;
 
 		let storage_changes = changes
 			.drain_storage_changes(

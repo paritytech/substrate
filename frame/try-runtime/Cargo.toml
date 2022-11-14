@@ -13,8 +13,7 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"]}
-frame-support = { version = "4.0.0-dev", default-features = false,  path = "../support" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
@@ -22,12 +21,8 @@ sp-std = { version = "4.0.0", default-features = false, path = "../../primitives
 [features]
 default = [ "std" ]
 std = [
-	"codec/std",
 	"frame-support/std",
 	"sp-api/std",
 	"sp-runtime/std",
 	"sp-std/std",
-]
-try-runtime = [
-	"frame-support/try-runtime",
 ]

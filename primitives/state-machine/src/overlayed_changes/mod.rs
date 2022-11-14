@@ -474,7 +474,7 @@ impl OverlayedChanges {
 	pub fn children(
 		&self,
 	) -> impl Iterator<Item = (impl Iterator<Item = (&StorageKey, &OverlayedValue)>, &ChildInfo)> {
-		self.children.values().map(|v| (v.0.changes(), &v.1))
+		self.children.iter().map(|(_, v)| (v.0.changes(), &v.1))
 	}
 
 	/// Get an iterator over all top changes as been by the current transaction.
@@ -639,21 +639,6 @@ impl OverlayedChanges {
 }
 
 #[cfg(feature = "std")]
-impl From<sp_core::storage::Storage> for OverlayedChanges {
-	fn from(storage: sp_core::storage::Storage) -> Self {
-		Self {
-			top: storage.top.into(),
-			children: storage
-				.children_default
-				.into_iter()
-				.map(|(k, v)| (k, (v.data.into(), v.child_info)))
-				.collect(),
-			..Default::default()
-		}
-	}
-}
-
-#[cfg(feature = "std")]
 fn retain_map<K, V, F>(map: &mut Map<K, V>, f: F)
 where
 	K: std::cmp::Eq + std::hash::Hash,
@@ -743,6 +728,7 @@ impl<'a> OverlayedExtensions<'a> {
 mod tests {
 	use super::*;
 	use crate::{ext::Ext, InMemoryBackend};
+	use hex_literal::hex;
 	use sp_core::{traits::Externalities, Blake2Hasher};
 	use std::collections::BTreeMap;
 
@@ -869,11 +855,10 @@ mod tests {
 
 		let mut cache = StorageTransactionCache::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &backend, None);
-		let root = array_bytes::hex2bytes_unchecked(
-			"39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa",
-		);
+		const ROOT: [u8; 32] =
+			hex!("39245109cef3758c2eed2ccba8d9b370a917850af3824bc8348d505df2c298fa");
 
-		assert_eq!(&ext.storage_root(state_version)[..], &root);
+		assert_eq!(&ext.storage_root(state_version)[..], &ROOT);
 	}
 
 	#[test]

@@ -19,10 +19,9 @@
 
 use crate::*;
 use frame_support::{
-	assert_ok,
-	dispatch::{DispatchInfo, GetDispatchInfo},
-	parameter_types,
+	assert_ok, parameter_types,
 	traits::{ConstU64, OnInitialize},
+	weights::{DispatchInfo, GetDispatchInfo},
 };
 use sp_core::H256;
 // The testing primitives are very useful for avoiding having to work with signatures
@@ -53,23 +52,23 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -88,7 +87,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -96,7 +95,7 @@ impl pallet_balances::Config for Test {
 
 impl Config for Test {
 	type MagicNumber = ConstU64<1_000_000_000>;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type WeightInfo = ();
 }
 
@@ -128,12 +127,12 @@ fn it_works_for_optional_value() {
 		assert_eq!(Example::dummy(), Some(val1));
 
 		// Check that accumulate works when we have Some value in Dummy already.
-		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val2));
+		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val2));
 		assert_eq!(Example::dummy(), Some(val1 + val2));
 
 		// Check that accumulate works when we Dummy has None in it.
 		<Example as OnInitialize<u64>>::on_initialize(2);
-		assert_ok!(Example::accumulate_dummy(RuntimeOrigin::signed(1), val1));
+		assert_ok!(Example::accumulate_dummy(Origin::signed(1), val1));
 		assert_eq!(Example::dummy(), Some(val1 + val2 + val1));
 	});
 }
@@ -142,7 +141,7 @@ fn it_works_for_optional_value() {
 fn it_works_for_default_value() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(Example::foo(), 24);
-		assert_ok!(Example::accumulate_foo(RuntimeOrigin::signed(1), 1));
+		assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
 		assert_eq!(Example::foo(), 25);
 	});
 }
@@ -151,7 +150,7 @@ fn it_works_for_default_value() {
 fn set_dummy_works() {
 	new_test_ext().execute_with(|| {
 		let test_val = 133;
-		assert_ok!(Example::set_dummy(RuntimeOrigin::root(), test_val.into()));
+		assert_ok!(Example::set_dummy(Origin::root(), test_val.into()));
 		assert_eq!(Example::dummy(), Some(test_val));
 	});
 }
@@ -191,13 +190,11 @@ fn weights_work() {
 	let default_call = pallet_example_basic::Call::<Test>::accumulate_dummy { increase_by: 10 };
 	let info1 = default_call.get_dispatch_info();
 	// aka. `let info = <Call<Test> as GetDispatchInfo>::get_dispatch_info(&default_call);`
-	// TODO: account for proof size weight
-	assert!(info1.weight.ref_time() > 0);
+	assert!(info1.weight > 0);
 
 	// `set_dummy` is simpler than `accumulate_dummy`, and the weight
 	//   should be less.
 	let custom_call = pallet_example_basic::Call::<Test>::set_dummy { new_value: 20 };
 	let info2 = custom_call.get_dispatch_info();
-	// TODO: account for proof size weight
-	assert!(info1.weight.ref_time() > info2.weight.ref_time());
+	assert!(info1.weight > info2.weight);
 }

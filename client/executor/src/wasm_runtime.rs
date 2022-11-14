@@ -32,7 +32,6 @@ use sc_executor_common::{
 use sp_core::traits::{Externalities, FetchRuntimeCode, RuntimeCode};
 use sp_version::RuntimeVersion;
 use std::{
-	num::NonZeroUsize,
 	panic::AssertUnwindSafe,
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -180,15 +179,17 @@ impl RuntimeCache {
 	/// for caching.
 	///
 	/// `runtime_cache_size` specifies the number of different runtimes versions preserved in an
-	/// in-memory cache, must always be at least 1.
+	/// in-memory cache.
 	pub fn new(
 		max_runtime_instances: usize,
 		cache_path: Option<PathBuf>,
 		runtime_cache_size: u8,
 	) -> RuntimeCache {
-		let cap =
-			NonZeroUsize::new(runtime_cache_size.max(1) as usize).expect("cache size is not zero");
-		RuntimeCache { runtimes: Mutex::new(LruCache::new(cap)), max_runtime_instances, cache_path }
+		RuntimeCache {
+			runtimes: Mutex::new(LruCache::new(runtime_cache_size.into())),
+			max_runtime_instances,
+			cache_path,
+		}
 	}
 
 	/// Prepares a WASM module instance and executes given function for it.

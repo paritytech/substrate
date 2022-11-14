@@ -28,7 +28,7 @@ use futures::{channel::mpsc, prelude::*};
 use libp2p::PeerId;
 use log::{debug, trace};
 use prost::Message;
-use sc_client_api::{BlockBackend, ProofProvider};
+use sc_client_api::{ProofProvider, StorageProof};
 use sc_network_common::{
 	config::ProtocolId,
 	request_responses::{IncomingRequest, OutgoingResponse, ProtocolConfig},
@@ -38,7 +38,7 @@ use sp_core::{
 	hexdisplay::HexDisplay,
 	storage::{ChildInfo, ChildType, PrefixedStorageKey},
 };
-use sp_runtime::traits::Block;
+use sp_runtime::{generic::BlockId, traits::Block};
 use std::{marker::PhantomData, sync::Arc};
 
 const LOG_TARGET: &str = "light-client-request-handler";
@@ -54,27 +54,15 @@ pub struct LightClientRequestHandler<B, Client> {
 impl<B, Client> LightClientRequestHandler<B, Client>
 where
 	B: Block,
-	Client: BlockBackend<B> + ProofProvider<B> + Send + Sync + 'static,
+	Client: ProofProvider<B> + Send + Sync + 'static,
 {
 	/// Create a new [`LightClientRequestHandler`].
-	pub fn new(
-		protocol_id: &ProtocolId,
-		fork_id: Option<&str>,
-		client: Arc<Client>,
-	) -> (Self, ProtocolConfig) {
+	pub fn new(protocol_id: &ProtocolId, client: Arc<Client>) -> (Self, ProtocolConfig) {
 		// For now due to lack of data on light client request handling in production systems, this
 		// value is chosen to match the block request limit.
 		let (tx, request_receiver) = mpsc::channel(20);
 
-		let mut protocol_config = super::generate_protocol_config(
-			protocol_id,
-			client
-				.block_hash(0u32.into())
-				.ok()
-				.flatten()
-				.expect("Genesis block exists; qed"),
-			fork_id,
-		);
+		let mut protocol_config = super::generate_protocol_config(protocol_id);
 		protocol_config.inbound_queue = Some(tx);
 
 		(Self { client, request_receiver, _block: PhantomData::default() }, protocol_config)
@@ -151,8 +139,12 @@ where
 				self.on_remote_call_request(&peer, r)?,
 			Some(schema::v1::light::request::Request::RemoteReadRequest(r)) =>
 				self.on_remote_read_request(&peer, r)?,
+			Some(schema::v1::light::request::Request::RemoteHeaderRequest(_r)) =>
+				return Err(HandleRequestError::BadRequest("Not supported.")),
 			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) =>
 				self.on_remote_read_child_request(&peer, r)?,
+			Some(schema::v1::light::request::Request::RemoteChangesRequest(_r)) =>
+				return Err(HandleRequestError::BadRequest("Not supported.")),
 			None =>
 				return Err(HandleRequestError::BadRequest("Remote request without request data.")),
 		};
@@ -172,24 +164,30 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let response = match self.client.execution_proof(block, &request.method, &request.data) {
-			Ok((_, proof)) => {
-				let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
-				Some(schema::v1::light::response::Response::RemoteCallResponse(r))
-			},
-			Err(e) => {
-				trace!(
-					"remote call request from {} ({} at {:?}) failed with: {}",
-					peer,
-					request.method,
-					request.block,
-					e,
-				);
-				None
-			},
+		let proof =
+			match self
+				.client
+				.execution_proof(&BlockId::Hash(block), &request.method, &request.data)
+			{
+				Ok((_, proof)) => proof,
+				Err(e) => {
+					trace!(
+						"remote call request from {} ({} at {:?}) failed with: {}",
+						peer,
+						request.method,
+						request.block,
+						e,
+					);
+					StorageProof::empty()
+				},
+			};
+
+		let response = {
+			let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteCallResponse(r)
 		};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
 	fn on_remote_read_request(
@@ -211,25 +209,29 @@ where
 
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
-		let response =
-			match self.client.read_proof(block, &mut request.keys.iter().map(AsRef::as_ref)) {
-				Ok(proof) => {
-					let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
-					Some(schema::v1::light::response::Response::RemoteReadResponse(r))
-				},
-				Err(error) => {
-					trace!(
-						"remote read request from {} ({} at {:?}) failed with: {}",
-						peer,
-						fmt_keys(request.keys.first(), request.keys.last()),
-						request.block,
-						error,
-					);
-					None
-				},
-			};
+		let proof = match self
+			.client
+			.read_proof(&BlockId::Hash(block), &mut request.keys.iter().map(AsRef::as_ref))
+		{
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(
+					"remote read request from {} ({} at {:?}) failed with: {}",
+					peer,
+					fmt_keys(request.keys.first(), request.keys.last()),
+					request.block,
+					error,
+				);
+				StorageProof::empty()
+			},
+		};
 
-		Ok(schema::v1::light::Response { response })
+		let response = {
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteReadResponse(r)
+		};
+
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 
 	fn on_remote_read_child_request(
@@ -257,17 +259,14 @@ where
 			Some((ChildType::ParentKeyId, storage_key)) => Ok(ChildInfo::new_default(storage_key)),
 			None => Err(sp_blockchain::Error::InvalidChildStorageKey),
 		};
-		let response = match child_info.and_then(|child_info| {
+		let proof = match child_info.and_then(|child_info| {
 			self.client.read_child_proof(
-				block,
+				&BlockId::Hash(block),
 				&child_info,
 				&mut request.keys.iter().map(AsRef::as_ref),
 			)
 		}) {
-			Ok(proof) => {
-				let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
-				Some(schema::v1::light::response::Response::RemoteReadResponse(r))
-			},
+			Ok(proof) => proof,
 			Err(error) => {
 				trace!(
 					"remote read child request from {} ({} {} at {:?}) failed with: {}",
@@ -277,11 +276,16 @@ where
 					request.block,
 					error,
 				);
-				None
+				StorageProof::empty()
 			},
 		};
 
-		Ok(schema::v1::light::Response { response })
+		let response = {
+			let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
+			schema::v1::light::response::Response::RemoteReadResponse(r)
+		};
+
+		Ok(schema::v1::light::Response { response: Some(response) })
 	}
 }
 

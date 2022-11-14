@@ -18,6 +18,7 @@
 
 //! Rust executor possible errors.
 
+use sp_serializer;
 use wasmi;
 
 /// Result type alias.
@@ -27,6 +28,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum Error {
+	#[error("Unserializable data encountered")]
+	InvalidData(#[from] sp_serializer::Error),
+
 	#[error(transparent)]
 	Wasmi(#[from] wasmi::Error),
 

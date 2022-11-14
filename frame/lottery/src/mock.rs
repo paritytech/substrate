@@ -57,16 +57,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type BlockNumber = u64;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -84,7 +84,7 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
@@ -97,10 +97,10 @@ parameter_types! {
 
 impl Config for Test {
 	type PalletId = LotteryPalletId;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Currency = Balances;
 	type Randomness = TestRandomness<Self>;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ManagerOrigin = EnsureRoot<u64>;
 	type MaxCalls = ConstU32<2>;
 	type ValidateCall = Lottery;

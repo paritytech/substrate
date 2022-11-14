@@ -15,17 +15,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::env;
+
 #[rustversion::attr(not(stable), ignore)]
 #[cfg(not(feature = "disable-ui-tests"))]
 #[test]
 fn ui() {
 	// Only run the ui tests when `RUN_UI_TESTS` is set.
-	if std::env::var("RUN_UI_TESTS").is_err() {
+	if env::var("RUN_UI_TESTS").is_err() {
 		return
 	}
 
 	// As trybuild is using `cargo check`, we don't need the real WASM binaries.
-	std::env::set_var("SKIP_WASM_BUILD", "1");
+	env::set_var("SKIP_WASM_BUILD", "1");
 
 	let t = trybuild::TestCases::new();
 	t.compile_fail("tests/construct_runtime_ui/*.rs");

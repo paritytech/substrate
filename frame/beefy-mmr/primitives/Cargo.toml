@@ -9,22 +9,23 @@ description = "A no-std/Substrate compatible library to construct binary merkle 
 homepage = "https://substrate.io"
 
 [dependencies]
-array-bytes = { version = "4.1", optional = true }
+hex = { version = "0.4", default-features = false, optional = true }
 log = { version = "0.4", default-features = false, optional = true }
+tiny-keccak = { version = "2.0.2", features = ["keccak"], optional = true }
 
 beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/beefy" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
-array-bytes = "4.1"
 env_logger = "0.9"
+hex = "0.4"
+hex-literal = "0.3"
 
 [features]
-debug = ["array-bytes", "log"]
-default = ["debug", "std"]
+debug = ["hex", "hex/std", "log"]
+default = ["debug", "keccak", "std"]
+keccak = ["tiny-keccak"]
 std = [
 	"beefy-primitives/std",
-	"sp-api/std",
-	"sp-runtime/std"
+	"sp-api/std"
 ]

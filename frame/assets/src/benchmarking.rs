@@ -37,7 +37,7 @@ const SEED: u32 = 0;
 
 fn create_default_asset<T: Config<I>, I: 'static>(
 	is_sufficient: bool,
-) -> (T::AccountId, AccountIdLookupOf<T>) {
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let root = SystemOrigin::Root.into();
@@ -55,7 +55,7 @@ fn create_default_asset<T: Config<I>, I: 'static>(
 fn create_default_minted_asset<T: Config<I>, I: 'static>(
 	is_sufficient: bool,
 	amount: T::Balance,
-) -> (T::AccountId, AccountIdLookupOf<T>) {
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let (caller, caller_lookup) = create_default_asset::<T, I>(is_sufficient);
 	if !is_sufficient {
 		T::Currency::make_free_balance_be(&caller, T::Currency::minimum_balance());
@@ -140,24 +140,22 @@ fn add_approvals<T: Config<I>, I: 'static>(minter: T::AccountId, n: u32) {
 	}
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
-fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
+fn assert_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	frame_system::Pallet::<T>::assert_has_event(generic_event.into());
 }
 
 benchmarks_instance_pallet! {
 	create {
-		let asset_id = Default::default();
-		let origin = T::CreateOrigin::successful_origin(&asset_id);
-		let caller = T::CreateOrigin::ensure_origin(origin, &asset_id).unwrap();
+		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, 1u32.into())
+	}: _(SystemOrigin::Signed(caller.clone()), Default::default(), caller_lookup, 1u32.into())
 	verify {
-		assert_last_event::<T, I>(Event::Created { asset_id, creator: caller.clone(), owner: caller }.into());
+		assert_last_event::<T, I>(Event::Created { asset_id: Default::default(), creator: caller.clone(), owner: caller }.into());
 	}
 
 	force_create {

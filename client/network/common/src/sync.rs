@@ -44,20 +44,11 @@ pub struct PeerInfo<Block: BlockT> {
 
 /// Reported sync state.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum SyncState<BlockNumber> {
+pub enum SyncState {
 	/// Initial sync is complete, keep-up sync is active.
 	Idle,
 	/// Actively catching up with the chain.
-	Downloading { target: BlockNumber },
-	/// All blocks are downloaded and are being imported.
-	Importing { target: BlockNumber },
-}
-
-impl<BlockNumber> SyncState<BlockNumber> {
-	/// Are we actively catching up with the chain?
-	pub fn is_major_syncing(&self) -> bool {
-		!matches!(self, SyncState::Idle)
-	}
+	Downloading,
 }
 
 /// Reported state download progress.
@@ -73,7 +64,7 @@ pub struct StateDownloadProgress {
 #[derive(Clone)]
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
-	pub state: SyncState<NumberFor<Block>>,
+	pub state: SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<Block>>,
 	/// Number of peers participating in syncing.
@@ -105,8 +96,6 @@ pub enum OnBlockData<Block: BlockT> {
 	Import(BlockOrigin, Vec<IncomingBlock<Block>>),
 	/// A new block request needs to be made to the given peer.
 	Request(PeerId, BlockRequest<Block>),
-	/// Continue processing events.
-	Continue,
 }
 
 /// Result of [`ChainSync::on_block_justification`].
@@ -278,14 +267,12 @@ pub trait ChainSync<Block: BlockT>: Send {
 	);
 
 	/// Get an iterator over all scheduled justification requests.
-	fn justification_requests<'a>(
-		&'a mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
+	fn justification_requests(
+		&mut self,
+	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + '_>;
 
 	/// Get an iterator over all block requests of all peers.
-	fn block_requests<'a>(
-		&'a mut self,
-	) -> Box<dyn Iterator<Item = (PeerId, BlockRequest<Block>)> + 'a>;
+	fn block_requests(&mut self) -> Box<dyn Iterator<Item = (&PeerId, BlockRequest<Block>)> + '_>;
 
 	/// Get a state request, if any.
 	fn state_request(&mut self) -> Option<(PeerId, OpaqueStateRequest)>;
@@ -370,9 +357,9 @@ pub trait ChainSync<Block: BlockT>: Send {
 	///
 	/// If [`PollBlockAnnounceValidation::ImportHeader`] is returned, then the caller MUST try to
 	/// import passed header (call `on_block_data`). The network request isn't sent in this case.
-	fn poll_block_announce_validation<'a>(
+	fn poll_block_announce_validation(
 		&mut self,
-		cx: &mut std::task::Context<'a>,
+		cx: &mut std::task::Context,
 	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 
 	/// Call when a peer has disconnected.
@@ -404,14 +391,4 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Decode implementation-specific state response.
 	fn decode_state_response(&self, response: &[u8]) -> Result<OpaqueStateResponse, String>;
-
-	/// Advance the state of `ChainSync`
-	///
-	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
-	/// this function should be polled until it returns [`Poll::Pending`] to
-	/// consume all pending events.
-	fn poll(
-		&mut self,
-		cx: &mut std::task::Context,
-	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 }

@@ -28,7 +28,7 @@ use sp_runtime::traits::Bounded;
 const SEED: u32 = 0;
 const DEFAULT_DELAY: u32 = 0;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -106,25 +106,22 @@ benchmarks! {
 	as_recovered {
 		let caller: T::AccountId = whitelisted_caller();
 		let recovered_account: T::AccountId = account("recovered_account", 0, SEED);
-		let recovered_account_lookup = T::Lookup::unlookup(recovered_account.clone());
-		let call: <T as Config>::RuntimeCall = frame_system::Call::<T>::remark { remark: vec![] }.into();
+		let call: <T as Config>::Call = frame_system::Call::<T>::remark { remark: vec![] }.into();
 
 		Proxy::<T>::insert(&caller, &recovered_account);
 	}: _(
 		RawOrigin::Signed(caller),
-		recovered_account_lookup,
+		recovered_account,
 		Box::new(call)
 	)
 
 	set_recovered {
 		let lost: T::AccountId = whitelisted_caller();
-		let lost_lookup = T::Lookup::unlookup(lost.clone());
 		let rescuer: T::AccountId = whitelisted_caller();
-		let rescuer_lookup = T::Lookup::unlookup(rescuer.clone());
 	}: _(
 		RawOrigin::Root,
-		lost_lookup,
-		rescuer_lookup
+		lost.clone(),
+		rescuer.clone()
 	) verify {
 		assert_last_event::<T>(
 			Event::AccountRecovered {
@@ -156,12 +153,11 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
-		let lost_account_lookup = T::Lookup::unlookup(lost_account.clone());
 
 		insert_recovery_account::<T>(&caller, &lost_account);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		lost_account_lookup
+		lost_account.clone()
 	) verify {
 		assert_last_event::<T>(
 			Event::RecoveryInitiated {
@@ -176,10 +172,7 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
-		let lost_account_lookup = T::Lookup::unlookup(lost_account.clone());
 		let rescuer_account: T::AccountId = account("rescuer_account", 0, SEED);
-		let rescuer_account_lookup = T::Lookup::unlookup(rescuer_account.clone());
-
 
 		// Create friends
 		let friends = add_caller_and_generate_friends::<T>(caller.clone(), n);
@@ -213,8 +206,8 @@ benchmarks! {
 
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		lost_account_lookup,
-		rescuer_account_lookup
+		lost_account.clone(),
+		rescuer_account.clone()
 	) verify {
 		assert_last_event::<T>(
 			Event::RecoveryVouched {
@@ -230,7 +223,6 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let lost_account: T::AccountId = account("lost_account", 0, SEED);
-		let lost_account_lookup = T::Lookup::unlookup(lost_account.clone());
 
 		T::Currency::make_free_balance_be(&caller, BalanceOf::<T>::max_value());
 
@@ -265,7 +257,7 @@ benchmarks! {
 		<ActiveRecoveries<T>>::insert(&lost_account, &caller, recovery_status);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		lost_account_lookup
+		lost_account.clone()
 	) verify {
 		assert_last_event::<T>(
 			Event::AccountRecovered {
@@ -278,7 +270,6 @@ benchmarks! {
 	close_recovery {
 		let caller: T::AccountId = whitelisted_caller();
 		let rescuer_account: T::AccountId = account("rescuer_account", 0, SEED);
-		let rescuer_account_lookup = T::Lookup::unlookup(rescuer_account.clone());
 
 		let n in 1 .. T::MaxFriends::get();
 
@@ -316,7 +307,7 @@ benchmarks! {
 		<ActiveRecoveries<T>>::insert(&caller, &rescuer_account, recovery_status);
 	}: _(
 		RawOrigin::Signed(caller.clone()),
-		rescuer_account_lookup
+		rescuer_account.clone()
 	) verify {
 		assert_last_event::<T>(
 			Event::RecoveryClosed {
@@ -365,7 +356,6 @@ benchmarks! {
 	cancel_recovered {
 		let caller: T::AccountId = whitelisted_caller();
 		let account: T::AccountId = account("account", 0, SEED);
-		let account_lookup = T::Lookup::unlookup(account.clone());
 
 		frame_system::Pallet::<T>::inc_providers(&caller);
 
@@ -374,7 +364,7 @@ benchmarks! {
 		Proxy::<T>::insert(&caller, &account);
 	}: _(
 		RawOrigin::Signed(caller),
-		account_lookup
+		account
 	)
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);

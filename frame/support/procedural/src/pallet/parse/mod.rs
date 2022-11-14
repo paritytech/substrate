@@ -59,11 +59,10 @@ pub struct Def {
 	pub type_values: Vec<type_value::TypeValueDef>,
 	pub frame_system: syn::Ident,
 	pub frame_support: syn::Ident,
-	pub dev_mode: bool,
 }
 
 impl Def {
-	pub fn try_from(mut item: syn::ItemMod, dev_mode: bool) -> syn::Result<Self> {
+	pub fn try_from(mut item: syn::ItemMod) -> syn::Result<Self> {
 		let frame_system = generate_crate_access_2018("frame-system")?;
 		let frame_support = generate_crate_access_2018("frame-support")?;
 
@@ -106,11 +105,11 @@ impl Def {
 					let m = hooks::HooksDef::try_from(span, index, item)?;
 					hooks = Some(m);
 				},
-				Some(PalletAttr::RuntimeCall(span)) if call.is_none() =>
-					call = Some(call::CallDef::try_from(span, index, item, dev_mode)?),
+				Some(PalletAttr::Call(span)) if call.is_none() =>
+					call = Some(call::CallDef::try_from(span, index, item)?),
 				Some(PalletAttr::Error(span)) if error.is_none() =>
 					error = Some(error::ErrorDef::try_from(span, index, item)?),
-				Some(PalletAttr::RuntimeEvent(span)) if event.is_none() =>
+				Some(PalletAttr::Event(span)) if event.is_none() =>
 					event = Some(event::EventDef::try_from(span, index, item)?),
 				Some(PalletAttr::GenesisConfig(_)) if genesis_config.is_none() => {
 					let g = genesis_config::GenesisConfigDef::try_from(index, item)?;
@@ -120,12 +119,12 @@ impl Def {
 					let g = genesis_build::GenesisBuildDef::try_from(span, index, item)?;
 					genesis_build = Some(g);
 				},
-				Some(PalletAttr::RuntimeOrigin(_)) if origin.is_none() =>
+				Some(PalletAttr::Origin(_)) if origin.is_none() =>
 					origin = Some(origin::OriginDef::try_from(index, item)?),
 				Some(PalletAttr::Inherent(_)) if inherent.is_none() =>
 					inherent = Some(inherent::InherentDef::try_from(index, item)?),
 				Some(PalletAttr::Storage(span)) =>
-					storages.push(storage::StorageDef::try_from(span, index, item, dev_mode)?),
+					storages.push(storage::StorageDef::try_from(span, index, item)?),
 				Some(PalletAttr::ValidateUnsigned(_)) if validate_unsigned.is_none() => {
 					let v = validate_unsigned::ValidateUnsignedDef::try_from(index, item)?;
 					validate_unsigned = Some(v);
@@ -174,7 +173,6 @@ impl Def {
 			type_values,
 			frame_system,
 			frame_support,
-			dev_mode,
 		};
 
 		def.check_instance_usage()?;
@@ -184,19 +182,19 @@ impl Def {
 	}
 
 	/// Check that usage of trait `Event` is consistent with the definition, i.e. it is declared
-	/// and trait defines type RuntimeEvent, or not declared and no trait associated type.
+	/// and trait defines type Event, or not declared and no trait associated type.
 	fn check_event_usage(&self) -> syn::Result<()> {
 		match (self.config.has_event_type, self.event.is_some()) {
 			(true, false) => {
-				let msg = "Invalid usage of RuntimeEvent, `Config` contains associated type `RuntimeEvent`, \
+				let msg = "Invalid usage of Event, `Config` contains associated type `Event`, \
 					but enum `Event` is not declared (i.e. no use of `#[pallet::event]`). \
-					Note that type `RuntimeEvent` in trait is reserved to work alongside pallet event.";
+					Note that type `Event` in trait is reserved to work alongside pallet event.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
 			(false, true) => {
-				let msg = "Invalid usage of RuntimeEvent, `Config` contains no associated type \
-					`RuntimeEvent`, but enum `Event` is declared (in use of `#[pallet::event]`). \
-					An RuntimeEvent associated type must be declare on trait `Config`.";
+				let msg = "Invalid usage of Event, `Config` contains no associated type \
+					`Event`, but enum `Event` is declared (in use of `#[pallet::event]`). \
+					An Event associated type must be declare on trait `Config`.";
 				Err(syn::Error::new(proc_macro2::Span::call_site(), msg))
 			},
 			_ => Ok(()),
@@ -393,10 +391,10 @@ enum PalletAttr {
 	Config(proc_macro2::Span),
 	Pallet(proc_macro2::Span),
 	Hooks(proc_macro2::Span),
-	RuntimeCall(proc_macro2::Span),
+	Call(proc_macro2::Span),
 	Error(proc_macro2::Span),
-	RuntimeEvent(proc_macro2::Span),
-	RuntimeOrigin(proc_macro2::Span),
+	Event(proc_macro2::Span),
+	Origin(proc_macro2::Span),
 	Inherent(proc_macro2::Span),
 	Storage(proc_macro2::Span),
 	GenesisConfig(proc_macro2::Span),
@@ -412,10 +410,10 @@ impl PalletAttr {
 			Self::Config(span) => *span,
 			Self::Pallet(span) => *span,
 			Self::Hooks(span) => *span,
-			Self::RuntimeCall(span) => *span,
+			Self::Call(span) => *span,
 			Self::Error(span) => *span,
-			Self::RuntimeEvent(span) => *span,
-			Self::RuntimeOrigin(span) => *span,
+			Self::Event(span) => *span,
+			Self::Origin(span) => *span,
 			Self::Inherent(span) => *span,
 			Self::Storage(span) => *span,
 			Self::GenesisConfig(span) => *span,
@@ -443,13 +441,13 @@ impl syn::parse::Parse for PalletAttr {
 		} else if lookahead.peek(keyword::hooks) {
 			Ok(PalletAttr::Hooks(content.parse::<keyword::hooks>()?.span()))
 		} else if lookahead.peek(keyword::call) {
-			Ok(PalletAttr::RuntimeCall(content.parse::<keyword::call>()?.span()))
+			Ok(PalletAttr::Call(content.parse::<keyword::call>()?.span()))
 		} else if lookahead.peek(keyword::error) {
 			Ok(PalletAttr::Error(content.parse::<keyword::error>()?.span()))
 		} else if lookahead.peek(keyword::event) {
-			Ok(PalletAttr::RuntimeEvent(content.parse::<keyword::event>()?.span()))
+			Ok(PalletAttr::Event(content.parse::<keyword::event>()?.span()))
 		} else if lookahead.peek(keyword::origin) {
-			Ok(PalletAttr::RuntimeOrigin(content.parse::<keyword::origin>()?.span()))
+			Ok(PalletAttr::Origin(content.parse::<keyword::origin>()?.span()))
 		} else if lookahead.peek(keyword::inherent) {
 			Ok(PalletAttr::Inherent(content.parse::<keyword::inherent>()?.span()))
 		} else if lookahead.peek(keyword::storage) {

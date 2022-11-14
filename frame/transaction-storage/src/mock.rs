@@ -51,8 +51,8 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -60,7 +60,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -77,7 +77,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -87,8 +87,8 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_transaction_storage::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type RuntimeCall = RuntimeCall;
+	type Event = Event;
+	type Call = Call;
 	type Currency = Balances;
 	type FeeDestination = ();
 	type WeightInfo = ();
@@ -116,7 +116,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub fn run_to_block(n: u64, f: impl Fn() -> Option<TransactionStorageProof>) {
 	while System::block_number() < n {
 		if let Some(proof) = f() {
-			TransactionStorage::check_proof(RuntimeOrigin::none(), proof).unwrap();
+			TransactionStorage::check_proof(Origin::none(), proof).unwrap();
 		}
 		TransactionStorage::on_finalize(System::block_number());
 		System::on_finalize(System::block_number());

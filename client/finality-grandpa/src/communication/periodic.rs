@@ -32,6 +32,9 @@ use super::gossip::{GossipMessage, NeighborPacket};
 use sc_network::PeerId;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
+// How often to rebroadcast, in cases where no new packets are created.
+const REBROADCAST_AFTER: Duration = Duration::from_secs(2 * 60);
+
 /// A sender used to send neighbor packets to a background job.
 #[derive(Clone)]
 pub(super) struct NeighborPacketSender<B: BlockT>(
@@ -57,7 +60,6 @@ impl<B: BlockT> NeighborPacketSender<B> {
 /// implementation). Periodically it sends out the last packet in cases where no new ones arrive.
 pub(super) struct NeighborPacketWorker<B: BlockT> {
 	last: Option<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
-	rebroadcast_period: Duration,
 	delay: Delay,
 	rx: TracingUnboundedReceiver<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>,
 }
@@ -65,16 +67,13 @@ pub(super) struct NeighborPacketWorker<B: BlockT> {
 impl<B: BlockT> Unpin for NeighborPacketWorker<B> {}
 
 impl<B: BlockT> NeighborPacketWorker<B> {
-	pub(super) fn new(rebroadcast_period: Duration) -> (Self, NeighborPacketSender<B>) {
+	pub(super) fn new() -> (Self, NeighborPacketSender<B>) {
 		let (tx, rx) = tracing_unbounded::<(Vec<PeerId>, NeighborPacket<NumberFor<B>>)>(
 			"mpsc_grandpa_neighbor_packet_worker",
 		);
-		let delay = Delay::new(rebroadcast_period);
+		let delay = Delay::new(REBROADCAST_AFTER);
 
-		(
-			NeighborPacketWorker { last: None, rebroadcast_period, delay, rx },
-			NeighborPacketSender(tx),
-		)
+		(NeighborPacketWorker { last: None, delay, rx }, NeighborPacketSender(tx))
 	}
 }
 
@@ -86,7 +85,7 @@ impl<B: BlockT> Stream for NeighborPacketWorker<B> {
 		match this.rx.poll_next_unpin(cx) {
 			Poll::Ready(None) => return Poll::Ready(None),
 			Poll::Ready(Some((to, packet))) => {
-				this.delay.reset(this.rebroadcast_period);
+				this.delay.reset(REBROADCAST_AFTER);
 				this.last = Some((to.clone(), packet.clone()));
 
 				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet))))
@@ -99,7 +98,7 @@ impl<B: BlockT> Stream for NeighborPacketWorker<B> {
 
 		// Getting this far here implies that the timer fired.
 
-		this.delay.reset(this.rebroadcast_period);
+		this.delay.reset(REBROADCAST_AFTER);
 
 		// Make sure the underlying task is scheduled for wake-up.
 		//

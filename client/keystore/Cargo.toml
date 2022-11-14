@@ -14,10 +14,10 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = "4.1"
-async-trait = "0.1.57"
-parking_lot = "0.12.1"
-serde_json = "1.0.85"
+async-trait = "0.1.50"
+hex = "0.4.0"
+parking_lot = "0.12.0"
+serde_json = "1.0.79"
 thiserror = "1.0"
 sp-application-crypto = { version = "6.0.0", path = "../../primitives/application-crypto" }
 sp-core = { version = "6.0.0", path = "../../primitives/core" }

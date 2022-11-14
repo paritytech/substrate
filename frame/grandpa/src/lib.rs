@@ -40,11 +40,11 @@ use fg_primitives::{
 	GRANDPA_ENGINE_ID,
 };
 use frame_support::{
-	dispatch::{DispatchResultWithPostInfo, Pays},
+	dispatch::DispatchResultWithPostInfo,
 	pallet_prelude::Get,
 	storage,
 	traits::{KeyOwnerProofSystem, OneSessionHandler},
-	weights::Weight,
+	weights::{Pays, Weight},
 	WeakBoundedVec,
 };
 use scale_info::TypeInfo;
@@ -87,9 +87,12 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The event type of this module.
-		type RuntimeEvent: From<Event>
-			+ Into<<Self as frame_system::Config>::RuntimeEvent>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event>
+			+ Into<<Self as frame_system::Config>::Event>
+			+ IsType<<Self as frame_system::Config>::Event>;
+
+		/// The function call.
+		type Call: From<Call<Self>>;
 
 		/// The proof of key ownership, used for validating equivocation reports
 		/// The proof must include the session index and validator count of the

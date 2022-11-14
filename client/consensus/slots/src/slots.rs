@@ -50,6 +50,8 @@ pub fn time_until_next_slot(slot_duration: Duration) -> Duration {
 pub struct SlotInfo<B: BlockT> {
 	/// The slot number as found in the inherent data.
 	pub slot: Slot,
+	/// Current timestamp as found in the inherent data.
+	pub timestamp: sp_timestamp::Timestamp,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
 	/// The inherent data.
@@ -70,6 +72,7 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
+		timestamp: sp_timestamp::Timestamp,
 		inherent_data: InherentData,
 		duration: Duration,
 		chain_head: B::Header,
@@ -77,6 +80,7 @@ impl<B: BlockT> SlotInfo<B> {
 	) -> Self {
 		Self {
 			slot,
+			timestamp,
 			inherent_data,
 			duration,
 			chain_head,
@@ -171,6 +175,7 @@ where
 				);
 			}
 
+			let timestamp = inherent_data_providers.timestamp();
 			let slot = inherent_data_providers.slot();
 			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
@@ -178,7 +183,14 @@ where
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(slot, inherent_data, self.slot_duration, chain_head, None))
+				break Ok(SlotInfo::new(
+					slot,
+					timestamp,
+					inherent_data,
+					self.slot_duration,
+					chain_head,
+					None,
+				))
 			}
 		}
 	}

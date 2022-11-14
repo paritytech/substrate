@@ -23,21 +23,21 @@ use sp_core::crypto::SecretString;
 
 /// The `sign` command
 #[derive(Debug, Clone, Parser)]
-#[command(name = "sign", about = "Sign a message, with a given (secret) key")]
+#[clap(name = "sign", about = "Sign a message, with a given (secret) key")]
 pub struct SignCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[arg(long)]
+	#[clap(long)]
 	suri: Option<String>,
 
 	/// Message to sign, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[arg(long)]
+	#[clap(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[arg(long)]
+	#[clap(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]
@@ -70,7 +70,7 @@ fn sign<P: sp_core::Pair>(
 	message: Vec<u8>,
 ) -> error::Result<String> {
 	let pair = utils::pair_from_suri::<P>(suri, password)?;
-	Ok(array_bytes::bytes2hex("", pair.sign(&message).as_ref()))
+	Ok(hex::encode(pair.sign(&message)))
 }
 
 #[cfg(test)]

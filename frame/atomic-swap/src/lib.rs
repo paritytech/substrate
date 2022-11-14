@@ -166,7 +166,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 		/// Swap action.
 		type SwapAction: SwapAction<Self::AccountId, Self> + Parameter + MaxEncodedLen;
 		/// Limit of proof size.
@@ -243,7 +243,7 @@ pub mod pallet {
 		/// - `duration`: Locked duration of the atomic swap. For safety reasons, it is recommended
 		///   that the revealer uses a shorter duration than the counterparty, to prevent the
 		///   situation where the revealer reveals the proof too late around the end block.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
 		pub fn create_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -280,10 +280,9 @@ pub mod pallet {
 		///   the operation fails. This is used for weight calculation.
 		#[pallet::weight(
 			T::DbWeight::get().reads_writes(1, 1)
-				.saturating_add(action.weight())
-				.ref_time()
 				.saturating_add(40_000_000)
-				.saturating_add((proof.len() as u64).saturating_mul(100))
+				.saturating_add((proof.len() as Weight).saturating_mul(100))
+				.saturating_add(action.weight())
 		)]
 		pub fn claim_swap(
 			origin: OriginFor<T>,
@@ -318,7 +317,7 @@ pub mod pallet {
 		///
 		/// - `target`: Target of the original atomic swap.
 		/// - `hashed_proof`: Hashed proof of the original atomic swap.
-		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).ref_time().saturating_add(40_000_000))]
+		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1).saturating_add(40_000_000))]
 		pub fn cancel_swap(
 			origin: OriginFor<T>,
 			target: T::AccountId,
@@ -334,7 +333,7 @@ pub mod pallet {
 			);
 
 			swap.action.cancel(&swap.source);
-			PendingSwaps::<T>::remove(&target, hashed_proof);
+			PendingSwaps::<T>::remove(&target, hashed_proof.clone());
 
 			Self::deposit_event(Event::SwapCancelled { account: target, proof: hashed_proof });
 

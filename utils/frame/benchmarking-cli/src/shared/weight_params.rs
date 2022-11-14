@@ -31,23 +31,23 @@ pub struct WeightParams {
 	/// File or directory to write the *weight* files to.
 	///
 	/// For Substrate this should be `frame/support/src/weights`.
-	#[arg(long)]
+	#[clap(long)]
 	pub weight_path: Option<PathBuf>,
 
 	/// Select a specific metric to calculate the final weight output.
-	#[arg(long = "metric", default_value = "average")]
+	#[clap(long = "metric", default_value = "average")]
 	pub weight_metric: StatSelect,
 
 	/// Multiply the resulting weight with the given factor. Must be positive.
 	///
 	/// Is applied before `weight_add`.
-	#[arg(long = "mul", default_value_t = 1.0)]
+	#[clap(long = "mul", default_value = "1")]
 	pub weight_mul: f64,
 
 	/// Add the given offset to the resulting weight.
 	///
 	/// Is applied after `weight_mul`.
-	#[arg(long = "add", default_value_t = 0)]
+	#[clap(long = "add", default_value = "0")]
 	pub weight_add: u64,
 }
 

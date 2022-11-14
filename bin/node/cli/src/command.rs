@@ -115,56 +115,35 @@ pub fn run() -> Result<()> {
 						cmd.run::<Block, ExecutorDispatch>(config)
 					},
 					BenchmarkCmd::Block(cmd) => {
-						// ensure that we keep the task manager alive
-						let partial = new_partial(&config)?;
-						cmd.run(partial.client)
+						let PartialComponents { client, .. } = new_partial(&config)?;
+						cmd.run(client)
 					},
-					#[cfg(not(feature = "runtime-benchmarks"))]
-					BenchmarkCmd::Storage(_) => Err(
-						"Storage benchmarking can be enabled with `--features runtime-benchmarks`."
-							.into(),
-					),
-					#[cfg(feature = "runtime-benchmarks")]
 					BenchmarkCmd::Storage(cmd) => {
-						// ensure that we keep the task manager alive
-						let partial = new_partial(&config)?;
-						let db = partial.backend.expose_db();
-						let storage = partial.backend.expose_storage();
+						let PartialComponents { client, backend, .. } = new_partial(&config)?;
+						let db = backend.expose_db();
+						let storage = backend.expose_storage();
 
-						cmd.run(config, partial.client, db, storage)
+						cmd.run(config, client, db, storage)
 					},
 					BenchmarkCmd::Overhead(cmd) => {
-						// ensure that we keep the task manager alive
-						let partial = new_partial(&config)?;
-						let ext_builder = RemarkBuilder::new(partial.client.clone());
+						let PartialComponents { client, .. } = new_partial(&config)?;
+						let ext_builder = RemarkBuilder::new(client.clone());
 
-						cmd.run(
-							config,
-							partial.client,
-							inherent_benchmark_data()?,
-							Vec::new(),
-							&ext_builder,
-						)
+						cmd.run(config, client, inherent_benchmark_data()?, &ext_builder)
 					},
 					BenchmarkCmd::Extrinsic(cmd) => {
-						// ensure that we keep the task manager alive
-						let partial = service::new_partial(&config)?;
+						let PartialComponents { client, .. } = service::new_partial(&config)?;
 						// Register the *Remark* and *TKA* builders.
 						let ext_factory = ExtrinsicFactory(vec![
-							Box::new(RemarkBuilder::new(partial.client.clone())),
+							Box::new(RemarkBuilder::new(client.clone())),
 							Box::new(TransferKeepAliveBuilder::new(
-								partial.client.clone(),
+								client.clone(),
 								Sr25519Keyring::Alice.to_account_id(),
 								ExistentialDeposit::get(),
 							)),
 						]);
 
-						cmd.run(
-							partial.client,
-							inherent_benchmark_data()?,
-							Vec::new(),
-							&ext_factory,
-						)
+						cmd.run(client, inherent_benchmark_data()?, &ext_factory)
 					},
 					BenchmarkCmd::Machine(cmd) =>
 						cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()),

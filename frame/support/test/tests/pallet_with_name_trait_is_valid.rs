@@ -18,7 +18,7 @@
 pub trait Trait: frame_system::Config {
 	type Balance: frame_support::dispatch::Parameter;
 	/// The overarching event type.
-	type RuntimeEvent: From<Event<Self>> + Into<<Self as frame_system::Config>::RuntimeEvent>;
+	type Event: From<Event<Self>> + Into<<Self as frame_system::Config>::Event>;
 }
 
 frame_support::decl_storage! {
@@ -43,7 +43,7 @@ frame_support::decl_error!(
 );
 
 frame_support::decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::RuntimeOrigin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 		type Error = Error<T>;
 		const Foo: u32 = u32::MAX;
@@ -54,7 +54,7 @@ frame_support::decl_module! {
 		}
 
 		fn on_initialize(_n: T::BlockNumber) -> frame_support::weights::Weight {
-			frame_support::weights::Weight::zero()
+			0
 		}
 	}
 }
@@ -108,7 +108,7 @@ mod tests {
 	type TestHeader = sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>;
 	type TestUncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<
 		<Runtime as frame_system::Config>::AccountId,
-		<Runtime as frame_system::Config>::RuntimeCall,
+		<Runtime as frame_system::Config>::Call,
 		(),
 		SignedExtra,
 	>;
@@ -126,16 +126,16 @@ mod tests {
 
 	impl frame_system::Config for Runtime {
 		type BaseCallFilter = frame_support::traits::Everything;
-		type RuntimeOrigin = RuntimeOrigin;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = sp_core::H256;
-		type RuntimeCall = RuntimeCall;
+		type Call = Call;
 		type Hashing = sp_runtime::traits::BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 		type Header = TestHeader;
-		type RuntimeEvent = ();
+		type Event = ();
 		type BlockHashCount = ConstU64<250>;
 		type DbWeight = ();
 		type BlockWeights = ();
@@ -153,6 +153,6 @@ mod tests {
 
 	impl pallet_test::Trait for Runtime {
 		type Balance = u32;
-		type RuntimeEvent = ();
+		type Event = ();
 	}
 }

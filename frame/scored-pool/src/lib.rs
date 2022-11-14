@@ -75,7 +75,7 @@
 //! 			let who = ensure_signed(origin)?;
 //!
 //! 			let _ = <scored_pool::Pallet<T>>::submit_candidacy(
-//! 				T::RuntimeOrigin::from(Some(who.clone()).into())
+//! 				T::Origin::from(Some(who.clone()).into())
 //! 			);
 //! 			Ok(())
 //! 		}
@@ -98,11 +98,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-use codec::{FullCodec, MaxEncodedLen};
+use codec::FullCodec;
 use frame_support::{
 	ensure,
 	traits::{ChangeMembers, Currency, Get, InitializeMembers, ReservableCurrency},
-	BoundedVec,
 };
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32Bit, StaticLookup, Zero};
@@ -110,13 +109,7 @@ use sp_std::{fmt::Debug, prelude::*};
 
 type BalanceOf<T, I> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type PoolT<T, I> = BoundedVec<
-	(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>),
-	<T as Config<I>>::MaximumMembers,
->;
-type MembersT<T, I> =
-	BoundedVec<<T as frame_system::Config>::AccountId, <T as Config<I>>::MaximumMembers>;
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+type PoolT<T, I> = Vec<(<T as frame_system::Config>::AccountId, Option<<T as Config<I>>::Score>)>;
 
 /// The enum is supplied when refreshing the members set.
 /// Depending on the enum variant the corresponding associated
@@ -136,16 +129,13 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The currency used for deposits.
 		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
-
-		/// Maximum members length allowed.
-		#[pallet::constant]
-		type MaximumMembers: Get<u32>;
 
 		/// The score attributed to a member or candidate.
 		type Score: AtLeast32Bit
@@ -155,12 +145,10 @@ pub mod pallet {
 			+ FullCodec
 			+ MaybeSerializeDeserialize
 			+ Debug
-			+ scale_info::TypeInfo
-			+ MaxEncodedLen;
+			+ scale_info::TypeInfo;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		// The deposit which is reserved from candidates if they want to
 		// start a candidacy. The deposit gets returned when the candidacy is
@@ -183,13 +171,13 @@ pub mod pallet {
 		type MembershipChanged: ChangeMembers<Self::AccountId>;
 
 		/// Allows a configurable origin type to set a score to a candidate in the pool.
-		type ScoreOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		type ScoreOrigin: EnsureOrigin<Self::Origin>;
 
 		/// Required origin for removing a member (though can always be Root).
 		/// Configurable origin which enables removing an entity. If the entity
 		/// is part of the `Members` it is immediately replaced by the next
 		/// highest scoring candidate, if available.
-		type KickOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		type KickOrigin: EnsureOrigin<Self::Origin>;
 	}
 
 	#[pallet::event]
@@ -218,11 +206,9 @@ pub mod pallet {
 		InvalidIndex,
 		/// Index does not match requested account.
 		WrongAccountIndex,
-		/// Number of members exceeds `MaximumMembers`.
-		TooManyMembers,
 	}
 
-	/// The current pool of candidates, stored as an ordered Bounded Vec
+	/// The current pool of candidates, stored as an ordered Vec
 	/// (ordered descending by score, `None` last, highest first).
 	#[pallet::storage]
 	#[pallet::getter(fn pool)]
@@ -242,7 +228,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn members)]
 	pub(crate) type Members<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, MembersT<T, I>, ValueQuery>;
+		StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
 	/// Size of the `Members` set.
 	#[pallet::storage]
@@ -276,10 +262,10 @@ pub mod pallet {
 			});
 
 			// Sorts the `Pool` by score in a descending order. Entities which
-			// have a score of `None` are sorted to the end of the bounded vec.
+			// have a score of `None` are sorted to the beginning of the vec.
 			pool.sort_by_key(|(_, maybe_score)| Reverse(maybe_score.unwrap_or_default()));
-			<Pallet<T, I>>::update_member_count(self.member_count)
-				.expect("Number of allowed members exceeded");
+
+			<MemberCount<T, I>>::put(self.member_count);
 			<Pool<T, I>>::put(&pool);
 			<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipInitialized);
 		}
@@ -294,7 +280,7 @@ pub mod pallet {
 				let pool = <Pool<T, I>>::get();
 				<Pallet<T, I>>::refresh_members(pool, ChangeReceiver::MembershipChanged);
 			}
-			Weight::zero()
+			0
 		}
 	}
 
@@ -321,8 +307,7 @@ pub mod pallet {
 
 			// can be inserted as last element in pool, since entities with
 			// `None` are always sorted to the end.
-			<Pool<T, I>>::try_append((who.clone(), Option::<<T as Config<I>>::Score>::None))
-				.map_err(|_| Error::<T, I>::TooManyMembers)?;
+			<Pool<T, I>>::append((who.clone(), Option::<<T as Config<I>>::Score>::None));
 
 			<CandidateExists<T, I>>::insert(&who, true);
 
@@ -361,7 +346,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn kick(
 			origin: OriginFor<T>,
-			dest: AccountIdLookupOf<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32,
 		) -> DispatchResult {
 			T::KickOrigin::ensure_origin(origin)?;
@@ -385,7 +370,7 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn score(
 			origin: OriginFor<T>,
-			dest: AccountIdLookupOf<T>,
+			dest: <T::Lookup as StaticLookup>::Source,
 			index: u32,
 			score: T::Score,
 		) -> DispatchResult {
@@ -408,7 +393,7 @@ pub mod pallet {
 					Reverse(maybe_score.unwrap_or_default())
 				})
 				.unwrap_or_else(|l| l);
-			pool.try_insert(location, item).map_err(|_| Error::<T, I>::TooManyMembers)?;
+			pool.insert(location, item);
 
 			<Pool<T, I>>::put(&pool);
 			Self::deposit_event(Event::<T, I>::CandidateScored);
@@ -424,7 +409,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn change_member_count(origin: OriginFor<T>, count: u32) -> DispatchResult {
 			ensure_root(origin)?;
-			Self::update_member_count(count).map_err(Into::into)
+			MemberCount::<T, I>::put(&count);
+			Ok(())
 		}
 	}
 }
@@ -437,28 +423,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// type function to invoke at the end of the method.
 	fn refresh_members(pool: PoolT<T, I>, notify: ChangeReceiver) {
 		let count = MemberCount::<T, I>::get();
-		let old_members = <Members<T, I>>::get();
 
-		let new_members: Vec<T::AccountId> = pool
+		let mut new_members: Vec<T::AccountId> = pool
 			.into_iter()
 			.filter(|(_, score)| score.is_some())
 			.take(count as usize)
 			.map(|(account_id, _)| account_id)
 			.collect();
+		new_members.sort();
 
-		// It's safe to truncate_from at this point since MemberCount
-		// is verified that it does not exceed the MaximumMembers value
-		let mut new_members_bounded: MembersT<T, I> = BoundedVec::truncate_from(new_members);
-
-		new_members_bounded.sort();
-
-		<Members<T, I>>::put(&new_members_bounded);
+		let old_members = <Members<T, I>>::get();
+		<Members<T, I>>::put(&new_members);
 
 		match notify {
 			ChangeReceiver::MembershipInitialized =>
-				T::MembershipInitialized::initialize_members(&new_members_bounded),
+				T::MembershipInitialized::initialize_members(&new_members),
 			ChangeReceiver::MembershipChanged =>
-				T::MembershipChanged::set_members_sorted(&new_members_bounded[..], &old_members[..]),
+				T::MembershipChanged::set_members_sorted(&new_members[..], &old_members[..]),
 		}
 	}
 
@@ -502,13 +483,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let (index_who, _index_score) = &pool[index as usize];
 		ensure!(index_who == who, Error::<T, I>::WrongAccountIndex);
 
-		Ok(())
-	}
-
-	/// Make sure the new member count value does not exceed the MaximumMembers
-	fn update_member_count(new_member_count: u32) -> Result<(), Error<T, I>> {
-		ensure!(new_member_count <= T::MaximumMembers::get(), Error::<T, I>::TooManyMembers);
-		<MemberCount<T, I>>::put(new_member_count);
 		Ok(())
 	}
 }

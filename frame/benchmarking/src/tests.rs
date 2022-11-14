@@ -27,7 +27,6 @@ use sp_runtime::{
 	BuildStorage,
 };
 use sp_std::prelude::*;
-use std::cell::RefCell;
 
 #[frame_support::pallet]
 mod pallet_test {
@@ -36,7 +35,7 @@ mod pallet_test {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T>(PhantomData<T>);
+	pub struct Pallet<T>(_);
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
@@ -46,21 +45,21 @@ mod pallet_test {
 	}
 
 	#[pallet::storage]
-	#[pallet::getter(fn value)]
+	#[pallet::getter(fn heartbeat_after)]
 	pub(crate) type Value<T: Config> = StorageValue<_, u32, OptionQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
 		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
-			let _sender = ensure_signed(origin)?;
+			let _sender = frame_system::ensure_signed(origin)?;
 			Value::<T>::put(n);
 			Ok(())
 		}
 
 		#[pallet::weight(0)]
 		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
-			let _sender = ensure_none(origin)?;
+			let _sender = frame_system::ensure_none(origin)?;
 			Ok(())
 		}
 
@@ -90,16 +89,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -126,20 +125,11 @@ fn new_test_ext() -> sp_io::TestExternalities {
 	GenesisConfig::default().build_storage().unwrap().into()
 }
 
-thread_local! {
-	/// Tracks the used components per value. Needs to be a thread local since the
-	/// benchmarking clears the storage after each run.
-	static VALUES_PER_COMPONENT: RefCell<Vec<u32>> = RefCell::new(vec![]);
-}
-
-// NOTE: This attribute is only needed for the `modify_in_` functions.
-#[allow(unreachable_code)]
 mod benchmarks {
-	use super::{new_test_ext, pallet_test::Value, Test, VALUES_PER_COMPONENT};
+	use super::{new_test_ext, pallet_test::Value, Test};
 	use crate::{account, BenchmarkError, BenchmarkParameter, BenchmarkResult, BenchmarkingSetup};
 	use frame_support::{assert_err, assert_ok, ensure, traits::Get};
 	use frame_system::RawOrigin;
-	use rusty_fork::rusty_fork_test;
 	use sp_std::prelude::*;
 
 	// Additional used internally by the benchmark macro.
@@ -148,7 +138,7 @@ mod benchmarks {
 	crate::benchmarks! {
 		where_clause {
 			where
-				crate::tests::RuntimeOrigin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
+				crate::tests::Origin: From<RawOrigin<<T as frame_system::Config>::AccountId>>,
 		}
 
 		set_value {
@@ -236,31 +226,6 @@ mod benchmarks {
 		}: {
 			// This should never be reached.
 			assert!(value > 100);
-		}
-
-		modify_in_setup_then_error {
-			Value::<T>::set(Some(123));
-			return Err(BenchmarkError::Stop("Should error"));
-		}: { }
-
-		modify_in_call_then_error {
-		}: {
-			Value::<T>::set(Some(123));
-			return Err(BenchmarkError::Stop("Should error"));
-		}
-
-		modify_in_verify_then_error {
-		}: {
-		} verify {
-			Value::<T>::set(Some(123));
-			return Err(BenchmarkError::Stop("Should error"));
-		}
-
-		// Stores all component values in the thread-local storage.
-		values_per_component {
-			let n in 0 .. 10;
-		}: {
-			VALUES_PER_COMPONENT.with(|v| v.borrow_mut().push(n));
 		}
 	}
 
@@ -383,72 +348,6 @@ mod benchmarks {
 				Err(BenchmarkError::Override(_)),
 			));
 			assert_eq!(Pallet::<Test>::test_benchmark_skip_benchmark(), Err(BenchmarkError::Skip),);
-		});
-	}
-
-	/// An error return of a benchmark test function still causes the db to be wiped.
-	#[test]
-	fn benchmark_error_wipes_storage() {
-		new_test_ext().execute_with(|| {
-			// It resets when the error happens in the setup:
-			assert_err!(
-				Pallet::<Test>::test_benchmark_modify_in_setup_then_error(),
-				"Should error"
-			);
-			assert_eq!(Value::<Test>::get(), None);
-
-			// It resets when the error happens in the call:
-			assert_err!(Pallet::<Test>::test_benchmark_modify_in_call_then_error(), "Should error");
-			assert_eq!(Value::<Test>::get(), None);
-
-			// It resets when the error happens in the verify:
-			assert_err!(
-				Pallet::<Test>::test_benchmark_modify_in_verify_then_error(),
-				"Should error"
-			);
-			assert_eq!(Value::<Test>::get(), None);
-		});
-	}
-
-	rusty_fork_test! {
-		/// Test that the benchmarking uses the correct values for each component and
-		/// that the number of components can be controlled with `VALUES_PER_COMPONENT`.
-		///
-		/// NOTE: This test needs to run in its own process, since it
-		/// otherwise messes up the env variable for the other tests.
-		#[test]
-		fn test_values_per_component() {
-			let tests = vec![
-				(Some("1"), Err("`VALUES_PER_COMPONENT` must be at least 2".into())),
-				(Some("asdf"), Err("Could not parse env var `VALUES_PER_COMPONENT` as u32.".into())),
-				(None, Ok(vec![0, 2, 4, 6, 8, 10])),
-				(Some("2"), Ok(vec![0, 10])),
-				(Some("4"), Ok(vec![0, 3, 6, 10])),
-				(Some("6"), Ok(vec![0, 2, 4, 6, 8, 10])),
-				(Some("10"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 10])),
-				(Some("11"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
-				(Some("99"), Ok(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])),
-			];
-
-			for (num, expected) in tests {
-				run_test_values_per_component(num, expected);
-			}
-		}
-	}
-
-	/// Helper for [`test_values_per_component`].
-	fn run_test_values_per_component(num: Option<&str>, output: Result<Vec<u32>, BenchmarkError>) {
-		VALUES_PER_COMPONENT.with(|v| v.borrow_mut().clear());
-		match num {
-			Some(n) => std::env::set_var("VALUES_PER_COMPONENT", n),
-			None => std::env::remove_var("VALUES_PER_COMPONENT"),
-		}
-
-		new_test_ext().execute_with(|| {
-			let got = Pallet::<Test>::test_benchmark_values_per_component()
-				.map(|_| VALUES_PER_COMPONENT.with(|v| v.borrow().clone()));
-
-			assert_eq!(got, output);
 		});
 	}
 }

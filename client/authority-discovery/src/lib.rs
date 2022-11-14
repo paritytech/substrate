@@ -29,7 +29,7 @@
 
 pub use crate::{
 	service::Service,
-	worker::{AuthorityDiscovery, NetworkProvider, Role, Worker},
+	worker::{NetworkProvider, Role, Worker},
 };
 
 use std::{collections::HashSet, sync::Arc, time::Duration};
@@ -39,10 +39,10 @@ use futures::{
 	Stream,
 };
 
-use libp2p::{Multiaddr, PeerId};
-use sc_network_common::protocol::event::DhtEvent;
-use sp_authority_discovery::AuthorityId;
-use sp_blockchain::HeaderBackend;
+use sc_client_api::blockchain::HeaderBackend;
+use sc_network::{DhtEvent, Multiaddr, PeerId};
+use sp_api::ProvideRuntimeApi;
+use sp_authority_discovery::{AuthorityDiscoveryApi, AuthorityId};
 use sp_runtime::traits::Block as BlockT;
 
 mod error;
@@ -121,7 +121,8 @@ pub fn new_worker_and_service<Client, Network, Block, DhtEventStream>(
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	new_worker_and_service_with_config(
@@ -148,7 +149,8 @@ pub fn new_worker_and_service_with_config<Client, Network, Block, DhtEventStream
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	let (to_worker, from_service) = mpsc::channel(0);

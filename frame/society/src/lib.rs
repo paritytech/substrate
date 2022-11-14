@@ -281,7 +281,6 @@ type BalanceOf<T, I> =
 type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A vote by a member on a candidate application.
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
@@ -378,8 +377,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// The societies's pallet id
 		#[pallet::constant]
@@ -421,10 +419,10 @@ pub mod pallet {
 		type MaxLockDuration: Get<Self::BlockNumber>;
 
 		/// The origin that is allowed to call `found`.
-		type FounderSetOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		type FounderSetOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The origin that is allowed to make suspension judgements.
-		type SuspensionJudgementOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+		type SuspensionJudgementOrigin: EnsureOrigin<Self::Origin>;
 
 		/// The number of blocks between membership challenges.
 		#[pallet::constant]
@@ -615,7 +613,7 @@ pub mod pallet {
 		fn on_initialize(n: T::BlockNumber) -> Weight {
 			let mut members = vec![];
 
-			let mut weight = Weight::zero();
+			let mut weight = 0;
 			let weights = T::BlockWeights::get();
 
 			// Run a candidate/membership rotation
@@ -825,12 +823,11 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vouch(
 			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
+			who: T::AccountId,
 			value: BalanceOf<T, I>,
 			tip: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let voucher = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			// Check user is not suspended.
 			ensure!(!<SuspendedCandidates<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
 			ensure!(!<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::Suspended);
@@ -917,7 +914,7 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn vote(
 			origin: OriginFor<T>,
-			candidate: AccountIdLookupOf<T>,
+			candidate: <T::Lookup as StaticLookup>::Source,
 			approve: bool,
 		) -> DispatchResult {
 			let voter = ensure_signed(origin)?;
@@ -1029,12 +1026,11 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn found(
 			origin: OriginFor<T>,
-			founder: AccountIdLookupOf<T>,
+			founder: T::AccountId,
 			max_members: u32,
 			rules: Vec<u8>,
 		) -> DispatchResult {
 			T::FounderSetOrigin::ensure_origin(origin)?;
-			let founder = T::Lookup::lookup(founder)?;
 			ensure!(!<Head<T, I>>::exists(), Error::<T, I>::AlreadyFounded);
 			ensure!(max_members > 1, Error::<T, I>::MaxMembers);
 			// This should never fail in the context of this function...
@@ -1108,11 +1104,10 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_member(
 			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
+			who: T::AccountId,
 			forgive: bool,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			ensure!(<SuspendedMembers<T, I>>::contains_key(&who), Error::<T, I>::NotSuspended);
 
 			if forgive {
@@ -1185,11 +1180,10 @@ pub mod pallet {
 		#[pallet::weight(T::BlockWeights::get().max_block / 10)]
 		pub fn judge_suspended_candidate(
 			origin: OriginFor<T>,
-			who: AccountIdLookupOf<T>,
+			who: T::AccountId,
 			judgement: Judgement,
 		) -> DispatchResult {
 			T::SuspensionJudgementOrigin::ensure_origin(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			if let Some((value, kind)) = <SuspendedCandidates<T, I>>::get(&who) {
 				match judgement {
 					Judgement::Approve => {
@@ -1268,19 +1262,19 @@ pub mod pallet {
 
 /// Simple ensure origin struct to filter for the founder account.
 pub struct EnsureFounder<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> EnsureOrigin<T::RuntimeOrigin> for EnsureFounder<T> {
+impl<T: Config> EnsureOrigin<T::Origin> for EnsureFounder<T> {
 	type Success = T::AccountId;
-	fn try_origin(o: T::RuntimeOrigin) -> Result<Self::Success, T::RuntimeOrigin> {
+	fn try_origin(o: T::Origin) -> Result<Self::Success, T::Origin> {
 		o.into().and_then(|o| match (o, Founder::<T>::get()) {
 			(frame_system::RawOrigin::Signed(ref who), Some(ref f)) if who == f => Ok(who.clone()),
-			(r, _) => Err(T::RuntimeOrigin::from(r)),
+			(r, _) => Err(T::Origin::from(r)),
 		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn try_successful_origin() -> Result<T::RuntimeOrigin, ()> {
+	fn try_successful_origin() -> Result<T::Origin, ()> {
 		let founder = Founder::<T>::get().ok_or(())?;
-		Ok(T::RuntimeOrigin::from(frame_system::RawOrigin::Signed(founder)))
+		Ok(T::Origin::from(frame_system::RawOrigin::Signed(founder)))
 	}
 }
 

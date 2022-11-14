@@ -38,11 +38,6 @@ pub use sp_arithmetic::traits::{
 };
 use sp_core::{self, storage::StateVersion, Hasher, RuntimeDebug, TypeId};
 #[doc(hidden)]
-pub use sp_core::{
-	parameter_types, ConstBool, ConstI128, ConstI16, ConstI32, ConstI64, ConstI8, ConstU128,
-	ConstU16, ConstU32, ConstU64, ConstU8, Get, GetDefault, TryCollect, TypedGet,
-};
-#[doc(hidden)]
 pub use sp_std::marker::PhantomData;
 use sp_std::{self, fmt::Debug, prelude::*};
 #[cfg(feature = "std")]
@@ -279,6 +274,203 @@ where
 	fn unlookup(x: Self::Target) -> Self::Source {
 		A::unlookup(x)
 	}
+}
+
+/// A trait for querying a single value from a type defined in the trait.
+///
+/// It is not required that the value is constant.
+pub trait TypedGet {
+	/// The type which is returned.
+	type Type;
+	/// Return the current value.
+	fn get() -> Self::Type;
+}
+
+/// A trait for querying a single value from a type.
+///
+/// It is not required that the value is constant.
+pub trait Get<T> {
+	/// Return the current value.
+	fn get() -> T;
+}
+
+impl<T: Default> Get<T> for () {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+/// Implement Get by returning Default for any type that implements Default.
+pub struct GetDefault;
+impl<T: Default> Get<T> for GetDefault {
+	fn get() -> T {
+		T::default()
+	}
+}
+
+/// Try and collect into a collection `C`.
+pub trait TryCollect<C> {
+	/// The error type that gets returned when a collection can't be made from `self`.
+	type Error;
+	/// Consume self and try to collect the results into `C`.
+	///
+	/// This is useful in preventing the undesirable `.collect().try_into()` call chain on
+	/// collections that need to be converted into a bounded type (e.g. `BoundedVec`).
+	fn try_collect(self) -> Result<C, Self::Error>;
+}
+
+macro_rules! impl_const_get {
+	($name:ident, $t:ty) => {
+		#[doc = "Const getter for a basic type."]
+		#[derive($crate::RuntimeDebug)]
+		pub struct $name<const T: $t>;
+		impl<const T: $t> Get<$t> for $name<T> {
+			fn get() -> $t {
+				T
+			}
+		}
+		impl<const T: $t> Get<Option<$t>> for $name<T> {
+			fn get() -> Option<$t> {
+				Some(T)
+			}
+		}
+		impl<const T: $t> TypedGet for $name<T> {
+			type Type = $t;
+			fn get() -> $t {
+				T
+			}
+		}
+	};
+}
+
+impl_const_get!(ConstBool, bool);
+impl_const_get!(ConstU8, u8);
+impl_const_get!(ConstU16, u16);
+impl_const_get!(ConstU32, u32);
+impl_const_get!(ConstU64, u64);
+impl_const_get!(ConstU128, u128);
+impl_const_get!(ConstI8, i8);
+impl_const_get!(ConstI16, i16);
+impl_const_get!(ConstI32, i32);
+impl_const_get!(ConstI64, i64);
+impl_const_get!(ConstI128, i128);
+
+/// Create new implementations of the [`Get`](crate::traits::Get) trait.
+///
+/// The so-called parameter type can be created in four different ways:
+///
+/// - Using `const` to create a parameter type that provides a `const` getter. It is required that
+///   the `value` is const.
+///
+/// - Declare the parameter type without `const` to have more freedom when creating the value.
+///
+/// NOTE: A more substantial version of this macro is available in `frame_support` crate which
+/// allows mutable and persistant variants.
+///
+/// # Examples
+///
+/// ```
+/// # use sp_runtime::traits::Get;
+/// # use sp_runtime::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// const FIXED_VALUE: u64 = 10;
+/// parameter_types! {
+///    pub const Argument: u64 = 42 + FIXED_VALUE;
+///    /// Visibility of the type is optional
+///    OtherArgument: u64 = non_const_expression();
+/// }
+///
+/// trait Config {
+///    type Parameter: Get<u64>;
+///    type OtherParameter: Get<u64>;
+/// }
+///
+/// struct Runtime;
+/// impl Config for Runtime {
+///    type Parameter = Argument;
+///    type OtherParameter = OtherArgument;
+/// }
+/// ```
+///
+/// # Invalid example:
+///
+/// ```compile_fail
+/// # use sp_runtime::traits::Get;
+/// # use sp_runtime::parameter_types;
+/// // This function cannot be used in a const context.
+/// fn non_const_expression() -> u64 { 99 }
+///
+/// parameter_types! {
+///    pub const Argument: u64 = non_const_expression();
+/// }
+/// ```
+#[macro_export]
+macro_rules! parameter_types {
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis const $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(@IMPL_CONST $name , $type , $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	(
+		$( #[ $attr:meta ] )*
+		$vis:vis $name:ident: $type:ty = $value:expr;
+		$( $rest:tt )*
+	) => (
+		$( #[ $attr ] )*
+		$vis struct $name;
+		$crate::parameter_types!(@IMPL $name, $type, $value);
+		$crate::parameter_types!( $( $rest )* );
+	);
+	() => ();
+	(@IMPL_CONST $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub const fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
+	(@IMPL $name:ident, $type:ty, $value:expr) => {
+		impl $name {
+			/// Returns the value of this parameter type.
+			pub fn get() -> $type {
+				$value
+			}
+		}
+
+		impl<I: From<$type>> $crate::traits::Get<I> for $name {
+			fn get() -> I {
+				I::from(Self::get())
+			}
+		}
+
+		impl $crate::traits::TypedGet for $name {
+			type Type = $type;
+			fn get() -> $type {
+				Self::get()
+			}
+		}
+	};
 }
 
 /// Extensible conversion trait. Generic over only source type, with destination type being
@@ -1018,7 +1210,7 @@ pub trait Dispatchable {
 	/// Every function call from your runtime has an origin, which specifies where the extrinsic was
 	/// generated from. In the case of a signed extrinsic (transaction), the origin contains an
 	/// identifier for the caller. The origin can be empty in the case of an inherent extrinsic.
-	type RuntimeOrigin;
+	type Origin;
 	/// ...
 	type Config;
 	/// An opaque set of information attached to the transaction. This could be constructed anywhere
@@ -1029,8 +1221,7 @@ pub trait Dispatchable {
 	/// with information about a `Dispatchable` that is ownly known post dispatch.
 	type PostInfo: Eq + PartialEq + Clone + Copy + Encode + Decode + Printable;
 	/// Actually dispatch this call and return the result of it.
-	fn dispatch(self, origin: Self::RuntimeOrigin)
-		-> crate::DispatchResultWithInfo<Self::PostInfo>;
+	fn dispatch(self, origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo>;
 }
 
 /// Shortcut to reference the `Info` type of a `Dispatchable`.
@@ -1039,14 +1230,11 @@ pub type DispatchInfoOf<T> = <T as Dispatchable>::Info;
 pub type PostDispatchInfoOf<T> = <T as Dispatchable>::PostInfo;
 
 impl Dispatchable for () {
-	type RuntimeOrigin = ();
+	type Origin = ();
 	type Config = ();
 	type Info = ();
 	type PostInfo = ();
-	fn dispatch(
-		self,
-		_origin: Self::RuntimeOrigin,
-	) -> crate::DispatchResultWithInfo<Self::PostInfo> {
+	fn dispatch(self, _origin: Self::Origin) -> crate::DispatchResultWithInfo<Self::PostInfo> {
 		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
@@ -1821,12 +2009,6 @@ impl Printable for bool {
 		} else {
 			"false".print()
 		}
-	}
-}
-
-impl Printable for sp_weights::Weight {
-	fn print(&self) {
-		self.ref_time().print()
 	}
 }
 

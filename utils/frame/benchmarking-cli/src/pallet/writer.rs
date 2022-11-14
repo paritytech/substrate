@@ -24,12 +24,12 @@ use std::{
 };
 
 use inflector::Inflector;
-use itertools::Itertools;
 use serde::Serialize;
 
 use crate::{pallet::command::ComponentRange, shared::UnderscoreHelper, PalletCmd};
 use frame_benchmarking::{
 	Analysis, AnalysisChoice, BenchmarkBatchSplitResults, BenchmarkResult, BenchmarkSelector,
+	RegressionModel,
 };
 use frame_support::traits::StorageInfo;
 use sp_core::hexdisplay::HexDisplay;
@@ -69,8 +69,6 @@ struct BenchmarkData {
 	component_writes: Vec<ComponentSlope>,
 	component_ranges: Vec<ComponentRange>,
 	comments: Vec<String>,
-	#[serde(serialize_with = "string_serialize")]
-	min_execution_time: u128,
 }
 
 // This forwards some specific metadata from the `PalletCmd`
@@ -147,15 +145,13 @@ fn map_results(
 	Ok(all_benchmarks)
 }
 
-// Get an iterator of errors.
-fn extract_errors(errors: &Option<Vec<u128>>) -> impl Iterator<Item = u128> + '_ {
-	errors
-		.as_ref()
-		.map(|e| e.as_slice())
-		.unwrap_or(&[])
-		.iter()
-		.copied()
-		.chain(std::iter::repeat(0))
+// Get an iterator of errors from a model. If the model is `None` all errors are zero.
+fn extract_errors(model: &Option<RegressionModel>) -> impl Iterator<Item = u128> + '_ {
+	let mut errors = model.as_ref().map(|m| m.se.regressor_values.iter());
+	std::iter::from_fn(move || match &mut errors {
+		Some(model) => model.next().map(|val| *val as u128),
+		_ => Some(0),
+	})
 }
 
 // Analyze and return the relevant results for a given benchmark.
@@ -194,20 +190,24 @@ fn get_benchmark_data(
 		.slopes
 		.into_iter()
 		.zip(extrinsic_time.names.iter())
-		.zip(extract_errors(&extrinsic_time.errors))
+		.zip(extract_errors(&extrinsic_time.model))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
 				if !used_components.contains(&name) {
 					used_components.push(name);
 				}
-				used_extrinsic_time.push(ComponentSlope { name: name.clone(), slope, error });
+				used_extrinsic_time.push(ComponentSlope {
+					name: name.clone(),
+					slope: slope.saturating_mul(1000),
+					error: error.saturating_mul(1000),
+				});
 			}
 		});
 	reads
 		.slopes
 		.into_iter()
 		.zip(reads.names.iter())
-		.zip(extract_errors(&reads.errors))
+		.zip(extract_errors(&reads.model))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
 				if !used_components.contains(&name) {
@@ -220,7 +220,7 @@ fn get_benchmark_data(
 		.slopes
 		.into_iter()
 		.zip(writes.names.iter())
-		.zip(extract_errors(&writes.errors))
+		.zip(extract_errors(&writes.model))
 		.for_each(|((slope, name), error)| {
 			if !slope.is_zero() {
 				if !used_components.contains(&name) {
@@ -251,7 +251,7 @@ fn get_benchmark_data(
 	BenchmarkData {
 		name: String::from_utf8(batch.benchmark.clone()).unwrap(),
 		components,
-		base_weight: extrinsic_time.base,
+		base_weight: extrinsic_time.base.saturating_mul(1000),
 		base_reads: reads.base,
 		base_writes: writes.base,
 		component_weight: used_extrinsic_time,
@@ -259,7 +259,6 @@ fn get_benchmark_data(
 		component_writes: used_writes,
 		component_ranges,
 		comments,
-		min_execution_time: extrinsic_time.minimum,
 	}
 }
 
@@ -318,21 +317,18 @@ pub(crate) fn write_results(
 
 	// Organize results by pallet into a JSON map
 	let all_results = map_results(batches, storage_info, component_ranges, &analysis_choice)?;
-	let mut created_files = Vec::new();
-
 	for ((pallet, instance), results) in all_results.iter() {
 		let mut file_path = path.clone();
 		// If a user only specified a directory...
 		if file_path.is_dir() {
-			// Start with "path/to/pallet_name".
-			let mut file_name = pallet.clone();
 			// Check if there might be multiple instances benchmarked.
 			if all_results.keys().any(|(p, i)| p == pallet && i != instance) {
-				// Append "_instance_name".
-				file_name = format!("{}_{}", file_name, instance.to_snake_case());
+				// Create new file: "path/to/pallet_name_instance_name.rs".
+				file_path.push(pallet.clone() + "_" + instance.to_snake_case().as_str());
+			} else {
+				// Create new file: "path/to/pallet_name.rs".
+				file_path.push(pallet.clone());
 			}
-			// "mod::pallet_name.rs" becomes "mod_pallet_name.rs".
-			file_path.push(file_name.replace("::", "_"));
 			file_path.set_extension("rs");
 		}
 
@@ -349,18 +345,10 @@ pub(crate) fn write_results(
 			benchmarks: results.clone(),
 		};
 
-		let mut output_file = fs::File::create(&file_path)?;
+		let mut output_file = fs::File::create(file_path)?;
 		handlebars
 			.render_template_to_write(&template, &hbs_data, &mut output_file)
 			.map_err(|e| io_error(&e.to_string()))?;
-		println!("Created file: {:?}", &file_path);
-		created_files.push(file_path);
-	}
-
-	for file in created_files.iter().duplicates() {
-		// This can happen when there are multiple instances of a pallet deployed
-		// and `--output` forces the output of all instances into the same file.
-		println!("Multiple benchmarks were written to the same file: {:?}.", file);
 	}
 	Ok(())
 }

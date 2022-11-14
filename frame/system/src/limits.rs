@@ -25,12 +25,9 @@
 //! `DispatchClass`. This module contains configuration object for both resources,
 //! which should be passed to `frame_system` configuration when runtime is being set up.
 
-use frame_support::{
-	dispatch::{DispatchClass, OneOrMany, PerDispatchClass},
-	weights::{constants, Weight},
-};
+use frame_support::weights::{constants, DispatchClass, OneOrMany, PerDispatchClass, Weight};
 use scale_info::TypeInfo;
-use sp_runtime::{traits::Bounded, Perbill, RuntimeDebug};
+use sp_runtime::{Perbill, RuntimeDebug};
 
 /// Block length limit configuration.
 #[derive(RuntimeDebug, Clone, codec::Encode, codec::Decode, TypeInfo)]
@@ -207,10 +204,7 @@ pub struct BlockWeights {
 
 impl Default for BlockWeights {
 	fn default() -> Self {
-		Self::with_sensible_defaults(
-			Weight::from_parts(constants::WEIGHT_PER_SECOND.ref_time(), u64::MAX),
-			DEFAULT_NORMAL_RATIO,
-		)
+		Self::with_sensible_defaults(1 * constants::WEIGHT_PER_SECOND, DEFAULT_NORMAL_RATIO)
 	}
 }
 
@@ -235,18 +229,15 @@ impl BlockWeights {
 			// Make sure that if total is set it's greater than base_block &&
 			// base_for_class
 			error_assert!(
-				(max_for_class.all_gt(self.base_block) && max_for_class.all_gt(base_for_class))
-				|| max_for_class == Weight::zero(),
+				(max_for_class > self.base_block && max_for_class > base_for_class)
+				|| max_for_class == 0,
 				&mut error,
 				"[{:?}] {:?} (total) has to be greater than {:?} (base block) & {:?} (base extrinsic)",
 				class, max_for_class, self.base_block, base_for_class,
 			);
 			// Max extrinsic can't be greater than max_for_class.
 			error_assert!(
-				weights
-					.max_extrinsic
-					.unwrap_or(Weight::zero())
-					.all_lte(max_for_class.saturating_sub(base_for_class)),
+				weights.max_extrinsic.unwrap_or(0) <= max_for_class.saturating_sub(base_for_class),
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) can't be greater than {:?} (max for class)",
 				class,
@@ -255,14 +246,14 @@ impl BlockWeights {
 			);
 			// Max extrinsic should not be 0
 			error_assert!(
-				weights.max_extrinsic.unwrap_or_else(Weight::max_value).all_gt(Weight::zero()),
+				weights.max_extrinsic.unwrap_or_else(Weight::max_value) > 0,
 				&mut error,
 				"[{:?}] {:?} (max_extrinsic) must not be 0. Check base cost and average initialization cost.",
 				class, weights.max_extrinsic,
 			);
 			// Make sure that if reserved is set it's greater than base_for_class.
 			error_assert!(
-				reserved.all_gt(base_for_class) || reserved == Weight::zero(),
+				reserved > base_for_class || reserved == 0,
 				&mut error,
 				"[{:?}] {:?} (reserved) has to be greater than {:?} (base extrinsic) if set",
 				class,
@@ -271,7 +262,7 @@ impl BlockWeights {
 			);
 			// Make sure max block is greater than max_total if it's set.
 			error_assert!(
-				self.max_block.all_gte(weights.max_total.unwrap_or(Weight::zero())),
+				self.max_block >= weights.max_total.unwrap_or(0),
 				&mut error,
 				"[{:?}] {:?} (max block) has to be greater than {:?} (max for class)",
 				class,
@@ -280,7 +271,7 @@ impl BlockWeights {
 			);
 			// Make sure we can fit at least one extrinsic.
 			error_assert!(
-				self.max_block.all_gt(base_for_class + self.base_block),
+				self.max_block > base_for_class + self.base_block,
 				&mut error,
 				"[{:?}] {:?} (max block) must fit at least one extrinsic {:?} (base weight)",
 				class,
@@ -303,9 +294,9 @@ impl BlockWeights {
 	/// is not suitable for production deployments.
 	pub fn simple_max(block_weight: Weight) -> Self {
 		Self::builder()
-			.base_block(Weight::zero())
+			.base_block(0)
 			.for_class(DispatchClass::all(), |weights| {
-				weights.base_extrinsic = Weight::zero();
+				weights.base_extrinsic = 0;
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
 				weights.max_total = block_weight.into();
@@ -342,10 +333,9 @@ impl BlockWeights {
 		BlockWeightsBuilder {
 			weights: BlockWeights {
 				base_block: constants::BlockExecutionWeight::get(),
-				max_block: Weight::zero(),
+				max_block: 0,
 				per_class: PerDispatchClass::new(|class| {
-					let initial =
-						if class == DispatchClass::Mandatory { None } else { Some(Weight::zero()) };
+					let initial = if class == DispatchClass::Mandatory { None } else { Some(0) };
 					WeightsPerClass {
 						base_extrinsic: constants::ExtrinsicBaseWeight::get(),
 						max_extrinsic: None,
@@ -408,7 +398,7 @@ impl BlockWeightsBuilder {
 		// compute max block size.
 		for class in DispatchClass::all() {
 			weights.max_block = match weights.per_class.get(*class).max_total {
-				Some(max) => max.max(weights.max_block),
+				Some(max) if max > weights.max_block => max,
 				_ => weights.max_block,
 			};
 		}

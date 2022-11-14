@@ -22,12 +22,11 @@ use remote_externalities::{Builder, Mode, OnlineConfig};
 use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Execute create a snapshot from pallet-staking.
-pub async fn execute<Runtime, Block>(voter_limit: Option<usize>, currency_unit: u64, ws_url: String)
-where
-	Runtime: crate::RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT,
-	Block::Header: DeserializeOwned,
-{
+pub async fn execute<Runtime: crate::RuntimeT, Block: BlockT + DeserializeOwned>(
+	voter_limit: Option<usize>,
+	currency_unit: u64,
+	ws_url: String,
+) {
 	use frame_support::storage::generator::StorageMap;
 
 	let mut ext = Builder::<Block>::new()
@@ -35,8 +34,7 @@ where
 			transport: ws_url.to_string().into(),
 			// NOTE: we don't scrape pallet-staking, this kinda ensures that the source of the data
 			// is bags-list.
-			pallets: vec![pallet_bags_list::Pallet::<Runtime, pallet_bags_list::Instance1>::name()
-				.to_string()],
+			pallets: vec![pallet_bags_list::Pallet::<Runtime>::name().to_string()],
 			at: None,
 			..Default::default()
 		}))

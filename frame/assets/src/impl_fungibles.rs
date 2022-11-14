@@ -272,23 +272,3 @@ impl<T: Config<I>, I: 'static> fungibles::InspectEnumerable<T::AccountId> for Pa
 		Box::new(Asset::<T, I>::iter_keys())
 	}
 }
-
-impl<T: Config<I>, I: 'static> fungibles::roles::Inspect<<T as SystemConfig>::AccountId>
-	for Pallet<T, I>
-{
-	fn owner(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.owner)
-	}
-
-	fn issuer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.issuer)
-	}
-
-	fn admin(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.admin)
-	}
-
-	fn freezer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
-		Asset::<T, I>::get(asset).map(|x| x.freezer)
-	}
-}

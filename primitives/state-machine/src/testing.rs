@@ -24,7 +24,7 @@ use std::{
 
 use crate::{
 	backend::Backend, ext::Ext, InMemoryBackend, OverlayedChanges, StorageKey,
-	StorageTransactionCache, StorageValue, TrieBackendBuilder,
+	StorageTransactionCache, StorageValue,
 };
 
 use hash_db::Hasher;
@@ -41,9 +41,8 @@ use sp_externalities::{Extension, ExtensionStore, Extensions};
 use sp_trie::StorageProof;
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H>
+pub struct TestExternalities<H: Hasher>
 where
-	H: Hasher + 'static,
 	H::Out: codec::Codec + Ord,
 {
 	/// The overlay changed storage.
@@ -59,9 +58,8 @@ where
 	pub state_version: StateVersion,
 }
 
-impl<H> TestExternalities<H>
+impl<H: Hasher> TestExternalities<H>
 where
-	H: Hasher + 'static,
 	H::Out: Ord + 'static + codec::Codec,
 {
 	/// Get externalities implementation.
@@ -204,9 +202,7 @@ where
 	/// This implementation will wipe the proof recorded in between calls. Consecutive calls will
 	/// get their own proof from scratch.
 	pub fn execute_and_prove<R>(&mut self, execute: impl FnOnce() -> R) -> (R, StorageProof) {
-		let proving_backend = TrieBackendBuilder::wrap(&self.backend)
-			.with_recorder(Default::default())
-			.build();
+		let proving_backend = crate::InMemoryProvingBackend::new(&self.backend);
 		let mut proving_ext = Ext::new(
 			&mut self.overlay,
 			&mut self.storage_transaction_cache,
@@ -215,7 +211,7 @@ where
 		);
 
 		let outcome = sp_externalities::set_and_run_with_externalities(&mut proving_ext, execute);
-		let proof = proving_backend.extract_proof().expect("Failed to extract storage proof");
+		let proof = proving_backend.extract_proof();
 
 		(outcome, proof)
 	}
@@ -334,6 +330,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use hex_literal::hex;
 	use sp_core::{storage::ChildInfo, traits::Externalities, H256};
 	use sp_runtime::traits::BlakeTwo256;
 
@@ -345,9 +342,8 @@ mod tests {
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		let root = array_bytes::hex_n_into_unchecked::<H256, 32>(
-			"ed4d8c799d996add422395a6abd7545491d40bd838d738afafa1b8a4de625489",
-		);
+		let root =
+			H256::from(hex!("ed4d8c799d996add422395a6abd7545491d40bd838d738afafa1b8a4de625489"));
 		assert_eq!(H256::from_slice(ext.storage_root(Default::default()).as_slice()), root);
 	}
 

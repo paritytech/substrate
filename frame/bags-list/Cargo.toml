@@ -41,18 +41,12 @@ sp-core = { version = "6.0.0", path = "../../primitives/core"}
 sp-io = { version = "6.0.0", path = "../../primitives/io"}
 sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
-frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
+frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support", features = ["runtime-benchmarks"] }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
 [features]
 default = ["std"]
 std = [
-	"sp-tracing?/std",
-	"sp-io?/std",
-	"sp-core?/std",
-	"pallet-balances?/std",
-	"frame-benchmarking?/std",
-	"scale-info/std",
 	"codec/std",
 	"sp-runtime/std",
 	"sp-std/std",
@@ -65,7 +59,7 @@ runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
 	"sp-core",
 	"sp-io",
-	"pallet-balances/runtime-benchmarks",
+	"pallet-balances",
 	"sp-tracing",
 	"frame-election-provider-support/runtime-benchmarks",
 ]
@@ -74,6 +68,5 @@ fuzz = [
 	"sp-io",
 	"pallet-balances",
 	"sp-tracing",
-	"frame-election-provider-support/fuzz",
 ]
 try-runtime = [ "frame-support/try-runtime" ]

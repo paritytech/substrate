@@ -30,6 +30,7 @@ use sp_runtime::{
 	testing::{Header, UintAuthorityId},
 	traits::IdentityLookup,
 };
+use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -48,7 +49,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 impl frame_system::Config for Test {
@@ -56,16 +57,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = ::sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -85,17 +86,18 @@ impl pallet_timestamp::Config for Test {
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	static DisabledValidatorTestValue: Vec<AuthorityIndex> = Default::default();
+thread_local! {
+	static DISABLED_VALIDATORS: RefCell<Vec<AuthorityIndex>> = RefCell::new(Default::default());
 }
 
 pub struct MockDisabledValidators;
 
 impl MockDisabledValidators {
 	pub fn disable_validator(index: AuthorityIndex) {
-		DisabledValidatorTestValue::mutate(|v| {
-			if let Err(i) = v.binary_search(&index) {
-				v.insert(i, index);
+		DISABLED_VALIDATORS.with(|v| {
+			let mut disabled = v.borrow_mut();
+			if let Err(i) = disabled.binary_search(&index) {
+				disabled.insert(i, index);
 			}
 		})
 	}
@@ -103,7 +105,7 @@ impl MockDisabledValidators {
 
 impl DisabledValidators for MockDisabledValidators {
 	fn is_disabled(index: AuthorityIndex) -> bool {
-		DisabledValidatorTestValue::get().binary_search(&index).is_ok()
+		DISABLED_VALIDATORS.with(|v| v.borrow().binary_search(&index).is_ok())
 	}
 }
 

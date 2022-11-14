@@ -105,29 +105,20 @@ pub trait Inspect<AccountId> {
 /// Interface for enumerating items in existence or owned by a given account over many collections
 /// of NFTs.
 pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// The iterator type for [`Self::collections`].
-	type CollectionsIterator: Iterator<Item = Self::CollectionId>;
-	/// The iterator type for [`Self::items`].
-	type ItemsIterator: Iterator<Item = Self::ItemId>;
-	/// The iterator type for [`Self::owned`].
-	type OwnedIterator: Iterator<Item = (Self::CollectionId, Self::ItemId)>;
-	/// The iterator type for [`Self::owned_in_collection`].
-	type OwnedInCollectionIterator: Iterator<Item = Self::ItemId>;
-
 	/// Returns an iterator of the collections in existence.
-	fn collections() -> Self::CollectionsIterator;
+	fn collections() -> Box<dyn Iterator<Item = Self::CollectionId>>;
 
 	/// Returns an iterator of the items of a `collection` in existence.
-	fn items(collection: &Self::CollectionId) -> Self::ItemsIterator;
+	fn items(collection: &Self::CollectionId) -> Box<dyn Iterator<Item = Self::ItemId>>;
 
 	/// Returns an iterator of the items of all collections owned by `who`.
-	fn owned(who: &AccountId) -> Self::OwnedIterator;
+	fn owned(who: &AccountId) -> Box<dyn Iterator<Item = (Self::CollectionId, Self::ItemId)>>;
 
 	/// Returns an iterator of the items of `collection` owned by `who`.
 	fn owned_in_collection(
 		collection: &Self::CollectionId,
 		who: &AccountId,
-	) -> Self::OwnedInCollectionIterator;
+	) -> Box<dyn Iterator<Item = Self::ItemId>>;
 }
 
 /// Trait for providing the ability to create collections of nonfungible items.

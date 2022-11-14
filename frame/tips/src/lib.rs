@@ -61,7 +61,7 @@ pub mod migrations;
 pub mod weights;
 
 use sp_runtime::{
-	traits::{AccountIdConversion, BadOrigin, Hash, StaticLookup, TrailingZeroInput, Zero},
+	traits::{AccountIdConversion, BadOrigin, Hash, TrailingZeroInput, Zero},
 	Percent, RuntimeDebug,
 };
 use sp_std::prelude::*;
@@ -80,7 +80,6 @@ pub use weights::WeightInfo;
 
 pub type BalanceOf<T, I = ()> = pallet_treasury::BalanceOf<T, I>;
 pub type NegativeImbalanceOf<T, I = ()> = pallet_treasury::NegativeImbalanceOf<T, I>;
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// An open tipping "motion". Retains all details of a tip including information on the finder
 /// and the members who have voted.
@@ -127,8 +126,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + pallet_treasury::Config<I> {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Maximum acceptable reason length.
 		///
@@ -239,10 +237,9 @@ pub mod pallet {
 		pub fn report_awesome(
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
-			who: AccountIdLookupOf<T>,
+			who: T::AccountId,
 		) -> DispatchResult {
 			let finder = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
 
 			ensure!(
 				reason.len() <= T::MaximumReasonLength::get() as usize,
@@ -334,11 +331,10 @@ pub mod pallet {
 		pub fn tip_new(
 			origin: OriginFor<T>,
 			reason: Vec<u8>,
-			who: AccountIdLookupOf<T>,
+			who: T::AccountId,
 			#[pallet::compact] tip_value: BalanceOf<T, I>,
 		) -> DispatchResult {
 			let tipper = ensure_signed(origin)?;
-			let who = T::Lookup::lookup(who)?;
 			ensure!(T::Tippers::contains(&tipper), BadOrigin);
 			let reason_hash = T::Hashing::hash(&reason[..]);
 			ensure!(!Reasons::<T, I>::contains_key(&reason_hash), Error::<T, I>::AlreadyKnown);

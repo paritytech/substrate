@@ -354,7 +354,7 @@ fn warn_authority_wrong_target<H: ::std::fmt::Display>(hash: H, id: AuthorityId)
 	);
 }
 
-impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block::Header> {
+impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block> {
 	type Blocked = Self;
 
 	fn needs_waiting<BlockStatus: BlockStatusT<Block>>(
@@ -389,13 +389,8 @@ impl<Block: BlockT> BlockUntilImported<Block> for SignedMessage<Block::Header> {
 
 /// Helper type definition for the stream which waits until vote targets for
 /// signed messages are imported.
-pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, I> = UntilImported<
-	Block,
-	BlockStatus,
-	BlockSyncRequester,
-	I,
-	SignedMessage<<Block as BlockT>::Header>,
->;
+pub(crate) type UntilVoteTargetImported<Block, BlockStatus, BlockSyncRequester, I> =
+	UntilImported<Block, BlockStatus, BlockSyncRequester, I, SignedMessage<Block>>;
 
 /// This blocks a global message import, i.e. a commit or catch up messages,
 /// until all blocks referenced in its votes are known.
@@ -592,7 +587,7 @@ mod tests {
 
 		fn import_header(&self, header: Header) {
 			let hash = header.hash();
-			let number = *header.number();
+			let number = header.number().clone();
 
 			self.known_blocks.lock().insert(hash, number);
 			self.sender
@@ -613,7 +608,7 @@ mod tests {
 
 	impl BlockStatusT<Block> for TestBlockStatus {
 		fn block_number(&self, hash: Hash) -> Result<Option<u64>, Error> {
-			Ok(self.inner.lock().get(&hash).map(|x| *x))
+			Ok(self.inner.lock().get(&hash).map(|x| x.clone()))
 		}
 	}
 
@@ -651,7 +646,7 @@ mod tests {
 
 	// unwrap the commit from `CommunicationIn` returning its fields in a tuple,
 	// panics if the given message isn't a commit
-	fn unapply_commit(msg: CommunicationIn<Block>) -> (u64, CompactCommit<Header>) {
+	fn unapply_commit(msg: CommunicationIn<Block>) -> (u64, CompactCommit<Block>) {
 		match msg {
 			voter::CommunicationIn::Commit(round, commit, ..) => (round, commit),
 			_ => panic!("expected commit"),
@@ -660,7 +655,7 @@ mod tests {
 
 	// unwrap the catch up from `CommunicationIn` returning its inner representation,
 	// panics if the given message isn't a catch up
-	fn unapply_catch_up(msg: CommunicationIn<Block>) -> CatchUp<Header> {
+	fn unapply_catch_up(msg: CommunicationIn<Block>) -> CatchUp<Block> {
 		match msg {
 			voter::CommunicationIn::CatchUp(catch_up, ..) => catch_up,
 			_ => panic!("expected catch up"),
@@ -745,7 +740,7 @@ mod tests {
 		let h2 = make_header(6);
 		let h3 = make_header(7);
 
-		let unknown_commit = CompactCommit::<Header> {
+		let unknown_commit = CompactCommit::<Block> {
 			target_hash: h1.hash(),
 			target_number: 5,
 			precommits: vec![
@@ -773,7 +768,7 @@ mod tests {
 		let h2 = make_header(6);
 		let h3 = make_header(7);
 
-		let known_commit = CompactCommit::<Header> {
+		let known_commit = CompactCommit::<Block> {
 			target_hash: h1.hash(),
 			target_number: 5,
 			precommits: vec![
@@ -915,7 +910,7 @@ mod tests {
 
 		// we create a commit message, with precommits for blocks 6 and 7 which
 		// we haven't imported.
-		let unknown_commit = CompactCommit::<Header> {
+		let unknown_commit = CompactCommit::<Block> {
 			target_hash: h1.hash(),
 			target_number: 5,
 			precommits: vec![

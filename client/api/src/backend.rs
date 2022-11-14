@@ -27,12 +27,12 @@ use sp_blockchain;
 use sp_consensus::BlockOrigin;
 use sp_core::offchain::OffchainStorage;
 use sp_runtime::{
+	generic::BlockId,
 	traits::{Block as BlockT, HashFor, NumberFor},
 	Justification, Justifications, StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::AsTrieBackend, ChildStorageCollection, IndexOperation, OffchainChangesCollection,
-	StorageCollection,
+	ChildStorageCollection, IndexOperation, OffchainChangesCollection, StorageCollection,
 };
 use sp_storage::{ChildInfo, StorageData, StorageKey};
 use std::collections::{HashMap, HashSet};
@@ -215,13 +215,13 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// Mark a block as finalized.
 	fn mark_finalized(
 		&mut self,
-		hash: Block::Hash,
+		id: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Mark a block as new head. If both block import and set head are specified, set head
 	/// overrides block import's best block rule.
-	fn mark_head(&mut self, hash: Block::Hash) -> sp_blockchain::Result<()>;
+	fn mark_head(&mut self, id: BlockId<Block>) -> sp_blockchain::Result<()>;
 
 	/// Add a transaction index operation.
 	fn update_transaction_index(&mut self, index: Vec<IndexOperation>)
@@ -251,7 +251,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		block: Block::Hash,
+		id: BlockId<Block>,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -271,7 +271,7 @@ pub trait Finalizer<Block: BlockT, B: Backend<Block>> {
 	/// while performing major synchronization work.
 	fn finalize_block(
 		&self,
-		block: Block::Hash,
+		id: BlockId<Block>,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()>;
@@ -356,77 +356,77 @@ where
 
 /// Provides acess to storage primitives
 pub trait StorageProvider<Block: BlockT, B: Backend<Block>> {
-	/// Given a block's `Hash` and a key, return the value under the key in that block.
+	/// Given a `BlockId` and a key, return the value under the key in that block.
 	fn storage(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a block's `Hash` and a key prefix, return the matching storage keys in that block.
+	/// Given a `BlockId` and a key prefix, return the matching storage keys in that block.
 	fn storage_keys(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a block's `Hash` and a key, return the value under the hash in that block.
+	/// Given a `BlockId` and a key, return the value under the hash in that block.
 	fn storage_hash(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
 
-	/// Given a block's `Hash` and a key prefix, return the matching child storage keys and values
-	/// in that block.
+	/// Given a `BlockId` and a key prefix, return the matching child storage keys and values in
+	/// that block.
 	fn storage_pairs(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>>;
 
-	/// Given a block's `Hash` and a key prefix, return a `KeyIterator` iterates matching storage
-	/// keys in that block.
+	/// Given a `BlockId` and a key prefix, return a `KeyIterator` iterates matching storage keys in
+	/// that block.
 	fn storage_keys_iter<'a>(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a block's `Hash`, a key and a child storage key, return the value under the key in
-	/// that block.
+	/// Given a `BlockId`, a key and a child storage key, return the value under the key in that
+	/// block.
 	fn child_storage(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>>;
 
-	/// Given a block's `Hash`, a key prefix, and a child storage key, return the matching child
-	/// storage keys.
+	/// Given a `BlockId`, a key prefix, and a child storage key, return the matching child storage
+	/// keys.
 	fn child_storage_keys(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>>;
 
-	/// Given a block's `Hash` and a key `prefix` and a child storage key,
+	/// Given a `BlockId` and a key `prefix` and a child storage key,
 	/// return a `KeyIterator` that iterates matching storage keys in that block.
 	fn child_storage_keys_iter<'a>(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		child_info: ChildInfo,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>>;
 
-	/// Given a block's `Hash`, a key and a child storage key, return the hash under the key in that
+	/// Given a `BlockId`, a key and a child storage key, return the hash under the key in that
 	/// block.
 	fn child_storage_hash(
 		&self,
-		hash: Block::Hash,
+		id: &BlockId<Block>,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>>;
@@ -448,12 +448,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	/// Associated blockchain backend type.
 	type Blockchain: BlockchainBackend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<HashFor<Block>>
-		+ Send
-		+ AsTrieBackend<
-			HashFor<Block>,
-			TrieBackendStorage = <Self::State as StateBackend<HashFor<Block>>>::TrieBackendStorage,
-		>;
+	type State: StateBackend<HashFor<Block>> + Send;
 	/// Offchain workers local storage.
 	type OffchainStorage: OffchainStorage;
 
@@ -466,7 +461,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn begin_state_operation(
 		&self,
 		operation: &mut Self::BlockImportOperation,
-		block: Block::Hash,
+		block: BlockId<Block>,
 	) -> sp_blockchain::Result<()>;
 
 	/// Commit block insertion.
@@ -475,21 +470,21 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 		transaction: Self::BlockImportOperation,
 	) -> sp_blockchain::Result<()>;
 
-	/// Finalize block with given `hash`.
+	/// Finalize block with given Id.
 	///
 	/// This should only be called if the parent of the given block has been finalized.
 	fn finalize_block(
 		&self,
-		hash: Block::Hash,
+		block: BlockId<Block>,
 		justification: Option<Justification>,
 	) -> sp_blockchain::Result<()>;
 
-	/// Append justification to the block with the given `hash`.
+	/// Append justification to the block with the given Id.
 	///
 	/// This should only be called for blocks that are already finalized.
 	fn append_justification(
 		&self,
-		hash: Block::Hash,
+		block: BlockId<Block>,
 		justification: Justification,
 	) -> sp_blockchain::Result<()>;
 
@@ -503,17 +498,16 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	fn offchain_storage(&self) -> Option<Self::OffchainStorage>;
 
 	/// Returns true if state for given block is available.
-	fn have_state_at(&self, hash: Block::Hash, _number: NumberFor<Block>) -> bool {
-		self.state_at(hash).is_ok()
+	fn have_state_at(&self, hash: &Block::Hash, _number: NumberFor<Block>) -> bool {
+		self.state_at(BlockId::Hash(*hash)).is_ok()
 	}
 
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, hash: Block::Hash) -> sp_blockchain::Result<Self::State>;
+	fn state_at(&self, block: BlockId<Block>) -> sp_blockchain::Result<Self::State>;
 
 	/// Attempts to revert the chain by `n` blocks. If `revert_finalized` is set it will attempt to
 	/// revert past any finalized block, this is unsafe and can potentially leave the node in an
-	/// inconsistent state. All blocks higher than the best block are also reverted and not counting
-	/// towards `n`.
+	/// inconsistent state.
 	///
 	/// Returns the number of blocks that were successfully reverted and the list of finalized
 	/// blocks that has been reverted.
@@ -524,7 +518,7 @@ pub trait Backend<Block: BlockT>: AuxStore + Send + Sync {
 	) -> sp_blockchain::Result<(NumberFor<Block>, HashSet<Block::Hash>)>;
 
 	/// Discard non-best, unfinalized leaf block.
-	fn remove_leaf_block(&self, hash: Block::Hash) -> sp_blockchain::Result<()>;
+	fn remove_leaf_block(&self, hash: &Block::Hash) -> sp_blockchain::Result<()>;
 
 	/// Insert auxiliary data into key-value store.
 	fn insert_aux<

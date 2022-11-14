@@ -29,16 +29,16 @@ use std::sync::Arc;
 
 /// The `insert` command
 #[derive(Debug, Clone, Parser)]
-#[command(name = "insert", about = "Insert a key to the keystore of a node.")]
+#[clap(name = "insert", about = "Insert a key to the keystore of a node.")]
 pub struct InsertKeyCmd {
 	/// The secret key URI.
 	/// If the value is a file, the file content is used as URI.
 	/// If not given, you will be prompted for the URI.
-	#[arg(long)]
+	#[clap(long)]
 	suri: Option<String>,
 
 	/// Key type, examples: "gran", or "imon"
-	#[arg(long)]
+	#[clap(long)]
 	key_type: String,
 
 	#[allow(missing_docs)]
@@ -50,7 +50,7 @@ pub struct InsertKeyCmd {
 	pub keystore_params: KeystoreParams,
 
 	/// The cryptography scheme that should be used to generate the key out of the given URI.
-	#[arg(long, value_name = "SCHEME", value_enum, ignore_case = true)]
+	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true)]
 	pub scheme: CryptoScheme,
 }
 
@@ -60,7 +60,7 @@ impl InsertKeyCmd {
 		let suri = utils::read_uri(self.suri.as_ref())?;
 		let base_path = self
 			.shared_params
-			.base_path()?
+			.base_path()
 			.unwrap_or_else(|| BasePath::from_project("", "", &C::executable_name()));
 		let chain_id = self.shared_params.chain_id(self.shared_params.is_dev());
 		let chain_spec = cli.load_spec(&chain_id)?;

@@ -16,10 +16,7 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use frame_support::{
-	traits::{ConstU32, ConstU64},
-	weights::Weight,
-};
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -37,7 +34,7 @@ mod module {
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::event]
@@ -64,7 +61,7 @@ frame_support::construct_runtime!(
 frame_support::parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
 		frame_system::limits::BlockWeights::with_sensible_defaults(
-			Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75),
+			4 * 1024 * 1024, Perbill::from_percent(75),
 		);
 	pub BlockLength: frame_system::limits::BlockLength =
 		frame_system::limits::BlockLength::max_with_normal_ratio(
@@ -76,16 +73,16 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = BlockLength;
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -99,7 +96,7 @@ impl frame_system::Config for Runtime {
 }
 
 impl module::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {

@@ -28,8 +28,8 @@ use crate::Config;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::ScoreProvider;
 use frame_support::{
-	defensive, ensure,
-	traits::{Defensive, DefensiveOption, Get},
+	ensure,
+	traits::{Defensive, Get},
 	DefaultNoBound, PalletError,
 };
 use scale_info::TypeInfo;
@@ -220,8 +220,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			crate::ListBags::<T, I>::remove(removed_bag);
 		}
 
-		#[cfg(feature = "std")]
-		debug_assert_eq!(Self::try_state(), Ok(()));
+		debug_assert_eq!(Self::sanity_check(), Ok(()));
 
 		num_affected
 	}
@@ -326,7 +325,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		crate::log!(
 			debug,
-			"inserted {:?} with score {:?} into bag {:?}, new count is {}",
+			"inserted {:?} with score {:?
+			} into bag {:?}, new count is {}",
 			id,
 			score,
 			bag_score,
@@ -457,8 +457,11 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 
 		// re-fetch `lighter_node` from storage since it may have been updated when `heavier_node`
 		// was removed.
-		let lighter_node =
-			Node::<T, I>::get(lighter_id).defensive_ok_or_else(|| ListError::NodeNotFound)?;
+		let lighter_node = Node::<T, I>::get(lighter_id).ok_or_else(|| {
+			debug_assert!(false, "id that should exist cannot be found");
+			crate::log!(warn, "id that should exist cannot be found");
+			ListError::NodeNotFound
+		})?;
 
 		// insert `heavier_node` directly in front of `lighter_node`. This will update both nodes
 		// in storage and update the node counter.
@@ -505,7 +508,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		node.put();
 	}
 
-	/// Check the internal state of the list.
+	/// Sanity check the list.
 	///
 	/// This should be called from the call-site, whenever one of the mutating apis (e.g. `insert`)
 	/// is being used, after all other staking data (such as counter) has been updated. It checks:
@@ -514,7 +517,8 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 	/// * length of this list is in sync with `ListNodes::count()`,
 	/// * and sanity-checks all bags and nodes. This will cascade down all the checks and makes sure
 	/// all bags and nodes are checked per *any* update to `List`.
-	pub(crate) fn try_state() -> Result<(), &'static str> {
+	#[cfg(feature = "std")]
+	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		let mut seen_in_list = BTreeSet::new();
 		ensure!(
 			Self::iter().map(|node| node.id).all(|id| seen_in_list.insert(id)),
@@ -542,7 +546,7 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 			thresholds.into_iter().filter_map(|t| Bag::<T, I>::get(t))
 		};
 
-		let _ = active_bags.clone().try_for_each(|b| b.try_state())?;
+		let _ = active_bags.clone().try_for_each(|b| b.sanity_check())?;
 
 		let nodes_in_bags_count =
 			active_bags.clone().fold(0u32, |acc, cur| acc + cur.iter().count() as u32);
@@ -553,9 +557,14 @@ impl<T: Config<I>, I: 'static> List<T, I> {
 		// check that all nodes are sane. We check the `ListNodes` storage item directly in case we
 		// have some "stale" nodes that are not in a bag.
 		for (_id, node) in crate::ListNodes::<T, I>::iter() {
-			node.try_state()?
+			node.sanity_check()?
 		}
 
+		Ok(())
+	}
+
+	#[cfg(not(feature = "std"))]
+	pub(crate) fn sanity_check() -> Result<(), &'static str> {
 		Ok(())
 	}
 
@@ -692,7 +701,8 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 			if *tail == node.id {
 				// this should never happen, but this check prevents one path to a worst case
 				// infinite loop.
-				defensive!("system logic error: inserting a node who has the id of tail");
+				debug_assert!(false, "system logic error: inserting a node who has the id of tail");
+				crate::log!(warn, "system logic error: inserting a node who has the id of tail");
 				return
 			};
 		}
@@ -743,7 +753,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 		}
 	}
 
-	/// Check the internal state of the bag.
+	/// Sanity check this bag.
 	///
 	/// Should be called by the call-site, after any mutating operation on a bag. The call site of
 	/// this struct is always `List`.
@@ -751,7 +761,8 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	/// * Ensures head has no prev.
 	/// * Ensures tail has no next.
 	/// * Ensures there are no loops, traversal from head to tail is correct.
-	fn try_state(&self) -> Result<(), &'static str> {
+	#[cfg(feature = "std")]
+	fn sanity_check(&self) -> Result<(), &'static str> {
 		frame_support::ensure!(
 			self.head()
 				.map(|head| head.prev().is_none())
@@ -790,6 +801,7 @@ impl<T: Config<I>, I: 'static> Bag<T, I> {
 	}
 
 	/// Check if the bag contains a node with `id`.
+	#[cfg(feature = "std")]
 	fn contains(&self, id: &T::AccountId) -> bool {
 		self.iter().any(|n| n.id() == id)
 	}
@@ -882,7 +894,7 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		&self.id
 	}
 
-	#[cfg(any(feature = "runtime-benchmarks", feature = "fuzz", test))]
+	#[cfg(any(feature = "runtime-benchmarks", test))]
 	pub fn set_score(&mut self, s: T::Score) {
 		self.score = s
 	}
@@ -894,7 +906,8 @@ impl<T: Config<I>, I: 'static> Node<T, I> {
 		self.bag_upper
 	}
 
-	fn try_state(&self) -> Result<(), &'static str> {
+	#[cfg(feature = "std")]
+	fn sanity_check(&self) -> Result<(), &'static str> {
 		let expected_bag = Bag::<T, I>::get(self.bag_upper).ok_or("bag not found for node")?;
 
 		let id = self.id();

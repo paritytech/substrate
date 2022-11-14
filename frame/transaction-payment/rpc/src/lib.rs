@@ -21,12 +21,12 @@ use std::{convert::TryInto, sync::Arc};
 
 use codec::{Codec, Decode};
 use jsonrpsee::{
-	core::{Error as JsonRpseeError, RpcResult},
+	core::{async_trait, Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
 use pallet_transaction_payment_rpc_runtime_api::{FeeDetails, InclusionFee, RuntimeDispatchInfo};
-use sp_api::{ApiExt, ProvideRuntimeApi};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_rpc::number::NumberOrHex;
@@ -81,11 +81,10 @@ impl From<Error> for i32 {
 	}
 }
 
+#[async_trait]
 impl<C, Block, Balance>
-	TransactionPaymentApiServer<
-		<Block as BlockT>::Hash,
-		RuntimeDispatchInfo<Balance, sp_weights::OldWeight>,
-	> for TransactionPayment<C, Block>
+	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
+	for TransactionPayment<C, Block>
 where
 	Block: BlockT,
 	C: ProvideRuntimeApi<Block> + HeaderBackend<Block> + Send + Sync + 'static,
@@ -96,7 +95,7 @@ where
 		&self,
 		encoded_xt: Bytes,
 		at: Option<Block::Hash>,
-	) -> RpcResult<RuntimeDispatchInfo<Balance, sp_weights::OldWeight>> {
+	) -> RpcResult<RuntimeDispatchInfo<Balance>> {
 		let api = self.client.runtime_api();
 		let at = BlockId::hash(at.unwrap_or_else(|| self.client.info().best_hash));
 
@@ -109,41 +108,14 @@ where
 				Some(format!("{:?}", e)),
 			))
 		})?;
-
-		fn map_err(error: impl ToString, desc: &'static str) -> CallError {
+		api.query_info(&at, uxt, encoded_len).map_err(|e| {
 			CallError::Custom(ErrorObject::owned(
 				Error::RuntimeError.into(),
-				desc,
-				Some(error.to_string()),
+				"Unable to query dispatch info.",
+				Some(e.to_string()),
 			))
-		}
-
-		let api_version = api
-			.api_version::<dyn TransactionPaymentRuntimeApi<Block, Balance>>(&at)
-			.map_err(|e| map_err(e, "Failed to get transaction payment runtime api version"))?
-			.ok_or_else(|| {
-				CallError::Custom(ErrorObject::owned(
-					Error::RuntimeError.into(),
-					"Transaction payment runtime api wasn't found in the runtime",
-					None::<String>,
-				))
-			})?;
-
-		if api_version < 2 {
-			#[allow(deprecated)]
-			api.query_info_before_version_2(&at, uxt, encoded_len)
-				.map_err(|e| map_err(e, "Unable to query dispatch info.").into())
-		} else {
-			let res = api
-				.query_info(&at, uxt, encoded_len)
-				.map_err(|e| map_err(e, "Unable to query dispatch info."))?;
-
-			Ok(RuntimeDispatchInfo {
-				weight: sp_weights::OldWeight(res.weight.ref_time()),
-				class: res.class,
-				partial_fee: res.partial_fee,
-			})
-		}
+			.into()
+		})
 	}
 
 	fn query_fee_details(

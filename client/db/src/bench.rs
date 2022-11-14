@@ -18,7 +18,13 @@
 
 //! State backend that's useful for benchmarking
 
-use crate::{DbState, DbStateBuilder};
+use std::{
+	cell::{Cell, RefCell},
+	collections::HashMap,
+	sync::Arc,
+};
+
+use crate::storage_cache::{new_shared_cache, CachingState, SharedCache};
 use hash_db::{Hasher, Prefix};
 use kvdb::{DBTransaction, KeyValueDB};
 use linked_hash_map::LinkedHashMap;
@@ -31,31 +37,40 @@ use sp_runtime::{
 	StateVersion, Storage,
 };
 use sp_state_machine::{
-	backend::Backend as StateBackend, ChildStorageCollection, DBValue, StorageCollection,
+	backend::Backend as StateBackend, ChildStorageCollection, DBValue, ProofRecorder,
+	StorageCollection,
 };
-use sp_trie::{
-	cache::{CacheSize, SharedTrieCache},
-	prefixed_key, MemoryDB,
-};
-use std::{
-	cell::{Cell, RefCell},
-	collections::HashMap,
-	sync::Arc,
-};
+use sp_trie::{prefixed_key, MemoryDB};
 
-type State<B> = DbState<B>;
+type DbState<B> =
+	sp_state_machine::TrieBackend<Arc<dyn sp_state_machine::Storage<HashFor<B>>>, HashFor<B>>;
+
+type State<B> = CachingState<DbState<B>, B>;
 
 struct StorageDb<Block: BlockT> {
 	db: Arc<dyn KeyValueDB>,
+	proof_recorder: Option<ProofRecorder<Block::Hash>>,
 	_block: std::marker::PhantomData<Block>,
 }
 
 impl<Block: BlockT> sp_state_machine::Storage<HashFor<Block>> for StorageDb<Block> {
 	fn get(&self, key: &Block::Hash, prefix: Prefix) -> Result<Option<DBValue>, String> {
 		let prefixed_key = prefixed_key::<HashFor<Block>>(key, prefix);
-		self.db
-			.get(0, &prefixed_key)
-			.map_err(|e| format!("Database backend error: {:?}", e))
+		if let Some(recorder) = &self.proof_recorder {
+			if let Some(v) = recorder.get(key) {
+				return Ok(v)
+			}
+			let backend_value = self
+				.db
+				.get(0, &prefixed_key)
+				.map_err(|e| format!("Database backend error: {:?}", e))?;
+			recorder.record(*key, backend_value.clone());
+			Ok(backend_value)
+		} else {
+			self.db
+				.get(0, &prefixed_key)
+				.map_err(|e| format!("Database backend error: {:?}", e))
+		}
 	}
 }
 
@@ -67,6 +82,7 @@ pub struct BenchmarkingState<B: BlockT> {
 	db: Cell<Option<Arc<dyn KeyValueDB>>>,
 	genesis: HashMap<Vec<u8>, (Vec<u8>, i32)>,
 	record: Cell<Vec<Vec<u8>>>,
+	shared_cache: SharedCache<B>, // shared cache is always empty
 	/// Key tracker for keys in the main trie.
 	/// We track the total number of reads and writes to these keys,
 	/// not de-duplicated for repeats.
@@ -77,10 +93,9 @@ pub struct BenchmarkingState<B: BlockT> {
 	/// not de-duplicated for repeats.
 	child_key_tracker: RefCell<LinkedHashMap<Vec<u8>, LinkedHashMap<Vec<u8>, TrackedStorageKey>>>,
 	whitelist: RefCell<Vec<TrackedStorageKey>>,
-	proof_recorder: Option<sp_trie::recorder::Recorder<HashFor<B>>>,
+	proof_recorder: Option<ProofRecorder<B::Hash>>,
 	proof_recorder_root: Cell<B::Hash>,
 	enable_tracking: bool,
-	shared_trie_cache: SharedTrieCache<HashFor<B>>,
 }
 
 impl<B: BlockT> BenchmarkingState<B> {
@@ -94,7 +109,7 @@ impl<B: BlockT> BenchmarkingState<B> {
 		let state_version = sp_runtime::StateVersion::default();
 		let mut root = B::Hash::default();
 		let mut mdb = MemoryDB::<HashFor<B>>::default();
-		sp_trie::trie_types::TrieDBMutBuilderV1::<HashFor<B>>::new(&mut mdb, &mut root).build();
+		sp_state_machine::TrieDBMutV1::<HashFor<B>>::new(&mut mdb, &mut root);
 
 		let mut state = BenchmarkingState {
 			state: RefCell::new(None),
@@ -103,20 +118,19 @@ impl<B: BlockT> BenchmarkingState<B> {
 			genesis: Default::default(),
 			genesis_root: Default::default(),
 			record: Default::default(),
+			shared_cache: new_shared_cache(0, (1, 10)),
 			main_key_tracker: Default::default(),
 			child_key_tracker: Default::default(),
 			whitelist: Default::default(),
 			proof_recorder: record_proof.then(Default::default),
 			proof_recorder_root: Cell::new(root),
 			enable_tracking,
-			// Enable the cache, but do not sync anything to the shared state.
-			shared_trie_cache: SharedTrieCache::new(CacheSize::Maximum(0)),
 		};
 
 		state.add_whitelist_to_tracker();
 
 		state.reopen()?;
-		let child_delta = genesis.children_default.values().map(|child_content| {
+		let child_delta = genesis.children_default.iter().map(|(_storage_key, child_content)| {
 			(
 				&child_content.child_info,
 				child_content.data.iter().map(|(k, v)| (k.as_ref(), Some(v.as_ref()))),
@@ -146,13 +160,16 @@ impl<B: BlockT> BenchmarkingState<B> {
 			recorder.reset();
 			self.proof_recorder_root.set(self.root.get());
 		}
-		let storage_db = Arc::new(StorageDb::<B> { db, _block: Default::default() });
-		*self.state.borrow_mut() = Some(
-			DbStateBuilder::<B>::new(storage_db, self.root.get())
-				.with_optional_recorder(self.proof_recorder.clone())
-				.with_cache(self.shared_trie_cache.local_cache())
-				.build(),
-		);
+		let storage_db = Arc::new(StorageDb::<B> {
+			db,
+			proof_recorder: self.proof_recorder.clone(),
+			_block: Default::default(),
+		});
+		*self.state.borrow_mut() = Some(State::new(
+			DbState::<B>::new(storage_db, self.root.get()),
+			self.shared_cache.clone(),
+			None,
+		));
 		Ok(())
 	}
 
@@ -305,19 +322,6 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 			.as_ref()
 			.ok_or_else(state_err)?
 			.child_storage(child_info, key)
-	}
-
-	fn child_storage_hash(
-		&self,
-		child_info: &ChildInfo,
-		key: &[u8],
-	) -> Result<Option<B::Hash>, Self::Error> {
-		self.add_read_key(Some(child_info.storage_key()), key);
-		self.state
-			.borrow()
-			.as_ref()
-			.ok_or_else(state_err)?
-			.child_storage_hash(child_info, key)
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
@@ -600,25 +604,22 @@ impl<B: BlockT> StateBackend<HashFor<B>> for BenchmarkingState<B> {
 	fn proof_size(&self) -> Option<u32> {
 		self.proof_recorder.as_ref().map(|recorder| {
 			let proof_size = recorder.estimate_encoded_size() as u32;
-
 			let proof = recorder.to_storage_proof();
-
 			let proof_recorder_root = self.proof_recorder_root.get();
 			if proof_recorder_root == Default::default() || proof_size == 1 {
 				// empty trie
 				proof_size
+			} else if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root)
+			{
+				size as u32
 			} else {
-				if let Some(size) = proof.encoded_compact_size::<HashFor<B>>(proof_recorder_root) {
-					size as u32
-				} else {
-					panic!(
-						"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
-						self.proof_recorder_root.get(),
-						self.root.get(),
-						self.genesis_root,
-						proof_size,
-					);
-				}
+				panic!(
+					"proof rec root {:?}, root {:?}, genesis {:?}, rec_len {:?}",
+					self.proof_recorder_root.get(),
+					self.root.get(),
+					self.genesis_root,
+					proof_size,
+				);
 			}
 		})
 	}

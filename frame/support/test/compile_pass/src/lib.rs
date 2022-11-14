@@ -65,12 +65,12 @@ impl frame_system::Config for Runtime {
 	type BlockHashCount = ConstU64<2400>;
 	type Version = Version;
 	type AccountData = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type BlockNumber = BlockNumber;
 	type AccountId = AccountId;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type PalletInfo = PalletInfo;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type DbWeight = ();
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
@@ -82,7 +82,7 @@ impl frame_system::Config for Runtime {
 
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
 
 construct_runtime!(
 	pub enum Runtime where

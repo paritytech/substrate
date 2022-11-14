@@ -17,8 +17,6 @@
 
 //! Traits and associated utilities for scheduling dispatchables in FRAME.
 
-#[allow(deprecated)]
-use super::PreimageProvider;
 use codec::{Codec, Decode, Encode, EncodeLike, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Saturating, DispatchError, RuntimeDebug};
@@ -130,12 +128,11 @@ impl<T: Decode, H> MaybeHashed<T, H> {
 	}
 }
 
-// TODO: deprecate
 pub mod v1 {
 	use super::*;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call, RuntimeOrigin> {
+	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo + MaxEncodedLen;
 
@@ -146,7 +143,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: RuntimeOrigin,
+			origin: Origin,
 			call: Call,
 		) -> Result<Self::Address, DispatchError>;
 
@@ -180,7 +177,7 @@ pub mod v1 {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call, RuntimeOrigin> {
+	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug + MaxEncodedLen;
 
@@ -192,7 +189,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: RuntimeOrigin,
+			origin: Origin,
 			call: Call,
 		) -> Result<Self::Address, ()>;
 
@@ -218,9 +215,9 @@ pub mod v1 {
 		fn next_dispatch_time(id: Vec<u8>) -> Result<BlockNumber, ()>;
 	}
 
-	impl<T, BlockNumber, Call, RuntimeOrigin> Anon<BlockNumber, Call, RuntimeOrigin> for T
+	impl<T, BlockNumber, Call, Origin> Anon<BlockNumber, Call, Origin> for T
 	where
-		T: v2::Anon<BlockNumber, Call, RuntimeOrigin>,
+		T: v2::Anon<BlockNumber, Call, Origin>,
 	{
 		type Address = T::Address;
 
@@ -228,7 +225,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: RuntimeOrigin,
+			origin: Origin,
 			call: Call,
 		) -> Result<Self::Address, DispatchError> {
 			let c = MaybeHashed::<Call, T::Hash>::Value(call);
@@ -251,9 +248,9 @@ pub mod v1 {
 		}
 	}
 
-	impl<T, BlockNumber, Call, RuntimeOrigin> Named<BlockNumber, Call, RuntimeOrigin> for T
+	impl<T, BlockNumber, Call, Origin> Named<BlockNumber, Call, Origin> for T
 	where
-		T: v2::Named<BlockNumber, Call, RuntimeOrigin>,
+		T: v2::Named<BlockNumber, Call, Origin>,
 	{
 		type Address = T::Address;
 
@@ -262,7 +259,7 @@ pub mod v1 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: RuntimeOrigin,
+			origin: Origin,
 			call: Call,
 		) -> Result<Self::Address, ()> {
 			let c = MaybeHashed::<Call, T::Hash>::Value(call);
@@ -286,12 +283,11 @@ pub mod v1 {
 	}
 }
 
-// TODO: deprecate
 pub mod v2 {
 	use super::*;
 
 	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call, RuntimeOrigin> {
+	pub trait Anon<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + Debug + TypeInfo + MaxEncodedLen;
 		/// A means of expressing a call by the hash of its encoded data.
@@ -304,7 +300,7 @@ pub mod v2 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: RuntimeOrigin,
+			origin: Origin,
 			call: MaybeHashed<Call, Self::Hash>,
 		) -> Result<Self::Address, DispatchError>;
 
@@ -338,7 +334,7 @@ pub mod v2 {
 	}
 
 	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call, RuntimeOrigin> {
+	pub trait Named<BlockNumber, Call, Origin> {
 		/// An address which can be used for removing a scheduled task.
 		type Address: Codec + Clone + Eq + EncodeLike + sp_std::fmt::Debug + MaxEncodedLen;
 		/// A means of expressing a call by the hash of its encoded data.
@@ -352,7 +348,7 @@ pub mod v2 {
 			when: DispatchTime<BlockNumber>,
 			maybe_periodic: Option<Period<BlockNumber>>,
 			priority: Priority,
-			origin: RuntimeOrigin,
+			origin: Origin,
 			call: MaybeHashed<Call, Self::Hash>,
 		) -> Result<Self::Address, ()>;
 
@@ -379,97 +375,6 @@ pub mod v2 {
 	}
 }
 
-pub mod v3 {
-	use super::*;
-	use crate::traits::Bounded;
-
-	/// A type that can be used as a scheduler.
-	pub trait Anon<BlockNumber, Call, Origin> {
-		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + MaxEncodedLen + Clone + Eq + EncodeLike + Debug + TypeInfo;
-
-		/// Schedule a dispatch to happen at the beginning of some block in the future.
-		///
-		/// This is not named.
-		fn schedule(
-			when: DispatchTime<BlockNumber>,
-			maybe_periodic: Option<Period<BlockNumber>>,
-			priority: Priority,
-			origin: Origin,
-			call: Bounded<Call>,
-		) -> Result<Self::Address, DispatchError>;
-
-		/// Cancel a scheduled task. If periodic, then it will cancel all further instances of that,
-		/// also.
-		///
-		/// Will return an `Unavailable` error if the `address` is invalid.
-		///
-		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
-		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		///
-		/// NOTE2: This will not work to cancel periodic tasks after their initial execution. For
-		/// that, you must name the task explicitly using the `Named` trait.
-		fn cancel(address: Self::Address) -> Result<(), DispatchError>;
-
-		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
-		/// only if it is executed *before* the currently scheduled block. For periodic tasks,
-		/// this dispatch is guaranteed to succeed only before the *initial* execution; for
-		/// others, use `reschedule_named`.
-		///
-		/// Will return an `Unavailable` error if the `address` is invalid.
-		fn reschedule(
-			address: Self::Address,
-			when: DispatchTime<BlockNumber>,
-		) -> Result<Self::Address, DispatchError>;
-
-		/// Return the next dispatch time for a given task.
-		///
-		/// Will return an `Unavailable` error if the `address` is invalid.
-		fn next_dispatch_time(address: Self::Address) -> Result<BlockNumber, DispatchError>;
-	}
-
-	pub type TaskName = [u8; 32];
-
-	/// A type that can be used as a scheduler.
-	pub trait Named<BlockNumber, Call, Origin> {
-		/// An address which can be used for removing a scheduled task.
-		type Address: Codec + MaxEncodedLen + Clone + Eq + EncodeLike + sp_std::fmt::Debug;
-
-		/// Schedule a dispatch to happen at the beginning of some block in the future.
-		///
-		/// - `id`: The identity of the task. This must be unique and will return an error if not.
-		fn schedule_named(
-			id: TaskName,
-			when: DispatchTime<BlockNumber>,
-			maybe_periodic: Option<Period<BlockNumber>>,
-			priority: Priority,
-			origin: Origin,
-			call: Bounded<Call>,
-		) -> Result<Self::Address, DispatchError>;
-
-		/// Cancel a scheduled, named task. If periodic, then it will cancel all further instances
-		/// of that, also.
-		///
-		/// Will return an `Unavailable` error if the `id` is invalid.
-		///
-		/// NOTE: This guaranteed to work only *before* the point that it is due to be executed.
-		/// If it ends up being delayed beyond the point of execution, then it cannot be cancelled.
-		fn cancel_named(id: TaskName) -> Result<(), DispatchError>;
-
-		/// Reschedule a task. For one-off tasks, this dispatch is guaranteed to succeed
-		/// only if it is executed *before* the currently scheduled block.
-		///
-		/// Will return an `Unavailable` error if the `id` is invalid.
-		fn reschedule_named(
-			id: TaskName,
-			when: DispatchTime<BlockNumber>,
-		) -> Result<Self::Address, DispatchError>;
-
-		/// Return the next dispatch time for a given task.
-		///
-		/// Will return an `Unavailable` error if the `id` is invalid.
-		fn next_dispatch_time(id: TaskName) -> Result<BlockNumber, DispatchError>;
-	}
-}
-
 pub use v1::*;
+
+use super::PreimageProvider;

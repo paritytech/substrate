@@ -39,11 +39,9 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{Get, ReservableCurrency},
-	WeakBoundedVec,
 };
 use sp_core::crypto::UncheckedFrom;
 use sp_runtime::traits::BadOrigin;
-use sp_std::vec;
 
 /// Put the instrumented module in storage.
 ///
@@ -98,7 +96,7 @@ where
 			<PristineCode<T>>::insert(&code_hash, orig_code);
 			<OwnerInfoOf<T>>::insert(&code_hash, owner_info);
 			*existing = Some(module);
-			<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeStored { code_hash });
+			<Pallet<T>>::deposit_event(Event::CodeStored { code_hash });
 			Ok(())
 		},
 	})
@@ -135,10 +133,7 @@ pub fn increment_refcount<T: Config>(code_hash: CodeHash<T>) -> Result<(), Dispa
 }
 
 /// Try to remove code together with all associated information.
-pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult
-where
-	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
-{
+pub fn try_remove<T: Config>(origin: &T::AccountId, code_hash: CodeHash<T>) -> DispatchResult {
 	<OwnerInfoOf<T>>::try_mutate_exists(&code_hash, |existing| {
 		if let Some(owner_info) = existing {
 			ensure!(owner_info.refcount == 0, <Error<T>>::CodeInUse);
@@ -147,7 +142,7 @@ where
 			*existing = None;
 			<PristineCode<T>>::remove(&code_hash);
 			<CodeStorage<T>>::remove(&code_hash);
-			<Pallet<T>>::deposit_event(vec![code_hash], Event::CodeRemoved { code_hash });
+			<Pallet<T>>::deposit_event(Event::CodeRemoved { code_hash });
 			Ok(())
 		} else {
 			Err(<Error<T>>::CodeNotFound.into())
@@ -196,15 +191,10 @@ pub fn reinstrument<T: Config>(
 	let original_code =
 		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
-	// We need to allow contracts growing too big after re-instrumentation. Otherwise
-	// the contract can become inaccessible. The user has no influence over this size
-	// as the contract is already deployed and every change in size would be the result
-	// of changes in the instrumentation algorithm controlled by the chain authors.
-	prefab_module.code = WeakBoundedVec::force_from(
-		prepare::reinstrument_contract::<T>(&original_code, schedule, prefab_module.determinism)
-			.map_err(|_| <Error<T>>::CodeRejected)?,
-		Some("Contract exceeds limit after re-instrumentation."),
-	);
+	prefab_module.code = prepare::reinstrument_contract::<T>(&original_code, schedule)
+		.map_err(|_| <Error<T>>::CodeRejected)?
+		.try_into()
+		.map_err(|_| <Error<T>>::CodeTooLarge)?;
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
 	Ok(original_code_len as u32)
@@ -225,14 +215,17 @@ impl<T: Config> Token<T> for CodeToken {
 		use self::CodeToken::*;
 		// In case of `Load` we already covered the general costs of
 		// calling the storage but still need to account for the actual size of the
-		// contract code. This is why we subtract `T::*::(0)`. We need to do this at this
+		// contract code. This is why we substract `T::*::(0)`. We need to do this at this
 		// point because when charging the general weight for calling the contract we not know the
 		// size of the contract.
 		match *self {
 			Reinstrument(len) => T::WeightInfo::reinstrument(len),
-			Load(len) => T::WeightInfo::call_with_code_per_byte(len)
-				.saturating_sub(T::WeightInfo::call_with_code_per_byte(0))
-				.set_proof_size(len.into()),
+			Load(len) => {
+				let computation = T::WeightInfo::call_with_code_per_byte(len)
+					.saturating_sub(T::WeightInfo::call_with_code_per_byte(0));
+				let bandwith = T::ContractAccessWeight::get().saturating_mul(len.into());
+				computation.max(bandwith)
+			},
 		}
 	}
 }

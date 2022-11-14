@@ -32,27 +32,23 @@ use std::{
 use futures::{channel::mpsc, future, stream::Fuse, FutureExt, Stream, StreamExt};
 
 use addr_cache::AddrCache;
+use async_trait::async_trait;
 use codec::Decode;
 use ip_network::IpNetwork;
 use libp2p::{
 	core::multiaddr,
 	multihash::{Multihash, MultihashDigest},
-	Multiaddr, PeerId,
 };
 use log::{debug, error, log_enabled};
 use prometheus_endpoint::{register, Counter, CounterVec, Gauge, Opts, U64};
 use prost::Message;
 use rand::{seq::SliceRandom, thread_rng};
-use sc_network_common::{
-	protocol::event::DhtEvent,
-	service::{KademliaKey, NetworkDHTProvider, NetworkSigner, NetworkStateInfo, Signature},
-};
-use sp_api::{ApiError, ProvideRuntimeApi};
+use sc_client_api::blockchain::HeaderBackend;
+use sc_network::{DhtEvent, ExHashT, Multiaddr, NetworkStateInfo, PeerId};
+use sp_api::ProvideRuntimeApi;
 use sp_authority_discovery::{
 	AuthorityDiscoveryApi, AuthorityId, AuthorityPair, AuthoritySignature,
 };
-use sp_blockchain::HeaderBackend;
-
 use sp_core::crypto::{key_types, CryptoTypePublicPair, Pair};
 use sp_keystore::CryptoStore;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
@@ -140,7 +136,7 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	/// Queue of throttled lookups pending to be passed to the network.
 	pending_lookups: Vec<AuthorityId>,
 	/// Set of in-flight lookups.
-	in_flight_lookups: HashMap<KademliaKey, AuthorityId>,
+	in_flight_lookups: HashMap<sc_network::KademliaKey, AuthorityId>,
 
 	addr_cache: addr_cache::AddrCache,
 
@@ -151,35 +147,12 @@ pub struct Worker<Client, Network, Block, DhtEventStream> {
 	phantom: PhantomData<Block>,
 }
 
-/// Wrapper for [`AuthorityDiscoveryApi`](sp_authority_discovery::AuthorityDiscoveryApi). Can be
-/// be implemented by any struct without dependency on the runtime.
-#[async_trait::async_trait]
-pub trait AuthorityDiscovery<Block: BlockT> {
-	/// Retrieve authority identifiers of the current and next authority set.
-	async fn authorities(&self, at: Block::Hash)
-		-> std::result::Result<Vec<AuthorityId>, ApiError>;
-}
-
-#[async_trait::async_trait]
-impl<Block, T> AuthorityDiscovery<Block> for T
-where
-	T: ProvideRuntimeApi<Block> + Send + Sync,
-	T::Api: AuthorityDiscoveryApi<Block>,
-	Block: BlockT,
-{
-	async fn authorities(
-		&self,
-		at: Block::Hash,
-	) -> std::result::Result<Vec<AuthorityId>, ApiError> {
-		self.runtime_api().authorities(&BlockId::Hash(at))
-	}
-}
-
 impl<Client, Network, Block, DhtEventStream> Worker<Client, Network, Block, DhtEventStream>
 where
 	Block: BlockT + Unpin + 'static,
 	Network: NetworkProvider,
-	Client: AuthorityDiscovery<Block> + HeaderBackend<Block> + 'static,
+	Client: ProvideRuntimeApi<Block> + Send + Sync + 'static + HeaderBackend<Block>,
+	<Client as ProvideRuntimeApi<Block>>::Api: AuthorityDiscoveryApi<Block>,
 	DhtEventStream: Stream<Item = DhtEvent> + Unpin,
 {
 	/// Construct a [`Worker`].
@@ -378,7 +351,7 @@ where
 	}
 
 	async fn refill_pending_lookups_queue(&mut self) -> Result<()> {
-		let best_hash = self.client.info().best_hash;
+		let id = BlockId::hash(self.client.info().best_hash);
 
 		let local_keys = match &self.role {
 			Role::PublishAndDiscover(key_store) => key_store
@@ -391,8 +364,8 @@ where
 
 		let mut authorities = self
 			.client
-			.authorities(best_hash)
-			.await
+			.runtime_api()
+			.authorities(&id)
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.filter(|id| !local_keys.contains(id.as_ref()))
@@ -491,7 +464,10 @@ where
 		}
 	}
 
-	fn handle_dht_value_found_event(&mut self, values: Vec<(KademliaKey, Vec<u8>)>) -> Result<()> {
+	fn handle_dht_value_found_event(
+		&mut self,
+		values: Vec<(sc_network::KademliaKey, Vec<u8>)>,
+	) -> Result<()> {
 		// Ensure `values` is not empty and all its keys equal.
 		let remote_key = single(values.iter().map(|(key, _)| key.clone()))
 			.map_err(|_| Error::ReceivingDhtValueFoundEventWithDifferentKeys)?
@@ -547,11 +523,11 @@ where
 				// properly signed by the owner of the PeerId
 
 				if let Some(peer_signature) = peer_signature {
-					let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(
-						&peer_signature.public_key,
-					)
-					.map_err(Error::ParsingLibp2pIdentity)?;
-					let signature = Signature { public_key, bytes: peer_signature.signature };
+					let public_key =
+						sc_network::PublicKey::from_protobuf_encoding(&peer_signature.public_key)
+							.map_err(Error::ParsingLibp2pIdentity)?;
+					let signature =
+						sc_network::Signature { public_key, bytes: peer_signature.signature };
 
 					if !signature.verify(record, &remote_peer_id) {
 						return Err(Error::VerifyingDhtPayload)
@@ -598,10 +574,10 @@ where
 			.into_iter()
 			.collect::<HashSet<_>>();
 
-		let best_hash = client.info().best_hash;
+		let id = BlockId::hash(client.info().best_hash);
 		let authorities = client
-			.authorities(best_hash)
-			.await
+			.runtime_api()
+			.authorities(&id)
 			.map_err(|e| Error::CallingRuntime(e.into()))?
 			.into_iter()
 			.map(Into::into)
@@ -614,15 +590,55 @@ where
 	}
 }
 
+pub trait NetworkSigner {
+	/// Sign a message in the name of `self.local_peer_id()`
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError>;
+}
+
 /// NetworkProvider provides [`Worker`] with all necessary hooks into the
 /// underlying Substrate networking. Using this trait abstraction instead of
-/// `sc_network::NetworkService` directly is necessary to unit test [`Worker`].
-pub trait NetworkProvider: NetworkDHTProvider + NetworkStateInfo + NetworkSigner {}
+/// [`sc_network::NetworkService`] directly is necessary to unit test [`Worker`].
+#[async_trait]
+pub trait NetworkProvider: NetworkStateInfo + NetworkSigner {
+	/// Start putting a value in the Dht.
+	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>);
 
-impl<T> NetworkProvider for T where T: NetworkDHTProvider + NetworkStateInfo + NetworkSigner {}
+	/// Start getting a value from the Dht.
+	fn get_value(&self, key: &sc_network::KademliaKey);
+}
 
-fn hash_authority_id(id: &[u8]) -> KademliaKey {
-	KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
+impl<B, H> NetworkSigner for sc_network::NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn sign_with_local_identity(
+		&self,
+		msg: impl AsRef<[u8]>,
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
+		self.sign_with_local_identity(msg)
+	}
+}
+
+#[async_trait::async_trait]
+impl<B, H> NetworkProvider for sc_network::NetworkService<B, H>
+where
+	B: BlockT + 'static,
+	H: ExHashT,
+{
+	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>) {
+		self.put_value(key, value)
+	}
+	fn get_value(&self, key: &sc_network::KademliaKey) {
+		self.get_value(key)
+	}
+}
+
+fn hash_authority_id(id: &[u8]) -> sc_network::KademliaKey {
+	sc_network::KademliaKey::new(&libp2p::multihash::Code::Sha2_256.digest(id).digest())
 }
 
 // Makes sure all values are the same and returns it
@@ -669,7 +685,7 @@ async fn sign_record_with_authority_ids(
 	peer_signature: Option<schema::PeerSignature>,
 	key_store: &dyn CryptoStore,
 	keys: Vec<CryptoTypePublicPair>,
-) -> Result<Vec<(KademliaKey, Vec<u8>)>> {
+) -> Result<Vec<(sc_network::KademliaKey, Vec<u8>)>> {
 	let signatures = key_store
 		.sign_with_all(key_types::AUTHORITY_DISCOVERY, keys.clone(), &serialized_record)
 		.await

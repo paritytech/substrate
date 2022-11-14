@@ -30,11 +30,11 @@ use sc_cli::{CliConfiguration, Result, SharedParams};
 use sc_service::Configuration;
 use sc_sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
-	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit, Throughput,
+	benchmark_memory, benchmark_sr25519_verify, ExecutionLimit,
 };
 
 use crate::shared::check_build_profile;
-pub use hardware::{Metric, Requirement, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
+pub use hardware::{Metric, Requirement, Requirements, Throughput, SUBSTRATE_REFERENCE_HARDWARE};
 
 /// Command to benchmark the hardware.
 ///
@@ -53,30 +53,30 @@ pub struct MachineCmd {
 	/// Do not return an error if any check fails.
 	///
 	/// Should only be used for debugging.
-	#[arg(long)]
+	#[clap(long)]
 	pub allow_fail: bool,
 
 	/// Set a fault tolerance for passing a requirement.
 	///
 	/// 10% means that the test would pass even when only 90% score was archived.
 	/// Can be used to mitigate outliers of the benchmarks.
-	#[arg(long, default_value_t = 10.0, value_name = "PERCENT")]
+	#[clap(long, default_value = "10.0", value_name = "PERCENT")]
 	pub tolerance: f64,
 
 	/// Time limit for the verification benchmark.
-	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
 	pub verify_duration: f32,
 
 	/// Time limit for the hash function benchmark.
-	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
 	pub hash_duration: f32,
 
 	/// Time limit for the memory benchmark.
-	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
 	pub memory_duration: f32,
 
 	/// Time limit for each disk benchmark.
-	#[arg(long, default_value_t = 5.0, value_name = "SECONDS")]
+	#[clap(long, default_value = "5.0", value_name = "SECONDS")]
 	pub disk_duration: f32,
 }
 
@@ -128,9 +128,8 @@ impl MachineCmd {
 	/// Benchmarks a specific metric of the hardware and judges the resulting score.
 	fn run_benchmark(&self, requirement: &Requirement, dir: &Path) -> Result<BenchResult> {
 		// Dispatch the concrete function from `sc-sysinfo`.
-
 		let score = self.measure(&requirement.metric, dir)?;
-		let rel_score = score.as_bytes() / requirement.minimum.as_bytes();
+		let rel_score = score.to_bs() / requirement.minimum.to_bs();
 
 		// Sanity check if the result is off by factor >100x.
 		if rel_score >= 100.0 || rel_score <= 0.01 {
@@ -148,11 +147,13 @@ impl MachineCmd {
 		let memory_limit = ExecutionLimit::from_secs_f32(self.memory_duration);
 
 		let score = match metric {
-			Metric::Blake2256 => benchmark_cpu(hash_limit),
-			Metric::Sr25519Verify => benchmark_sr25519_verify(verify_limit),
-			Metric::MemCopy => benchmark_memory(memory_limit),
-			Metric::DiskSeqWrite => benchmark_disk_sequential_writes(disk_limit, dir)?,
-			Metric::DiskRndWrite => benchmark_disk_random_writes(disk_limit, dir)?,
+			Metric::Blake2256 => Throughput::MiBs(benchmark_cpu(hash_limit) as f64),
+			Metric::Sr25519Verify => Throughput::MiBs(benchmark_sr25519_verify(verify_limit)),
+			Metric::MemCopy => Throughput::MiBs(benchmark_memory(memory_limit) as f64),
+			Metric::DiskSeqWrite =>
+				Throughput::MiBs(benchmark_disk_sequential_writes(disk_limit, dir)? as f64),
+			Metric::DiskRndWrite =>
+				Throughput::MiBs(benchmark_disk_random_writes(disk_limit, dir)? as f64),
 		};
 		Ok(score)
 	}

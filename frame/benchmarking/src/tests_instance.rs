@@ -28,51 +28,47 @@ use sp_runtime::{
 };
 use sp_std::prelude::*;
 
-#[frame_support::pallet]
 mod pallet_test {
-	use frame_support::pallet_prelude::*;
-	use frame_system::pallet_prelude::*;
+	use frame_support::pallet_prelude::Get;
 
-	#[pallet::pallet]
-	#[pallet::generate_store(pub(super) trait Store)]
-	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+	frame_support::decl_storage! {
+		trait Store for Module<T: Config<I>, I: Instance = DefaultInstance> as Test where
+			<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::Event>
+		{
+			pub Value get(fn value): Option<u32>;
+		}
+	}
+
+	frame_support::decl_module! {
+		pub struct Module<T: Config<I>, I: Instance = DefaultInstance> for enum Call where
+			origin: T::Origin, <T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::Event>
+		{
+			#[weight = 0]
+			fn set_value(origin, n: u32) -> frame_support::dispatch::DispatchResult {
+				let _sender = frame_system::ensure_signed(origin)?;
+				Value::<I>::put(n);
+				Ok(())
+			}
+
+			#[weight = 0]
+			fn dummy(origin, _n: u32) -> frame_support::dispatch::DispatchResult {
+				let _sender = frame_system::ensure_none(origin)?;
+				Ok(())
+			}
+		}
+	}
 
 	pub trait OtherConfig {
 		type OtherEvent;
 	}
 
-	#[pallet::config]
-	pub trait Config<I: 'static = ()>: frame_system::Config + OtherConfig {
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+	pub trait Config<I: Instance = DefaultInstance>: frame_system::Config + OtherConfig
+	where
+		Self::OtherEvent: Into<<Self as Config<I>>::Event>,
+	{
+		type Event;
 		type LowerBound: Get<u32>;
 		type UpperBound: Get<u32>;
-	}
-
-	#[pallet::storage]
-	#[pallet::getter(fn value)]
-	pub(crate) type Value<T: Config<I>, I: 'static = ()> = StorageValue<_, u32, OptionQuery>;
-
-	#[pallet::event]
-	pub enum Event<T: Config<I>, I: 'static = ()> {}
-
-	#[pallet::call]
-	impl<T: Config<I>, I: 'static> Pallet<T, I>
-	where
-		<T as OtherConfig>::OtherEvent: Into<<T as Config<I>>::RuntimeEvent>,
-	{
-		#[pallet::weight(0)]
-		pub fn set_value(origin: OriginFor<T>, n: u32) -> DispatchResult {
-			let _sender = ensure_signed(origin)?;
-			Value::<T, I>::put(n);
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
-		pub fn dummy(origin: OriginFor<T>, _n: u32) -> DispatchResult {
-			let _sender = ensure_none(origin)?;
-			Ok(())
-		}
 	}
 }
 
@@ -86,7 +82,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		TestPallet: pallet_test::{Pallet, Call, Storage, Event<T>},
+		TestPallet: pallet_test::{Pallet, Call, Storage},
 	}
 );
 
@@ -94,18 +90,18 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type DbWeight = ();
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ();
-	type DbWeight = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
 	type AccountData = ();
@@ -114,17 +110,17 @@ impl frame_system::Config for Test {
 	type SystemWeightInfo = ();
 	type SS58Prefix = ();
 	type OnSetCode = ();
-	type MaxConsumers = ConstU32<16>;
+	type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 impl pallet_test::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type LowerBound = ConstU32<1>;
 	type UpperBound = ConstU32<100>;
 }
 
 impl pallet_test::OtherConfig for Test {
-	type OtherEvent = RuntimeEvent;
+	type OtherEvent = Event;
 }
 
 fn new_test_ext() -> sp_io::TestExternalities {
@@ -134,19 +130,20 @@ fn new_test_ext() -> sp_io::TestExternalities {
 mod benchmarks {
 	use super::pallet_test::{self, Value};
 	use crate::account;
-	use frame_support::ensure;
+	use frame_support::{ensure, StorageValue};
 	use frame_system::RawOrigin;
 	use sp_std::prelude::*;
 
 	// Additional used internally by the benchmark macro.
 	use super::pallet_test::{Call, Config, Pallet};
+	use frame_support::traits::Instance;
 
-	crate::benchmarks_instance_pallet! {
+	crate::benchmarks_instance! {
 		where_clause {
 			where
 				<T as pallet_test::OtherConfig>::OtherEvent: Clone
-					+ Into<<T as pallet_test::Config<I>>::RuntimeEvent>,
-				<T as pallet_test::Config<I>>::RuntimeEvent: Clone,
+					+ Into<<T as pallet_test::Config<I>>::Event>,
+				<T as pallet_test::Config<I>>::Event: Clone,
 		}
 
 		set_value {
@@ -154,7 +151,7 @@ mod benchmarks {
 			let caller = account::<T::AccountId>("caller", 0, 0);
 		}: _ (RawOrigin::Signed(caller), b.into())
 		verify {
-			assert_eq!(Value::<T, I>::get(), Some(b));
+			assert_eq!(Value::<pallet_test::DefaultInstance>::get(), Some(b));
 		}
 
 		other_name {

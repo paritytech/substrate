@@ -71,7 +71,7 @@ impl_opaque_keys! {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 impl frame_system::Config for Test {
@@ -79,16 +79,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -103,10 +103,10 @@ impl frame_system::Config for Test {
 
 impl<C> frame_system::offchain::SendTransactionTypes<C> for Test
 where
-	RuntimeCall: From<C>,
+	Call: From<C>,
 {
-	type OverarchingCall = RuntimeCall;
-	type Extrinsic = TestXt<RuntimeCall, ()>;
+	type OverarchingCall = Call;
+	type Extrinsic = TestXt<Call, ()>;
 }
 
 parameter_types! {
@@ -116,7 +116,7 @@ parameter_types! {
 
 /// Custom `SessionHandler` since we use `TestSessionKeys` as `Keys`.
 impl pallet_session::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ValidatorId = u64;
 	type ValidatorIdOf = pallet_staking::StashOf<Self>;
 	type ShouldEndSession = pallet_session::PeriodicSessions<ConstU64<1>, ConstU64<0>>;
@@ -145,7 +145,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u128;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -182,16 +182,13 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<u64, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
-	type MaxWinners = ConstU32<100>;
-	type VotersBound = ConstU32<{ u32::MAX }>;
-	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 impl pallet_staking::Config for Test {
 	type MaxNominations = ConstU32<16>;
 	type RewardRemainder = ();
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Currency = Balances;
 	type CurrencyBalance = <Self as pallet_balances::Config>::Balance;
 	type Slash = ();
@@ -206,19 +203,17 @@ impl pallet_staking::Config for Test {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
 	type NextNewSession = Session;
-	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	type VoterList = pallet_staking::UseNominatorsAndValidatorsMap<Self>;
-	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
-	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = ();
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
 }
 
 impl pallet_offences::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
 	type OnOffenceHandler = Staking;
 }
@@ -229,7 +224,8 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
+	type Call = Call;
 
 	type KeyOwnerProofSystem = Historical;
 

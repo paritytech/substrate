@@ -80,7 +80,6 @@ pub use pallet::*;
 type BalanceOf<T> = pallet_treasury::BalanceOf<T>;
 type BountiesError<T> = pallet_bounties::Error<T>;
 type BountyIndex = pallet_bounties::BountyIndex;
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// A child bounty proposal.
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -146,7 +145,7 @@ pub mod pallet {
 		type ChildBountyValueMinimum: Get<BalanceOf<Self>>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -316,7 +315,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] child_bounty_id: BountyIndex,
-			curator: AccountIdLookupOf<T>,
+			curator: <T::Lookup as StaticLookup>::Source,
 			#[pallet::compact] fee: BalanceOf<T>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -575,7 +574,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] parent_bounty_id: BountyIndex,
 			#[pallet::compact] child_bounty_id: BountyIndex,
-			beneficiary: AccountIdLookupOf<T>,
+			beneficiary: <T::Lookup as StaticLookup>::Source,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let beneficiary = T::Lookup::lookup(beneficiary)?;

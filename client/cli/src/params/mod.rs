@@ -27,7 +27,7 @@ mod transaction_pool_params;
 
 use crate::arg_enums::{CryptoScheme, OutputType};
 use clap::Args;
-use sp_core::crypto::{Ss58AddressFormat, Ss58AddressFormatRegistry};
+use sp_core::crypto::Ss58AddressFormat;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, NumberFor},
@@ -39,17 +39,6 @@ pub use crate::params::{
 	node_key_params::*, offchain_worker_params::*, pruning_params::*, shared_params::*,
 	transaction_pool_params::*,
 };
-
-/// Parse Ss58AddressFormat
-pub fn parse_ss58_address_format(x: &str) -> Result<Ss58AddressFormat, String> {
-	match Ss58AddressFormatRegistry::try_from(x) {
-		Ok(format_registry) => Ok(format_registry.into()),
-		Err(_) => Err(format!(
-			"Unable to parse variant. Known variants: {:?}",
-			Ss58AddressFormat::all_names()
-		)),
-	}
-}
 
 /// Wrapper type of `String` that holds an unsigned integer of arbitrary size, formatted as a
 /// decimal.
@@ -129,7 +118,7 @@ impl BlockNumberOrHash {
 #[derive(Debug, Clone, Args)]
 pub struct CryptoSchemeFlag {
 	/// cryptography scheme
-	#[arg(long, value_name = "SCHEME", value_enum, ignore_case = true, default_value_t = CryptoScheme::Sr25519)]
+	#[clap(long, value_name = "SCHEME", arg_enum, ignore_case = true, default_value = "sr25519")]
 	pub scheme: CryptoScheme,
 }
 
@@ -137,7 +126,7 @@ pub struct CryptoSchemeFlag {
 #[derive(Debug, Clone, Args)]
 pub struct OutputTypeFlag {
 	/// output format
-	#[arg(long, value_name = "FORMAT", value_enum, ignore_case = true, default_value_t = OutputType::Text)]
+	#[clap(long, value_name = "FORMAT", arg_enum, ignore_case = true, default_value = "text")]
 	pub output_type: OutputType,
 }
 
@@ -145,12 +134,13 @@ pub struct OutputTypeFlag {
 #[derive(Debug, Clone, Args)]
 pub struct NetworkSchemeFlag {
 	/// network address format
-	#[arg(
+	#[clap(
 		short = 'n',
 		long,
 		value_name = "NETWORK",
+		possible_values = &Ss58AddressFormat::all_names()[..],
 		ignore_case = true,
-		value_parser = parse_ss58_address_format,
+		parse(try_from_str = Ss58AddressFormat::try_from),
 	)]
 	pub network: Option<Ss58AddressFormat>,
 }

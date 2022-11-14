@@ -33,14 +33,15 @@ use libp2p::{
 use log::{error, trace, warn};
 use parking_lot::RwLock;
 use rand::distributions::{Distribution as _, Uniform};
-use sc_network_common::protocol::ProtocolName;
 use sc_peerset::DropReason;
 use smallvec::SmallVec;
 use std::{
+	borrow::Cow,
 	cmp,
 	collections::{hash_map::Entry, VecDeque},
 	mem,
 	pin::Pin,
+	str,
 	sync::Arc,
 	task::{Context, Poll},
 	time::{Duration, Instant},
@@ -139,9 +140,9 @@ pub struct Notifications {
 #[derive(Debug, Clone)]
 pub struct ProtocolConfig {
 	/// Name of the protocol.
-	pub name: ProtocolName,
+	pub name: Cow<'static, str>,
 	/// Names of the protocol to use if the main one isn't available.
-	pub fallback_names: Vec<ProtocolName>,
+	pub fallback_names: Vec<Cow<'static, str>>,
 	/// Handshake of the protocol.
 	pub handshake: Vec<u8>,
 	/// Maximum allowed size for a notification.
@@ -308,7 +309,7 @@ pub enum NotificationsOut {
 		set_id: sc_peerset::SetId,
 		/// If `Some`, a fallback protocol name has been used rather the main protocol name.
 		/// Always matches one of the fallback names passed at initialization.
-		negotiated_fallback: Option<ProtocolName>,
+		negotiated_fallback: Option<Cow<'static, str>>,
 		/// Handshake that was sent to us.
 		/// This is normally a "Status" message, but this is out of the concern of this code.
 		received_handshake: Vec<u8>,

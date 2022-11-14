@@ -159,8 +159,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let bounded_authorities =
-			BoundedSlice::<T::BeefyId, T::MaxAuthorities>::try_from(authorities.as_slice())
-				.map_err(|_| ())?;
+			BoundedSlice::<T::BeefyId, T::MaxAuthorities>::try_from(authorities.as_slice())?;
 
 		let id = 0;
 		<Authorities<T>>::put(bounded_authorities);

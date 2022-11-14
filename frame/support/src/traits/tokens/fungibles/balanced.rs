@@ -163,7 +163,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 /// **WARNING**
 /// Do not use this directly unless you want trouble, since it allows you to alter account balances
 /// without keeping the issuance up to date. It has no safeguards against accidentally creating
-/// token imbalances in your system leading to accidental inflation or deflation. It's really just
+/// token imbalances in your system leading to accidental imflation or deflation. It's really just
 /// for the underlying datatype to implement so the user gets the much safer `Balanced` trait to
 /// use.
 pub trait Unbalanced<AccountId>: Inspect<AccountId> {
@@ -185,7 +185,7 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(asset, who);
-		let (mut new_balance, mut amount) = if Self::reducible_balance(asset, who, false) < amount {
+		let (mut new_balance, mut amount) = if old_balance < amount {
 			return Err(TokenError::NoFunds.into())
 		} else {
 			(old_balance - amount, amount)
@@ -211,9 +211,8 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Self::Balance {
 		let old_balance = Self::balance(asset, who);
-		let old_free_balance = Self::reducible_balance(asset, who, false);
-		let (mut new_balance, mut amount) = if old_free_balance < amount {
-			(old_balance.saturating_sub(old_free_balance), old_free_balance)
+		let (mut new_balance, mut amount) = if old_balance < amount {
+			(Zero::zero(), old_balance)
 		} else {
 			(old_balance - amount, amount)
 		};

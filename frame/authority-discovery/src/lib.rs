@@ -209,7 +209,7 @@ mod tests {
 		type Keys = UintAuthorityId;
 		type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
 		type SessionHandler = TestSessionHandler;
-		type RuntimeEvent = RuntimeEvent;
+		type Event = Event;
 		type ValidatorId = AuthorityId;
 		type ValidatorIdOf = ConvertInto;
 		type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
@@ -227,7 +227,7 @@ mod tests {
 		pub const Period: BlockNumber = 1;
 		pub const Offset: BlockNumber = 0;
 		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+			frame_system::limits::BlockWeights::simple_max(1024);
 	}
 
 	impl frame_system::Config for Test {
@@ -235,16 +235,16 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type RuntimeOrigin = RuntimeOrigin;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = BlockNumber;
-		type RuntimeCall = RuntimeCall;
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AuthorityId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type RuntimeEvent = RuntimeEvent;
+		type Event = Event;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
