@@ -595,7 +595,9 @@ pub struct PoolRoles<AccountId> {
 /// commission can change in each update, and how often updates can take place.
 /// If a `throttle` is set before a commission `current` is set, the initial commission `current`
 /// value will not be subject to throttling. Subsequent commission updates will be.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone)]
+#[derive(
+	Encode, Decode, DefaultNoBound, MaxEncodedLen, TypeInfo, DebugNoBound, PartialEq, Copy, Clone,
+)]
 #[codec(mel_bound(T: Config))]
 #[scale_info(skip_type_params(T))]
 pub struct Commission<T: Config> {
@@ -607,12 +609,6 @@ pub struct Commission<T: Config> {
 	/// Optional configiration around how often commission can be updated, and when the last
 	/// commission update took place.
 	pub throttle: Option<CommissionThrottle<T>>,
-}
-
-impl<T: Config> Default for Commission<T> {
-	fn default() -> Self {
-		Self { current: None, max: None, throttle: None }
-	}
 }
 
 impl<T: Config> Commission<T> {
