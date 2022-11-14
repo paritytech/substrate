@@ -87,6 +87,7 @@ members = [
 	"frame/bounties",
 	"frame/child-bounties",
 	"frame/collective",
+	"frame/collective-mangata",
 	"frame/contracts",
 	"frame/contracts/rpc",
 	"frame/contracts/rpc/runtime-api",
