@@ -91,7 +91,7 @@ fn note_preimage<T: Config>() -> PreimageHash {
 	// note a new preimage on every function invoke.
 	static COUNTER: AtomicU8 = AtomicU8::new(0);
 	let data = Cow::from(vec![COUNTER.fetch_add(1, Ordering::Relaxed)]);
-	let hash = <T as Config>::Preimages::note(data.clone()).unwrap();
+	let hash = <T as Config>::Preimages::note(data).unwrap();
 	hash
 }
 
