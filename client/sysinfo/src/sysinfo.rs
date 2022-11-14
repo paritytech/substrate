@@ -588,7 +588,9 @@ pub fn benchmark_sr25519_verify(limit: ExecutionLimit) -> Throughput {
 
 /// Benchmarks the hardware and returns the results of those benchmarks.
 ///
-/// Optionally accepts a path to a `scratch_directory` to use to benchmark the disk.
+/// Optionally accepts a path to a `scratch_directory` to use to benchmark the
+/// disk. Also accepts the `requirements` for the hardware benchmark and a
+/// boolean to specify if the node is an authority.
 pub fn gather_hwbench(
 	scratch_directory: Option<&Path>,
 	requirements: Requirements,
@@ -654,7 +656,7 @@ fn ensure_requirements(hwbench: HwBench, requirements: Requirements) {
 						failed += 1;
 					}
 				},
-			_ => (),
+			Metric::Sr25519Verify => {},
 		}
 	}
 	if failed != 0 {
