@@ -1573,9 +1573,7 @@ pub mod pallet {
 		}
 
 		// TODO: Update weight info
-		// Caller to be reinbursed for the transactional fees used?
 		// Investigate adding helper function to remove code duplication.
-		// Explore the proxy pallet alternative, allowing root to spend the specified amout of rewards payout to the member.
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
@@ -1596,9 +1594,6 @@ pub mod pallet {
 			// IMPORTANT: reward pool records must be updated with the old points. why?
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
 
-			// TODO: Investigate need.
-			debug_assert_eq!(member.pool_id, bonded_pool.id);
-
 		    // A member who has no skin in the game anymore cannot claim any rewards.
 		    ensure!(!member.active_points().is_zero(), Error::<T>::FullyUnbonding);
 
@@ -1606,13 +1601,11 @@ pub mod pallet {
 				reward_pool.current_reward_counter(bonded_pool.id, bonded_pool.points)?;
 		    let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
-			// TODO: Investigate adding conditional here for when the pending_rewards is not zero.
 			if !pending_rewards.is_zero() {
 				member.last_recorded_reward_counter = current_reward_counter;
 				reward_pool.register_claimed_reward(pending_rewards);
 			}
 
-			// TODO: Investigate adjusting member reward & points after rebonding.
 			let points_issued = bonded_pool.try_bond_funds(
 				&bonded_pool.reward_account(), 
 				pending_rewards, 

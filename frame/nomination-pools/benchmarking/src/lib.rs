@@ -30,7 +30,7 @@ use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage,
+	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage, ClaimableAction,
 };
 use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -261,6 +261,25 @@ frame_benchmarking::benchmarks! {
 		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
 
 	}: bond_extra(RuntimeOrigin::Signed(scenario.creator1.clone()), BondExtra::Rewards)
+	verify {
+		assert!(
+			T::Staking::active_stake(&scenario.origin1).unwrap() >=
+			scenario.dest_weight
+		);
+	}
+
+	root_bond_extra {
+		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
+		let scenario = ListScenario::<T>::new(origin_weight, true)?;
+		let scenario_creator1_lookup = T::Lookup::unlookup(scenario.creator1.clone());
+		let extra = (scenario.dest_weight - origin_weight).max(CurrencyOf::<T>::minimum_balance());
+
+		// transfer exactly `extra` to the depositor of the src pool (1), from the reward balance
+		let reward_account1 = Pools::<T>::create_reward_account(1);
+		assert!(extra >= CurrencyOf::<T>::minimum_balance());
+		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
+
+	}:_(RuntimeOrigin::Signed(scenario.creator1.clone()), scenario_creator1_lookup)
 	verify {
 		assert!(
 			T::Staking::active_stake(&scenario.origin1).unwrap() >=
@@ -650,6 +669,28 @@ frame_benchmarking::benchmarks! {
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1)
 	verify {
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
+	}
+
+	set_claimable_action {
+		// Create a pool
+		let min_create_bond = Pools::<T>::depositor_min_bond();
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+
+		// Add a new member
+		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
+		let joiner = create_funded_user_with_balance::<T>("joiner", 0, min_join_bond * 2u32.into());
+		let joiner_lookup = T::Lookup::unlookup(joiner.clone());
+		Pools::<T>::join(RuntimeOrigin::Signed(joiner.clone()).into(), min_join_bond, 1)
+			.unwrap();
+
+		// Sanity check join worked
+		assert_eq!(
+			T::Staking::active_stake(&pool_account).unwrap(),
+			min_create_bond + min_join_bond
+		);
+	}:_(RuntimeOrigin::Signed(joiner.clone()), true)
+	verify {
+		assert_eq!(ClaimableAction::<T>::get(joiner), true);
 	}
 
 	impl_benchmark_test_suite!(

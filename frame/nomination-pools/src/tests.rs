@@ -4269,7 +4269,6 @@ fn set_claimable_action_works() {
 		// then
 		assert_eq!(ClaimableAction::<Runtime>::get(11), true);
 
-		// TODO: Pool withdraw unbonding...
 		ClaimableAction::<Runtime>::remove(11);
 		assert_eq!(ClaimableAction::<Runtime>::get(11), false);
 	});
@@ -4638,9 +4637,7 @@ mod bond_extra {
 
 			assert_noop!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 10), Error::<Runtime>::DoesNotHavePermission);
 			assert_ok!(Pools::set_claimable_action(RuntimeOrigin::signed(10), true));
-			// assert_eq!(BondedPools::<Runtime>::get(1).unwrap().member_counter, 10);
 			assert_ok!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 10));
-			// let account_reward = BondedPools::<Runtime>::get(1).reward_account();
 			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
 
 			// then
@@ -4659,9 +4656,6 @@ mod bond_extra {
 			// the shares
 			assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 20 + 2);
 			assert_eq!(BondedPools::<Runtime>::get(1).unwrap().points, 30 + 3);
-
-			// try bond_extra with no rewards.
-			// TODO: check the new payout after `root_bound_extra`
 		})
 	}
 }
