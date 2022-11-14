@@ -3401,6 +3401,7 @@ dependencies = [
  "pallet-recovery",
  "pallet-referenda",
  "pallet-remark",
+ "pallet-root-testing",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -4589,6 +4590,7 @@ dependencies = [
  "pallet-balances",
  "pallet-contracts",
  "pallet-im-online",
+ "pallet-root-testing",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -5957,13 +5959,12 @@ dependencies = [
 
 [[package]]
 name = "pallet-root-offences"
-version = "1.0.0"
+version = "1.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "pallet-balances",
- "pallet-offences",
  "pallet-session",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -5975,6 +5976,17 @@ dependencies = [
  "sp-runtime",
  "sp-staking",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-root-testing"
+version = "1.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -6317,6 +6329,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-root-testing",
  "pallet-collective",
  "pallet-timestamp",
  "parity-scale-codec",
