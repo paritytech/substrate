@@ -392,8 +392,8 @@ pub mod pallet {
 		NoPermission,
 		/// The deposit cannot be refunded since none was made.
 		NoDeposit,
-		/// The metadata preimage for a given hash does not exist.
-		BadMetadata,
+		/// The preimage does not exist.
+		PreimageNotExist,
 	}
 
 	#[pallet::call]
@@ -621,7 +621,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let status = Self::ensure_ongoing(index)?;
 			ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
-			ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::BadMetadata);
+			ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::PreimageNotExist);
 			T::Preimages::request(&hash);
 			MetadataOf::<T, I>::insert(index, hash);
 			Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });

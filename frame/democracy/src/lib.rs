@@ -558,8 +558,8 @@ pub mod pallet {
 		TooMany,
 		/// Voting period too low
 		VotingPeriodLow,
-		/// The metadata preimage for a given hash does not exist.
-		BadMetadata,
+		/// The preimage does not exist.
+		PreimageNotExist,
 	}
 
 	#[pallet::hooks]
@@ -1113,7 +1113,7 @@ pub mod pallet {
 					let _ = T::ExternalMajorityOrigin::ensure_origin(origin)?;
 				},
 			};
-			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::BadMetadata);
+			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
 			T::Preimages::request(&hash);
 			MetadataOf::<T>::insert(MetadataOwner::External, hash);
 			Self::deposit_event(Event::<T>::MetadataSet { owner: MetadataOwner::External, hash });
@@ -1134,7 +1134,7 @@ pub mod pallet {
 			let who = ensure_signed(origin)?;
 			let (_, _, proposer) = Self::proposal(index)?;
 			ensure!(proposer == who, Error::<T>::NoPermission);
-			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::BadMetadata);
+			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
 			T::Preimages::request(&hash);
 			let owner = MetadataOwner::Proposal(index);
 			MetadataOf::<T>::insert(owner.clone(), hash);

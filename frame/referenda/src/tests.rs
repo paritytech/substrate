@@ -555,7 +555,7 @@ fn set_metadata_works() {
 		let index = ReferendumCount::<Test>::get() - 1;
 		assert_noop!(
 			Referenda::set_metadata(RuntimeOrigin::signed(1), index, invalid_hash,),
-			Error::<Test>::BadMetadata,
+			Error::<Test>::PreimageNotExist,
 		);
 		// metadata set.
 		let index = ReferendumCount::<Test>::get() - 1;

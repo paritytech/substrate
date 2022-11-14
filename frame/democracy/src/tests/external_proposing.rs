@@ -297,7 +297,7 @@ fn set_external_metadata_works() {
 		// fails to set non-existing preimage.
 		assert_noop!(
 			Democracy::set_external_metadata(RuntimeOrigin::signed(2), invalid_hash),
-			Error::<Test>::BadMetadata,
+			Error::<Test>::PreimageNotExist,
 		);
 		// set metadata successful.
 		let hash = note_preimage(1);
