@@ -129,7 +129,7 @@ pub type CompactCommit<Header> = grandpa::CompactCommit<
 ///
 /// This is meant to be stored in the db and passed around the network to other
 /// nodes, and are used by syncing nodes to prove authority set handoffs.
-#[derive(Clone, Encode, Decode, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, PartialEq, Eq, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct GrandpaJustification<Header: HeaderT> {
 	pub round: u64,
@@ -139,7 +139,7 @@ pub struct GrandpaJustification<Header: HeaderT> {
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Serialize))]
-#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, Eq, PartialEq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: AuthorityList,
