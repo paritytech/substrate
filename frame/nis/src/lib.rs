@@ -175,7 +175,6 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
-	use sp_core::bounded_vec;
 	use sp_runtime::{
 		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
 		TokenError,
@@ -359,7 +358,10 @@ pub mod pallet {
 	pub struct OnEmptyQueueTotals<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> Get<QueueTotalsTypeOf<T>> for OnEmptyQueueTotals<T> {
 		fn get() -> QueueTotalsTypeOf<T> {
-			bounded_vec![(0, Zero::zero()); <T as Config>::QueueCount::get() as usize]
+			BoundedVec::truncate_from(vec![
+				(0, Zero::zero());
+				<T as Config>::QueueCount::get() as usize
+			])
 		}
 	}
 
