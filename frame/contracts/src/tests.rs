@@ -2780,7 +2780,7 @@ fn ecdsa_recover() {
 		let addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 		#[rustfmt::skip]
-			let signature: [u8; 65] = [
+		let signature: [u8; 65] = [
 			161, 234, 203,  74, 147, 96,  51, 212,   5, 174, 231,   9, 142,  48, 137, 201,
 			162, 118, 192,  67, 239, 16,  71, 216, 125,  86, 167, 139,  70,   7,  86, 241,
 			33,  87, 154, 251,  81, 29, 160,   4, 176, 239,  88, 211, 244, 232, 232,  52,
@@ -2788,7 +2788,7 @@ fn ecdsa_recover() {
 			28,
 		];
 		#[rustfmt::skip]
-			let message_hash: [u8; 32] = [
+		let message_hash: [u8; 32] = [
 			162, 28, 244, 179, 96, 76, 244, 178, 188,  83, 230, 248, 143, 106,  77, 117,
 			239, 95, 244, 171, 65, 95,  62, 153, 174, 166, 182,  28, 130,  73, 196, 208
 		];
@@ -4462,6 +4462,7 @@ fn reentrant_count_works_with_delegated_call() {
 #[cfg(feature = "unstable-interface")]
 fn account_reentrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_reentrance_count_call").unwrap();
+	let (wasm_reentrant_count, code_hash_reentrant_count) = compile_module::<Test>("reentrant_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -4476,9 +4477,20 @@ fn account_reentrance_count_works() {
 			vec![],
 		));
 
-		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		assert_ok!(Contracts::instantiate_with_code(
+			RuntimeOrigin::signed(ALICE),
+			300_000,
+			GAS_LIMIT,
+			None,
+			wasm_reentrant_count,
+			vec![],
+			vec![]
+		));
 
-		let result = Contracts::bare_call(
+		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
+		let another_contract_addr = Contracts::contract_address(&ALICE, &code_hash_reentrant_count, &[]);
+
+		let result1 = Contracts::bare_call(
 			ALICE,
 			contract_addr.clone(),
 			0,
@@ -4491,6 +4503,20 @@ fn account_reentrance_count_works() {
 		.result
 		.unwrap();
 
-		assert_eq!(result.data, 1.encode());
+		let result2 = Contracts::bare_call(
+			ALICE,
+			contract_addr.clone(),
+			0,
+			GAS_LIMIT,
+			None,
+			another_contract_addr.encode(),
+			true,
+			Determinism::Deterministic,
+		)
+		.result
+		.unwrap();
+
+		assert_eq!(result1.data, 1.encode());
+		assert_eq!(result2.data, 0.encode());
 	});
 }
