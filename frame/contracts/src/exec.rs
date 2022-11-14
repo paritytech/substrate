@@ -304,7 +304,7 @@ pub trait Ext: sealing::Sealed {
 	/// Returns the number of times the specified contract exists on the call stack. Delegated calls
 	/// are not calculated as separate entrance.
 	/// A value of 0 means it does not exist on the call stack.
-	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32;
+	fn account_reentrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32;
 }
 
 /// Describes the different functions that can be exported by an [`Executable`].
@@ -1386,10 +1386,10 @@ where
 
 	fn reentrant_count(&self) -> u32 {
 		let id: &AccountIdOf<Self::T> = &self.top_frame().account_id;
-		self.account_entrance_count(id).saturating_sub(1)
+		self.account_reentrance_count(id).saturating_sub(1)
 	}
 
-	fn account_entrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32 {
+	fn account_reentrance_count(&self, account_id: &AccountIdOf<Self::T>) -> u32 {
 		self.frames()
 			.filter(|f| f.delegate_caller.is_none() && &f.account_id == account_id)
 			.count() as u32

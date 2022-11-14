@@ -2106,7 +2106,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	account_entrance_count {
+	account_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
 		let accounts = (0..r * API_BENCHMARK_BATCH_SIZE)
@@ -2118,7 +2118,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "account_entrance_count",
+				name: "account_reentrance_count",
 				params: vec![ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],

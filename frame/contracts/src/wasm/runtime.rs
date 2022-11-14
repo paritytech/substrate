@@ -254,7 +254,7 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_reentrant_count`
 	#[cfg(feature = "unstable-interface")]
 	ReentrantCount,
-	/// Weight of calling `seal_account_entrance_count`
+	/// Weight of calling `seal_account_reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	AccountEntranceCount,
 }
@@ -339,7 +339,7 @@ impl RuntimeCosts {
 			#[cfg(feature = "unstable-interface")]
 			ReentrantCount => s.reentrant_count,
 			#[cfg(feature = "unstable-interface")]
-			AccountEntranceCount => s.account_entrance_count,
+			AccountEntranceCount => s.account_reentrance_count,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2480,10 +2480,10 @@ pub mod env {
 	///
 	/// Returns 0 when the contract does not exist on the call stack.
 	#[unstable]
-	fn account_entrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
+	fn account_reentrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(account_ptr)?;
-		Ok(ctx.ext.account_entrance_count(&account_id))
+		Ok(ctx.ext.account_reentrance_count(&account_id))
 	}
 }

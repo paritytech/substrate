@@ -4460,8 +4460,8 @@ fn reentrant_count_works_with_delegated_call() {
 
 #[test]
 #[cfg(feature = "unstable-interface")]
-fn account_entrance_count_works() {
-	let (wasm, code_hash) = compile_module::<Test>("account_entrance_count_call").unwrap();
+fn account_reentrance_count_works() {
+	let (wasm, code_hash) = compile_module::<Test>("account_reentrance_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
