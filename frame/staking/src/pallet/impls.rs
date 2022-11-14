@@ -103,7 +103,6 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let mut dispatch_weight = Weight::zero();
-
 		let num_slashing_spans = {
 			// if using the speculative number of spans, get real number of slashing spans and
 			// calculate weight associated with fetching real number of slashing spans.
@@ -1605,8 +1604,8 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
 		let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
 		Self::unbond(RawOrigin::Signed(ctrl).into(), value)
-            .map_err(|with_post| with_post.error)
-            .map(|_| ())
+			.map_err(|with_post| with_post.error)
+			.map(|_| ())
 	}
 
 	fn chill(who: &Self::AccountId) -> DispatchResult {

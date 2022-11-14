@@ -49,7 +49,7 @@ use crate::{
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
-pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 10_000;
+pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 100;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -956,12 +956,23 @@ pub mod pallet {
 			// ensure that there's chunk slots available by requesting the staking interface to
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
-			if unlocking == T::MaxUnlockingChunks::get() as usize {
-				Self::do_withdraw_unbonded(&controller, SPECULATIVE_NUM_SPANS)?;
-			}
+			let maybe_dispatch_weight = {
+				if unlocking == T::MaxUnlockingChunks::get() as usize {
+					Self::do_withdraw_unbonded(&controller, SPECULATIVE_NUM_SPANS)?.actual_weight
+				} else {
+					None
+				}
+			};
 
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let mut value = value.min(ledger.active);
+
+			// this should not happen anymore, but we want to make sure the unbonding does not
+			// proceed if for some reason the chunks were not freed.
+			ensure!(
+				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
+				Error::<T>::NoMoreChunks,
+			);
 
 			if !value.is_zero() {
 				ledger.active -= value;
@@ -976,8 +987,7 @@ pub mod pallet {
 					MinNominatorBond::<T>::get()
 				} else if Validators::<T>::contains_key(&ledger.stash) {
 					MinValidatorBond::<T>::get()
-
-                } else {
+				} else {
 					Zero::zero()
 				};
 
@@ -1011,7 +1021,15 @@ pub mod pallet {
 
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
-			Ok(().into())
+
+			if let Some(weight) = maybe_dispatch_weight {
+				Ok(frame_support::dispatch::PostDispatchInfo {
+					actual_weight: Some(weight.saturating_add(T::WeightInfo::unbond())),
+					pays_fee: Pays::Yes,
+				})
+			} else {
+				Ok(().into())
+			}
 		}
 
 		/// Remove any unlocked chunks from the `unlocking` queue from our management.
