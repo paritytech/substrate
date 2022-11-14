@@ -46,6 +46,12 @@ publish-docker-substrate:
       artifacts:                   true
   variables:
     PRODUCT:                       substrate
+  artifacts:
+    reports:
+      # this artifact is used in zombienet-tests job
+      # https://docs.gitlab.com/ee/ci/multi_project_pipelines.html#with-variable-inheritance
+      dotenv: ./artifacts/$PRODUCT/build.env
+    expire_in:                     6h
 
 publish-docker-subkey:
   stage:                           publish

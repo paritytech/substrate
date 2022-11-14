@@ -1,0 +1,29 @@
+# This file is part of .gitlab-ci.yml
+# Here are all jobs that are executed during "zombienet" stage
+
+zombienet-tests-build-blocks:
+  stage:                           zombienet
+  image:                           "${ZOMBIENET_IMAGE}"
+  extends:
+    - .kubernetes-env
+    - .zombienet-refs
+  needs:
+    - job:                         publish-docker-substrate
+  variables:
+    GH_DIR:                        "https://github.com/paritytech/substrate/tree/${CI_COMMIT_SHORT_SHA}/zombienet/0000-block-building"
+  before_script:
+    - echo "Zombie-net Tests Config"
+    - echo "${ZOMBIENET_IMAGE}"
+    - echo "${SUBSTRATE_IMAGE_NAME} ${SUBSTRATE_IMAGE_TAG}"
+    - echo "${GH_DIR}"
+    - export DEBUG=zombie,zombie::network-node
+    - export ZOMBIENET_INTEGRATION_TEST_IMAGE=${SUBSTRATE_CI_COMMIT_REF}:${SUBSTRATE_IMAGE_TAG}
+  script:
+    - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
+        --github-remote-dir="${GH_DIR}"
+        --test="0000-block-building.toml"
+  allow_failure:                   false
+  retry: 2
+  tags:
+    - zombienet-substrate-integration-test
+
