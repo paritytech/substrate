@@ -4,7 +4,7 @@
 
 .build-push-docker-image:
   extends:
-    - .build-refs
+    - .publish-refs
     - .kubernetes-env
   variables:
     CI_IMAGE:                      quay.io/buildah/stable
@@ -23,6 +23,7 @@
         --format=docker
         --build-arg VCS_REF="${CI_COMMIT_SHA}"
         --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        --build-arg IMAGE_NAME="${IMAGE_NAME}"
         --tag "$IMAGE_NAME:$VERSION"
         --tag "$IMAGE_NAME:latest"
         --file "$DOCKERFILE" .
@@ -38,6 +39,43 @@
     - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
     - cat ./artifacts/$PRODUCT/build.env
 
+
+# publish image to paritypr, for later use in zombienet testing
+.build-push-image-parity-pr:
+  extends:
+    - .build-refs
+    - .kubernetes-env
+  variables:
+    CI_IMAGE:                      quay.io/buildah/stable
+    GIT_STRATEGY:                  none
+    DOCKERFILE:                    $PRODUCT.Dockerfile
+    IMAGE_NAME:                    docker.io/paritypr/$IMAGE_NAME_SUFFIX
+  before_script:
+    - cd ./artifacts/$PRODUCT/
+    - VERSION="$(cat ./VERSION)"
+    - echo "${PRODUCT} version = ${VERSION}"
+    - test -z "${VERSION}" && exit 1
+  script:
+    - test "$PARITYPR_USER" -a "$PARITYPR_PASS" ||
+        ( echo "no docker credentials provided"; exit 1 )
+    - buildah bud
+        --format=docker
+        --build-arg VCS_REF="${CI_COMMIT_SHA}"
+        --build-arg BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+        --build-arg IMAGE_NAME="${IMAGE_NAME}"
+        --tag "$IMAGE_NAME:$VERSION"
+        --file "$DOCKERFILE" .
+    - echo "$PARITYPR_PASS" |
+        buildah login --username "$PARITYPR_USER" --password-stdin docker.io
+    - buildah info
+    - buildah push --format=v2s2 "$IMAGE_NAME:$VERSION"
+  after_script:
+    - buildah logout --all
+    - echo "SUBSTRATE_IMAGE_NAME=${IMAGE_NAME}" | tee -a ./artifacts/$PRODUCT/build.env
+    - IMAGE_TAG="$(cat ./artifacts/$PRODUCT/VERSION)"
+    - echo "SUBSTRATE_IMAGE_TAG=${IMAGE_TAG}"   | tee -a ./artifacts/$PRODUCT/build.env
+    - cat ./artifacts/$PRODUCT/build.env
+
 publish-docker-substrate:
   stage:                           publish
   extends:                         .build-push-docker-image
@@ -46,6 +84,17 @@ publish-docker-substrate:
       artifacts:                   true
   variables:
     PRODUCT:                       substrate
+
+publish-docker-substrate-debug:
+  stage:                           publish
+  extends:
+    - .build-push-image-parity-pr
+  needs:
+    - job:                         build-linux-substrate
+      artifacts:                   true
+  variables:
+    PRODUCT:                       substrate
+    IMAGE_NAME_SUFFIX:             substrate-debug
   artifacts:
     reports:
       # this artifact is used in zombienet-tests job
@@ -65,7 +114,7 @@ publish-docker-subkey:
 publish-s3-release:
   stage:                           publish
   extends:
-    - .build-refs
+    - .publish-refs
     - .kubernetes-env
   needs:
     - job:                         build-linux-substrate
