@@ -18,7 +18,8 @@
 //! Some configurable implementations as associated type for the substrate runtime.
 
 use crate::{
-	AccountId, AllianceMotion, Assets, Authorship, Balances, Call, Hash, NegativeImbalance, Runtime,
+	AccountId, AllianceMotion, Assets, Authorship, Balances, Hash, NegativeImbalance, Runtime,
+	RuntimeCall,
 };
 use frame_support::{
 	pallet_prelude::*,
@@ -77,11 +78,11 @@ impl IdentityVerifier<AccountId> for AllianceIdentityVerifier {
 }
 
 pub struct AllianceProposalProvider;
-impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
+impl ProposalProvider<AccountId, Hash, RuntimeCall> for AllianceProposalProvider {
 	fn propose_proposal(
 		who: AccountId,
 		threshold: u32,
-		proposal: Box<Call>,
+		proposal: Box<RuntimeCall>,
 		length_bound: u32,
 	) -> Result<(u32, u32), DispatchError> {
 		AllianceMotion::do_propose_proposed(who, threshold, proposal, length_bound)
@@ -109,7 +110,7 @@ impl ProposalProvider<AccountId, Hash, Call> for AllianceProposalProvider {
 		AllianceMotion::do_close(proposal_hash, proposal_index, proposal_weight_bound, length_bound)
 	}
 
-	fn proposal_of(proposal_hash: Hash) -> Option<Call> {
+	fn proposal_of(proposal_hash: Hash) -> Option<RuntimeCall> {
 		AllianceMotion::proposal_of(proposal_hash)
 	}
 }
@@ -125,10 +126,13 @@ mod multiplier_tests {
 
 	use crate::{
 		constants::{currency::*, time::*},
-		AdjustmentVariable, MinimumMultiplier, Runtime, RuntimeBlockWeights as BlockWeights,
-		System, TargetBlockFullness, TransactionPayment,
+		AdjustmentVariable, MaximumMultiplier, MinimumMultiplier, Runtime,
+		RuntimeBlockWeights as BlockWeights, System, TargetBlockFullness, TransactionPayment,
 	};
-	use frame_support::weights::{DispatchClass, Weight, WeightToFee};
+	use frame_support::{
+		dispatch::DispatchClass,
+		weights::{Weight, WeightToFee},
+	};
 
 	fn max_normal() -> Weight {
 		BlockWeights::get()
@@ -152,6 +156,7 @@ mod multiplier_tests {
 			TargetBlockFullness,
 			AdjustmentVariable,
 			MinimumMultiplier,
+			MaximumMultiplier,
 		>::convert(fm)
 	}
 
@@ -220,7 +225,7 @@ mod multiplier_tests {
 	fn multiplier_can_grow_from_zero() {
 		// if the min is too small, then this will not change, and we are doomed forever.
 		// the weight is 1/100th bigger than target.
-		run_with_system_weight(target() * 101 / 100, || {
+		run_with_system_weight(target().set_ref_time(target().ref_time() * 101 / 100), || {
 			let next = runtime_multiplier_update(min_multiplier());
 			assert!(next > min_multiplier(), "{:?} !>= {:?}", next, min_multiplier());
 		})

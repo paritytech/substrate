@@ -84,20 +84,20 @@ use sp_version::RuntimeVersion;
 
 use codec::{Decode, Encode, EncodeLike, FullCodec, MaxEncodedLen};
 use frame_support::{
-	dispatch::{DispatchResult, DispatchResultWithPostInfo},
+	dispatch::{
+		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
+		DispatchResult, DispatchResultWithPostInfo, PerDispatchClass,
+	},
 	storage,
 	traits::{
 		ConstU32, Contains, EnsureOrigin, Get, HandleLifetime, OnKilledAccount, OnNewAccount,
 		OriginTrait, PalletInfo, SortedMembers, StoredMap, TypedGet,
 	},
-	weights::{
-		extract_actual_pays_fee, extract_actual_weight, DispatchClass, DispatchInfo,
-		PerDispatchClass, RuntimeDbWeight, Weight,
-	},
 	Parameter,
 };
 use scale_info::TypeInfo;
 use sp_core::storage::well_known_keys;
+use sp_weights::{RuntimeDbWeight, Weight};
 
 #[cfg(feature = "std")]
 use frame_support::traits::GenesisBuild;
@@ -208,7 +208,7 @@ pub mod pallet {
 	pub trait Config: 'static + Eq + Clone {
 		/// The basic call filter to use in Origin. All origins are built with this filter as base,
 		/// except Root.
-		type BaseCallFilter: Contains<Self::Call>;
+		type BaseCallFilter: Contains<Self::RuntimeCall>;
 
 		/// Block & extrinsics weights: base values and limits.
 		#[pallet::constant]
@@ -218,14 +218,17 @@ pub mod pallet {
 		#[pallet::constant]
 		type BlockLength: Get<limits::BlockLength>;
 
-		/// The `Origin` type used by dispatchable calls.
-		type Origin: Into<Result<RawOrigin<Self::AccountId>, Self::Origin>>
+		/// The `RuntimeOrigin` type used by dispatchable calls.
+		type RuntimeOrigin: Into<Result<RawOrigin<Self::AccountId>, Self::RuntimeOrigin>>
 			+ From<RawOrigin<Self::AccountId>>
 			+ Clone
-			+ OriginTrait<Call = Self::Call>;
+			+ OriginTrait<Call = Self::RuntimeCall>;
 
-		/// The aggregated `Call` type.
-		type Call: Dispatchable + Debug;
+		/// The aggregated `RuntimeCall` type.
+		type RuntimeCall: Parameter
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+			+ Debug
+			+ From<Call<Self>>;
 
 		/// Account index (aka nonce) type. This stores the number of previous transactions
 		/// associated with a sender account.
@@ -296,11 +299,11 @@ pub mod pallet {
 		type Header: Parameter + traits::Header<Number = Self::BlockNumber, Hash = Self::Hash>;
 
 		/// The aggregated event type of the runtime.
-		type Event: Parameter
+		type RuntimeEvent: Parameter
 			+ Member
 			+ From<Event<Self>>
 			+ Debug
-			+ IsType<<Self as frame_system::Config>::Event>;
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// Maximum number of block number to block hash mappings to keep (oldest pruned first).
 		#[pallet::constant]
@@ -565,6 +568,7 @@ pub mod pallet {
 
 	/// The current weight for the block.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_weight)]
 	pub(super) type BlockWeight<T: Config> = StorageValue<_, ConsumedWeight, ValueQuery>;
 
@@ -592,6 +596,7 @@ pub mod pallet {
 
 	/// The current block number being processed. Set by `execute_block`.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn block_number)]
 	pub(super) type Number<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -614,12 +619,14 @@ pub mod pallet {
 	/// Events have a large in-memory size. Box the events to not go out-of-memory
 	/// just in case someone still reads them from within the runtime.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::unbounded]
 	pub(super) type Events<T: Config> =
-		StorageValue<_, Vec<Box<EventRecord<T::Event, T::Hash>>>, ValueQuery>;
+		StorageValue<_, Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>>, ValueQuery>;
 
 	/// The number of events in the `Events<T>` list.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	#[pallet::getter(fn event_count)]
 	pub(super) type EventCount<T: Config> = StorageValue<_, EventIndex, ValueQuery>;
 
@@ -655,6 +662,7 @@ pub mod pallet {
 
 	/// The execution phase of the block.
 	#[pallet::storage]
+	#[pallet::whitelist_storage]
 	pub(super) type ExecutionPhase<T: Config> = StorageValue<_, Phase>;
 
 	#[cfg_attr(feature = "std", derive(Default))]
@@ -1225,7 +1233,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Deposits an event into this block's event record.
-	pub fn deposit_event(event: impl Into<T::Event>) {
+	pub fn deposit_event(event: impl Into<T::RuntimeEvent>) {
 		Self::deposit_event_indexed(&[], event.into());
 	}
 
@@ -1234,7 +1242,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will update storage entries that correspond to the specified topics.
 	/// It is expected that light-clients could subscribe to this topics.
-	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::Event) {
+	pub fn deposit_event_indexed(topics: &[T::Hash], event: T::RuntimeEvent) {
 		let block_number = Self::block_number();
 		// Don't populate events on genesis.
 		if block_number.is_zero() {
@@ -1428,7 +1436,7 @@ impl<T: Config> Pallet<T> {
 	/// impact on the PoV size of a block. Users should use alternative and well bounded storage
 	/// items for any behavior like this.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn events() -> Vec<EventRecord<T::Event, T::Hash>> {
+	pub fn events() -> Vec<EventRecord<T::RuntimeEvent, T::Hash>> {
 		// Dereferencing the events here is fine since we are not in the
 		// memory-restricted runtime.
 		Self::read_events_no_consensus().into_iter().map(|e| *e).collect()
@@ -1438,7 +1446,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Should only be called if you know what you are doing and outside of the runtime block
 	/// execution else it can have a large impact on the PoV size of a block.
-	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::Event, T::Hash>>> {
+	pub fn read_events_no_consensus() -> Vec<Box<EventRecord<T::RuntimeEvent, T::Hash>>> {
 		Events::<T>::get()
 	}
 
@@ -1483,13 +1491,13 @@ impl<T: Config> Pallet<T> {
 
 	/// Assert the given `event` exists.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn assert_has_event(event: T::Event) {
+	pub fn assert_has_event(event: T::RuntimeEvent) {
 		assert!(Self::events().iter().any(|record| record.event == event))
 	}
 
 	/// Assert the last event equal to the given `event`.
 	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn assert_last_event(event: T::Event) {
+	pub fn assert_last_event(event: T::RuntimeEvent) {
 		assert_eq!(Self::events().last().expect("events expected").event, event);
 	}
 
@@ -1517,9 +1525,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
+	///
+	/// Emits an `ExtrinsicSuccess` or `ExtrinsicFailed` event depending on the outcome.
+	/// The emitted event contains the post-dispatch corrected weight including
+	/// the base-weight for its dispatch class.
 	pub fn note_applied_extrinsic(r: &DispatchResultWithPostInfo, mut info: DispatchInfo) {
-		info.weight = extract_actual_weight(r, &info);
+		info.weight = extract_actual_weight(r, &info)
+			.saturating_add(T::BlockWeights::get().get(info.class).base_extrinsic);
 		info.pays_fee = extract_actual_pays_fee(r, &info);
+
 		Self::deposit_event(match r {
 			Ok(_) => Event::ExtrinsicSuccess { dispatch_info: info },
 			Err(err) => {
@@ -1709,7 +1723,7 @@ pub mod pallet_prelude {
 	pub use crate::{ensure_none, ensure_root, ensure_signed, ensure_signed_or_root};
 
 	/// Type alias for the `Origin` associated type of system config.
-	pub type OriginFor<T> = <T as crate::Config>::Origin;
+	pub type OriginFor<T> = <T as crate::Config>::RuntimeOrigin;
 
 	/// Type alias for the `BlockNumber` associated type of system config.
 	pub type BlockNumberFor<T> = <T as crate::Config>::BlockNumber;

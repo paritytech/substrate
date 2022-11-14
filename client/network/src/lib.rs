@@ -249,30 +249,26 @@ mod discovery;
 mod peer_info;
 mod protocol;
 mod request_responses;
-mod schema;
 mod service;
 mod transport;
-mod utils;
 
-pub mod bitswap;
 pub mod config;
-pub mod error;
 pub mod network_state;
-pub mod transactions;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
 pub use protocol::PeerInfo;
 pub use sc_network_common::{
 	protocol::{
-		event::{DhtEvent, Event, ObservedRole},
+		event::{DhtEvent, Event},
+		role::ObservedRole,
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, RequestFailure},
 	service::{
 		KademliaKey, NetworkBlock, NetworkDHTProvider, NetworkRequest, NetworkSigner,
-		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest,
-		NetworkTransaction, Signature, SigningError,
+		NetworkStateInfo, NetworkStatus, NetworkStatusProvider, NetworkSyncForkRequest, Signature,
+		SigningError,
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
@@ -283,6 +279,7 @@ pub use service::{
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
 	NotificationSenderReady, OutboundFailure, PublicKey,
 };
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 pub use sc_peerset::ReputationChange;
 
@@ -298,8 +295,13 @@ const MAX_CONNECTIONS_PER_PEER: usize = 2;
 /// The maximum number of concurrent established connections that were incoming.
 const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
-/// Minimum Requirements for a Hash within Networking
-pub trait ExHashT: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static {}
+/// Abstraction over syncing-related services
+pub trait ChainSyncInterface<B: BlockT>:
+	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + Send + Sync
+{
+}
 
-impl<T> ExHashT for T where T: std::hash::Hash + Eq + std::fmt::Debug + Clone + Send + Sync + 'static
-{}
+impl<T, B: BlockT> ChainSyncInterface<B> for T where
+	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>> + Send + Sync
+{
+}

@@ -240,7 +240,7 @@ where
 
 		let proof = self.api.extract_proof();
 
-		let state = self.backend.state_at(self.block_id)?;
+		let state = self.backend.state_at(&self.parent_hash)?;
 		let parent_hash = self.parent_hash;
 
 		let valid_txs = self.api.execute_in_transaction(|api| {

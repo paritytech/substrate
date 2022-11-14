@@ -31,7 +31,7 @@ use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
 use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
-use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
+use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
@@ -43,7 +43,7 @@ use sp_runtime::{
 	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
 };
-use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
+use sp_timestamp::Timestamp;
 use std::{cell::RefCell, task::Poll, time::Duration};
 
 type Item = DigestItem;
@@ -67,6 +67,8 @@ type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 
 type BabeBlockImport =
 	PanickingBlockImport<crate::BabeBlockImport<TestBlock, TestClient, Arc<TestClient>>>;
+
+const SLOT_DURATION_MS: u64 = 1000;
 
 #[derive(Clone)]
 struct DummyFactory {
@@ -235,12 +237,11 @@ pub struct TestVerifier {
 		TestBlock,
 		PeersFullClient,
 		TestSelectChain,
-		AlwaysCanAuthor,
 		Box<
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
+				InherentDataProviders = (InherentDataProvider,),
 			>,
 		>,
 	>,
@@ -322,17 +323,14 @@ impl TestNetFactory for BabeTestNet {
 				client: client.clone(),
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
+						Timestamp::current(),
+						SlotDuration::from_millis(SLOT_DURATION_MS),
 					);
-
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
-				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
@@ -435,19 +433,16 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				env: environ,
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(|_, _| async {
-					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						*timestamp,
-						SlotDuration::from_millis(6000),
+						Timestamp::current(),
+						SlotDuration::from_millis(SLOT_DURATION_MS),
 					);
-
-					Ok((timestamp, slot))
+					Ok((slot,))
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				babe_link: data.link.clone(),
 				keystore,
-				can_author_with: sp_consensus::AlwaysCanAuthor,
 				justification_sync_link: (),
 				block_proposal_slot_portion: SlotProportion::new(0.5),
 				max_block_proposal_slot_portion: None,
@@ -647,10 +642,8 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
 	import.post_digests.push(seal);
 	import.body = Some(block.extrinsics);
-	import.intermediates.insert(
-		Cow::from(INTERMEDIATE_KEY),
-		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
-	);
+	import
+		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
 

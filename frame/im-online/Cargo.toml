@@ -33,6 +33,7 @@ pallet-session = { version = "4.0.0-dev", path = "../session" }
 [features]
 default = ["std"]
 std = [
+	"frame-benchmarking?/std",
 	"codec/std",
 	"frame-support/std",
 	"frame-system/std",

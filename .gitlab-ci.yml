@@ -41,7 +41,7 @@ workflow:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH
 
-variables:                         &default-vars
+variables:
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
   CARGO_INCREMENTAL:               0
@@ -125,6 +125,18 @@ default:
 
 .test-refs:
   rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+    - if: $CI_COMMIT_REF_NAME =~ /^v[0-9]+\.[0-9]+.*$/              # i.e. v1.0, v2.1rc1
+
+# handle the specific case where benches could store incorrect bench data because of the downstream staging runs
+# exclude cargo-check-benches from such runs
+.test-refs-check-benches:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/ 
+      when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "master"
@@ -266,8 +278,6 @@ rusty-cachier-notify:
     PR_NUM:                        "${PR_NUM}"
   trigger:
     project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
-    # remove branch, when pipeline-stopper for polakdot is updated to the same branch
-    branch:                        "as-improve"
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails

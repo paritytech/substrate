@@ -22,7 +22,7 @@ use sp_runtime::generic;
 /// An unchecked extrinsic type to be used in tests.
 pub type MockUncheckedExtrinsic<T, Signature = (), Extra = ()> = generic::UncheckedExtrinsic<
 	<T as crate::Config>::AccountId,
-	<T as crate::Config>::Call,
+	<T as crate::Config>::RuntimeCall,
 	Signature,
 	Extra,
 >;

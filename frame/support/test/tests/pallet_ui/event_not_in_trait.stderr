@@ -1,4 +1,4 @@
-error: Invalid usage of Event, `Config` contains no associated type `Event`, but enum `Event` is declared (in use of `#[pallet::event]`). An Event associated type must be declare on trait `Config`.
+error: Invalid usage of RuntimeEvent, `Config` contains no associated type `RuntimeEvent`, but enum `Event` is declared (in use of `#[pallet::event]`). An RuntimeEvent associated type must be declare on trait `Config`.
  --> $DIR/event_not_in_trait.rs:1:1
   |
 1 | #[frame_support::pallet]

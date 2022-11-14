@@ -19,7 +19,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 impl-trait-for-tuples = "0.2.2"
 thiserror = { version = "1.0.30", optional = true }
 sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-runtime = { version = "6.0.0", optional = true, path = "../runtime" }
+sp-runtime = { version = "6.0.0", optional = true, default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
@@ -31,7 +31,7 @@ std = [
 	"async-trait",
 	"codec/std",
 	"sp-core/std",
-	"sp-runtime",
+	"sp-runtime/std",
 	"sp-std/std",
 	"thiserror",
 ]

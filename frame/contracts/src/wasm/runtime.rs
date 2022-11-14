@@ -30,7 +30,7 @@ use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
 use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
-use sp_core::{crypto::UncheckedFrom, Bytes};
+use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
 use sp_runtime::traits::{Bounded, Zero};
 use sp_sandbox::SandboxMemory;
@@ -164,7 +164,7 @@ impl<T: Into<DispatchError>> From<T> for TrapReason {
 pub enum RuntimeCosts {
 	/// Charge the gas meter with the cost of a metering block. The charged costs are
 	/// the supplied cost of the block plus the overhead of the metering itself.
-	MeteringBlock(u32),
+	MeteringBlock(u64),
 	/// Weight charged for copying data from the sandbox.
 	CopyFromContract(u32),
 	/// Weight charged for copying data to the sandbox.
@@ -261,7 +261,7 @@ impl RuntimeCosts {
 	{
 		use self::RuntimeCosts::*;
 		let weight = match *self {
-			MeteringBlock(amount) => s.gas.saturating_add(amount.into()),
+			MeteringBlock(amount) => s.gas.saturating_add(amount),
 			CopyFromContract(len) => s.return_per_byte.saturating_mul(len.into()),
 			CopyToContract(len) => s.input_per_byte.saturating_mul(len.into()),
 			Caller => s.caller,
@@ -483,10 +483,10 @@ where
 				TrapReason::Return(ReturnData { flags, data }) => {
 					let flags =
 						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
-					Ok(ExecReturnValue { flags, data: Bytes(data) })
+					Ok(ExecReturnValue { flags, data })
 				},
 				TrapReason::Termination =>
-					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
+					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
 				TrapReason::SupervisorError(error) => return Err(error.into()),
 			}
 		}
@@ -494,7 +494,7 @@ where
 		// Check the exact type of the error.
 		match sandbox_result {
 			// No traps were generated. Proceed normally.
-			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Bytes(Vec::new()) }),
+			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
 			// `Error::Module` is returned only if instantiation or linking failed (i.e.
 			// wasm binary tried to import a function that is not provided by the host).
 			// This shouldn't happen because validation process ought to reject such binaries.
@@ -879,7 +879,7 @@ where
 			if let Ok(return_value) = call_outcome {
 				return Err(TrapReason::Return(ReturnData {
 					flags: return_value.flags.bits(),
-					data: return_value.data.0,
+					data: return_value.data,
 				}))
 			}
 		}
@@ -957,7 +957,7 @@ pub mod env {
 	/// This call is supposed to be called only by instrumentation injected code.
 	///
 	/// - amount: How much gas is used.
-	fn gas(ctx: Runtime<E>, amount: u32) -> Result<(), TrapReason> {
+	fn gas(ctx: Runtime<E>, amount: u64) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::MeteringBlock(amount))?;
 		Ok(())
 	}
@@ -1737,7 +1737,7 @@ pub mod env {
 	#[prefixed_alias]
 	fn gas_left(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
-		let gas_left = &ctx.ext.gas_meter().gas_left().encode();
+		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
 		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, gas_left, false, already_charged)?)
 	}
 
@@ -1976,11 +1976,7 @@ pub mod env {
 		data_len: u32,
 	) -> Result<(), TrapReason> {
 		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
-			// # Warning
-			//
-			// Unstable sorts are non-deterministic across architectures. The usage here is OK
-			// because we are rejecting duplicates which removes the non determinism.
-			items.sort_unstable();
+			items.sort();
 			// Find any two consecutive equal elements.
 			items.windows(2).any(|w| match &w {
 				&[a, b] => a == b,
@@ -2314,9 +2310,9 @@ pub mod env {
 		call_ptr: u32,
 		call_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		use frame_support::{dispatch::GetDispatchInfo, weights::extract_actual_weight};
+		use frame_support::dispatch::{extract_actual_weight, GetDispatchInfo};
 		ctx.charge_gas(RuntimeCosts::CopyFromContract(call_len))?;
-		let call: <E::T as Config>::Call =
+		let call: <E::T as Config>::RuntimeCall =
 			ctx.read_sandbox_memory_as_unbounded(call_ptr, call_len)?;
 		let dispatch_info = call.get_dispatch_info();
 		let charged = ctx.charge_gas(RuntimeCosts::CallRuntime(dispatch_info.weight))?;

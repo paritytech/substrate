@@ -17,45 +17,9 @@
 
 //! Try-runtime specific traits and types.
 
-use super::*;
 use impl_trait_for_tuples::impl_for_tuples;
 use sp_arithmetic::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
-
-/// Prefix to be used (optionally) for implementing [`OnRuntimeUpgradeHelpersExt::storage_key`].
-const ON_RUNTIME_UPGRADE_PREFIX: &[u8] = b"__ON_RUNTIME_UPGRADE__";
-
-/// Some helper functions for [`OnRuntimeUpgrade`] during `try-runtime` testing.
-pub trait OnRuntimeUpgradeHelpersExt {
-	/// Generate a storage key unique to this runtime upgrade.
-	///
-	/// This can be used to communicate data from pre-upgrade to post-upgrade state and check
-	/// them. See [`Self::set_temp_storage`] and [`Self::get_temp_storage`].
-	fn storage_key(ident: &str) -> [u8; 32] {
-		crate::storage::storage_prefix(ON_RUNTIME_UPGRADE_PREFIX, ident.as_bytes())
-	}
-
-	/// Get temporary storage data written by [`Self::set_temp_storage`].
-	///
-	/// Returns `None` if either the data is unavailable or un-decodable.
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being read from.
-	fn get_temp_storage<T: codec::Decode>(at: &str) -> Option<T> {
-		sp_io::storage::get(&Self::storage_key(at))
-			.and_then(|bytes| codec::Decode::decode(&mut &*bytes).ok())
-	}
-
-	/// Write some temporary data to a specific storage that can be read (potentially in
-	/// post-upgrade hook) via [`Self::get_temp_storage`].
-	///
-	/// A `at` storage identifier must be provided to indicate where the storage is being written
-	/// to.
-	fn set_temp_storage<T: codec::Encode>(data: T, at: &str) {
-		sp_io::storage::set(&Self::storage_key(at), &data.encode());
-	}
-}
-
-impl<U: OnRuntimeUpgrade> OnRuntimeUpgradeHelpersExt for U {}
 
 // Which state tests to execute.
 #[derive(codec::Encode, codec::Decode, Clone)]
@@ -68,7 +32,7 @@ pub enum Select {
 	RoundRobin(u32),
 	/// Run only pallets who's name matches the given list.
 	///
-	/// Pallet names are obtained from [`PalletInfoAccess`].
+	/// Pallet names are obtained from [`super::PalletInfoAccess`].
 	Only(Vec<Vec<u8>>),
 }
 

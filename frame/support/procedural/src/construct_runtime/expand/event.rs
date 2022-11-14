@@ -80,7 +80,7 @@ pub fn expand_outer_event(
 			#scrate::RuntimeDebug,
 		)]
 		#[allow(non_camel_case_types)]
-		pub enum Event {
+		pub enum RuntimeEvent {
 			#event_variants
 		}
 
@@ -148,13 +148,13 @@ fn expand_event_conversion(
 
 	quote! {
 		#attr
-		impl From<#pallet_event> for Event {
+		impl From<#pallet_event> for RuntimeEvent {
 			fn from(x: #pallet_event) -> Self {
-				Event::#variant_name(x)
+				RuntimeEvent::#variant_name(x)
 			}
 		}
 		#attr
-		impl TryInto<#pallet_event> for Event {
+		impl TryInto<#pallet_event> for RuntimeEvent {
 			type Error = ();
 
 			fn try_into(self) -> #scrate::sp_std::result::Result<#pallet_event, Self::Error> {

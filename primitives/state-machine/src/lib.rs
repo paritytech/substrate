@@ -157,31 +157,28 @@ mod execution {
 	use crate::backend::AsTrieBackend;
 
 	use super::*;
-	use codec::{Codec, Decode, Encode};
+	use codec::Codec;
 	use hash_db::Hasher;
 	use smallvec::SmallVec;
 	use sp_core::{
 		hexdisplay::HexDisplay,
 		storage::{ChildInfo, ChildType, PrefixedStorageKey},
 		traits::{CodeExecutor, ReadRuntimeVersionExt, RuntimeCode, SpawnNamed},
-		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_externalities::Extensions;
 	use std::{
 		collections::{HashMap, HashSet},
 		fmt,
-		panic::UnwindSafe,
-		result,
 	};
 
 	const PROOF_CLOSE_TRANSACTION: &str = "\
 		Closing a transaction that was started in this function. Client initiated transactions
 		are protected from being closed by the runtime. qed";
 
-	pub(crate) type CallResult<R, E> = Result<NativeOrEncoded<R>, E>;
+	pub(crate) type CallResult<E> = Result<Vec<u8>, E>;
 
 	/// Default handler of the execution manager.
-	pub type DefaultHandler<R, E> = fn(CallResult<R, E>, CallResult<R, E>) -> CallResult<R, E>;
+	pub type DefaultHandler<E> = fn(CallResult<E>, CallResult<E>) -> CallResult<E>;
 
 	/// Trie backend with in-memory storage.
 	pub type InMemoryBackend<H> = TrieBackend<MemoryDB<H>, H>;
@@ -243,9 +240,7 @@ mod execution {
 
 	impl ExecutionStrategy {
 		/// Gets the corresponding manager for the execution strategy.
-		pub fn get_manager<E: fmt::Debug, R: Decode + Encode>(
-			self,
-		) -> ExecutionManager<DefaultHandler<R, E>> {
+		pub fn get_manager<E: fmt::Debug>(self) -> ExecutionManager<DefaultHandler<E>> {
 			match self {
 				ExecutionStrategy::AlwaysWasm =>
 					ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted),
@@ -265,19 +260,19 @@ mod execution {
 	}
 
 	/// Evaluate to ExecutionManager::NativeElseWasm, without having to figure out the type.
-	pub fn native_else_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	pub fn native_else_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
 		ExecutionManager::NativeElseWasm
 	}
 
 	/// Evaluate to ExecutionManager::AlwaysWasm with trusted backend, without having to figure out
 	/// the type.
-	fn always_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	fn always_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Trusted)
 	}
 
 	/// Evaluate ExecutionManager::AlwaysWasm with untrusted backend, without having to figure out
 	/// the type.
-	fn always_untrusted_wasm<E, R: Decode>() -> ExecutionManager<DefaultHandler<R, E>> {
+	fn always_untrusted_wasm<E>() -> ExecutionManager<DefaultHandler<E>> {
 		ExecutionManager::AlwaysWasm(BackendTrustLevel::Untrusted)
 	}
 
@@ -379,23 +374,10 @@ mod execution {
 		pub fn execute(&mut self, strategy: ExecutionStrategy) -> Result<Vec<u8>, Box<dyn Error>> {
 			// We are not giving a native call and thus we are sure that the result can never be a
 			// native value.
-			self.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-				strategy.get_manager(),
-				None,
-			)
-			.map(NativeOrEncoded::into_encoded)
+			self.execute_using_consensus_failure_handler(strategy.get_manager())
 		}
 
-		fn execute_aux<R, NC>(
-			&mut self,
-			use_native: bool,
-			native_call: Option<NC>,
-		) -> (CallResult<R, Exec::Error>, bool)
-		where
-			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
-				+ UnwindSafe,
-		{
+		fn execute_aux(&mut self, use_native: bool) -> (CallResult<Exec::Error>, bool) {
 			let mut cache = StorageTransactionCache::default();
 
 			let cache = match self.storage_transaction_cache.as_mut() {
@@ -426,7 +408,6 @@ mod execution {
 				self.method,
 				self.call_data,
 				use_native,
-				native_call,
 			);
 
 			self.overlay
@@ -444,26 +425,20 @@ mod execution {
 			(result, was_native)
 		}
 
-		fn execute_call_with_both_strategy<Handler, R, NC>(
+		fn execute_call_with_both_strategy<Handler>(
 			&mut self,
-			mut native_call: Option<NC>,
 			on_consensus_failure: Handler,
-		) -> CallResult<R, Exec::Error>
+		) -> CallResult<Exec::Error>
 		where
-			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
-				+ UnwindSafe,
-			Handler: FnOnce(
-				CallResult<R, Exec::Error>,
-				CallResult<R, Exec::Error>,
-			) -> CallResult<R, Exec::Error>,
+			Handler:
+				FnOnce(CallResult<Exec::Error>, CallResult<Exec::Error>) -> CallResult<Exec::Error>,
 		{
 			self.overlay.start_transaction();
-			let (result, was_native) = self.execute_aux(true, native_call.take());
+			let (result, was_native) = self.execute_aux(true);
 
 			if was_native {
 				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				let (wasm_result, _) = self.execute_aux(false, native_call);
+				let (wasm_result, _) = self.execute_aux(false);
 
 				if (result.is_ok() &&
 					wasm_result.is_ok() && result.as_ref().ok() == wasm_result.as_ref().ok()) ||
@@ -479,25 +454,16 @@ mod execution {
 			}
 		}
 
-		fn execute_call_with_native_else_wasm_strategy<R, NC>(
-			&mut self,
-			mut native_call: Option<NC>,
-		) -> CallResult<R, Exec::Error>
-		where
-			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
-				+ UnwindSafe,
-		{
+		fn execute_call_with_native_else_wasm_strategy(&mut self) -> CallResult<Exec::Error> {
 			self.overlay.start_transaction();
-			let (result, was_native) = self.execute_aux(true, native_call.take());
+			let (result, was_native) = self.execute_aux(true);
 
 			if !was_native || result.is_ok() {
 				self.overlay.commit_transaction().expect(PROOF_CLOSE_TRANSACTION);
 				result
 			} else {
 				self.overlay.rollback_transaction().expect(PROOF_CLOSE_TRANSACTION);
-				let (wasm_result, _) = self.execute_aux(false, native_call);
-				wasm_result
+				self.execute_aux(false).0
 			}
 		}
 
@@ -510,35 +476,29 @@ mod execution {
 		///
 		/// Returns the result of the executed function either in native representation `R` or
 		/// in SCALE encoded representation.
-		pub fn execute_using_consensus_failure_handler<Handler, R, NC>(
+		pub fn execute_using_consensus_failure_handler<Handler>(
 			&mut self,
 			manager: ExecutionManager<Handler>,
-			mut native_call: Option<NC>,
-		) -> Result<NativeOrEncoded<R>, Box<dyn Error>>
+		) -> Result<Vec<u8>, Box<dyn Error>>
 		where
-			R: Decode + Encode + PartialEq,
-			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>>
-				+ UnwindSafe,
-			Handler: FnOnce(
-				CallResult<R, Exec::Error>,
-				CallResult<R, Exec::Error>,
-			) -> CallResult<R, Exec::Error>,
+			Handler:
+				FnOnce(CallResult<Exec::Error>, CallResult<Exec::Error>) -> CallResult<Exec::Error>,
 		{
 			let result = {
 				match manager {
-					ExecutionManager::Both(on_consensus_failure) => self
-						.execute_call_with_both_strategy(native_call.take(), on_consensus_failure),
+					ExecutionManager::Both(on_consensus_failure) =>
+						self.execute_call_with_both_strategy(on_consensus_failure),
 					ExecutionManager::NativeElseWasm =>
-						self.execute_call_with_native_else_wasm_strategy(native_call.take()),
+						self.execute_call_with_native_else_wasm_strategy(),
 					ExecutionManager::AlwaysWasm(trust_level) => {
 						let _abort_guard = match trust_level {
 							BackendTrustLevel::Trusted => None,
 							BackendTrustLevel::Untrusted =>
 								Some(sp_panic_handler::AbortGuard::never_abort()),
 						};
-						self.execute_aux(false, native_call).0
+						self.execute_aux(false).0
 					},
-					ExecutionManager::NativeWhenPossible => self.execute_aux(true, native_call).0,
+					ExecutionManager::NativeWhenPossible => self.execute_aux(true).0,
 				}
 			};
 
@@ -603,29 +563,23 @@ mod execution {
 		let proving_backend =
 			TrieBackendBuilder::wrap(trie_backend).with_recorder(Default::default()).build();
 
-		let result = {
-			let mut sm = StateMachine::<_, H, Exec>::new(
-				&proving_backend,
-				overlay,
-				exec,
-				method,
-				call_data,
-				Extensions::default(),
-				runtime_code,
-				spawn_handle,
-			);
-
-			sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-				always_wasm(),
-				None,
-			)?
-		};
+		let result = StateMachine::<_, H, Exec>::new(
+			&proving_backend,
+			overlay,
+			exec,
+			method,
+			call_data,
+			Extensions::default(),
+			runtime_code,
+			spawn_handle,
+		)
+		.execute_using_consensus_failure_handler::<_>(always_wasm())?;
 
 		let proof = proving_backend
 			.extract_proof()
 			.expect("A recorder was set and thus, a storage proof can be extracted; qed");
 
-		Ok((result.into_encoded(), proof))
+		Ok((result, proof))
 	}
 
 	/// Check execution proof, generated by `prove_execution` call.
@@ -673,7 +627,7 @@ mod execution {
 		Exec: CodeExecutor + Clone + 'static,
 		Spawn: SpawnNamed + Send + 'static,
 	{
-		let mut sm = StateMachine::<_, H, Exec>::new(
+		StateMachine::<_, H, Exec>::new(
 			trie_backend,
 			overlay,
 			exec,
@@ -682,13 +636,8 @@ mod execution {
 			Extensions::default(),
 			runtime_code,
 			spawn_handle,
-		);
-
-		sm.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-			always_untrusted_wasm(),
-			None,
 		)
-		.map(NativeOrEncoded::into_encoded)
+		.execute_using_consensus_failure_handler(always_untrusted_wasm())
 	}
 
 	/// Generate storage read proof.
@@ -1362,21 +1311,16 @@ mod tests {
 	use super::{backend::AsTrieBackend, ext::Ext, *};
 	use crate::{execution::CallResult, in_memory_backend::new_in_mem_hash_key};
 	use assert_matches::assert_matches;
-	use codec::{Decode, Encode};
+	use codec::Encode;
 	use sp_core::{
 		map,
 		storage::{ChildInfo, StateVersion},
 		testing::TaskExecutor,
 		traits::{CodeExecutor, Externalities, RuntimeCode},
-		NativeOrEncoded, NeverNativeValue,
 	};
 	use sp_runtime::traits::BlakeTwo256;
 	use sp_trie::trie_types::{TrieDBMutBuilderV0, TrieDBMutBuilderV1};
-	use std::{
-		collections::{BTreeMap, HashMap},
-		panic::UnwindSafe,
-		result,
-	};
+	use std::collections::{BTreeMap, HashMap};
 
 	#[derive(Clone)]
 	struct DummyCodeExecutor {
@@ -1388,28 +1332,20 @@ mod tests {
 	impl CodeExecutor for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<
-			R: Encode + Decode + PartialEq,
-			NC: FnOnce() -> result::Result<R, Box<dyn std::error::Error + Send + Sync>> + UnwindSafe,
-		>(
+		fn call(
 			&self,
 			ext: &mut dyn Externalities,
 			_: &RuntimeCode,
 			_method: &str,
 			_data: &[u8],
 			use_native: bool,
-			native_call: Option<NC>,
-		) -> (CallResult<R, Self::Error>, bool) {
+		) -> (CallResult<Self::Error>, bool) {
 			let using_native = use_native && self.native_available;
-			match (using_native, self.native_succeeds, self.fallback_succeeds, native_call) {
-				(true, true, _, Some(call)) => {
-					let res = sp_externalities::set_and_run_with_externalities(ext, call);
-					(res.map(NativeOrEncoded::Native).map_err(|_| 0), true)
-				},
-				(true, true, _, None) | (false, _, true, None) => (
-					Ok(NativeOrEncoded::Encoded(vec![
+			match (using_native, self.native_succeeds, self.fallback_succeeds) {
+				(true, true, _) | (false, _, true) => (
+					Ok(vec![
 						ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0],
-					])),
+					]),
 					using_native,
 				),
 				_ => (Err(0), using_native),
@@ -1510,13 +1446,10 @@ mod tests {
 		);
 
 		assert!(state_machine
-			.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-				ExecutionManager::Both(|we, _ne| {
-					consensus_failed = true;
-					we
-				}),
-				None,
-			)
+			.execute_using_consensus_failure_handler(ExecutionManager::Both(|we, _ne| {
+				consensus_failed = true;
+				we
+			}),)
 			.is_err());
 		assert!(consensus_failed);
 	}
@@ -2259,52 +2192,5 @@ mod tests {
 		}
 		overlay.commit_transaction().unwrap();
 		assert_eq!(overlay.storage(b"ccc"), Some(None));
-	}
-
-	#[test]
-	fn runtime_registered_extensions_are_removed_after_execution() {
-		let state_version = StateVersion::default();
-		use sp_externalities::ExternalitiesExt;
-		sp_externalities::decl_extension! {
-			struct DummyExt(u32);
-		}
-
-		let backend = trie_backend::tests::test_trie(state_version, None, None);
-		let mut overlayed_changes = Default::default();
-		let wasm_code = RuntimeCode::empty();
-
-		let mut state_machine = StateMachine::new(
-			&backend,
-			&mut overlayed_changes,
-			&DummyCodeExecutor {
-				native_available: true,
-				native_succeeds: true,
-				fallback_succeeds: false,
-			},
-			"test",
-			&[],
-			Default::default(),
-			&wasm_code,
-			TaskExecutor::new(),
-		);
-
-		let run_state_machine = |state_machine: &mut StateMachine<_, _, _>| {
-			state_machine
-				.execute_using_consensus_failure_handler::<fn(_, _) -> _, _, _>(
-					ExecutionManager::NativeWhenPossible,
-					Some(|| {
-						sp_externalities::with_externalities(|mut ext| {
-							ext.register_extension(DummyExt(2)).unwrap();
-						})
-						.unwrap();
-
-						Ok(())
-					}),
-				)
-				.unwrap();
-		};
-
-		run_state_machine(&mut state_machine);
-		run_state_machine(&mut state_machine);
 	}
 }

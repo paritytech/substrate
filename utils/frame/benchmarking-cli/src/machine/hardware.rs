@@ -161,7 +161,7 @@ impl fmt::Display for Throughput {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use sp_runtime::assert_eq_error_rate;
+	use sp_runtime::assert_eq_error_rate_float;
 
 	/// `SUBSTRATE_REFERENCE_HARDWARE` can be en- and decoded.
 	#[test]
@@ -179,9 +179,9 @@ mod tests {
 		const EPS: f64 = 0.1;
 		let gib = Throughput::GiBs(14.324);
 
-		assert_eq_error_rate!(14.324, gib.to_gibs(), EPS);
-		assert_eq_error_rate!(14667.776, gib.to_mibs(), EPS);
-		assert_eq_error_rate!(14667.776 * 1024.0, gib.to_kibs(), EPS);
+		assert_eq_error_rate_float!(14.324, gib.to_gibs(), EPS);
+		assert_eq_error_rate_float!(14667.776, gib.to_mibs(), EPS);
+		assert_eq_error_rate_float!(14667.776 * 1024.0, gib.to_kibs(), EPS);
 		assert_eq!("14.32 GiB/s", gib.to_string());
 		assert_eq!("14.32 GiB/s", gib.normalize().to_string());
 

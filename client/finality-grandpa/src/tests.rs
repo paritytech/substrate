@@ -450,7 +450,7 @@ fn finalize_3_voters_1_full_observer() {
 		let justification =
 			crate::aux_schema::best_justification::<_, Block>(&*client).unwrap().unwrap();
 
-		assert_eq!(justification.commit.target_number, 20);
+		assert_eq!(justification.justification.commit.target_number, 20);
 	}
 }
 

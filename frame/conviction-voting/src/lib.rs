@@ -98,7 +98,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
@@ -399,7 +400,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						Err(i) => {
 							votes
 								.try_insert(i, (poll_index, vote))
-								.map_err(|()| Error::<T, I>::MaxVotesReached)?;
+								.map_err(|_| Error::<T, I>::MaxVotesReached)?;
 						},
 					}
 					// Shouldn't be possible to fail, but we handle it gracefully.

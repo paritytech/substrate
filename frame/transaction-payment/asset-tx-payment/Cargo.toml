@@ -41,6 +41,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 [features]
 default = ["std"]
 std = [
+	"scale-info/std",
 	"serde",
 	"codec/std",
 	"sp-std/std",

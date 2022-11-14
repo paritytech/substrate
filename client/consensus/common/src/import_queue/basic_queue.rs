@@ -34,7 +34,7 @@ use crate::{
 	import_queue::{
 		buffered_link::{self, BufferedLinkReceiver, BufferedLinkSender},
 		import_single_block_metered, BlockImportError, BlockImportStatus, BoxBlockImport,
-		BoxJustificationImport, ImportQueue, IncomingBlock, Link, Origin, Verifier,
+		BoxJustificationImport, ImportQueue, IncomingBlock, Link, RuntimeOrigin, Verifier,
 	},
 	metrics::Metrics,
 };
@@ -120,7 +120,7 @@ impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction>
 
 	fn import_justifications(
 		&mut self,
-		who: Origin,
+		who: RuntimeOrigin,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justifications: Justifications,
@@ -152,7 +152,7 @@ mod worker_messages {
 
 	pub struct ImportBlocks<B: BlockT>(pub BlockOrigin, pub Vec<IncomingBlock<B>>);
 	pub struct ImportJustification<B: BlockT>(
-		pub Origin,
+		pub RuntimeOrigin,
 		pub B::Hash,
 		pub NumberFor<B>,
 		pub Justification,
@@ -289,7 +289,7 @@ impl<B: BlockT> BlockImportWorker<B> {
 
 	async fn import_justification(
 		&mut self,
-		who: Origin,
+		who: RuntimeOrigin,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justification: Justification,
@@ -530,7 +530,7 @@ mod tests {
 
 		fn justification_imported(
 			&mut self,
-			_who: Origin,
+			_who: RuntimeOrigin,
 			hash: &Hash,
 			_number: BlockNumber,
 			_success: bool,

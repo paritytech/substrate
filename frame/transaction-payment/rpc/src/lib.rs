@@ -21,7 +21,7 @@ use std::{convert::TryInto, sync::Arc};
 
 use codec::{Codec, Decode};
 use jsonrpsee::{
-	core::{async_trait, Error as JsonRpseeError, RpcResult},
+	core::{Error as JsonRpseeError, RpcResult},
 	proc_macros::rpc,
 	types::error::{CallError, ErrorCode, ErrorObject},
 };
@@ -81,7 +81,6 @@ impl From<Error> for i32 {
 	}
 }
 
-#[async_trait]
 impl<C, Block, Balance>
 	TransactionPaymentApiServer<<Block as BlockT>::Hash, RuntimeDispatchInfo<Balance>>
 	for TransactionPayment<C, Block>

@@ -151,10 +151,10 @@ pub trait DefensiveOption<T> {
 
 	/// Defensively transform this option to a result, mapping `None` to the return value of an
 	/// error closure.
-	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
+	fn defensive_ok_or_else<E: sp_std::fmt::Debug, F: FnOnce() -> E>(self, err: F) -> Result<T, E>;
 
 	/// Defensively transform this option to a result, mapping `None` to a default value.
-	fn defensive_ok_or<E>(self, err: E) -> Result<T, E>;
+	fn defensive_ok_or<E: sp_std::fmt::Debug>(self, err: E) -> Result<T, E>;
 
 	/// Exactly the same as `map`, but it prints the appropriate warnings if the value being mapped
 	/// is `None`.
@@ -318,16 +318,17 @@ impl<T> DefensiveOption<T> for Option<T> {
 		)
 	}
 
-	fn defensive_ok_or_else<E, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
+	fn defensive_ok_or_else<E: sp_std::fmt::Debug, F: FnOnce() -> E>(self, err: F) -> Result<T, E> {
 		self.ok_or_else(|| {
-			defensive!();
-			err()
+			let err_value = err();
+			defensive!(err_value);
+			err_value
 		})
 	}
 
-	fn defensive_ok_or<E>(self, err: E) -> Result<T, E> {
+	fn defensive_ok_or<E: sp_std::fmt::Debug>(self, err: E) -> Result<T, E> {
 		self.ok_or_else(|| {
-			defensive!();
+			defensive!(err);
 			err
 		})
 	}
@@ -722,13 +723,13 @@ pub trait EstimateCallFee<Call, Balance> {
 	///
 	/// The dispatch info and the length is deduced from the call. The post info can optionally be
 	/// provided.
-	fn estimate_call_fee(call: &Call, post_info: crate::weights::PostDispatchInfo) -> Balance;
+	fn estimate_call_fee(call: &Call, post_info: crate::dispatch::PostDispatchInfo) -> Balance;
 }
 
 // Useful for building mocks.
 #[cfg(feature = "std")]
 impl<Call, Balance: From<u32>, const T: u32> EstimateCallFee<Call, Balance> for ConstU32<T> {
-	fn estimate_call_fee(_: &Call, _: crate::weights::PostDispatchInfo) -> Balance {
+	fn estimate_call_fee(_: &Call, _: crate::dispatch::PostDispatchInfo) -> Balance {
 		T.into()
 	}
 }
@@ -943,7 +944,7 @@ pub trait PreimageRecipient<Hash>: PreimageProvider<Hash> {
 	/// Maximum size of a preimage.
 	type MaxSize: Get<u32>;
 
-	/// Store the bytes of a preimage on chain.
+	/// Store the bytes of a preimage on chain infallible due to the bounded type.
 	fn note_preimage(bytes: crate::BoundedVec<u8, Self::MaxSize>);
 
 	/// Clear a previously noted preimage. This is infallible and should be treated more like a

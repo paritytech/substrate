@@ -47,7 +47,7 @@ use frame_support::{
 		},
 		IsType,
 	},
-	weights::{DispatchInfo, PostDispatchInfo},
+	dispatch::{DispatchInfo, PostDispatchInfo},
 	DefaultNoBound,
 };
 use pallet_transaction_payment_mangata::OnChargeTransaction;
@@ -140,7 +140,7 @@ pub struct ChargeAssetTxPayment<T: Config> {
 
 impl<T: Config> ChargeAssetTxPayment<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
@@ -156,8 +156,8 @@ where
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,
-		call: &T::Call,
-		info: &DispatchInfoOf<T::Call>,
+		call: &T::RuntimeCall,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 	) -> Result<(BalanceOf<T>, InitialPayment<T>), TransactionValidityError> {
 		let fee = pallet_transaction_payment_mangata::Pallet::<T>::compute_fee(
@@ -199,7 +199,7 @@ impl<T: Config> sp_std::fmt::Debug for ChargeAssetTxPayment<T> {
 
 impl<T: Config> SignedExtension for ChargeAssetTxPayment<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	AssetBalanceOf<T>: Send + Sync + FixedPointOperand,
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand + IsType<ChargeAssetBalanceOf<T>>,
 	ChargeAssetIdOf<T>: Send + Sync,
@@ -207,7 +207,7 @@ where
 {
 	const IDENTIFIER: &'static str = "ChargeAssetTxPayment";
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = (
 		// tip

@@ -79,7 +79,7 @@ mod types;
 pub mod weights;
 
 use frame_support::traits::{BalanceStatus, Currency, OnUnbalanced, ReservableCurrency};
-use sp_runtime::traits::{AppendZerosInput, Saturating, StaticLookup, Zero};
+use sp_runtime::traits::{AppendZerosInput, Hash, Saturating, StaticLookup, Zero};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -105,7 +105,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -142,10 +142,10 @@ pub mod pallet {
 		type Slashed: OnUnbalanced<NegativeImbalanceOf<Self>>;
 
 		/// The origin which may forcibly set or remove a name. Root can always do this.
-		type ForceOrigin: EnsureOrigin<Self::Origin>;
+		type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The origin which may add or remove registrars. Root can always do this.
-		type RegistrarOrigin: EnsureOrigin<Self::Origin>;
+		type RegistrarOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
@@ -236,6 +236,8 @@ pub mod pallet {
 		NotSub,
 		/// Sub-account isn't owned by sender.
 		NotOwned,
+		/// The provided judgement was for a different identity.
+		JudgementForDifferentIdentity,
 	}
 
 	#[pallet::event]
@@ -746,6 +748,7 @@ pub mod pallet {
 		/// - `target`: the account whose identity the judgement is upon. This must be an account
 		///   with a registered identity.
 		/// - `judgement`: the judgement of the registrar of index `reg_index` about `target`.
+		/// - `identity`: The hash of the [`IdentityInfo`] for that the judgement is provided.
 		///
 		/// Emits `JudgementGiven` if successful.
 		///
@@ -765,6 +768,7 @@ pub mod pallet {
 			#[pallet::compact] reg_index: RegistrarIndex,
 			target: AccountIdLookupOf<T>,
 			judgement: Judgement<BalanceOf<T>>,
+			identity: T::Hash,
 		) -> DispatchResultWithPostInfo {
 			let sender = ensure_signed(origin)?;
 			let target = T::Lookup::lookup(target)?;
@@ -772,9 +776,13 @@ pub mod pallet {
 			<Registrars<T>>::get()
 				.get(reg_index as usize)
 				.and_then(Option::as_ref)
-				.and_then(|r| if r.account == sender { Some(r) } else { None })
+				.filter(|r| r.account == sender)
 				.ok_or(Error::<T>::InvalidIndex)?;
 			let mut id = <IdentityOf<T>>::get(&target).ok_or(Error::<T>::InvalidTarget)?;
+
+			if T::Hashing::hash_of(&id.info) != identity {
+				return Err(Error::<T>::JudgementForDifferentIdentity.into())
+			}
 
 			let item = (reg_index, judgement);
 			match id.judgements.binary_search_by_key(&reg_index, |x| x.0) {

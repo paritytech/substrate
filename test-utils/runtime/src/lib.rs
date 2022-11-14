@@ -37,8 +37,9 @@ use trie_db::{Trie, TrieMut};
 
 use cfg_if::cfg_if;
 use frame_support::{
+	dispatch::RawOrigin,
 	parameter_types,
-	traits::{ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
+	traits::{CallerTrait, ConstU32, ConstU64, CrateVersion, KeyOwnerProofSystem},
 	weights::{RuntimeDbWeight, Weight},
 };
 use frame_system::limits::{BlockLength, BlockWeights};
@@ -119,7 +120,7 @@ pub fn native_version() -> NativeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
@@ -150,7 +151,7 @@ impl Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub enum Extrinsic {
 	AuthoritiesChange(Vec<AuthorityId>),
 	Transfer {
@@ -233,11 +234,14 @@ impl ExtrinsicT for Extrinsic {
 }
 
 impl sp_runtime::traits::Dispatchable for Extrinsic {
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Config = ();
 	type Info = ();
 	type PostInfo = ();
-	fn dispatch(self, _origin: Self::Origin) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
+	fn dispatch(
+		self,
+		_origin: Self::RuntimeOrigin,
+	) -> sp_runtime::DispatchResultWithInfo<Self::PostInfo> {
 		panic!("This implementation should not be used for actual dispatch.");
 	}
 }
@@ -441,22 +445,33 @@ impl GetRuntimeBlockType for Runtime {
 }
 
 #[derive(Clone, RuntimeDebug, Encode, Decode, PartialEq, Eq, TypeInfo, MaxEncodedLen)]
-pub struct Origin;
+pub struct RuntimeOrigin;
 
-impl From<frame_system::Origin<Runtime>> for Origin {
-	fn from(_o: frame_system::Origin<Runtime>) -> Self {
-		unimplemented!("Not required in tests!")
-	}
-}
-impl From<Origin> for Result<frame_system::Origin<Runtime>, Origin> {
-	fn from(_origin: Origin) -> Result<frame_system::Origin<Runtime>, Origin> {
+impl From<RawOrigin<<Runtime as frame_system::Config>::AccountId>> for RuntimeOrigin {
+	fn from(_: RawOrigin<<Runtime as frame_system::Config>::AccountId>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
 }
 
-impl frame_support::traits::OriginTrait for Origin {
-	type Call = <Runtime as frame_system::Config>::Call;
-	type PalletsOrigin = Origin;
+impl CallerTrait<<Runtime as frame_system::Config>::AccountId> for RuntimeOrigin {
+	fn into_system(self) -> Option<RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+
+	fn as_system_ref(&self) -> Option<&RawOrigin<<Runtime as frame_system::Config>::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl From<RuntimeOrigin> for Result<frame_system::Origin<Runtime>, RuntimeOrigin> {
+	fn from(_origin: RuntimeOrigin) -> Result<frame_system::Origin<Runtime>, RuntimeOrigin> {
+		unimplemented!("Not required in tests!")
+	}
+}
+
+impl frame_support::traits::OriginTrait for RuntimeOrigin {
+	type Call = <Runtime as frame_system::Config>::RuntimeCall;
+	type PalletsOrigin = RuntimeOrigin;
 	type AccountId = <Runtime as frame_system::Config>::AccountId;
 
 	fn add_filter(&mut self, _filter: impl Fn(&Self::Call) -> bool + 'static) {
@@ -479,6 +494,10 @@ impl frame_support::traits::OriginTrait for Origin {
 		unimplemented!("Not required in tests!")
 	}
 
+	fn into_caller(self) -> Self::PalletsOrigin {
+		unimplemented!("Not required in tests!")
+	}
+
 	fn try_with_caller<R>(
 		self,
 		_f: impl FnOnce(Self::PalletsOrigin) -> Result<R, Self::PalletsOrigin>,
@@ -498,12 +517,15 @@ impl frame_support::traits::OriginTrait for Origin {
 	fn as_signed(self) -> Option<Self::AccountId> {
 		unimplemented!("Not required in tests!")
 	}
+	fn as_system_ref(&self) -> Option<&RawOrigin<Self::AccountId>> {
+		unimplemented!("Not required in tests!")
+	}
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct Event;
+pub struct RuntimeEvent;
 
-impl From<frame_system::Event<Runtime>> for Event {
+impl From<frame_system::Event<Runtime>> for RuntimeEvent {
 	fn from(_evt: frame_system::Event<Runtime>) -> Self {
 		unimplemented!("Not required in tests!")
 	}
@@ -580,12 +602,18 @@ parameter_types! {
 		BlockWeights::with_sensible_defaults(Weight::from_ref_time(4 * 1024 * 1024), Perbill::from_percent(75));
 }
 
+impl From<frame_system::Call<Runtime>> for Extrinsic {
+	fn from(_: frame_system::Call<Runtime>) -> Self {
+		unimplemented!("Not required in tests!")
+	}
+}
+
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type Origin = Origin;
-	type Call = Extrinsic;
+	type RuntimeOrigin = RuntimeOrigin;
+	type RuntimeCall = Extrinsic;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -593,7 +621,7 @@ impl frame_system::Config for Runtime {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ConstU64<2400>;
 	type DbWeight = ();
 	type Version = ();
@@ -606,6 +634,8 @@ impl frame_system::Config for Runtime {
 	type OnSetCode = ();
 	type MaxConsumers = ConstU32<16>;
 }
+
+impl system::Config for Runtime {}
 
 impl pallet_timestamp::Config for Runtime {
 	/// A timestamp: milliseconds since the unix epoch.
@@ -1325,7 +1355,7 @@ mod tests {
 			.set_execution_strategy(ExecutionStrategy::AlwaysWasm)
 			.set_heap_pages(8)
 			.build();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		// Try to allocate 1024k of memory on heap. This is going to fail since it is twice larger
 		// than the heap.
@@ -1362,7 +1392,7 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		runtime_api.test_storage(&block_id).unwrap();
 	}
@@ -1389,7 +1419,7 @@ mod tests {
 		let client =
 			TestClientBuilder::new().set_execution_strategy(ExecutionStrategy::Both).build();
 		let runtime_api = client.runtime_api();
-		let block_id = BlockId::Number(client.chain_info().best_number);
+		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		runtime_api.test_witness(&block_id, proof, root).unwrap();
 	}

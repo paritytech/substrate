@@ -18,7 +18,7 @@ frame-benchmarking = { version = "4.0.0-dev", default-features = false, path = "
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../system" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../../session" }
-pallet-staking = { version = "4.0.0-dev", default-features = false, features = ["runtime-benchmarks"], path = "../../staking" }
+pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../staking" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
@@ -45,4 +45,8 @@ std = [
 	"sp-runtime/std",
 	"sp-session/std",
 	"sp-std/std",
+]
+
+runtime-benchmarks = [
+	"pallet-staking/runtime-benchmarks",
 ]

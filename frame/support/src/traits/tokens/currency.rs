@@ -25,11 +25,13 @@ use crate::{
 	dispatch::{DispatchError, DispatchResult},
 	traits::Get,
 };
+
 use codec::{FullCodec, MaxEncodedLen};
 use frame_support::Parameter;
 use mangata_types::{Balance as BalancePrimitive, TokenId};
 use scale_info::TypeInfo;
 use sp_runtime::traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member};
+use sp_runtime::FixedPointOperand;
 use sp_std::{fmt::Debug, result};
 
 mod reservable;
@@ -314,7 +316,7 @@ pub trait MultiTokenLockableCurrency<AccountId>: MultiTokenCurrency<AccountId> {
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {
 	/// The balance of an account.
-	type Balance: Balance + MaybeSerializeDeserialize + Debug + MaxEncodedLen;
+	type Balance: Balance + MaybeSerializeDeserialize + Debug + MaxEncodedLen + FixedPointOperand;
 
 	/// The opaque token type for an imbalance. This is returned by unbalanced operations
 	/// and must be dealt with. It may be dropped but cannot be cloned.

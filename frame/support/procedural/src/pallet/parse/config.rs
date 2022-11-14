@@ -28,6 +28,7 @@ mod keyword {
 	syn::custom_keyword!(I);
 	syn::custom_keyword!(config);
 	syn::custom_keyword!(IsType);
+	syn::custom_keyword!(RuntimeEvent);
 	syn::custom_keyword!(Event);
 	syn::custom_keyword!(constant);
 	syn::custom_keyword!(frame_system);
@@ -42,8 +43,9 @@ pub struct ConfigDef {
 	pub has_instance: bool,
 	/// Const associated type.
 	pub consts_metadata: Vec<ConstMetadataDef>,
-	/// Whether the trait has the associated type `Event`, note that those bounds are checked:
-	/// * `IsType<Self as frame_system::Config>::Event`
+	/// Whether the trait has the associated type `Event`, note that those bounds are
+	/// checked:
+	/// * `IsType<Self as frame_system::Config>::RuntimeEvent`
 	/// * `From<Event>` or `From<Event<T>>` or `From<Event<T, I>>`
 	pub has_event_type: bool,
 	/// The where clause on trait definition but modified so `Self` is `T`.
@@ -159,7 +161,7 @@ impl syn::parse::Parse for ConfigBoundParse {
 	}
 }
 
-/// Parse for `IsType<<Sef as $ident::Config>::Event>` and retrieve `$ident`
+/// Parse for `IsType<<Sef as $ident::Config>::RuntimeEvent>` and retrieve `$ident`
 pub struct IsTypeBoundEventParse(syn::Ident);
 
 impl syn::parse::Parse for IsTypeBoundEventParse {
@@ -174,7 +176,7 @@ impl syn::parse::Parse for IsTypeBoundEventParse {
 		input.parse::<keyword::Config>()?;
 		input.parse::<syn::Token![>]>()?;
 		input.parse::<syn::Token![::]>()?;
-		input.parse::<keyword::Event>()?;
+		input.parse::<keyword::RuntimeEvent>()?;
 		input.parse::<syn::Token![>]>()?;
 
 		Ok(Self(ident))
@@ -212,7 +214,7 @@ impl syn::parse::Parse for FromEventParse {
 	}
 }
 
-/// Check if trait_item is `type Event`, if so checks its bounds are those expected.
+/// Check if trait_item is `type RuntimeEvent`, if so checks its bounds are those expected.
 /// (Event type is reserved type)
 fn check_event_type(
 	frame_system: &syn::Ident,
@@ -220,10 +222,10 @@ fn check_event_type(
 	trait_has_instance: bool,
 ) -> syn::Result<bool> {
 	if let syn::TraitItem::Type(type_) = trait_item {
-		if type_.ident == "Event" {
+		if type_.ident == "RuntimeEvent" {
 			// Check event has no generics
 			if !type_.generics.params.is_empty() || type_.generics.where_clause.is_some() {
-				let msg = "Invalid `type Event`, associated type `Event` is reserved and must have\
+				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must have\
 					no generics nor where_clause";
 				return Err(syn::Error::new(trait_item.span(), msg))
 			}
@@ -236,8 +238,8 @@ fn check_event_type(
 
 			if !has_is_type_bound {
 				let msg = format!(
-					"Invalid `type Event`, associated type `Event` is reserved and must \
-					bound: `IsType<<Self as {}::Config>::Event>`",
+					"Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must \
+					bound: `IsType<<Self as {}::Config>::RuntimeEvent>`",
 					frame_system,
 				);
 				return Err(syn::Error::new(type_.span(), msg))
@@ -251,14 +253,14 @@ fn check_event_type(
 			let from_event_bound = if let Some(b) = from_event_bound {
 				b
 			} else {
-				let msg = "Invalid `type Event`, associated type `Event` is reserved and must \
+				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` is reserved and must \
 					bound: `From<Event>` or `From<Event<Self>>` or `From<Event<Self, I>>`";
 				return Err(syn::Error::new(type_.span(), msg))
 			};
 
 			if from_event_bound.is_generic && (from_event_bound.has_instance != trait_has_instance)
 			{
-				let msg = "Invalid `type Event`, associated type `Event` bounds inconsistent \
+				let msg = "Invalid `type RuntimeEvent`, associated type `RuntimeEvent` bounds inconsistent \
 					`From<Event..>`. Config and generic Event must be both with instance or \
 					without instance";
 				return Err(syn::Error::new(type_.span(), msg))

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Origin tests for construct_runtime macro
+//! RuntimeOrigin tests for construct_runtime macro
 
 #![recursion_limit = "128"]
 
@@ -38,7 +38,7 @@ mod nested {
 
 		frame_support::decl_module! {
 			pub struct Module<T: Config> for enum Call
-				where origin: <T as system::Config>::Origin, system=system
+				where origin: <T as system::Config>::RuntimeOrigin, system=system
 			{
 				#[weight = 0]
 				pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -80,7 +80,7 @@ pub mod module {
 
 	frame_support::decl_module! {
 		pub struct Module<T: Config> for enum Call
-			where origin: <T as system::Config>::Origin, system=system
+			where origin: <T as system::Config>::RuntimeOrigin, system=system
 		{
 			#[weight = 0]
 			pub fn fail(_origin) -> frame_support::dispatch::DispatchResult {
@@ -100,7 +100,7 @@ pub mod module {
 			}
 			#[weight = 3]
 			fn aux_4(_origin) -> frame_support::dispatch::DispatchResult { unreachable!() }
-			#[weight = (5, frame_support::weights::DispatchClass::Operational)]
+			#[weight = (5, frame_support::dispatch::DispatchClass::Operational)]
 			fn operational(_origin) { unreachable!() }
 		}
 	}
@@ -134,10 +134,10 @@ impl nested::module::Config for RuntimeOriginTest {}
 impl module::Config for RuntimeOriginTest {}
 
 pub struct BaseCallFilter;
-impl Contains<Call> for BaseCallFilter {
-	fn contains(c: &Call) -> bool {
+impl Contains<RuntimeCall> for BaseCallFilter {
+	fn contains(c: &RuntimeCall) -> bool {
 		match c {
-			Call::NestedModule(_) => true,
+			RuntimeCall::NestedModule(_) => true,
 			_ => false,
 		}
 	}
@@ -146,12 +146,12 @@ impl Contains<Call> for BaseCallFilter {
 impl system::Config for RuntimeOriginTest {
 	type BaseCallFilter = BaseCallFilter;
 	type Hash = H256;
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type BlockNumber = BlockNumber;
 	type AccountId = u32;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type PalletInfo = PalletInfo;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type DbWeight = ();
 }
 
@@ -170,7 +170,7 @@ frame_support::construct_runtime!(
 pub type Signature = sr25519::Signature;
 pub type BlockNumber = u64;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, Call, Signature, ()>;
+pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<u32, RuntimeCall, Signature, ()>;
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 
 #[test]
@@ -178,40 +178,40 @@ fn origin_default_filter() {
 	let accepted_call = nested::module::Call::fail {}.into();
 	let rejected_call = module::Call::fail {}.into();
 
-	assert_eq!(Origin::root().filter_call(&accepted_call), true);
-	assert_eq!(Origin::root().filter_call(&rejected_call), true);
-	assert_eq!(Origin::none().filter_call(&accepted_call), true);
-	assert_eq!(Origin::none().filter_call(&rejected_call), false);
-	assert_eq!(Origin::signed(0).filter_call(&accepted_call), true);
-	assert_eq!(Origin::signed(0).filter_call(&rejected_call), false);
-	assert_eq!(Origin::from(Some(0)).filter_call(&accepted_call), true);
-	assert_eq!(Origin::from(Some(0)).filter_call(&rejected_call), false);
-	assert_eq!(Origin::from(None).filter_call(&accepted_call), true);
-	assert_eq!(Origin::from(None).filter_call(&rejected_call), false);
-	assert_eq!(Origin::from(nested::module::Origin).filter_call(&accepted_call), true);
-	assert_eq!(Origin::from(nested::module::Origin).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::root().filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::root().filter_call(&rejected_call), true);
+	assert_eq!(RuntimeOrigin::none().filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::none().filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::signed(0).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::signed(0).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::from(Some(0)).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::from(Some(0)).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::from(None).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::from(None).filter_call(&rejected_call), false);
+	assert_eq!(RuntimeOrigin::from(nested::module::Origin).filter_call(&accepted_call), true);
+	assert_eq!(RuntimeOrigin::from(nested::module::Origin).filter_call(&rejected_call), false);
 
-	let mut origin = Origin::from(Some(0));
-	origin.add_filter(|c| matches!(c, Call::Module(_)));
+	let mut origin = RuntimeOrigin::from(Some(0));
+	origin.add_filter(|c| matches!(c, RuntimeCall::Module(_)));
 	assert_eq!(origin.filter_call(&accepted_call), false);
 	assert_eq!(origin.filter_call(&rejected_call), false);
 
 	// Now test for root origin and filters:
-	let mut origin = Origin::from(Some(0));
-	origin.set_caller_from(Origin::root());
+	let mut origin = RuntimeOrigin::from(Some(0));
+	origin.set_caller_from(RuntimeOrigin::root());
 	assert!(matches!(origin.caller, OriginCaller::system(system::RawOrigin::Root)));
 
 	// Root origin bypass all filter.
 	assert_eq!(origin.filter_call(&accepted_call), true);
 	assert_eq!(origin.filter_call(&rejected_call), true);
 
-	origin.set_caller_from(Origin::from(Some(0)));
+	origin.set_caller_from(RuntimeOrigin::from(Some(0)));
 
 	// Back to another signed origin, the filtered are now effective again
 	assert_eq!(origin.filter_call(&accepted_call), true);
 	assert_eq!(origin.filter_call(&rejected_call), false);
 
-	origin.set_caller_from(Origin::root());
+	origin.set_caller_from(RuntimeOrigin::root());
 	origin.reset_filter();
 
 	// Root origin bypass all filter, even when they are reset.

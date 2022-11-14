@@ -63,10 +63,10 @@ use sp_runtime::{
 use sp_std::prelude::*;
 
 use frame_support::{
-	dispatch::DispatchResult,
+	dispatch::{DispatchResult, DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo},
 	traits::{EstimateCallFee, Get},
 	weights::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo, Weight, WeightToFee,
+		Weight, WeightToFee,
 	},
 };
 
@@ -399,7 +399,7 @@ where
 		len: u32,
 	) -> RuntimeDispatchInfo<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		// NOTE: we can actually make it understand `ChargeTransactionPayment`, but would be some
 		// hassle for sure. We have to make it aware of the index of `ChargeTransactionPayment` in
@@ -426,7 +426,7 @@ where
 		len: u32,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		let dispatch_info = <Extrinsic as GetDispatchInfo>::get_dispatch_info(&unchecked_extrinsic);
 
@@ -441,9 +441,9 @@ where
 	}
 
 	/// Compute the final fee value for a particular transaction.
-	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::Call>, tip: BalanceOf<T>) -> BalanceOf<T>
+	pub fn compute_fee(len: u32, info: &DispatchInfoOf<T::RuntimeCall>, tip: BalanceOf<T>) -> BalanceOf<T>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		Self::compute_fee_details(len, info, tip).final_fee()
 	}
@@ -451,11 +451,11 @@ where
 	/// Compute the fee details for a particular transaction.
 	pub fn compute_fee_details(
 		len: u32,
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		tip: BalanceOf<T>,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
 	{
 		Self::compute_fee_raw(len, info.weight, tip, info.pays_fee, info.class)
 	}
@@ -466,12 +466,12 @@ where
 	/// weight is used for the weight fee calculation.
 	pub fn compute_actual_fee(
 		len: u32,
-		info: &DispatchInfoOf<T::Call>,
-		post_info: &PostDispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		tip: BalanceOf<T>,
 	) -> BalanceOf<T>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	{
 		Self::compute_actual_fee_details(len, info, post_info, tip).final_fee()
 	}
@@ -479,12 +479,12 @@ where
 	/// Compute the actual post dispatch fee details for a particular transaction.
 	pub fn compute_actual_fee_details(
 		len: u32,
-		info: &DispatchInfoOf<T::Call>,
-		post_info: &PostDispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
+		post_info: &PostDispatchInfoOf<T::RuntimeCall>,
 		tip: BalanceOf<T>,
 	) -> FeeDetails<BalanceOf<T>>
 	where
-		T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+		T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	{
 		Self::compute_fee_raw(
 			len,
@@ -565,7 +565,7 @@ pub struct ChargeTransactionPayment<T: Config>(#[codec(compact)] BalanceOf<T>);
 
 impl<T: Config> ChargeTransactionPayment<T>
 where
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 	BalanceOf<T>: Send + Sync + FixedPointOperand,
 {
 	/// utility constructor. Used only in client/factory code.
@@ -581,8 +581,8 @@ where
 	fn withdraw_fee(
 		&self,
 		who: &T::AccountId,
-		call: &T::Call,
-		info: &DispatchInfoOf<T::Call>,
+		call: &T::RuntimeCall,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 	) -> Result<
 		(
@@ -614,7 +614,7 @@ where
 	/// state of-the-art blockchains, number of per-block transactions is expected to be in a
 	/// range reasonable enough to not saturate the `Balance` type while multiplying by the tip.
 	pub fn get_priority(
-		info: &DispatchInfoOf<T::Call>,
+		info: &DispatchInfoOf<T::RuntimeCall>,
 		len: usize,
 		tip: BalanceOf<T>,
 		final_fee: BalanceOf<T>,
@@ -688,11 +688,11 @@ impl<T: Config> sp_std::fmt::Debug for ChargeTransactionPayment<T> {
 impl<T: Config> SignedExtension for ChargeTransactionPayment<T>
 where
 	BalanceOf<T>: Send + Sync + From<u64> + FixedPointOperand,
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	const IDENTIFIER: &'static str = "ChargeTransactionPayment";
 	type AccountId = T::AccountId;
-	type Call = T::Call;
+	type Call = T::RuntimeCall;
 	type AdditionalSigned = ();
 	type Pre = (
 		// tip
@@ -753,7 +753,7 @@ impl<T: Config, AnyCall: GetDispatchInfo + Encode> EstimateCallFee<AnyCall, Bala
 	for Pallet<T>
 where
 	BalanceOf<T>: FixedPointOperand,
-	T::Call: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+	T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
 {
 	fn estimate_call_fee(call: &AnyCall, post_info: PostDispatchInfo) -> BalanceOf<T> {
 		let len = call.encoded_size() as u32;

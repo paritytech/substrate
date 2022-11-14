@@ -30,6 +30,7 @@ pub use extrinsic::{ExtrinsicBuilder, ExtrinsicCmd, ExtrinsicFactory};
 pub use machine::{MachineCmd, Requirements, SUBSTRATE_REFERENCE_HARDWARE};
 pub use overhead::OverheadCmd;
 pub use pallet::PalletCmd;
+pub use sc_service::BasePath;
 pub use storage::StorageCmd;
 
 use sc_cli::{CliConfiguration, DatabaseParams, ImportParams, PruningParams, Result, SharedParams};
@@ -84,6 +85,19 @@ impl CliConfiguration for BenchmarkCmd {
 	fn database_params(&self) -> Option<&DatabaseParams> {
 		unwrap_cmd! {
 			self, cmd, cmd.database_params()
+		}
+	}
+
+	fn base_path(&self) -> Result<Option<BasePath>> {
+		let inner = unwrap_cmd! {
+			self, cmd, cmd.base_path()
+		};
+
+		// If the base path was not provided, benchmark command shall use temporary path. Otherwise
+		// we may end up using shared path, which may be inappropriate for benchmarking.
+		match inner {
+			Ok(None) => Some(BasePath::new_temp_dir()).transpose().map_err(|e| e.into()),
+			e => e,
 		}
 	}
 
