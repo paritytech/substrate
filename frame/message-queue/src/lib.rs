@@ -243,6 +243,14 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 	}
 }
 
+pub trait OnQueueChanged<Id> {
+	fn on_queue_changed(id: Id, items_count: u32, items_size: u32);
+}
+
+impl<Id> OnQueueChanged<Id> for () {
+	fn on_queue_changed(_: Id, _: u32, _: u32) {}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -279,6 +287,10 @@ pub mod pallet {
 			+ MaxEncodedLen
 			+ TypeInfo
 			+ Default;
+
+		/// Code to be called when a message queue changes - either with items introduced or
+		/// removed.
+		type QueueChangeHandler: OnQueueChanged<<Self::MessageProcessor as ProcessMessage>::Origin>;
 
 		/// The size of the page; this implies the maximum message size which can be sent.
 		#[pallet::constant]
@@ -643,6 +655,11 @@ impl<T: Config> Pallet<T> {
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
+				T::QueueChangeHandler::on_queue_changed(
+					origin,
+					book_state.message_count,
+					book_state.size,
+				);
 				Ok(weight_counter.consumed)
 			},
 		}
@@ -730,6 +747,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		BookStateFor::<T>::insert(&origin, &book_state);
+		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
 		(total_processed > 0, next_ready)
 	}
 
@@ -1023,7 +1041,9 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		message: BoundedSlice<u8, Self::MaxMessageLen>,
 		origin: <T::MessageProcessor as ProcessMessage>::Origin,
 	) {
-		Self::do_enqueue_message(&origin, message)
+		Self::do_enqueue_message(&origin, message);
+		let book_state = BookStateFor::<T>::get(&origin);
+		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
 	}
 
 	fn enqueue_messages<'a>(
@@ -1033,6 +1053,8 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		for message in messages {
 			Self::do_enqueue_message(&origin, message);
 		}
+		let book_state = BookStateFor::<T>::get(&origin);
+		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
 	}
 
 	/// Force removes a queue from the ready ring.

@@ -95,6 +95,7 @@ impl Config for Test {
 	type WeightInfo = MockedWeightInfo;
 	type MessageProcessor = CountingMessageProcessor;
 	type Size = u32;
+	type QueueChangeHandler = ();
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
