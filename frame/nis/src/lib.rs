@@ -164,7 +164,6 @@ pub mod pallet {
 	use super::{FungibleInspect, FungibleMutate};
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
-		bounded_vec,
 		pallet_prelude::*,
 		traits::{
 			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
@@ -176,6 +175,7 @@ pub mod pallet {
 	};
 	use frame_system::pallet_prelude::*;
 	use sp_arithmetic::{PerThing, Perquintill};
+	use sp_core::bounded_vec;
 	use sp_runtime::{
 		traits::{AccountIdConversion, Bounded, Convert, ConvertBack, Saturating, Zero},
 		TokenError,
