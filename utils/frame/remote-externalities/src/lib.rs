@@ -667,12 +667,16 @@ where
 						},
 					};
 
-					// TODO: we should get rid of this StorageKey and StorageData wrapper types as
-					// they are just annoyance.
-					thread_sender.send(Message::Batch((
-						ChildInfo::new_default(un_prefixed),
-						child_kv_inner.iter().cloned().map(|(k, v)| (k.0, v.0)).collect::<Vec<_>>(),
-					))).unwrap();
+					thread_sender
+						.send(Message::Batch((
+							ChildInfo::new_default(un_prefixed),
+							child_kv_inner
+								.iter()
+								.cloned()
+								.map(|(k, v)| (k.0, v.0))
+								.collect::<Vec<_>>(),
+						)))
+						.unwrap();
 					thread_child_kv.push((ChildInfo::new_default(un_prefixed), child_kv_inner));
 				}
 
@@ -922,8 +926,7 @@ where
 				self.hashed_blacklist.len()
 			);
 			for k in self.hashed_blacklist {
-				todo!();
-				// ext.remove(k);
+				ext.execute_with(|| sp_io::storage::clear(&k));
 			}
 		}
 
