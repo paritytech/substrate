@@ -10,6 +10,7 @@ This pallet allows to:
  - exchange the LP token back to assets
  - swap 2 assets if there is a pool created
  - query for an exchange price via a new RPC endpoint
+## Getting Started
 
 ## RPC usage
 

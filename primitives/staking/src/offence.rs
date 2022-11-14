@@ -108,11 +108,10 @@ pub trait Offence<Offender> {
 	}
 
 	/// A slash fraction of the total exposure that should be slashed for this
-	/// particular offence kind for the given parameters that happened at a singular `TimeSlot`.
+	/// particular offence for the `offenders_count` that happened at a singular `TimeSlot`.
 	///
-	/// `offenders_count` - the count of unique offending authorities. It is >0.
-	/// `validator_set_count` - the cardinality of the validator set at the time of offence.
-	fn slash_fraction(offenders_count: u32, validator_set_count: u32) -> Perbill;
+	/// `offenders_count` - the count of unique offending authorities for this `TimeSlot`. It is >0.
+	fn slash_fraction(&self, offenders_count: u32) -> Perbill;
 }
 
 /// Errors that may happen on offence reports.

@@ -21,7 +21,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use codec::Codec;
 use jsonrpsee::{
-	core::{async_trait, RpcResult},
+	core::RpcResult,
 	proc_macros::rpc,
 	types::error::{CallError, ErrorObject},
 };

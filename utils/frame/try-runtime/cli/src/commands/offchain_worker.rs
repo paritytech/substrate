@@ -20,28 +20,27 @@ use crate::{
 	parse, state_machine_call, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use remote_externalities::rpc_api;
 use sc_executor::NativeExecutionDispatch;
 use sc_service::Configuration;
 use sp_core::storage::well_known_keys;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor};
 use std::{fmt::Debug, str::FromStr};
+use substrate_rpc_client::{ws_client, ChainApi};
 
 /// Configurations of the [`Command::OffchainWorker`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct OffchainWorkerCmd {
 	/// Overwrite the wasm code in state or not.
-	#[clap(long)]
+	#[arg(long)]
 	overwrite_wasm_code: bool,
 
 	/// The block hash at which to fetch the header.
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::at` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = parse::hash)
+		value_parser = parse::hash
 	)]
 	header_at: Option<String>,
 
@@ -49,15 +48,14 @@ pub struct OffchainWorkerCmd {
 	///
 	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
 	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
-	#[clap(
+	#[arg(
 		long,
-		multiple_values = false,
-		parse(try_from_str = parse::url)
+		value_parser = parse::url
 	)]
 	header_ws_uri: Option<String>,
 
 	/// The state type to use.
-	#[clap(subcommand)]
+	#[command(subcommand)]
 	pub state: State,
 }
 
@@ -119,7 +117,11 @@ where
 	let header_at = command.header_at::<Block>()?;
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
-	let header = rpc_api::get_header::<Block, _>(header_ws_uri.clone(), header_at).await?;
+	let rpc = ws_client(&header_ws_uri).await?;
+	let header = ChainApi::<(), Block::Hash, Block::Header, ()>::header(&rpc, Some(header_at))
+		.await
+		.unwrap()
+		.unwrap();
 	log::info!(
 		target: LOG_TARGET,
 		"fetched header from {:?}, block number: {:?}",
@@ -128,7 +130,7 @@ where
 	);
 
 	let ext = {
-		let builder = command.state.builder::<Block>()?;
+		let builder = command.state.builder::<Block>()?.state_version(shared.state_version);
 
 		let builder = if command.overwrite_wasm_code {
 			log::info!(
@@ -151,7 +153,7 @@ where
 		header_ws_uri,
 		expected_spec_name,
 		expected_spec_version,
-		shared.no_spec_name_check,
+		shared.no_spec_check_panic,
 	)
 	.await;
 

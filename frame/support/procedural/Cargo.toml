@@ -16,6 +16,8 @@ proc-macro = true
 
 [dependencies]
 Inflector = "0.11.4"
+cfg-expr = "0.10.3"
+itertools = "0.10.3"
 proc-macro2 = "1.0.37"
 quote = "1.0.10"
 syn = { version = "1.0.98", features = ["full"] }

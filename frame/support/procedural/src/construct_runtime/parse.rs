@@ -23,7 +23,7 @@ use syn::{
 	parse::{Parse, ParseStream},
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token, Error, Ident, Path, Result, Token,
+	token, Attribute, Error, Ident, Path, Result, Token,
 };
 
 mod keyword {
@@ -185,6 +185,8 @@ impl Parse for WhereDefinition {
 pub struct PalletDeclaration {
 	/// The name of the pallet, e.g.`System` in `System: frame_system`.
 	pub name: Ident,
+	/// Optional attributes tagged right above a pallet declaration.
+	pub attrs: Vec<Attribute>,
 	/// Optional fixed index, e.g. `MyPallet ...  = 3,`.
 	pub index: Option<u8>,
 	/// The path of the pallet, e.g. `frame_system` in `System: frame_system`.
@@ -212,6 +214,8 @@ pub enum SpecifiedParts {
 
 impl Parse for PalletDeclaration {
 	fn parse(input: ParseStream) -> Result<Self> {
+		let attrs = input.call(Attribute::parse_outer)?;
+
 		let name = input.parse()?;
 		let _: Token![:] = input.parse()?;
 		let path = input.parse()?;
@@ -279,7 +283,7 @@ impl Parse for PalletDeclaration {
 			None
 		};
 
-		Ok(Self { name, path, instance, pallet_parts, specified_parts, index })
+		Ok(Self { attrs, name, path, instance, pallet_parts, specified_parts, index })
 	}
 }
 
@@ -535,6 +539,8 @@ pub struct Pallet {
 	pub instance: Option<Ident>,
 	/// The pallet parts to use for the pallet.
 	pub pallet_parts: Vec<PalletPart>,
+	/// Expressions specified inside of a #[cfg] attribute.
+	pub cfg_pattern: Vec<cfg_expr::Expression>,
 }
 
 impl Pallet {
@@ -647,11 +653,32 @@ fn convert_pallets(pallets: Vec<PalletDeclaration>) -> syn::Result<PalletsConver
 				SpecifiedParts::All => (),
 			}
 
+			let cfg_pattern = pallet
+				.attrs
+				.iter()
+				.map(|attr| {
+					if attr.path.segments.len() != 1 || attr.path.segments[0].ident != "cfg" {
+						let msg = "Unsupported attribute, only #[cfg] is supported on pallet \
+						declarations in `construct_runtime`";
+						return Err(syn::Error::new(attr.span(), msg))
+					}
+
+					attr.parse_args_with(|input: syn::parse::ParseStream| {
+						// Required, otherwise the parse stream doesn't advance and will result in
+						// an error.
+						let input = input.parse::<proc_macro2::TokenStream>()?;
+						cfg_expr::Expression::parse(&input.to_string())
+							.map_err(|e| syn::Error::new(attr.span(), e.to_string()))
+					})
+				})
+				.collect::<Result<Vec<_>>>()?;
+
 			Ok(Pallet {
 				name: pallet.name,
 				index: final_index,
 				path: pallet.path,
 				instance: pallet.instance,
+				cfg_pattern,
 				pallet_parts,
 			})
 		})

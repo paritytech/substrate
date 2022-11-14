@@ -17,21 +17,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use super::{client::ClientConfig, wasm_override::WasmOverride, wasm_substitutes::WasmSubstitutes};
-use codec::{Decode, Encode};
 use sc_client_api::{backend, call_executor::CallExecutor, HeaderBackend};
 use sc_executor::{RuntimeVersion, RuntimeVersionOf};
 use sp_api::{ProofRecorder, StorageTransactionCache};
-use sp_core::{
-	traits::{CodeExecutor, RuntimeCode, SpawnNamed},
-	NativeOrEncoded, NeverNativeValue,
-};
+use sp_core::traits::{CodeExecutor, RuntimeCode, SpawnNamed};
 use sp_externalities::Extensions;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT};
 use sp_state_machine::{
-	self, backend::Backend as _, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
+	backend::AsTrieBackend, ExecutionManager, ExecutionStrategy, Ext, OverlayedChanges,
 	StateMachine, StorageProof,
 };
-use std::{cell::RefCell, panic::UnwindSafe, result, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
@@ -151,18 +147,15 @@ where
 		extensions: Option<Extensions>,
 	) -> sp_blockchain::Result<Vec<u8>> {
 		let mut changes = OverlayedChanges::default();
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let state = self.backend.state_at(at_hash)?;
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
 		let runtime_code =
 			state_runtime_code.runtime_code().map_err(sp_blockchain::Error::RuntimeCode)?;
 
 		let runtime_code = self.check_override(runtime_code, at)?;
 
-		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
-			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
-		})?;
-
-		let return_data = StateMachine::new(
+		let mut sm = StateMachine::new(
 			&state,
 			&mut changes,
 			&self.executor,
@@ -172,22 +165,17 @@ where
 			&runtime_code,
 			self.spawn_handle.clone(),
 		)
-		.set_parent_hash(at_hash)
-		.execute_using_consensus_failure_handler::<_, NeverNativeValue, fn() -> _>(
-			strategy.get_manager(),
-			None,
-		)?;
+		.set_parent_hash(at_hash);
 
-		Ok(return_data.into_encoded())
+		sm.execute_using_consensus_failure_handler(strategy.get_manager())
+			.map_err(Into::into)
 	}
 
 	fn contextual_call<
 		EM: Fn(
-			Result<NativeOrEncoded<R>, Self::Error>,
-			Result<NativeOrEncoded<R>, Self::Error>,
-		) -> Result<NativeOrEncoded<R>, Self::Error>,
-		R: Encode + Decode + PartialEq,
-		NC: FnOnce() -> result::Result<R, sp_api::ApiError> + UnwindSafe,
+			Result<Vec<u8>, Self::Error>,
+			Result<Vec<u8>, Self::Error>,
+		) -> Result<Vec<u8>, Self::Error>,
 	>(
 		&self,
 		at: &BlockId<Block>,
@@ -196,22 +184,18 @@ where
 		changes: &RefCell<OverlayedChanges>,
 		storage_transaction_cache: Option<&RefCell<StorageTransactionCache<Block, B::State>>>,
 		execution_manager: ExecutionManager<EM>,
-		native_call: Option<NC>,
 		recorder: &Option<ProofRecorder<Block>>,
 		extensions: Option<Extensions>,
-	) -> Result<NativeOrEncoded<R>, sp_blockchain::Error>
+	) -> Result<Vec<u8>, sp_blockchain::Error>
 	where
 		ExecutionManager<EM>: Clone,
 	{
 		let mut storage_transaction_cache = storage_transaction_cache.map(|c| c.borrow_mut());
 
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let state = self.backend.state_at(at_hash)?;
 
 		let changes = &mut *changes.borrow_mut();
-
-		let at_hash = self.backend.blockchain().block_hash_from_id(at)?.ok_or_else(|| {
-			sp_blockchain::Error::UnknownBlock(format!("Could not find block hash for {:?}", at))
-		})?;
 
 		// It is important to extract the runtime code here before we create the proof
 		// recorder to not record it. We also need to fetch the runtime code from `state` to
@@ -224,15 +208,11 @@ where
 
 		match recorder {
 			Some(recorder) => {
-				let trie_state = state.as_trie_backend().ok_or_else(|| {
-					Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-						as Box<dyn sp_state_machine::Error>
-				})?;
+				let trie_state = state.as_trie_backend();
 
-				let backend = sp_state_machine::ProvingBackend::new_with_recorder(
-					trie_state,
-					recorder.clone(),
-				);
+				let backend = sp_state_machine::TrieBackendBuilder::wrap(&trie_state)
+					.with_recorder(recorder.clone())
+					.build();
 
 				let mut state_machine = StateMachine::new(
 					&backend,
@@ -246,10 +226,7 @@ where
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
-				)
+				state_machine.execute_using_consensus_failure_handler(execution_manager)
 			},
 			None => {
 				let mut state_machine = StateMachine::new(
@@ -264,10 +241,7 @@ where
 				)
 				.with_storage_transaction_cache(storage_transaction_cache.as_deref_mut())
 				.set_parent_hash(at_hash);
-				state_machine.execute_using_consensus_failure_handler(
-					execution_manager,
-					native_call.map(|n| || (n)().map_err(|e| Box::new(e) as Box<_>)),
-				)
+				state_machine.execute_using_consensus_failure_handler(execution_manager)
 			},
 		}
 		.map_err(Into::into)
@@ -275,7 +249,9 @@ where
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> sp_blockchain::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
-		let state = self.backend.state_at(*id)?;
+
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
+		let state = self.backend.state_at(at_hash)?;
 		let mut cache = StorageTransactionCache::<Block, B::State>::default();
 		let mut ext = Ext::new(&mut overlay, &mut cache, &state, None);
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(&state);
@@ -292,12 +268,10 @@ where
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		let state = self.backend.state_at(*at)?;
+		let at_hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
+		let state = self.backend.state_at(at_hash)?;
 
-		let trie_backend = state.as_trie_backend().ok_or_else(|| {
-			Box::new(sp_state_machine::ExecutionError::UnableToGenerateProof)
-				as Box<dyn sp_state_machine::Error>
-		})?;
+		let trie_backend = state.as_trie_backend();
 
 		let state_runtime_code = sp_state_machine::backend::BackendRuntimeCode::new(trie_backend);
 		let runtime_code =
