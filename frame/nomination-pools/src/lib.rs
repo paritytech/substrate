@@ -636,11 +636,10 @@ impl<T: Config> Commission<T> {
 				return true
 			}
 			// check for `max_increase` throttling
-			(*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase &&
+			return (*to).saturating_sub(self.commission_or_zero()) > t.change_rate.max_increase &&
 				self.current.is_some()
-		} else {
-			return false
 		}
+		false
 	}
 
 	/// Set the pool's commission.
@@ -655,10 +654,7 @@ impl<T: Config> Commission<T> {
 		payee: T::AccountId,
 	) -> DispatchResult {
 		ensure!(!self.throttling(&commission), Error::<T>::CommissionChangeThrottled);
-		ensure!(
-			self.max.map(|m| commission <= &m).unwrap_or(true),
-			Error::<T>::CommissionExceedsMaximum
-		);
+		ensure!(self.max.map_or(true, |m| commission <= &m), Error::<T>::CommissionExceedsMaximum);
 
 		self.current = Some((*commission, payee));
 
@@ -700,15 +696,16 @@ impl<T: Config> Commission<T> {
 		&mut self,
 		change_rate: CommissionThrottlePrefs<T::BlockNumber>,
 	) -> DispatchResult {
-		if let Some(t) = &self.throttle {
-			ensure!(!t.restricted(&change_rate), Error::<T>::CommissionThrottleNotAllowed);
-		}
-		self.throttle = self
-			.throttle
-			.as_ref()
-			.map_or(Some(CommissionThrottle { change_rate, previous_set_at: None }), |t| {
-				Some(CommissionThrottle { change_rate, ..*t })
-			});
+		ensure!(
+			&self.throttle.as_ref().map_or(true, |t| t.less_restrictive(&change_rate)),
+			Error::<T>::CommissionThrottleNotAllowed
+		);
+
+		self.throttle = Some(CommissionThrottle {
+			change_rate,
+			previous_set_at: self.throttle.as_ref().map_or(None, |t| t.previous_set_at),
+		});
+
 		Ok(())
 	}
 
@@ -739,9 +736,10 @@ pub struct CommissionThrottle<T: Config> {
 }
 
 impl<T: Config> CommissionThrottle<T> {
-	fn restricted(&self, change_rate: &CommissionThrottlePrefs<T::BlockNumber>) -> bool {
-		change_rate.max_increase > self.change_rate.max_increase ||
-			change_rate.min_delay < self.change_rate.min_delay
+	/// Returns `true` if `change_rate` is less restrictive than `self`.
+	fn less_restrictive(&self, change_rate: &CommissionThrottlePrefs<T::BlockNumber>) -> bool {
+		change_rate.max_increase <= self.change_rate.max_increase &&
+			change_rate.min_delay >= self.change_rate.min_delay
 	}
 
 	fn register_change(&mut self, now: T::BlockNumber) {
@@ -759,7 +757,7 @@ impl<T: Config> CommissionThrottle<T> {
 /// used in the `set_commission_throttle` call as well as in CommissionThrottle.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Copy, Clone)]
 pub struct CommissionThrottlePrefs<BlockNumber> {
-	/// The maximum amount the commission can be updated by.
+	/// The maximum amount the commission can be updated by per `min_delay` period.
 	pub max_increase: Perbill,
 	/// How often an update can take place.
 	pub min_delay: BlockNumber,
@@ -2608,16 +2606,14 @@ impl<T: Config> Pallet<T> {
 		reward_pool.register_claimed_reward(pending_rewards);
 
 		// Gets the commission percentage and payee to be paid if commission has
-		// been set. Otherwise, a zero commission and payee of `None` is returned.
-		let commission_current = &bonded_pool.commission.get_commission_and_payee(&pending_rewards);
+		// been set. Otherwise, `None` is returned.
+		let maybe_commission = &bonded_pool.commission.get_commission_and_payee(&pending_rewards);
 
-		if let Some((pool_commission, payee)) = commission_current {
+		if let Some((pool_commission, payee)) = maybe_commission {
 			// Deduct any outstanding commission from the reward being claimed.
 			pending_rewards = pending_rewards.saturating_sub(*pool_commission);
 
-			// If a non-zero commission has been applied to the pool, deduct the share from
-			// `reward_pool` and send the amount to the commission `payee`.
-			// Defensive: The commission payee is also checked for existence.
+			// Send any non-zero `pool_commission` to the commission `payee`.
 			if pool_commission != &BalanceOf::<T>::zero() {
 				T::Currency::transfer(
 					&bonded_pool.reward_account(),
@@ -2642,7 +2638,7 @@ impl<T: Config> Pallet<T> {
 			member: member_account.clone(),
 			pool_id: member.pool_id,
 			payout: pending_rewards,
-			commission: commission_current.as_ref().map(|(c, _)| *c).unwrap_or(Zero::zero()),
+			commission: maybe_commission.as_ref().map(|(c, _)| *c).unwrap_or(Zero::zero()),
 		});
 
 		Ok(pending_rewards)
