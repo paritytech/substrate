@@ -52,10 +52,12 @@ pub mod v1 {
 
 	impl<T: Config> OldBondedPoolInner<T> {
 		fn migrate_to_v1(self) -> BondedPoolInner<T> {
+			// TODO: I don't think this is correct, commission shouldn't be included in
+			// this migration.
 			BondedPoolInner {
+				points: self.points,
 				commission: Commission::default(),
 				member_counter: self.member_counter,
-				points: self.points,
 				state: self.state,
 				roles: self.roles.migrate_to_v1(),
 			}
