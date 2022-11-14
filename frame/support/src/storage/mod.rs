@@ -311,7 +311,7 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	///
 	/// # Cursor
 	///
-	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// A *cursor* may be passed into this operation with `maybe_cursor`. `None` should only be
 	/// passed once (in the initial call).
 	/// Subsequent calls operating on the same map
 	/// should always pass `Some`, and this should be equal to the
@@ -411,7 +411,7 @@ pub trait IterableStorageDoubleMap<K1: FullCodec, K2: FullCodec, V: FullCodec>:
 	///
 	/// # Cursor
 	///
-	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// A *cursor* may be passed into this operation with `maybe_cursor`. `None` should only be
 	/// passed once (in the initial call).
 	/// Subsequent calls operating on the same map
 	/// should always pass `Some`, and this should be equal to the
@@ -516,7 +516,7 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	///
 	/// # Cursor
 	///
-	/// A *cursor* may be passed in to this operation with `maybe_cursor`. `None` should only be
+	/// A *cursor* may be passed into this operation with `maybe_cursor`. `None` should only be
 	/// passed once (in the initial call).
 	/// Subsequent calls operating on the same map
 	/// should always pass `Some`, and this should be equal to the
