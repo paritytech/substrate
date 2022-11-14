@@ -896,73 +896,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(not(feature = "unstable-interface"))]
 	fn contains_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "seal0" "seal_contains_storage" (func $seal_contains_storage (param i32) (result i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; [0, 4) size of input buffer (32 bytes as we copy the key here)
-	(data (i32.const 0) "\20")
-
-	;; [4, 36) input buffer
-	;; [36, inf) output buffer
-
-	(func (export "call")
-		;; Receive key
-		(call $seal_input
-			(i32.const 4)	;; Pointer to the input buffer
-			(i32.const 0)	;; Size of the length buffer
-		)
-
-		;; Load the return value into the output buffer
-		(i32.store (i32.const 36)
-			(call $seal_contains_storage
-				(i32.const 4)		;; The pointer to the storage key to fetch
-			)
-		)
-
-		;; Return the contents of the buffer
-		(call $seal_return
-			(i32.const 0)					;; flags
-			(i32.const 36)					;; output buffer ptr
-			(i32.const 4)					;; result is integer (4 bytes)
-		)
-	)
-
-	(func (export "deploy"))
-)
-"#;
-
-		let mut ext = MockExt::default();
-
-		ext.storage.insert(vec![1u8; 32], vec![42u8]);
-		ext.storage.insert(vec![2u8; 32], vec![]);
-
-		// value does not exist -> sentinel value returned
-		let result = execute(CODE, [3u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
-
-		// value did exist -> success
-		let result = execute(CODE, [1u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 1,);
-
-		// value did exist -> success (zero sized type)
-		let result = execute(CODE, [2u8; 32].encode(), &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0,);
-	}
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn contains_storage_works() {
-		const CODE: &str = r#"
-(module
-	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "__unstable__" "contains_storage" (func $contains_storage (param i32 i32) (result i32)))
+	(import "seal1" "contains_storage" (func $contains_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 
@@ -2357,76 +2296,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(not(feature = "unstable-interface"))]
 	fn set_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "seal1" "seal_set_storage" (func $seal_set_storage (param i32 i32 i32) (result i32)))
-	(import "env" "memory" (memory 1 1))
-
-	;; 0x1000 = 4k in little endian
-	;; size of input buffer
-	(data (i32.const 0) "\00\10")
-
-	(func (export "call")
-		;; Receive (key ++ value_to_write)
-		(call $seal_input
-			(i32.const 4)	;; Pointer to the input buffer
-			(i32.const 0)	;; Size of the length buffer
-		)
-		;; Store the passed value to the passed key and store result to memory
-		(i32.store (i32.const 0)
-			(call $seal_set_storage
-				(i32.const 4)				;; key_ptr
-				(i32.const 36)				;; value_ptr
-				(i32.sub			;; value_len (input_size - key_size)
-					(i32.load (i32.const 0))
-					(i32.const 32)
-				)
-			)
-		)
-		(call $seal_return
-			(i32.const 0)	;; flags
-			(i32.const 0)	;; pointer to returned value
-			(i32.const 4)	;; length of returned value
-		)
-	)
-
-	(func (export "deploy"))
-)
-"#;
-
-		let mut ext = MockExt::default();
-
-		// value did not exist before -> sentinel returned
-		let input = ([1u8; 32], [42u8, 48]).encode();
-		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), crate::SENTINEL);
-		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[42u8, 48]);
-
-		// value do exist -> length of old value returned
-		let input = ([1u8; 32], [0u8; 0]).encode();
-		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 2);
-		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[0u8; 0]);
-
-		// value do exist -> length of old value returned (test for zero sized val)
-		let input = ([1u8; 32], [99u8]).encode();
-		let result = execute(CODE, input, &mut ext).unwrap();
-		assert_eq!(u32::from_le_bytes(result.data.try_into().unwrap()), 0);
-		assert_eq!(ext.storage.get(&[1u8; 32].to_vec()).unwrap(), &[99u8]);
-	}
-
-	#[test]
-	#[cfg(feature = "unstable-interface")]
-	fn set_storage_works() {
-		const CODE: &str = r#"
-(module
-	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
-	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "set_storage" (func $set_storage (param i32 i32 i32 i32) (result i32)))
+	(import "seal2" "set_storage" (func $set_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer
@@ -2491,13 +2366,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn get_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "get_storage" (func $get_storage (param i32 i32 i32 i32) (result i32)))
+	(import "seal1" "get_storage" (func $get_storage (param i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 4) size of input buffer (160 bytes as we copy the key+len here)
@@ -2585,13 +2459,12 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "unstable-interface")]
 	fn clear_storage_works() {
 		const CODE: &str = r#"
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_return" (func $seal_return (param i32 i32 i32)))
-	(import "__unstable__" "clear_storage" (func $clear_storage (param i32 i32) (result i32)))
+	(import "seal1" "clear_storage" (func $clear_storage (param i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; size of input buffer

@@ -21,6 +21,7 @@ sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain"
 sp-core = { version = "6.0.0", path = "../../../primitives/core" }
 sp-mmr-primitives = { version = "4.0.0-dev", path = "../../../primitives/merkle-mountain-range" }
 sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+anyhow = "1"
 
 [dev-dependencies]
 serde_json = "1.0.85"

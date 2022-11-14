@@ -70,7 +70,7 @@ use frame_support::{
 		Bounded, CallerTrait, EnsureOrigin, Get, Hash as PreimageHash, IsType, OriginTrait,
 		PalletInfoAccess, PrivilegeCmp, QueryPreimage, StorageVersion, StorePreimage,
 	},
-	weights::Weight,
+	weights::{Weight, WeightMeter},
 };
 use frame_system::{self as system};
 pub use pallet::*;
@@ -259,15 +259,15 @@ pub mod pallet {
 		/// Dispatched some task.
 		Dispatched {
 			task: TaskAddress<T::BlockNumber>,
-			id: Option<[u8; 32]>,
+			id: Option<TaskName>,
 			result: DispatchResult,
 		},
 		/// The call for the provided hash was not found so the task has been aborted.
-		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
+		CallUnavailable { task: TaskAddress<T::BlockNumber>, id: Option<TaskName> },
 		/// The given task was unable to be renewed since the agenda is full at that block.
-		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
+		PeriodicFailed { task: TaskAddress<T::BlockNumber>, id: Option<TaskName> },
 		/// The given task can never be executed since it is overweight.
-		PermanentlyOverweight { task: TaskAddress<T::BlockNumber>, id: Option<[u8; 32]> },
+		PermanentlyOverweight { task: TaskAddress<T::BlockNumber>, id: Option<TaskName> },
 	}
 
 	#[pallet::error]
@@ -288,7 +288,7 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		/// Execute the scheduled calls
 		fn on_initialize(now: T::BlockNumber) -> Weight {
-			let mut weight_counter = WeightCounter::from_limit(T::MaximumWeight::get());
+			let mut weight_counter = WeightMeter::from_limit(T::MaximumWeight::get());
 			Self::service_agendas(&mut weight_counter, now, u32::max_value());
 			weight_counter.consumed
 		}
@@ -914,7 +914,7 @@ use ServiceTaskError::*;
 
 impl<T: Config> Pallet<T> {
 	/// Service up to `max` agendas queue starting from earliest incompletely executed agenda.
-	fn service_agendas(weight: &mut WeightCounter, now: T::BlockNumber, max: u32) {
+	fn service_agendas(weight: &mut WeightMeter, now: T::BlockNumber, max: u32) {
 		if !weight.check_accrue(T::WeightInfo::service_agendas_base()) {
 			return
 		}
@@ -942,7 +942,7 @@ impl<T: Config> Pallet<T> {
 	/// Returns `true` if the agenda was fully completed, `false` if it should be revisited at a
 	/// later block.
 	fn service_agenda(
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		executed: &mut u32,
 		now: T::BlockNumber,
 		when: T::BlockNumber,
@@ -1011,7 +1011,7 @@ impl<T: Config> Pallet<T> {
 	/// - realizing the task's call which can include a preimage lookup.
 	/// - Rescheduling the task for execution in a later agenda if periodic.
 	fn service_task(
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		now: T::BlockNumber,
 		when: T::BlockNumber,
 		agenda_index: u32,
@@ -1091,7 +1091,7 @@ impl<T: Config> Pallet<T> {
 	/// NOTE: Only the weight for this function will be counted (origin lookup, dispatch and the
 	/// call itself).
 	fn execute_dispatch(
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		origin: T::PalletsOrigin,
 		call: <T as Config>::RuntimeCall,
 	) -> Result<DispatchResult, ServiceTaskError> {
