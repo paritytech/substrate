@@ -2,18 +2,18 @@
 resolver = "2"
 
 members = [
-	"bin/node-template/node",
-	"bin/node-template/pallets/template",
-	"bin/node-template/runtime",
-	"bin/node/bench",
-	"bin/node/cli",
-	"bin/node/executor",
-	"bin/node/primitives",
-	"bin/node/rpc",
-	"bin/node/runtime",
-	"bin/node/testing",
-	"bin/utils/chain-spec-builder",
-	"bin/utils/subkey",
+	# "bin/node-template/node",
+	# "bin/node-template/pallets/template",
+	# "bin/node-template/runtime",
+	# "bin/node/bench",
+	# "bin/node/cli",
+	# "bin/node/executor",
+	# "bin/node/primitives",
+	# "bin/node/rpc",
+	# "bin/node/runtime",
+	# "bin/node/testing",
+	# "bin/utils/chain-spec-builder",
+	# "bin/utils/subkey",
 	"client/api",
 	"client/authority-discovery",
 	"client/basic-authorship",
@@ -98,7 +98,6 @@ members = [
 	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
-	"frame/examples/parallel",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -116,6 +115,7 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/nomination-pools",
+	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
@@ -135,6 +135,7 @@ members = [
 	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/root-offences",
+	"frame/root-testing",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
@@ -204,7 +205,6 @@ members = [
 	"primitives/state-machine",
 	"primitives/std",
 	"primitives/storage",
-	"primitives/tasks",
 	"primitives/test-primitives",
 	"primitives/timestamp",
 	"primitives/tracing",
@@ -254,7 +254,6 @@ members = [
 # This list is ordered alphabetically.
 [profile.dev.package]
 blake2 = { opt-level = 3 }
-blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }

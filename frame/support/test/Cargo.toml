@@ -51,6 +51,7 @@ try-runtime = ["frame-support/try-runtime"]
 # Only CI runs with this feature enabled. This feature is for testing stuff related to the FRAME macros
 # in conjunction with rust features.
 frame-feature-testing = []
+frame-feature-testing-2 = []
 # Disable ui tests
 disable-ui-tests = []
 no-metadata-docs = ["frame-support/no-metadata-docs"]

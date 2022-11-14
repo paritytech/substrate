@@ -142,7 +142,7 @@ where
 		let block_hash = self.client.expect_block_hash_from_id(block)?;
 		let mut raw_weight = &self
 			.client
-			.storage(&block_hash, &key)?
+			.storage(block_hash, &key)?
 			.ok_or(format!("Could not find System::BlockWeight for block: {}", block))?
 			.0[..];
 

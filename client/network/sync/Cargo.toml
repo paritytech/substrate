@@ -18,13 +18,11 @@ prost-build = "0.11"
 
 [dependencies]
 array-bytes = "4.1"
-codec = { package = "parity-scale-codec", version = "3.0.0", features = [
-	"derive",
-] }
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
 libp2p = "0.49.0"
 log = "0.4.17"
-lru = "0.7.5"
+lru = "0.8.1"
 mockall = "0.11.2"
 prost = "0.11"
 smallvec = "1.8.0"

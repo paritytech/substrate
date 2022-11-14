@@ -15,17 +15,14 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 async-trait = "0.1.57"
-codec = { package = "parity-scale-codec", version = "3.0.0", features = [
-	"derive",
-] }
+codec = { package = "parity-scale-codec", version = "3.0.0", features = ["derive"] }
 futures = "0.3.21"
 log = "0.4.17"
 merlin = "2.0"
-num-bigint = "0.2.3"
-num-rational = "0.2.2"
+num-bigint = "0.4.3"
+num-rational = "0.4.1"
 num-traits = "0.2.8"
 parking_lot = "0.12.1"
-rand = "0.7.2"
 schnorrkel = { version = "0.9.1", features = ["preaudit_deprecated"] }
 serde = { version = "1.0.136", features = ["derive"] }
 thiserror = "1.0"

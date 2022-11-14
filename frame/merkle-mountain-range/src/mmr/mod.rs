@@ -36,10 +36,10 @@ pub struct Hasher<H, L>(sp_std::marker::PhantomData<(H, L)>);
 impl<H: traits::Hash, L: FullLeaf> mmr_lib::Merge for Hasher<H, L> {
 	type Item = Node<H, L>;
 
-	fn merge(left: &Self::Item, right: &Self::Item) -> Self::Item {
+	fn merge(left: &Self::Item, right: &Self::Item) -> mmr_lib::Result<Self::Item> {
 		let mut concat = left.hash().as_ref().to_vec();
 		concat.extend_from_slice(right.hash().as_ref());
 
-		Node::Hash(<H as traits::Hash>::hash(&concat))
+		Ok(Node::Hash(<H as traits::Hash>::hash(&concat)))
 	}
 }
