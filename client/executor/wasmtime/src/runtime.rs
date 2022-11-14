@@ -395,9 +395,6 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 				// This determines how many instances of the module can be
 				// instantiated in parallel from the same `Module`.
-				//
-				// This includes nested instances spawned with `sp_tasks::spawn`
-				// from *within* the runtime.
 				count: 32,
 			},
 		});
