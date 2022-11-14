@@ -1120,7 +1120,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the metadata to the public proposal.
+		/// Set the metadata of the public proposal.
 		///
 		/// - `origin`: Must be `Signed`, and the creator of the proposal.
 		/// - `index`: The index of the proposal.
