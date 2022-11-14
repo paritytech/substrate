@@ -54,6 +54,15 @@ const DEFAULT_VALUE_DOWNLOAD_BATCH: usize = 4096;
 // NOTE: increasing this value does not seem to impact speed all that much.
 const DEFAULT_KEY_DOWNLOAD_PAGE: u32 = 1000;
 
+macro_rules! time_block {
+	($name:expr, $code:block) => {{
+		let now = std::time::Instant::now();
+		let r = $code;
+		log::info!("time block {} took {:?}s", $name, now.elapsed().as_secs());
+		r
+	}};
+}
+
 /// The snapshot that we store on disk.
 #[derive(Decode, Encode)]
 struct Snapshot<B: BlockT> {
@@ -383,17 +392,16 @@ where
 		at: B::Hash,
 		pending_ext: &mut TestExternalities,
 	) -> Result<Vec<KeyValue>, &'static str> {
-		let now = std::time::Instant::now();
-		let keys = self.rpc_get_keys_paged(prefix, at).await?;
+		let keys =
+			time_block!("rpc_get_keys_paged", { self.rpc_get_keys_paged(prefix, at).await? });
 		let client = self.as_online().transport.remote_client.clone().unwrap();
 		let thread_chunk_size =
 			((keys.len() + self.as_online().threads - 1) / self.as_online().threads).max(1);
 
 		log::info!(
 			target: LOG_TARGET,
-			"Querying a total of {} keys, took {}s to fetch keys, splitting among {} threads, {} keys per thread",
+			"Querying a total of {} keys, splitting among {} threads, {} keys per thread",
 			keys.len(),
-			now.elapsed().as_secs(),
 			self.as_online().threads,
 			thread_chunk_size,
 		);
@@ -408,97 +416,100 @@ where
 		}
 		let (tx, rx) = std::sync::mpsc::channel::<Message>();
 
-		for thread_keys in keys_chunked {
-			let thread_client = client.clone();
-			let thread_sender = tx.clone();
-			let handle = std::thread::spawn(move || {
-				let rt = tokio::runtime::Runtime::new().unwrap();
-				let mut thread_key_values = Vec::with_capacity(thread_keys.len());
-				for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
-					let batch = chunk_keys
-						.iter()
-						.cloned()
-						.map(|key| ("state_getStorage", rpc_params![key, at]))
-						.collect::<Vec<_>>();
+		time_block!("value_download", {
+			for thread_keys in keys_chunked {
+				let thread_client = client.clone();
+				let thread_sender = tx.clone();
+				let handle = std::thread::spawn(move || {
+					let rt = tokio::runtime::Runtime::new().unwrap();
+					let mut thread_key_values = Vec::with_capacity(thread_keys.len());
+					for chunk_keys in thread_keys.chunks(DEFAULT_VALUE_DOWNLOAD_BATCH) {
+						let batch = chunk_keys
+							.iter()
+							.cloned()
+							.map(|key| ("state_getStorage", rpc_params![key, at]))
+							.collect::<Vec<_>>();
 
-					let values = rt
-						.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
-						.map_err(|e| {
-							log::error!(
-								target: LOG_TARGET,
-								"failed to execute batch of {} values. Error: {:?}",
-								chunk_keys.len(),
-								e
-							);
-							"batch failed."
-						})
-						.unwrap();
-
-					let batch_kv = chunk_keys
-						.into_iter()
-						.enumerate()
-						.map(|(idx, key)| {
-							let maybe_value = values[idx].clone();
-							let value = maybe_value.unwrap_or_else(|| {
-								log::warn!(
+						let values = rt
+							.block_on(thread_client.batch_request::<Option<StorageData>>(batch))
+							.map_err(|e| {
+								log::error!(
 									target: LOG_TARGET,
-									"key {:?} had none corresponding value.",
-									&key
+									"failed to execute batch of {} values. Error: {:?}",
+									chunk_keys.len(),
+									e
 								);
-								StorageData(vec![])
-							});
-							thread_key_values.push((key.clone(), value.clone()));
-							if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
-								let ratio: f64 =
-									thread_key_values.len() as f64 / thread_keys.len() as f64;
-								log::debug!(
-									target: LOG_TARGET,
-									"[thread = {:?}] progress = {:.2} [{} / {}]",
-									std::thread::current().id(),
-									ratio,
-									thread_key_values.len(),
-									thread_keys.len(),
-								);
-							}
-							(key.clone().0, value.0)
-						})
-						.collect::<Vec<_>>();
+								"batch failed."
+							})
+							.unwrap();
 
-					// send this batch to the main thread to start inserting.
-					thread_sender.send(Message::Batch(batch_kv)).unwrap();
-				}
+						let batch_kv = chunk_keys
+							.into_iter()
+							.enumerate()
+							.map(|(idx, key)| {
+								let maybe_value = values[idx].clone();
+								let value = maybe_value.unwrap_or_else(|| {
+									log::warn!(
+										target: LOG_TARGET,
+										"key {:?} had none corresponding value.",
+										&key
+									);
+									StorageData(vec![])
+								});
+								thread_key_values.push((key.clone(), value.clone()));
+								if thread_key_values.len() % (thread_keys.len() / 10).max(1) == 0 {
+									let ratio: f64 =
+										thread_key_values.len() as f64 / thread_keys.len() as f64;
+									log::debug!(
+										target: LOG_TARGET,
+										"[thread = {:?}] progress = {:.2} [{} / {}]",
+										std::thread::current().id(),
+										ratio,
+										thread_key_values.len(),
+										thread_keys.len(),
+									);
+								}
+								(key.clone().0, value.0)
+							})
+							.collect::<Vec<_>>();
 
-				thread_sender.send(Message::Terminated).unwrap();
-				thread_key_values
-			});
-
-			handles.push(handle);
-		}
-
-		// first, wait until all threads send a `Terminated` message, in the meantime populate
-		// `pending_ext`.
-		let mut terminated = 0usize;
-		loop {
-			match rx.recv().unwrap() {
-				Message::Batch(kv) =>
-					for (k, v) in kv {
-						// skip writing the child root data.
-						if is_default_child_storage_key(k.as_ref()) {
-							continue
-						}
-						pending_ext.insert(k, v);
-					},
-				Message::Terminated => {
-					terminated += 1;
-					if terminated == handles.len() {
-						break
+						// send this batch to the main thread to start inserting.
+						thread_sender.send(Message::Batch(batch_kv)).unwrap();
 					}
-				},
-			}
-		}
 
-		let keys_and_values =
-			handles.into_iter().map(|h| h.join().unwrap()).flatten().collect::<Vec<_>>();
+					thread_sender.send(Message::Terminated).unwrap();
+					thread_key_values
+				});
+
+				handles.push(handle);
+			}
+
+			// first, wait until all threads send a `Terminated` message, in the meantime populate
+			// `pending_ext`.
+			let mut terminated = 0usize;
+			loop {
+				match rx.recv().unwrap() {
+					Message::Batch(kv) =>
+						for (k, v) in kv {
+							// skip writing the child root data.
+							if is_default_child_storage_key(k.as_ref()) {
+								continue
+							}
+							pending_ext.insert(k, v);
+						},
+					Message::Terminated => {
+						terminated += 1;
+						if terminated == handles.len() {
+							break
+						}
+					},
+				}
+			}
+		});
+
+		let keys_and_values = time_block!("collect_values", {
+			handles.into_iter().map(|h| h.join().unwrap()).flatten().collect::<Vec<_>>()
+		});
 
 		Ok(keys_and_values)
 	}
