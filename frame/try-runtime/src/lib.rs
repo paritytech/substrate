@@ -33,6 +33,10 @@ sp_api::decl_runtime_apis! {
 		///
 		/// Returns the consumed weight of the migration in case of a successful one, combined with
 		/// the total allowed block weight of the runtime.
+		///
+		/// If `checks` is `true`, `pre_migrate` and `post_migrate` of each migration and
+		/// `try_state` of all pallets will be executed. Else, no. If checks are executed, the PoV
+		/// tracking is likely inaccurate.
 		fn on_runtime_upgrade(checks: bool) -> (Weight, Weight);
 
 		/// Execute the given block, but don't check that its state root matches that of yours.

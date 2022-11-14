@@ -51,7 +51,7 @@ use sc_client_api::{
 pub use sc_rpc_api::{child_state::*, state::*};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 
-const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 10000;
+const STORAGE_KEYS_PAGED_MAX_COUNT: u32 = 1000;
 
 /// State backend API.
 pub trait StateBackend<Block: BlockT, Client>: Send + Sync + 'static
