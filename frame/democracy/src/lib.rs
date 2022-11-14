@@ -1714,7 +1714,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Clear metadata, if `Some` and unrequest associated preimage.
 	fn clear_metadata(owner: MetadataOwner) {
-		if let Some(hash) = MetadataOf::<T>::take(owner.clone()) {
+		if let Some(hash) = MetadataOf::<T>::take(&owner) {
 			if T::Preimages::is_requested(&hash) {
 				T::Preimages::unrequest(&hash);
 			}
@@ -1724,8 +1724,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Reset the metadata of an `owner` to a `new_owner`.
 	fn reset_metadata(owner: MetadataOwner, new_owner: MetadataOwner) {
-		if let Some(hash) = MetadataOf::<T>::take(owner.clone()) {
-			MetadataOf::<T>::insert(new_owner.clone(), hash);
+		if let Some(hash) = MetadataOf::<T>::take(&owner) {
+			MetadataOf::<T>::insert(&new_owner, hash);
 			Self::deposit_event(Event::<T>::MetadataReset {
 				prev_owner: owner,
 				owner: new_owner,
