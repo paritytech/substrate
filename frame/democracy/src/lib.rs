@@ -1098,7 +1098,7 @@ pub mod pallet {
 		/// - `origin`: Must be an external origin and correspond to the proposal vote threshold,
 		///   `ExternalOrigin` for `SuperMajorityApprove`, `ExternalDefaultOrigin` for
 		///   `SuperMajorityAgainst` and `ExternalMajorityOrigin` for `SimpleMajority`.
-		/// - `hash`: The preimage hash of an on-chain stored preimage.
+		/// - `hash`: The hash of an on-chain stored preimage.
 		#[pallet::weight(T::WeightInfo::set_external_metadata())]
 		pub fn set_external_metadata(origin: OriginFor<T>, hash: PreimageHash) -> DispatchResult {
 			let (_, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::NoProposal)?;
