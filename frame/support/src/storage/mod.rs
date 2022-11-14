@@ -299,7 +299,7 @@ pub trait IterableStorageMap<K: FullEncode, V: FullCodec>: StorageMap<K, V> {
 	/// Partially translate items from the map.
 	///
 	/// Returns the current cursor.
-	/// Once the resultant cursor is `None`, then no further items remain to be deleted.
+	/// Once the resultant cursor is `None`, then no further items remain to be translated.
 	///
 	/// NOTE: After the initial call, it is important that no further items
 	/// are inserted into the map. If so, then the map may not be fully translated when the
@@ -399,7 +399,7 @@ pub trait IterableStorageDoubleMap<K1: FullCodec, K2: FullCodec, V: FullCodec>:
 	/// Partially translate items from the map.
 	///
 	/// Returns the current cursor.
-	/// Once the resultant cursor is `None`, then no further items remain to be deleted.
+	/// Once the resultant cursor is `None`, then no further items remain to be translated.
 	///
 	/// NOTE: After the initial call, it is important that no further items
 	/// are inserted into the map. If so, then the map may not be fully translated when the
@@ -504,7 +504,7 @@ pub trait IterableStorageNMap<K: ReversibleKeyGenerator, V: FullCodec>: StorageN
 	/// Partially translate items from the map.
 	///
 	/// Returns the current cursor.
-	/// Once the resultant cursor is `None`, then no further items remain to be deleted.
+	/// Once the resultant cursor is `None`, then no further items remain to be translated.
 	///
 	/// NOTE: After the initial call, it is important that no further items
 	/// are inserted into the map. If so, then the map may not be fully translated when the
