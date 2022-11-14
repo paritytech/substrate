@@ -71,6 +71,7 @@ fn create_funded_user_with_balance<T: pallet_nomination_pools::Config>(
 fn create_pool_account<T: pallet_nomination_pools::Config>(
 	n: u32,
 	balance: BalanceOf<T>,
+	commission: Option<Perbill>,
 ) -> (T::AccountId, T::AccountId) {
 	let ed = CurrencyOf::<T>::minimum_balance();
 	let pool_creator: T::AccountId =
@@ -85,6 +86,20 @@ fn create_pool_account<T: pallet_nomination_pools::Config>(
 		pool_creator_lookup,
 	)
 	.unwrap();
+
+	if let Some(c) = commission {
+		let _ = pallet_nomination_pools::BondedPools::<T>::iter()
+			.find(|(_, bonded_pool)| bonded_pool.roles.depositor == pool_creator)
+			.map(|(pool_id, _)| {
+				Pools::<T>::set_commission(
+					RuntimeOrigin::Signed(pool_creator.clone()).into(),
+					pool_id,
+					c,
+					Some(pool_creator.clone()),
+				)
+				.expect("pool commission has been set");
+			});
+	}
 
 	let pool_account = pallet_nomination_pools::BondedPools::<T>::iter()
 		.find(|(_, bonded_pool)| bonded_pool.roles.depositor == pool_creator)
@@ -136,14 +151,8 @@ impl<T: Config> ListScenario<T> {
 		sp_std::mem::forget(i);
 
 		// Create accounts with the origin weight
-		let (pool_creator1, pool_origin1) = create_pool_account::<T>(USER_SEED + 1, origin_weight);
-		Pools::<T>::set_commission(
-			RuntimeOrigin::Signed(pool_creator1.clone()).into(),
-			1,
-			Perbill::from_percent(50),
-			Some(pool_creator1.clone()),
-		)
-		.unwrap();
+		let (pool_creator1, pool_origin1) =
+			create_pool_account::<T>(USER_SEED + 1, origin_weight, Some(Perbill::from_percent(50)));
 
 		T::Staking::nominate(
 			&pool_origin1,
@@ -151,14 +160,9 @@ impl<T: Config> ListScenario<T> {
 			vec![account("random_validator", 0, USER_SEED)],
 		)?;
 
-		let (pool_creator2, pool_origin2) = create_pool_account::<T>(USER_SEED + 2, origin_weight);
-		Pools::<T>::set_commission(
-			RuntimeOrigin::Signed(pool_creator2.clone()).into(),
-			2,
-			Perbill::from_percent(50),
-			Some(pool_creator2),
-		)
-		.unwrap();
+		let (_, pool_origin2) =
+			create_pool_account::<T>(USER_SEED + 2, origin_weight, Some(Perbill::from_percent(50)));
+
 		T::Staking::nominate(
 			&pool_origin2,
 			vec![account("random_validator", 0, USER_SEED)].clone(),
@@ -174,14 +178,8 @@ impl<T: Config> ListScenario<T> {
 			dest_weight_as_vote.try_into().map_err(|_| "could not convert u64 to Balance")?;
 
 		// Create an account with the worst case destination weight
-		let (pool_creator3, pool_dest1) = create_pool_account::<T>(USER_SEED + 3, dest_weight);
-		Pools::<T>::set_commission(
-			RuntimeOrigin::Signed(pool_creator3.clone()).into(),
-			3,
-			Perbill::from_percent(50),
-			Some(pool_creator3),
-		)
-		.unwrap();
+		let (_, pool_dest1) =
+			create_pool_account::<T>(USER_SEED + 3, dest_weight, Some(Perbill::from_percent(50)));
 
 		T::Staking::nominate(&pool_dest1, vec![account("random_validator", 0, USER_SEED)])?;
 
@@ -299,7 +297,7 @@ frame_benchmarking::benchmarks! {
 	claim_payout {
 		let origin_weight = Pools::<T>::depositor_min_bond() * 2u32.into();
 		let ed = CurrencyOf::<T>::minimum_balance();
-		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight);
+		let (depositor, pool_account) = create_pool_account::<T>(0, origin_weight, None);
 		let reward_account = Pools::<T>::create_reward_account(1);
 
 		// Send funds to the reward account of the pool
@@ -359,7 +357,7 @@ frame_benchmarking::benchmarks! {
 		let s in 0 .. MAX_SPANS;
 
 		let min_create_bond = Pools::<T>::depositor_min_bond();
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 
 		// Add a new member
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
@@ -401,7 +399,7 @@ frame_benchmarking::benchmarks! {
 		let s in 0 .. MAX_SPANS;
 
 		let min_create_bond = Pools::<T>::depositor_min_bond();
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 
 		// Add a new member
 		let min_join_bond = MinJoinBond::<T>::get().max(CurrencyOf::<T>::minimum_balance());
@@ -447,7 +445,7 @@ frame_benchmarking::benchmarks! {
 		let s in 0 .. MAX_SPANS;
 
 		let min_create_bond = Pools::<T>::depositor_min_bond();
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 		let depositor_lookup = T::Lookup::unlookup(depositor.clone());
 
 		// We set the pool to the destroying state so the depositor can leave
@@ -560,7 +558,7 @@ frame_benchmarking::benchmarks! {
 
 		// Create a pool
 		let min_create_bond = Pools::<T>::depositor_min_bond() * 2u32.into();
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 
 		// Create some accounts to nominate. For the sake of benchmarking they don't need to be
 		// actual validators
@@ -598,7 +596,7 @@ frame_benchmarking::benchmarks! {
 	set_state {
 		// Create a pool
 		let min_create_bond = Pools::<T>::depositor_min_bond();
-		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
+		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond, None);
 		BondedPools::<T>::mutate(&1, |maybe_pool| {
 			// Force the pool into an invalid state
 			maybe_pool.as_mut().map(|mut pool| pool.points = min_create_bond * 10u32.into());
@@ -615,7 +613,7 @@ frame_benchmarking::benchmarks! {
 		let n in 1 .. <T as pallet_nomination_pools::Config>::MaxMetadataLen::get();
 
 		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 
 		// Create metadata of the max possible size
 		let metadata: Vec<u8> = (0..n).map(|_| 42).collect();
@@ -644,7 +642,7 @@ frame_benchmarking::benchmarks! {
 
 	update_roles {
 		let first_id = pallet_nomination_pools::LastPoolId::<T>::get() + 1;
-		let (root, _) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		let (root, _) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 		let random: T::AccountId = account("but is anything really random in computers..?", 0, USER_SEED);
 	}:_(
 		RuntimeOrigin::Signed(root.clone()),
@@ -666,7 +664,7 @@ frame_benchmarking::benchmarks! {
 
 	chill {
 		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 
 		// Nominate with the pool.
 		 let validators: Vec<_> = (0..T::MaxNominations::get())
@@ -683,8 +681,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	set_commission {
-		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		// Create a pool - do not set a commission yet.
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 		// set a max commission
 		Pools::<T>::set_commission_max(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(50)).unwrap();
 		// set a commission throttle
@@ -709,10 +707,8 @@ frame_benchmarking::benchmarks! {
 	}
 
 	set_commission_max {
-		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
-		// Set a commission that will update when max commission is set.
-		Pools::<T>::set_commission(RuntimeOrigin::Signed(depositor.clone()).into(), 1u32.into(), Perbill::from_percent(50), Some(depositor.clone())).unwrap();
+		// Create a pool, setting a commission that will update when max commission is set.
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), Some(Perbill::from_percent(50)));
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), Perbill::from_percent(50))
 	verify {
 		assert_eq!(
@@ -725,7 +721,7 @@ frame_benchmarking::benchmarks! {
 
 	set_commission_throttle {
 		// Create a pool
-		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into());
+		let (depositor, pool_account) = create_pool_account::<T>(0, Pools::<T>::depositor_min_bond() * 2u32.into(), None);
 	}:_(RuntimeOrigin::Signed(depositor.clone()), 1u32.into(), CommissionThrottlePrefs {
 		max_increase: Perbill::from_percent(50),
 		min_delay: 1000u32.into(),
