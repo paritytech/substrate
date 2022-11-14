@@ -482,6 +482,10 @@ where
 			match rx.recv().unwrap() {
 				Message::Batch(kv) =>
 					for (k, v) in kv {
+						// skip writing the child root data.
+						if is_default_child_storage_key(k.as_ref()) {
+							continue
+						}
 						pending_ext.insert(k, v);
 					},
 				Message::Terminated => {
