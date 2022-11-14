@@ -20,6 +20,7 @@
 //! [!!! HERE
 //! !!!](https://storage.googleapis.com/mangata-docs-node/sc_basic_authorship_ver/basic_authorship/index.html)
 
+#![feature(proc_macro_hygiene)]
 #[cfg(doc)]
 use aquamarine::aquamarine;
 
