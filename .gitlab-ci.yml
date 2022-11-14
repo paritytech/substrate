@@ -33,6 +33,7 @@ stages:
   - test
   - build
   - publish
+  - zombienet
   - deploy
   - notify
 
