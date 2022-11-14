@@ -56,10 +56,9 @@
 //! NOTE This pallet is experimental and not proven to work in production.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
 use frame_support::{log, traits::Get, weights::Weight};
 use sp_runtime::{
-	traits::{self, CheckedSub, One, Saturating, UniqueSaturatedInto},
+	traits::{self, CheckedSub, One, Saturating},
 	SaturatedConversion,
 };
 
@@ -73,7 +72,9 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafIndex, NodeIndex};
+pub use sp_mmr_primitives::{
+	self as primitives, utils::NodesUtils, Error, LeafDataProvider, LeafIndex, NodeIndex,
+};
 use sp_std::prelude::*;
 
 /// The most common use case for MMRs is to store historical block hashes,
@@ -219,7 +220,7 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
-			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
 
 			// append new leaf to MMR
@@ -242,7 +243,7 @@ pub mod pallet {
 			<NumberOfLeaves<T, I>>::put(leaves);
 			<RootHash<T, I>>::put(root);
 
-			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let peaks_after = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
 
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
 		}
@@ -313,11 +314,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Build offchain key from `parent_hash` of block that originally added node `pos` to MMR.
 	///
 	/// This combination makes the offchain (key,value) entry resilient to chain forks.
-	fn node_offchain_key(
+	fn node_temp_offchain_key(
 		pos: NodeIndex,
-		parent_hash: <T as frame_system::Config>::Hash,
+		parent_hash: &<T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, pos, parent_hash).encode()
+		NodesUtils::node_temp_offchain_key::<<T as frame_system::Config>::Header>(
+			&T::INDEXING_PREFIX,
+			pos,
+			parent_hash,
+		)
 	}
 
 	/// Build canonical offchain key for node `pos` in MMR.
@@ -326,7 +331,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Never read keys using `node_canon_offchain_key` unless you sure that
 	/// there's no `node_offchain_key` key in the storage.
 	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, pos).encode()
+		NodesUtils::node_canon_offchain_key(&T::INDEXING_PREFIX, pos)
 	}
 
 	/// Return size of rolling window of leaves saved in offchain under fork-unique keys.
@@ -336,7 +341,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// can be built using `frame_system::block_hash` map.
 	fn offchain_canonicalization_window() -> LeafIndex {
 		let window_size: LeafIndex =
-			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
+			<T as frame_system::Config>::BlockHashCount::get().saturated_into();
 		window_size.saturating_sub(1)
 	}
 
@@ -355,7 +360,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.saturating_add(leaf_index.saturated_into())
 	}
 
-	/// Convert a `block_num` into a leaf index.
+	/// Convert a block number into a leaf index.
 	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error>
 	where
 		T: frame_system::Config,

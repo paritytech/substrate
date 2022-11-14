@@ -18,12 +18,12 @@
 use crate::{
 	mmr::{
 		storage::{OffchainStorage, RuntimeStorage, Storage},
-		utils::NodesUtils,
 		Hasher, Node, NodeOf,
 	},
 	primitives::{self, Error, NodeIndex},
 	Config, HashingOf,
 };
+use sp_mmr_primitives::{mmr_lib, utils::NodesUtils};
 use sp_std::prelude::*;
 
 /// Stateless verification of the proof for a batch of leaves.
@@ -115,12 +115,6 @@ where
 		let root = self.mmr.get_root().map_err(|e| Error::GetRoot.log_error(e))?;
 		p.verify(root, leaves_positions_and_data)
 			.map_err(|e| Error::Verify.log_debug(e))
-	}
-
-	/// Return the internal size of the MMR (number of nodes).
-	#[cfg(test)]
-	pub fn size(&self) -> NodeIndex {
-		self.mmr.mmr_size()
 	}
 }
 

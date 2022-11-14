@@ -20,12 +20,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
+pub use mmr_lib;
+
 use scale_info::TypeInfo;
 use sp_debug_derive::RuntimeDebug;
 use sp_runtime::traits;
 use sp_std::fmt;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
+
+pub mod utils;
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;

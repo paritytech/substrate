@@ -19,15 +19,15 @@
 
 use codec::Encode;
 use frame_support::log::{debug, error, trace};
-use mmr_lib::helper;
 use sp_core::offchain::StorageKind;
 use sp_io::{offchain, offchain_index};
+use sp_mmr_primitives::{mmr_lib, mmr_lib::helper, utils::NodesUtils};
 use sp_std::iter::Peekable;
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::*;
 
 use crate::{
-	mmr::{utils::NodesUtils, Node, NodeOf},
+	mmr::{Node, NodeOf},
 	primitives::{self, NodeIndex},
 	Config, Nodes, NumberOfLeaves, Pallet,
 };
@@ -150,7 +150,7 @@ where
 			// persisted. All entries added by same block number on other forks will be cleared.
 			let to_canon_hash = <frame_system::Pallet<T>>::block_hash(to_canon_block_num);
 
-			Self::canonicalize_nodes_for_hash(&to_canon_nodes, to_canon_hash);
+			Self::canonicalize_nodes_for_hash(&to_canon_nodes, &to_canon_hash);
 			// Get all the forks to prune, also remove them from the offchain pruning_map.
 			PruningMap::<T, I>::remove(to_canon_block_num)
 				.map(|forks| {
@@ -169,7 +169,7 @@ where
 	fn prune_nodes_for_forks(nodes: &[NodeIndex], forks: Vec<<T as frame_system::Config>::Hash>) {
 		for hash in forks {
 			for pos in nodes {
-				let key = Pallet::<T, I>::node_offchain_key(*pos, hash);
+				let key = Pallet::<T, I>::node_temp_offchain_key(*pos, &hash);
 				debug!(
 					target: "runtime::mmr::offchain",
 					"Clear elem at pos {} with key {:?}",
@@ -182,10 +182,10 @@ where
 
 	fn canonicalize_nodes_for_hash(
 		to_canon_nodes: &[NodeIndex],
-		to_canon_hash: <T as frame_system::Config>::Hash,
+		to_canon_hash: &<T as frame_system::Config>::Hash,
 	) {
 		for pos in to_canon_nodes {
-			let key = Pallet::<T, I>::node_offchain_key(*pos, to_canon_hash);
+			let key = Pallet::<T, I>::node_temp_offchain_key(*pos, to_canon_hash);
 			// Retrieve the element from Off-chain DB under fork-aware key.
 			if let Some(elem) = offchain::local_storage_get(StorageKind::PERSISTENT, &key) {
 				let canon_key = Pallet::<T, I>::node_canon_offchain_key(*pos);
@@ -239,7 +239,7 @@ where
 		let ancestor_parent_block_num =
 			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves);
 		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
-		let key = Pallet::<T, I>::node_offchain_key(pos, ancestor_parent_hash);
+		let key = Pallet::<T, I>::node_temp_offchain_key(pos, &ancestor_parent_hash);
 		debug!(
 			target: "runtime::mmr::offchain", "offchain db get {}: leaf idx {:?}, hash {:?}, key {:?}",
 			pos, ancestor_leaf_idx, ancestor_parent_hash, key
@@ -308,7 +308,7 @@ where
 				<Nodes<T, I>>::insert(node_index, elem.hash());
 			}
 			// We are storing full node off-chain (using indexing API).
-			Self::store_to_offchain(node_index, parent_hash, &elem);
+			Self::store_to_offchain(node_index, &parent_hash, &elem);
 
 			// Increase the indices.
 			if let Node::Data(..) = elem {
@@ -337,7 +337,7 @@ where
 {
 	fn store_to_offchain(
 		pos: NodeIndex,
-		parent_hash: <T as frame_system::Config>::Hash,
+		parent_hash: &<T as frame_system::Config>::Hash,
 		node: &NodeOf<T, I, L>,
 	) {
 		let encoded_node = node.encode();
@@ -345,7 +345,7 @@ where
 		// fork-resistant. Offchain worker task will "canonicalize" it
 		// `frame_system::BlockHashCount` blocks later, when we are not worried about forks anymore
 		// (multi-era-deep forks should not happen).
-		let key = Pallet::<T, I>::node_offchain_key(pos, parent_hash);
+		let key = Pallet::<T, I>::node_temp_offchain_key(pos, parent_hash);
 		debug!(
 			target: "runtime::mmr::offchain", "offchain db set: pos {} parent_hash {:?} key {:?}",
 			pos, parent_hash, key
