@@ -35,7 +35,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			collection,
 			CollectionDetails {
 				owner: owner.clone(),
-				total_deposit: deposit,
+				owner_deposit: deposit,
 				items: 0,
 				item_metadatas: 0,
 				attributes: 0,
@@ -90,12 +90,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			PendingSwapOf::<T, I>::remove_prefix(&collection, None);
 			CollectionMetadataOf::<T, I>::remove(&collection);
 			Self::clear_roles(&collection)?;
-			#[allow(deprecated)]
-			Attribute::<T, I>::remove_prefix((&collection,), None);
+
+			for (_, (_, deposit)) in Attribute::<T, I>::drain_prefix((&collection,)) {
+				if !deposit.amount.is_zero() {
+					if let Some(account) = deposit.account {
+						T::Currency::unreserve(&account, deposit.amount);
+					}
+				}
+			}
+
 			CollectionAccount::<T, I>::remove(&collection_details.owner, &collection);
-			T::Currency::unreserve(&collection_details.owner, collection_details.total_deposit);
+			T::Currency::unreserve(&collection_details.owner, collection_details.owner_deposit);
 			CollectionConfigOf::<T, I>::remove(&collection);
 			let _ = ItemConfigOf::<T, I>::clear_prefix(&collection, witness.items, None);
+			let _ =
+				ItemAttributesApprovalsOf::<T, I>::clear_prefix(&collection, witness.items, None);
 
 			Self::deposit_event(Event::Destroyed { collection });
 

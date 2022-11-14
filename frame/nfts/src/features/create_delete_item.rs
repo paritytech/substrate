@@ -109,6 +109,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::remove((&owner, &collection, &item));
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 		PendingSwapOf::<T, I>::remove(&collection, &item);
+		ItemAttributesApprovalsOf::<T, I>::remove(&collection, &item);
 
 		// NOTE: if item's settings are not empty (e.g. item's metadata is locked)
 		// then we keep the record and don't remove it
