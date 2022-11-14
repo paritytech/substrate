@@ -35,6 +35,7 @@ use sc_network_common::{
 use sp_runtime::traits::Block as BlockT;
 use std::{
 	hash::{Hash, Hasher},
+	num::NonZeroUsize,
 	sync::Arc,
 	time::Duration,
 };
@@ -144,7 +145,9 @@ where
 		);
 		protocol_config.inbound_queue = Some(tx);
 
-		let seen_requests = LruCache::new(num_peer_hint * 2);
+		let capacity =
+			NonZeroUsize::new(num_peer_hint.max(1) * 2).expect("cache capacity is not zero");
+		let seen_requests = LruCache::new(capacity);
 
 		(Self { client, request_receiver, seen_requests }, protocol_config)
 	}

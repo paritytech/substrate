@@ -477,7 +477,7 @@ pub mod pallet {
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
 		LiquidityRestrictions,
-		/// Balance too low to send value
+		/// Balance too low to send value.
 		InsufficientBalance,
 		/// Value too low to create account due to existential deposit
 		ExistentialDeposit,

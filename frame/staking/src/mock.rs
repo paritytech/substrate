@@ -238,6 +238,7 @@ parameter_types! {
 	pub static MaxUnlockingChunks: u32 = 32;
 	pub static RewardOnUnbalanceWasCalled: bool = false;
 	pub static LedgerSlashPerEra: (BalanceOf<Test>, BTreeMap<EraIndex, BalanceOf<Test>>) = (Zero::zero(), BTreeMap::new());
+	pub static MaxWinners: u32 = 100;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -256,6 +257,9 @@ impl onchain::Config for OnChainSeqPhragmen {
 	type Solver = SequentialPhragmen<AccountId, Perbill>;
 	type DataProvider = Staking;
 	type WeightInfo = ();
+	type MaxWinners = MaxWinners;
+	type VotersBound = ConstU32<{ u32::MAX }>;
+	type TargetsBound = ConstU32<{ u32::MAX }>;
 }
 
 pub struct MockReward {}
@@ -295,7 +299,7 @@ impl crate::pallet::pallet::Config for Test {
 	type NextNewSession = Session;
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-	type ElectionProvider = onchain::UnboundedExecution<OnChainSeqPhragmen>;
+	type ElectionProvider = onchain::OnChainExecution<OnChainSeqPhragmen>;
 	type GenesisElectionProvider = Self::ElectionProvider;
 	// NOTE: consider a macro and use `UseNominatorsAndValidatorsMap<Self>` as well.
 	type VoterList = VoterBagsList;

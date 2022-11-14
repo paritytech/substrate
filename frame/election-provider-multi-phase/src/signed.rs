@@ -462,7 +462,7 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Infallible
 	pub fn finalize_signed_phase_accept_solution(
-		ready_solution: ReadySolution<T::AccountId>,
+		ready_solution: ReadySolution<T>,
 		who: &T::AccountId,
 		deposit: BalanceOf<T>,
 		call_fee: BalanceOf<T>,
@@ -537,7 +537,7 @@ impl<T: Config> Pallet<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{mock::*, ElectionCompute, Error, Event, Perbill, Phase};
+	use crate::{mock::*, ElectionCompute, ElectionError, Error, Event, Perbill, Phase};
 	use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 
 	#[test]
@@ -554,6 +554,50 @@ mod tests {
 				MultiPhase::submit(RuntimeOrigin::signed(10), Box::new(solution)),
 				Error::<Runtime>::PreDispatchEarlySubmission,
 			);
+		})
+	}
+
+	#[test]
+	fn data_provider_should_respect_target_limits() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given a reduced expectation of maximum electable targets
+			MaxElectableTargets::set(2);
+			// and a data provider that does not respect limits
+			DataProviderAllowBadData::set(true);
+
+			assert_noop!(
+				MultiPhase::create_snapshot(),
+				ElectionError::DataProvider("Snapshot too big for submission."),
+			);
+		})
+	}
+
+	#[test]
+	fn data_provider_should_respect_voter_limits() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given a reduced expectation of maximum electing voters
+			MaxElectingVoters::set(2);
+			// and a data provider that does not respect limits
+			DataProviderAllowBadData::set(true);
+
+			assert_noop!(
+				MultiPhase::create_snapshot(),
+				ElectionError::DataProvider("Snapshot too big for submission."),
+			);
+		})
+	}
+
+	#[test]
+	fn desired_targets_greater_than_max_winners() {
+		ExtBuilder::default().build_and_execute(|| {
+			// given desired_targets bigger than MaxWinners
+			DesiredTargets::set(4);
+			MaxWinners::set(3);
+
+			let (_, _, actual_desired_targets) = MultiPhase::create_snapshot_external().unwrap();
+
+			// snapshot is created with min of desired_targets and MaxWinners
+			assert_eq!(actual_desired_targets, 3);
 		})
 	}
 
