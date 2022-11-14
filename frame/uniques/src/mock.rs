@@ -24,6 +24,7 @@ use frame_support::{
 	construct_runtime,
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 };
+use frame_system::EnsureSigned;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -86,10 +87,11 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_assets::Config for Test {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
 	type AssetId = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<1>;
 	type AssetAccountDeposit = ConstU64<10>;

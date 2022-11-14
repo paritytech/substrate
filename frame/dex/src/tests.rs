@@ -43,7 +43,7 @@ fn pools() -> Vec<PoolIdOf<Test>> {
 fn assets() -> Vec<u32> {
 	// if the storage would be public:
 	// let mut s: Vec<_> = pallet_assets::pallet::Asset::<Test>::iter().map(|x| x.0).collect();
-	let mut s: Vec<_> = <<Test as Config>::Assets>::assets().collect();
+	let mut s: Vec<_> = <<Test as Config>::Assets>::asset_ids().collect();
 	s.sort();
 	s
 }
@@ -51,7 +51,7 @@ fn assets() -> Vec<u32> {
 fn pool_assets() -> Vec<u32> {
 	// if the storage would be public:
 	// let mut s: Vec<_> = pallet_assets::pallet::PoolAsset::<Test>::iter().map(|x| x.0).collect();
-	let mut s: Vec<_> = <<Test as Config>::PoolAssets>::assets().collect();
+	let mut s: Vec<_> = <<Test as Config>::PoolAssets>::asset_ids().collect();
 	s.sort();
 	s
 }

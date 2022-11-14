@@ -710,9 +710,20 @@ fn approved_account_gets_reset_after_buy_item() {
 		assert_ok!(Uniques::mint(RuntimeOrigin::signed(1), 0, item, 1));
 		assert_ok!(Uniques::approve_transfer(RuntimeOrigin::signed(1), 0, item, 5));
 
-		assert_ok!(Uniques::set_price(RuntimeOrigin::signed(1), 0, item, Some(price), None));
+		assert_ok!(Uniques::set_price(
+			RuntimeOrigin::signed(1),
+			0,
+			item,
+			Some(types::BalanceOrAsset::Balance { amount: price }),
+			None
+		));
 
-		assert_ok!(Uniques::buy_item(RuntimeOrigin::signed(2), 0, item, price));
+		assert_ok!(Uniques::buy_item(
+			RuntimeOrigin::signed(2),
+			0,
+			item,
+			types::BalanceOrAsset::Balance { amount: price }
+		));
 
 		// this shouldn't work because the item has been bough and the approved account should be
 		// reset.

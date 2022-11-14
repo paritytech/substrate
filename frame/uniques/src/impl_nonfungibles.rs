@@ -21,7 +21,7 @@ use super::*;
 use frame_support::{
 	storage::KeyPrefixIterator,
 	traits::{
-		tokens::nonfungibles::{Inspect, Transfer, *},
+		tokens::nonfungibles::{Create, Destroy, Inspect, InspectEnumerable, Mutate, Transfer},
 		Get,
 	},
 	BoundedSlice,
