@@ -164,6 +164,7 @@ pub mod pallet {
 	use super::{FungibleInspect, FungibleMutate};
 	pub use crate::weights::WeightInfo;
 	use frame_support::{
+		bounded_vec,
 		pallet_prelude::*,
 		traits::{
 			nonfungible::{Inspect as NonfungibleInspect, Transfer as NonfungibleTransfer},
@@ -358,7 +359,7 @@ pub mod pallet {
 	pub struct OnEmptyQueueTotals<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> Get<QueueTotalsTypeOf<T>> for OnEmptyQueueTotals<T> {
 		fn get() -> QueueTotalsTypeOf<T> {
-			frame_support::bounded_vec![(0, Zero::zero()); <T as Config>::QueueCount::get() as usize]
+			bounded_vec![(0, Zero::zero()); <T as Config>::QueueCount::get() as usize]
 		}
 	}
 
