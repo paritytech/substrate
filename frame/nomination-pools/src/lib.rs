@@ -609,6 +609,7 @@ pub struct Commission<T: Config> {
 	pub throttle: Option<CommissionThrottle<T>>,
 }
 
+#[derive(DefaultNoBound)]
 impl<T: Config> Default for Commission<T> {
 	fn default() -> Self {
 		Self { current: None, max: None, throttle: None }
@@ -647,10 +648,10 @@ impl<T: Config> Commission<T> {
 		}
 	}
 
-	/// Set the pool's commission.
-	/// Update commission accordingly based on `commission` and `payee`.
-	/// If throttle is present, record the current block as the previously updated commission.
-	/// If the supplied commission is zero, `None` will be inserted and `payee` will be ignored.
+	/// Set the pool's commission. Update commission accordingly based on
+	/// `commission` and `payee`. If throttle is present, record the current block
+	/// as the previously updated commission. If the supplied commission is zero,
+	/// `None` will be inserted and `payee` will be ignored.
 	fn maybe_update_current(
 		&mut self,
 		commission: &Perbill,
@@ -672,12 +673,12 @@ impl<T: Config> Commission<T> {
 		Ok(())
 	}
 
-	/// Set the pool's maximum commission.
-	/// The pool's maximum commission can be set to any value initially, and only smaller values
-	/// thereafter. If larger values are attempted, this function will return a dispatch error.
+	/// Set the pool's maximum commission. The pool's maximum commission can be
+	/// set to any value initially, and only smaller values thereafter. If larger
+	/// values are attempted, this function will return a dispatch error.
 	///
-	/// If `current.0` is larger than an updated max commission value, then `current.0` will also be
-	/// updated to the new maximum.
+	/// If `current.0` is larger than an updated max commission value, then
+	/// `current.0` will also be updated to the new maximum.
 	fn maybe_update_max(&mut self, new_max: Perbill) -> DispatchResult {
 		if let Some(old) = self.max.as_mut() {
 			if new_max > *old {
@@ -691,9 +692,9 @@ impl<T: Config> Commission<T> {
 		Ok(())
 	}
 
-	/// Set the pool's commission throttle settings.
-	/// Once a throttle configuration has been set, only more restrictive values can be set
-	/// thereafter. These restrictions translate to increased `min_delay` values and decreased
+	/// Set the pool's commission throttle settings. Once a throttle configuration
+	/// has been set, only more restrictive values can be set thereafter. These
+	/// restrictions translate to increased `min_delay` values and decreased
 	/// `max_increase` values.
 	fn maybe_update_throttle(
 		&mut self,
