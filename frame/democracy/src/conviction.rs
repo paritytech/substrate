@@ -18,7 +18,7 @@
 //! The conviction datatype.
 
 use crate::types::Delegations;
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Bounded, CheckedDiv, CheckedMul, Zero},
@@ -27,19 +27,7 @@ use sp_runtime::{
 use sp_std::{prelude::*, result::Result};
 
 /// A value denoting the strength of conviction of a vote.
-#[derive(
-	Encode,
-	MaxEncodedLen,
-	Decode,
-	Copy,
-	Clone,
-	Eq,
-	PartialEq,
-	Ord,
-	PartialOrd,
-	RuntimeDebug,
-	TypeInfo,
-)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo)]
 pub enum Conviction {
 	/// 0.1x votes, unlocked.
 	None,

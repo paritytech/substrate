@@ -80,11 +80,12 @@ use libp2p::{
 };
 use log::error;
 use parking_lot::{Mutex, RwLock};
-use sc_network_common::protocol::ProtocolName;
 use std::{
+	borrow::Cow,
 	collections::VecDeque,
 	mem,
 	pin::Pin,
+	str,
 	sync::Arc,
 	task::{Context, Poll},
 	time::{Duration, Instant},
@@ -145,9 +146,9 @@ pub struct NotifsHandler {
 #[derive(Debug, Clone)]
 pub struct ProtocolConfig {
 	/// Name of the protocol.
-	pub name: ProtocolName,
+	pub name: Cow<'static, str>,
 	/// Names of the protocol to use if the main one isn't available.
-	pub fallback_names: Vec<ProtocolName>,
+	pub fallback_names: Vec<Cow<'static, str>>,
 	/// Handshake of the protocol. The `RwLock` is locked every time a new substream is opened.
 	pub handshake: Arc<RwLock<Vec<u8>>>,
 	/// Maximum allowed size for a notification.
@@ -296,7 +297,7 @@ pub enum NotifsHandlerOut {
 		/// Index of the protocol in the list of protocols passed at initialization.
 		protocol_index: usize,
 		/// Name of the protocol that was actually negotiated, if the default one wasn't available.
-		negotiated_fallback: Option<ProtocolName>,
+		negotiated_fallback: Option<Cow<'static, str>>,
 		/// The endpoint of the connection that is open for custom protocols.
 		endpoint: ConnectedPoint,
 		/// Handshake that was sent to us.

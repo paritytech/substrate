@@ -29,7 +29,6 @@ mod sysinfo_linux;
 pub use sysinfo::{
 	benchmark_cpu, benchmark_disk_random_writes, benchmark_disk_sequential_writes,
 	benchmark_memory, benchmark_sr25519_verify, gather_hwbench, gather_sysinfo,
-	serialize_throughput, serialize_throughput_option, Throughput,
 };
 
 /// The operating system part of the current target triplet.
@@ -45,23 +44,13 @@ pub const TARGET_ENV: &str = include_str!(concat!(env!("OUT_DIR"), "/target_env.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct HwBench {
 	/// The CPU speed, as measured in how many MB/s it can hash using the BLAKE2b-256 hash.
-	#[serde(serialize_with = "serialize_throughput")]
-	pub cpu_hashrate_score: Throughput,
+	pub cpu_hashrate_score: u64,
 	/// Memory bandwidth in MB/s, calculated by measuring the throughput of `memcpy`.
-	#[serde(serialize_with = "serialize_throughput")]
-	pub memory_memcpy_score: Throughput,
+	pub memory_memcpy_score: u64,
 	/// Sequential disk write speed in MB/s.
-	#[serde(
-		serialize_with = "serialize_throughput_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub disk_sequential_write_score: Option<Throughput>,
+	pub disk_sequential_write_score: Option<u64>,
 	/// Random disk write speed in MB/s.
-	#[serde(
-		serialize_with = "serialize_throughput_option",
-		skip_serializing_if = "Option::is_none"
-	)]
-	pub disk_random_write_score: Option<Throughput>,
+	pub disk_random_write_score: Option<u64>,
 }
 
 /// Limit the execution time of a benchmark.
@@ -131,14 +120,14 @@ pub fn print_sysinfo(sysinfo: &sc_telemetry::SysInfo) {
 
 /// Prints out the results of the hardware benchmarks in the logs.
 pub fn print_hwbench(hwbench: &HwBench) {
-	log::info!("🏁 CPU score: {}", hwbench.cpu_hashrate_score);
-	log::info!("🏁 Memory score: {}", hwbench.memory_memcpy_score);
+	log::info!("🏁 CPU score: {}MB/s", hwbench.cpu_hashrate_score);
+	log::info!("🏁 Memory score: {}MB/s", hwbench.memory_memcpy_score);
 
 	if let Some(score) = hwbench.disk_sequential_write_score {
-		log::info!("🏁 Disk score (seq. writes): {}", score);
+		log::info!("🏁 Disk score (seq. writes): {}MB/s", score);
 	}
 	if let Some(score) = hwbench.disk_random_write_score {
-		log::info!("🏁 Disk score (rand. writes): {}", score);
+		log::info!("🏁 Disk score (rand. writes): {}MB/s", score);
 	}
 }
 

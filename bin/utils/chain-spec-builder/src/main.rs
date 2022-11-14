@@ -37,51 +37,51 @@ use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 /// A utility to easily create a testnet chain spec definition with a given set
 /// of authorities and endowed accounts and/or generate random accounts.
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[clap(rename_all = "kebab-case")]
 enum ChainSpecBuilder {
 	/// Create a new chain spec with the given authorities, endowed and sudo
 	/// accounts.
 	New {
 		/// Authority key seed.
-		#[arg(long, short, required = true)]
+		#[clap(long, short, required = true)]
 		authority_seeds: Vec<String>,
 		/// Active nominators (SS58 format), each backing a random subset of the aforementioned
 		/// authorities.
-		#[arg(long, short, default_value = "0")]
+		#[clap(long, short, default_value = "0")]
 		nominator_accounts: Vec<String>,
 		/// Endowed account address (SS58 format).
-		#[arg(long, short)]
+		#[clap(long, short)]
 		endowed_accounts: Vec<String>,
 		/// Sudo account address (SS58 format).
-		#[arg(long, short)]
+		#[clap(long, short)]
 		sudo_account: String,
 		/// The path where the chain spec should be saved.
-		#[arg(long, short, default_value = "./chain_spec.json")]
+		#[clap(long, short, default_value = "./chain_spec.json")]
 		chain_spec_path: PathBuf,
 	},
 	/// Create a new chain spec with the given number of authorities and endowed
 	/// accounts. Random keys will be generated as required.
 	Generate {
 		/// The number of authorities.
-		#[arg(long, short)]
+		#[clap(long, short)]
 		authorities: usize,
 		/// The number of nominators backing the aforementioned authorities.
 		///
 		/// Will nominate a random subset of `authorities`.
-		#[arg(long, short, default_value_t = 0)]
+		#[clap(long, short, default_value = "0")]
 		nominators: usize,
 		/// The number of endowed accounts.
-		#[arg(long, short, default_value_t = 0)]
+		#[clap(long, short, default_value = "0")]
 		endowed: usize,
 		/// The path where the chain spec should be saved.
-		#[arg(long, short, default_value = "./chain_spec.json")]
+		#[clap(long, short, default_value = "./chain_spec.json")]
 		chain_spec_path: PathBuf,
 		/// Path to use when saving generated keystores for each authority.
 		///
 		/// At this path, a new folder will be created for each authority's
 		/// keystore named `auth-$i` where `i` is the authority index, i.e.
 		/// `auth-0`, `auth-1`, etc.
-		#[arg(long, short)]
+		#[clap(long, short)]
 		keystore_path: Option<PathBuf>,
 	},
 }

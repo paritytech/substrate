@@ -19,7 +19,6 @@ use crate::{
 	traits::{GetStorageVersion, PalletInfoAccess},
 	weights::{RuntimeDbWeight, Weight},
 };
-use impl_trait_for_tuples::impl_for_tuples;
 
 /// Trait used by [`migrate_from_pallet_version_to_storage_version`] to do the actual migration.
 pub trait PalletVersionToStorageVersionHelper {
@@ -43,12 +42,10 @@ impl<T: GetStorageVersion + PalletInfoAccess> PalletVersionToStorageVersionHelpe
 	}
 }
 
-#[cfg_attr(all(not(feature = "tuples-96"), not(feature = "tuples-128")), impl_for_tuples(64))]
-#[cfg_attr(all(feature = "tuples-96", not(feature = "tuples-128")), impl_for_tuples(96))]
-#[cfg_attr(feature = "tuples-128", impl_for_tuples(128))]
+#[impl_trait_for_tuples::impl_for_tuples(30)]
 impl PalletVersionToStorageVersionHelper for T {
 	fn migrate(db_weight: &RuntimeDbWeight) -> Weight {
-		let mut weight = Weight::zero();
+		let mut weight: Weight = 0;
 
 		for_tuples!( #( weight = weight.saturating_add(T::migrate(db_weight)); )* );
 

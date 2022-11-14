@@ -220,7 +220,11 @@ frame_benchmarking::benchmarks! {
 		let receiver = account("receiver", 0, SEED);
 		let initial_balance = T::Currency::minimum_balance() * 10u32.into();
 		T::Currency::make_free_balance_be(&receiver, initial_balance);
-		let ready = Default::default();
+		let ready = ReadySolution {
+			supports: vec![],
+			score: Default::default(),
+			compute: Default::default()
+		};
 		let deposit: BalanceOf<T> = 10u32.into();
 
 		let reward: BalanceOf<T> = T::SignedRewardBase::get();
@@ -316,14 +320,21 @@ frame_benchmarking::benchmarks! {
 	}
 
 	submit {
-		// the queue is full and the solution is only better than the worse.
+		// the solution will be worse than all of them meaning the score need to be checked against
+		// ~ log2(c)
+		let solution = RawSolution {
+			score: ElectionScore { minimal_stake: 10_000_000u128 - 1, ..Default::default() },
+			..Default::default()
+		};
+
 		<MultiPhase<T>>::create_snapshot().map_err(<&str>::from)?;
 		MultiPhase::<T>::on_initialize_open_signed();
 		<Round<T>>::put(1);
 
 		let mut signed_submissions = SignedSubmissions::<T>::get();
 
-		// Insert `max` submissions
+		// Insert `max - 1` submissions because the call to `submit` will insert another
+		// submission and the score is worse then the previous scores.
 		for i in 0..(T::SignedMaxSubmissions::get() - 1) {
 			let raw_solution = RawSolution {
 				score: ElectionScore { minimal_stake: 10_000_000u128 + (i as u128), ..Default::default() },
@@ -338,12 +349,6 @@ frame_benchmarking::benchmarks! {
 			signed_submissions.insert(signed_submission);
 		}
 		signed_submissions.put();
-
-		// this score will eject the weakest one.
-		let solution = RawSolution {
-			score: ElectionScore { minimal_stake: 10_000_000u128 + 1, ..Default::default() },
-			..Default::default()
-		};
 
 		let caller = frame_benchmarking::whitelisted_caller();
 		let deposit = MultiPhase::<T>::deposit_for(
@@ -399,7 +404,7 @@ frame_benchmarking::benchmarks! {
 		assert_eq!(raw_solution.solution.voter_count() as u32, a);
 		assert_eq!(raw_solution.solution.unique_targets().len() as u32, d);
 	}: {
-		assert!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned).is_ok());
+		assert_ok!(<MultiPhase<T>>::feasibility_check(raw_solution, ElectionCompute::Unsigned));
 	}
 
 	// NOTE: this weight is not used anywhere, but the fact that it should succeed when execution in

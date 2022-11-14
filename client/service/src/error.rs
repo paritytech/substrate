@@ -19,6 +19,7 @@
 //! Errors that can occur during the service operation.
 
 use sc_keystore;
+use sc_network;
 use sp_blockchain;
 use sp_consensus;
 
@@ -40,7 +41,7 @@ pub enum Error {
 	Consensus(#[from] sp_consensus::Error),
 
 	#[error(transparent)]
-	Network(#[from] sc_network_common::error::Error),
+	Network(#[from] sc_network::error::Error),
 
 	#[error(transparent)]
 	Keystore(#[from] sc_keystore::Error),

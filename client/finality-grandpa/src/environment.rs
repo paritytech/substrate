@@ -81,7 +81,7 @@ pub struct CompletedRound<Block: BlockT> {
 	/// The target block base used for voting in the round.
 	pub base: (Block::Hash, NumberFor<Block>),
 	/// All the votes observed in the round.
-	pub votes: Vec<SignedMessage<Block::Header>>,
+	pub votes: Vec<SignedMessage<Block>>,
 }
 
 // Data about last completed rounds within a single voter set. Stores
@@ -170,7 +170,7 @@ impl<Block: BlockT> CompletedRounds<Block> {
 
 /// A map with voter status information for currently live rounds,
 /// which votes have we cast and what are they.
-pub type CurrentRounds<Block> = BTreeMap<RoundNumber, HasVoted<<Block as BlockT>::Header>>;
+pub type CurrentRounds<Block> = BTreeMap<RoundNumber, HasVoted<Block>>;
 
 /// The state of the current voter set, whether it is currently active or not
 /// and information related to the previously completed rounds. Current round
@@ -214,7 +214,7 @@ impl<Block: BlockT> VoterSetState<Block> {
 			authority_set,
 		);
 
-		let mut current_rounds = CurrentRounds::<Block>::new();
+		let mut current_rounds = CurrentRounds::new();
 		current_rounds.insert(1, HasVoted::No);
 
 		VoterSetState::Live { completed_rounds, current_rounds }
@@ -258,27 +258,27 @@ impl<Block: BlockT> VoterSetState<Block> {
 
 /// Whether we've voted already during a prior run of the program.
 #[derive(Clone, Debug, Decode, Encode, PartialEq)]
-pub enum HasVoted<Header: HeaderT> {
+pub enum HasVoted<Block: BlockT> {
 	/// Has not voted already in this round.
 	No,
 	/// Has voted in this round.
-	Yes(AuthorityId, Vote<Header>),
+	Yes(AuthorityId, Vote<Block>),
 }
 
 /// The votes cast by this voter already during a prior run of the program.
 #[derive(Debug, Clone, Decode, Encode, PartialEq)]
-pub enum Vote<Header: HeaderT> {
+pub enum Vote<Block: BlockT> {
 	/// Has cast a proposal.
-	Propose(PrimaryPropose<Header>),
+	Propose(PrimaryPropose<Block>),
 	/// Has cast a prevote.
-	Prevote(Option<PrimaryPropose<Header>>, Prevote<Header>),
+	Prevote(Option<PrimaryPropose<Block>>, Prevote<Block>),
 	/// Has cast a precommit (implies prevote.)
-	Precommit(Option<PrimaryPropose<Header>>, Prevote<Header>, Precommit<Header>),
+	Precommit(Option<PrimaryPropose<Block>>, Prevote<Block>, Precommit<Block>),
 }
 
-impl<Header: HeaderT> HasVoted<Header> {
+impl<Block: BlockT> HasVoted<Block> {
 	/// Returns the proposal we should vote with (if any.)
-	pub fn propose(&self) -> Option<&PrimaryPropose<Header>> {
+	pub fn propose(&self) -> Option<&PrimaryPropose<Block>> {
 		match self {
 			HasVoted::Yes(_, Vote::Propose(propose)) => Some(propose),
 			HasVoted::Yes(_, Vote::Prevote(propose, _)) |
@@ -288,7 +288,7 @@ impl<Header: HeaderT> HasVoted<Header> {
 	}
 
 	/// Returns the prevote we should vote with (if any.)
-	pub fn prevote(&self) -> Option<&Prevote<Header>> {
+	pub fn prevote(&self) -> Option<&Prevote<Block>> {
 		match self {
 			HasVoted::Yes(_, Vote::Prevote(_, prevote)) |
 			HasVoted::Yes(_, Vote::Precommit(_, prevote, _)) => Some(prevote),
@@ -297,7 +297,7 @@ impl<Header: HeaderT> HasVoted<Header> {
 	}
 
 	/// Returns the precommit we should vote with (if any.)
-	pub fn precommit(&self) -> Option<&Precommit<Header>> {
+	pub fn precommit(&self) -> Option<&Precommit<Block>> {
 		match self {
 			HasVoted::Yes(_, Vote::Precommit(_, _, precommit)) => Some(precommit),
 			_ => None,
@@ -368,7 +368,7 @@ impl<Block: BlockT> SharedVoterSetState<Block> {
 	}
 
 	/// Return vote status information for the current round.
-	pub(crate) fn has_voted(&self, round: RoundNumber) -> HasVoted<Block::Header> {
+	pub(crate) fn has_voted(&self, round: RoundNumber) -> HasVoted<Block> {
 		match &*self.inner.read() {
 			VoterSetState::Live { current_rounds, .. } => current_rounds
 				.get(&round)
@@ -771,7 +771,7 @@ where
 	fn proposed(
 		&self,
 		round: RoundNumber,
-		propose: PrimaryPropose<Block::Header>,
+		propose: PrimaryPropose<Block>,
 	) -> Result<(), Self::Error> {
 		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
@@ -811,17 +811,13 @@ where
 		Ok(())
 	}
 
-	fn prevoted(
-		&self,
-		round: RoundNumber,
-		prevote: Prevote<Block::Header>,
-	) -> Result<(), Self::Error> {
+	fn prevoted(&self, round: RoundNumber, prevote: Prevote<Block>) -> Result<(), Self::Error> {
 		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
 			None => return Ok(()),
 		};
 
-		let report_prevote_metrics = |prevote: &Prevote<Block::Header>| {
+		let report_prevote_metrics = |prevote: &Prevote<Block>| {
 			telemetry!(
 				self.telemetry;
 				CONSENSUS_DEBUG;
@@ -877,14 +873,14 @@ where
 	fn precommitted(
 		&self,
 		round: RoundNumber,
-		precommit: Precommit<Block::Header>,
+		precommit: Precommit<Block>,
 	) -> Result<(), Self::Error> {
 		let local_id = match self.voter_set_state.voting_on(round) {
 			Some(id) => id,
 			None => return Ok(()),
 		};
 
-		let report_precommit_metrics = |precommit: &Precommit<Block::Header>| {
+		let report_precommit_metrics = |precommit: &Precommit<Block>| {
 			telemetry!(
 				self.telemetry;
 				CONSENSUS_DEBUG;
@@ -1069,7 +1065,7 @@ where
 		hash: Block::Hash,
 		number: NumberFor<Block>,
 		round: RoundNumber,
-		commit: Commit<Block::Header>,
+		commit: Commit<Block>,
 	) -> Result<(), Self::Error> {
 		finalize_block(
 			self.client.clone(),
@@ -1096,11 +1092,7 @@ where
 	fn prevote_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: finality_grandpa::Equivocation<
-			Self::Id,
-			Prevote<Block::Header>,
-			Self::Signature,
-		>,
+		equivocation: finality_grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>,
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
@@ -1111,11 +1103,7 @@ where
 	fn precommit_equivocation(
 		&self,
 		_round: RoundNumber,
-		equivocation: finality_grandpa::Equivocation<
-			Self::Id,
-			Precommit<Block::Header>,
-			Self::Signature,
-		>,
+		equivocation: finality_grandpa::Equivocation<Self::Id, Precommit<Block>, Self::Signature>,
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		if let Err(err) = self.report_equivocation(equivocation.into()) {
@@ -1126,11 +1114,11 @@ where
 
 pub(crate) enum JustificationOrCommit<Block: BlockT> {
 	Justification(GrandpaJustification<Block>),
-	Commit((RoundNumber, Commit<Block::Header>)),
+	Commit((RoundNumber, Commit<Block>)),
 }
 
-impl<Block: BlockT> From<(RoundNumber, Commit<Block::Header>)> for JustificationOrCommit<Block> {
-	fn from(commit: (RoundNumber, Commit<Block::Header>)) -> JustificationOrCommit<Block> {
+impl<Block: BlockT> From<(RoundNumber, Commit<Block>)> for JustificationOrCommit<Block> {
+	fn from(commit: (RoundNumber, Commit<Block>)) -> JustificationOrCommit<Block> {
 		JustificationOrCommit::Commit(commit)
 	}
 }
@@ -1352,7 +1340,7 @@ where
 		// ideally some handle to a synchronization oracle would be used
 		// to avoid unconditionally notifying.
 		client
-			.apply_finality(import_op, hash, persisted_justification, true)
+			.apply_finality(import_op, BlockId::Hash(hash), persisted_justification, true)
 			.map_err(|e| {
 				warn!(target: "afg", "Error applying finality to block {:?}: {}", (hash, number), e);
 				e

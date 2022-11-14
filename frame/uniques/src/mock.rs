@@ -50,8 +50,8 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -59,7 +59,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -76,7 +76,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -103,7 +103,7 @@ impl pallet_assets::Config for Test {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type CollectionId = u32;
 	type ItemId = u32;
 	type Currency = Balances;

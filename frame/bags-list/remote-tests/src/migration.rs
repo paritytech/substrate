@@ -24,15 +24,11 @@ use sp_runtime::{traits::Block as BlockT, DeserializeOwned};
 
 /// Test voter bags migration. `currency_unit` is the number of planks per the the runtimes `UNITS`
 /// (i.e. number of decimal places per DOT, KSM etc)
-pub async fn execute<Runtime, Block>(
+pub async fn execute<Runtime: RuntimeT, Block: BlockT + DeserializeOwned>(
 	currency_unit: u64,
 	currency_name: &'static str,
 	ws_url: String,
-) where
-	Runtime: RuntimeT<pallet_bags_list::Instance1>,
-	Block: BlockT,
-	Block::Header: DeserializeOwned,
-{
+) {
 	let mut ext = Builder::<Block>::new()
 		.mode(Mode::Online(OnlineConfig {
 			transport: ws_url.to_string().into(),

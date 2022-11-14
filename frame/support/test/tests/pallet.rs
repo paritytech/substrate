@@ -16,16 +16,14 @@
 // limitations under the License.
 
 use frame_support::{
-	dispatch::{
-		DispatchClass, DispatchInfo, GetDispatchInfo, Parameter, Pays, UnfilteredDispatchable,
-	},
+	dispatch::{Parameter, UnfilteredDispatchable},
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{
 		ConstU32, GetCallName, GetStorageVersion, OnFinalize, OnGenesis, OnInitialize,
 		OnRuntimeUpgrade, PalletError, PalletInfoAccess, StorageVersion,
 	},
-	weights::{RuntimeDbWeight, Weight},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, RuntimeDbWeight},
 };
 use scale_info::{meta_type, TypeInfo};
 use sp_io::{
@@ -127,7 +125,7 @@ pub mod pallet {
 
 		type Balance: Parameter + Default + TypeInfo;
 
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::extra_constants]
@@ -167,7 +165,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(10));
-			Weight::from_ref_time(10)
+			10
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -178,7 +176,7 @@ pub mod pallet {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
 			let _ = T::AccountId::from(SomeType2); // Test for where clause
 			Self::deposit_event(Event::Something(30));
-			Weight::from_ref_time(30)
+			30
 		}
 		fn integrity_test() {
 			let _ = T::AccountId::from(SomeType1); // Test for where clause
@@ -192,7 +190,7 @@ pub mod pallet {
 		T::AccountId: From<SomeType1> + From<SomeType3> + SomeAssociation1,
 	{
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
+		#[pallet::weight(Weight::from(*_foo))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -231,7 +229,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
-		NonExistentStorageValue,
 		Code(u8),
 		#[codec(skip)]
 		Skipped(u128),
@@ -286,10 +283,6 @@ pub mod pallet {
 		StorageMap<Hasher = Twox64Concat, Key = u16, Value = u32, MaxValues = ConstU32<3>>;
 
 	#[pallet::storage]
-	pub type Map3<T> =
-		StorageMap<_, Blake2_128Concat, u32, u64, ResultQuery<Error<T>::NonExistentStorageValue>>;
-
-	#[pallet::storage]
 	pub type DoubleMap<T> = StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
 	#[pallet::storage]
@@ -300,17 +293,6 @@ pub mod pallet {
 		Key2 = u32,
 		Value = u64,
 		MaxValues = ConstU32<5>,
-	>;
-
-	#[pallet::storage]
-	pub type DoubleMap3<T> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		Twox64Concat,
-		u64,
-		u128,
-		ResultQuery<Error<T>::NonExistentStorageValue>,
 	>;
 
 	#[pallet::storage]
@@ -326,32 +308,23 @@ pub mod pallet {
 	>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn nmap3)]
-	pub type NMap3<T> = StorageNMap<
-		_,
-		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),
-		u128,
-		ResultQuery<Error<T>::NonExistentStorageValue>,
-	>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn conditional_value)]
-	#[cfg(feature = "frame-feature-testing")]
+	#[cfg(feature = "conditional-storage")]
 	pub type ConditionalValue<T> = StorageValue<_, u32>;
 
-	#[cfg(feature = "frame-feature-testing")]
+	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_map)]
 	pub type ConditionalMap<T> =
 		StorageMap<_, Twox64Concat, u16, u32, OptionQuery, GetDefault, ConstU32<12>>;
 
-	#[cfg(feature = "frame-feature-testing")]
+	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_double_map)]
 	pub type ConditionalDoubleMap<T> =
 		StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
 
-	#[cfg(feature = "frame-feature-testing")]
+	#[cfg(feature = "conditional-storage")]
 	#[pallet::storage]
 	#[pallet::getter(fn conditional_nmap)]
 	pub type ConditionalNMap<T> =
@@ -479,7 +452,7 @@ pub mod pallet2 {
 	where
 		<Self as frame_system::Config>::AccountId: From<SomeType1> + SomeAssociation1,
 	{
-		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::pallet]
@@ -494,14 +467,14 @@ pub mod pallet2 {
 	{
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			Self::deposit_event(Event::Something(11));
-			Weight::zero()
+			0
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
 			Self::deposit_event(Event::Something(21));
 		}
 		fn on_runtime_upgrade() -> Weight {
 			Self::deposit_event(Event::Something(31));
-			Weight::zero()
+			0
 		}
 	}
 
@@ -552,11 +525,7 @@ pub mod pallet2 {
 #[frame_support::pallet]
 pub mod pallet3 {
 	#[pallet::config]
-	pub trait Config:
-		frame_system::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
-	{
-		type RuntimeOrigin;
-	}
+	pub trait Config: frame_system::Config<Origin = ()> {}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -574,36 +543,22 @@ pub mod pallet4 {
 	impl<T: Config> Pallet<T> {}
 }
 
-/// Test that the supertrait check works when we pass some parameter to the `frame_system::Config`.
-#[frame_support::pallet]
-pub mod pallet5 {
-	#[pallet::config]
-	pub trait Config:
-		frame_system::Config<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
-	{
-		type RuntimeOrigin;
-	}
-
-	#[pallet::pallet]
-	pub struct Pallet<T>(_);
-}
-
 frame_support::parameter_types!(
 	pub const MyGetParam3: u32 = 12;
 );
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -619,7 +574,7 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type MyGetParam = ConstU32<10>;
 	type MyGetParam2 = ConstU32<11>;
 	type MyGetParam3 = MyGetParam3;
@@ -627,24 +582,14 @@ impl pallet::Config for Runtime {
 }
 
 impl pallet2::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 }
 
 impl pallet4::Config for Runtime {}
 
-#[cfg(feature = "frame-feature-testing")]
-impl pallet3::Config for Runtime {
-	type RuntimeOrigin = RuntimeOrigin;
-}
-
-#[cfg(feature = "frame-feature-testing-2")]
-impl pallet5::Config for Runtime {
-	type RuntimeOrigin = RuntimeOrigin;
-}
-
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -656,19 +601,14 @@ frame_support::construct_runtime!(
 		System: frame_system exclude_parts { Pallet, Storage },
 		Example: pallet,
 		Example2: pallet2 exclude_parts { Call },
-		#[cfg(feature = "frame-feature-testing")]
-		Example3: pallet3,
 		Example4: pallet4 use_parts { Call },
-
-		#[cfg(feature = "frame-feature-testing-2")]
-		Example5: pallet5,
 	}
 );
 
-// Test that the part `RuntimeCall` is excluded from Example2 and included in Example4.
-fn _ensure_call_is_correctly_excluded_and_included(call: RuntimeCall) {
+// Test that the part `Call` is excluded from Example2 and included in Example4.
+fn _ensure_call_is_correctly_excluded_and_included(call: Call) {
 	match call {
-		RuntimeCall::System(_) | RuntimeCall::Example(_) | RuntimeCall::Example4(_) => (),
+		Call::System(_) | Call::Example(_) | Call::Example4(_) => (),
 	}
 }
 
@@ -691,7 +631,7 @@ fn transactional_works() {
 				.iter()
 				.map(|e| &e.event)
 				.collect::<Vec<_>>(),
-			vec![&RuntimeEvent::Example(pallet::Event::Something(0))],
+			vec![&Event::Example(pallet::Event::Something(0))],
 		);
 	})
 }
@@ -701,11 +641,7 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3, bar: 0 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo {
-			weight: frame_support::weights::Weight::from_ref_time(3),
-			class: DispatchClass::Normal,
-			pays_fee: Pays::Yes
-		}
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -756,7 +692,7 @@ fn inherent_expand() {
 	let inherents = InherentData::new().create_extrinsics();
 
 	let expected = vec![UncheckedExtrinsic {
-		function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+		function: Call::Example(pallet::Call::foo_no_post_info {}),
 		signature: None,
 	}];
 	assert_eq!(expected, inherents);
@@ -771,11 +707,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -793,11 +729,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 0, bar: 0 }),
+				function: Call::Example(pallet::Call::foo { foo: 0, bar: 0 }),
 				signature: None,
 			},
 		],
@@ -814,7 +750,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+			function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 			signature: None,
 		}],
 	);
@@ -832,7 +768,7 @@ fn inherent_expand() {
 			Digest::default(),
 		),
 		vec![UncheckedExtrinsic {
-			function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+			function: Call::Example(pallet::Call::foo_no_post_info {}),
 			signature: Some((1, (), ())),
 		}],
 	);
@@ -851,11 +787,11 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 		],
@@ -873,15 +809,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_storage_layer { foo: 0 }),
+				function: Call::Example(pallet::Call::foo_storage_layer { foo: 0 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -899,15 +835,15 @@ fn inherent_expand() {
 		),
 		vec![
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 1 }),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 1 }),
 				signature: None,
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo { foo: 1, bar: 0 }),
+				function: Call::Example(pallet::Call::foo { foo: 1, bar: 0 }),
 				signature: Some((1, (), ())),
 			},
 			UncheckedExtrinsic {
-				function: RuntimeCall::Example(pallet::Call::foo_no_post_info {}),
+				function: Call::Example(pallet::Call::foo_no_post_info {}),
 				signature: None,
 			},
 		],
@@ -951,7 +887,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	})
 }
@@ -998,16 +934,6 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<pallet::Map2<Runtime>>::final_prefix());
 
-		pallet::Map3::<Runtime>::insert(1, 2);
-		let mut k = [twox_128(b"Example"), twox_128(b"Map3")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		assert_eq!(unhashed::get::<u64>(&k), Some(2u64));
-		assert_eq!(&k[..32], &<pallet::Map3<Runtime>>::final_prefix());
-		assert_eq!(
-			pallet::Map3::<Runtime>::get(2),
-			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
-		);
-
 		pallet::DoubleMap::<Runtime>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -1022,17 +948,6 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
 
-		pallet::DoubleMap3::<Runtime>::insert(&1, &2, &3);
-		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap3")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		k.extend(2u64.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
-		assert_eq!(&k[..32], &<pallet::DoubleMap3<Runtime>>::final_prefix());
-		assert_eq!(
-			pallet::DoubleMap3::<Runtime>::get(2, 3),
-			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
-		);
-
 		pallet::NMap::<Runtime>::insert((&1,), &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -1046,18 +961,7 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
 
-		pallet::NMap3::<Runtime>::insert((&1, &2), &3);
-		let mut k = [twox_128(b"Example"), twox_128(b"NMap3")].concat();
-		k.extend(1u8.using_encoded(blake2_128_concat));
-		k.extend(2u16.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
-		assert_eq!(&k[..32], &<pallet::NMap3<Runtime>>::final_prefix());
-		assert_eq!(
-			pallet::NMap3::<Runtime>::get((2, 3)),
-			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
-		);
-
-		#[cfg(feature = "frame-feature-testing")]
+		#[cfg(feature = "conditional-storage")]
 		{
 			pallet::ConditionalValue::<Runtime>::put(1);
 			pallet::ConditionalMap::<Runtime>::insert(1, 2);
@@ -1083,34 +987,34 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(10));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 10);
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(30));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 30);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			RuntimeEvent::Example2(pallet2::Event::Something(11)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			RuntimeEvent::Example(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			RuntimeEvent::Example2(pallet2::Event::Something(21)),
+			Event::Example2(pallet2::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			RuntimeEvent::Example(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			RuntimeEvent::Example2(pallet2::Event::Something(31)),
+			Event::Example2(pallet2::Event::Something(31)),
 		);
 	})
 }
@@ -1122,41 +1026,35 @@ fn all_pallets_type_reversed_order_is_correct() {
 
 		#[allow(deprecated)]
 		{
-			assert_eq!(
-				AllPalletsWithoutSystemReversed::on_initialize(1),
-				Weight::from_ref_time(10)
-			);
+			assert_eq!(AllPalletsWithoutSystemReversed::on_initialize(1), 10);
 			AllPalletsWithoutSystemReversed::on_finalize(1);
 
-			assert_eq!(
-				AllPalletsWithoutSystemReversed::on_runtime_upgrade(),
-				Weight::from_ref_time(30)
-			);
+			assert_eq!(AllPalletsWithoutSystemReversed::on_runtime_upgrade(), 30);
 		}
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example2(pallet2::Event::Something(11)),
+			Event::Example2(pallet2::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			RuntimeEvent::Example(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			RuntimeEvent::Example2(pallet2::Event::Something(21)),
+			Event::Example2(pallet2::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			RuntimeEvent::Example(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			RuntimeEvent::Example2(pallet2::Event::Something(31)),
+			Event::Example2(pallet2::Event::Something(31)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			RuntimeEvent::Example(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 	})
 }
@@ -1197,16 +1095,8 @@ fn migrate_from_pallet_version_to_storage_version() {
 			AllPalletsWithSystem,
 		>(&db_weight);
 
-		let mut pallet_num = 4;
-		if cfg!(feature = "frame-feature-testing") {
-			pallet_num += 1;
-		};
-		if cfg!(feature = "frame-feature-testing-2") {
-			pallet_num += 1;
-		};
-
-		// `pallet_num` pallets, 2 writes and every write costs 5 weight.
-		assert_eq!(Weight::from_ref_time(pallet_num * 2 * 5), weight);
+		// 4 pallets, 2 writes and every write costs 5 weight.
+		assert_eq!(4 * 2 * 5, weight);
 
 		// All pallet versions should be removed
 		assert!(sp_io::storage::get(&pallet_version_key(Example::name())).is_none());
@@ -1282,17 +1172,6 @@ fn metadata() {
 						docs: vec![],
 					},
 					StorageEntryMetadata {
-						name: "Map3",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<u32>(),
-							value: meta_type::<u64>(),
-							hashers: vec![StorageHasher::Blake2_128Concat],
-						},
-						default: vec![1, 1],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
 						name: "DoubleMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
@@ -1321,20 +1200,6 @@ fn metadata() {
 						docs: vec![],
 					},
 					StorageEntryMetadata {
-						name: "DoubleMap3",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							value: meta_type::<u128>(),
-							key: meta_type::<(u32, u64)>(),
-							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat,
-							],
-						},
-						default: vec![1, 1],
-						docs: vec![],
-					},
-					StorageEntryMetadata {
 						name: "NMap",
 						modifier: StorageEntryModifier::Optional,
 						ty: StorageEntryType::Map {
@@ -1359,21 +1224,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					StorageEntryMetadata {
-						name: "NMap3",
-						modifier: StorageEntryModifier::Optional,
-						ty: StorageEntryType::Map {
-							key: meta_type::<(u8, u16)>(),
-							hashers: vec![
-								StorageHasher::Blake2_128Concat,
-								StorageHasher::Twox64Concat,
-							],
-							value: meta_type::<u128>(),
-						},
-						default: vec![1, 1],
-						docs: vec![],
-					},
-					#[cfg(feature = "frame-feature-testing")]
+					#[cfg(feature = "conditional-storage")]
 					StorageEntryMetadata {
 						name: "ConditionalValue",
 						modifier: StorageEntryModifier::Optional,
@@ -1381,7 +1232,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					#[cfg(feature = "frame-feature-testing")]
+					#[cfg(feature = "conditional-storage")]
 					StorageEntryMetadata {
 						name: "ConditionalMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1393,7 +1244,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					#[cfg(feature = "frame-feature-testing")]
+					#[cfg(feature = "conditional-storage")]
 					StorageEntryMetadata {
 						name: "ConditionalDoubleMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1408,7 +1259,7 @@ fn metadata() {
 						default: vec![0],
 						docs: vec![],
 					},
-					#[cfg(feature = "frame-feature-testing")]
+					#[cfg(feature = "conditional-storage")]
 					StorageEntryMetadata {
 						name: "ConditionalNMap",
 						modifier: StorageEntryModifier::Optional,
@@ -1530,26 +1381,6 @@ fn metadata() {
 			constants: vec![],
 			error: None,
 		},
-		#[cfg(feature = "frame-feature-testing")]
-		PalletMetadata {
-			index: 3,
-			name: "Example3",
-			storage: None,
-			calls: None,
-			event: None,
-			constants: vec![],
-			error: None,
-		},
-		#[cfg(feature = "frame-feature-testing-2")]
-		PalletMetadata {
-			index: 5,
-			name: "Example5",
-			storage: None,
-			calls: None,
-			event: None,
-			constants: vec![],
-			error: None,
-		},
 	];
 
 	let empty_doc = pallets[0].event.as_ref().unwrap().ty.type_info().docs().is_empty() &&
@@ -1605,8 +1436,6 @@ fn test_storage_info() {
 		traits::{StorageInfo, StorageInfoTrait},
 	};
 
-	// Storage max size is calculated by adding up all the hasher size, the key type size and the
-	// value type size
 	assert_eq!(
 		Example::storage_info(),
 		vec![
@@ -1636,65 +1465,44 @@ fn test_storage_info() {
 				storage_name: b"Map".to_vec(),
 				prefix: prefix(b"Example", b"Map").to_vec(),
 				max_values: None,
-				max_size: Some(16 + 1 + 2),
+				max_size: Some(3 + 16),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"Map2".to_vec(),
 				prefix: prefix(b"Example", b"Map2").to_vec(),
 				max_values: Some(3),
-				max_size: Some(8 + 2 + 4),
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"Map3".to_vec(),
-				prefix: prefix(b"Example", b"Map3").to_vec(),
-				max_values: None,
-				max_size: Some(16 + 4 + 8),
+				max_size: Some(6 + 8),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"DoubleMap".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap").to_vec(),
 				max_values: None,
-				max_size: Some(16 + 1 + 8 + 2 + 4),
+				max_size: Some(7 + 16 + 8),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"DoubleMap2".to_vec(),
 				prefix: prefix(b"Example", b"DoubleMap2").to_vec(),
 				max_values: Some(5),
-				max_size: Some(8 + 2 + 16 + 4 + 8),
-			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"DoubleMap3".to_vec(),
-				prefix: prefix(b"Example", b"DoubleMap3").to_vec(),
-				max_values: None,
-				max_size: Some(16 + 4 + 8 + 8 + 16),
+				max_size: Some(14 + 8 + 16),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"NMap".to_vec(),
 				prefix: prefix(b"Example", b"NMap").to_vec(),
 				max_values: None,
-				max_size: Some(16 + 1 + 4),
+				max_size: Some(5 + 16),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
 				storage_name: b"NMap2".to_vec(),
 				prefix: prefix(b"Example", b"NMap2").to_vec(),
 				max_values: Some(11),
-				max_size: Some(8 + 2 + 16 + 4 + 8),
+				max_size: Some(14 + 8 + 16),
 			},
-			StorageInfo {
-				pallet_name: b"Example".to_vec(),
-				storage_name: b"NMap3".to_vec(),
-				prefix: prefix(b"Example", b"NMap3").to_vec(),
-				max_values: None,
-				max_size: Some(16 + 1 + 8 + 2 + 16),
-			},
-			#[cfg(feature = "frame-feature-testing")]
+			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
@@ -1704,34 +1512,34 @@ fn test_storage_info() {
 					max_size: Some(4),
 				}
 			},
-			#[cfg(feature = "frame-feature-testing")]
+			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
 					storage_name: b"ConditionalMap".to_vec(),
 					prefix: prefix(b"Example", b"ConditionalMap").to_vec(),
 					max_values: Some(12),
-					max_size: Some(8 + 2 + 4),
+					max_size: Some(6 + 8),
 				}
 			},
-			#[cfg(feature = "frame-feature-testing")]
+			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
 					storage_name: b"ConditionalDoubleMap".to_vec(),
 					prefix: prefix(b"Example", b"ConditionalDoubleMap").to_vec(),
 					max_values: None,
-					max_size: Some(16 + 1 + 8 + 2 + 4),
+					max_size: Some(7 + 16 + 8),
 				}
 			},
-			#[cfg(feature = "frame-feature-testing")]
+			#[cfg(feature = "conditional-storage")]
 			{
 				StorageInfo {
 					pallet_name: b"Example".to_vec(),
 					storage_name: b"ConditionalNMap".to_vec(),
 					prefix: prefix(b"Example", b"ConditionalNMap").to_vec(),
 					max_values: None,
-					max_size: Some(16 + 1 + 8 + 2 + 4),
+					max_size: Some(7 + 16 + 8),
 				}
 			},
 			StorageInfo {
@@ -1739,7 +1547,7 @@ fn test_storage_info() {
 				storage_name: b"RenamedCountedMap".to_vec(),
 				prefix: prefix(b"Example", b"RenamedCountedMap").to_vec(),
 				max_values: None,
-				max_size: Some(8 + 1 + 4),
+				max_size: Some(1 + 4 + 8),
 			},
 			StorageInfo {
 				pallet_name: b"Example".to_vec(),
@@ -1789,24 +1597,8 @@ fn test_storage_info() {
 #[test]
 fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
 	// Just ensure the 2 types are same.
-	#[allow(deprecated)]
 	fn _a(_t: AllPalletsReversedWithSystemFirst) {}
-	#[cfg(all(not(feature = "frame-feature-testing"), not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (System, Example4, Example2, Example)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (System, Example4, Example3, Example2, Example)) {
-		_a(t)
-	}
-
-	#[cfg(all(not(feature = "frame-feature-testing"), feature = "frame-feature-testing-2"))]
-	fn _b(t: (System, Example5, Example4, Example2, Example)) {
-		_a(t)
-	}
-
-	#[cfg(all(feature = "frame-feature-testing", feature = "frame-feature-testing-2"))]
-	fn _b(t: (System, Example5, Example4, Example3, Example2, Example)) {
+	fn _b(t: (System, (Example4, (Example2, (Example,))))) {
 		_a(t)
 	}
 }
@@ -1815,20 +1607,7 @@ fn assert_type_all_pallets_reversed_with_system_first_is_correct() {
 fn assert_type_all_pallets_with_system_is_correct() {
 	// Just ensure the 2 types are same.
 	fn _a(_t: AllPalletsWithSystem) {}
-	#[cfg(all(not(feature = "frame-feature-testing"), not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (System, Example, Example2, Example4)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (System, Example, Example2, Example3, Example4)) {
-		_a(t)
-	}
-	#[cfg(all(not(feature = "frame-feature-testing"), feature = "frame-feature-testing-2"))]
-	fn _b(t: (System, Example, Example2, Example4, Example5)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", feature = "frame-feature-testing-2"))]
-	fn _b(t: (System, Example, Example2, Example3, Example4, Example5)) {
+	fn _b(t: (System, (Example, (Example2, (Example4,))))) {
 		_a(t)
 	}
 }
@@ -1837,20 +1616,7 @@ fn assert_type_all_pallets_with_system_is_correct() {
 fn assert_type_all_pallets_without_system_is_correct() {
 	// Just ensure the 2 types are same.
 	fn _a(_t: AllPalletsWithoutSystem) {}
-	#[cfg(all(not(feature = "frame-feature-testing"), not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (Example, Example2, Example4)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (Example, Example2, Example3, Example4)) {
-		_a(t)
-	}
-	#[cfg(all(not(feature = "frame-feature-testing"), feature = "frame-feature-testing-2"))]
-	fn _b(t: (Example, Example2, Example4, Example5)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", feature = "frame-feature-testing-2"))]
-	fn _b(t: (Example, Example2, Example3, Example4, Example5)) {
+	fn _b(t: (Example, (Example2, (Example4,)))) {
 		_a(t)
 	}
 }
@@ -1858,22 +1624,8 @@ fn assert_type_all_pallets_without_system_is_correct() {
 #[test]
 fn assert_type_all_pallets_with_system_reversed_is_correct() {
 	// Just ensure the 2 types are same.
-	#[allow(deprecated)]
 	fn _a(_t: AllPalletsWithSystemReversed) {}
-	#[cfg(all(not(feature = "frame-feature-testing"), not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (Example4, Example2, Example, System)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (Example4, Example3, Example2, Example, System)) {
-		_a(t)
-	}
-	#[cfg(all(not(feature = "frame-feature-testing"), feature = "frame-feature-testing-2"))]
-	fn _b(t: (Example5, Example4, Example2, Example, System)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", feature = "frame-feature-testing-2"))]
-	fn _b(t: (Example5, Example4, Example3, Example2, Example, System)) {
+	fn _b(t: (Example4, (Example2, (Example, (System,))))) {
 		_a(t)
 	}
 }
@@ -1881,22 +1633,8 @@ fn assert_type_all_pallets_with_system_reversed_is_correct() {
 #[test]
 fn assert_type_all_pallets_without_system_reversed_is_correct() {
 	// Just ensure the 2 types are same.
-	#[allow(deprecated)]
 	fn _a(_t: AllPalletsWithoutSystemReversed) {}
-	#[cfg(all(not(feature = "frame-feature-testing"), not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (Example4, Example2, Example)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", not(feature = "frame-feature-testing-2")))]
-	fn _b(t: (Example4, Example3, Example2, Example)) {
-		_a(t)
-	}
-	#[cfg(all(not(feature = "frame-feature-testing"), feature = "frame-feature-testing-2"))]
-	fn _b(t: (Example5, Example4, Example2, Example)) {
-		_a(t)
-	}
-	#[cfg(all(feature = "frame-feature-testing", feature = "frame-feature-testing-2"))]
-	fn _b(t: (Example5, Example4, Example3, Example2, Example)) {
+	fn _b(t: (Example4, (Example2, (Example,)))) {
 		_a(t)
 	}
 }

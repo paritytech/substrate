@@ -62,7 +62,7 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 	if get_doc_literals(&pallet_item.attrs).is_empty() {
 		pallet_item.attrs.push(syn::parse_quote!(
 			#[doc = r"
-			The [pallet](https://docs.substrate.io/reference/frame-pallets/#pallets) implementing
+			The [pallet](https://docs.substrate.io/v3/runtime/frame#pallets) implementing
 			the on-chain logic.
 			"]
 		));
@@ -166,24 +166,6 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 		quote::quote! { #frame_support::traits::StorageVersion::default() }
 	};
 
-	let whitelisted_storage_idents: Vec<syn::Ident> = def
-		.storages
-		.iter()
-		.filter_map(|s| s.whitelisted.then_some(s.ident.clone()))
-		.collect();
-
-	let whitelisted_storage_keys_impl = quote::quote![
-		use #frame_support::traits::{StorageInfoTrait, TrackedStorageKey, WhitelistedStorageKeys};
-		impl<#type_impl_gen> WhitelistedStorageKeys for #pallet_ident<#type_use_gen> #storages_where_clauses {
-			fn whitelisted_storage_keys() -> #frame_support::sp_std::vec::Vec<TrackedStorageKey> {
-				use #frame_support::sp_std::vec;
-				vec![#(
-					TrackedStorageKey::new(#whitelisted_storage_idents::<#type_use_gen>::hashed_key().to_vec())
-				),*]
-			}
-		}
-	];
-
 	quote::quote_spanned!(def.pallet_struct.attr_span =>
 		#pallet_error_metadata
 
@@ -258,7 +240,9 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 			#config_where_clause
 		{
 			fn count() -> usize { 1 }
-			fn infos() -> #frame_support::sp_std::vec::Vec<#frame_support::traits::PalletInfoData> {
+			fn accumulate(
+				acc: &mut #frame_support::sp_std::vec::Vec<#frame_support::traits::PalletInfoData>
+			) {
 				use #frame_support::traits::PalletInfoAccess;
 				let item = #frame_support::traits::PalletInfoData {
 					index: Self::index(),
@@ -266,11 +250,10 @@ pub fn expand_pallet_struct(def: &mut Def) -> proc_macro2::TokenStream {
 					module_name: Self::module_name(),
 					crate_version: Self::crate_version(),
 				};
-				#frame_support::sp_std::vec![item]
+				acc.push(item);
 			}
 		}
 
 		#storage_info
-		#whitelisted_storage_keys_impl
 	)
 }

@@ -90,7 +90,7 @@ benchmarks! {
 	}
 
 	sr25519_verification {
-		let i in 0 .. 100;
+		let i in 1 .. 100;
 
 		let public = SignerId::generate_pair(None);
 
@@ -176,16 +176,16 @@ pub mod mock {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type RuntimeOrigin = RuntimeOrigin;
+		type Origin = Origin;
 		type Index = AccountIndex;
 		type BlockNumber = BlockNumber;
-		type RuntimeCall = RuntimeCall;
+		type Call = Call;
 		type Hash = H256;
 		type Hashing = ::sp_runtime::traits::BlakeTwo256;
 		type AccountId = AccountId;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = sp_runtime::testing::Header;
-		type RuntimeEvent = RuntimeEvent;
+		type Event = Event;
 		type BlockHashCount = ();
 		type Version = ();
 		type PalletInfo = PalletInfo;

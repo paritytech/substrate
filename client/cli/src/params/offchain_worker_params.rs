@@ -23,7 +23,7 @@
 //! targeted at handling input parameter parsing providing
 //! a reasonable abstraction.
 
-use clap::{ArgAction, Args};
+use clap::Args;
 use sc_network::config::Role;
 use sc_service::config::OffchainWorkerConfig;
 
@@ -35,12 +35,12 @@ pub struct OffchainWorkerParams {
 	/// Should execute offchain workers on every block.
 	///
 	/// By default it's only enabled for nodes that are authoring new blocks.
-	#[arg(
+	#[clap(
 		long = "offchain-worker",
 		value_name = "ENABLED",
-		value_enum,
+		arg_enum,
 		ignore_case = true,
-		default_value_t = OffchainWorkerEnabled::WhenValidating
+		default_value = "when-validating"
 	)]
 	pub enabled: OffchainWorkerEnabled,
 
@@ -48,7 +48,7 @@ pub struct OffchainWorkerParams {
 	///
 	/// Enables a runtime to write directly to a offchain workers
 	/// DB during block import.
-	#[arg(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING", default_value_t = false, action = ArgAction::Set)]
+	#[clap(long = "enable-offchain-indexing", value_name = "ENABLE_OFFCHAIN_INDEXING")]
 	pub indexing_enabled: bool,
 }
 

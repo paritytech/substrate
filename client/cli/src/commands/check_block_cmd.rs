@@ -30,13 +30,13 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 #[derive(Debug, Clone, Parser)]
 pub struct CheckBlockCmd {
 	/// Block hash or number
-	#[arg(value_name = "HASH or NUMBER")]
+	#[clap(value_name = "HASH or NUMBER")]
 	pub input: BlockNumberOrHash,
 
 	/// The default number of 64KB pages to ever allocate for Wasm execution.
 	///
 	/// Don't alter this unless you know what you're doing.
-	#[arg(long, value_name = "COUNT")]
+	#[clap(long, value_name = "COUNT")]
 	pub default_heap_pages: Option<u32>,
 
 	#[allow(missing_docs)]

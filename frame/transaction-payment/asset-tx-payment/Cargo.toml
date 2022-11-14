@@ -29,7 +29,7 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 serde = { version = "1.0.136", optional = true }
 
 [dev-dependencies]
-serde_json = "1.0.85"
+serde_json = "1.0.79"
 
 sp-storage = { version = "6.0.0", default-features = false, path = "../../../primitives/storage" }
 
@@ -41,7 +41,6 @@ pallet-balances = { version = "4.0.0-dev", path = "../../balances" }
 [features]
 default = ["std"]
 std = [
-	"scale-info/std",
 	"serde",
 	"codec/std",
 	"sp-std/std",

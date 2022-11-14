@@ -88,7 +88,7 @@ fn main() {
 				},
 			}
 
-			assert!(BagsList::try_state().is_ok());
+			assert!(BagsList::sanity_check().is_ok());
 		})
 	});
 }

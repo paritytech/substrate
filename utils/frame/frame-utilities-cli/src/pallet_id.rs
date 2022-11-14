@@ -28,30 +28,31 @@ use sp_runtime::traits::AccountIdConversion;
 
 /// The `palletid` command
 #[derive(Debug, Parser)]
-#[command(name = "palletid", about = "Inspect a module ID address")]
+#[clap(name = "palletid", about = "Inspect a module ID address")]
 pub struct PalletIdCmd {
 	/// The module ID used to derive the account
 	id: String,
 
 	/// network address format
-	#[arg(
+	#[clap(
 		long,
 		value_name = "NETWORK",
-		value_parser = sc_cli::parse_ss58_address_format,
+		possible_values = &Ss58AddressFormat::all_names()[..],
+		parse(try_from_str = Ss58AddressFormat::try_from),
 		ignore_case = true,
 	)]
 	pub network: Option<Ss58AddressFormat>,
 
 	#[allow(missing_docs)]
-	#[command(flatten)]
+	#[clap(flatten)]
 	pub output_scheme: OutputTypeFlag,
 
 	#[allow(missing_docs)]
-	#[command(flatten)]
+	#[clap(flatten)]
 	pub crypto_scheme: CryptoSchemeFlag,
 
 	#[allow(missing_docs)]
-	#[command(flatten)]
+	#[clap(flatten)]
 	pub keystore_params: KeystoreParams,
 }
 

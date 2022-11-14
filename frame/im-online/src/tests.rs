@@ -36,24 +36,22 @@ use sp_runtime::{
 
 #[test]
 fn test_unresponsiveness_slash_fraction() {
-	let dummy_offence =
-		UnresponsivenessOffence { session_index: 0, validator_set_count: 50, offenders: vec![()] };
 	// A single case of unresponsiveness is not slashed.
-	assert_eq!(dummy_offence.slash_fraction(1), Perbill::zero());
+	assert_eq!(UnresponsivenessOffence::<()>::slash_fraction(1, 50), Perbill::zero());
 
 	assert_eq!(
-		dummy_offence.slash_fraction(5),
+		UnresponsivenessOffence::<()>::slash_fraction(5, 50),
 		Perbill::zero(), // 0%
 	);
 
 	assert_eq!(
-		dummy_offence.slash_fraction(7),
+		UnresponsivenessOffence::<()>::slash_fraction(7, 50),
 		Perbill::from_parts(4200000), // 0.42%
 	);
 
 	// One third offline should be punished around 5%.
 	assert_eq!(
-		dummy_offence.slash_fraction(17),
+		UnresponsivenessOffence::<()>::slash_fraction(17, 50),
 		Perbill::from_parts(46200000), // 4.62%
 	);
 }
@@ -68,7 +66,7 @@ fn should_report_offline_validators() {
 		advance_session();
 		// enact the change and buffer another one
 		let validators = vec![1, 2, 3, 4, 5, 6];
-		Validators::mutate(|l| *l = Some(validators.clone()));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(validators.clone()));
 		advance_session();
 
 		// when
@@ -76,7 +74,7 @@ fn should_report_offline_validators() {
 		advance_session();
 
 		// then
-		let offences = Offences::take();
+		let offences = OFFENCES.with(|l| l.replace(vec![]));
 		assert_eq!(
 			offences,
 			vec![(
@@ -96,7 +94,7 @@ fn should_report_offline_validators() {
 		advance_session();
 
 		// then
-		let offences = Offences::take();
+		let offences = OFFENCES.with(|l| l.replace(vec![]));
 		assert_eq!(
 			offences,
 			vec![(
@@ -141,7 +139,7 @@ fn heartbeat(
 			"invalid validators len",
 		e @ _ => <&'static str>::from(e),
 	})?;
-	ImOnline::heartbeat(RuntimeOrigin::none(), heartbeat, signature)
+	ImOnline::heartbeat(Origin::none(), heartbeat, signature)
 }
 
 #[test]
@@ -149,7 +147,7 @@ fn should_mark_online_validator_when_heartbeat_is_received() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		Validators::mutate(|l| *l = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -184,7 +182,7 @@ fn late_heartbeat_and_invalid_keys_len_should_fail() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		Validators::mutate(|l| *l = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -226,7 +224,7 @@ fn should_generate_heartbeats() {
 		// buffer new validators
 		Session::rotate_session();
 		// enact the change and buffer another one
-		Validators::mutate(|l| *l = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		Session::rotate_session();
 
 		// when
@@ -240,8 +238,7 @@ fn should_generate_heartbeats() {
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
-			crate::mock::RuntimeCall::ImOnline(crate::Call::heartbeat { heartbeat, .. }) =>
-				heartbeat,
+			crate::mock::Call::ImOnline(crate::Call::heartbeat { heartbeat, .. }) => heartbeat,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
@@ -263,7 +260,7 @@ fn should_cleanup_received_heartbeats_on_session_end() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 
-		Validators::mutate(|l| *l = Some(vec![1, 2, 3]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 
 		// enact the change and buffer another one
@@ -294,7 +291,7 @@ fn should_mark_online_validator_when_block_is_authored() {
 	new_test_ext().execute_with(|| {
 		advance_session();
 		// given
-		Validators::mutate(|l| *l = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -331,7 +328,7 @@ fn should_not_send_a_report_if_already_online() {
 	ext.execute_with(|| {
 		advance_session();
 		// given
-		Validators::mutate(|l| *l = Some(vec![1, 2, 3, 4, 5, 6]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![1, 2, 3, 4, 5, 6]));
 		assert_eq!(Session::validators(), Vec::<u64>::new());
 		// enact the change and buffer another one
 		advance_session();
@@ -356,8 +353,7 @@ fn should_not_send_a_report_if_already_online() {
 		// check stuff about the transaction.
 		let ex: Extrinsic = Decode::decode(&mut &*transaction).unwrap();
 		let heartbeat = match ex.call {
-			crate::mock::RuntimeCall::ImOnline(crate::Call::heartbeat { heartbeat, .. }) =>
-				heartbeat,
+			crate::mock::Call::ImOnline(crate::Call::heartbeat { heartbeat, .. }) => heartbeat,
 			e => panic!("Unexpected call: {:?}", e),
 		};
 
@@ -395,12 +391,12 @@ fn should_handle_missing_progress_estimates() {
 		Session::rotate_session();
 
 		// enact the change and buffer another one
-		Validators::mutate(|l| *l = Some(vec![0, 1, 2]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
 		Session::rotate_session();
 
 		// we will return `None` on the next call to `estimate_current_session_progress`
 		// and the offchain worker should fallback to checking `HeartbeatAfter`
-		MockCurrentSessionProgress::mutate(|p| *p = Some(None));
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
 		ImOnline::offchain_worker(block);
 
 		assert_eq!(state.read().transactions.len(), 3);
@@ -429,25 +425,26 @@ fn should_handle_non_linear_session_progress() {
 
 		// mock the session length as being 10 blocks long,
 		// enact the change and buffer another one
-		Validators::mutate(|l| *l = Some(vec![0, 1, 2]));
+		VALIDATORS.with(|l| *l.borrow_mut() = Some(vec![0, 1, 2]));
 
 		// mock the session length has being 10 which should make us assume the fallback for half
 		// session will be reached by block 5.
-		MockAverageSessionLength::mutate(|p| *p = Some(10));
+		MOCK_AVERAGE_SESSION_LENGTH.with(|p| *p.borrow_mut() = Some(10));
 
 		Session::rotate_session();
 
 		// if we don't have valid results for the current session progres then
 		// we'll fallback to `HeartbeatAfter` and only heartbeat on block 5.
-		MockCurrentSessionProgress::mutate(|p| *p = Some(None));
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
 		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
 
-		MockCurrentSessionProgress::mutate(|p| *p = Some(None));
+		MOCK_CURRENT_SESSION_PROGRESS.with(|p| *p.borrow_mut() = Some(None));
 		assert!(ImOnline::send_heartbeats(5).ok().is_some());
 
 		// if we have a valid current session progress then we'll heartbeat as soon
 		// as we're past 80% of the session regardless of the block number
-		MockCurrentSessionProgress::mutate(|p| *p = Some(Some(Permill::from_percent(81))));
+		MOCK_CURRENT_SESSION_PROGRESS
+			.with(|p| *p.borrow_mut() = Some(Some(Permill::from_percent(81))));
 
 		assert!(ImOnline::send_heartbeats(2).ok().is_some());
 	});
@@ -465,7 +462,8 @@ fn test_does_not_heartbeat_early_in_the_session() {
 	ext.execute_with(|| {
 		// mock current session progress as being 5%. we only randomly start
 		// heartbeating after 10% of the session has elapsed.
-		MockCurrentSessionProgress::mutate(|p| *p = Some(Some(Permill::from_float(0.05))));
+		MOCK_CURRENT_SESSION_PROGRESS
+			.with(|p| *p.borrow_mut() = Some(Some(Permill::from_float(0.05))));
 		assert_eq!(ImOnline::send_heartbeats(2).err(), Some(OffchainErr::TooEarly));
 	});
 }
@@ -483,8 +481,9 @@ fn test_probability_of_heartbeating_increases_with_session_progress() {
 		let set_test = |progress, random: f64| {
 			// the average session length is 100 blocks, therefore the residual
 			// probability of sending a heartbeat is 1%
-			MockAverageSessionLength::mutate(|p| *p = Some(100));
-			MockCurrentSessionProgress::mutate(|p| *p = Some(Some(Permill::from_float(progress))));
+			MOCK_AVERAGE_SESSION_LENGTH.with(|p| *p.borrow_mut() = Some(100));
+			MOCK_CURRENT_SESSION_PROGRESS
+				.with(|p| *p.borrow_mut() = Some(Some(Permill::from_float(progress))));
 
 			let mut seed = [0u8; 32];
 			let encoded = ((random * Permill::ACCURACY as f64) as u32).encode();

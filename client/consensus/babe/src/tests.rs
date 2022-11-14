@@ -22,33 +22,27 @@ use super::*;
 use authorship::claim_slot;
 use futures::executor::block_on;
 use log::debug;
-use rand_chacha::{
-	rand_core::{RngCore, SeedableRng},
-	ChaChaRng,
-};
+use rand::RngCore;
+use rand_chacha::{rand_core::SeedableRng, ChaChaRng};
 use sc_block_builder::{BlockBuilder, BlockBuilderProvider};
 use sc_client_api::{backend::TransactionFor, BlockchainEvents, Finalizer};
 use sc_consensus::{BoxBlockImport, BoxJustificationImport};
 use sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging;
+use sc_keystore::LocalKeystore;
 use sc_network_test::{Block as TestBlock, *};
 use sp_application_crypto::key_types::BABE;
-use sp_consensus::{DisableProofRecording, NoNetwork as DummyOracle, Proposal};
+use sp_consensus::{AlwaysCanAuthor, DisableProofRecording, NoNetwork as DummyOracle, Proposal};
 use sp_consensus_babe::{
 	inherents::InherentDataProvider, make_transcript, make_transcript_data, AllowedSlots,
 	AuthorityPair, Slot,
 };
-use sp_consensus_slots::SlotDuration;
 use sp_core::crypto::Pair;
-use sp_keyring::Sr25519Keyring;
-use sp_keystore::{
-	testing::KeyStore as TestKeyStore, vrf::make_transcript as transcript_from_data,
-	SyncCryptoStore,
-};
+use sp_keystore::{vrf::make_transcript as transcript_from_data, SyncCryptoStore};
 use sp_runtime::{
 	generic::{Digest, DigestItem},
 	traits::Block as BlockT,
 };
-use sp_timestamp::Timestamp;
+use sp_timestamp::InherentDataProvider as TimestampInherentDataProvider;
 use std::{cell::RefCell, task::Poll, time::Duration};
 
 type Item = DigestItem;
@@ -73,13 +67,11 @@ type Mutator = Arc<dyn Fn(&mut TestHeader, Stage) + Send + Sync>;
 type BabeBlockImport =
 	PanickingBlockImport<crate::BabeBlockImport<TestBlock, TestClient, Arc<TestClient>>>;
 
-const SLOT_DURATION_MS: u64 = 1000;
-
 #[derive(Clone)]
 struct DummyFactory {
 	client: Arc<TestClient>,
 	epoch_changes: SharedEpochChanges<TestBlock, Epoch>,
-	config: BabeConfiguration,
+	config: Config,
 	mutator: Mutator,
 }
 
@@ -147,7 +139,7 @@ impl DummyProposer {
 				&self.parent_hash,
 				self.parent_number,
 				this_slot,
-				|slot| Epoch::genesis(&self.factory.config, slot),
+				|slot| Epoch::genesis(self.factory.config.genesis_config(), slot),
 			)
 			.expect("client has data to find epoch")
 			.expect("can compute epoch for baked block");
@@ -160,7 +152,7 @@ impl DummyProposer {
 			// that will re-check the randomness logic off-chain.
 			let digest_data = ConsensusLog::NextEpochData(NextEpochDescriptor {
 				authorities: epoch.authorities.clone(),
-				randomness: epoch.randomness,
+				randomness: epoch.randomness.clone(),
 			})
 			.encode();
 			let digest = DigestItem::Consensus(BABE_ENGINE_ID, digest_data);
@@ -242,11 +234,12 @@ pub struct TestVerifier {
 		TestBlock,
 		PeersFullClient,
 		TestSelectChain,
+		AlwaysCanAuthor,
 		Box<
 			dyn CreateInherentDataProviders<
 				TestBlock,
 				(),
-				InherentDataProviders = (InherentDataProvider,),
+				InherentDataProviders = (TimestampInherentDataProvider, InherentDataProvider),
 			>,
 		>,
 	>,
@@ -295,7 +288,7 @@ impl TestNetFactory for BabeTestNet {
 	) {
 		let client = client.as_client();
 
-		let config = crate::configuration(&*client).expect("config available");
+		let config = Config::get(&*client).expect("config available");
 		let (block_import, link) = crate::block_import(config, client.clone(), client.clone())
 			.expect("can initialize block-import");
 
@@ -328,14 +321,17 @@ impl TestNetFactory for BabeTestNet {
 				client: client.clone(),
 				select_chain: longest_chain,
 				create_inherent_data_providers: Box::new(|_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						Timestamp::current(),
-						SlotDuration::from_millis(SLOT_DURATION_MS),
+						*timestamp,
+						SlotDuration::from_millis(6000),
 					);
-					Ok((slot,))
+
+					Ok((timestamp, slot))
 				}),
 				config: data.link.config.clone(),
 				epoch_changes: data.link.epoch_changes.clone(),
+				can_author_with: AlwaysCanAuthor,
 				telemetry: None,
 			},
 			mutator: MUTATOR.with(|m| m.borrow().clone()),
@@ -368,13 +364,6 @@ fn rejects_empty_block() {
 	})
 }
 
-fn create_keystore(authority: Sr25519Keyring) -> SyncCryptoStorePtr {
-	let keystore = Arc::new(TestKeyStore::new());
-	SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(&authority.to_seed()))
-		.expect("Generates authority key");
-	keystore
-}
-
 fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static) {
 	sp_tracing::try_init_simple();
 	let mutator = Arc::new(mutator) as Mutator;
@@ -382,19 +371,25 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 	MUTATOR.with(|m| *m.borrow_mut() = mutator.clone());
 	let net = BabeTestNet::new(3);
 
-	let peers = [Sr25519Keyring::Alice, Sr25519Keyring::Bob, Sr25519Keyring::Charlie];
+	let peers = &[(0, "//Alice"), (1, "//Bob"), (2, "//Charlie")];
 
 	let net = Arc::new(Mutex::new(net));
 	let mut import_notifications = Vec::new();
 	let mut babe_futures = Vec::new();
+	let mut keystore_paths = Vec::new();
 
-	for (peer_id, auth_id) in peers.iter().enumerate() {
+	for (peer_id, seed) in peers {
 		let mut net = net.lock();
-		let peer = net.peer(peer_id);
+		let peer = net.peer(*peer_id);
 		let client = peer.client().as_client();
 		let select_chain = peer.select_chain().expect("Full client has select_chain");
 
-		let keystore = create_keystore(*auth_id);
+		let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+		let keystore: SyncCryptoStorePtr =
+			Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+		SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some(seed))
+			.expect("Generates authority key");
+		keystore_paths.push(keystore_path);
 
 		let mut got_own = false;
 		let mut got_other = false;
@@ -439,16 +434,19 @@ fn run_one_test(mutator: impl Fn(&mut TestHeader, Stage) + Send + Sync + 'static
 				env: environ,
 				sync_oracle: DummyOracle,
 				create_inherent_data_providers: Box::new(|_, _| async {
+					let timestamp = TimestampInherentDataProvider::from_system_time();
 					let slot = InherentDataProvider::from_timestamp_and_slot_duration(
-						Timestamp::current(),
-						SlotDuration::from_millis(SLOT_DURATION_MS),
+						*timestamp,
+						SlotDuration::from_millis(6000),
 					);
-					Ok((slot,))
+
+					Ok((timestamp, slot))
 				}),
 				force_authoring: false,
 				backoff_authoring_blocks: Some(BackoffAuthoringOnFinalizedHeadLagging::default()),
 				babe_link: data.link.clone(),
 				keystore,
+				can_author_with: sp_consensus::AlwaysCanAuthor,
 				justification_sync_link: (),
 				block_proposal_slot_portion: SlotProportion::new(0.5),
 				max_block_proposal_slot_portion: None,
@@ -542,14 +540,16 @@ fn sig_is_not_pre_digest() {
 #[test]
 fn can_author_block() {
 	sp_tracing::try_init_simple();
-
-	let authority = Sr25519Keyring::Alice;
-	let keystore = create_keystore(authority);
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore: SyncCryptoStorePtr =
+		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
+		.expect("Generates authority pair");
 
 	let mut i = 0;
 	let epoch = Epoch {
 		start_slot: 0.into(),
-		authorities: vec![(authority.public().into(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
@@ -559,11 +559,11 @@ fn can_author_block() {
 		},
 	};
 
-	let mut config = crate::BabeConfiguration {
+	let mut config = crate::BabeGenesisConfiguration {
 		slot_duration: 1000,
 		epoch_length: 100,
 		c: (3, 10),
-		authorities: Vec::new(),
+		genesis_authorities: Vec::new(),
 		randomness: [0; 32],
 		allowed_slots: AllowedSlots::PrimaryAndSecondaryPlainSlots,
 	};
@@ -644,8 +644,10 @@ fn propose_and_import_block<Transaction: Send + 'static>(
 	let mut import = BlockImportParams::new(BlockOrigin::Own, block.header);
 	import.post_digests.push(seal);
 	import.body = Some(block.extrinsics);
-	import
-		.insert_intermediate(INTERMEDIATE_KEY, BabeIntermediate::<TestBlock> { epoch_descriptor });
+	import.intermediates.insert(
+		Cow::from(INTERMEDIATE_KEY),
+		Box::new(BabeIntermediate::<TestBlock> { epoch_descriptor }) as Box<_>,
+	);
 	import.fork_choice = Some(ForkChoiceStrategy::LongestChain);
 	let import_result = block_on(block_import.import_block(import, Default::default())).unwrap();
 
@@ -706,12 +708,12 @@ fn importing_block_one_sets_genesis_epoch() {
 		&mut block_import,
 	);
 
-	let genesis_epoch = Epoch::genesis(&data.link.config, 999.into());
+	let genesis_epoch = Epoch::genesis(data.link.config.genesis_config(), 999.into());
 
 	let epoch_changes = data.link.epoch_changes.shared_data();
 	let epoch_for_second_block = epoch_changes
 		.epoch_data_for_child_of(descendent_query(&*client), &block_hash, 1, 1000.into(), |slot| {
-			Epoch::genesis(&data.link.config, slot)
+			Epoch::genesis(data.link.config.genesis_config(), slot)
 		})
 		.unwrap()
 		.unwrap();
@@ -769,14 +771,16 @@ fn revert_prunes_epoch_changes_and_removes_weights() {
 
 	// Load and check epoch changes.
 
-	let actual_nodes =
-		aux_schema::load_epoch_changes::<Block, TestClient>(&*client, &data.link.config)
-			.expect("load epoch changes")
-			.shared_data()
-			.tree()
-			.iter()
-			.map(|(h, _, _)| *h)
-			.collect::<Vec<_>>();
+	let actual_nodes = aux_schema::load_epoch_changes::<Block, TestClient>(
+		&*client,
+		data.link.config.genesis_config(),
+	)
+	.expect("load epoch changes")
+	.shared_data()
+	.tree()
+	.iter()
+	.map(|(h, _, _)| *h)
+	.collect::<Vec<_>>();
 
 	let expected_nodes = vec![
 		canon[0], // A
@@ -824,7 +828,7 @@ fn revert_not_allowed_for_finalized() {
 	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 3);
 
 	// Finalize best block
-	client.finalize_block(canon[2], None, false).unwrap();
+	client.finalize_block(BlockId::Hash(canon[2]), None, false).unwrap();
 
 	// Revert canon chain to last finalized block
 	revert(client.clone(), backend, 100).expect("revert should work for baked test scenario");
@@ -871,12 +875,12 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// Create and import the canon chain and keep track of fork blocks (A, C, D)
 	// from the diagram above.
-	let canon = propose_and_import_blocks_wrap(BlockId::Number(0), 30);
+	let canon_hashes = propose_and_import_blocks_wrap(BlockId::Number(0), 30);
 
 	// Create the forks
-	let fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon[0]), 10);
-	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon[12]), 15);
-	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon[18]), 10);
+	let fork_1 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[0]), 10);
+	let fork_2 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[12]), 15);
+	let fork_3 = propose_and_import_blocks_wrap(BlockId::Hash(canon_hashes[18]), 10);
 
 	// We should be tracking a total of 9 epochs in the fork tree
 	assert_eq!(epoch_changes.shared_data().tree().iter().count(), 9);
@@ -886,31 +890,51 @@ fn importing_epoch_change_block_prunes_tree() {
 
 	// We finalize block #13 from the canon chain, so on the next epoch
 	// change the tree should be pruned, to not contain F (#7).
-	client.finalize_block(canon[12], None, false).unwrap();
+	client.finalize_block(BlockId::Hash(canon_hashes[12]), None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 7);
 
-	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
-
-	// no hashes from the first fork must exist on the tree
-	assert!(!nodes.iter().any(|h| fork_1.contains(h)));
+	// at this point no hashes from the first fork must exist on the tree
+	assert!(!epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_1.contains(h)),);
 
 	// but the epoch changes from the other forks must still exist
-	assert!(nodes.iter().any(|h| fork_2.contains(h)));
-	assert!(nodes.iter().any(|h| fork_3.contains(h)));
+	assert!(epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_2.contains(h)));
+
+	assert!(epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_3.contains(h)),);
 
 	// finalizing block #25 from the canon chain should prune out the second fork
-	client.finalize_block(canon[24], None, false).unwrap();
+	client.finalize_block(BlockId::Hash(canon_hashes[24]), None, false).unwrap();
 	propose_and_import_blocks_wrap(BlockId::Hash(client.chain_info().best_hash), 8);
 
-	let nodes: Vec<_> = epoch_changes.shared_data().tree().iter().map(|(h, _, _)| *h).collect();
+	// at this point no hashes from the second fork must exist on the tree
+	assert!(!epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_2.contains(h)),);
 
-	// no hashes from the other forks must exist on the tree
-	assert!(!nodes.iter().any(|h| fork_2.contains(h)));
-	assert!(!nodes.iter().any(|h| fork_3.contains(h)));
-
-	// Check that we contain the nodes that we care about
-	assert!(nodes.iter().any(|h| *h == canon[18]));
-	assert!(nodes.iter().any(|h| *h == canon[24]));
+	// while epoch changes from the last fork should still exist
+	assert!(epoch_changes
+		.shared_data()
+		.tree()
+		.iter()
+		.map(|(h, _, _)| h)
+		.any(|h| fork_3.contains(h)),);
 }
 
 #[test]
@@ -951,13 +975,15 @@ fn verify_slots_are_strictly_increasing() {
 #[test]
 fn babe_transcript_generation_match() {
 	sp_tracing::try_init_simple();
-
-	let authority = Sr25519Keyring::Alice;
-	let _keystore = create_keystore(authority);
+	let keystore_path = tempfile::tempdir().expect("Creates keystore path");
+	let keystore: SyncCryptoStorePtr =
+		Arc::new(LocalKeystore::open(keystore_path.path(), None).expect("Creates keystore"));
+	let public = SyncCryptoStore::sr25519_generate_new(&*keystore, BABE, Some("//Alice"))
+		.expect("Generates authority pair");
 
 	let epoch = Epoch {
 		start_slot: 0.into(),
-		authorities: vec![(authority.public().into(), 1)],
+		authorities: vec![(public.into(), 1)],
 		randomness: [0; 32],
 		epoch_index: 1,
 		duration: 100,
@@ -1031,7 +1057,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	assert!(aux_data_check(&fork3_hashes, true));
 
 	// Finalize A3
-	client.finalize_block(fork1_hashes[2], None, true).unwrap();
+	client.finalize_block(BlockId::Number(3), None, true).unwrap();
 
 	// Wiped: A1, A2
 	assert!(aux_data_check(&fork1_hashes[..2], false));
@@ -1042,7 +1068,7 @@ fn obsolete_blocks_aux_data_cleanup() {
 	// Present C4, C5
 	assert!(aux_data_check(&fork3_hashes, true));
 
-	client.finalize_block(fork1_hashes[3], None, true).unwrap();
+	client.finalize_block(BlockId::Number(4), None, true).unwrap();
 
 	// Wiped: A3
 	assert!(aux_data_check(&fork1_hashes[2..3], false));

@@ -35,16 +35,13 @@ fn pool_lifecycle_e2e() {
 		assert_eq!(Staking::current_era(), None);
 
 		// create the pool, we know this has id 1.
-		assert_ok!(Pools::create(RuntimeOrigin::signed(10), 50, 10, 10, 10));
+		assert_ok!(Pools::create(Origin::signed(10), 50, 10, 10, 10));
 		assert_eq!(LastPoolId::<Runtime>::get(), 1);
 
 		// have the pool nominate.
-		assert_ok!(Pools::nominate(RuntimeOrigin::signed(10), 1, vec![1, 2, 3]));
+		assert_ok!(Pools::nominate(Origin::signed(10), 1, vec![1, 2, 3]));
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 50 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 50),]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -54,15 +51,12 @@ fn pool_lifecycle_e2e() {
 		);
 
 		// have two members join
-		assert_ok!(Pools::join(RuntimeOrigin::signed(20), 10, 1));
-		assert_ok!(Pools::join(RuntimeOrigin::signed(21), 10, 1));
+		assert_ok!(Pools::join(Origin::signed(20), 10, 1));
+		assert_ok!(Pools::join(Origin::signed(21), 10, 1));
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: 10 },
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: 10 },
-			]
+			vec![StakingEvent::Bonded(POOL1_BONDED, 10), StakingEvent::Bonded(POOL1_BONDED, 10),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -73,17 +67,17 @@ fn pool_lifecycle_e2e() {
 		);
 
 		// pool goes into destroying
-		assert_ok!(Pools::set_state(RuntimeOrigin::signed(10), 1, PoolState::Destroying));
+		assert_ok!(Pools::set_state(Origin::signed(10), 1, PoolState::Destroying));
 
 		// depositor cannot unbond yet.
 		assert_noop!(
-			Pools::unbond(RuntimeOrigin::signed(10), 10, 50),
+			Pools::unbond(Origin::signed(10), 10, 50),
 			PoolsError::<Runtime>::MinimumBondNotMet,
 		);
 
 		// now the members want to unbond.
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 10));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(21), 21, 10));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
+		assert_ok!(Pools::unbond(Origin::signed(21), 21, 10));
 
 		assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().unbonding_eras.len(), 1);
 		assert_eq!(PoolMembers::<Runtime>::get(20).unwrap().points, 0);
@@ -93,8 +87,8 @@ fn pool_lifecycle_e2e() {
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 },
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 },
+				StakingEvent::Unbonded(POOL1_BONDED, 10),
+				StakingEvent::Unbonded(POOL1_BONDED, 10),
 			]
 		);
 		assert_eq!(
@@ -108,14 +102,14 @@ fn pool_lifecycle_e2e() {
 
 		// depositor cannot still unbond
 		assert_noop!(
-			Pools::unbond(RuntimeOrigin::signed(10), 10, 50),
+			Pools::unbond(Origin::signed(10), 10, 50),
 			PoolsError::<Runtime>::MinimumBondNotMet,
 		);
 
 		for e in 1..BondingDuration::get() {
 			CurrentEra::<Runtime>::set(Some(e));
 			assert_noop!(
-				Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0),
+				Pools::withdraw_unbonded(Origin::signed(20), 20, 0),
 				PoolsError::<Runtime>::CannotWithdrawAny
 			);
 		}
@@ -125,19 +119,19 @@ fn pool_lifecycle_e2e() {
 
 		// depositor cannot still unbond
 		assert_noop!(
-			Pools::unbond(RuntimeOrigin::signed(10), 10, 50),
+			Pools::unbond(Origin::signed(10), 10, 50),
 			PoolsError::<Runtime>::MinimumBondNotMet,
 		);
 
 		// but members can now withdraw.
-		assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0));
-		assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(21), 21, 0));
+		assert_ok!(Pools::withdraw_unbonded(Origin::signed(20), 20, 0));
+		assert_ok!(Pools::withdraw_unbonded(Origin::signed(21), 21, 0));
 		assert!(PoolMembers::<Runtime>::get(20).is_none());
 		assert!(PoolMembers::<Runtime>::get(21).is_none());
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Withdrawn { stash: POOL1_BONDED, amount: 20 },]
+			vec![StakingEvent::Withdrawn(POOL1_BONDED, 20),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -152,19 +146,16 @@ fn pool_lifecycle_e2e() {
 		// as soon as all members have left, the depositor can try to unbond, but since the
 		// min-nominator intention is set, they must chill first.
 		assert_noop!(
-			Pools::unbond(RuntimeOrigin::signed(10), 10, 50),
+			Pools::unbond(Origin::signed(10), 10, 50),
 			pallet_staking::Error::<Runtime>::InsufficientBond
 		);
 
-		assert_ok!(Pools::chill(RuntimeOrigin::signed(10), 1));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 50));
+		assert_ok!(Pools::chill(Origin::signed(10), 1));
+		assert_ok!(Pools::unbond(Origin::signed(10), 10, 50));
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Chilled { stash: POOL1_BONDED },
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 50 },
-			]
+			vec![StakingEvent::Chilled(POOL1_BONDED), StakingEvent::Unbonded(POOL1_BONDED, 50),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -173,12 +164,12 @@ fn pool_lifecycle_e2e() {
 
 		// waiting another bonding duration:
 		CurrentEra::<Runtime>::set(Some(BondingDuration::get() * 2));
-		assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 1));
+		assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 1));
 
 		// pools is fully destroyed now.
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Withdrawn { stash: POOL1_BONDED, amount: 50 },]
+			vec![StakingEvent::Withdrawn(POOL1_BONDED, 50),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -199,13 +190,10 @@ fn pool_slash_e2e() {
 		assert_eq!(Staking::current_era(), None);
 
 		// create the pool, we know this has id 1.
-		assert_ok!(Pools::create(RuntimeOrigin::signed(10), 40, 10, 10, 10));
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
 		assert_eq!(LastPoolId::<Runtime>::get(), 1);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 40 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -217,15 +205,12 @@ fn pool_slash_e2e() {
 		assert_eq!(Payee::<Runtime>::get(POOL1_BONDED), RewardDestination::Account(POOL1_REWARD));
 
 		// have two members join
-		assert_ok!(Pools::join(RuntimeOrigin::signed(20), 20, 1));
-		assert_ok!(Pools::join(RuntimeOrigin::signed(21), 20, 1));
+		assert_ok!(Pools::join(Origin::signed(20), 20, 1));
+		assert_ok!(Pools::join(Origin::signed(21), 20, 1));
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: 20 },
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: 20 }
-			]
+			vec![StakingEvent::Bonded(POOL1_BONDED, 20), StakingEvent::Bonded(POOL1_BONDED, 20)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -239,14 +224,14 @@ fn pool_slash_e2e() {
 		CurrentEra::<Runtime>::set(Some(1));
 
 		// 20 / 80 of the total funds are unlocked, and safe from any further slash.
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 10));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 10));
+		assert_ok!(Pools::unbond(Origin::signed(10), 10, 10));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
 
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 },
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 }
+				StakingEvent::Unbonded(POOL1_BONDED, 10),
+				StakingEvent::Unbonded(POOL1_BONDED, 10)
 			]
 		);
 		assert_eq!(
@@ -261,16 +246,16 @@ fn pool_slash_e2e() {
 
 		// note: depositor cannot fully unbond at this point.
 		// these funds will still get slashed.
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 10));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, 10));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(21), 21, 10));
+		assert_ok!(Pools::unbond(Origin::signed(10), 10, 10));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, 10));
+		assert_ok!(Pools::unbond(Origin::signed(21), 21, 10));
 
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 },
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 },
-				StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 },
+				StakingEvent::Unbonded(POOL1_BONDED, 10),
+				StakingEvent::Unbonded(POOL1_BONDED, 10),
+				StakingEvent::Unbonded(POOL1_BONDED, 10),
 			]
 		);
 
@@ -293,10 +278,7 @@ fn pool_slash_e2e() {
 			2, // slash era 2, affects chunks at era 5 onwards.
 		);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 30 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -308,7 +290,7 @@ fn pool_slash_e2e() {
 		);
 
 		CurrentEra::<Runtime>::set(Some(3));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(21), 21, 10));
+		assert_ok!(Pools::unbond(Origin::signed(21), 21, 10));
 
 		assert_eq!(
 			PoolMembers::<Runtime>::get(21).unwrap(),
@@ -320,10 +302,7 @@ fn pool_slash_e2e() {
 				unbonding_eras: bounded_btree_map!(5 => 10, 6 => 5)
 			}
 		);
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 5 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Unbonded(POOL1_BONDED, 5)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![PoolsEvent::Unbonded { member: 21, pool_id: 1, balance: 5, points: 5, era: 6 }]
@@ -331,8 +310,8 @@ fn pool_slash_e2e() {
 
 		// now we start withdrawing. we do it all at once, at era 6 where 20 and 21 are fully free.
 		CurrentEra::<Runtime>::set(Some(6));
-		assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(20), 20, 0));
-		assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(21), 21, 0));
+		assert_ok!(Pools::withdraw_unbonded(Origin::signed(20), 20, 0));
+		assert_ok!(Pools::withdraw_unbonded(Origin::signed(21), 21, 0));
 
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -348,16 +327,16 @@ fn pool_slash_e2e() {
 		assert_eq!(
 			staking_events_since_last_call(),
 			// a 10 (un-slashed) + 10/2 (slashed) balance from 10 has also been unlocked
-			vec![StakingEvent::Withdrawn { stash: POOL1_BONDED, amount: 15 + 10 + 15 }]
+			vec![StakingEvent::Withdrawn(POOL1_BONDED, 15 + 10 + 15)]
 		);
 
 		// now, finally, we can unbond the depositor further than their current limit.
-		assert_ok!(Pools::set_state(RuntimeOrigin::signed(10), 1, PoolState::Destroying));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(10), 10, 20));
+		assert_ok!(Pools::set_state(Origin::signed(10), 1, PoolState::Destroying));
+		assert_ok!(Pools::unbond(Origin::signed(10), 10, 20));
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: 10 }]
+			vec![StakingEvent::Unbonded(POOL1_BONDED, 10)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -378,11 +357,11 @@ fn pool_slash_e2e() {
 			}
 		);
 		// withdraw the depositor, they should lose 12 balance in total due to slash.
-		assert_ok!(Pools::withdraw_unbonded(RuntimeOrigin::signed(10), 10, 0));
+		assert_ok!(Pools::withdraw_unbonded(Origin::signed(10), 10, 0));
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Withdrawn { stash: POOL1_BONDED, amount: 10 }]
+			vec![StakingEvent::Withdrawn(POOL1_BONDED, 10)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -406,13 +385,10 @@ fn pool_slash_proportional() {
 		assert_eq!(Staking::current_era(), None);
 
 		// create the pool, we know this has id 1.
-		assert_ok!(Pools::create(RuntimeOrigin::signed(10), 40, 10, 10, 10));
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
 		assert_eq!(LastPoolId::<T>::get(), 1);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 40 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -423,16 +399,16 @@ fn pool_slash_proportional() {
 
 		// have two members join
 		let bond = 20;
-		assert_ok!(Pools::join(RuntimeOrigin::signed(20), bond, 1));
-		assert_ok!(Pools::join(RuntimeOrigin::signed(21), bond, 1));
-		assert_ok!(Pools::join(RuntimeOrigin::signed(22), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(21), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(22), bond, 1));
 
 		assert_eq!(
 			staking_events_since_last_call(),
 			vec![
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: bond },
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: bond },
-				StakingEvent::Bonded { stash: POOL1_BONDED, amount: bond },
+				StakingEvent::Bonded(POOL1_BONDED, bond),
+				StakingEvent::Bonded(POOL1_BONDED, bond),
+				StakingEvent::Bonded(POOL1_BONDED, bond),
 			]
 		);
 		assert_eq!(
@@ -448,11 +424,11 @@ fn pool_slash_proportional() {
 		CurrentEra::<T>::set(Some(99));
 
 		// and unbond
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, bond));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, bond));
 
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: bond },]
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -466,10 +442,10 @@ fn pool_slash_proportional() {
 		);
 
 		CurrentEra::<T>::set(Some(100));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(21), 21, bond));
+		assert_ok!(Pools::unbond(Origin::signed(21), 21, bond));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: bond },]
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -483,10 +459,10 @@ fn pool_slash_proportional() {
 		);
 
 		CurrentEra::<T>::set(Some(101));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(22), 22, bond));
+		assert_ok!(Pools::unbond(Origin::signed(22), 22, bond));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: bond },]
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond),]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -510,17 +486,16 @@ fn pool_slash_proportional() {
 			100,
 		);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 50 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 50)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
-				// This era got slashed 12.5, which rounded up to 13.
-				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 7 },
-				// This era got slashed 12 instead of 12.5 because an earlier chunk got 0.5 more
-				// slashed, and 12 is all the remaining slash
+				// This last pool got slashed only the leftover dust. Otherwise in principle, this
+				// chunk/pool should have not been affected.
+				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 127, balance: 19 },
+				// This pool got slashed 12.5, which rounded down to 12.
+				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 128, balance: 8 },
+				// This pool got slashed 12.5, which rounded down to 12.
 				PoolsEvent::UnbondingPoolSlashed { pool_id: 1, era: 129, balance: 8 },
 				// Bonded pool got slashed for 25, remaining 15 in it.
 				PoolsEvent::PoolSlashed { pool_id: 1, balance: 15 }
@@ -543,11 +518,8 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 		assert_eq!(Staking::current_era(), None);
 
 		// create the pool, we know this has id 1.
-		assert_ok!(Pools::create(RuntimeOrigin::signed(10), 40, 10, 10, 10));
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 40 }]
-		);
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -558,10 +530,10 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 
 		// have two members join
 		let bond = 20;
-		assert_ok!(Pools::join(RuntimeOrigin::signed(20), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: bond }]
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -570,10 +542,10 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 
 		// progress and unbond.
 		CurrentEra::<T>::set(Some(99));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, bond));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, bond));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: bond }]
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -597,10 +569,7 @@ fn pool_slash_non_proportional_only_bonded_pool() {
 			100,
 		);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 30 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 30)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![PoolsEvent::PoolSlashed { pool_id: 1, balance: 10 }]
@@ -622,11 +591,8 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 		assert_eq!(Staking::current_era(), None);
 
 		// create the pool, we know this has id 1.
-		assert_ok!(Pools::create(RuntimeOrigin::signed(10), 40, 10, 10, 10));
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: 40 }]
-		);
+		assert_ok!(Pools::create(Origin::signed(10), 40, 10, 10, 10));
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Bonded(POOL1_BONDED, 40)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![
@@ -637,10 +603,10 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 
 		// have two members join
 		let bond = 20;
-		assert_ok!(Pools::join(RuntimeOrigin::signed(20), bond, 1));
+		assert_ok!(Pools::join(Origin::signed(20), bond, 1));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Bonded { stash: POOL1_BONDED, amount: bond }]
+			vec![StakingEvent::Bonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -649,10 +615,10 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 
 		// progress and unbond.
 		CurrentEra::<T>::set(Some(99));
-		assert_ok!(Pools::unbond(RuntimeOrigin::signed(20), 20, bond));
+		assert_ok!(Pools::unbond(Origin::signed(20), 20, bond));
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![StakingEvent::Unbonded { stash: POOL1_BONDED, amount: bond }]
+			vec![StakingEvent::Unbonded(POOL1_BONDED, bond)]
 		);
 		assert_eq!(
 			pool_events_since_last_call(),
@@ -676,10 +642,7 @@ fn pool_slash_non_proportional_bonded_pool_and_chunks() {
 			100,
 		);
 
-		assert_eq!(
-			staking_events_since_last_call(),
-			vec![StakingEvent::Slashed { staker: POOL1_BONDED, amount: 50 }]
-		);
+		assert_eq!(staking_events_since_last_call(), vec![StakingEvent::Slashed(POOL1_BONDED, 50)]);
 		assert_eq!(
 			pool_events_since_last_call(),
 			vec![

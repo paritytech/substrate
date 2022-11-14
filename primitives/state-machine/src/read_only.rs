@@ -23,6 +23,7 @@ use hash_db::Hasher;
 use sp_core::{
 	storage::{ChildInfo, StateVersion, TrackedStorageKey},
 	traits::Externalities,
+	Blake2Hasher,
 };
 use sp_externalities::MultiRemovalResults;
 use std::{
@@ -43,10 +44,7 @@ pub trait InspectState<H: Hasher, B: Backend<H>> {
 	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R;
 }
 
-impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B
-where
-	H::Out: Encode,
-{
+impl<H: Hasher, B: Backend<H>> InspectState<H, B> for B {
 	fn inspect_state<F: FnOnce() -> R, R>(&self, f: F) -> R {
 		ReadOnlyExternalities::from(self).execute_with(f)
 	}
@@ -68,10 +66,7 @@ impl<'a, H: Hasher, B: 'a + Backend<H>> From<&'a B> for ReadOnlyExternalities<'a
 	}
 }
 
-impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B>
-where
-	H::Out: Encode,
-{
+impl<'a, H: Hasher, B: 'a + Backend<H>> ReadOnlyExternalities<'a, H, B> {
 	/// Execute the given closure while `self` is set as externalities.
 	///
 	/// Returns the result of the given closure.
@@ -80,10 +75,7 @@ where
 	}
 }
 
-impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<'a, H, B>
-where
-	H::Out: Encode,
-{
+impl<'a, H: Hasher, B: 'a + Backend<H>> Externalities for ReadOnlyExternalities<'a, H, B> {
 	fn set_offchain_storage(&mut self, _key: &[u8], _value: Option<&[u8]>) {
 		panic!("Should not be used in read-only externalities!")
 	}
@@ -95,10 +87,7 @@ where
 	}
 
 	fn storage_hash(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.backend
-			.storage_hash(key)
-			.expect("Backed failed for storage_hash in ReadOnlyExternalities")
-			.map(|h| h.encode())
+		self.storage(key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn child_storage(&self, child_info: &ChildInfo, key: &[u8]) -> Option<StorageValue> {
@@ -108,10 +97,7 @@ where
 	}
 
 	fn child_storage_hash(&self, child_info: &ChildInfo, key: &[u8]) -> Option<Vec<u8>> {
-		self.backend
-			.child_storage_hash(child_info, key)
-			.expect("Backed failed for child_storage_hash in ReadOnlyExternalities")
-			.map(|h| h.encode())
+		self.child_storage(child_info, key).map(|v| Blake2Hasher::hash(&v).encode())
 	}
 
 	fn next_storage_key(&self, key: &[u8]) -> Option<StorageKey> {

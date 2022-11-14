@@ -126,7 +126,10 @@ pub mod pallet {
 		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 
 		/// The overarching event type.
-		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+
+		/// The overarching dispatch call type.
+		type Call: From<Call<Self>>;
 
 		// Configuration parameters
 

@@ -16,13 +16,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Definitions of [`ValueEnum`] types.
+//! Definitions of [`ArgEnum`] types.
 
-use clap::{builder::PossibleValue, ValueEnum};
+use clap::ArgEnum;
 
 /// The instantiation strategy to use in compiled mode.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum WasmtimeInstantiationStrategy {
 	/// Pool the instances to avoid initializing everything from scratch
 	/// on each instantiation. Use copy-on-write memory when possible.
@@ -59,22 +59,20 @@ pub enum WasmExecutionMethod {
 	Compiled,
 }
 
-const INTERPRETED_NAME: &str = "interpreted-i-know-what-i-do";
-
-impl clap::ValueEnum for WasmExecutionMethod {
-	/// All possible argument values, in display order.
-	fn value_variants<'a>() -> &'a [Self] {
-		let variants = &[Self::Interpreted, Self::Compiled];
-		if cfg!(feature = "wasmtime") {
-			variants
-		} else {
-			&variants[..1]
+impl std::fmt::Display for WasmExecutionMethod {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Interpreted => write!(f, "Interpreted"),
+			Self::Compiled => write!(f, "Compiled"),
 		}
 	}
+}
 
-	/// Parse an argument into `Self`.
-	fn from_str(s: &str, _: bool) -> Result<Self, String> {
-		if s.eq_ignore_ascii_case(INTERPRETED_NAME) {
+impl std::str::FromStr for WasmExecutionMethod {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		if s.eq_ignore_ascii_case("interpreted-i-know-what-i-do") {
 			Ok(Self::Interpreted)
 		} else if s.eq_ignore_ascii_case("compiled") {
 			#[cfg(feature = "wasmtime")]
@@ -86,29 +84,19 @@ impl clap::ValueEnum for WasmExecutionMethod {
 				Err("`Compiled` variant requires the `wasmtime` feature to be enabled".into())
 			}
 		} else {
-			Err(format!("Unknown variant `{}`", s))
-		}
-	}
-
-	/// The canonical argument value.
-	///
-	/// The value is `None` for skipped variants.
-	fn to_possible_value(&self) -> Option<PossibleValue> {
-		match self {
-			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => Some(PossibleValue::new("compiled")),
-			#[cfg(not(feature = "wasmtime"))]
-			WasmExecutionMethod::Compiled => None,
-			WasmExecutionMethod::Interpreted => Some(PossibleValue::new(INTERPRETED_NAME)),
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
 		}
 	}
 }
 
-impl std::fmt::Display for WasmExecutionMethod {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Interpreted => write!(f, "Interpreted"),
-			Self::Compiled => write!(f, "Compiled"),
+impl WasmExecutionMethod {
+	/// Returns all the variants of this enum to be shown in the cli.
+	pub fn variants() -> &'static [&'static str] {
+		let variants = &["interpreted-i-know-what-i-do", "compiled"];
+		if cfg!(feature = "wasmtime") {
+			variants
+		} else {
+			&variants[..1]
 		}
 	}
 }
@@ -145,15 +133,15 @@ pub fn execution_method_from_cli(
 
 /// The default [`WasmExecutionMethod`].
 #[cfg(feature = "wasmtime")]
-pub const DEFAULT_WASM_EXECUTION_METHOD: WasmExecutionMethod = WasmExecutionMethod::Compiled;
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "compiled";
 
 /// The default [`WasmExecutionMethod`].
 #[cfg(not(feature = "wasmtime"))]
-pub const DEFAULT_WASM_EXECUTION_METHOD: WasmExecutionMethod = WasmExecutionMethod::Interpreted;
+pub const DEFAULT_WASM_EXECUTION_METHOD: &str = "interpreted-i-know-what-i-do";
 
 #[allow(missing_docs)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum TracingReceiver {
 	/// Output the tracing records using the log.
 	Log,
@@ -168,16 +156,16 @@ impl Into<sc_tracing::TracingReceiver> for TracingReceiver {
 }
 
 /// The type of the node key.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum NodeKeyType {
 	/// Use ed25519.
 	Ed25519,
 }
 
 /// The crypto scheme to use.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum CryptoScheme {
 	/// Use ed25519.
 	Ed25519,
@@ -188,8 +176,8 @@ pub enum CryptoScheme {
 }
 
 /// The type of the output format.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum OutputType {
 	/// Output as json.
 	Json,
@@ -198,8 +186,8 @@ pub enum OutputType {
 }
 
 /// How to execute blocks
-#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum ExecutionStrategy {
 	/// Execute with native build (if available, WebAssembly otherwise).
 	Native,
@@ -224,8 +212,8 @@ impl Into<sc_client_api::ExecutionStrategy> for ExecutionStrategy {
 
 /// Available RPC methods.
 #[allow(missing_docs)]
-#[derive(Debug, Copy, Clone, PartialEq, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum RpcMethods {
 	/// Expose every RPC method only when RPC is listening on `localhost`,
 	/// otherwise serve only safe RPC methods.
@@ -247,8 +235,7 @@ impl Into<sc_service::config::RpcMethods> for RpcMethods {
 }
 
 /// Database backend
-#[derive(Debug, Clone, PartialEq, Copy, clap::ValueEnum)]
-#[value(rename_all = "lower")]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum Database {
 	/// Facebooks RocksDB
 	#[cfg(feature = "rocksdb")]
@@ -259,8 +246,27 @@ pub enum Database {
 	/// instance of ParityDb
 	Auto,
 	/// ParityDb. <https://github.com/paritytech/parity-db/>
-	#[value(name = "paritydb-experimental")]
 	ParityDbDeprecated,
+}
+
+impl std::str::FromStr for Database {
+	type Err = String;
+
+	fn from_str(s: &str) -> Result<Self, String> {
+		#[cfg(feature = "rocksdb")]
+		if s.eq_ignore_ascii_case("rocksdb") {
+			return Ok(Self::RocksDb)
+		}
+		if s.eq_ignore_ascii_case("paritydb-experimental") {
+			return Ok(Self::ParityDbDeprecated)
+		} else if s.eq_ignore_ascii_case("paritydb") {
+			return Ok(Self::ParityDb)
+		} else if s.eq_ignore_ascii_case("auto") {
+			Ok(Self::Auto)
+		} else {
+			Err(format!("Unknown variant `{}`, known variants: {:?}", s, Self::variants()))
+		}
+	}
 }
 
 impl Database {
@@ -278,8 +284,8 @@ impl Database {
 
 /// Whether off-chain workers are enabled.
 #[allow(missing_docs)]
-#[derive(Debug, Clone, ValueEnum)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Clone, ArgEnum)]
+#[clap(rename_all = "kebab-case")]
 pub enum OffchainWorkerEnabled {
 	/// Always have offchain worker enabled.
 	Always,
@@ -290,8 +296,8 @@ pub enum OffchainWorkerEnabled {
 }
 
 /// Syncing mode.
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
-#[value(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Copy, ArgEnum, PartialEq)]
+#[clap(rename_all = "kebab-case")]
 pub enum SyncMode {
 	/// Full sync. Download end verify all blocks.
 	Full,

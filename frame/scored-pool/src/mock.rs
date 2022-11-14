@@ -21,7 +21,7 @@ use super::*;
 use crate as pallet_scored_pool;
 
 use frame_support::{
-	bounded_vec, construct_runtime, ord_parameter_types, parameter_types,
+	ord_parameter_types, parameter_types,
 	traits::{ConstU32, ConstU64, GenesisBuild},
 };
 use frame_system::EnsureSignedBy;
@@ -30,11 +30,12 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
-construct_runtime!(
+frame_support::construct_runtime!(
 	pub enum Test where
 		Block = Block,
 		NodeBlock = Block,
@@ -49,7 +50,7 @@ construct_runtime!(
 parameter_types! {
 	pub const CandidateDeposit: u64 = 25;
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 ord_parameter_types! {
 	pub const KickOrigin: u64 = 2;
@@ -61,16 +62,16 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -88,21 +89,21 @@ impl pallet_balances::Config for Test {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
 
-parameter_types! {
-	pub static MembersTestValue: BoundedVec<u64,ConstU32<10_u32>> = bounded_vec![0,10];
+thread_local! {
+	pub static MEMBERS: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
 pub struct TestChangeMembers;
 impl ChangeMembers<u64> for TestChangeMembers {
 	fn change_members_sorted(incoming: &[u64], outgoing: &[u64], new: &[u64]) {
-		let mut old_plus_incoming = MembersTestValue::get().into_inner();
+		let mut old_plus_incoming = MEMBERS.with(|m| m.borrow().to_vec());
 		old_plus_incoming.extend_from_slice(incoming);
 		old_plus_incoming.sort();
 
@@ -112,20 +113,18 @@ impl ChangeMembers<u64> for TestChangeMembers {
 
 		assert_eq!(old_plus_incoming, new_plus_outgoing);
 
-		MembersTestValue::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(new.to_vec()));
+		MEMBERS.with(|m| *m.borrow_mut() = new.to_vec());
 	}
 }
 
 impl InitializeMembers<u64> for TestChangeMembers {
 	fn initialize_members(new_members: &[u64]) {
-		MembersTestValue::set(<BoundedVec<u64, ConstU32<10_u32>>>::truncate_from(
-			new_members.to_vec(),
-		));
+		MEMBERS.with(|m| *m.borrow_mut() = new_members.to_vec());
 	}
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type KickOrigin = EnsureSignedBy<KickOrigin, u64>;
 	type MembershipInitialized = TestChangeMembers;
 	type MembershipChanged = TestChangeMembers;
@@ -134,24 +133,25 @@ impl Config for Test {
 	type Period = ConstU64<4>;
 	type Score = u64;
 	type ScoreOrigin = EnsureSignedBy<ScoreOrigin, u64>;
-	type MaximumMembers = ConstU32<10>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	let mut balances = vec![];
-	for i in 1..31 {
-		balances.push((i, 500_000));
+	pallet_balances::GenesisConfig::<Test> {
+		balances: vec![
+			(5, 500_000),
+			(10, 500_000),
+			(15, 500_000),
+			(20, 500_000),
+			(31, 500_000),
+			(40, 500_000),
+			(99, 1),
+		],
 	}
-	balances.push((31, 500_000));
-	balances.push((40, 500_000));
-	balances.push((99, 1));
-
-	pallet_balances::GenesisConfig::<Test> { balances }
-		.assimilate_storage(&mut t)
-		.unwrap();
+	.assimilate_storage(&mut t)
+	.unwrap();
 	pallet_scored_pool::GenesisConfig::<Test> {
-		pool: bounded_vec![(10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3)), (5, None)],
+		pool: vec![(5, None), (10, Some(1)), (20, Some(2)), (31, Some(2)), (40, Some(3))],
 		member_count: 2,
 	}
 	.assimilate_storage(&mut t)

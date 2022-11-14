@@ -32,36 +32,32 @@ struct LeafSetItem<H, N> {
 	number: Reverse<N>,
 }
 
-/// Inserted and removed leaves after an import action.
-pub struct ImportOutcome<H, N> {
-	inserted: LeafSetItem<H, N>,
-	removed: Option<H>,
+/// A displaced leaf after import.
+#[must_use = "Displaced items from the leaf set must be handled."]
+pub struct ImportDisplaced<H, N> {
+	new_hash: H,
+	displaced: LeafSetItem<H, N>,
 }
 
-/// Inserted and removed leaves after a remove action.
-pub struct RemoveOutcome<H, N> {
-	inserted: Option<H>,
-	removed: LeafSetItem<H, N>,
+/// Displaced leaves after finalization.
+#[must_use = "Displaced items from the leaf set must be handled."]
+pub struct FinalizationDisplaced<H, N> {
+	leaves: BTreeMap<Reverse<N>, Vec<H>>,
 }
 
-/// Removed leaves after a finalization action.
-pub struct FinalizationOutcome<H, N> {
-	removed: BTreeMap<Reverse<N>, Vec<H>>,
-}
-
-impl<H, N: Ord> FinalizationOutcome<H, N> {
+impl<H, N: Ord> FinalizationDisplaced<H, N> {
 	/// Merge with another. This should only be used for displaced items that
 	/// are produced within one transaction of each other.
 	pub fn merge(&mut self, mut other: Self) {
 		// this will ignore keys that are in duplicate, however
 		// if these are actually produced correctly via the leaf-set within
 		// one transaction, then there will be no overlap in the keys.
-		self.removed.append(&mut other.removed);
+		self.leaves.append(&mut other.leaves);
 	}
 
 	/// Iterate over all displaced leaves.
 	pub fn leaves(&self) -> impl Iterator<Item = &H> {
-		self.removed.values().flatten()
+		self.leaves.values().flatten()
 	}
 }
 
@@ -103,52 +99,27 @@ where
 	}
 
 	/// Update the leaf list on import.
-	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> ImportOutcome<H, N> {
-		let number = Reverse(number);
+	/// Returns a displaced leaf if there was one.
+	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> Option<ImportDisplaced<H, N>> {
+		// avoid underflow for genesis.
+		let displaced = if number != N::zero() {
+			let parent_number = Reverse(number.clone() - N::one());
+			let was_displaced = self.remove_leaf(&parent_number, &parent_hash);
 
-		let removed = if number.0 != N::zero() {
-			let parent_number = Reverse(number.0.clone() - N::one());
-			self.remove_leaf(&parent_number, &parent_hash).then(|| parent_hash)
+			if was_displaced {
+				Some(ImportDisplaced {
+					new_hash: hash.clone(),
+					displaced: LeafSetItem { hash: parent_hash, number: parent_number },
+				})
+			} else {
+				None
+			}
 		} else {
 			None
 		};
 
-		self.insert_leaf(number.clone(), hash.clone());
-
-		ImportOutcome { inserted: LeafSetItem { hash, number }, removed }
-	}
-
-	/// Update the leaf list on removal.
-	///
-	/// Note that the leaves set structure doesn't have the information to decide if the
-	/// leaf we're removing is the last children of the parent. Follows that this method requires
-	/// the caller to check this condition and optionally pass the `parent_hash` if `hash` is
-	/// its last child.
-	///
-	/// Returns `None` if no modifications are applied.
-	pub fn remove(
-		&mut self,
-		hash: H,
-		number: N,
-		parent_hash: Option<H>,
-	) -> Option<RemoveOutcome<H, N>> {
-		let number = Reverse(number);
-
-		if !self.remove_leaf(&number, &hash) {
-			return None
-		}
-
-		let inserted = parent_hash.and_then(|parent_hash| {
-			if number.0 != N::zero() {
-				let parent_number = Reverse(number.0.clone() - N::one());
-				self.insert_leaf(parent_number, parent_hash.clone());
-				Some(parent_hash)
-			} else {
-				None
-			}
-		});
-
-		Some(RemoveOutcome { inserted, removed: LeafSetItem { hash, number } })
+		self.insert_leaf(Reverse(number.clone()), hash.clone());
+		displaced
 	}
 
 	/// Note a block height finalized, displacing all leaves with number less than the finalized
@@ -158,15 +129,15 @@ where
 	/// same number as the finalized block, but with different hashes, the current behavior
 	/// is simpler and our assumptions about how finalization works means that those leaves
 	/// will be pruned soon afterwards anyway.
-	pub fn finalize_height(&mut self, number: N) -> FinalizationOutcome<H, N> {
+	pub fn finalize_height(&mut self, number: N) -> FinalizationDisplaced<H, N> {
 		let boundary = if number == N::zero() {
-			return FinalizationOutcome { removed: BTreeMap::new() }
+			return FinalizationDisplaced { leaves: BTreeMap::new() }
 		} else {
 			number - N::one()
 		};
 
 		let below_boundary = self.storage.split_off(&Reverse(boundary));
-		FinalizationOutcome { removed: below_boundary }
+		FinalizationDisplaced { leaves: below_boundary }
 	}
 
 	/// The same as [`Self::finalize_height`], but it only simulates the operation.
@@ -174,16 +145,16 @@ where
 	/// This means that no changes are done.
 	///
 	/// Returns the leaves that would be displaced by finalizing the given block.
-	pub fn displaced_by_finalize_height(&self, number: N) -> FinalizationOutcome<H, N> {
+	pub fn displaced_by_finalize_height(&self, number: N) -> FinalizationDisplaced<H, N> {
 		let boundary = if number == N::zero() {
-			return FinalizationOutcome { removed: BTreeMap::new() }
+			return FinalizationDisplaced { leaves: BTreeMap::new() }
 		} else {
 			number - N::one()
 		};
 
 		let below_boundary = self.storage.range(&Reverse(boundary)..);
-		FinalizationOutcome {
-			removed: below_boundary.map(|(k, v)| (k.clone(), v.clone())).collect(),
+		FinalizationDisplaced {
+			leaves: below_boundary.map(|(k, v)| (k.clone(), v.clone())).collect(),
 		}
 	}
 
@@ -288,11 +259,6 @@ where
 
 		removed
 	}
-
-	/// Returns the highest leaf and all hashes associated to it.
-	pub fn highest_leaf(&self) -> Option<(N, &[H])> {
-		self.storage.iter().next().map(|(k, v)| (k.0.clone(), &v[..]))
-	}
 }
 
 /// Helper for undoing operations.
@@ -305,30 +271,16 @@ where
 	H: Clone + PartialEq + Decode + Encode,
 	N: std::fmt::Debug + Clone + AtLeast32Bit + Decode + Encode,
 {
-	/// Undo an imported block by providing the import operation outcome.
-	/// No additional operations should be performed between import and undo.
-	pub fn undo_import(&mut self, outcome: ImportOutcome<H, N>) {
-		if let Some(removed_hash) = outcome.removed {
-			let removed_number = Reverse(outcome.inserted.number.0.clone() - N::one());
-			self.inner.insert_leaf(removed_number, removed_hash);
-		}
-		self.inner.remove_leaf(&outcome.inserted.number, &outcome.inserted.hash);
-	}
-
-	/// Undo a removed block by providing the displaced leaf.
-	/// No additional operations should be performed between remove and undo.
-	pub fn undo_remove(&mut self, outcome: RemoveOutcome<H, N>) {
-		if let Some(inserted_hash) = outcome.inserted {
-			let inserted_number = Reverse(outcome.removed.number.0.clone() - N::one());
-			self.inner.remove_leaf(&inserted_number, &inserted_hash);
-		}
-		self.inner.insert_leaf(outcome.removed.number, outcome.removed.hash);
+	/// Undo an imported block by providing the displaced leaf.
+	pub fn undo_import(&mut self, displaced: ImportDisplaced<H, N>) {
+		let new_number = Reverse(displaced.displaced.number.0.clone() + N::one());
+		self.inner.remove_leaf(&new_number, &displaced.new_hash);
+		self.inner.insert_leaf(displaced.displaced.number, displaced.displaced.hash);
 	}
 
 	/// Undo a finalization operation by providing the displaced leaves.
-	/// No additional operations should be performed between finalization and undo.
-	pub fn undo_finalization(&mut self, mut outcome: FinalizationOutcome<H, N>) {
-		self.inner.storage.append(&mut outcome.removed);
+	pub fn undo_finalization(&mut self, mut displaced: FinalizationDisplaced<H, N>) {
+		self.inner.storage.append(&mut displaced.leaves);
 	}
 }
 
@@ -338,7 +290,7 @@ mod tests {
 	use std::sync::Arc;
 
 	#[test]
-	fn import_works() {
+	fn it_works() {
 		let mut set = LeafSet::new();
 		set.import(0u32, 0u32, 0u32);
 
@@ -360,90 +312,6 @@ mod tests {
 		assert!(set.contains(3, 3_1));
 		assert!(set.contains(2, 2_2));
 		assert!(set.contains(2, 2_3));
-
-		// Finally test the undo feature
-
-		let outcome = set.import(2_4, 2, 1_1);
-		assert_eq!(outcome.inserted.hash, 2_4);
-		assert_eq!(outcome.removed, None);
-		assert_eq!(set.count(), 4);
-		assert!(set.contains(2, 2_4));
-
-		set.undo().undo_import(outcome);
-		assert_eq!(set.count(), 3);
-		assert!(set.contains(3, 3_1));
-		assert!(set.contains(2, 2_2));
-		assert!(set.contains(2, 2_3));
-
-		let outcome = set.import(3_2, 3, 2_3);
-		assert_eq!(outcome.inserted.hash, 3_2);
-		assert_eq!(outcome.removed, Some(2_3));
-		assert_eq!(set.count(), 3);
-		assert!(set.contains(3, 3_2));
-
-		set.undo().undo_import(outcome);
-		assert_eq!(set.count(), 3);
-		assert!(set.contains(3, 3_1));
-		assert!(set.contains(2, 2_2));
-		assert!(set.contains(2, 2_3));
-	}
-
-	#[test]
-	fn removal_works() {
-		let mut set = LeafSet::new();
-		set.import(10_1u32, 10u32, 0u32);
-		set.import(11_1, 11, 10_1);
-		set.import(11_2, 11, 10_1);
-		set.import(12_1, 12, 11_1);
-
-		let outcome = set.remove(12_1, 12, Some(11_1)).unwrap();
-		assert_eq!(outcome.removed.hash, 12_1);
-		assert_eq!(outcome.inserted, Some(11_1));
-		assert_eq!(set.count(), 2);
-		assert!(set.contains(11, 11_1));
-		assert!(set.contains(11, 11_2));
-
-		let outcome = set.remove(11_1, 11, None).unwrap();
-		assert_eq!(outcome.removed.hash, 11_1);
-		assert_eq!(outcome.inserted, None);
-		assert_eq!(set.count(), 1);
-		assert!(set.contains(11, 11_2));
-
-		let outcome = set.remove(11_2, 11, Some(10_1)).unwrap();
-		assert_eq!(outcome.removed.hash, 11_2);
-		assert_eq!(outcome.inserted, Some(10_1));
-		assert_eq!(set.count(), 1);
-		assert!(set.contains(10, 10_1));
-
-		set.undo().undo_remove(outcome);
-		assert_eq!(set.count(), 1);
-		assert!(set.contains(11, 11_2));
-	}
-
-	#[test]
-	fn finalization_works() {
-		let mut set = LeafSet::new();
-		set.import(9_1u32, 9u32, 0u32);
-		set.import(10_1, 10, 9_1);
-		set.import(10_2, 10, 9_1);
-		set.import(11_1, 11, 10_1);
-		set.import(11_2, 11, 10_1);
-		set.import(12_1, 12, 11_2);
-
-		let outcome = set.finalize_height(11);
-		assert_eq!(set.count(), 2);
-		assert!(set.contains(11, 11_1));
-		assert!(set.contains(12, 12_1));
-		assert_eq!(
-			outcome.removed,
-			[(Reverse(10), vec![10_2])].into_iter().collect::<BTreeMap<_, _>>(),
-		);
-
-		set.undo().undo_finalization(outcome);
-		assert_eq!(set.count(), 3);
-		assert!(set.contains(11, 11_1));
-		assert!(set.contains(12, 12_1));
-		assert!(set.contains(10, 10_2));
 	}
 
 	#[test]
@@ -509,5 +377,45 @@ mod tests {
 
 		let set2 = LeafSet::read_from_db(&*db, 0, PREFIX).unwrap();
 		assert_eq!(set, set2);
+	}
+
+	#[test]
+	fn undo_import() {
+		let mut set = LeafSet::new();
+		set.import(10_1u32, 10u32, 0u32);
+		set.import(11_1, 11, 10_1);
+		set.import(11_2, 11, 10_1);
+
+		let displaced = set.import(12_1, 12, 11_1).unwrap();
+		assert_eq!(set.count(), 2);
+		assert!(set.contains(11, 11_2));
+		assert!(set.contains(12, 12_1));
+
+		set.undo().undo_import(displaced);
+		assert_eq!(set.count(), 2);
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(11, 11_2));
+	}
+
+	#[test]
+	fn undo_finalization() {
+		let mut set = LeafSet::new();
+		set.import(9_1u32, 9u32, 0u32);
+		set.import(10_1, 10, 9_1);
+		set.import(10_2, 10, 9_1);
+		set.import(11_1, 11, 10_1);
+		set.import(11_2, 11, 10_1);
+		set.import(12_1, 12, 11_2);
+
+		let displaced = set.finalize_height(11);
+		assert_eq!(set.count(), 2);
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(12, 12_1));
+
+		set.undo().undo_finalization(displaced);
+		assert_eq!(set.count(), 3);
+		assert!(set.contains(11, 11_1));
+		assert!(set.contains(12, 12_1));
+		assert!(set.contains(10, 10_2));
 	}
 }

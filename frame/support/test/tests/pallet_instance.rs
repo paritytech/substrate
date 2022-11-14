@@ -16,10 +16,11 @@
 // limitations under the License.
 
 use frame_support::{
-	dispatch::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays, UnfilteredDispatchable},
+	dispatch::UnfilteredDispatchable,
 	pallet_prelude::ValueQuery,
 	storage::unhashed,
 	traits::{ConstU32, GetCallName, OnFinalize, OnGenesis, OnInitialize, OnRuntimeUpgrade},
+	weights::{DispatchClass, DispatchInfo, GetDispatchInfo, Pays},
 };
 use sp_io::{
 	hashing::{blake2_128, twox_128, twox_64},
@@ -30,7 +31,7 @@ use sp_runtime::{DispatchError, ModuleError};
 #[frame_support::pallet]
 pub mod pallet {
 	use codec::MaxEncodedLen;
-	use frame_support::{pallet_prelude::*, parameter_types, scale_info};
+	use frame_support::{pallet_prelude::*, scale_info};
 	use frame_system::pallet_prelude::*;
 	use sp_std::any::TypeId;
 
@@ -41,8 +42,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MyGetParam: Get<u32>;
 		type Balance: Parameter + Default + scale_info::StaticTypeInfo;
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::pallet]
@@ -54,10 +54,10 @@ pub mod pallet {
 		fn on_initialize(_: BlockNumberFor<T>) -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(10));
-				Weight::from_ref_time(10)
+				10
 			} else {
 				Self::deposit_event(Event::Something(11));
-				Weight::from_ref_time(11)
+				11
 			}
 		}
 		fn on_finalize(_: BlockNumberFor<T>) {
@@ -70,10 +70,10 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			if TypeId::of::<I>() == TypeId::of::<()>() {
 				Self::deposit_event(Event::Something(30));
-				Weight::from_ref_time(30)
+				30
 			} else {
 				Self::deposit_event(Event::Something(31));
-				Weight::from_ref_time(31)
+				31
 			}
 		}
 		fn integrity_test() {}
@@ -82,7 +82,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Doc comment put in metadata
-		#[pallet::weight(Weight::from_ref_time(*_foo as u64))]
+		#[pallet::weight(Weight::from(*_foo))]
 		pub fn foo(
 			origin: OriginFor<T>,
 			#[pallet::compact] _foo: u32,
@@ -104,11 +104,9 @@ pub mod pallet {
 	}
 
 	#[pallet::error]
-	#[derive(PartialEq, Eq)]
 	pub enum Error<T, I = ()> {
 		/// doc comment put into metadata
 		InsufficientProposersBalance,
-		NonExistentStorageValue,
 	}
 
 	#[pallet::event]
@@ -130,20 +128,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type Map2<T, I = ()> = StorageMap<_, Twox64Concat, u16, u32>;
 
-	parameter_types! {
-		pub const Map3Default<T, I>: Result<u64, Error<T, I>> = Ok(1337);
-	}
-
-	#[pallet::storage]
-	pub type Map3<T, I = ()> = StorageMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		u64,
-		ResultQuery<Error<T, I>::NonExistentStorageValue>,
-		Map3Default<T, I>,
-	>;
-
 	#[pallet::storage]
 	pub type DoubleMap<T, I = ()> =
 		StorageDoubleMap<_, Blake2_128Concat, u8, Twox64Concat, u16, u32>;
@@ -153,17 +137,6 @@ pub mod pallet {
 		StorageDoubleMap<_, Twox64Concat, u16, Blake2_128Concat, u32, u64>;
 
 	#[pallet::storage]
-	pub type DoubleMap3<T, I = ()> = StorageDoubleMap<
-		_,
-		Blake2_128Concat,
-		u32,
-		Twox64Concat,
-		u64,
-		u128,
-		ResultQuery<Error<T, I>::NonExistentStorageValue>,
-	>;
-
-	#[pallet::storage]
 	#[pallet::getter(fn nmap)]
 	pub type NMap<T, I = ()> = StorageNMap<_, storage::Key<Blake2_128Concat, u8>, u32>;
 
@@ -171,15 +144,6 @@ pub mod pallet {
 	#[pallet::getter(fn nmap2)]
 	pub type NMap2<T, I = ()> =
 		StorageNMap<_, (storage::Key<Twox64Concat, u16>, storage::Key<Blake2_128Concat, u32>), u64>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn nmap3)]
-	pub type NMap3<T, I = ()> = StorageNMap<
-		_,
-		(NMapKey<Blake2_128Concat, u8>, NMapKey<Twox64Concat, u16>),
-		u128,
-		ResultQuery<Error<T, I>::NonExistentStorageValue>,
-	>;
 
 	#[pallet::genesis_config]
 	#[derive(Default)]
@@ -253,8 +217,7 @@ pub mod pallet2 {
 
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config {
-		type RuntimeEvent: From<Event<Self, I>>
-			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
 	}
 
 	#[pallet::pallet]
@@ -286,16 +249,16 @@ pub mod pallet2 {
 
 impl frame_system::Config for Runtime {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u32;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = sp_runtime::testing::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = sp_runtime::traits::IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU32<250>;
 	type BlockWeights = ();
 	type BlockLength = ();
@@ -311,25 +274,25 @@ impl frame_system::Config for Runtime {
 	type MaxConsumers = ConstU32<16>;
 }
 impl pallet::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet::Config<pallet::Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type MyGetParam = ConstU32<10>;
 	type Balance = u64;
 }
 impl pallet2::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 }
 impl pallet2::Config<pallet::Instance1> for Runtime {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 }
 
 pub type Header = sp_runtime::generic::Header<u32, sp_runtime::traits::BlakeTwo256>;
 pub type Block = sp_runtime::generic::Block<Header, UncheckedExtrinsic>;
-pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, RuntimeCall, (), ()>;
+pub type UncheckedExtrinsic = sp_runtime::generic::UncheckedExtrinsic<u32, Call, (), ()>;
 
 frame_support::construct_runtime!(
 	pub enum Runtime where
@@ -346,18 +309,12 @@ frame_support::construct_runtime!(
 	}
 );
 
-use frame_support::weights::Weight;
-
 #[test]
 fn call_expand() {
 	let call_foo = pallet::Call::<Runtime>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo {
-			weight: Weight::from_ref_time(3),
-			class: DispatchClass::Normal,
-			pays_fee: Pays::Yes
-		}
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(pallet::Call::<Runtime>::get_call_names(), &["foo", "foo_storage_layer"]);
@@ -365,11 +322,7 @@ fn call_expand() {
 	let call_foo = pallet::Call::<Runtime, pallet::Instance1>::foo { foo: 3 };
 	assert_eq!(
 		call_foo.get_dispatch_info(),
-		DispatchInfo {
-			weight: Weight::from_ref_time(3),
-			class: DispatchClass::Normal,
-			pays_fee: Pays::Yes
-		}
+		DispatchInfo { weight: 3, class: DispatchClass::Normal, pays_fee: Pays::Yes }
 	);
 	assert_eq!(call_foo.get_call_name(), "foo");
 	assert_eq!(
@@ -434,7 +387,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::Event::Something(3)),
+			Event::Example(pallet::Event::Something(3)),
 		);
 	});
 
@@ -445,7 +398,7 @@ fn pallet_expand_deposit_event() {
 			.unwrap();
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Instance1Example(pallet::Event::Something(3)),
+			Event::Instance1Example(pallet::Event::Something(3)),
 		);
 	});
 }
@@ -483,13 +436,6 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<pallet::Map2<Runtime>>::final_prefix());
 
-		<pallet::Map3<Runtime>>::insert(1, 2);
-		let mut k = [twox_128(b"Example"), twox_128(b"Map3")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		assert_eq!(unhashed::get::<u64>(&k), Some(2u64));
-		assert_eq!(&k[..32], &<pallet::Map3<Runtime>>::final_prefix());
-		assert_eq!(<pallet::Map3<Runtime>>::get(2), Ok(1337));
-
 		<pallet::DoubleMap<Runtime>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -504,17 +450,6 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime>>::final_prefix());
 
-		<pallet::DoubleMap3<Runtime>>::insert(&1, &2, &3);
-		let mut k = [twox_128(b"Example"), twox_128(b"DoubleMap3")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		k.extend(2u64.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
-		assert_eq!(&k[..32], &<pallet::DoubleMap3<Runtime>>::final_prefix());
-		assert_eq!(
-			<pallet::DoubleMap3<Runtime>>::get(2, 3),
-			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
-		);
-
 		<pallet::NMap<Runtime>>::insert((&1,), &3);
 		let mut k = [twox_128(b"Example"), twox_128(b"NMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -527,17 +462,6 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::NMap2<Runtime>>::final_prefix());
-
-		<pallet::NMap3<Runtime>>::insert((&1, &2), &3);
-		let mut k = [twox_128(b"Example"), twox_128(b"NMap3")].concat();
-		k.extend(1u8.using_encoded(blake2_128_concat));
-		k.extend(2u16.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
-		assert_eq!(&k[..32], &<pallet::NMap3<Runtime>>::final_prefix());
-		assert_eq!(
-			<pallet::NMap3<Runtime>>::get((2, 3)),
-			Err(pallet::Error::<Runtime>::NonExistentStorageValue),
-		);
 	});
 
 	TestExternalities::default().execute_with(|| {
@@ -557,13 +481,6 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u32>(&k), Some(2u32));
 		assert_eq!(&k[..32], &<pallet::Map2<Runtime, pallet::Instance1>>::final_prefix());
 
-		<pallet::Map3<Runtime, pallet::Instance1>>::insert(1, 2);
-		let mut k = [twox_128(b"Instance1Example"), twox_128(b"Map3")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		assert_eq!(unhashed::get::<u64>(&k), Some(2u64));
-		assert_eq!(&k[..32], &<pallet::Map3<Runtime, pallet::Instance1>>::final_prefix());
-		assert_eq!(<pallet::Map3<Runtime, pallet::Instance1>>::get(2), Ok(1337));
-
 		<pallet::DoubleMap<Runtime, pallet::Instance1>>::insert(&1, &2, &3);
 		let mut k = [twox_128(b"Instance1Example"), twox_128(b"DoubleMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -578,17 +495,6 @@ fn storage_expand() {
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::DoubleMap2<Runtime, pallet::Instance1>>::final_prefix());
 
-		<pallet::DoubleMap3<Runtime, pallet::Instance1>>::insert(&1, &2, &3);
-		let mut k = [twox_128(b"Instance1Example"), twox_128(b"DoubleMap3")].concat();
-		k.extend(1u32.using_encoded(blake2_128_concat));
-		k.extend(2u64.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
-		assert_eq!(&k[..32], &<pallet::DoubleMap3<Runtime, pallet::Instance1>>::final_prefix());
-		assert_eq!(
-			<pallet::DoubleMap3<Runtime, pallet::Instance1>>::get(2, 3),
-			Err(pallet::Error::<Runtime, pallet::Instance1>::NonExistentStorageValue),
-		);
-
 		<pallet::NMap<Runtime, pallet::Instance1>>::insert((&1,), &3);
 		let mut k = [twox_128(b"Instance1Example"), twox_128(b"NMap")].concat();
 		k.extend(1u8.using_encoded(blake2_128_concat));
@@ -601,17 +507,6 @@ fn storage_expand() {
 		k.extend(2u32.using_encoded(blake2_128_concat));
 		assert_eq!(unhashed::get::<u64>(&k), Some(3u64));
 		assert_eq!(&k[..32], &<pallet::NMap2<Runtime, pallet::Instance1>>::final_prefix());
-
-		<pallet::NMap3<Runtime, pallet::Instance1>>::insert((&1, &2), &3);
-		let mut k = [twox_128(b"Instance1Example"), twox_128(b"NMap3")].concat();
-		k.extend(1u8.using_encoded(blake2_128_concat));
-		k.extend(2u16.using_encoded(twox_64_concat));
-		assert_eq!(unhashed::get::<u128>(&k), Some(3u128));
-		assert_eq!(&k[..32], &<pallet::NMap3<Runtime, pallet::Instance1>>::final_prefix());
-		assert_eq!(
-			<pallet::NMap3<Runtime, pallet::Instance1>>::get((2, 3)),
-			Err(pallet::Error::<Runtime, pallet::Instance1>::NonExistentStorageValue),
-		);
 	});
 }
 
@@ -662,34 +557,34 @@ fn pallet_hooks_expand() {
 	TestExternalities::default().execute_with(|| {
 		frame_system::Pallet::<Runtime>::set_block_number(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), Weight::from_ref_time(21));
+		assert_eq!(AllPalletsWithoutSystem::on_initialize(1), 21);
 		AllPalletsWithoutSystem::on_finalize(1);
 
-		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), Weight::from_ref_time(61));
+		assert_eq!(AllPalletsWithoutSystem::on_runtime_upgrade(), 61);
 
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[0].event,
-			RuntimeEvent::Example(pallet::Event::Something(10)),
+			Event::Example(pallet::Event::Something(10)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[1].event,
-			RuntimeEvent::Instance1Example(pallet::Event::Something(11)),
+			Event::Instance1Example(pallet::Event::Something(11)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[2].event,
-			RuntimeEvent::Example(pallet::Event::Something(20)),
+			Event::Example(pallet::Event::Something(20)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[3].event,
-			RuntimeEvent::Instance1Example(pallet::Event::Something(21)),
+			Event::Instance1Example(pallet::Event::Something(21)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[4].event,
-			RuntimeEvent::Example(pallet::Event::Something(30)),
+			Event::Example(pallet::Event::Something(30)),
 		);
 		assert_eq!(
 			frame_system::Pallet::<Runtime>::events()[5].event,
-			RuntimeEvent::Instance1Example(pallet::Event::Something(31)),
+			Event::Instance1Example(pallet::Event::Something(31)),
 		);
 	})
 }
@@ -794,17 +689,6 @@ fn metadata() {
 					docs: vec![],
 				},
 				StorageEntryMetadata {
-					name: "Map3",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: scale_info::meta_type::<u32>(),
-						value: scale_info::meta_type::<u64>(),
-						hashers: vec![StorageHasher::Blake2_128Concat],
-					},
-					default: vec![0, 57, 5, 0, 0, 0, 0, 0, 0],
-					docs: vec![],
-				},
-				StorageEntryMetadata {
 					name: "DoubleMap",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
@@ -827,17 +711,6 @@ fn metadata() {
 					docs: vec![],
 				},
 				StorageEntryMetadata {
-					name: "DoubleMap3",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						value: scale_info::meta_type::<u128>(),
-						key: scale_info::meta_type::<(u32, u64)>(),
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
-					},
-					default: vec![1, 1],
-					docs: vec![],
-				},
-				StorageEntryMetadata {
 					name: "NMap",
 					modifier: StorageEntryModifier::Optional,
 					ty: StorageEntryType::Map {
@@ -857,17 +730,6 @@ fn metadata() {
 						value: scale_info::meta_type::<u64>(),
 					},
 					default: vec![0],
-					docs: vec![],
-				},
-				StorageEntryMetadata {
-					name: "NMap3",
-					modifier: StorageEntryModifier::Optional,
-					ty: StorageEntryType::Map {
-						key: scale_info::meta_type::<(u8, u16)>(),
-						hashers: vec![StorageHasher::Blake2_128Concat, StorageHasher::Twox64Concat],
-						value: scale_info::meta_type::<u128>(),
-					},
-					default: vec![1, 1],
 					docs: vec![],
 				},
 			],

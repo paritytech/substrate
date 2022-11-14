@@ -18,7 +18,6 @@
 use crate::construct_runtime::{Pallet, SYSTEM_PALLET_NAME};
 use proc_macro2::TokenStream;
 use quote::quote;
-use std::str::FromStr;
 use syn::{Generics, Ident};
 
 pub fn expand_outer_origin(
@@ -103,13 +102,13 @@ pub fn expand_outer_origin(
 		///
 		#[doc = #doc_string]
 		#[derive(Clone)]
-		pub struct RuntimeOrigin {
+		pub struct Origin {
 			caller: OriginCaller,
-			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::RuntimeCall) -> bool>>,
+			filter: #scrate::sp_std::rc::Rc<Box<dyn Fn(&<#runtime as #system_path::Config>::Call) -> bool>>,
 		}
 
 		#[cfg(not(feature = "std"))]
-		impl #scrate::sp_std::fmt::Debug for RuntimeOrigin {
+		impl #scrate::sp_std::fmt::Debug for Origin {
 			fn fmt(
 				&self,
 				fmt: &mut #scrate::sp_std::fmt::Formatter,
@@ -119,7 +118,7 @@ pub fn expand_outer_origin(
 		}
 
 		#[cfg(feature = "std")]
-		impl #scrate::sp_std::fmt::Debug for RuntimeOrigin {
+		impl #scrate::sp_std::fmt::Debug for Origin {
 			fn fmt(
 				&self,
 				fmt: &mut #scrate::sp_std::fmt::Formatter,
@@ -131,8 +130,8 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl #scrate::traits::OriginTrait for RuntimeOrigin {
-			type Call = <#runtime as #system_path::Config>::RuntimeCall;
+		impl #scrate::traits::OriginTrait for Origin {
+			type Call = <#runtime as #system_path::Config>::Call;
 			type PalletsOrigin = OriginCaller;
 			type AccountId = <#runtime as #system_path::Config>::AccountId;
 
@@ -147,7 +146,7 @@ pub fn expand_outer_origin(
 			fn reset_filter(&mut self) {
 				let filter = <
 					<#runtime as #system_path::Config>::BaseCallFilter
-					as #scrate::traits::Contains<<#runtime as #system_path::Config>::RuntimeCall>
+					as #scrate::traits::Contains<<#runtime as #system_path::Config>::Call>
 				>::contains;
 
 				self.filter = #scrate::sp_std::rc::Rc::new(Box::new(filter));
@@ -167,10 +166,6 @@ pub fn expand_outer_origin(
 
 			fn caller(&self) -> &Self::PalletsOrigin {
 				&self.caller
-			}
-
-			fn into_caller(self) -> Self::PalletsOrigin {
-				self.caller
 			}
 
 			fn try_with_caller<R>(
@@ -194,6 +189,13 @@ pub fn expand_outer_origin(
 			fn signed(by: Self::AccountId) -> Self {
 				#system_path::RawOrigin::Signed(by).into()
 			}
+
+			fn as_signed(self) -> Option<Self::AccountId> {
+				match self.caller {
+					OriginCaller::system(#system_path::RawOrigin::Signed(by)) => Some(by),
+					_ => None,
+				}
+			}
 		}
 
 		#[derive(
@@ -211,41 +213,27 @@ pub fn expand_outer_origin(
 
 		// For backwards compatibility and ease of accessing these functions.
 		#[allow(dead_code)]
-		impl RuntimeOrigin {
+		impl Origin {
+
 			#[doc = #doc_string_none_origin]
 			pub fn none() -> Self {
-				<RuntimeOrigin as #scrate::traits::OriginTrait>::none()
+				<Origin as #scrate::traits::OriginTrait>::none()
 			}
 
 			#[doc = #doc_string_root_origin]
 			pub fn root() -> Self {
-				<RuntimeOrigin as #scrate::traits::OriginTrait>::root()
+				<Origin as #scrate::traits::OriginTrait>::root()
 			}
 
 			#[doc = #doc_string_signed_origin]
 			pub fn signed(by: <#runtime as #system_path::Config>::AccountId) -> Self {
-				<RuntimeOrigin as #scrate::traits::OriginTrait>::signed(by)
+				<Origin as #scrate::traits::OriginTrait>::signed(by)
 			}
 		}
 
 		impl From<#system_path::Origin<#runtime>> for OriginCaller {
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
 				OriginCaller::system(x)
-			}
-		}
-
-		impl #scrate::traits::CallerTrait<<#runtime as #system_path::Config>::AccountId> for OriginCaller {
-			fn into_system(self) -> Option<#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
-				match self {
-					OriginCaller::system(x) => Some(x),
-					_ => None,
-				}
-			}
-			fn as_system_ref(&self) -> Option<&#system_path::RawOrigin<<#runtime as #system_path::Config>::AccountId>> {
-				match &self {
-					OriginCaller::system(o) => Some(o),
-					_ => None,
-				}
 			}
 		}
 
@@ -262,7 +250,7 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl From<#system_path::Origin<#runtime>> for RuntimeOrigin {
+		impl From<#system_path::Origin<#runtime>> for Origin {
 
 			#[doc = #doc_string_runtime_origin]
 			fn from(x: #system_path::Origin<#runtime>) -> Self {
@@ -271,9 +259,9 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl From<OriginCaller> for RuntimeOrigin {
+		impl From<OriginCaller> for Origin {
 			fn from(x: OriginCaller) -> Self {
-				let mut o = RuntimeOrigin {
+				let mut o = Origin {
 					caller: x,
 					filter: #scrate::sp_std::rc::Rc::new(Box::new(|_| true)),
 				};
@@ -284,9 +272,9 @@ pub fn expand_outer_origin(
 			}
 		}
 
-		impl From<RuntimeOrigin> for #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, RuntimeOrigin> {
+		impl From<Origin> for #scrate::sp_std::result::Result<#system_path::Origin<#runtime>, Origin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn from(val: RuntimeOrigin) -> Self {
+			fn from(val: Origin) -> Self {
 				if let OriginCaller::system(l) = val.caller {
 					Ok(l)
 				} else {
@@ -294,7 +282,7 @@ pub fn expand_outer_origin(
 				}
 			}
 		}
-		impl From<Option<<#runtime as #system_path::Config>::AccountId>> for RuntimeOrigin {
+		impl From<Option<<#runtime as #system_path::Config>::AccountId>> for Origin {
 			#[doc = #doc_string_runtime_origin_with_caller]
 			fn from(x: Option<<#runtime as #system_path::Config>::AccountId>) -> Self {
 				<#system_path::Origin<#runtime>>::from(x).into()
@@ -315,35 +303,19 @@ fn expand_origin_caller_variant(
 	let part_is_generic = !generics.params.is_empty();
 	let variant_name = &pallet.name;
 	let path = &pallet.path;
-	let attr = pallet.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
-		let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
-			.expect("was successfully parsed before; qed");
-		quote! {
-			#acc
-			#attr
-		}
-	});
 
 	match instance {
-		Some(inst) if part_is_generic => quote! {
-			#attr
-			#[codec(index = #index)]
-			#variant_name(#path::Origin<#runtime, #path::#inst>),
+		Some(inst) if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime, #path::#inst>),)
 		},
-		Some(inst) => quote! {
-			#attr
-			#[codec(index = #index)]
-			#variant_name(#path::Origin<#path::#inst>),
+		Some(inst) => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#path::#inst>),)
 		},
-		None if part_is_generic => quote! {
-			#attr
-			#[codec(index = #index)]
-			#variant_name(#path::Origin<#runtime>),
+		None if part_is_generic => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin<#runtime>),)
 		},
-		None => quote! {
-			#attr
-			#[codec(index = #index)]
-			#variant_name(#path::Origin),
+		None => {
+			quote!(#[codec(index = #index)] #variant_name(#path::Origin),)
 		},
 	}
 }
@@ -367,25 +339,15 @@ fn expand_origin_pallet_conversions(
 	};
 
 	let doc_string = get_intra_doc_string(" Convert to runtime origin using", &path.module_name());
-	let attr = pallet.cfg_pattern.iter().fold(TokenStream::new(), |acc, pattern| {
-		let attr = TokenStream::from_str(&format!("#[cfg({})]", pattern.original()))
-			.expect("was successfully parsed before; qed");
-		quote! {
-			#acc
-			#attr
-		}
-	});
 
 	quote! {
-		#attr
 		impl From<#pallet_origin> for OriginCaller {
 			fn from(x: #pallet_origin) -> Self {
 				OriginCaller::#variant_name(x)
 			}
 		}
 
-		#attr
-		impl From<#pallet_origin> for RuntimeOrigin {
+		impl From<#pallet_origin> for Origin {
 			#[doc = #doc_string]
 			fn from(x: #pallet_origin) -> Self {
 				let x: OriginCaller = x.into();
@@ -393,10 +355,9 @@ fn expand_origin_pallet_conversions(
 			}
 		}
 
-		#attr
-		impl From<RuntimeOrigin> for #scrate::sp_std::result::Result<#pallet_origin, RuntimeOrigin> {
+		impl From<Origin> for #scrate::sp_std::result::Result<#pallet_origin, Origin> {
 			/// NOTE: converting to pallet origin loses the origin filter information.
-			fn from(val: RuntimeOrigin) -> Self {
+			fn from(val: Origin) -> Self {
 				if let OriginCaller::#variant_name(l) = val.caller {
 					Ok(l)
 				} else {
@@ -405,7 +366,6 @@ fn expand_origin_pallet_conversions(
 			}
 		}
 
-		#attr
 		impl TryFrom<OriginCaller> for #pallet_origin {
 			type Error = OriginCaller;
 			fn try_from(

@@ -95,22 +95,22 @@ pub fn check_build_profile() -> Result<(), String> {
 
 /// Parameters to configure how the host info will be determined.
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
-#[command(rename_all = "kebab-case")]
+#[clap(rename_all = "kebab-case")]
 pub struct HostInfoParams {
 	/// Manually override the hostname to use.
-	#[arg(long)]
+	#[clap(long)]
 	pub hostname_override: Option<String>,
 
 	/// Specify a fallback hostname if no-one could be detected automatically.
 	///
 	/// Note: This only exists to make the `hostname` function infallible.
-	#[arg(long, default_value = "<UNKNOWN>")]
+	#[clap(long, default_value = "<UNKNOWN>")]
 	pub hostname_fallback: String,
 
 	/// Specify a fallback CPU name if no-one could be detected automatically.
 	///
 	/// Note: This only exists to make the `cpuname` function infallible.
-	#[arg(long, default_value = "<UNKNOWN>")]
+	#[clap(long, default_value = "<UNKNOWN>")]
 	pub cpuname_fallback: String,
 }
 

@@ -379,7 +379,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type RuntimeEvent: From<Event> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type Event: From<Event> + IsType<<Self as frame_system::Config>::Event>;
 
 		/// A stable ID for a validator.
 		type ValidatorId: Member
@@ -574,7 +574,7 @@ pub mod pallet {
 				// NOTE: the non-database part of the weight for `should_end_session(n)` is
 				// included as weight for empty block, the database part is expected to be in
 				// cache.
-				Weight::zero()
+				0
 			}
 		}
 	}

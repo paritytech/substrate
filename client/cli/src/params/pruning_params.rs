@@ -18,7 +18,7 @@
 
 use crate::error;
 use clap::Args;
-use sc_service::{BlocksPruning, PruningMode};
+use sc_service::{KeepBlocks, PruningMode};
 
 /// Parameters to define the pruning mode
 #[derive(Debug, Clone, PartialEq, Args)]
@@ -28,52 +28,37 @@ pub struct PruningParams {
 	/// Default is to keep only the last 256 blocks,
 	/// otherwise, the state can be kept for all of the blocks (i.e 'archive'),
 	/// or for all of the canonical blocks (i.e 'archive-canonical').
-	#[arg(alias = "pruning", long, value_name = "PRUNING_MODE")]
-	pub state_pruning: Option<String>,
-	/// Specify the blocks pruning mode, a number of blocks to keep or 'archive'.
+	#[clap(long, value_name = "PRUNING_MODE")]
+	pub pruning: Option<String>,
+	/// Specify the number of finalized blocks to keep in the database.
 	///
-	/// Default is to keep all finalized blocks.
-	/// otherwise, all blocks can be kept (i.e 'archive'),
-	/// or for all canonical blocks (i.e 'archive-canonical'),
-	/// or for the last N blocks (i.e a number).
+	/// Default is to keep all blocks.
 	///
 	/// NOTE: only finalized blocks are subject for removal!
-	#[arg(alias = "keep-blocks", long, value_name = "COUNT")]
-	pub blocks_pruning: Option<String>,
+	#[clap(long, value_name = "COUNT")]
+	pub keep_blocks: Option<u32>,
 }
 
 impl PruningParams {
 	/// Get the pruning value from the parameters
 	pub fn state_pruning(&self) -> error::Result<Option<PruningMode>> {
-		self.state_pruning
+		self.pruning
 			.as_ref()
 			.map(|s| match s.as_str() {
 				"archive" => Ok(PruningMode::ArchiveAll),
-				"archive-canonical" => Ok(PruningMode::ArchiveCanonical),
 				bc => bc
 					.parse()
-					.map_err(|_| {
-						error::Error::Input("Invalid state pruning mode specified".to_string())
-					})
-					.map(PruningMode::blocks_pruning),
+					.map_err(|_| error::Error::Input("Invalid pruning mode specified".to_string()))
+					.map(PruningMode::keep_blocks),
 			})
 			.transpose()
 	}
 
 	/// Get the block pruning value from the parameters
-	pub fn blocks_pruning(&self) -> error::Result<BlocksPruning> {
-		match self.blocks_pruning.as_ref() {
-			Some(bp) => match bp.as_str() {
-				"archive" => Ok(BlocksPruning::KeepAll),
-				"archive-canonical" => Ok(BlocksPruning::KeepFinalized),
-				bc => bc
-					.parse()
-					.map_err(|_| {
-						error::Error::Input("Invalid blocks pruning mode specified".to_string())
-					})
-					.map(BlocksPruning::Some),
-			},
-			None => Ok(BlocksPruning::KeepFinalized),
-		}
+	pub fn keep_blocks(&self) -> error::Result<KeepBlocks> {
+		Ok(match self.keep_blocks {
+			Some(n) => KeepBlocks::Some(n),
+			None => KeepBlocks::All,
+		})
 	}
 }

@@ -17,8 +17,6 @@
 
 //! Benchmarks for the MMR pallet.
 
-#![cfg(feature = "runtime-benchmarks")]
-
 use crate::*;
 use frame_benchmarking::benchmarks_instance_pallet;
 use frame_support::traits::OnInitialize;

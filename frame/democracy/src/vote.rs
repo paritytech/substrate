@@ -18,12 +18,11 @@
 //! The vote datatype.
 
 use crate::{Conviction, Delegations, ReferendumIndex};
-use codec::{Decode, Encode, EncodeLike, Input, MaxEncodedLen, Output};
-use frame_support::traits::Get;
+use codec::{Decode, Encode, EncodeLike, Input, Output};
 use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{Saturating, Zero},
-	BoundedVec, RuntimeDebug,
+	RuntimeDebug,
 };
 use sp_std::prelude::*;
 
@@ -37,12 +36,6 @@ pub struct Vote {
 impl Encode for Vote {
 	fn encode_to<T: Output + ?Sized>(&self, output: &mut T) {
 		output.push_byte(u8::from(self.conviction) | if self.aye { 0b1000_0000 } else { 0 });
-	}
-}
-
-impl MaxEncodedLen for Vote {
-	fn max_encoded_len() -> usize {
-		1
 	}
 }
 
@@ -73,7 +66,7 @@ impl TypeInfo for Vote {
 }
 
 /// A vote for a referendum of a particular account.
-#[derive(Encode, MaxEncodedLen, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+#[derive(Encode, Decode, Copy, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub enum AccountVote<Balance> {
 	/// A standard vote, one-way (approve or reject) with a given amount of conviction.
 	Standard { vote: Vote, balance: Balance },
@@ -114,18 +107,7 @@ impl<Balance: Saturating> AccountVote<Balance> {
 
 /// A "prior" lock, i.e. a lock for some now-forgotten reason.
 #[derive(
-	Encode,
-	MaxEncodedLen,
-	Decode,
-	Default,
-	Copy,
-	Clone,
-	Eq,
-	PartialEq,
-	Ord,
-	PartialOrd,
-	RuntimeDebug,
-	TypeInfo,
+	Encode, Decode, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, RuntimeDebug, TypeInfo,
 )]
 pub struct PriorLock<BlockNumber, Balance>(BlockNumber, Balance);
 
@@ -149,15 +131,13 @@ impl<BlockNumber: Ord + Copy + Zero, Balance: Ord + Copy + Zero> PriorLock<Block
 }
 
 /// An indicator for what an account is doing; it can either be delegating or voting.
-#[derive(Clone, Encode, Decode, Eq, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo)]
-#[codec(mel_bound(skip_type_params(MaxVotes)))]
-#[scale_info(skip_type_params(MaxVotes))]
-pub enum Voting<Balance, AccountId, BlockNumber, MaxVotes: Get<u32>> {
+#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub enum Voting<Balance, AccountId, BlockNumber> {
 	/// The account is voting directly. `delegations` is the total amount of post-conviction voting
 	/// weight that it controls from those that have delegated to it.
 	Direct {
 		/// The current votes of the account.
-		votes: BoundedVec<(ReferendumIndex, AccountVote<Balance>), MaxVotes>,
+		votes: Vec<(ReferendumIndex, AccountVote<Balance>)>,
 		/// The total amount of delegations that this account has received.
 		delegations: Delegations<Balance>,
 		/// Any pre-existing locks from past voting/delegating activity.
@@ -175,24 +155,20 @@ pub enum Voting<Balance, AccountId, BlockNumber, MaxVotes: Get<u32>> {
 	},
 }
 
-impl<Balance: Default, AccountId, BlockNumber: Zero, MaxVotes: Get<u32>> Default
-	for Voting<Balance, AccountId, BlockNumber, MaxVotes>
+impl<Balance: Default, AccountId, BlockNumber: Zero> Default
+	for Voting<Balance, AccountId, BlockNumber>
 {
 	fn default() -> Self {
 		Voting::Direct {
-			votes: Default::default(),
+			votes: Vec::new(),
 			delegations: Default::default(),
 			prior: PriorLock(Zero::zero(), Default::default()),
 		}
 	}
 }
 
-impl<
-		Balance: Saturating + Ord + Zero + Copy,
-		BlockNumber: Ord + Copy + Zero,
-		AccountId,
-		MaxVotes: Get<u32>,
-	> Voting<Balance, AccountId, BlockNumber, MaxVotes>
+impl<Balance: Saturating + Ord + Zero + Copy, BlockNumber: Ord + Copy + Zero, AccountId>
+	Voting<Balance, AccountId, BlockNumber>
 {
 	pub fn rejig(&mut self, now: BlockNumber) {
 		match self {

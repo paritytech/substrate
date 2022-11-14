@@ -44,7 +44,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 impl frame_system::Config for Test {
@@ -52,8 +52,8 @@ impl frame_system::Config for Test {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -61,7 +61,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = Indices;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -80,7 +80,7 @@ impl pallet_balances::Config for Test {
 	type ReserveIdentifier = [u8; 8];
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -90,7 +90,7 @@ impl Config for Test {
 	type AccountIndex = u64;
 	type Currency = Balances;
 	type Deposit = ConstU64<1>;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type WeightInfo = ();
 }
 

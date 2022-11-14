@@ -19,6 +19,8 @@
 
 #![cfg(test)]
 
+use std::cell::RefCell;
+
 use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
@@ -55,18 +57,18 @@ frame_support::construct_runtime!(
 	}
 );
 
-parameter_types! {
-	pub static Validators: Option<Vec<u64>> = Some(vec![
+thread_local! {
+	pub static VALIDATORS: RefCell<Option<Vec<u64>>> = RefCell::new(Some(vec![
 		1,
 		2,
 		3,
-	]);
+	]));
 }
 
 pub struct TestSessionManager;
 impl pallet_session::SessionManager<u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<u64>> {
-		Validators::mutate(|l| l.take())
+		VALIDATORS.with(|l| l.borrow_mut().take())
 	}
 	fn end_session(_: SessionIndex) {}
 	fn start_session(_: SessionIndex) {}
@@ -74,8 +76,10 @@ impl pallet_session::SessionManager<u64> for TestSessionManager {
 
 impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager {
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<(u64, u64)>> {
-		Validators::mutate(|l| {
-			l.take().map(|validators| validators.iter().map(|v| (*v, *v)).collect())
+		VALIDATORS.with(|l| {
+			l.borrow_mut()
+				.take()
+				.map(|validators| validators.iter().map(|v| (*v, *v)).collect())
 		})
 	}
 	fn end_session(_: SessionIndex) {}
@@ -83,19 +87,19 @@ impl pallet_session::historical::SessionManager<u64, u64> for TestSessionManager
 }
 
 /// An extrinsic type used for tests.
-pub type Extrinsic = TestXt<RuntimeCall, ()>;
+pub type Extrinsic = TestXt<Call, ()>;
 type IdentificationTuple = (u64, u64);
 type Offence = crate::UnresponsivenessOffence<IdentificationTuple>;
 
-parameter_types! {
-	pub static Offences: Vec<(Vec<u64>, Offence)> = vec![];
+thread_local! {
+	pub static OFFENCES: RefCell<Vec<(Vec<u64>, Offence)>> = RefCell::new(vec![]);
 }
 
 /// A mock offence report handler.
 pub struct OffenceHandler;
 impl ReportOffence<u64, IdentificationTuple, Offence> for OffenceHandler {
 	fn report_offence(reporters: Vec<u64>, offence: Offence) -> Result<(), OffenceError> {
-		Offences::mutate(|l| l.push((reporters, offence)));
+		OFFENCES.with(|l| l.borrow_mut().push((reporters, offence)));
 		Ok(())
 	}
 
@@ -111,7 +115,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	result.execute_with(|| {
 		for i in 1..=6 {
 			System::inc_providers(&i);
-			assert_eq!(Session::set_keys(RuntimeOrigin::signed(i), (i - 1).into(), vec![]), Ok(()));
+			assert_eq!(Session::set_keys(Origin::signed(i), (i - 1).into(), vec![]), Ok(()));
 		}
 	});
 	result
@@ -119,7 +123,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-		frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+		frame_system::limits::BlockWeights::simple_max(1024);
 }
 
 impl frame_system::Config for Runtime {
@@ -127,16 +131,16 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -162,7 +166,7 @@ impl pallet_session::Config for Runtime {
 	type ValidatorId = u64;
 	type ValidatorIdOf = ConvertInto;
 	type Keys = UintAuthorityId;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
 	type WeightInfo = ();
 }
@@ -179,12 +183,12 @@ impl pallet_authorship::Config for Runtime {
 	type EventHandler = ImOnline;
 }
 
-parameter_types! {
-	pub static MockCurrentSessionProgress: Option<Option<Permill>> = None;
+thread_local! {
+	pub static MOCK_CURRENT_SESSION_PROGRESS: RefCell<Option<Option<Permill>>> = RefCell::new(None);
 }
 
-parameter_types! {
-	pub static MockAverageSessionLength: Option<u64> = None;
+thread_local! {
+	pub static MOCK_AVERAGE_SESSION_LENGTH: RefCell<Option<u64>> = RefCell::new(None);
 }
 
 pub struct TestNextSessionRotation;
@@ -192,7 +196,7 @@ pub struct TestNextSessionRotation;
 impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSessionRotation {
 	fn average_session_length() -> u64 {
 		// take the mock result if any and return it
-		let mock = MockAverageSessionLength::mutate(|p| p.take());
+		let mock = MOCK_AVERAGE_SESSION_LENGTH.with(|p| p.borrow_mut().take());
 
 		mock.unwrap_or(pallet_session::PeriodicSessions::<Period, Offset>::average_session_length())
 	}
@@ -204,7 +208,7 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 			);
 
 		// take the mock result if any and return it
-		let mock = MockCurrentSessionProgress::mutate(|p| p.take());
+		let mock = MOCK_CURRENT_SESSION_PROGRESS.with(|p| p.borrow_mut().take());
 
 		(mock.unwrap_or(estimate), weight)
 	}
@@ -216,7 +220,7 @@ impl frame_support::traits::EstimateNextSessionRotation<u64> for TestNextSession
 
 impl Config for Runtime {
 	type AuthorityId = UintAuthorityId;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ValidatorSet = Historical;
 	type NextSessionRotation = TestNextSessionRotation;
 	type ReportUnresponsiveness = OffenceHandler;
@@ -229,9 +233,9 @@ impl Config for Runtime {
 
 impl<LocalCall> frame_system::offchain::SendTransactionTypes<LocalCall> for Runtime
 where
-	RuntimeCall: From<LocalCall>,
+	Call: From<LocalCall>,
 {
-	type OverarchingCall = RuntimeCall;
+	type OverarchingCall = Call;
 	type Extrinsic = Extrinsic;
 }
 

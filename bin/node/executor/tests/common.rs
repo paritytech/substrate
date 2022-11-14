@@ -27,6 +27,7 @@ use sp_core::{
 	crypto::KeyTypeId,
 	sr25519::Signature,
 	traits::{CodeExecutor, RuntimeCode},
+	NativeOrEncoded, NeverNativeValue,
 };
 use sp_runtime::{
 	traits::{BlakeTwo256, Header as HeaderT},
@@ -98,12 +99,17 @@ pub fn executor() -> NativeElseWasmExecutor<ExecutorDispatch> {
 	NativeElseWasmExecutor::new(WasmExecutionMethod::Interpreted, None, 8, 2)
 }
 
-pub fn executor_call(
+pub fn executor_call<
+	R: Decode + Encode + PartialEq,
+	NC: FnOnce() -> std::result::Result<R, Box<dyn std::error::Error + Send + Sync>>
+		+ std::panic::UnwindSafe,
+>(
 	t: &mut TestExternalities<BlakeTwo256>,
 	method: &str,
 	data: &[u8],
 	use_native: bool,
-) -> (Result<Vec<u8>>, bool) {
+	native_call: Option<NC>,
+) -> (Result<NativeOrEncoded<R>>, bool) {
 	let mut t = t.ext();
 
 	let code = t.storage(sp_core::storage::well_known_keys::CODE).unwrap();
@@ -114,7 +120,7 @@ pub fn executor_call(
 		heap_pages: heap_pages.and_then(|hp| Decode::decode(&mut &hp[..]).ok()),
 	};
 	sp_tracing::try_init_simple();
-	executor().call(&mut t, &runtime_code, method, data, use_native)
+	executor().call::<R, NC>(&mut t, &runtime_code, method, data, use_native, native_call)
 }
 
 pub fn new_test_ext(code: &[u8]) -> TestExternalities<BlakeTwo256> {
@@ -165,15 +171,29 @@ pub fn construct_block(
 	};
 
 	// execute the block to get the real header.
-	executor_call(env, "Core_initialize_block", &header.encode(), true).0.unwrap();
+	executor_call::<NeverNativeValue, fn() -> _>(
+		env,
+		"Core_initialize_block",
+		&header.encode(),
+		true,
+		None,
+	)
+	.0
+	.unwrap();
 
 	for extrinsic in extrinsics.iter() {
 		// Try to apply the `extrinsic`. It should be valid, in the sense that it passes
 		// all pre-inclusion checks.
-		let r = executor_call(env, "BlockBuilder_apply_extrinsic", &extrinsic.encode(), true)
-			.0
-			.expect("application of an extrinsic failed");
-
+		let r = executor_call::<NeverNativeValue, fn() -> _>(
+			env,
+			"BlockBuilder_apply_extrinsic",
+			&extrinsic.encode(),
+			true,
+			None,
+		)
+		.0
+		.expect("application of an extrinsic failed")
+		.into_encoded();
 		match ApplyExtrinsicResult::decode(&mut &r[..])
 			.expect("apply result deserialization failed")
 		{
@@ -182,10 +202,19 @@ pub fn construct_block(
 		}
 	}
 
-	let header = Header::decode(
-		&mut &executor_call(env, "BlockBuilder_finalize_block", &[0u8; 0], true).0.unwrap()[..],
+	let header = match executor_call::<NeverNativeValue, fn() -> _>(
+		env,
+		"BlockBuilder_finalize_block",
+		&[0u8; 0],
+		true,
+		None,
 	)
-	.unwrap();
+	.0
+	.unwrap()
+	{
+		NativeOrEncoded::Native(_) => unreachable!(),
+		NativeOrEncoded::Encoded(h) => Header::decode(&mut &h[..]).unwrap(),
+	};
 
 	let hash = header.blake2_256();
 	(Block { header, extrinsics }.encode(), hash.into())

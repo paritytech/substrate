@@ -22,6 +22,7 @@ use std::{
 	task::Poll,
 };
 
+use async_trait::async_trait;
 use futures::{
 	channel::mpsc::{self, channel},
 	executor::{block_on, LocalPool},
@@ -29,11 +30,9 @@ use futures::{
 	sink::SinkExt,
 	task::LocalSpawn,
 };
-use libp2p::{core::multiaddr, identity::Keypair, PeerId};
+use libp2p::{core::multiaddr, PeerId};
 use prometheus_endpoint::prometheus::default_registry;
 
-use sc_client_api::HeaderBackend;
-use sc_network_common::service::{KademliaKey, Signature, SigningError};
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_keystore::{testing::KeyStore, CryptoStore};
 use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
@@ -49,7 +48,7 @@ pub(crate) struct TestApi {
 impl ProvideRuntimeApi<Block> for TestApi {
 	type Api = RuntimeApi;
 
-	fn runtime_api(&self) -> ApiRef<'_, Self::Api> {
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api> {
 		RuntimeApi { authorities: self.authorities.clone() }.into()
 	}
 }
@@ -112,18 +111,18 @@ sp_api::mock_impl_runtime_apis! {
 
 #[derive(Debug)]
 pub enum TestNetworkEvent {
-	GetCalled(KademliaKey),
-	PutCalled(KademliaKey, Vec<u8>),
+	GetCalled(sc_network::KademliaKey),
+	PutCalled(sc_network::KademliaKey, Vec<u8>),
 }
 
 pub struct TestNetwork {
 	peer_id: PeerId,
-	identity: Keypair,
+	identity: sc_network::Keypair,
 	external_addresses: Vec<Multiaddr>,
 	// Whenever functions on `TestNetwork` are called, the function arguments are added to the
 	// vectors below.
-	pub put_value_call: Arc<Mutex<Vec<(KademliaKey, Vec<u8>)>>>,
-	pub get_value_call: Arc<Mutex<Vec<KademliaKey>>>,
+	pub put_value_call: Arc<Mutex<Vec<(sc_network::KademliaKey, Vec<u8>)>>>,
+	pub get_value_call: Arc<Mutex<Vec<sc_network::KademliaKey>>>,
 	event_sender: mpsc::UnboundedSender<TestNetworkEvent>,
 	event_receiver: Option<mpsc::UnboundedReceiver<TestNetworkEvent>>,
 }
@@ -137,7 +136,7 @@ impl TestNetwork {
 impl Default for TestNetwork {
 	fn default() -> Self {
 		let (tx, rx) = mpsc::unbounded();
-		let identity = Keypair::generate_ed25519();
+		let identity = sc_network::Keypair::generate_ed25519();
 		TestNetwork {
 			peer_id: identity.public().to_peer_id(),
 			identity,
@@ -154,20 +153,21 @@ impl NetworkSigner for TestNetwork {
 	fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<Signature, SigningError> {
-		Signature::sign_message(msg, &self.identity)
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
+		sc_network::Signature::sign_message(msg, &self.identity)
 	}
 }
 
-impl NetworkDHTProvider for TestNetwork {
-	fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
+#[async_trait]
+impl NetworkProvider for TestNetwork {
+	fn put_value(&self, key: sc_network::KademliaKey, value: Vec<u8>) {
 		self.put_value_call.lock().unwrap().push((key.clone(), value.clone()));
 		self.event_sender
 			.clone()
 			.unbounded_send(TestNetworkEvent::PutCalled(key, value))
 			.unwrap();
 	}
-	fn get_value(&self, key: &KademliaKey) {
+	fn get_value(&self, key: &sc_network::KademliaKey) {
 		self.get_value_call.lock().unwrap().push(key.clone());
 		self.event_sender
 			.clone()
@@ -186,16 +186,12 @@ impl NetworkStateInfo for TestNetwork {
 	}
 }
 
-struct TestSigner<'a> {
-	keypair: &'a Keypair,
-}
-
-impl<'a> NetworkSigner for TestSigner<'a> {
+impl NetworkSigner for sc_network::Keypair {
 	fn sign_with_local_identity(
 		&self,
 		msg: impl AsRef<[u8]>,
-	) -> std::result::Result<Signature, SigningError> {
-		Signature::sign_message(msg, self.keypair)
+	) -> std::result::Result<sc_network::Signature, sc_network::SigningError> {
+		sc_network::Signature::sign_message(msg, self)
 	}
 }
 
@@ -204,7 +200,7 @@ async fn build_dht_event<Signer: NetworkSigner>(
 	public_key: AuthorityId,
 	key_store: &dyn CryptoStore,
 	network: Option<&Signer>,
-) -> Vec<(KademliaKey, Vec<u8>)> {
+) -> Vec<(sc_network::KademliaKey, Vec<u8>)> {
 	let serialized_record =
 		serialize_authority_record(serialize_addresses(addresses.into_iter())).unwrap();
 
@@ -317,7 +313,7 @@ fn publish_discover_cycle() {
 
 			let dht_event = {
 				let (key, value) = network.put_value_call.lock().unwrap().pop().unwrap();
-				DhtEvent::ValueFound(vec![(key, value)])
+				sc_network::DhtEvent::ValueFound(vec![(key, value)])
 			};
 
 			// Node B discovering node A's address.
@@ -473,7 +469,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 				None,
 			)
 			.await;
-			DhtEvent::ValueFound(kv_pairs)
+			sc_network::DhtEvent::ValueFound(kv_pairs)
 		};
 		dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
@@ -491,7 +487,7 @@ fn dont_stop_polling_dht_event_stream_after_bogus_event() {
 struct DhtValueFoundTester {
 	pub remote_key_store: KeyStore,
 	pub remote_authority_public: sp_core::sr25519::Public,
-	pub remote_node_key: Keypair,
+	pub remote_node_key: sc_network::Keypair,
 	pub local_worker: Option<
 		Worker<
 			TestApi,
@@ -500,7 +496,7 @@ struct DhtValueFoundTester {
 				sp_runtime::generic::Header<u64, sp_runtime::traits::BlakeTwo256>,
 				substrate_test_runtime_client::runtime::Extrinsic,
 			>,
-			std::pin::Pin<Box<futures::channel::mpsc::Receiver<DhtEvent>>>,
+			std::pin::Pin<Box<futures::channel::mpsc::Receiver<sc_network::DhtEvent>>>,
 		>,
 	>,
 }
@@ -512,7 +508,7 @@ impl DhtValueFoundTester {
 			block_on(remote_key_store.sr25519_generate_new(key_types::AUTHORITY_DISCOVERY, None))
 				.unwrap();
 
-		let remote_node_key = Keypair::generate_ed25519();
+		let remote_node_key = sc_network::Keypair::generate_ed25519();
 		Self { remote_key_store, remote_authority_public, remote_node_key, local_worker: None }
 	}
 
@@ -527,11 +523,11 @@ impl DhtValueFoundTester {
 	fn process_value_found(
 		&mut self,
 		strict_record_validation: bool,
-		values: Vec<(KademliaKey, Vec<u8>)>,
+		values: Vec<(sc_network::KademliaKey, Vec<u8>)>,
 	) -> Option<&HashSet<Multiaddr>> {
 		let (_dht_event_tx, dht_event_rx) = channel(1);
 		let local_test_api =
-			Arc::new(TestApi { authorities: vec![self.remote_authority_public.into()] });
+			Arc::new(TestApi { authorities: vec![self.remote_authority_public.clone().into()] });
 		let local_network: Arc<TestNetwork> = Arc::new(Default::default());
 		let local_key_store = KeyStore::new();
 
@@ -556,7 +552,8 @@ impl DhtValueFoundTester {
 		self.local_worker
 			.as_ref()
 			.map(|w| {
-				w.addr_cache.get_addresses_by_authority_id(&self.remote_authority_public.into())
+				w.addr_cache
+					.get_addresses_by_authority_id(&self.remote_authority_public.clone().into())
 			})
 			.unwrap()
 	}
@@ -569,7 +566,7 @@ fn limit_number_of_addresses_added_to_cache_per_authority() {
 	let addresses = (1..100).map(|i| tester.multiaddr_with_peer_id(i)).collect();
 	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		addresses,
-		tester.remote_authority_public.into(),
+		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
 		None,
 	));
@@ -584,9 +581,9 @@ fn strict_accept_address_with_peer_signature() {
 	let addr = tester.multiaddr_with_peer_id(1);
 	let kv_pairs = block_on(build_dht_event(
 		vec![addr.clone()],
-		tester.remote_authority_public.into(),
+		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
-		Some(&TestSigner { keypair: &tester.remote_node_key }),
+		Some(&tester.remote_node_key),
 	));
 
 	let cached_remote_addresses = tester.process_value_found(true, kv_pairs);
@@ -601,12 +598,12 @@ fn strict_accept_address_with_peer_signature() {
 #[test]
 fn reject_address_with_rogue_peer_signature() {
 	let mut tester = DhtValueFoundTester::new();
-	let rogue_remote_node_key = Keypair::generate_ed25519();
+	let rogue_remote_node_key = sc_network::Keypair::generate_ed25519();
 	let kv_pairs = block_on(build_dht_event(
 		vec![tester.multiaddr_with_peer_id(1)],
-		tester.remote_authority_public.into(),
+		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
-		Some(&TestSigner { keypair: &rogue_remote_node_key }),
+		Some(&rogue_remote_node_key),
 	));
 
 	let cached_remote_addresses = tester.process_value_found(false, kv_pairs);
@@ -622,9 +619,9 @@ fn reject_address_with_invalid_peer_signature() {
 	let mut tester = DhtValueFoundTester::new();
 	let mut kv_pairs = block_on(build_dht_event(
 		vec![tester.multiaddr_with_peer_id(1)],
-		tester.remote_authority_public.into(),
+		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
-		Some(&TestSigner { keypair: &tester.remote_node_key }),
+		Some(&tester.remote_node_key),
 	));
 	// tamper with the signature
 	let mut record = schema::SignedAuthorityRecord::decode(kv_pairs[0].1.as_slice()).unwrap();
@@ -644,7 +641,7 @@ fn reject_address_without_peer_signature() {
 	let mut tester = DhtValueFoundTester::new();
 	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		vec![tester.multiaddr_with_peer_id(1)],
-		tester.remote_authority_public.into(),
+		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
 		None,
 	));
@@ -662,7 +659,7 @@ fn do_not_cache_addresses_without_peer_id() {
 		"/ip6/2001:db8:0:0:0:0:0:2/tcp/30333".parse().unwrap();
 	let kv_pairs = block_on(build_dht_event::<TestNetwork>(
 		vec![multiaddr_with_peer_id.clone(), multiaddr_without_peer_id],
-		tester.remote_authority_public.into(),
+		tester.remote_authority_public.clone().into(),
 		&tester.remote_key_store,
 		None,
 	));
@@ -811,7 +808,7 @@ fn lookup_throttling() {
 					None,
 				)
 				.await;
-				DhtEvent::ValueFound(kv_pairs)
+				sc_network::DhtEvent::ValueFound(kv_pairs)
 			};
 			dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
@@ -825,7 +822,7 @@ fn lookup_throttling() {
 
 			// Make second one fail.
 			let remote_hash = network.get_value_call.lock().unwrap().pop().unwrap();
-			let dht_event = DhtEvent::ValueNotFound(remote_hash);
+			let dht_event = sc_network::DhtEvent::ValueNotFound(remote_hash);
 			dht_event_tx.send(dht_event).await.expect("Channel has capacity of 1.");
 
 			// Assert worker to trigger another lookup.

@@ -19,6 +19,7 @@
 
 use super::*;
 use crate as pallet_timestamp;
+use sp_std::cell::RefCell;
 
 use frame_support::{
 	parameter_types,
@@ -48,23 +49,23 @@ frame_support::construct_runtime!(
 
 parameter_types! {
 	pub BlockWeights: frame_system::limits::BlockWeights =
-	frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
+	frame_system::limits::BlockWeights::simple_max(1024);
 }
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type RuntimeOrigin = RuntimeOrigin;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
-	type RuntimeCall = RuntimeCall;
+	type Call = Call;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -77,14 +78,14 @@ impl frame_system::Config for Test {
 	type MaxConsumers = ConstU32<16>;
 }
 
-parameter_types! {
-	pub static CapturedMoment: Option<Moment> = None;
+thread_local! {
+	pub static CAPTURED_MOMENT: RefCell<Option<Moment>> = RefCell::new(None);
 }
 
 pub struct MockOnTimestampSet;
 impl OnTimestampSet<Moment> for MockOnTimestampSet {
 	fn on_timestamp_set(moment: Moment) {
-		CapturedMoment::mutate(|x| *x = Some(moment));
+		CAPTURED_MOMENT.with(|x| *x.borrow_mut() = Some(moment));
 	}
 }
 
@@ -96,11 +97,11 @@ impl Config for Test {
 }
 
 pub(crate) fn clear_captured_moment() {
-	CapturedMoment::mutate(|x| *x = None);
+	CAPTURED_MOMENT.with(|x| *x.borrow_mut() = None);
 }
 
 pub(crate) fn get_captured_moment() -> Option<Moment> {
-	CapturedMoment::get()
+	CAPTURED_MOMENT.with(|x| x.borrow().clone())
 }
 
 pub(crate) fn new_test_ext() -> TestExternalities {

@@ -19,7 +19,6 @@
 
 use sp_runtime::traits::{Bounded, Hash, StaticLookup};
 use sp_std::{
-	cmp,
 	convert::{TryFrom, TryInto},
 	mem::size_of,
 	prelude::*,
@@ -35,7 +34,7 @@ const SEED: u32 = 0;
 
 const MAX_BYTES: u32 = 1_024;
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
@@ -122,12 +121,7 @@ benchmarks_instance_pallet! {
 		let proposer = founders[0].clone();
 		let fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			fellows,
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		let threshold = m;
 		// Add previous proposals.
@@ -173,12 +167,7 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			fellows,
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		// Threshold is 1 less than the number of members so that one person can vote nay
 		let threshold = m - 1;
@@ -241,12 +230,7 @@ benchmarks_instance_pallet! {
 		let founders = (0 .. m).map(founder::<T, I>).collect::<Vec<_>>();
 		let vetor = founders[0].clone();
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			vec![],
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, vec![], vec![])?;
 
 		// Threshold is one less than total members so that two nays will disapprove the vote
 		let threshold = m - 1;
@@ -292,12 +276,7 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			fellows,
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -353,7 +332,7 @@ benchmarks_instance_pallet! {
 		// Whitelist voter account from further DB operations.
 		let voter_key = frame_system::Account::<T>::hashed_key_for(&voter);
 		frame_benchmarking::benchmarking::add_to_whitelist(voter_key.into());
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -377,12 +356,7 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			fellows,
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -443,7 +417,7 @@ benchmarks_instance_pallet! {
 			index,
 			true,
 		)?;
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -468,12 +442,7 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			fellows,
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -520,7 +489,7 @@ benchmarks_instance_pallet! {
 
 		System::<T>::set_block_number(T::BlockNumber::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
@@ -544,12 +513,7 @@ benchmarks_instance_pallet! {
 		members.extend(founders.clone());
 		members.extend(fellows.clone());
 
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			founders,
-			fellows,
-			vec![],
-		)?;
+		Alliance::<T, I>::init_members(SystemOrigin::Root.into(), founders, fellows, vec![])?;
 
 		let proposer = members[0].clone();
 		let voter = members[1].clone();
@@ -598,19 +562,19 @@ benchmarks_instance_pallet! {
 		// caller is prime, prime already votes aye by creating the proposal
 		System::<T>::set_block_number(T::BlockNumber::max_value());
 
-	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::MAX, bytes_in_storage)
+	}: close(SystemOrigin::Signed(voter), last_hash.clone(), index, Weight::max_value(), bytes_in_storage)
 	verify {
 		// The last proposal is removed.
 		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
 	}
 
 	init_members {
-		// at least 1 founders
-		let x in 1 .. T::MaxFounders::get();
+		// at least 2 founders
+		let x in 2 .. T::MaxFounders::get();
 		let y in 0 .. T::MaxFellows::get();
 		let z in 0 .. T::MaxAllies::get();
 
-		let mut founders = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
+		let mut founders = (2 .. x).map(founder::<T, I>).collect::<Vec<_>>();
 		let mut fellows = (0 .. y).map(fellow::<T, I>).collect::<Vec<_>>();
 		let mut allies = (0 .. z).map(ally::<T, I>).collect::<Vec<_>>();
 
@@ -627,47 +591,6 @@ benchmarks_instance_pallet! {
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Founder), founders);
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Fellow), fellows);
 		assert_eq!(Alliance::<T, I>::members(MemberRole::Ally), allies);
-	}
-
-	disband {
-		// at least 1 founders
-		let x in 1 .. T::MaxFounders::get() + T::MaxFellows::get();
-		let y in 0 .. T::MaxAllies::get();
-		let z in 0 .. T::MaxMembersCount::get() / 2;
-
-		let voting_members = (0 .. x).map(founder::<T, I>).collect::<Vec<_>>();
-		let allies = (0 .. y).map(ally::<T, I>).collect::<Vec<_>>();
-		let witness = DisbandWitness{
-			voting_members: x,
-			ally_members: y,
-		};
-
-		// setting the Alliance to disband on the benchmark call
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			voting_members.clone(),
-			vec![],
-			allies.clone(),
-		)?;
-
-		// reserve deposits
-		let deposit = T::AllyDeposit::get();
-		for member in voting_members.iter().chain(allies.iter()).take(z as usize) {
-			T::Currency::reserve(&member, deposit)?;
-			<DepositOf<T, I>>::insert(&member, deposit);
-		}
-
-		assert_eq!(Alliance::<T, I>::voting_members_count(), x);
-		assert_eq!(Alliance::<T, I>::ally_members_count(), y);
-	}: _(SystemOrigin::Root, witness)
-	verify {
-		assert_last_event::<T, I>(Event::AllianceDisbanded {
-			voting_members: x,
-			ally_members: y,
-			unreserved: cmp::min(z, x + y),
-		}.into());
-
-		assert!(!Alliance::<T, I>::is_initialized());
 	}
 
 	set_rule {
@@ -739,7 +662,7 @@ benchmarks_instance_pallet! {
 		assert!(!Alliance::<T, I>::is_member(&outsider));
 		assert_eq!(DepositOf::<T, I>::get(&outsider), None);
 
-		let outsider_lookup = T::Lookup::unlookup(outsider.clone());
+		let outsider_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(outsider.clone());
 	}: _(SystemOrigin::Signed(founder1.clone()), outsider_lookup)
 	verify {
 		assert!(Alliance::<T, I>::is_member_of(&outsider, MemberRole::Ally)); // outsider is now an ally
@@ -758,7 +681,7 @@ benchmarks_instance_pallet! {
 		let ally1 = ally::<T, I>(1);
 		assert!(Alliance::<T, I>::is_ally(&ally1));
 
-		let ally1_lookup = T::Lookup::unlookup(ally1.clone());
+		let ally1_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(ally1.clone());
 		let call = Call::<T, I>::elevate_ally { ally: ally1_lookup };
 		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -768,37 +691,12 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::AllyElevated { ally: ally1 }.into());
 	}
 
-	give_retirement_notice {
-		set_members::<T, I>();
-		let fellow2 = fellow::<T, I>(2);
-
-		assert!(Alliance::<T, I>::is_fellow(&fellow2));
-	}: _(SystemOrigin::Signed(fellow2.clone()))
-	verify {
-		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Retiring));
-
-		assert_eq!(
-			RetiringMembers::<T, I>::get(&fellow2),
-			Some(System::<T>::block_number() + T::RetirementPeriod::get())
-		);
-		assert_last_event::<T, I>(
-			Event::MemberRetirementPeriodStarted {member: fellow2}.into()
-		);
-	}
-
 	retire {
 		set_members::<T, I>();
 
 		let fellow2 = fellow::<T, I>(2);
 		assert!(Alliance::<T, I>::is_fellow(&fellow2));
-
-		assert_eq!(
-			Alliance::<T, I>::give_retirement_notice(
-				SystemOrigin::Signed(fellow2.clone()).into()
-			),
-			Ok(())
-		);
-		System::<T>::set_block_number(System::<T>::block_number() + T::RetirementPeriod::get());
+		assert!(!Alliance::<T, I>::is_up_for_kicking(&fellow2));
 
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 	}: _(SystemOrigin::Signed(fellow2.clone()))
@@ -815,10 +713,14 @@ benchmarks_instance_pallet! {
 		set_members::<T, I>();
 
 		let fellow2 = fellow::<T, I>(2);
+		UpForKicking::<T, I>::insert(&fellow2, true);
+
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Fellow));
+		assert!(Alliance::<T, I>::is_up_for_kicking(&fellow2));
+
 		assert_eq!(DepositOf::<T, I>::get(&fellow2), Some(T::AllyDeposit::get()));
 
-		let fellow2_lookup = T::Lookup::unlookup(fellow2.clone());
+		let fellow2_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(fellow2.clone());
 		let call = Call::<T, I>::kick_member { who: fellow2_lookup };
 		let origin = T::MembershipManager::successful_origin();
 	}: { call.dispatch_bypass_filter(origin)? }
@@ -832,8 +734,8 @@ benchmarks_instance_pallet! {
 	}
 
 	add_unscrupulous_items {
-		let n in 0 .. T::MaxUnscrupulousItems::get();
-		let l in 0 .. T::MaxWebsiteUrlLength::get();
+		let n in 1 .. T::MaxUnscrupulousItems::get();
+		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 
@@ -856,8 +758,8 @@ benchmarks_instance_pallet! {
 	}
 
 	remove_unscrupulous_items {
-		let n in 0 .. T::MaxUnscrupulousItems::get();
-		let l in 0 .. T::MaxWebsiteUrlLength::get();
+		let n in 1 .. T::MaxUnscrupulousItems::get();
+		let l in 1 .. T::MaxWebsiteUrlLength::get();
 
 		set_members::<T, I>();
 

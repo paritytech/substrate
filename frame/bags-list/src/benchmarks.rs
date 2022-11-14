@@ -25,7 +25,7 @@ use frame_support::{assert_ok, traits::Get};
 use frame_system::RawOrigin as SystemOrigin;
 use sp_runtime::traits::One;
 
-frame_benchmarking::benchmarks_instance_pallet! {
+frame_benchmarking::benchmarks! {
 	rebag_non_terminal {
 		// An expensive case for rebag-ing (rebag a non-terminal node):
 		//
@@ -57,8 +57,6 @@ frame_benchmarking::benchmarks_instance_pallet! {
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T, _>::insert(dest_head.clone(), dest_bag_thresh));
 
-		let origin_middle_lookup = T::Lookup::unlookup(origin_middle.clone());
-
 		// the bags are in the expected state after initial setup.
 		assert_eq!(
 			List::<T, _>::get_bags(),
@@ -71,7 +69,7 @@ frame_benchmarking::benchmarks_instance_pallet! {
 		let caller = whitelisted_caller();
 		// update the weight of `origin_middle` to guarantee it will be rebagged into the destination.
 		T::ScoreProvider::set_score_of(&origin_middle, dest_bag_thresh);
-	}: rebag(SystemOrigin::Signed(caller), origin_middle_lookup.clone())
+	}: rebag(SystemOrigin::Signed(caller), origin_middle.clone())
 	verify {
 		// check the bags have updated as expected.
 		assert_eq!(
@@ -99,7 +97,7 @@ frame_benchmarking::benchmarks_instance_pallet! {
 
 		// clear any pre-existing storage.
 		// NOTE: safe to call outside block production
-		List::<T, I>::unsafe_clear();
+		List::<T>::unsafe_clear();
 
 		// define our origin and destination thresholds.
 		let origin_bag_thresh = T::BagThresholds::get()[0];
@@ -116,8 +114,6 @@ frame_benchmarking::benchmarks_instance_pallet! {
 		let dest_head: T::AccountId  = account("dest_head", 0, 0);
 		assert_ok!(List::<T, _>::insert(dest_head.clone(), dest_bag_thresh));
 
-		let origin_tail_lookup = T::Lookup::unlookup(origin_tail.clone());
-
 		// the bags are in the expected state after initial setup.
 		assert_eq!(
 			List::<T, _>::get_bags(),
@@ -130,7 +126,7 @@ frame_benchmarking::benchmarks_instance_pallet! {
 		let caller = whitelisted_caller();
 		// update the weight of `origin_tail` to guarantee it will be rebagged into the destination.
 		T::ScoreProvider::set_score_of(&origin_tail, dest_bag_thresh);
-	}: rebag(SystemOrigin::Signed(caller), origin_tail_lookup.clone())
+	}: rebag(SystemOrigin::Signed(caller), origin_tail.clone())
 	verify {
 		// check the bags have updated as expected.
 		assert_eq!(
@@ -150,7 +146,7 @@ frame_benchmarking::benchmarks_instance_pallet! {
 
 		// clear any pre-existing storage.
 		// NOTE: safe to call outside block production
-		List::<T, I>::unsafe_clear();
+		List::<T>::unsafe_clear();
 
 		let bag_thresh = T::BagThresholds::get()[0];
 
@@ -170,15 +166,13 @@ frame_benchmarking::benchmarks_instance_pallet! {
 		T::ScoreProvider::set_score_of(&lighter, bag_thresh - One::one());
 		T::ScoreProvider::set_score_of(&heavier, bag_thresh);
 
-		let lighter_lookup = T::Lookup::unlookup(lighter.clone());
-
 		assert_eq!(
 			List::<T, _>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),
 			vec![lighter.clone(), heavier_prev.clone(), heavier.clone(), heavier_next.clone()]
 		);
 
 		whitelist_account!(heavier);
-	}: _(SystemOrigin::Signed(heavier.clone()), lighter_lookup.clone())
+	}: _(SystemOrigin::Signed(heavier.clone()), lighter.clone())
 	verify {
 		assert_eq!(
 			List::<T, _>::iter().map(|n| n.id().clone()).collect::<Vec<_>>(),

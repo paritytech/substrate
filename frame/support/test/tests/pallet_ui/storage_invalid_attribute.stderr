@@ -1,4 +1,4 @@
-error: expected one of: `getter`, `storage_prefix`, `unbounded`, `whitelist_storage`
+error: expected one of: `getter`, `storage_prefix`, `unbounded`
   --> $DIR/storage_invalid_attribute.rs:16:12
    |
 16 |     #[pallet::generate_store(pub trait Store)]

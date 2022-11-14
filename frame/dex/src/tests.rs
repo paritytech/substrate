@@ -26,7 +26,7 @@ fn events() -> Vec<Event<Test>> {
 	let result = System::events()
 		.into_iter()
 		.map(|r| r.event)
-		.filter_map(|e| if let mock::RuntimeEvent::Dex(inner) = e { Some(inner) } else { None })
+		.filter_map(|e| if let mock::Event::Dex(inner) = e { Some(inner) } else { None })
 		.collect();
 
 	System::reset_events();
@@ -58,7 +58,7 @@ fn pool_assets() -> Vec<u32> {
 
 fn create_tokens(owner: u64, tokens: Vec<u32>) {
 	for token_id in tokens {
-		assert_ok!(Assets::force_create(RuntimeOrigin::root(), token_id, owner, true, 1));
+		assert_ok!(Assets::force_create(Origin::root(), token_id, owner, true, 1));
 	}
 }
 
@@ -87,7 +87,7 @@ fn create_pool_should_work() {
 
 		create_tokens(user, vec![token_1, token_2]);
 
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1, lp_token));
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_2, token_1, lp_token));
 
 		assert_eq!(events(), [Event::<Test>::PoolCreated { creator: user, pool_id, lp_token }]);
 		assert_eq!(pools(), vec![pool_id]);
@@ -107,13 +107,13 @@ fn add_liquidity_should_work() {
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
-			RuntimeOrigin::signed(user),
+			Origin::signed(user),
 			token_1,
 			token_2,
 			10,
@@ -152,13 +152,13 @@ fn remove_liquidity_should_work() {
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
-			RuntimeOrigin::signed(user),
+			Origin::signed(user),
 			token_1,
 			token_2,
 			10,
@@ -169,16 +169,7 @@ fn remove_liquidity_should_work() {
 			2
 		));
 
-		assert_ok!(Dex::remove_liquidity(
-			RuntimeOrigin::signed(user),
-			token_1,
-			token_2,
-			9,
-			0,
-			0,
-			user,
-			2
-		));
+		assert_ok!(Dex::remove_liquidity(Origin::signed(user), token_1, token_2, 9, 0, 0, user, 2));
 
 		assert!(events().contains(&Event::<Test>::LiquidityRemoved {
 			who: user,
@@ -211,13 +202,13 @@ fn quote_price_should_work() {
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		assert_ok!(Dex::add_liquidity(
-			RuntimeOrigin::signed(user),
+			Origin::signed(user),
 			token_1,
 			token_2,
 			1000,
@@ -242,15 +233,15 @@ fn swap_should_work() {
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		assert_ok!(Dex::create_pool(Origin::signed(user), token_1, token_2, lp_token));
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_2, user, 1000));
 
 		let liquidity1 = 1000;
 		let liquidity2 = 20;
 		assert_ok!(Dex::add_liquidity(
-			RuntimeOrigin::signed(user),
+			Origin::signed(user),
 			token_1,
 			token_2,
 			liquidity1,
@@ -265,7 +256,7 @@ fn swap_should_work() {
 
 		let exchange_amount = 10;
 		assert_ok!(Dex::swap_exact_tokens_for_tokens(
-			RuntimeOrigin::signed(user),
+			Origin::signed(user),
 			token_2,
 			token_1,
 			exchange_amount,
@@ -293,17 +284,17 @@ fn same_asset_swap_should_fail() {
 
 		create_tokens(user, vec![token_1]);
 		assert_noop!(
-			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_1, lp_token),
+			Dex::create_pool(Origin::signed(user), token_1, token_1, lp_token),
 			Error::<Test>::EqualAssets
 		);
 
-		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
+		assert_ok!(Assets::mint(Origin::signed(user), token_1, user, 1000));
 
 		let liquidity1 = 1000;
 		let liquidity2 = 20;
 		assert_noop!(
 			Dex::add_liquidity(
-				RuntimeOrigin::signed(user),
+				Origin::signed(user),
 				token_1,
 				token_1,
 				liquidity1,
@@ -319,7 +310,7 @@ fn same_asset_swap_should_fail() {
 		let exchange_amount = 10;
 		assert_noop!(
 			Dex::swap_exact_tokens_for_tokens(
-				RuntimeOrigin::signed(user),
+				Origin::signed(user),
 				token_1,
 				token_1,
 				exchange_amount,

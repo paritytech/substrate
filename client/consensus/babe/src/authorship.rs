@@ -85,7 +85,7 @@ pub(super) fn calculate_primary_threshold(
 		 qed.",
 	);
 
-	((BigUint::one() << 128usize) * numer / denom).to_u128().expect(
+	((BigUint::one() << 128) * numer / denom).to_u128().expect(
 		"returns None if the underlying value cannot be represented with 128 bits; \
 		 we start with 2^128 which is one more than can be represented with 128 bits; \
 		 we multiple by p which is defined in [0, 1); \
@@ -310,7 +310,7 @@ mod tests {
 
 		assert!(claim_slot(10.into(), &epoch, &keystore).is_none());
 
-		epoch.authorities.push((valid_public_key.into(), 10));
+		epoch.authorities.push((valid_public_key.clone().into(), 10));
 		assert_eq!(claim_slot(10.into(), &epoch, &keystore).unwrap().1, valid_public_key.into());
 	}
 }

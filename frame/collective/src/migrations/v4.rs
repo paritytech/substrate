@@ -45,7 +45,7 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 			target: "runtime::collective",
 			"New pallet name is equal to the old pallet name. No migration needs to be done.",
 		);
-		return Weight::zero()
+		return 0
 	}
 
 	let on_chain_storage_version = <P as GetStorageVersion>::on_chain_storage_version();
@@ -70,7 +70,7 @@ pub fn migrate<T: frame_system::Config, P: GetStorageVersion + PalletInfoAccess,
 			"Attempted to apply migration to v4 but failed because storage version is {:?}",
 			on_chain_storage_version,
 		);
-		Weight::zero()
+		0
 	}
 }
 

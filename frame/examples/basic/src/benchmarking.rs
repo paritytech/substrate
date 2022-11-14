@@ -26,7 +26,7 @@ use frame_system::RawOrigin;
 // To actually run this benchmark on pallet-example-basic, we need to put this pallet into the
 //   runtime and compile it with `runtime-benchmarks` feature. The detail procedures are
 //   documented at:
-//   https://docs.substrate.io/reference/how-to-guides/weights/add-benchmarks/
+//   https://docs.substrate.io/v3/runtime/benchmarking#how-to-benchmark
 //
 // The auto-generated weight estimate of this pallet is copied over to the `weights.rs` file.
 // The exact command of how the estimate generated is printed at the top of the file.
@@ -34,26 +34,25 @@ use frame_system::RawOrigin;
 // Details on using the benchmarks macro can be seen at:
 //   https://paritytech.github.io/substrate/master/frame_benchmarking/trait.Benchmarking.html#tymethod.benchmarks
 benchmarks! {
-	// This will measure the execution time of `set_dummy`.
+	// This will measure the execution time of `set_dummy` for b in [1..1000] range.
 	set_dummy_benchmark {
-		// This is the benchmark setup phase.
-		// `set_dummy` is a constant time function, hence we hard-code some random value here.
-		let value = 1000u32.into();
-	}: set_dummy(RawOrigin::Root, value) // The execution phase is just running `set_dummy` extrinsic call
+		// This is the benchmark setup phase
+		let b in 1 .. 1000;
+	}: set_dummy(RawOrigin::Root, b.into()) // The execution phase is just running `set_dummy` extrinsic call
 	verify {
 		// This is the optional benchmark verification phase, asserting certain states.
-		assert_eq!(Pallet::<T>::dummy(), Some(value))
+		assert_eq!(Pallet::<T>::dummy(), Some(b.into()))
 	}
 
-	// This will measure the execution time of `accumulate_dummy`.
+	// This will measure the execution time of `accumulate_dummy` for b in [1..1000] range.
 	// The benchmark execution phase is shorthanded. When the name of the benchmark case is the same
 	// as the extrinsic call. `_(...)` is used to represent the extrinsic name.
 	// The benchmark verification phase is omitted.
 	accumulate_dummy {
-		let value = 1000u32.into();
+		let b in 1 .. 1000;
 		// The caller account is whitelisted for DB reads/write by the benchmarking macro.
 		let caller: T::AccountId = whitelisted_caller();
-	}: _(RawOrigin::Signed(caller), value)
+	}: _(RawOrigin::Signed(caller), b.into())
 
 	// This will measure the execution time of sorting a vector.
 	sort_vector {
@@ -64,7 +63,7 @@ benchmarks! {
 		}
 	}: {
 		// The benchmark execution phase could also be a closure with custom code
-		m.sort();
+		m.sort_unstable();
 	}
 
 	// This line generates test cases for benchmarking, and could be run by:

@@ -26,6 +26,7 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
+use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = mocking::MockUncheckedExtrinsic<Test>;
 type Block = mocking::MockBlock<Test>;
@@ -41,7 +42,7 @@ frame_support::construct_runtime!(
 );
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-const MAX_BLOCK_WEIGHT: Weight = Weight::from_ref_time(1024).set_proof_size(u64::MAX);
+const MAX_BLOCK_WEIGHT: Weight = 1024;
 
 parameter_types! {
 	pub Version: RuntimeVersion = RuntimeVersion {
@@ -59,15 +60,14 @@ parameter_types! {
 		write: 100,
 	};
 	pub RuntimeBlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-		.base_block(Weight::from_ref_time(10))
+		.base_block(10)
 		.for_class(DispatchClass::all(), |weights| {
-			weights.base_extrinsic = Weight::from_ref_time(5);
+			weights.base_extrinsic = 5;
 		})
 		.for_class(DispatchClass::Normal, |weights| {
 			weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT);
 		})
 		.for_class(DispatchClass::Operational, |weights| {
-			weights.base_extrinsic = Weight::from_ref_time(10);
 			weights.max_total = Some(MAX_BLOCK_WEIGHT);
 			weights.reserved = Some(
 				MAX_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAX_BLOCK_WEIGHT
@@ -79,14 +79,14 @@ parameter_types! {
 		limits::BlockLength::max_with_normal_ratio(1024, NORMAL_DISPATCH_RATIO);
 }
 
-parameter_types! {
-	pub static Killed: Vec<u64> = vec![];
+thread_local! {
+	pub static KILLED: RefCell<Vec<u64>> = RefCell::new(vec![]);
 }
 
 pub struct RecordKilled;
 impl OnKilledAccount<u64> for RecordKilled {
 	fn on_killed_account(who: &u64) {
-		Killed::mutate(|r| r.push(*who))
+		KILLED.with(|r| r.borrow_mut().push(*who))
 	}
 }
 
@@ -94,8 +94,8 @@ impl Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = RuntimeBlockWeights;
 	type BlockLength = RuntimeBlockLength;
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -103,7 +103,7 @@ impl Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<10>;
 	type DbWeight = DbWeight;
 	type Version = Version;
@@ -120,8 +120,8 @@ impl Config for Test {
 pub type SysEvent = frame_system::Event<Test>;
 
 /// A simple call, which one doesn't matter.
-pub const CALL: &<Test as Config>::RuntimeCall =
-	&RuntimeCall::System(frame_system::Call::set_heap_pages { pages: 0u64 });
+pub const CALL: &<Test as Config>::Call =
+	&Call::System(frame_system::Call::set_heap_pages { pages: 0u64 });
 
 /// Create new externalities for `System` module tests.
 pub fn new_test_ext() -> sp_io::TestExternalities {

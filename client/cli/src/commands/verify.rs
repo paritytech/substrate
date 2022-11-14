@@ -24,7 +24,7 @@ use sp_core::crypto::{ByteArray, Ss58Codec};
 
 /// The `verify` command
 #[derive(Debug, Clone, Parser)]
-#[command(
+#[clap(
 	name = "verify",
 	about = "Verify a signature for a message, provided on STDIN, with a given (public or secret) key"
 )]
@@ -39,11 +39,11 @@ pub struct VerifyCmd {
 
 	/// Message to verify, if not provided you will be prompted to
 	/// pass the message via STDIN
-	#[arg(long)]
+	#[clap(long)]
 	message: Option<String>,
 
 	/// The message on STDIN is hex-encoded data
-	#[arg(long)]
+	#[clap(long)]
 	hex: bool,
 
 	#[allow(missing_docs)]
@@ -55,7 +55,7 @@ impl VerifyCmd {
 	/// Run the command
 	pub fn run(&self) -> error::Result<()> {
 		let message = utils::read_message(self.message.as_ref(), self.hex)?;
-		let sig_data = array_bytes::hex2bytes(&self.sig)?;
+		let sig_data = utils::decode_hex(&self.sig)?;
 		let uri = utils::read_uri(self.uri.as_ref())?;
 		let uri = if let Some(uri) = uri.strip_prefix("0x") { uri } else { &uri };
 
@@ -71,7 +71,7 @@ where
 	let signature =
 		Pair::Signature::try_from(&sig_data).map_err(|_| error::Error::SignatureFormatInvalid)?;
 
-	let pubkey = if let Ok(pubkey_vec) = array_bytes::hex2bytes(uri) {
+	let pubkey = if let Ok(pubkey_vec) = hex::decode(uri) {
 		Pair::Public::from_slice(pubkey_vec.as_slice())
 			.map_err(|_| error::Error::KeyFormatInvalid)?
 	} else {

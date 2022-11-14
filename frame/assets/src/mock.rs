@@ -21,8 +21,8 @@ use super::*;
 use crate as pallet_assets;
 
 use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, GenesisBuild},
+	construct_runtime,
+	traits::{ConstU32, ConstU64, GenesisBuild},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -49,8 +49,8 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -58,7 +58,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -75,7 +75,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -85,11 +85,10 @@ impl pallet_balances::Config for Test {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Balance = u64;
 	type AssetId = u32;
 	type Currency = Balances;
-	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u64>>;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
 	type AssetDeposit = ConstU64<1>;
 	type AssetAccountDeposit = ConstU64<10>;
@@ -102,49 +101,44 @@ impl Config for Test {
 	type Extra = ();
 }
 
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum Hook {
+pub(crate) enum Hook {
 	Died(u32, u64),
 }
-parameter_types! {
-	static Frozen: HashMap<(u32, u64), u64> = Default::default();
-	static Hooks: Vec<Hook> = Default::default();
+thread_local! {
+	static FROZEN: RefCell<HashMap<(u32, u64), u64>> = RefCell::new(Default::default());
+	static HOOKS: RefCell<Vec<Hook>> = RefCell::new(Default::default());
 }
 
 pub struct TestFreezer;
 impl FrozenBalance<u32, u64, u64> for TestFreezer {
 	fn frozen_balance(asset: u32, who: &u64) -> Option<u64> {
-		Frozen::get().get(&(asset, *who)).cloned()
+		FROZEN.with(|f| f.borrow().get(&(asset, who.clone())).cloned())
 	}
 
 	fn died(asset: u32, who: &u64) {
-		Hooks::mutate(|v| v.push(Hook::Died(asset, *who)));
-
+		HOOKS.with(|h| h.borrow_mut().push(Hook::Died(asset, who.clone())));
 		// Sanity check: dead accounts have no balance.
 		assert!(Assets::balance(asset, *who).is_zero());
 	}
 }
 
 pub(crate) fn set_frozen_balance(asset: u32, who: u64, amount: u64) {
-	Frozen::mutate(|v| {
-		v.insert((asset, who), amount);
-	});
+	FROZEN.with(|f| f.borrow_mut().insert((asset, who), amount));
 }
 
 pub(crate) fn clear_frozen_balance(asset: u32, who: u64) {
-	Frozen::mutate(|v| {
-		v.remove(&(asset, who));
-	});
+	FROZEN.with(|f| f.borrow_mut().remove(&(asset, who)));
 }
 
 pub(crate) fn hooks() -> Vec<Hook> {
-	Hooks::get().clone()
+	HOOKS.with(|h| h.borrow().clone())
 }
 
 pub(crate) fn take_hooks() -> Vec<Hook> {
-	Hooks::take()
+	HOOKS.with(|h| h.take())
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

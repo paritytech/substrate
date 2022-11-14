@@ -13,7 +13,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false }
-scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
@@ -21,10 +20,9 @@ sp-core = { version = "6.0.0", default-features = false, path = "../core" }
 sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
 sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
 sp-std = { version = "4.0.0", default-features = false, path = "../std" }
-thiserror = "1.0"
 
 [dev-dependencies]
-array-bytes = "4.1"
+hex-literal = "0.3"
 
 [features]
 default = ["std"]

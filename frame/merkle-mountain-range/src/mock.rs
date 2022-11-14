@@ -19,17 +19,14 @@ use crate as pallet_mmr;
 use crate::*;
 
 use codec::{Decode, Encode};
-use frame_support::{
-	parameter_types,
-	traits::{ConstU32, ConstU64},
-};
+use frame_support::traits::{ConstU32, ConstU64};
 use sp_core::H256;
 use sp_mmr_primitives::{Compact, LeafDataProvider};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Keccak256},
 };
-use sp_std::prelude::*;
+use sp_std::{cell::RefCell, prelude::*};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -47,8 +44,8 @@ frame_support::construct_runtime!(
 
 impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -56,7 +53,7 @@ impl frame_system::Config for Test {
 	type AccountId = sp_core::sr25519::Public;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type BlockWeights = ();
@@ -94,14 +91,14 @@ impl LeafData {
 	}
 }
 
-parameter_types! {
-	pub static LeafDataTestValue: LeafData = Default::default();
+thread_local! {
+	pub static LEAF_DATA: RefCell<LeafData> = RefCell::new(Default::default());
 }
 
 impl LeafDataProvider for LeafData {
 	type LeafData = Self;
 
 	fn leaf_data() -> Self::LeafData {
-		LeafDataTestValue::get().clone()
+		LEAF_DATA.with(|r| r.borrow().clone())
 	}
 }

@@ -12,12 +12,13 @@ repository = "https://github.com/paritytech/substrate/"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-array-bytes = "4.1"
 fdlimit = "0.2.1"
 futures = "0.3.21"
+hex = "0.4"
+hex-literal = "0.3.4"
 log = "0.4.17"
 parity-scale-codec = "3.0.0"
-parking_lot = "0.12.1"
+parking_lot = "0.12.0"
 tempfile = "3.1.0"
 tokio = { version = "1.17.0", features = ["time"] }
 sc-block-builder = { version = "0.10.0-dev", path = "../../block-builder" }
@@ -26,7 +27,6 @@ sc-client-db = { version = "0.10.0-dev", default-features = false, path = "../..
 sc-consensus = { version = "0.10.0-dev", path = "../../../client/consensus/common" }
 sc-executor = { version = "0.10.0-dev", path = "../../executor" }
 sc-network = { version = "0.10.0-dev", path = "../../network" }
-sc-network-common = { version = "0.10.0-dev", path = "../../network/common" }
 sc-service = { version = "0.10.0-dev", features = ["test-helpers"], path = "../../service" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../../../client/transaction-pool/api" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }

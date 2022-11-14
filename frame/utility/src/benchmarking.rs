@@ -25,15 +25,15 @@ use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
 
-fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
+fn assert_last_event<T: Config>(generic_event: <T as Config>::Event) {
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
 benchmarks! {
-	where_clause { where <T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin: Clone }
+	where_clause { where <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin: Clone }
 	batch {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::RuntimeCall> = Vec::new();
+		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
@@ -54,7 +54,7 @@ benchmarks! {
 
 	batch_all {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::RuntimeCall> = Vec::new();
+		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);
@@ -68,14 +68,14 @@ benchmarks! {
 	dispatch_as {
 		let caller = account("caller", SEED, SEED);
 		let call = Box::new(frame_system::Call::remark { remark: vec![] }.into());
-		let origin: T::RuntimeOrigin = RawOrigin::Signed(caller).into();
-		let pallets_origin: <T::RuntimeOrigin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
+		let origin: T::Origin = RawOrigin::Signed(caller).into();
+		let pallets_origin: <T::Origin as frame_support::traits::OriginTrait>::PalletsOrigin = origin.caller().clone();
 		let pallets_origin = Into::<T::PalletsOrigin>::into(pallets_origin);
 	}: _(RawOrigin::Root, Box::new(pallets_origin), call)
 
 	force_batch {
 		let c in 0 .. 1000;
-		let mut calls: Vec<<T as Config>::RuntimeCall> = Vec::new();
+		let mut calls: Vec<<T as Config>::Call> = Vec::new();
 		for i in 0 .. c {
 			let call = frame_system::Call::remark { remark: vec![] }.into();
 			calls.push(call);

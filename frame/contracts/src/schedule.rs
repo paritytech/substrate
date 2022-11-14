@@ -18,10 +18,10 @@
 //! This module contains the cost schedule and supporting code that constructs a
 //! sane default schedule from a `WeightInfo` implementation.
 
-use crate::{wasm::Determinism, weights::WeightInfo, Config};
+use crate::{weights::WeightInfo, Config};
 
 use codec::{Decode, Encode};
-use frame_support::DefaultNoBound;
+use frame_support::{weights::Weight, DefaultNoBound};
 use pallet_contracts_proc_macro::{ScheduleDebug, WeightDebug};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -193,13 +193,6 @@ pub struct InstructionWeights<T: Config> {
 	/// Changes to other parts of the schedule should not increment the version in
 	/// order to avoid unnecessary re-instrumentations.
 	pub version: u32,
-	/// Weight to be used for instructions which don't have benchmarks assigned.
-	///
-	/// This weight is used whenever a code is uploaded with [`Determinism::AllowIndeterminism`]
-	/// and an instruction (usually a float instruction) is encountered. This weight is **not**
-	/// used if a contract is uploaded with [`Determinism::Deterministic`]. If this field is set to
-	/// `0` (the default) only deterministic codes are allowed to be uploaded.
-	pub fallback: u32,
 	pub i64const: u32,
 	pub i64load: u32,
 	pub i64store: u32,
@@ -262,166 +255,166 @@ pub struct InstructionWeights<T: Config> {
 #[scale_info(skip_type_params(T))]
 pub struct HostFnWeights<T: Config> {
 	/// Weight of calling `seal_caller`.
-	pub caller: u64,
+	pub caller: Weight,
 
 	/// Weight of calling `seal_is_contract`.
-	pub is_contract: u64,
+	pub is_contract: Weight,
 
 	/// Weight of calling `seal_code_hash`.
-	pub code_hash: u64,
+	pub code_hash: Weight,
 
 	/// Weight of calling `seal_own_code_hash`.
-	pub own_code_hash: u64,
+	pub own_code_hash: Weight,
 
 	/// Weight of calling `seal_caller_is_origin`.
-	pub caller_is_origin: u64,
+	pub caller_is_origin: Weight,
 
 	/// Weight of calling `seal_address`.
-	pub address: u64,
+	pub address: Weight,
 
 	/// Weight of calling `seal_gas_left`.
-	pub gas_left: u64,
+	pub gas_left: Weight,
 
 	/// Weight of calling `seal_balance`.
-	pub balance: u64,
+	pub balance: Weight,
 
 	/// Weight of calling `seal_value_transferred`.
-	pub value_transferred: u64,
+	pub value_transferred: Weight,
 
 	/// Weight of calling `seal_minimum_balance`.
-	pub minimum_balance: u64,
+	pub minimum_balance: Weight,
 
 	/// Weight of calling `seal_block_number`.
-	pub block_number: u64,
+	pub block_number: Weight,
 
 	/// Weight of calling `seal_now`.
-	pub now: u64,
+	pub now: Weight,
 
 	/// Weight of calling `seal_weight_to_fee`.
-	pub weight_to_fee: u64,
+	pub weight_to_fee: Weight,
 
 	/// Weight of calling `gas`.
-	pub gas: u64,
+	pub gas: Weight,
 
 	/// Weight of calling `seal_input`.
-	pub input: u64,
+	pub input: Weight,
 
 	/// Weight per input byte copied to contract memory by `seal_input`.
-	pub input_per_byte: u64,
+	pub input_per_byte: Weight,
 
 	/// Weight of calling `seal_return`.
-	pub r#return: u64,
+	pub r#return: Weight,
 
 	/// Weight per byte returned through `seal_return`.
-	pub return_per_byte: u64,
+	pub return_per_byte: Weight,
 
 	/// Weight of calling `seal_terminate`.
-	pub terminate: u64,
+	pub terminate: Weight,
 
 	/// Weight of calling `seal_random`.
-	pub random: u64,
+	pub random: Weight,
 
 	/// Weight of calling `seal_reposit_event`.
-	pub deposit_event: u64,
+	pub deposit_event: Weight,
 
 	/// Weight per topic supplied to `seal_deposit_event`.
-	pub deposit_event_per_topic: u64,
+	pub deposit_event_per_topic: Weight,
 
 	/// Weight per byte of an event deposited through `seal_deposit_event`.
-	pub deposit_event_per_byte: u64,
+	pub deposit_event_per_byte: Weight,
 
 	/// Weight of calling `seal_debug_message`.
-	pub debug_message: u64,
+	pub debug_message: Weight,
 
 	/// Weight of calling `seal_set_storage`.
-	pub set_storage: u64,
+	pub set_storage: Weight,
 
 	/// Weight per written byten of an item stored with `seal_set_storage`.
-	pub set_storage_per_new_byte: u64,
+	pub set_storage_per_new_byte: Weight,
 
 	/// Weight per overwritten byte of an item stored with `seal_set_storage`.
-	pub set_storage_per_old_byte: u64,
+	pub set_storage_per_old_byte: Weight,
 
 	/// Weight of calling `seal_set_code_hash`.
-	pub set_code_hash: u64,
+	pub set_code_hash: Weight,
 
 	/// Weight of calling `seal_clear_storage`.
-	pub clear_storage: u64,
+	pub clear_storage: Weight,
 
 	/// Weight of calling `seal_clear_storage` per byte of the stored item.
-	pub clear_storage_per_byte: u64,
+	pub clear_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_contains_storage`.
-	pub contains_storage: u64,
+	pub contains_storage: Weight,
 
 	/// Weight of calling `seal_contains_storage` per byte of the stored item.
-	pub contains_storage_per_byte: u64,
+	pub contains_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_get_storage`.
-	pub get_storage: u64,
+	pub get_storage: Weight,
 
 	/// Weight per byte of an item received via `seal_get_storage`.
-	pub get_storage_per_byte: u64,
+	pub get_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_take_storage`.
-	pub take_storage: u64,
+	pub take_storage: Weight,
 
 	/// Weight per byte of an item received via `seal_take_storage`.
-	pub take_storage_per_byte: u64,
+	pub take_storage_per_byte: Weight,
 
 	/// Weight of calling `seal_transfer`.
-	pub transfer: u64,
+	pub transfer: Weight,
 
 	/// Weight of calling `seal_call`.
-	pub call: u64,
+	pub call: Weight,
 
 	/// Weight of calling `seal_delegate_call`.
-	pub delegate_call: u64,
+	pub delegate_call: Weight,
 
 	/// Weight surcharge that is claimed if `seal_call` does a balance transfer.
-	pub call_transfer_surcharge: u64,
+	pub call_transfer_surcharge: Weight,
 
 	/// Weight per byte that is cloned by supplying the `CLONE_INPUT` flag.
-	pub call_per_cloned_byte: u64,
+	pub call_per_cloned_byte: Weight,
 
 	/// Weight of calling `seal_instantiate`.
-	pub instantiate: u64,
+	pub instantiate: Weight,
 
 	/// Weight surcharge that is claimed if `seal_instantiate` does a balance transfer.
-	pub instantiate_transfer_surcharge: u64,
+	pub instantiate_transfer_surcharge: Weight,
 
 	/// Weight per salt byte supplied to `seal_instantiate`.
-	pub instantiate_per_salt_byte: u64,
+	pub instantiate_per_salt_byte: Weight,
 
 	/// Weight of calling `seal_hash_sha_256`.
-	pub hash_sha2_256: u64,
+	pub hash_sha2_256: Weight,
 
 	/// Weight per byte hashed by `seal_hash_sha_256`.
-	pub hash_sha2_256_per_byte: u64,
+	pub hash_sha2_256_per_byte: Weight,
 
 	/// Weight of calling `seal_hash_keccak_256`.
-	pub hash_keccak_256: u64,
+	pub hash_keccak_256: Weight,
 
 	/// Weight per byte hashed by `seal_hash_keccak_256`.
-	pub hash_keccak_256_per_byte: u64,
+	pub hash_keccak_256_per_byte: Weight,
 
 	/// Weight of calling `seal_hash_blake2_256`.
-	pub hash_blake2_256: u64,
+	pub hash_blake2_256: Weight,
 
 	/// Weight per byte hashed by `seal_hash_blake2_256`.
-	pub hash_blake2_256_per_byte: u64,
+	pub hash_blake2_256_per_byte: Weight,
 
 	/// Weight of calling `seal_hash_blake2_128`.
-	pub hash_blake2_128: u64,
+	pub hash_blake2_128: Weight,
 
 	/// Weight per byte hashed by `seal_hash_blake2_128`.
-	pub hash_blake2_128_per_byte: u64,
+	pub hash_blake2_128_per_byte: Weight,
 
 	/// Weight of calling `seal_ecdsa_recover`.
-	pub ecdsa_recover: u64,
+	pub ecdsa_recover: Weight,
 
 	/// Weight of calling `seal_ecdsa_to_eth_address`.
-	pub ecdsa_to_eth_address: u64,
+	pub ecdsa_to_eth_address: Weight,
 
 	/// The type parameter is used in the default implementation.
 	#[codec(skip)]
@@ -442,19 +435,19 @@ macro_rules! call_zero {
 
 macro_rules! cost_args {
 	($name:ident, $( $arg: expr ),+) => {
-		(T::WeightInfo::$name($( $arg ),+).saturating_sub(call_zero!($name, $( $arg ),+))).ref_time()
+		(T::WeightInfo::$name($( $arg ),+).saturating_sub(call_zero!($name, $( $arg ),+)))
 	}
 }
 
 macro_rules! cost_batched_args {
 	($name:ident, $( $arg: expr ),+) => {
-		cost_args!($name, $( $arg ),+) / u64::from(API_BENCHMARK_BATCH_SIZE)
+		cost_args!($name, $( $arg ),+) / Weight::from(API_BENCHMARK_BATCH_SIZE)
 	}
 }
 
 macro_rules! cost_instr_no_params_with_batch_size {
 	($name:ident, $batch_size:expr) => {
-		(cost_args!($name, 1) / u64::from($batch_size)) as u32
+		(cost_args!($name, 1) / Weight::from($batch_size)) as u32
 	};
 }
 
@@ -532,8 +525,7 @@ impl<T: Config> Default for InstructionWeights<T> {
 	fn default() -> Self {
 		let max_pages = Limits::default().memory_pages;
 		Self {
-			version: 3,
-			fallback: 0,
+			version: 2,
 			i64const: cost_instr!(instr_i64const, 1),
 			i64load: cost_instr!(instr_i64load, 2),
 			i64store: cost_instr!(instr_i64store, 2),
@@ -667,15 +659,10 @@ impl<T: Config> Default for HostFnWeights<T> {
 struct ScheduleRules<'a, T: Config> {
 	schedule: &'a Schedule<T>,
 	params: Vec<u32>,
-	determinism: Determinism,
 }
 
 impl<T: Config> Schedule<T> {
-	pub(crate) fn rules(
-		&self,
-		module: &elements::Module,
-		determinism: Determinism,
-	) -> impl gas_metering::Rules + '_ {
+	pub(crate) fn rules(&self, module: &elements::Module) -> impl gas_metering::Rules + '_ {
 		ScheduleRules {
 			schedule: self,
 			params: module
@@ -687,7 +674,6 @@ impl<T: Config> Schedule<T> {
 					func.params().len() as u32
 				})
 				.collect(),
-			determinism,
 		}
 	}
 }
@@ -770,10 +756,7 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 			I32Rotr | I64Rotr => w.i64rotr,
 
 			// Returning None makes the gas instrumentation fail which we intend for
-			// unsupported or unknown instructions. Offchain we might allow indeterminism and hence
-			// use the fallback weight for those instructions.
-			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 =>
-				w.fallback,
+			// unsupported or unknown instructions.
 			_ => return None,
 		};
 		Some(weight)

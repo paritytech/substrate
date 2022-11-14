@@ -48,12 +48,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Account::<T, I>::insert((&dest, &collection, &item), ());
 		let origin = details.owner;
 		details.owner = dest;
-
-		// The approved account has to be reset to None, because otherwise pre-approve attack would
-		// be possible, where the owner can approve his second account before making the transaction
-		// and then claiming the item back.
-		details.approved = None;
-
 		Item::<T, I>::insert(&collection, &item, &details);
 		ItemPriceOf::<T, I>::remove(&collection, &item);
 
@@ -94,7 +88,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			},
 		);
 
+		let next_id = collection.saturating_add(1u32.into());
+
 		CollectionAccount::<T, I>::insert(&owner, &collection, ());
+		NextCollectionId::<T, I>::set(next_id);
+
+		Self::deposit_event(Event::NextCollectionIdIncremented { next_id });
 		Self::deposit_event(event);
 		Ok(())
 	}
@@ -214,6 +213,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
+	#[cfg(any(test, feature = "runtime-benchmarks"))]
+	pub fn set_next_id(count: u32) {
+		NextCollectionId::<T, I>::set(count.into());
+	}
+
+	#[cfg(test)]
+	pub fn get_next_id() -> T::CollectionId {
+		NextCollectionId::<T, I>::get()
+	}
+
 	pub fn do_set_price(
 		collection: T::CollectionId,
 		item: T::ItemId,
@@ -225,7 +234,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ensure!(details.owner == sender, Error::<T, I>::NoPermission);
 
 		if let Some(ref price) = price {
-			ItemPriceOf::<T, I>::insert(&collection, &item, (price, whitelisted_buyer.clone()));
+			ItemPriceOf::<T, I>::insert(
+				&collection,
+				&item,
+				(price.clone(), whitelisted_buyer.clone()),
+			);
 			Self::deposit_event(Event::ItemPriceSet {
 				collection,
 				item,

@@ -21,7 +21,6 @@
 use lru::LruCache;
 use parking_lot::RwLock;
 use sp_runtime::traits::{Block as BlockT, Header, NumberFor, One};
-use std::num::NonZeroUsize;
 
 /// Set to the expected max difference between `best` and `finalized` blocks at sync.
 const LRU_CACHE_SIZE: usize = 5_000;
@@ -177,13 +176,6 @@ pub struct TreeRoute<Block: BlockT> {
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
-	/// Creates a new `TreeRoute`.
-	///
-	/// It is required that `pivot >= route.len()`, otherwise it may panics.
-	pub fn new(route: Vec<HashAndNumber<Block>>, pivot: usize) -> Self {
-		TreeRoute { route, pivot }
-	}
-
 	/// Get a slice of all retracted blocks in reverse order (towards common ancestor).
 	pub fn retracted(&self) -> &[HashAndNumber<Block>] {
 		&self.route[..self.pivot]
@@ -240,15 +232,14 @@ pub struct HeaderMetadataCache<Block: BlockT> {
 
 impl<Block: BlockT> HeaderMetadataCache<Block> {
 	/// Creates a new LRU header metadata cache with `capacity`.
-	pub fn new(capacity: NonZeroUsize) -> Self {
+	pub fn new(capacity: usize) -> Self {
 		HeaderMetadataCache { cache: RwLock::new(LruCache::new(capacity)) }
 	}
 }
 
 impl<Block: BlockT> Default for HeaderMetadataCache<Block> {
 	fn default() -> Self {
-		let cap = NonZeroUsize::new(LRU_CACHE_SIZE).expect("cache capacity is not zero");
-		HeaderMetadataCache { cache: RwLock::new(LruCache::new(cap)) }
+		HeaderMetadataCache { cache: RwLock::new(LruCache::new(LRU_CACHE_SIZE)) }
 	}
 }
 

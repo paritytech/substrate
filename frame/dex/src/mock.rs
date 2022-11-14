@@ -19,11 +19,12 @@
 
 use super::*;
 use crate as pallet_dex;
+
 use frame_support::{
 	construct_runtime,
 	instances::{Instance1, Instance2},
 	parameter_types,
-	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64},
 	PalletId,
 };
 use sp_core::H256;
@@ -32,7 +33,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use sp_std::prelude::*;
 use std::sync::Arc;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -56,8 +56,8 @@ impl frame_system::Config for Test {
 	type BaseCallFilter = frame_support::traits::Everything;
 	type BlockWeights = ();
 	type BlockLength = ();
-	type RuntimeOrigin = RuntimeOrigin;
-	type RuntimeCall = RuntimeCall;
+	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -65,7 +65,7 @@ impl frame_system::Config for Test {
 	type AccountId = u64;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type BlockHashCount = ConstU64<250>;
 	type DbWeight = ();
 	type Version = ();
@@ -82,7 +82,7 @@ impl frame_system::Config for Test {
 impl pallet_balances::Config for Test {
 	type Balance = u64;
 	type DustRemoval = ();
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type ExistentialDeposit = ConstU64<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
@@ -92,7 +92,7 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_assets::Config<Instance1> for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Balance = u64;
 	type AssetId = u32;
 	type Currency = Balances;
@@ -106,13 +106,11 @@ impl pallet_assets::Config<Instance1> for Test {
 	type Freezer = ();
 	type WeightInfo = ();
 	type Extra = ();
-	type CreateOrigin = AsEnsureOriginWithArg<
-		frame_system::EnsureSigned<<Self as frame_system::Config>::AccountId>,
-	>;
 }
 
+//TODO: limit creation only to dex pallet
 impl pallet_assets::Config<Instance2> for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Balance = u64;
 	type AssetId = u32;
 	type Currency = Balances;
@@ -126,9 +124,6 @@ impl pallet_assets::Config<Instance2> for Test {
 	type Freezer = ();
 	type WeightInfo = ();
 	type Extra = ();
-	type CreateOrigin = AsEnsureOriginWithArg<
-		frame_system::EnsureSigned<<Self as frame_system::Config>::AccountId>,
-	>;
 }
 
 parameter_types! {
@@ -136,7 +131,7 @@ parameter_types! {
 }
 
 impl Config for Test {
-	type RuntimeEvent = RuntimeEvent;
+	type Event = Event;
 	type Currency = Balances;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type Assets = Assets;

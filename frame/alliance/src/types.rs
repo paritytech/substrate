@@ -93,30 +93,3 @@ impl Cid {
 		}
 	}
 }
-
-/// Witness data for the `disband` call.
-#[derive(
-	Copy, Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, MaxEncodedLen, TypeInfo, Default,
-)]
-pub struct DisbandWitness {
-	/// Total number of voting members in the current Alliance.
-	#[codec(compact)]
-	pub(super) voting_members: u32,
-	/// Total number of ally members in the current Alliance.
-	#[codec(compact)]
-	pub(super) ally_members: u32,
-}
-
-#[cfg(test)]
-impl DisbandWitness {
-	// Creates new DisbandWitness.
-	pub(super) fn new(voting_members: u32, ally_members: u32) -> Self {
-		Self { voting_members, ally_members }
-	}
-}
-
-impl DisbandWitness {
-	pub(super) fn is_zero(self) -> bool {
-		self == Self::default()
-	}
-}

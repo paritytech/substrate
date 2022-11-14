@@ -22,9 +22,7 @@ use frame_support::weights::constants::WEIGHT_PER_NANOS;
 use frame_system::ConsumedWeight;
 use sc_block_builder::{BlockBuilderApi, BlockBuilderProvider};
 use sc_cli::{Error, Result};
-use sc_client_api::{
-	Backend as ClientBackend, BlockBackend, HeaderBackend, StorageProvider, UsageProvider,
-};
+use sc_client_api::{Backend as ClientBackend, BlockBackend, StorageProvider, UsageProvider};
 use sp_api::{ApiExt, Core, HeaderT, ProvideRuntimeApi};
 use sp_blockchain::Error::RuntimeApiError;
 use sp_runtime::{generic::BlockId, traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
@@ -45,15 +43,15 @@ const LOG_TARGET: &'static str = "benchmark::block::weight";
 #[derive(Debug, Default, Serialize, Clone, PartialEq, Args)]
 pub struct BenchmarkParams {
 	/// Number of the first block to consider.
-	#[arg(long)]
+	#[clap(long)]
 	pub from: u32,
 
 	/// Last block number to consider.
-	#[arg(long)]
+	#[clap(long)]
 	pub to: u32,
 
 	/// Number of times that the benchmark should be repeated for each block.
-	#[arg(long, default_value_t = 10)]
+	#[clap(long, default_value = "10")]
 	pub repeat: u32,
 }
 
@@ -75,8 +73,7 @@ where
 		+ ProvideRuntimeApi<Block>
 		+ StorageProvider<Block, BA>
 		+ UsageProvider<Block>
-		+ BlockBackend<Block>
-		+ HeaderBackend<Block>,
+		+ BlockBackend<Block>,
 	C::Api: ApiExt<Block, StateBackend = BA::State> + BlockBuilderApi<Block>,
 {
 	/// Returns a new [`Self`] from the arguments.
@@ -134,22 +131,18 @@ where
 	fn consumed_weight(&self, block: &BlockId<Block>) -> Result<NanoSeconds> {
 		// Hard-coded key for System::BlockWeight. It could also be passed in as argument
 		// for the benchmark, but I think this should work as well.
-		let hash = array_bytes::hex2bytes(
-			"26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96",
-		)?;
+		let hash = hex::decode("26aa394eea5630e07c48ae0c9558cef734abf5cb34d6244378cddbf18e849d96")?;
 		let key = StorageKey(hash);
 
-		let block_hash = self.client.expect_block_hash_from_id(block)?;
 		let mut raw_weight = &self
 			.client
-			.storage(block_hash, &key)?
+			.storage(&block, &key)?
 			.ok_or(format!("Could not find System::BlockWeight for block: {}", block))?
 			.0[..];
 
 		let weight = ConsumedWeight::decode_all(&mut raw_weight)?;
 		// Should be divisible, but still use floats in case we ever change that.
-		Ok((weight.total().ref_time() as f64 / WEIGHT_PER_NANOS.ref_time() as f64).floor()
-			as NanoSeconds)
+		Ok((weight.total() as f64 / WEIGHT_PER_NANOS as f64).floor() as NanoSeconds)
 	}
 
 	/// Prints the weight info of a block to the console.

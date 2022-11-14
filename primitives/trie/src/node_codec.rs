@@ -25,7 +25,7 @@ use sp_std::{borrow::Borrow, marker::PhantomData, ops::Range, vec::Vec};
 use trie_db::{
 	nibble_ops,
 	node::{NibbleSlicePlan, NodeHandlePlan, NodePlan, Value, ValuePlan},
-	ChildReference, NodeCodec as NodeCodecT,
+	ChildReference, NodeCodec as NodeCodecT, Partial,
 };
 
 /// Helper struct for trie node decoder. This implements `codec::Input` on a byte slice, while
@@ -85,7 +85,7 @@ where
 	H: Hasher,
 {
 	const ESCAPE_HEADER: Option<u8> = Some(trie_constants::ESCAPE_COMPACT_HEADER);
-	type Error = Error<H::Out>;
+	type Error = Error;
 	type HashOut = H::Out;
 
 	fn hashed_null_node() -> <H as Hasher>::Out {
@@ -185,19 +185,19 @@ where
 		&[trie_constants::EMPTY_TRIE]
 	}
 
-	fn leaf_node(partial: impl Iterator<Item = u8>, number_nibble: usize, value: Value) -> Vec<u8> {
+	fn leaf_node(partial: Partial, value: Value) -> Vec<u8> {
 		let contains_hash = matches!(&value, Value::Node(..));
 		let mut output = if contains_hash {
-			partial_from_iterator_encode(partial, number_nibble, NodeKind::HashedValueLeaf)
+			partial_encode(partial, NodeKind::HashedValueLeaf)
 		} else {
-			partial_from_iterator_encode(partial, number_nibble, NodeKind::Leaf)
+			partial_encode(partial, NodeKind::Leaf)
 		};
 		match value {
 			Value::Inline(value) => {
 				Compact(value.len() as u32).encode_to(&mut output);
 				output.extend_from_slice(value);
 			},
-			Value::Node(hash) => {
+			Value::Node(hash, _) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				output.extend_from_slice(hash);
 			},
@@ -244,7 +244,7 @@ where
 				Compact(value.len() as u32).encode_to(&mut output);
 				output.extend_from_slice(value);
 			},
-			Some(Value::Node(hash)) => {
+			Some(Value::Node(hash, _)) => {
 				debug_assert!(hash.len() == H::LENGTH);
 				output.extend_from_slice(hash);
 			},
@@ -279,6 +279,8 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 	nibble_count: usize,
 	node_kind: NodeKind,
 ) -> Vec<u8> {
+	let nibble_count = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
+
 	let mut output = Vec::with_capacity(4 + (nibble_count / nibble_ops::NIBBLE_PER_BYTE));
 	match node_kind {
 		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
@@ -293,6 +295,31 @@ fn partial_from_iterator_encode<I: Iterator<Item = u8>>(
 	output
 }
 
+/// Encode and allocate node type header (type and size), and partial value.
+/// Same as `partial_from_iterator_encode` but uses non encoded `Partial` as input.
+fn partial_encode(partial: Partial, node_kind: NodeKind) -> Vec<u8> {
+	let number_nibble_encoded = (partial.0).0 as usize;
+	let nibble_count = partial.1.len() * nibble_ops::NIBBLE_PER_BYTE + number_nibble_encoded;
+
+	let nibble_count = sp_std::cmp::min(trie_constants::NIBBLE_SIZE_BOUND, nibble_count);
+
+	let mut output = Vec::with_capacity(4 + partial.1.len());
+	match node_kind {
+		NodeKind::Leaf => NodeHeader::Leaf(nibble_count).encode_to(&mut output),
+		NodeKind::BranchWithValue => NodeHeader::Branch(true, nibble_count).encode_to(&mut output),
+		NodeKind::BranchNoValue => NodeHeader::Branch(false, nibble_count).encode_to(&mut output),
+		NodeKind::HashedValueLeaf =>
+			NodeHeader::HashedValueLeaf(nibble_count).encode_to(&mut output),
+		NodeKind::HashedValueBranch =>
+			NodeHeader::HashedValueBranch(nibble_count).encode_to(&mut output),
+	};
+	if number_nibble_encoded > 0 {
+		output.push(nibble_ops::pad_right((partial.0).1));
+	}
+	output.extend_from_slice(partial.1);
+	output
+}
+
 const BITMAP_LENGTH: usize = 2;
 
 /// Radix 16 trie, bitmap encoding implementation,
@@ -302,13 +329,8 @@ const BITMAP_LENGTH: usize = 2;
 pub(crate) struct Bitmap(u16);
 
 impl Bitmap {
-	pub fn decode(data: &[u8]) -> Result<Self, codec::Error> {
-		let value = u16::decode(&mut &data[..])?;
-		if value == 0 {
-			Err("Bitmap without a child.".into())
-		} else {
-			Ok(Bitmap(value))
-		}
+	pub fn decode(mut data: &[u8]) -> Result<Self, Error> {
+		Ok(Bitmap(u16::decode(&mut data)?))
 	}
 
 	pub fn value_at(&self, i: usize) -> bool {

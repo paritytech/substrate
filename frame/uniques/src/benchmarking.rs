@@ -37,22 +37,20 @@ use crate::Pallet as Uniques;
 const SEED: u32 = 0;
 
 fn create_collection<T: Config<I>, I: 'static>(
-) -> (T::CollectionId, T::AccountId, AccountIdLookupOf<T>) {
+) -> (T::CollectionId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller: T::AccountId = whitelisted_caller();
 	let caller_lookup = T::Lookup::unlookup(caller.clone());
 	let collection = T::Helper::collection(0);
 	T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	assert!(Uniques::<T, I>::force_create(
-		SystemOrigin::Root.into(),
-		collection,
-		caller_lookup.clone(),
-		false,
-	)
-	.is_ok());
+	assert!(
+		Uniques::<T, I>::force_create(SystemOrigin::Root.into(), caller_lookup.clone(), false,)
+			.is_ok()
+	);
 	(collection, caller, caller_lookup)
 }
 
-fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, AccountIdLookupOf<T>) {
+fn add_collection_metadata<T: Config<I>, I: 'static>(
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -70,7 +68,7 @@ fn add_collection_metadata<T: Config<I>, I: 'static>() -> (T::AccountId, Account
 
 fn mint_item<T: Config<I>, I: 'static>(
 	index: u16,
-) -> (T::ItemId, T::AccountId, AccountIdLookupOf<T>) {
+) -> (T::ItemId, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().admin;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -89,7 +87,7 @@ fn mint_item<T: Config<I>, I: 'static>(
 
 fn add_item_metadata<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (T::AccountId, AccountIdLookupOf<T>) {
+) -> (T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -108,7 +106,7 @@ fn add_item_metadata<T: Config<I>, I: 'static>(
 
 fn add_item_attribute<T: Config<I>, I: 'static>(
 	item: T::ItemId,
-) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, AccountIdLookupOf<T>) {
+) -> (BoundedVec<u8, T::KeyLimit>, T::AccountId, <T::Lookup as StaticLookup>::Source) {
 	let caller = Collection::<T, I>::get(T::Helper::collection(0)).unwrap().owner;
 	if caller != whitelisted_caller() {
 		whitelist_account!(caller);
@@ -126,9 +124,9 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 	(key, caller, caller_lookup)
 }
 
-fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::RuntimeEvent) {
+fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::Event) {
 	let events = frame_system::Pallet::<T>::events();
-	let system_event: <T as frame_system::Config>::RuntimeEvent = generic_event.into();
+	let system_event: <T as frame_system::Config>::Event = generic_event.into();
 	// compare to the last event record
 	let frame_system::EventRecord { event, .. } = &events[events.len() - 1];
 	assert_eq!(event, &system_event);
@@ -142,7 +140,7 @@ benchmarks_instance_pallet! {
 		whitelist_account!(caller);
 		let admin = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-		let call = Call::<T, I>::create { collection, admin };
+		let call = Call::<T, I>::create { admin };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_last_event::<T, I>(Event::Created { collection: T::Helper::collection(0), creator: caller.clone(), owner: caller }.into());
@@ -151,7 +149,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, T::Helper::collection(0), caller_lookup, true)
+	}: _(SystemOrigin::Root, caller_lookup, true)
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { collection: T::Helper::collection(0), owner: caller }.into());
 	}
@@ -406,6 +404,16 @@ benchmarks_instance_pallet! {
 			max_supply: u32::MAX,
 		}.into());
 	}
+
+	try_increment_id {
+		let (_, caller, _) = create_collection::<T, I>();
+		Uniques::<T, I>::set_next_id(0);
+	}: _(SystemOrigin::Signed(caller.clone()))
+	verify {
+		assert_last_event::<T, I>(Event::NextCollectionIdIncremented {
+			next_id: 1u32.into()
+	}.into());
+  }
 
 	set_price {
 		let (collection, caller, _) = create_collection::<T, I>();
