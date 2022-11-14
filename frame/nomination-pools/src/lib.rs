@@ -609,7 +609,6 @@ pub struct Commission<T: Config> {
 	pub throttle: Option<CommissionThrottle<T>>,
 }
 
-#[derive(DefaultNoBound)]
 impl<T: Config> Default for Commission<T> {
 	fn default() -> Self {
 		Self { current: None, max: None, throttle: None }
@@ -632,8 +631,7 @@ impl<T: Config> Commission<T> {
 	///
 	/// Throttling is not applied to commission updates if `current` is still `None`.
 	fn throttling(&self, to: &Perbill) -> bool {
-		let throttle = self.throttle.as_ref().map(|t| t).or(None);
-		if let Some(t) = throttle {
+		if let Some(t) = self.throttle.as_ref() {
 			// check for `min_delay` throttling
 			if t.previous_set_at.map_or(false, |p| {
 				<frame_system::Pallet<T>>::block_number().saturating_sub(p) <
