@@ -35,8 +35,8 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod common_functions;
 mod features;
-mod functions;
 mod impl_nonfungibles;
 mod types;
 
@@ -557,18 +557,6 @@ pub mod pallet {
 		MintEnded,
 	}
 
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Get the owner of the item, if the item exists.
-		pub fn owner(collection: T::CollectionId, item: T::ItemId) -> Option<T::AccountId> {
-			Item::<T, I>::get(collection, item).map(|i| i.owner)
-		}
-
-		/// Get the owner of the item, if the item exists.
-		pub fn collection_owner(collection: T::CollectionId) -> Option<T::AccountId> {
-			Collection::<T, I>::get(collection).map(|i| i.owner)
-		}
-	}
-
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Issue a new collection of non-fungible items from a public origin.
@@ -1025,32 +1013,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
 			let owner = T::Lookup::lookup(owner)?;
-
-			let acceptable_collection = OwnershipAcceptance::<T, I>::get(&owner);
-			ensure!(acceptable_collection.as_ref() == Some(&collection), Error::<T, I>::Unaccepted);
-
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-				if details.owner == owner {
-					return Ok(())
-				}
-
-				// Move the deposit to the new owner.
-				T::Currency::repatriate_reserved(
-					&details.owner,
-					&owner,
-					details.total_deposit,
-					Reserved,
-				)?;
-				CollectionAccount::<T, I>::remove(&details.owner, &collection);
-				CollectionAccount::<T, I>::insert(&owner, &collection, ());
-				details.owner = owner.clone();
-				OwnershipAcceptance::<T, I>::remove(&owner);
-
-				Self::deposit_event(Event::OwnerChanged { collection, new_owner: owner });
-				Ok(())
-			})
+			Self::do_transfer_ownership(origin, collection, owner)
 		}
 
 		/// Change the Issuer, Admin and Freezer of a collection.
@@ -1077,26 +1040,7 @@ pub mod pallet {
 			let issuer = T::Lookup::lookup(issuer)?;
 			let admin = T::Lookup::lookup(admin)?;
 			let freezer = T::Lookup::lookup(freezer)?;
-
-			Collection::<T, I>::try_mutate(collection, |maybe_details| {
-				let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-
-				// delete previous values
-				Self::clear_roles(&collection)?;
-
-				let account_to_role = Self::group_roles_by_account(vec![
-					(issuer.clone(), CollectionRole::Issuer),
-					(admin.clone(), CollectionRole::Admin),
-					(freezer.clone(), CollectionRole::Freezer),
-				]);
-				for (account, roles) in account_to_role {
-					CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
-				}
-
-				Self::deposit_event(Event::TeamChanged { collection, issuer, admin, freezer });
-				Ok(())
-			})
+			Self::do_set_team(origin, collection, issuer, admin, freezer)
 		}
 
 		/// Approve an item to be transferred by a delegated third-party account.
@@ -1120,55 +1064,17 @@ pub mod pallet {
 			delegate: AccountIdLookupOf<T>,
 			maybe_deadline: Option<<T as SystemConfig>::BlockNumber>,
 		) -> DispatchResult {
-			ensure!(
-				Self::is_pallet_feature_enabled(PalletFeature::Approvals),
-				Error::<T, I>::MethodDisabled
-			);
-			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-
 			let delegate = T::Lookup::lookup(delegate)?;
-
-			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			ensure!(
-				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-				Error::<T, I>::ItemsNonTransferable
-			);
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			ensure!(
-				collection_config.is_setting_enabled(CollectionSetting::TransferableItems),
-				Error::<T, I>::ItemsNonTransferable
-			);
-
-			if let Some(check) = maybe_check {
-				let is_admin = Self::has_role(&collection, &check, CollectionRole::Admin);
-				let permitted = is_admin || check == details.owner;
-				ensure!(permitted, Error::<T, I>::NoPermission);
-			}
-
-			let now = frame_system::Pallet::<T>::block_number();
-			let deadline = maybe_deadline.map(|d| d.saturating_add(now));
-
-			details
-				.approvals
-				.try_insert(delegate.clone(), deadline)
-				.map_err(|_| Error::<T, I>::ReachedApprovalLimit)?;
-			Item::<T, I>::insert(&collection, &item, &details);
-
-			Self::deposit_event(Event::ApprovedTransfer {
+			Self::do_approve_transfer(
+				maybe_check_origin,
 				collection,
 				item,
-				owner: details.owner,
 				delegate,
-				deadline,
-			});
-
-			Ok(())
+				maybe_deadline,
+			)
 		}
 
 		/// Cancel one of the transfer approvals for a specific item.
@@ -1193,43 +1099,11 @@ pub mod pallet {
 			item: T::ItemId,
 			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-
 			let delegate = T::Lookup::lookup(delegate)?;
-
-			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownItem)?;
-
-			let maybe_deadline =
-				details.approvals.get(&delegate).ok_or(Error::<T, I>::NotDelegate)?;
-
-			let is_past_deadline = if let Some(deadline) = maybe_deadline {
-				let now = frame_system::Pallet::<T>::block_number();
-				now > *deadline
-			} else {
-				false
-			};
-
-			if !is_past_deadline {
-				if let Some(check) = maybe_check {
-					let is_admin = Self::has_role(&collection, &check, CollectionRole::Admin);
-					let permitted = is_admin || check == details.owner;
-					ensure!(permitted, Error::<T, I>::NoPermission);
-				}
-			}
-
-			details.approvals.remove(&delegate);
-			Item::<T, I>::insert(&collection, &item, &details);
-			Self::deposit_event(Event::ApprovalCancelled {
-				collection,
-				item,
-				owner: details.owner,
-				delegate,
-			});
-
-			Ok(())
+			Self::do_cancel_approval(maybe_check_origin, collection, item, delegate)
 		}
 
 		/// Cancel all the approvals of a specific item.
@@ -1252,28 +1126,10 @@ pub mod pallet {
 			collection: T::CollectionId,
 			item: T::ItemId,
 		) -> DispatchResult {
-			let maybe_check: Option<T::AccountId> = T::ForceOrigin::try_origin(origin)
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-
-			let mut details =
-				Item::<T, I>::get(&collection, &item).ok_or(Error::<T, I>::UnknownCollection)?;
-
-			if let Some(check) = maybe_check {
-				let is_admin = Self::has_role(&collection, &check, CollectionRole::Admin);
-				let permitted = is_admin || check == details.owner;
-				ensure!(permitted, Error::<T, I>::NoPermission);
-			}
-
-			details.approvals.clear();
-			Item::<T, I>::insert(&collection, &item, &details);
-			Self::deposit_event(Event::AllApprovalsCancelled {
-				collection,
-				item,
-				owner: details.owner,
-			});
-
-			Ok(())
+			Self::do_clear_all_transfer_approvals(maybe_check_origin, collection, item)
 		}
 
 		/// Alter the attributes of a given collection.
@@ -1301,37 +1157,11 @@ pub mod pallet {
 			config: CollectionConfigFor<T, I>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
-
-			Collection::<T, I>::try_mutate(collection, |maybe_collection| {
-				let mut collection_info =
-					maybe_collection.take().ok_or(Error::<T, I>::UnknownCollection)?;
-				let old_owner = collection_info.owner;
-				let new_owner = T::Lookup::lookup(owner)?;
-				collection_info.owner = new_owner.clone();
-				*maybe_collection = Some(collection_info);
-				CollectionAccount::<T, I>::remove(&old_owner, &collection);
-				CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
-				CollectionConfigOf::<T, I>::insert(&collection, config);
-
-				let issuer = T::Lookup::lookup(issuer)?;
-				let admin = T::Lookup::lookup(admin)?;
-				let freezer = T::Lookup::lookup(freezer)?;
-
-				// delete previous values
-				Self::clear_roles(&collection)?;
-
-				let account_to_role = Self::group_roles_by_account(vec![
-					(issuer, CollectionRole::Issuer),
-					(admin, CollectionRole::Admin),
-					(freezer, CollectionRole::Freezer),
-				]);
-				for (account, roles) in account_to_role {
-					CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
-				}
-
-				Self::deposit_event(Event::CollectionStatusChanged { collection });
-				Ok(())
-			})
+			let new_owner = T::Lookup::lookup(owner)?;
+			let issuer = T::Lookup::lookup(issuer)?;
+			let admin = T::Lookup::lookup(admin)?;
+			let freezer = T::Lookup::lookup(freezer)?;
+			Self::do_force_collection_status(collection, new_owner, issuer, admin, freezer, config)
 		}
 
 		/// Disallows changing the metadata of attributes of the item.
@@ -1393,61 +1223,10 @@ pub mod pallet {
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
 		) -> DispatchResult {
-			ensure!(
-				Self::is_pallet_feature_enabled(PalletFeature::Attributes),
-				Error::<T, I>::MethodDisabled
-			);
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let mut collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			match maybe_item {
-				None => {
-					ensure!(
-						collection_config.is_setting_enabled(CollectionSetting::UnlockedAttributes),
-						Error::<T, I>::LockedCollectionAttributes
-					)
-				},
-				Some(item) => {
-					let maybe_is_locked = Self::get_item_config(&collection, &item)
-						.map(|c| c.has_disabled_setting(ItemSetting::UnlockedAttributes))?;
-					ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
-				},
-			};
-
-			let attribute = Attribute::<T, I>::get((collection, maybe_item, &key));
-			if attribute.is_none() {
-				collection_details.attributes.saturating_inc();
-			}
-			let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
-			collection_details.total_deposit.saturating_reduce(old_deposit);
-			let mut deposit = Zero::zero();
-			if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
-				maybe_check_owner.is_some()
-			{
-				deposit = T::DepositPerByte::get()
-					.saturating_mul(((key.len() + value.len()) as u32).into())
-					.saturating_add(T::AttributeDepositBase::get());
-			}
-			collection_details.total_deposit.saturating_accrue(deposit);
-			if deposit > old_deposit {
-				T::Currency::reserve(&collection_details.owner, deposit - old_deposit)?;
-			} else if deposit < old_deposit {
-				T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
-			}
-
-			Attribute::<T, I>::insert((&collection, maybe_item, &key), (&value, deposit));
-			Collection::<T, I>::insert(collection, &collection_details);
-			Self::deposit_event(Event::AttributeSet { collection, maybe_item, key, value });
-			Ok(())
+			Self::do_set_attribute(maybe_check_owner, collection, maybe_item, key, value)
 		}
 
 		/// Clear an attribute for a collection or item.
@@ -1474,43 +1253,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let mut collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-
-			if maybe_check_owner.is_some() {
-				match maybe_item {
-					None => {
-						let collection_config = Self::get_collection_config(&collection)?;
-						ensure!(
-							collection_config
-								.is_setting_enabled(CollectionSetting::UnlockedAttributes),
-							Error::<T, I>::LockedCollectionAttributes
-						)
-					},
-					Some(item) => {
-						// NOTE: if the item was previously burned, the ItemConfigOf record might
-						// not exist. In that case, we allow to clear the attribute.
-						let maybe_is_locked = Self::get_item_config(&collection, &item)
-							.map_or(false, |c| {
-								c.has_disabled_setting(ItemSetting::UnlockedAttributes)
-							});
-						ensure!(!maybe_is_locked, Error::<T, I>::LockedItemAttributes);
-					},
-				};
-			}
-
-			if let Some((_, deposit)) = Attribute::<T, I>::take((collection, maybe_item, &key)) {
-				collection_details.attributes.saturating_dec();
-				collection_details.total_deposit.saturating_reduce(deposit);
-				T::Currency::unreserve(&collection_details.owner, deposit);
-				Collection::<T, I>::insert(collection, &collection_details);
-				Self::deposit_event(Event::AttributeCleared { collection, maybe_item, key });
-			}
-			Ok(())
+			Self::do_clear_attribute(maybe_check_owner, collection, maybe_item, key)
 		}
 
 		/// Set the metadata for an item.
@@ -1539,50 +1282,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let mut collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-
-			let item_config = Self::get_item_config(&collection, &item)?;
-			ensure!(
-				maybe_check_owner.is_none() ||
-					item_config.is_setting_enabled(ItemSetting::UnlockedMetadata),
-				Error::<T, I>::LockedItemMetadata
-			);
-
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-
-			let collection_config = Self::get_collection_config(&collection)?;
-
-			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
-				if metadata.is_none() {
-					collection_details.item_metadatas.saturating_inc();
-				}
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				collection_details.total_deposit.saturating_reduce(old_deposit);
-				let mut deposit = Zero::zero();
-				if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
-					maybe_check_owner.is_some()
-				{
-					deposit = T::DepositPerByte::get()
-						.saturating_mul(((data.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-				}
-				if deposit > old_deposit {
-					T::Currency::reserve(&collection_details.owner, deposit - old_deposit)?;
-				} else if deposit < old_deposit {
-					T::Currency::unreserve(&collection_details.owner, old_deposit - deposit);
-				}
-				collection_details.total_deposit.saturating_accrue(deposit);
-
-				*metadata = Some(ItemMetadata { deposit, data: data.clone() });
-
-				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataSet { collection, item, data });
-				Ok(())
-			})
+			Self::do_set_item_metadata(maybe_check_owner, collection, item, data)
 		}
 
 		/// Clear the metadata for an item.
@@ -1607,31 +1307,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let mut collection_details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &collection_details.owner, Error::<T, I>::NoPermission);
-			}
-
-			// NOTE: if the item was previously burned, the ItemConfigOf record might not exist
-			let is_locked = Self::get_item_config(&collection, &item)
-				.map_or(false, |c| c.has_disabled_setting(ItemSetting::UnlockedMetadata));
-
-			ensure!(maybe_check_owner.is_none() || !is_locked, Error::<T, I>::LockedItemMetadata);
-
-			ItemMetadataOf::<T, I>::try_mutate_exists(collection, item, |metadata| {
-				if metadata.is_some() {
-					collection_details.item_metadatas.saturating_dec();
-				}
-				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownItem)?.deposit;
-				T::Currency::unreserve(&collection_details.owner, deposit);
-				collection_details.total_deposit.saturating_reduce(deposit);
-
-				Collection::<T, I>::insert(&collection, &collection_details);
-				Self::deposit_event(Event::MetadataCleared { collection, item });
-				Ok(())
-			})
+			Self::do_clear_item_metadata(maybe_check_owner, collection, item)
 		}
 
 		/// Set the metadata for a collection.
@@ -1658,45 +1334,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			ensure!(
-				maybe_check_owner.is_none() ||
-					collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
-				Error::<T, I>::LockedCollectionMetadata
-			);
-
-			let mut details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
-
-			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
-				let old_deposit = metadata.take().map_or(Zero::zero(), |m| m.deposit);
-				details.total_deposit.saturating_reduce(old_deposit);
-				let mut deposit = Zero::zero();
-				if maybe_check_owner.is_some() &&
-					collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
-				{
-					deposit = T::DepositPerByte::get()
-						.saturating_mul(((data.len()) as u32).into())
-						.saturating_add(T::MetadataDepositBase::get());
-				}
-				if deposit > old_deposit {
-					T::Currency::reserve(&details.owner, deposit - old_deposit)?;
-				} else if deposit < old_deposit {
-					T::Currency::unreserve(&details.owner, old_deposit - deposit);
-				}
-				details.total_deposit.saturating_accrue(deposit);
-
-				Collection::<T, I>::insert(&collection, details);
-
-				*metadata = Some(CollectionMetadata { deposit, data: data.clone() });
-
-				Self::deposit_event(Event::CollectionMetadataSet { collection, data });
-				Ok(())
-			})
+			Self::do_set_collection_metadata(maybe_check_owner, collection, data)
 		}
 
 		/// Clear the metadata for a collection.
@@ -1719,26 +1357,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			ensure!(
-				maybe_check_owner.is_none() ||
-					collection_config.is_setting_enabled(CollectionSetting::UnlockedMetadata),
-				Error::<T, I>::LockedCollectionMetadata
-			);
-
-			CollectionMetadataOf::<T, I>::try_mutate_exists(collection, |metadata| {
-				let deposit = metadata.take().ok_or(Error::<T, I>::UnknownCollection)?.deposit;
-				T::Currency::unreserve(&details.owner, deposit);
-				Self::deposit_event(Event::CollectionMetadataCleared { collection });
-				Ok(())
-			})
+			Self::do_clear_collection_metadata(maybe_check_owner, collection)
 		}
 
 		/// Set (or reset) the acceptance of ownership for a particular account.
@@ -1757,23 +1376,7 @@ pub mod pallet {
 			maybe_collection: Option<T::CollectionId>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let old = OwnershipAcceptance::<T, I>::get(&who);
-			match (old.is_some(), maybe_collection.is_some()) {
-				(false, true) => {
-					frame_system::Pallet::<T>::inc_consumers(&who)?;
-				},
-				(true, false) => {
-					frame_system::Pallet::<T>::dec_consumers(&who);
-				},
-				_ => {},
-			}
-			if let Some(collection) = maybe_collection.as_ref() {
-				OwnershipAcceptance::<T, I>::insert(&who, collection);
-			} else {
-				OwnershipAcceptance::<T, I>::remove(&who);
-			}
-			Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_collection });
-			Ok(())
+			Self::do_set_accept_ownership(who, maybe_collection)
 		}
 
 		/// Set the maximum amount of items a collection could have.
@@ -1794,27 +1397,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let collection_config = Self::get_collection_config(&collection)?;
-			ensure!(
-				collection_config.is_setting_enabled(CollectionSetting::UnlockedMaxSupply),
-				Error::<T, I>::MaxSupplyLocked
-			);
-
-			let details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
-
-			ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
-
-			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
-				let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
-				config.max_supply = Some(max_supply);
-				Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
-				Ok(())
-			})
+			Self::do_set_collection_max_supply(maybe_check_owner, collection, max_supply)
 		}
 
 		/// Update mint settings.
@@ -1839,19 +1422,7 @@ pub mod pallet {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
-			let details =
-				Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
-			if let Some(check_owner) = &maybe_check_owner {
-				ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
-			}
-
-			CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
-				let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
-				config.mint_settings = mint_settings;
-				Self::deposit_event(Event::CollectionMintSettingsUpdated { collection });
-				Ok(())
-			})
+			Self::do_update_mint_settings(maybe_check_owner, collection, mint_settings)
 		}
 
 		/// Set (or reset) the price for an item.

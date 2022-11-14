@@ -18,11 +18,92 @@
 use crate::*;
 use frame_support::pallet_prelude::*;
 
-/// The helper methods bellow allow to read and validate different
-/// collection/item/pallet settings.
-/// For example, those settings allow to disable NFTs trading on a pallet level, or for a particular
-/// collection, or for a specific item.
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	pub(crate) fn do_force_collection_status(
+		collection: T::CollectionId,
+		new_owner: T::AccountId,
+		issuer: T::AccountId,
+		admin: T::AccountId,
+		freezer: T::AccountId,
+		config: CollectionConfigFor<T, I>,
+	) -> DispatchResult {
+		Collection::<T, I>::try_mutate(collection, |maybe_collection| {
+			let mut collection_info =
+				maybe_collection.take().ok_or(Error::<T, I>::UnknownCollection)?;
+			let old_owner = collection_info.owner;
+			collection_info.owner = new_owner.clone();
+			*maybe_collection = Some(collection_info);
+			CollectionAccount::<T, I>::remove(&old_owner, &collection);
+			CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
+			CollectionConfigOf::<T, I>::insert(&collection, config);
+
+			// delete previous values
+			Self::clear_roles(&collection)?;
+
+			let account_to_role = Self::group_roles_by_account(vec![
+				(issuer, CollectionRole::Issuer),
+				(admin, CollectionRole::Admin),
+				(freezer, CollectionRole::Freezer),
+			]);
+			for (account, roles) in account_to_role {
+				CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
+			}
+
+			Self::deposit_event(Event::CollectionStatusChanged { collection });
+			Ok(())
+		})
+	}
+
+	pub(crate) fn do_set_collection_max_supply(
+		maybe_check_owner: Option<T::AccountId>,
+		collection: T::CollectionId,
+		max_supply: u32,
+	) -> DispatchResult {
+		let collection_config = Self::get_collection_config(&collection)?;
+		ensure!(
+			collection_config.is_setting_enabled(CollectionSetting::UnlockedMaxSupply),
+			Error::<T, I>::MaxSupplyLocked
+		);
+
+		let details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		if let Some(check_owner) = &maybe_check_owner {
+			ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+		}
+
+		ensure!(details.items <= max_supply, Error::<T, I>::MaxSupplyTooSmall);
+
+		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
+			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
+			config.max_supply = Some(max_supply);
+			Self::deposit_event(Event::CollectionMaxSupplySet { collection, max_supply });
+			Ok(())
+		})
+	}
+
+	pub(crate) fn do_update_mint_settings(
+		maybe_check_owner: Option<T::AccountId>,
+		collection: T::CollectionId,
+		mint_settings: MintSettings<
+			BalanceOf<T, I>,
+			<T as SystemConfig>::BlockNumber,
+			T::CollectionId,
+		>,
+	) -> DispatchResult {
+		let details =
+			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
+		if let Some(check_owner) = &maybe_check_owner {
+			ensure!(check_owner == &details.owner, Error::<T, I>::NoPermission);
+		}
+
+		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
+			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
+			config.mint_settings = mint_settings;
+			Self::deposit_event(Event::CollectionMintSettingsUpdated { collection });
+			Ok(())
+		})
+	}
+
 	pub(crate) fn get_collection_config(
 		collection_id: &T::CollectionId,
 	) -> Result<CollectionConfigFor<T, I>, DispatchError> {
