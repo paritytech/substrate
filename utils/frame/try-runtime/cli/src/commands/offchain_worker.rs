@@ -16,13 +16,11 @@
 // limitations under the License.
 
 use crate::{
-	build_executor, full_extensions, parse, rpc_err_handler,
-	state_machine_call, LiveState, SharedParams, State, LOG_TARGET, commands::execute_block::next_hash_of,
+	build_executor, commands::execute_block::next_hash_of, full_extensions, parse, rpc_err_handler,
+	state_machine_call, LiveState, SharedParams, State, LOG_TARGET,
 };
 use parity_scale_codec::Encode;
-use sc_executor::{
-	sp_wasm_interface::{HostFunctions},
-};
+use sc_executor::sp_wasm_interface::HostFunctions;
 use sc_service::Configuration;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt::Debug, str::FromStr};
@@ -82,10 +80,7 @@ where
 {
 	let executor = build_executor(&shared, &config);
 	// we first build the externalities with the remote code.
-	let ext = command
-		.state
-		.into_ext::<Block, HostFns>(&shared, &config, &executor)
-		.await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
 
 	let header_ws_uri = command.header_ws_uri::<Block>();
 

@@ -45,7 +45,7 @@ use std::collections::VecDeque;
 pub use jsonrpsee::{
 	core::client::{ClientT, Subscription, SubscriptionClientT},
 	rpc_params,
-	ws_client::{WsClient, WsClientBuilder}
+	ws_client::{WsClient, WsClientBuilder},
 };
 pub use sc_rpc_api::{
 	author::AuthorApiClient as AuthorApi, chain::ChainApiClient as ChainApi,

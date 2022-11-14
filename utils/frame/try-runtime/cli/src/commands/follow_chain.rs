@@ -123,7 +123,8 @@ where
 		if maybe_state_ext.is_none() {
 			let state = State::Live(LiveState {
 				uri: command.uri.clone(),
-				// a bit dodgy, we have to un-parse the has to a string again and re-parse it inside.
+				// a bit dodgy, we have to un-parse the has to a string again and re-parse it
+				// inside.
 				at: Some(hex::encode(header.parent_hash().encode())),
 				pallet: vec![],
 				child_tree: true,
