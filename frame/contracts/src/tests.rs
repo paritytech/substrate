@@ -4462,7 +4462,8 @@ fn reentrant_count_works_with_delegated_call() {
 #[cfg(feature = "unstable-interface")]
 fn account_reentrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_reentrance_count_call").unwrap();
-	let (wasm_reentrant_count, code_hash_reentrant_count) = compile_module::<Test>("reentrant_count_call").unwrap();
+	let (wasm_reentrant_count, code_hash_reentrant_count) =
+		compile_module::<Test>("reentrant_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -4488,7 +4489,8 @@ fn account_reentrance_count_works() {
 		));
 
 		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
-		let another_contract_addr = Contracts::contract_address(&ALICE, &code_hash_reentrant_count, &[]);
+		let another_contract_addr =
+			Contracts::contract_address(&ALICE, &code_hash_reentrant_count, &[]);
 
 		let result1 = Contracts::bare_call(
 			ALICE,
