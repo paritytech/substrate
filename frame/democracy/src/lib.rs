@@ -679,7 +679,6 @@ pub mod pallet {
 
 			<Cancellations<T>>::insert(h, true);
 			Self::internal_cancel_referendum(ref_index);
-			Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -859,7 +858,6 @@ pub mod pallet {
 		) -> DispatchResult {
 			ensure_root(origin)?;
 			Self::internal_cancel_referendum(ref_index);
-			Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 			Ok(())
 		}
 
@@ -1059,7 +1057,6 @@ pub mod pallet {
 				if let Ok(status) = Self::referendum_status(ref_index) {
 					if status.proposal.hash() == proposal_hash {
 						Self::internal_cancel_referendum(ref_index);
-						Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 					}
 				}
 			}
@@ -1266,6 +1263,7 @@ impl<T: Config> Pallet<T> {
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
 		Self::deposit_event(Event::<T>::Cancelled { ref_index });
 		ReferendumInfoOf::<T>::remove(ref_index);
+		Self::clear_metadata(MetadataOwner::Referendum(ref_index));
 	}
 
 	// private.
