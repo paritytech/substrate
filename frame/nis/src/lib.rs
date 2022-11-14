@@ -355,13 +355,21 @@ pub mod pallet {
 		pub last_period: BlockNumber,
 	}
 
+	pub struct OnEmptyQueueTotals<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> Get<QueueTotalsTypeOf<T>> for OnEmptyQueueTotals<T> {
+		fn get() -> QueueTotalsTypeOf<T> {
+			frame_support::bounded_vec![(0, Zero::zero()); <T as Config>::QueueCount::get() as usize]
+		}
+	}
+
 	/// The totals of items and balances within each queue. Saves a lot of storage reads in the
 	/// case of sparsely packed queues.
 	///
 	/// The vector is indexed by duration in `Period`s, offset by one, so information on the queue
 	/// whose duration is one `Period` would be storage `0`.
 	#[pallet::storage]
-	pub type QueueTotals<T: Config> = StorageValue<_, QueueTotalsTypeOf<T>, ValueQuery>;
+	pub type QueueTotals<T: Config> =
+		StorageValue<_, QueueTotalsTypeOf<T>, ValueQuery, OnEmptyQueueTotals<T>>;
 
 	/// The queues of bids. Indexed by duration (in `Period`s).
 	#[pallet::storage]
@@ -521,7 +529,6 @@ pub mod pallet {
 				duration,
 				|q| -> Result<(u32, BalanceOf<T>), DispatchError> {
 					let queue_full = q.len() == T::MaxQueueLen::get() as usize;
-					// ensure!(have_reserved(q[0].amount));
 					ensure!(!queue_full || q[0].amount < amount, Error::<T>::BidTooLow);
 					T::Currency::reserve(&who, amount)?;
 
@@ -861,6 +868,8 @@ pub mod pallet {
 					summary,
 				) {
 					queue.try_push(bid).expect("just popped, so there must be space. qed");
+					// This should exit at the next iteration (though nothing will break if it
+					// doesn't).
 				}
 				count.saturating_inc();
 			}

@@ -359,7 +359,6 @@ pub fn testnet_genesis(
 		},
 		vesting: Default::default(),
 		assets: Default::default(),
-		nis: Default::default(),
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
 		alliance: Default::default(),
