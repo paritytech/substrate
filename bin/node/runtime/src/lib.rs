@@ -1141,6 +1141,7 @@ impl pallet_message_queue::Config for Runtime {
 	/// NOTE: Always set this to `NoopMessageProcessor` for benchmarking.
 	type MessageProcessor = pallet_message_queue::mock_helpers::NoopMessageProcessor;
 	type Size = u32;
+	type QueueChangeHandler = ();
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;

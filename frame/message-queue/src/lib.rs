@@ -605,6 +605,7 @@ impl<T: Config> Pallet<T> {
 		book_state.count.saturating_inc();
 		let page = Page::from_message::<T>(message);
 		Pages::<T>::insert(origin, book_state.end - 1, &page);
+		// NOTE: `T::QueueChangeHandler` is called by the caller.
 		BookStateFor::<T>::insert(origin, book_state);
 	}
 
@@ -655,6 +656,7 @@ impl<T: Config> Pallet<T> {
 				} else {
 					Pages::<T>::insert(&origin, page_index, page);
 				}
+				BookStateFor::<T>::insert(&origin, &book_state);
 				T::QueueChangeHandler::on_queue_changed(
 					origin,
 					book_state.message_count,
@@ -699,6 +701,11 @@ impl<T: Config> Pallet<T> {
 		book_state.message_count.saturating_reduce(page.remaining.into());
 		book_state.size.saturating_reduce(page.remaining_size.into());
 		BookStateFor::<T>::insert(origin, book_state);
+		T::QueueChangeHandler::on_queue_changed(
+			origin.clone(),
+			book_state.message_count,
+			book_state.size,
+		);
 		Self::deposit_event(Event::PageReaped { origin: origin.clone(), index: page_index });
 
 		Ok(())
@@ -747,7 +754,13 @@ impl<T: Config> Pallet<T> {
 			}
 		}
 		BookStateFor::<T>::insert(&origin, &book_state);
-		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
+		if total_processed > 0 {
+			T::QueueChangeHandler::on_queue_changed(
+				origin,
+				book_state.message_count,
+				book_state.size,
+			);
+		}
 		(total_processed > 0, next_ready)
 	}
 
