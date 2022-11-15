@@ -411,14 +411,11 @@ check-rustdoc:
     - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
     - rusty-cachier cache upload
 
-.cargo-check-each-crate_template: &cargo-check-each-crate_template
+cargo-check-each-crate:
   stage:                           test
   extends:
     - .docker-env
     - .test-refs
-
-cargo-check-each-crate:
-  <<: *cargo-check-each-crate_template
   variables:
     # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
     # "cargo-check-each-crate I/N" jobs
@@ -434,7 +431,12 @@ cargo-check-each-crate:
   parallel: 2
 
 cargo-check-each-crate-macos:
-  <<: *cargo-check-each-crate_template
+  stage: test
+  extends: .test-refs
+  before_script:
+    - !reference [.rust-info-script, script]
+  variables:
+    SKIP_WASM_BUILD:               1
   script:
     # TODO: enable rusty-cachier once it supports Mac
     # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
