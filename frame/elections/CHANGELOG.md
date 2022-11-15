@@ -9,7 +9,7 @@ and this crate adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 ### Added
 
 ### Changed
-\[**Needs Migration**\] Generalized the pallet to use `NposSolver` instead of hard coding the phragmen algorithm; Changed the name of the pallet to `pallet-elections` and the pallet's lock ID.
+Generalized the pallet to use `NposSolver` instead of hard coding the phragmen algorithm; Changed the name of the pallet from `pallet-elections-phragmen` to `pallet-elections`
 
 ### Fixed
 

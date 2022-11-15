@@ -919,7 +919,14 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	fn do_election() -> Weight {
-		let pre_election_results = match Self::do_pre_solve_election() {
+		let PreElectionResults {
+			num_to_elect,
+			candidate_ids,
+			candidates_and_deposit,
+			voters_and_stakes,
+			voters_and_votes,
+			num_edges,
+		} = match Self::do_pre_solve_election() {
 			Ok(results) => results,
 			Err(event) => match event {
 				Event::EmptyTerm => {
@@ -939,31 +946,27 @@ impl<T: Config> Pallet<T> {
 			},
 		};
 
-		let num_candidates = pre_election_results.candidates_and_deposit.len() as u32;
-		let num_voters = pre_election_results.voters_and_votes.len() as u32;
-		let num_edges = pre_election_results.num_edges;
+		let num_candidates = candidates_and_deposit.len() as u32;
+		let num_voters = voters_and_votes.len() as u32;
+		let num_edges = num_edges;
 
-		let _ = T::ElectionSolver::solve(
-			pre_election_results.num_to_elect,
-			pre_election_results.candidate_ids,
-			pre_election_results.voters_and_votes,
-		)
-		.map(
-			|ElectionResult::<T::AccountId, <T::ElectionSolver as NposSolver>::Accuracy> {
-			     winners,
-			     assignments: _,
-			 }| {
-				Self::do_post_solve_election(
-					winners,
-					pre_election_results.candidates_and_deposit,
-					pre_election_results.voters_and_stakes,
-				);
-			},
-		)
-		.map_err(|e| {
-			log!(warn, "Failed to run election [{:?}].", e);
-			Self::deposit_event(Event::ElectionError);
-		});
+		let _ = T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
+			.map(
+				|ElectionResult::<T::AccountId, <T::ElectionSolver as NposSolver>::Accuracy> {
+				     winners,
+				     assignments: _,
+				 }| {
+					Self::do_post_solve_election(
+						winners,
+						candidates_and_deposit,
+						voters_and_stakes,
+					);
+				},
+			)
+			.map_err(|e| {
+				log!(warn, "Failed to run election [{:?}].", e);
+				Self::deposit_event(Event::ElectionError);
+			});
 
 		// TODO(gpestana): pull pre/post weights from WeightInfo after benchmarking
 		let pre_solve_weight = Weight::zero();
