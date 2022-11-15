@@ -425,7 +425,7 @@ cargo-check-each-crate:
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
-    - ./scripts/ci/gitlab/check-each-crate.sh "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
+    - time ./scripts/ci/gitlab/check-each-crate.sh "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
     # need to update cache only from one job
     - if [ "$CI_NODE_INDEX" == 1 ]; then rusty-cachier cache upload; fi
   parallel: 2
@@ -440,6 +440,6 @@ cargo-check-each-crate-macos:
   script:
     # TODO: enable rusty-cachier once it supports Mac
     # TODO: use parallel jobs, as per cargo-check-each-crate, once more Mac runners are available
-    - ./scripts/ci/gitlab/check-each-crate.sh 1 1
+    - time ./scripts/ci/gitlab/check-each-crate.sh 1 1
   tags:
     - osx
