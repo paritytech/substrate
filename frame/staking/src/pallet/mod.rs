@@ -957,8 +957,10 @@ pub mod pallet {
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
 			let maybe_dispatch_weight = {
+				let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
-					Self::do_withdraw_unbonded(&controller, SPECULATIVE_NUM_SPANS)?.actual_weight
+					Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?
+						.actual_weight
 				} else {
 					None
 				}
