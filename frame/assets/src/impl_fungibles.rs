@@ -179,6 +179,24 @@ impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> 
 	}
 }
 
+impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
+	fn start_destroy(id: T::AssetId, maybe_check_owner: Option<T::AccountId>) -> DispatchResult {
+		Self::do_start_destroy(id, maybe_check_owner)
+	}
+
+	fn destroy_accounts(id: T::AssetId, max_items: u32) -> Result<u32, DispatchError> {
+		Self::do_destroy_accounts(id, max_items)
+	}
+
+	fn destroy_approvals(id: T::AssetId, max_items: u32) -> Result<u32, DispatchError> {
+		Self::do_destroy_approvals(id, max_items)
+	}
+
+	fn finish_destroy(id: T::AssetId) -> DispatchResult {
+		Self::do_finish_destroy(id)
+	}
+}
+
 impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
