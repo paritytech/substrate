@@ -531,7 +531,7 @@ fn beefy_finalizing_blocks() {
 
 	let peers = peers.into_iter().enumerate();
 	// finalize block #5 -> BEEFY should finalize #1 (mandatory) and #5 from diff-power-of-two rule.
-	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[5], &[1, 5]);
+	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[1, 5], &[1, 5]);
 
 	// GRANDPA finalize #10 -> BEEFY finalize #10 (mandatory)
 	finalize_block_and_wait_for_beefy(&net, peers.clone(), &mut runtime, &[10], &[10]);
@@ -573,7 +573,7 @@ fn lagging_validators() {
 		&net,
 		peers.clone(),
 		&mut runtime,
-		&[15],
+		&[1, 15],
 		&[1, 9, 13, 14, 15],
 	);
 
@@ -661,7 +661,7 @@ fn correct_beefy_payload() {
 	let net = Arc::new(Mutex::new(net));
 	let peers = peers.into_iter().enumerate();
 	// with 3 good voters and 1 bad one, consensus should happen and best blocks produced.
-	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[10], &[1, 9]);
+	finalize_block_and_wait_for_beefy(&net, peers, &mut runtime, &[1, 10], &[1, 9]);
 
 	let (best_blocks, versioned_finality_proof) =
 		get_beefy_streams(&mut net.lock(), [(0, BeefyKeyring::Alice)].into_iter());

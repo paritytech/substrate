@@ -17,6 +17,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use beefy_primitives::{BeefyApi, MmrRootHash, PayloadProvider};
+use futures::StreamExt;
+use log::error;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, Finalizer};
@@ -223,7 +225,7 @@ where
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 	let gossip_validator =
 		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
-	let gossip_engine = sc_network_gossip::GossipEngine::new(
+	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		network.clone(),
 		gossip_protocol_name,
 		gossip_validator.clone(),
@@ -251,11 +253,31 @@ where
 			},
 		);
 
+	// Subscribe to finality notifications and justifications before waiting for runtime pallet and
+	// reuse the streams, so we don't miss notifications while waiting for pallet to be available.
+	let mut finality_notifications = client.finality_notification_stream().fuse();
+	let block_import_justif = links.from_block_import_justif_stream.subscribe().fuse();
+
+	// Initialize voter state or from genesis.
+	let persisted_state = match crate::aux_schema::load_persistent(
+		&*backend,
+		&*runtime,
+		&mut gossip_engine,
+		&mut finality_notifications,
+		min_block_delta,
+	)
+	.await
+	{
+		Ok(state) => state,
+		Err(e) => {
+			error!(target: "beefy", "🥩 Error initializing worker, terminating. {}", e);
+			return
+		},
+	};
+
 	let worker_params = worker::WorkerParams {
-		client,
 		backend,
 		payload_provider,
-		runtime,
 		network,
 		key_store: key_store.into(),
 		known_peers,
@@ -264,10 +286,14 @@ where
 		on_demand_justifications,
 		links,
 		metrics,
-		min_block_delta,
+		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
 
-	futures::future::join(worker.run(), on_demand_justifications_handler.run()).await;
+	futures::future::join(
+		worker.run(block_import_justif, finality_notifications),
+		on_demand_justifications_handler.run(),
+	)
+	.await;
 }

@@ -37,20 +37,20 @@ use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
 use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
-use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
+	traits::{Block, Header, NumberFor},
 	SaturatedConversion,
 };
 
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
 	BeefyApi, Commitment, ConsensusLog, MmrRootHash, Payload, PayloadProvider, SignedCommitment,
-	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID, GENESIS_AUTHORITY_SET_ID,
+	ValidatorSet, VersionedFinalityProof, VoteMessage, BEEFY_ENGINE_ID,
 };
+use sc_utils::notification::NotificationReceiver;
 
 use crate::{
 	communication::{
@@ -63,7 +63,7 @@ use crate::{
 	metric_inc, metric_set,
 	metrics::Metrics,
 	round::Rounds,
-	BeefyVoterLinks, Client, KnownPeers,
+	BeefyVoterLinks, KnownPeers,
 };
 
 enum RoundAction {
@@ -92,9 +92,15 @@ struct VoterOracle<B: Block> {
 }
 
 impl<B: Block> VoterOracle<B> {
-	pub fn new(min_block_delta: u32) -> Self {
+	pub fn genesis(
+		session_start: NumberFor<B>,
+		validator_set: ValidatorSet<AuthorityId>,
+		min_block_delta: u32,
+	) -> Self {
+		let mut sessions = VecDeque::new();
+		sessions.push_back(Rounds::new(session_start, validator_set));
 		Self {
-			sessions: VecDeque::new(),
+			sessions,
 			// Always target at least one block better than current best beefy.
 			min_block_delta: min_block_delta.max(1),
 		}
@@ -211,11 +217,9 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N> {
-	pub client: Arc<C>,
+pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
-	pub runtime: Arc<R>,
 	pub network: N,
 	pub key_store: BeefyKeystore,
 	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
@@ -224,7 +228,7 @@ pub(crate) struct WorkerParams<B: Block, BE, C, P, R, N> {
 	pub on_demand_justifications: OnDemandJustificationsEngine<B, R>,
 	pub links: BeefyVoterLinks<B>,
 	pub metrics: Option<Metrics>,
-	pub min_block_delta: u32,
+	pub persisted_state: PersistedState<B>,
 }
 
 #[derive(Debug, Decode, Encode)]
@@ -239,26 +243,34 @@ pub(crate) struct PersistedState<B: Block> {
 }
 
 impl<B: Block> PersistedState<B> {
-	pub fn new(
-		best_grandpa_header: <B as Block>::Header,
+	pub fn initialize(
+		grandpa_header: <B as Block>::Header,
 		best_beefy: NumberFor<B>,
+		session_start: NumberFor<B>,
+		validator_set: ValidatorSet<AuthorityId>,
 		min_block_delta: u32,
 	) -> Self {
 		PersistedState {
-			best_grandpa_block_header: best_grandpa_header,
+			best_grandpa_block_header: grandpa_header,
 			best_beefy_block: best_beefy,
-			voting_oracle: VoterOracle::new(min_block_delta),
+			voting_oracle: VoterOracle::genesis(session_start, validator_set, min_block_delta),
 		}
+	}
+
+	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
+		self.voting_oracle.min_block_delta = min_block_delta;
+	}
+
+	pub(crate) fn active_round_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
+		self.voting_oracle.active_rounds_mut()
 	}
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	// utilities
-	client: Arc<C>,
 	backend: Arc<BE>,
 	payload_provider: P,
-	runtime: Arc<R>,
 	network: N,
 	key_store: BeefyKeystore,
 
@@ -283,11 +295,10 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, C, P, R, N> BeefyWorker<B, BE, C, P, R, N>
+impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
-	C: Client<B, BE>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
@@ -299,12 +310,10 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, C, P, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
 		let WorkerParams {
-			client,
 			backend,
 			payload_provider,
-			runtime,
 			key_store,
 			network,
 			gossip_engine,
@@ -313,36 +322,12 @@ where
 			known_peers,
 			links,
 			metrics,
-			min_block_delta,
+			persisted_state,
 		} = worker_params;
 
-		let last_finalized_header = backend
-			.blockchain()
-			.expect_header(BlockId::number(backend.blockchain().info().finalized_number))
-			.expect("latest block always has header available; qed.");
-
-		// TODO: get these from runtime? how do we set the initial BEEFY authorities and block?
-		let genesis_number = Zero::zero();
-		let genesis_validator_set =
-			|| Err(sp_blockchain::Error::Backend("FIXME: get from pallet?".into()));
-
-		let mut persisted_state = crate::aux_schema::load_persistent(
-			&*backend,
-			last_finalized_header,
-			genesis_number,
-			genesis_validator_set,
-			min_block_delta,
-		)
-		.expect("FIXME: bubble up this error.");
-
-		// Overwrite persisted data with new client min_block_delta.
-		persisted_state.voting_oracle.min_block_delta = min_block_delta;
-
 		BeefyWorker {
-			client: client.clone(),
 			backend,
 			payload_provider,
-			runtime,
 			network,
 			known_peers,
 			key_store,
@@ -759,123 +744,16 @@ where
 		Ok(())
 	}
 
-	/// Initialize BEEFY voter state.
-	///
-	/// Should be called only once during worker initialization with latest GRANDPA finalized
-	/// `header` and the validator set `active` at that point.
-	fn initialize_voter(&mut self, header: &B::Header, active: ValidatorSet<AuthorityId>) {
-		// just a sanity check.
-		if let Some(rounds) = self.active_round() {
-			error!(
-				target: "beefy",
-				"🥩 Voting session already initialized at: {:?}, validator set id {}.",
-				rounds.session_start(),
-				rounds.validator_set_id(),
-			);
-			return
-		}
-
-		// TODO: load this from aux db
-		self.persisted_state.best_grandpa_block_header = header.clone();
-		if active.id() == GENESIS_AUTHORITY_SET_ID {
-			// When starting from genesis, there is no session boundary digest.
-			// Just initialize `rounds` to Block #1 as BEEFY mandatory block.
-			info!(target: "beefy", "🥩 Initialize voting session at genesis, block 1.");
-			self.init_session_at(active, 1u32.into());
-		} else {
-			// TODO (issue #11837): persist local progress to avoid following look-up during init.
-			let blockchain = self.backend.blockchain();
-			let mut header = header.clone();
-
-			// Walk back the imported blocks and initialize voter either, at the last block with
-			// a BEEFY justification, or at this session's boundary; voter will resume from there.
-			loop {
-				if let Some(true) = blockchain
-					.justifications(header.hash())
-					.ok()
-					.flatten()
-					.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
-				{
-					info!(
-						target: "beefy",
-						"🥩 Initialize voting session at last BEEFY finalized block: {:?}.",
-						*header.number()
-					);
-					self.init_session_at(active, *header.number());
-					// Mark the round as already finalized.
-					if let Some(round) = self.persisted_state.voting_oracle.active_rounds_mut() {
-						round.conclude(*header.number());
-					}
-					self.persisted_state.best_beefy_block = *header.number();
-					break
-				}
-
-				if let Some(validator_set) = find_authorities_change::<B>(&header) {
-					info!(
-						target: "beefy",
-						"🥩 Initialize voting session at current session boundary: {:?}.",
-						*header.number()
-					);
-					self.init_session_at(validator_set, *header.number());
-					break
-				}
-
-				// Move up the chain.
-				header = self
-					.client
-					.expect_header(BlockId::Hash(*header.parent_hash()))
-					// in case of db failure here we want to kill the worker
-					.expect("db failure, voter going down.");
-			}
-		}
-	}
-
-	/// Wait for BEEFY runtime pallet to be available.
-	/// Should be called only once during worker initialization.
-	async fn wait_for_runtime_pallet(&mut self, finality: &mut Fuse<FinalityNotifications<B>>) {
-		let mut gossip_engine = &mut self.gossip_engine;
-		loop {
-			futures::select! {
-				notif = finality.next() => {
-					let notif = match notif {
-						Some(notif) => notif,
-						None => break
-					};
-					let at = BlockId::hash(notif.header.hash());
-					if let Some(active) = self.runtime.runtime_api().validator_set(&at).ok().flatten() {
-						self.initialize_voter(&notif.header, active);
-						if !self.network.is_major_syncing() {
-							if let Err(err) = self.try_to_vote() {
-								debug!(target: "beefy", "🥩 {}", err);
-							}
-						}
-						// Beefy pallet available and voter initialized.
-						break
-					} else {
-						trace!(target: "beefy", "🥩 Finality notification: {:?}", notif);
-						debug!(target: "beefy", "🥩 Waiting for BEEFY pallet to become available...");
-					}
-				},
-				_ = gossip_engine => {
-					break
-				}
-			}
-		}
-	}
-
 	/// Main loop for BEEFY worker.
 	///
 	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
 	/// which is driven by finality notifications and gossiped votes.
-	pub(crate) async fn run(mut self) {
+	pub(crate) async fn run(
+		mut self,
+		mut block_import_justif: Fuse<NotificationReceiver<BeefyVersionedFinalityProof<B>>>,
+		mut finality_notifications: Fuse<FinalityNotifications<B>>,
+	) {
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
-		let mut block_import_justif = self.links.from_block_import_justif_stream.subscribe().fuse();
-		// Subscribe to finality notifications before waiting for runtime pallet and reuse stream,
-		// so we process notifications for all finalized blocks after pallet is available.
-		let mut finality_notifications = self.client.finality_notification_stream().fuse();
-
-		self.wait_for_runtime_pallet(&mut finality_notifications).await;
-		trace!(target: "beefy", "🥩 BEEFY pallet available, starting voter.");
 
 		let mut network_events = self.network.event_stream("network-gossip").fuse();
 		let mut votes = Box::pin(
@@ -996,7 +874,7 @@ where
 
 /// Scan the `header` digest log for a BEEFY validator set change. Return either the new
 /// validator set or `None` in case no validator set change has been signaled.
-fn find_authorities_change<B>(header: &B::Header) -> Option<ValidatorSet<AuthorityId>>
+pub(crate) fn find_authorities_change<B>(header: &B::Header) -> Option<ValidatorSet<AuthorityId>>
 where
 	B: Block,
 {
@@ -1067,12 +945,13 @@ pub(crate) mod tests {
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
 	use sc_network::NetworkService;
-	use sc_network_test::{PeersFullClient, TestNetFactory};
+	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
+	use sp_runtime::traits::{One, Zero};
 	use substrate_test_runtime_client::{
 		runtime::{Block, Digest, DigestItem, Header, H256},
-		Backend, ClientExt,
+		Backend,
 	};
 
 	fn create_beefy_worker(
@@ -1082,7 +961,6 @@ pub(crate) mod tests {
 	) -> BeefyWorker<
 		Block,
 		Backend,
-		PeersFullClient,
 		MmrRootProvider<Block, TestApi>,
 		TestApi,
 		Arc<NetworkService<Block, H256>>,
@@ -1106,6 +984,7 @@ pub(crate) mod tests {
 			to_rpc_best_block_sender,
 		};
 
+		let backend = peer.client().as_backend();
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
@@ -1118,23 +997,31 @@ pub(crate) mod tests {
 			"/beefy/justifs/1".into(),
 			known_peers.clone(),
 		);
-		let payload_provider = MmrRootProvider::new(api.clone());
+		let at = BlockId::number(Zero::zero());
+		let genesis_validator_set = api.runtime_api().validator_set(&at).unwrap().unwrap();
+		let genesis_header = backend.blockchain().expect_header(at).unwrap();
+		let persisted_state = PersistedState::initialize(
+			genesis_header,
+			Zero::zero(),
+			One::one(),
+			genesis_validator_set,
+			min_block_delta,
+		);
+		let payload_provider = MmrRootProvider::new(api);
 		let worker_params = crate::worker::WorkerParams {
-			client: peer.client().as_client(),
-			backend: peer.client().as_backend(),
+			backend,
 			payload_provider,
-			runtime: api,
 			key_store: Some(keystore).into(),
 			known_peers,
 			links,
 			gossip_engine,
 			gossip_validator,
-			min_block_delta,
 			metrics: None,
 			network,
 			on_demand_justifications,
+			persisted_state,
 		};
-		BeefyWorker::<_, _, _, _, _, _>::new(worker_params)
+		BeefyWorker::<_, _, _, _, _>::new(worker_params)
 	}
 
 	#[test]
@@ -1231,7 +1118,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn should_vote_target() {
-		let mut oracle = VoterOracle::<Block>::new(1);
+		let mut oracle = VoterOracle::<Block> { min_block_delta: 1, sessions: VecDeque::new() };
 
 		// rounds not initialized -> should vote: `None`
 		assert_eq!(oracle.voting_target(0, 1), None);
@@ -1273,7 +1160,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 
-		let mut oracle = VoterOracle::<Block>::new(1);
+		let mut oracle = VoterOracle::<Block> { min_block_delta: 1, sessions: VecDeque::new() };
 
 		// rounds not initialized -> should accept votes: `None`
 		assert!(oracle.accepted_interval(1).is_err());
@@ -1386,6 +1273,8 @@ pub(crate) mod tests {
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		// remove default session, will manually add custom one.
+		worker.persisted_state.voting_oracle.sessions.clear();
 
 		let keys = keys.iter().cloned().enumerate();
 		let (mut best_block_streams, mut finality_proofs) =
@@ -1476,14 +1365,11 @@ pub(crate) mod tests {
 
 	#[test]
 	fn should_init_session() {
-		let keys = &[Keyring::Alice];
+		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
 
-		assert!(worker.voting_oracle().sessions.is_empty());
-
-		worker.init_session_at(validator_set.clone(), 1);
 		let worker_rounds = worker.active_round().unwrap();
 		assert_eq!(worker_rounds.session_start(), 1);
 		assert_eq!(worker_rounds.validators(), validator_set.validators());
@@ -1514,6 +1400,8 @@ pub(crate) mod tests {
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		// remove default session, will manually add custom one.
+		worker.persisted_state.voting_oracle.sessions.clear();
 
 		fn new_vote(
 			block_number: NumberFor<Block>,
@@ -1575,121 +1463,5 @@ pub(crate) mod tests {
 		let mut votes = worker.pending_votes.values();
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 21);
 		assert_eq!(votes.next().unwrap().first().unwrap().commitment.block_number, 22);
-	}
-
-	#[test]
-	fn should_initialize_correct_voter() {
-		let keys = &[Keyring::Alice];
-		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 1).unwrap();
-		let mut net = BeefyTestNet::new(1);
-		let backend = net.peer(0).client().as_backend();
-
-		// push 15 blocks with `AuthorityChange` digests every 10 blocks
-		net.generate_blocks_and_sync(15, 10, &validator_set, false);
-		// finalize 13 without justifications
-		let hashof13 =
-			backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
-		net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
-
-		// Test initialization at session boundary.
-		{
-			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
-
-			// initialize voter at block 13, expect rounds initialized at session_start = 10
-			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
-			worker.initialize_voter(&header, validator_set.clone());
-
-			// verify voter initialized with single session starting at block 10
-			assert_eq!(worker.voting_oracle().sessions.len(), 1);
-			let rounds = worker.active_round().unwrap();
-			assert_eq!(rounds.session_start(), 10);
-			assert_eq!(rounds.validator_set_id(), validator_set.id());
-
-			// verify next vote target is mandatory block 10
-			assert_eq!(worker.best_beefy_block(), 0);
-			assert_eq!(worker.best_grandpa_block(), 13);
-			assert_eq!(
-				worker.voting_oracle().voting_target(worker.best_beefy_block(), 13),
-				Some(10)
-			);
-		}
-
-		// Test corner-case where session boundary == last beefy finalized.
-		{
-			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
-
-			// import/append BEEFY justification for session boundary block 10
-			let commitment = Commitment {
-				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
-				block_number: 10,
-				validator_set_id: validator_set.id(),
-			};
-			let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
-				commitment,
-				signatures: vec![None],
-			});
-			let hashof10 =
-				backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
-			backend
-				.append_justification(hashof10, (BEEFY_ENGINE_ID, justif.encode()))
-				.unwrap();
-
-			// initialize voter at block 13, expect rounds initialized at last beefy finalized 10
-			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
-			worker.initialize_voter(&header, validator_set.clone());
-
-			// verify voter initialized with single session starting at block 10
-			assert_eq!(worker.voting_oracle().sessions.len(), 1);
-			let rounds = worker.active_round().unwrap();
-			assert_eq!(rounds.session_start(), 10);
-			assert_eq!(rounds.validator_set_id(), validator_set.id());
-
-			// verify next vote target is mandatory block 10
-			assert_eq!(worker.best_beefy_block(), 10);
-			assert_eq!(worker.best_grandpa_block(), 13);
-			assert_eq!(
-				worker.voting_oracle().voting_target(worker.best_beefy_block(), 13),
-				Some(12)
-			);
-		}
-
-		// Test initialization at last BEEFY finalized.
-		{
-			let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
-
-			// import/append BEEFY justification for block 12
-			let commitment = Commitment {
-				payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
-				block_number: 12,
-				validator_set_id: validator_set.id(),
-			};
-			let justif = VersionedFinalityProof::<_, Signature>::V1(SignedCommitment {
-				commitment,
-				signatures: vec![None],
-			});
-			let hashof12 =
-				backend.blockchain().expect_block_hash_from_id(&BlockId::Number(12)).unwrap();
-			backend
-				.append_justification(hashof12, (BEEFY_ENGINE_ID, justif.encode()))
-				.unwrap();
-
-			// initialize voter at block 13, expect rounds initialized at last beefy finalized 12
-			let header = backend.blockchain().header(BlockId::number(13)).unwrap().unwrap();
-			worker.initialize_voter(&header, validator_set.clone());
-
-			// verify voter initialized with single session starting at block 12
-			assert_eq!(worker.voting_oracle().sessions.len(), 1);
-			let rounds = worker.active_round().unwrap();
-			assert_eq!(rounds.session_start(), 12);
-			assert_eq!(rounds.validator_set_id(), validator_set.id());
-
-			// verify next vote target is 13
-			assert_eq!(worker.best_beefy_block(), 12);
-			assert_eq!(worker.best_grandpa_block(), 13);
-			assert_eq!(
-				worker.voting_oracle().voting_target(worker.best_beefy_block(), 13),
-				Some(13)
-			);
-		}
 	}
 }
