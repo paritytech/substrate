@@ -281,11 +281,41 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	///   command. If not provided, we will not do any authorization checks before destroying the
 	///   asset.
 	///
-	/// If successful, this function will return the actual witness data from the destroyed asset.
-	/// This may be different than the witness data provided, and can be used to refund weight.
-	fn destroy(
-		id: Self::AssetId,
-		witness: Self::DestroyWitness,
-		maybe_check_owner: Option<AccountId>,
-	) -> Result<Self::DestroyWitness, DispatchError>;
+	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
+	/// * `max_items`: The maximum number of accounts to be destroyed for a given call of the
+	///   function. This value should be small enough to allow the operation fit into a logical
+	///   block.
+	///
+	///	Response:
+	/// * u32: Total number of approvals which were actually destroyed
+	///
+	/// Due to weight restrictions, this function may need to be called multiple
+	/// times to fully destroy all approvals. It will destroy `max_items` approvals at a
+	/// time.
+	fn destroy_accounts(id: Self::AssetId, max_items: u32) -> Result<u32, DispatchError>;
+
+	/// Destroy all approvals associated with a given asset up to the `max_items`
+	/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
+	/// asset is in a `Destroying` state
+	///
+	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
+	/// * `max_items`: The maximum number of accounts to be destroyed for a given call of the
+	///   function. This value should be small enough to allow the operation fit into a logical
+	///   block.
+	///
+	///	Response:
+	/// * u32: Total number of approvals which were actually destroyed
+	///
+	/// Due to weight restrictions, this function may need to be called multiple
+	/// times to fully destroy all approvals. It will destroy `max_items` approvals at a
+	/// time.
+	fn destroy_approvals(id: Self::AssetId, max_items: u32) -> Result<u32, DispatchError>;
+
+	/// Complete destroying asset and unreserve currency.
+	/// `finish_destroy` should only be called after `start_destroy` has been called, and the
+	/// asset is in a `Destroying` state. All accounts or approvals should be destroyed before
+	/// hand.
+	///
+	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
+	fn finish_destroy(id: Self::AssetId) -> DispatchResult;
 }
