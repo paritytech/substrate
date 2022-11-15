@@ -1,16 +1,8 @@
 # This file is part of .gitlab-ci.yml
 # Here are all jobs that are executed during "zombienet" stage
 
-zombienet-tests-build-blocks:
-  stage:                           zombienet
-  image:                           "${ZOMBIENET_IMAGE}"
-  extends:
-    - .kubernetes-env
-    - .zombienet-refs
-  needs:
-    - job:                         publish-docker-substrate-debug
-  variables:
-    GH_DIR:                        "https://github.com/paritytech/substrate/tree/${CI_COMMIT_SHORT_SHA}/zombienet/0000_block_building"
+# common settings for all zombienet jobs
+.zombienet-common:
   before_script:
     - echo "Zombie-net Tests Config"
     - echo "${ZOMBIENET_IMAGE}"
@@ -19,12 +11,24 @@ zombienet-tests-build-blocks:
     - export DEBUG=zombie,zombie::network-node
     - export ZOMBIENET_INTEGRATION_TEST_IMAGE=${SUBSTRATE_IMAGE_NAME}:${SUBSTRATE_IMAGE_TAG}
     - echo "${ZOMBIENET_INTEGRATION_TEST_IMAGE}"
-  script:
-    - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
-        --github-remote-dir="${GH_DIR}"
-        --test="0000-block-building.zndsl"
-  allow_failure:                   false
+  stage:                           zombienet
+  image:                           "${ZOMBIENET_IMAGE}"
+  needs:
+    - job:                         publish-docker-substrate-temporary
+  extends:
+    - .kubernetes-env
+    - .zombienet-refs
+  variables:
+    GH_DIR:                        "https://github.com/paritytech/substrate/tree/${CI_COMMIT_SHORT_SHA}/zombienet/"
+  allow_failure:                   true
   retry: 2
   tags:
     - zombienet-polkadot-integration-test
 
+zombienet-0000-block-building:
+  extends:
+    - .zombienet-common
+  script:
+    - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
+        --github-remote-dir="${GH_DIR}/0000_block_building"
+        --test="0000-block-building.zndsl"
