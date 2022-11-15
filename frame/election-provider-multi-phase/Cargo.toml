@@ -25,12 +25,12 @@ log = { version = "0.4.17", default-features = false }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 frame-election-provider-support = { version = "4.0.0-dev", default-features = false, path = "../election-provider-support" }
 
 # Optional imports for benchmarking
@@ -42,10 +42,10 @@ strum = { version = "0.24.1",  default-features = false, features = ["derive"], 
 [dev-dependencies]
 parking_lot = "0.12.1"
 rand = { version = "0.7.3" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-npos-elections = { version = "4.0.0-dev", default-features = false, path = "../../primitives/npos-elections" }
-sp-tracing = { version = "5.0.0", path = "../../primitives/tracing" }
+sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 frame-benchmarking = { version = "4.0.0-dev", path = "../benchmarking" }
 
