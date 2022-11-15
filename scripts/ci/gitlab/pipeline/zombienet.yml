@@ -26,5 +26,5 @@ zombienet-tests-build-blocks:
   allow_failure:                   false
   retry: 2
   tags:
-    - zombienet-substrate-integration-test
+    - zombienet-polkadot-integration-test
 
