@@ -66,7 +66,7 @@ use crate::{
 	BeefyVoterLinks, KnownPeers,
 };
 
-enum RoundAction {
+pub(crate) enum RoundAction {
 	Drop,
 	Process,
 	Enqueue,
@@ -75,8 +75,8 @@ enum RoundAction {
 /// Responsible for the voting strategy.
 /// It chooses which incoming votes to accept and which votes to generate.
 /// Keeps track of voting seen for current and future rounds.
-#[derive(Debug, Decode, Encode)]
-struct VoterOracle<B: Block> {
+#[derive(Debug, Decode, Encode, PartialEq)]
+pub(crate) struct VoterOracle<B: Block> {
 	/// Queue of known sessions. Keeps track of voting rounds (block numbers) within each session.
 	///
 	/// There are three voter states coresponding to three queue states:
@@ -108,7 +108,7 @@ impl<B: Block> VoterOracle<B> {
 
 	// Return reference to rounds pertaining to first session in the queue.
 	// Voting will always happen at the head of the queue.
-	fn active_rounds(&mut self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&self) -> Option<&Rounds<Payload, B>> {
 		self.sessions.front()
 	}
 
@@ -231,7 +231,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
 	pub persisted_state: PersistedState<B>,
 }
 
-#[derive(Debug, Decode, Encode)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct PersistedState<B: Block> {
 	/// Best block we received a GRANDPA finality for.
 	best_grandpa_block_header: <B as Block>::Header,
@@ -954,10 +954,35 @@ pub(crate) mod tests {
 		Backend,
 	};
 
+	impl<B: super::Block> PersistedState<B> {
+		pub fn voting_oracle(&self) -> &VoterOracle<B> {
+			&self.voting_oracle
+		}
+
+		pub fn active_round(&self) -> Option<&Rounds<Payload, B>> {
+			self.voting_oracle.active_rounds()
+		}
+
+		pub fn best_beefy_block(&self) -> NumberFor<B> {
+			self.best_beefy_block
+		}
+
+		pub fn best_grandpa_block(&self) -> NumberFor<B> {
+			*self.best_grandpa_block_header.number()
+		}
+	}
+
+	impl<B: super::Block> VoterOracle<B> {
+		pub fn sessions(&self) -> &VecDeque<Rounds<Payload, B>> {
+			&self.sessions
+		}
+	}
+
 	fn create_beefy_worker(
 		peer: &BeefyPeer,
 		key: &Keyring,
 		min_block_delta: u32,
+		genesis_validator_set: ValidatorSet<AuthorityId>,
 	) -> BeefyWorker<
 		Block,
 		Backend,
@@ -998,7 +1023,6 @@ pub(crate) mod tests {
 			known_peers.clone(),
 		);
 		let at = BlockId::number(Zero::zero());
-		let genesis_validator_set = api.runtime_api().validator_set(&at).unwrap().unwrap();
 		let genesis_header = backend.blockchain().expect_header(at).unwrap();
 		let persisted_state = PersistedState::initialize(
 			genesis_header,
@@ -1248,7 +1272,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		// keystore doesn't contain other keys than validators'
 		assert_eq!(worker.verify_validator_set(&1, &validator_set), Ok(()));
@@ -1272,7 +1296,7 @@ pub(crate) mod tests {
 		let validator_set = ValidatorSet::new(make_beefy_ids(&keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
 		let backend = net.peer(0).client().as_backend();
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();
 
@@ -1368,7 +1392,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
 		let worker_rounds = worker.active_round().unwrap();
 		assert_eq!(worker_rounds.session_start(), 1);
@@ -1399,7 +1423,7 @@ pub(crate) mod tests {
 		let keys = &[Keyring::Alice, Keyring::Bob];
 		let validator_set = ValidatorSet::new(make_beefy_ids(keys), 0).unwrap();
 		let mut net = BeefyTestNet::new(1);
-		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1);
+		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 		// remove default session, will manually add custom one.
 		worker.persisted_state.voting_oracle.sessions.clear();
 

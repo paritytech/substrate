@@ -29,7 +29,7 @@ use std::{collections::BTreeMap, hash::Hash};
 /// whether the local `self` validator has voted/signed.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Debug, Decode, Default, Encode)]
+#[derive(Debug, Decode, Default, Encode, PartialEq)]
 struct RoundTracker {
 	self_vote: bool,
 	votes: BTreeMap<Public, Signature>,
@@ -65,7 +65,7 @@ pub fn threshold(authorities: usize) -> usize {
 /// Only round numbers > `best_done` are of interest, all others are considered stale.
 ///
 /// Does not do any validation on votes or signatures, layers above need to handle that (gossip).
-#[derive(Debug, Decode, Encode)]
+#[derive(Debug, Decode, Encode, PartialEq)]
 pub(crate) struct Rounds<Payload, B: Block> {
 	rounds: BTreeMap<(Payload, NumberFor<B>), RoundTracker>,
 	session_start: NumberFor<B>,

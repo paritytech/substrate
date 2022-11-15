@@ -219,7 +219,7 @@ impl TestNetFactory for BeefyTestNet {
 }
 
 macro_rules! create_test_api {
-    ( $api_name:ident, mmr_root: $mmr_root:expr, $($inits:expr),+ ) => {
+    ( $api_name:ident, mmr_root: $mmr_root:expr, set_id: $set_id:literal, $($inits:expr),+ ) => {
 		pub(crate) mod $api_name {
 			use super::*;
 
@@ -241,7 +241,7 @@ macro_rules! create_test_api {
 			sp_api::mock_impl_runtime_apis! {
 				impl BeefyApi<Block> for RuntimeApi {
 					fn validator_set() -> Option<BeefyValidatorSet> {
-						BeefyValidatorSet::new(make_beefy_ids(&[$($inits),+]), 0)
+						BeefyValidatorSet::new(make_beefy_ids(&[$($inits),+]), $set_id)
 					}
 				}
 
@@ -274,10 +274,17 @@ macro_rules! create_test_api {
 	};
 }
 
-create_test_api!(two_validators, mmr_root: GOOD_MMR_ROOT, BeefyKeyring::Alice, BeefyKeyring::Bob);
+create_test_api!(
+	two_validators,
+	mmr_root: GOOD_MMR_ROOT,
+	set_id: 0,
+	BeefyKeyring::Alice,
+	BeefyKeyring::Bob
+);
 create_test_api!(
 	four_validators,
 	mmr_root: GOOD_MMR_ROOT,
+	set_id: 0,
 	BeefyKeyring::Alice,
 	BeefyKeyring::Bob,
 	BeefyKeyring::Charlie,
@@ -286,10 +293,18 @@ create_test_api!(
 create_test_api!(
 	bad_four_validators,
 	mmr_root: BAD_MMR_ROOT,
+	set_id: 0,
 	BeefyKeyring::Alice,
 	BeefyKeyring::Bob,
 	BeefyKeyring::Charlie,
 	BeefyKeyring::Dave
+);
+create_test_api!(
+	next_two_validators,
+	mmr_root: GOOD_MMR_ROOT,
+	set_id: 1,
+	BeefyKeyring::Alice,
+	BeefyKeyring::Bob
 );
 
 fn add_mmr_digest(header: &mut Header, mmr_hash: MmrRootHash) {
