@@ -286,8 +286,7 @@ fn service_page_works() {
 			msgs -= process;
 
 			//  Enough weight to process `process` messages.
-			let mut meter =
-				WeightMeter::from_limit(((2 + (3 + 1) * process) as u64).into_weight());
+			let mut meter = WeightMeter::from_limit(((2 + (3 + 1) * process) as u64).into_weight());
 			System::reset_events();
 			let (processed, status) =
 				crate::Pallet::<Test>::service_page(&Here, &mut book, &mut meter, Weight::MAX);

@@ -87,7 +87,7 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const HeapSize: u32 = 32 * 1024;
 	pub const MaxStale: u32 = 32;
-	pub const ServiceWeight: Option<Weight> = Some(Weight::from_parts(10, 10));
+	pub static ServiceWeight: Option<Weight> = Some(Weight::from_parts(100, 100));
 }
 
 impl Config for Test {
@@ -131,7 +131,7 @@ fn stress_test_enqueue_and_service() {
 	let mut rng = rand::rngs::StdRng::seed_from_u64(2);
 
 	new_test_ext::<Test>().execute_with(|| {
-		for _ in 0..blocks {
+		for block in 0..blocks {
 			let num_queues = rng.gen_range(1..max_queues);
 			let mut num_messages = 0;
 			let mut total_msg_len = 0;
@@ -165,9 +165,10 @@ fn stress_test_enqueue_and_service() {
 				// We have to use at least 1 here since otherwise messages will marked as
 				// permanently overweight.
 				let weight = rng.gen_range(1..=msgs_remaining).into_weight();
+				ServiceWeight::set(Some(weight));
 
 				log::info!("Processing {} messages...", weight.ref_time());
-				let consumed = MessageQueue::service_queues(weight);
+				let consumed = MessageQueue::on_initialize(block);
 				if consumed != weight {
 					panic!(
 						"consumed != weight: {} != {}\n{}",
