@@ -771,6 +771,22 @@ where
 		);
 
 		loop {
+			// Don't bother voting or requesting justifications during major sync.
+			if !self.network.is_major_syncing() {
+				// If the current target is a mandatory block,
+				// make sure there's also an on-demand justification request out for it.
+				if let Some(block) = self.voting_oracle().mandatory_pending() {
+					// This only starts new request if there isn't already an active one.
+					self.on_demand_justifications.request(block);
+				}
+				// There were external events, 'state' is changed, author a vote if needed/possible.
+				if let Err(err) = self.try_to_vote() {
+					debug!(target: "beefy", "🥩 {}", err);
+				}
+			} else {
+				debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
+			}
+
 			let mut gossip_engine = &mut self.gossip_engine;
 			// Wait for, and handle external events.
 			// The branches below only change 'state', actual voting happen afterwards,
@@ -837,22 +853,6 @@ where
 			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
 			if let Err(err) = self.try_pending_justif_and_votes() {
 				debug!(target: "beefy", "🥩 {}", err);
-			}
-
-			// Don't bother voting or requesting justifications during major sync.
-			if !self.network.is_major_syncing() {
-				// If the current target is a mandatory block,
-				// make sure there's also an on-demand justification request out for it.
-				if let Some(block) = self.voting_oracle().mandatory_pending() {
-					// This only starts new request if there isn't already an active one.
-					self.on_demand_justifications.request(block);
-				}
-				// There were external events, 'state' is changed, author a vote if needed/possible.
-				if let Err(err) = self.try_to_vote() {
-					debug!(target: "beefy", "🥩 {}", err);
-				}
-			} else {
-				debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
 			}
 		}
 	}
