@@ -252,8 +252,8 @@ pub mod pallet {
 			let pre_digest = <frame_system::Pallet<T>>::digest()
 				.logs
 				.iter()
-				.filter_map(|s| {
-					s.as_pre_runtime().and_then(|(id, mut data)| {
+				.filter_map(|digest| {
+					digest.as_pre_runtime().and_then(|(id, mut data)| {
 						if id == SASSAFRAS_ENGINE_ID {
 							PreDigest::decode(&mut data).ok()
 						} else {
@@ -289,6 +289,9 @@ pub mod pallet {
 			// already occurred at this point, so the
 			let pre_digest = Initialized::<T>::take()
 				.expect("Finalization is called after initialization; qed.");
+
+			// TODO-SASS-P3: apparently this is not 100% ok
+			// `vrf_output` should be processed using `attach_input_hash(&pubkey, transcript)`
 			Self::deposit_randomness(pre_digest.vrf_output.as_bytes());
 
 			// If we are in the second half of the epoch, we can start sorting the next epoch
