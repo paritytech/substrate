@@ -21,14 +21,14 @@ frame-support = { version = "4.0.0-dev", default-features = false, path = "../su
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-authorship = { version = "4.0.0-dev", default-features = false, path = "../authorship" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
+sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 grandpa = { package = "finality-grandpa", version = "0.16.0", features = ["derive-codec"] }

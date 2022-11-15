@@ -19,10 +19,10 @@ impl-trait-for-tuples = "0.2.2"
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }
 smallvec = "1.8.0"
-sp-arithmetic = { version = "5.0.0", default-features = false, path = "../arithmetic" }
-sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../arithmetic" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]
