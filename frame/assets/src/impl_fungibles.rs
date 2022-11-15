@@ -179,22 +179,6 @@ impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> 
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
-	type DestroyWitness = DestroyWitness;
-
-	fn get_destroy_witness(asset: &T::AssetId) -> Option<Self::DestroyWitness> {
-		Asset::<T, I>::get(asset).map(|asset_details| asset_details.destroy_witness())
-	}
-
-	fn destroy(
-		id: T::AssetId,
-		witness: Self::DestroyWitness,
-		maybe_check_owner: Option<T::AccountId>,
-	) -> Result<Self::DestroyWitness, DispatchError> {
-		Self::do_destroy(id, witness, maybe_check_owner)
-	}
-}
-
 impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {
@@ -281,5 +265,16 @@ impl<T: Config<I>, I: 'static> fungibles::roles::Inspect<<T as SystemConfig>::Ac
 
 	fn freezer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
 		Asset::<T, I>::get(asset).map(|x| x.freezer)
+	}
+}
+
+impl<T: Config<I>, I: 'static> fungibles::InspectEnumerable<T::AccountId> for Pallet<T, I> {
+	type AssetsIterator = KeyPrefixIterator<<T as Config<I>>::AssetId>;
+
+	/// Returns an iterator of the assets in existence.
+	///
+	/// NOTE: iterating this list invokes a storage read per item.
+	fn asset_ids() -> Self::AssetsIterator {
+		Asset::<T, I>::iter_keys()
 	}
 }
