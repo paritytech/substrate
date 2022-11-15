@@ -7,7 +7,7 @@
     - .build-refs
     - .kubernetes-env
   variables:
-    CI_IMAGE:                      quay.io/buildah/stable
+    CI_IMAGE:                      $BUILDAH_IMAGE
     GIT_STRATEGY:                  none
     DOCKERFILE:                    $PRODUCT.Dockerfile
     IMAGE_NAME:                    docker.io/parity/$PRODUCT
