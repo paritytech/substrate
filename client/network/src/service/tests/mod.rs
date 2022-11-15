@@ -80,7 +80,7 @@ impl TestNetwork {
 		let service = worker.service().clone();
 		let event_stream = service.event_stream("test");
 
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			futures::pin_mut!(worker);
 			let _ = worker.await;
 		});
@@ -247,21 +247,21 @@ impl TestNetworkBuilder {
 		let block_request_protocol_config = {
 			let (handler, protocol_config) =
 				BlockRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			async_std::task::spawn(handler.run().boxed());
+			tokio::spawn(handler.run().boxed());
 			protocol_config
 		};
 
 		let state_request_protocol_config = {
 			let (handler, protocol_config) =
 				StateRequestHandler::new(&protocol_id, None, client.clone(), 50);
-			async_std::task::spawn(handler.run().boxed());
+			tokio::spawn(handler.run().boxed());
 			protocol_config
 		};
 
 		let light_client_request_protocol_config = {
 			let (handler, protocol_config) =
 				LightClientRequestHandler::new(&protocol_id, None, client.clone());
-			async_std::task::spawn(handler.run().boxed());
+			tokio::spawn(handler.run().boxed());
 			protocol_config
 		};
 
@@ -314,7 +314,7 @@ impl TestNetworkBuilder {
 		.unwrap();
 
 		let service = worker.service().clone();
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			let _ = chain_sync_network_provider.run(service).await;
 		});
 

@@ -16,12 +16,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use tokio::net::{TcpListener, TcpStream};
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use core::pin::Pin;
 use futures::prelude::*;
 use soketto::handshake::{server::Response, Server};
 use std::{io, net::SocketAddr};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Configuration for a [`WsServer`].
 pub struct Config {
@@ -72,8 +72,12 @@ pub struct WsServer {
 	negotiating: stream::FuturesUnordered<
 		Pin<
 			Box<
-				dyn Future<Output = Result<Server<'static, Compat<TcpStream>>, Box<dyn std::error::Error>>>
-					+ Send,
+				dyn Future<
+						Output = Result<
+							Server<'static, Compat<TcpStream>>,
+							Box<dyn std::error::Error>,
+						>,
+					> + Send,
 			>,
 		>,
 	>,

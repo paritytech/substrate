@@ -325,10 +325,7 @@ async fn invalid_justification_imported() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection)
-		.await
-		.is_err()
-	{
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection).await.is_err() {
 		panic!("did not receive disconnection event in time");
 	}
 }
@@ -393,10 +390,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection)
-		.await
-		.is_err()
-	{
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection).await.is_err() {
 		panic!("did not receive disconnection event in time");
 	}
 }

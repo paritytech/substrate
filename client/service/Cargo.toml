@@ -93,4 +93,3 @@ static_init = "1.0.3"
 [dev-dependencies]
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 substrate-test-runtime = { version = "2.0.0", path = "../../test-utils/runtime/" }
-async-std = { version = "1.11.0", default-features = false }

@@ -87,7 +87,9 @@ fn notifications_state_consistent() {
 		);
 	}
 
-	async_std::task::block_on(async move {
+	let runtime = tokio::runtime::Runtime::new().unwrap();
+
+	runtime.block_on(async move {
 		// True if we have an active substream from node1 to node2.
 		let mut node1_to_node2_open = false;
 		// True if we have an active substream from node2 to node1.
@@ -216,7 +218,7 @@ fn notifications_state_consistent() {
 	});
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn lots_of_incoming_peers_works() {
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
@@ -244,7 +246,7 @@ async fn lots_of_incoming_peers_works() {
 			.build()
 			.start_network();
 
-		background_tasks_to_wait.push(async_std::task::spawn(async move {
+		background_tasks_to_wait.push(tokio::spawn(async move {
 			// Create a dummy timer that will "never" fire, and that will be overwritten when we
 			// actually need the timer. Using an Option would be technically cleaner, but it would
 			// make the code below way more complicated.
@@ -290,7 +292,9 @@ fn notifications_back_pressure() {
 	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 	let node2_id = node2.local_peer_id();
 
-	let receiver = async_std::task::spawn(async move {
+	let runtime = tokio::runtime::Runtime::new().unwrap();
+
+	let receiver = runtime.spawn(async move {
 		let mut received_notifications = 0;
 
 		while received_notifications < TOTAL_NOTIFS {
@@ -306,12 +310,12 @@ fn notifications_back_pressure() {
 			};
 
 			if rand::random::<u8>() < 2 {
-				async_std::task::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
+				tokio::time::sleep(Duration::from_millis(rand::random::<u64>() % 750)).await;
 			}
 		}
 	});
 
-	async_std::task::block_on(async move {
+	runtime.block_on(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream1.next().await.unwrap() {
@@ -331,7 +335,7 @@ fn notifications_back_pressure() {
 				.unwrap();
 		}
 
-		receiver.await;
+		receiver.await.unwrap();
 	});
 }
 
@@ -369,7 +373,9 @@ fn fallback_name_working() {
 		.build()
 		.start_network();
 
-	let receiver = async_std::task::spawn(async move {
+	let runtime = tokio::runtime::Runtime::new().unwrap();
+
+	let receiver = runtime.spawn(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream2.next().await.unwrap() {
@@ -383,7 +389,7 @@ fn fallback_name_working() {
 		}
 	});
 
-	async_std::task::block_on(async move {
+	runtime.block_on(async move {
 		// Wait for the `NotificationStreamOpened`.
 		loop {
 			match events_stream1.next().await.unwrap() {
@@ -397,13 +403,13 @@ fn fallback_name_working() {
 			};
 		}
 
-		receiver.await;
+		receiver.await.unwrap();
 	});
 }
 
 // Disconnect peer by calling `Protocol::disconnect_peer()` with the supplied block announcement
 // protocol name and verify that `SyncDisconnected` event is emitted
-#[async_std::test]
+#[tokio::test]
 async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
 	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto();
 

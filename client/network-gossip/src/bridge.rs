@@ -308,7 +308,6 @@ impl<B: BlockT> futures::future::FusedFuture for GossipEngine<B> {
 mod tests {
 	use super::*;
 	use crate::{multiaddr::Multiaddr, ValidationResult, ValidatorContext};
-	use async_std::task::spawn;
 	use futures::{
 		channel::mpsc::{unbounded, UnboundedSender},
 		executor::{block_on, block_on_stream},
@@ -332,6 +331,7 @@ mod tests {
 		sync::{Arc, Mutex},
 	};
 	use substrate_test_runtime_client::runtime::Block;
+	use tokio::spawn;
 
 	#[derive(Clone, Default)]
 	struct TestNetwork {

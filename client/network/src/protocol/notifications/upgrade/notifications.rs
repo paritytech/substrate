@@ -481,10 +481,13 @@ pub enum NotificationsOutError {
 #[cfg(test)]
 mod tests {
 	use super::{NotificationsIn, NotificationsInOpen, NotificationsOut, NotificationsOutOpen};
-	use tokio::{net::{TcpListener, TcpStream}, runtime::Runtime};
-	use tokio_util::compat::TokioAsyncReadCompatExt;
 	use futures::{channel::oneshot, prelude::*};
 	use libp2p::core::upgrade;
+	use tokio::{
+		net::{TcpListener, TcpStream},
+		runtime::Runtime,
+	};
+	use tokio_util::compat::TokioAsyncReadCompatExt;
 
 	#[test]
 	fn basic_works() {
