@@ -273,7 +273,6 @@ fn service_page_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		set_weight("service_page_base_completion", 2.into_weight());
 		set_weight("service_page_item", 3.into_weight());
-		set_weight("process_message_payload", 4.into_weight());
 
 		let (page, mut msgs) = full_page::<Test>();
 		assert!(msgs >= 10, "pre-condition: need at least 10 msgs per page");
@@ -288,7 +287,7 @@ fn service_page_works() {
 
 			//  Enough weight to process `process` messages.
 			let mut meter =
-				WeightCounter::from_limit(((2 + (3 + 4 + 1) * process) as u64).into_weight());
+				WeightCounter::from_limit(((2 + (3 + 1) * process) as u64).into_weight());
 			System::reset_events();
 			let (processed, status) =
 				crate::Pallet::<Test>::service_page(&Here, &mut book, &mut meter, Weight::MAX);
@@ -620,7 +619,6 @@ fn execute_overweight_works() {
 		set_weight("bump_service_head", 1.into_weight());
 		set_weight("service_queue_base", 1.into_weight());
 		set_weight("service_page_base_completion", 1.into_weight());
-		set_weight("process_message_payload", 1.into_weight());
 
 		// Enqueue a message
 		let origin = MessageOrigin::Here;
@@ -630,7 +628,7 @@ fn execute_overweight_works() {
 		assert_eq!(book.message_count, 1);
 
 		// Mark the message as permanently overweight.
-		assert_eq!(MessageQueue::service_queues(5.into_weight()), 5.into_weight());
+		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
 				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=6"),
@@ -642,12 +640,12 @@ fn execute_overweight_works() {
 		);
 		// Now try to execute it.
 		let consumed = MessageQueue::do_execute_overweight(origin, 0, 0, 7.into_weight()).unwrap();
+		assert_eq!(consumed, 6.into_weight());
 		// There is no message left in the book.
 		let book = BookStateFor::<Test>::get(&origin);
 		assert_eq!(book.message_count, 0);
 		// Doing it again will error.
 		let consumed =
-			MessageQueue::do_execute_overweight(origin, 0, 0, 60.into_weight()).unwrap_err(); // TODO not 60
-		                                                                          // here
+			MessageQueue::do_execute_overweight(origin, 0, 0, 60.into_weight()).unwrap_err();
 	});
 }

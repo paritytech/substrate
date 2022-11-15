@@ -707,7 +707,7 @@ impl<T: Config> Pallet<T> {
 		book_state.count.saturating_dec();
 		book_state.message_count.saturating_reduce(page.remaining.into());
 		book_state.size.saturating_reduce(page.remaining_size.into());
-		BookStateFor::<T>::insert(origin, book_state);
+		BookStateFor::<T>::insert(&origin, &book_state);
 		T::QueueChangeHandler::on_queue_changed(
 			origin.clone(),
 			book_state.message_count,
@@ -927,6 +927,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Process a single message.
+	///
+	/// The base weight of this function needs to be accounted for by the caller. `weight` is the
+	/// remaining weight to process the message. `overweight_limit` is the maximum weight that a
+	/// message can ever consume. Messages above this limit are marked as permanently overweight.
 	fn process_message_payload(
 		origin: MessageOriginOf<T>,
 		page_index: PageIndex,
@@ -935,10 +939,6 @@ impl<T: Config> Pallet<T> {
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
-		if !weight.check_accrue(T::WeightInfo::process_message_payload()) {
-			return MessageExecutionStatus::InsufficientWeight
-		}
-
 		let hash = T::Hashing::hash(message);
 		use ProcessMessageError::Overweight;
 		match T::MessageProcessor::process_message(message, origin.clone(), weight.remaining()) {

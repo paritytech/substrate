@@ -37,11 +37,9 @@ pub trait WeightInfo {
 	fn service_page_base_no_completion() -> Weight;
 	fn ready_ring_unknit() -> Weight;
 	fn service_page_item() -> Weight;
-	fn service_page_process_message() -> Weight;
 	fn bump_service_head() -> Weight;
 	fn reap_page() -> Weight;
 	fn execute_overweight() -> Weight;
-	fn process_message_payload() -> Weight;
 }
 
 /// Weights for pallet_message_queue using the Substrate node and recommended hardware.
@@ -49,64 +47,60 @@ pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: MessageQueue BookStateFor (r:1 w:1)
 	fn service_queue_base() -> Weight {
-		// Minimum execution time: 3_489 nanoseconds.
-		Weight::from_ref_time(3_611_000 as u64)
+		// Minimum execution time: 3_677 nanoseconds.
+		Weight::from_ref_time(3_838_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn service_page_base_completion() -> Weight {
-		// Minimum execution time: 5_513 nanoseconds.
-		Weight::from_ref_time(5_680_000 as u64)
+		// Minimum execution time: 5_431 nanoseconds.
+		Weight::from_ref_time(5_685_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn service_page_base_no_completion() -> Weight {
-		// Minimum execution time: 5_665 nanoseconds.
-		Weight::from_ref_time(5_758_000 as u64)
+		// Minimum execution time: 5_598 nanoseconds.
+		Weight::from_ref_time(5_816_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue BookStateFor (r:2 w:2)
 	// Storage: MessageQueue ServiceHead (r:1 w:1)
 	fn ready_ring_unknit() -> Weight {
-		// Minimum execution time: 5_913 nanoseconds.
-		Weight::from_ref_time(6_056_000 as u64)
+		// Minimum execution time: 5_926 nanoseconds.
+		Weight::from_ref_time(6_208_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(3 as u64))
 			.saturating_add(T::DbWeight::get().writes(3 as u64))
 	}
 	fn service_page_item() -> Weight {
-		// Minimum execution time: 8_354 nanoseconds.
-		Weight::from_ref_time(9_730_000 as u64)
+		// Minimum execution time: 74_873 nanoseconds.
+		Weight::from_ref_time(100_821_000 as u64)
 	}
-	fn service_page_process_message() -> Weight {
-		// Minimum execution time: 28 nanoseconds.
-		Weight::from_ref_time(31_000 as u64)
-	}
+	// Storage: MessageQueue ServiceHead (r:1 w:1)
+	// Storage: MessageQueue BookStateFor (r:1 w:0)
 	fn bump_service_head() -> Weight {
-		// Minimum execution time: 28 nanoseconds.
-		Weight::from_ref_time(33_000 as u64)
+		// Minimum execution time: 8_222 nanoseconds.
+		Weight::from_ref_time(9_503_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue BookStateFor (r:1 w:1)
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn reap_page() -> Weight {
-		// Minimum execution time: 26_075 nanoseconds.
-		Weight::from_ref_time(36_499_000 as u64)
+		// Minimum execution time: 27_052 nanoseconds.
+		Weight::from_ref_time(36_827_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
-	// Storage: MessageQueue BookStateFor (r:1 w:0)
+	// Storage: MessageQueue BookStateFor (r:1 w:1)
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn execute_overweight() -> Weight {
-		// Minimum execution time: 29_557 nanoseconds.
-		Weight::from_ref_time(41_779_000 as u64)
+		// Minimum execution time: 92_801 nanoseconds.
+		Weight::from_ref_time(93_715_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
-			.saturating_add(T::DbWeight::get().writes(1 as u64))
-	}
-	fn process_message_payload() -> Weight {
-		// Minimum execution time: 75_445 nanoseconds.
-		Weight::from_ref_time(75_978_000 as u64)
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
 }
 
@@ -114,63 +108,59 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 impl WeightInfo for () {
 	// Storage: MessageQueue BookStateFor (r:1 w:1)
 	fn service_queue_base() -> Weight {
-		// Minimum execution time: 3_489 nanoseconds.
-		Weight::from_ref_time(3_611_000 as u64)
+		// Minimum execution time: 3_677 nanoseconds.
+		Weight::from_ref_time(3_838_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn service_page_base_completion() -> Weight {
-		// Minimum execution time: 5_513 nanoseconds.
-		Weight::from_ref_time(5_680_000 as u64)
+		// Minimum execution time: 5_431 nanoseconds.
+		Weight::from_ref_time(5_685_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn service_page_base_no_completion() -> Weight {
-		// Minimum execution time: 5_665 nanoseconds.
-		Weight::from_ref_time(5_758_000 as u64)
+		// Minimum execution time: 5_598 nanoseconds.
+		Weight::from_ref_time(5_816_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue BookStateFor (r:2 w:2)
 	// Storage: MessageQueue ServiceHead (r:1 w:1)
 	fn ready_ring_unknit() -> Weight {
-		// Minimum execution time: 5_913 nanoseconds.
-		Weight::from_ref_time(6_056_000 as u64)
+		// Minimum execution time: 5_926 nanoseconds.
+		Weight::from_ref_time(6_208_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(3 as u64))
 			.saturating_add(RocksDbWeight::get().writes(3 as u64))
 	}
 	fn service_page_item() -> Weight {
-		// Minimum execution time: 8_354 nanoseconds.
-		Weight::from_ref_time(9_730_000 as u64)
+		// Minimum execution time: 74_873 nanoseconds.
+		Weight::from_ref_time(100_821_000 as u64)
 	}
-	fn service_page_process_message() -> Weight {
-		// Minimum execution time: 28 nanoseconds.
-		Weight::from_ref_time(31_000 as u64)
-	}
+	// Storage: MessageQueue ServiceHead (r:1 w:1)
+	// Storage: MessageQueue BookStateFor (r:1 w:0)
 	fn bump_service_head() -> Weight {
-		// Minimum execution time: 28 nanoseconds.
-		Weight::from_ref_time(33_000 as u64)
+		// Minimum execution time: 8_222 nanoseconds.
+		Weight::from_ref_time(9_503_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
 	// Storage: MessageQueue BookStateFor (r:1 w:1)
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn reap_page() -> Weight {
-		// Minimum execution time: 26_075 nanoseconds.
-		Weight::from_ref_time(36_499_000 as u64)
+		// Minimum execution time: 27_052 nanoseconds.
+		Weight::from_ref_time(36_827_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
-	// Storage: MessageQueue BookStateFor (r:1 w:0)
+	// Storage: MessageQueue BookStateFor (r:1 w:1)
 	// Storage: MessageQueue Pages (r:1 w:1)
 	fn execute_overweight() -> Weight {
-		// Minimum execution time: 29_557 nanoseconds.
-		Weight::from_ref_time(41_779_000 as u64)
+		// Minimum execution time: 92_801 nanoseconds.
+		Weight::from_ref_time(93_715_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
-			.saturating_add(RocksDbWeight::get().writes(1 as u64))
-	}
-	fn process_message_payload() -> Weight {
-		// Minimum execution time: 75_445 nanoseconds.
-		Weight::from_ref_time(75_978_000 as u64)
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
 	}
 }

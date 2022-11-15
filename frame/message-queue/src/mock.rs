@@ -130,12 +130,6 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	fn service_queue_base() -> Weight {
 		WeightForCall::get().get("service_queue_base").copied().unwrap_or_default()
 	}
-	fn service_page_process_message() -> Weight {
-		WeightForCall::get()
-			.get("service_page_process_message")
-			.copied()
-			.unwrap_or_default()
-	}
 	fn bump_service_head() -> Weight {
 		WeightForCall::get().get("bump_service_head").copied().unwrap_or_default()
 	}
@@ -144,9 +138,6 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	}
 	fn ready_ring_unknit() -> Weight {
 		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
-	}
-	fn process_message_payload() -> Weight {
-		WeightForCall::get().get("process_message_payload").copied().unwrap_or_default()
 	}
 }
 

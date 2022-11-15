@@ -138,7 +138,8 @@ benchmarks! {
 	execute_overweight {
 		// Mock the storage
 		let origin: MessageOriginOf<T> = 0.into();
-		let (mut page, msgs) = full_page::<T>();
+		let msg = vec![1u8; MaxMessageLenOf::<T>::get() as usize];
+		let mut page = page::<T>(&msg);
 		page.skip_first(false); // One skipped un-processed overweight message.
 		let book = book_for::<T>(&page);
 		Pages::<T>::insert(&origin, 0, &page);
@@ -147,7 +148,7 @@ benchmarks! {
 	}: _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0u32, 0u32.into(), Weight::MAX)
 	verify {
 		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&0u32.encode()), origin: 0.into(),
+			hash: T::Hashing::hash(&msg), origin: 0.into(),
 			weight_used: Weight::from_parts(1, 1), success: true
 		}.into());
 	}
