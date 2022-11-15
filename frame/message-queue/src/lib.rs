@@ -213,12 +213,18 @@ impl<
 	}
 }
 
+/// The neighbours of a queue in the a double-linked list
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct Neighbours<MessageOrigin> {
 	prev: MessageOrigin,
 	next: MessageOrigin,
 }
 
+/// The state of a queue as represented by a book of its pages.
+///
+/// Each queue has exactly one book which holds all of its pages. All pages of a book combined
+/// contain all of the messages of its queue; hence the name *Book*.
+/// Books can be chained together in a double-linked fashion through their `ready_neighbours` field.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 pub struct BookState<MessageOrigin> {
 	/// The first page with some items to be processed in it. If this is `>= end`, then there are
@@ -243,7 +249,9 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 	}
 }
 
+/// Notifies the implementor of changes to a queue.
 pub trait OnQueueChanged<Id> {
+	/// The queue `id` changed and now has these properties.
 	fn on_queue_changed(id: Id, items_count: u32, items_size: u32);
 }
 
@@ -316,22 +324,11 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// Message discarded due to an inability to decode the item. Usually caused by state
 		/// corruption.
-		Discarded {
-			hash: T::Hash,
-		},
+		Discarded { hash: T::Hash },
 		/// Message discarded due to an error in the `MessageProcessor` (usually a format error).
-		ProcessingFailed {
-			hash: T::Hash,
-			origin: MessageOriginOf<T>,
-			error: ProcessMessageError,
-		},
+		ProcessingFailed { hash: T::Hash, origin: MessageOriginOf<T>, error: ProcessMessageError },
 		/// Message is processed.
-		Processed {
-			hash: T::Hash,
-			origin: MessageOriginOf<T>,
-			weight_used: Weight,
-			success: bool,
-		},
+		Processed { hash: T::Hash, origin: MessageOriginOf<T>, weight_used: Weight, success: bool },
 		/// Message placed in overweight queue.
 		OverweightEnqueued {
 			hash: T::Hash,
@@ -339,10 +336,8 @@ pub mod pallet {
 			page_index: PageIndex,
 			message_index: T::Size,
 		},
-		PageReaped {
-			origin: MessageOriginOf<T>,
-			index: PageIndex,
-		},
+		/// This page was reaped.
+		PageReaped { origin: MessageOriginOf<T>, index: PageIndex },
 	}
 
 	#[pallet::error]
@@ -352,10 +347,13 @@ pub mod pallet {
 		NotReapable,
 		/// Page to be reaped does not exist.
 		NoPage,
+		/// The referenced message could not be found.
 		NoMessage,
-		Unexpected,
+		/// The message was already processed and cannot be processed again.
 		AlreadyProcessed,
+		/// The message is queued for future execution.
 		Queued,
+		/// There is temporarily not enough weight to continue servicing messages.
 		InsufficientWeight,
 	}
 
@@ -537,6 +535,7 @@ impl<T: Config> Pallet<T> {
 			});
 			if let Some(head) = ServiceHead::<T>::get() {
 				if &head == origin {
+					// NOTE: This case is benchmarked by `ready_ring_unknit`.
 					ServiceHead::<T>::put(neighbours.next);
 				}
 			} else {
@@ -545,6 +544,9 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
+	/// Tries to bump the current `ServiceHead` to the next ready queue.
+	///
+	/// Returns the current head if it got be bumped and `None` otherwise.
 	fn bump_service_head(weight: &mut WeightCounter) -> Option<MessageOriginOf<T>> {
 		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
 			return None
@@ -573,6 +575,7 @@ impl<T: Config> Pallet<T> {
 			.size
 			// This should be payload size, but here the payload *is* the message.
 			.saturating_accrue(message.len() as u32);
+
 		if book_state.end > book_state.begin {
 			debug_assert!(book_state.ready_neighbours.is_some(), "Must be in ready ring if ready");
 			// Already have a page in progress - attempt to append.
@@ -609,6 +612,10 @@ impl<T: Config> Pallet<T> {
 		BookStateFor::<T>::insert(origin, book_state);
 	}
 
+	/// Try to execute a single message that was marked as overweight.
+	///
+	/// The `weight_limit` is the weight that can be consumed to execute the message. The base
+	/// weight of the function it self must be measured by the caller.
 	pub fn do_execute_overweight(
 		origin: MessageOriginOf<T>,
 		page_index: PageIndex,
@@ -774,7 +781,10 @@ impl<T: Config> Pallet<T> {
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
 		use PageExecutionStatus::*;
-		if !weight.check_accrue(T::WeightInfo::service_page_base()) {
+		if !weight.check_accrue(
+			T::WeightInfo::service_page_base_completion()
+				.max(T::WeightInfo::service_page_base_no_completion()),
+		) {
 			return (0, Bailed)
 		}
 
@@ -917,6 +927,7 @@ impl<T: Config> Pallet<T> {
 		info
 	}
 
+	/// Process a single message.
 	fn process_message_payload(
 		origin: MessageOriginOf<T>,
 		page_index: PageIndex,
@@ -1033,6 +1044,9 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		weight.consumed
 	}
 
+	/// Execute a single overweight message.
+	///
+	/// The weight limit must be enough for `execute_overweight` and the message execution itself.
 	fn execute_overweight(
 		weight_limit: Weight,
 		(message_origin, page, index): Self::OverweightMessageAddress,
