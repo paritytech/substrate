@@ -54,9 +54,9 @@ build-linux-substrate:
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
-  needs:
-    - job:                         test-linux-stable
-      artifacts:                   false
+  # needs:
+  #   - job:                         test-linux-stable
+  #     artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
     - !reference [.rusty-cachier, before_script]
