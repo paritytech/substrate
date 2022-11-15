@@ -3401,6 +3401,7 @@ dependencies = [
  "pallet-recovery",
  "pallet-referenda",
  "pallet-remark",
+ "pallet-root-testing",
  "pallet-scheduler",
  "pallet-session",
  "pallet-session-benchmarking",
@@ -4589,6 +4590,7 @@ dependencies = [
  "pallet-balances",
  "pallet-contracts",
  "pallet-im-online",
+ "pallet-root-testing",
  "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -5462,21 +5464,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-example-parallel"
-version = "3.0.0-dev"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
- "sp-tasks",
-]
-
-[[package]]
 name = "pallet-fast-unstake"
 version = "4.0.0-dev"
 dependencies = [
@@ -5972,13 +5959,12 @@ dependencies = [
 
 [[package]]
 name = "pallet-root-offences"
-version = "1.0.0"
+version = "1.0.0-dev"
 dependencies = [
  "frame-election-provider-support",
  "frame-support",
  "frame-system",
  "pallet-balances",
- "pallet-offences",
  "pallet-session",
  "pallet-staking",
  "pallet-staking-reward-curve",
@@ -5990,6 +5976,17 @@ dependencies = [
  "sp-runtime",
  "sp-staking",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-root-testing"
+version = "1.0.0-dev"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -6332,6 +6329,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-root-testing",
  "pallet-collective",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -7988,7 +7986,6 @@ dependencies = [
  "sp-runtime",
  "sp-runtime-interface",
  "sp-state-machine",
- "sp-tasks",
  "sp-trie",
  "sp-version",
  "sp-wasm-interface",
@@ -8548,7 +8545,6 @@ dependencies = [
  "sp-runtime",
  "sp-sandbox",
  "sp-std",
- "sp-tasks",
  "substrate-wasm-builder",
 ]
 
@@ -9957,19 +9953,6 @@ dependencies = [
  "ref-cast",
  "serde",
  "sp-debug-derive",
- "sp-std",
-]
-
-[[package]]
-name = "sp-tasks"
-version = "4.0.0-dev"
-dependencies = [
- "log",
- "parity-scale-codec",
- "sp-core",
- "sp-externalities",
- "sp-io",
- "sp-runtime-interface",
  "sp-std",
 ]
 
