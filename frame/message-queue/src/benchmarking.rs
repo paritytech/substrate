@@ -35,7 +35,7 @@ benchmarks! {
 
 	// `service_queue` without any page processing or unknitting.
 	service_queue_base {
-		let mut meter = WeightCounter::unlimited();
+		let mut meter = WeightMeter::max_limit();
 	}: {
 		MessageQueue::<T>::service_queue(0u32.into(), &mut meter, Weight::MAX)
 	}
@@ -46,7 +46,7 @@ benchmarks! {
 		let page = PageOf::<T>::default();
 		Pages::<T>::insert(&origin, 0, &page);
 		let mut book_state = single_page_book::<T>();
-		let mut meter = WeightCounter::unlimited();
+		let mut meter = WeightMeter::max_limit();
 		let limit = Weight::MAX;
 	}: {
 		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
@@ -61,7 +61,7 @@ benchmarks! {
 		page.remaining = 1.into();
 		Pages::<T>::insert(&origin, 0, &page);
 		let mut book_state = single_page_book::<T>();
-		let mut meter = WeightCounter::unlimited();
+		let mut meter = WeightMeter::max_limit();
 		let limit = Weight::MAX;
 	}: {
 		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
@@ -85,7 +85,7 @@ benchmarks! {
 		let mut page = page::<T>(&msg.clone());
 		let mut book = book_for::<T>(&page);
 		assert!(page.peek_first().is_some(), "There is one message");
-		let mut weight = WeightCounter::unlimited();
+		let mut weight = WeightMeter::max_limit();
 	}: {
 		let status = MessageQueue::<T>::service_page_item(&0u32.into(), 0, &mut book, &mut page, &mut weight, Weight::MAX);
 		assert_eq!(status, PageExecutionStatus::Partial);
@@ -103,7 +103,7 @@ benchmarks! {
 	// Worst case for calling `bump_service_head`.
 	bump_service_head {
 		setup_bump_service_head::<T>(0.into(), 10.into());
-		let mut weight = WeightCounter::unlimited();
+		let mut weight = WeightMeter::max_limit();
 	}: {
 		MessageQueue::<T>::bump_service_head(&mut weight);
 	} verify {

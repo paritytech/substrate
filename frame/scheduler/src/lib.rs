@@ -81,7 +81,7 @@ use sp_runtime::{
 	BoundedVec, RuntimeDebug,
 };
 use sp_std::{borrow::Borrow, cmp::Ordering, marker::PhantomData, prelude::*};
-use sp_weights::WeightCounter;
+use sp_weights::WeightMeter;
 pub use weights::WeightInfo;
 
 /// Just a simple index for naming period tasks.

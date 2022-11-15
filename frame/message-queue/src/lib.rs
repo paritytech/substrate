@@ -44,7 +44,7 @@ use sp_runtime::{
 	SaturatedConversion, Saturating,
 };
 use sp_std::{fmt::Debug, ops::Deref, prelude::*, vec};
-use sp_weights::WeightCounter;
+use sp_weights::WeightMeter;
 pub use weights::WeightInfo;
 
 /// Type for identifying a page.
@@ -547,7 +547,7 @@ impl<T: Config> Pallet<T> {
 	/// Tries to bump the current `ServiceHead` to the next ready queue.
 	///
 	/// Returns the current head if it got be bumped and `None` otherwise.
-	fn bump_service_head(weight: &mut WeightCounter) -> Option<MessageOriginOf<T>> {
+	fn bump_service_head(weight: &mut WeightMeter) -> Option<MessageOriginOf<T>> {
 		if !weight.check_accrue(T::WeightInfo::bump_service_head()) {
 			return None
 		}
@@ -634,7 +634,7 @@ impl<T: Config> Pallet<T> {
 		);
 		ensure!(!is_processed, Error::<T>::AlreadyProcessed);
 		use MessageExecutionStatus::*;
-		let mut weight_counter = WeightCounter::from_limit(weight_limit);
+		let mut weight_counter = WeightMeter::from_limit(weight_limit);
 		match Self::process_message_payload(
 			origin.clone(),
 			page_index,
@@ -723,7 +723,7 @@ impl<T: Config> Pallet<T> {
 	/// execute are deemed overweight and ignored.
 	fn service_queue(
 		origin: MessageOriginOf<T>,
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> (bool, Option<MessageOriginOf<T>>) {
 		if !weight.check_accrue(
@@ -777,7 +777,7 @@ impl<T: Config> Pallet<T> {
 	fn service_page(
 		origin: &MessageOriginOf<T>,
 		book_state: &mut BookStateOf<T>,
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> (u32, PageExecutionStatus) {
 		use PageExecutionStatus::*;
@@ -838,7 +838,7 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		book_state: &mut BookStateOf<T>,
 		page: &mut PageOf<T>,
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> PageExecutionStatus {
 		// This ugly pre-checking is needed for the invariant
@@ -936,7 +936,7 @@ impl<T: Config> Pallet<T> {
 		page_index: PageIndex,
 		message_index: T::Size,
 		message: &[u8],
-		weight: &mut WeightCounter,
+		weight: &mut WeightMeter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
 		let hash = T::Hashing::hash(message);
@@ -1014,7 +1014,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 	fn service_queues(weight_limit: Weight) -> Weight {
 		// The maximum weight that processing a single message may take.
 		let overweight_limit = weight_limit;
-		let mut weight = WeightCounter::from_limit(weight_limit);
+		let mut weight = WeightMeter::from_limit(weight_limit);
 
 		let mut next = match Self::bump_service_head(&mut weight) {
 			Some(h) => h,
@@ -1054,7 +1054,7 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		weight_limit: Weight,
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
-		let mut weight = WeightCounter::from_limit(weight_limit);
+		let mut weight = WeightMeter::from_limit(weight_limit);
 		if !weight.check_accrue(T::WeightInfo::execute_overweight()) {
 			return Err(ExecuteOverweightError::InsufficientWeight)
 		}
