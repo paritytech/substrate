@@ -964,6 +964,13 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 
+		let pre_solve_weight = T::WeightInfo::pre_election(
+			voters_and_stakes.len() as u32,
+			candidate_ids.len() as u32,
+			num_edges,
+		);
+		let mut post_election_weight: Weight = Weight::zero();
+
 		let num_candidates = candidates_and_deposit.len() as u32;
 		let num_voters = voters_and_votes.len() as u32;
 		let _ = T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
@@ -1119,6 +1126,8 @@ impl<T: Config> Pallet<T> {
 			});
 
 		T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
+			.saturating_add(pre_solve_weight)
+			.saturating_sub(post_election_weight)
 	}
 }
 

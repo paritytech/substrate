@@ -59,6 +59,10 @@ pub trait WeightInfo {
 	fn remove_member_with_replacement() -> Weight;
 	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
 	fn election(c: u32, v: u32, e: u32, ) -> Weight;
+
+    // TODO(gpestana): generate from benchmarks
+    fn pre_election(c: u32, v: u32, e: u32) -> Weight;
+    fn post_election(c: u32, v: u32, e: u32) -> Weight;
 }
 
 /// Weights for pallet_elections using the Substrate node and recommended hardware.
@@ -213,6 +217,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(6 as u64))
 			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(c as u64)))
 	}
+
+   // TODO(gpestana): generate from benchmarks
+    fn pre_election(_c: u32, _v: u32, _e: u32) -> Weight {
+        Weight::zero()
+    }
+    fn post_election(_c: u32, _v: u32, _e: u32) -> Weight {
+        Weight::zero()
+    }
 }
 
 // For backwards compatibility and tests
@@ -366,4 +378,12 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(6 as u64))
 			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(c as u64)))
 	}
+
+   // TODO(gpestana): generate from benchmarks
+    fn pre_election(_c: u32, _v: u32, _e: u32) -> Weight {
+        Weight::zero()
+    }
+    fn post_election(_c: u32, _v: u32, _e: u32) -> Weight {
+        Weight::zero()
+    }
 }
