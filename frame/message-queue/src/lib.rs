@@ -827,7 +827,6 @@ impl<T: Config> Pallet<T> {
 			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
 			book_state.count.saturating_dec();
 		} else {
-			// TODO we only benchmark the `true` case; assuming that it is more expensive.
 			Pages::<T>::insert(&origin, page_index, page);
 		}
 		(total_processed, status)
@@ -936,6 +935,10 @@ impl<T: Config> Pallet<T> {
 		weight: &mut WeightCounter,
 		overweight_limit: Weight,
 	) -> MessageExecutionStatus {
+		if !weight.check_accrue(T::WeightInfo::process_message_payload()) {
+			return MessageExecutionStatus::InsufficientWeight
+		}
+
 		let hash = T::Hashing::hash(message);
 		use ProcessMessageError::Overweight;
 		match T::MessageProcessor::process_message(message, origin.clone(), weight.remaining()) {
@@ -1051,12 +1054,17 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		weight_limit: Weight,
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
-		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight_limit).map_err(|e| {
-			match e {
+		let mut weight = WeightCounter::from_limit(weight_limit);
+		if !weight.check_accrue(T::WeightInfo::execute_overweight()) {
+			return Err(ExecuteOverweightError::InsufficientWeight)
+		}
+
+		Pallet::<T>::do_execute_overweight(message_origin, page, index, weight.remaining()).map_err(
+			|e| match e {
 				Error::<T>::InsufficientWeight => ExecuteOverweightError::InsufficientWeight,
 				_ => ExecuteOverweightError::NotFound,
-			}
-		})
+			},
+		)
 	}
 }
 
