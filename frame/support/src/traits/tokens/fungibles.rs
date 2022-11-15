@@ -276,13 +276,13 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// `destroy_accounts` should only be called after `start_destroy` has been called, and the
 	/// asset is in a `Destroying` state
 	///
-	/// - `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
-	/// - `max_items`: The maximum number of accounts to be destroyed for a given call of the
+	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
+	/// * `max_items`: The maximum number of accounts to be destroyed for a given call of the
 	///   function. This value should be small enough to allow the operation fit into a logical
 	///   block.
 	///
 	///	Response:
-	/// - u32: Total number of approvals which were actually destroyed
+	/// * u32: Total number of approvals which were actually destroyed
 	///
 	/// Due to weight restrictions, this function may need to be called multiple
 	/// times to fully destroy all approvals. It will destroy `max_items` approvals at a
@@ -293,13 +293,13 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// `destroy_approvals` should only be called after `start_destroy` has been called, and the
 	/// asset is in a `Destroying` state
 	///
-	/// - `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
-	/// - `max_items`: The maximum number of accounts to be destroyed for a given call of the
+	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
+	/// * `max_items`: The maximum number of accounts to be destroyed for a given call of the
 	///   function. This value should be small enough to allow the operation fit into a logical
 	///   block.
 	///
 	///	Response:
-	/// - u32: Total number of approvals which were actually destroyed
+	/// * u32: Total number of approvals which were actually destroyed
 	///
 	/// Due to weight restrictions, this function may need to be called multiple
 	/// times to fully destroy all approvals. It will destroy `max_items` approvals at a
@@ -311,6 +311,6 @@ pub trait Destroy<AccountId>: Inspect<AccountId> {
 	/// asset is in a `Destroying` state. All accounts or approvals should be destroyed before
 	/// hand.
 	///
-	/// - `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
+	/// * `id`: The identifier of the asset to be destroyed. This must identify an existing asset.
 	fn finish_destroy(id: Self::AssetId) -> DispatchResult;
 }
