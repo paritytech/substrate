@@ -948,7 +948,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			#[pallet::compact] value: BalanceOf<T>,
 		) -> DispatchResultWithPostInfo {
-			let controller = ensure_signed(origin.clone())?;
+			let controller = ensure_signed(origin)?;
 			let unlocking = Self::ledger(&controller)
 				.map(|l| l.unlocking.len())
 				.ok_or(Error::<T>::NotController)?;
@@ -956,7 +956,7 @@ pub mod pallet {
 			// ensure that there's chunk slots available by requesting the staking interface to
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
-			let maybe_dispatch_weight = {
+			let maybe_withdraw_weight = {
 				let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
 					Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?
@@ -1024,7 +1024,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
 			}
 
-			if let Some(weight) = maybe_dispatch_weight {
+			if let Some(weight) = maybe_withdraw_weight {
 				Ok(frame_support::dispatch::PostDispatchInfo {
 					actual_weight: Some(weight.saturating_add(T::WeightInfo::unbond())),
 					pays_fee: Pays::Yes,

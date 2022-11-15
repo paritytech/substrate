@@ -1384,7 +1384,7 @@ fn many_unbond_calls_should_work() {
 			assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		}
 
-		// only slots of unbonds within last `BondingDuration` are filled.
+		// only slots within last `BondingDuration` are filled.
 		assert_eq!(
 			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::BondingDuration>::get() as usize
