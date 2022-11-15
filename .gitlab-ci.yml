@@ -230,7 +230,7 @@ skip-if-draft:
     - .test-refs-no-trigger-prs-only
   script:
     - rm -f /usr/local/cargo/bin/diener
-    - cargo install --git https://github.com/paritytech/diener --rev fb4833ae21c3e415c4ca604fb72533013887d4a4
+    - cargo install --git https://github.com/paritytech/diener --rev 8852911c3b5d39ec74077cb4eba0b8be3c7e37f4
     - git clone
         --depth=1
         --branch="$PIPELINE_SCRIPTS_TAG"
