@@ -420,9 +420,6 @@ cargo-check-each-crate:
     # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
     # "cargo-check-each-crate I/N" jobs
     CI_JOB_NAME:                   cargo-check-each-crate
-  before_script:
-    - !reference [.rust-info-script, script]
-    - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
     - time ./scripts/ci/gitlab/check-each-crate.sh "$CI_NODE_INDEX" "$CI_NODE_TOTAL"
@@ -435,6 +432,7 @@ cargo-check-each-crate-macos:
   extends: .test-refs
   before_script:
     - !reference [.rust-info-script, script]
+    - !reference [.pipeline-stopper-vars, script]
   variables:
     SKIP_WASM_BUILD:               1
   script:
