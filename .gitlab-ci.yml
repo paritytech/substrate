@@ -229,7 +229,7 @@ skip-if-draft:
     - .docker-env
     - .test-refs-no-trigger-prs-only
   script:
-    - cargo uninstall diener
+    - rm -f /usr/local/cargo/bin/diener
     - cargo install --git https://github.com/paritytech/diener --rev fb4833ae21c3e415c4ca604fb72533013887d4a4
     - git clone
         --depth=1
