@@ -145,17 +145,6 @@ cargo-check-subkey:
     - SKIP_WASM_BUILD=1 time cargo check --locked --release
     - rusty-cachier cache upload
 
-cargo-check-contracts-proc-macro:
-  stage:                           test
-  extends:
-    - .docker-env
-    - .test-refs
-  script:
-    - rusty-cachier snapshot create
-    - cd ./frame/contracts/proc-macro
-    - SKIP_WASM_BUILD=1 time cargo check --locked --release
-    - rusty-cachier cache upload
-
 cargo-check-try-runtime:
   stage:                           test
   # this is an artificial job dependency, for pipeline optimization using GitLab's DAGs
