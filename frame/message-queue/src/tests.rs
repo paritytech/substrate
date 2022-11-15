@@ -21,7 +21,8 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
+use rand::{Rng, SeedableRng};
 
 #[test]
 fn mocked_weight_works() {
@@ -265,15 +266,76 @@ fn service_queue_bails() {
 }
 
 #[test]
-fn service_page_bails() {
-	// Not enough weight for `service_page_base`.
+fn service_page_works() {
+	use super::integration_test::Test;
+	use MessageOrigin::*;
+	use PageExecutionStatus::*; // Run with larger page size.
 	new_test_ext::<Test>().execute_with(|| {
-		set_weight("service_page_base", 2.into_weight());
+		set_weight("service_page_base_completion", 2.into_weight());
+		set_weight("service_page_item", 3.into_weight());
+		set_weight("process_message_payload", 4.into_weight());
+
+		let (page, mut msgs) = full_page::<Test>();
+		assert!(msgs >= 10, "pre-condition: need at least 10 msgs per page");
+		let mut book = book_for::<Test>(&page);
+		Pages::<Test>::insert(&Here, 0, page);
+
+		// Call it a few times each with a random weight limit.
+		let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+		while msgs > 0 {
+			let process = rng.gen_range(0..=msgs);
+			msgs -= process;
+
+			//  Enough weight to process `process` messages.
+			let mut meter =
+				WeightCounter::from_limit(((2 + (3 + 4 + 1) * process) as u64).into_weight());
+			System::reset_events();
+			let (processed, status) =
+				crate::Pallet::<Test>::service_page(&Here, &mut book, &mut meter, Weight::MAX);
+			assert_eq!(processed as usize, process);
+			assert_eq!(NumMessagesProcessed::take(), process);
+			assert_eq!(System::events().len(), process);
+			if msgs == 0 {
+				assert_eq!(status, NoMore);
+			} else {
+				assert_eq!(status, Bailed);
+			}
+		}
+		assert!(!Pages::<Test>::contains_key(&Here, 0), "The page got removed");
+	});
+}
+
+// `service_page` does nothing when called with an insufficient weight limit.
+#[test]
+fn service_page_bails() {
+	// Not enough weight for `service_page_base_completion`.
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("service_page_base_completion", 2.into_weight());
 		let mut meter = WeightCounter::from_limit(1.into_weight());
-		let mut book = single_page_book::<Test>();
+
+		let (page, _) = full_page::<Test>();
+		let mut book = book_for::<Test>(&page);
+		Pages::<Test>::insert(MessageOrigin::Here, 0, page);
 
 		assert_storage_noop!(MessageQueue::service_page(
-			&0.into(),
+			&MessageOrigin::Here,
+			&mut book,
+			&mut meter,
+			Weight::MAX
+		));
+		assert!(meter.consumed.is_zero());
+	});
+	// Not enough weight for `service_page_base_no_completion`.
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("service_page_base_no_completion", 2.into_weight());
+		let mut meter = WeightCounter::from_limit(1.into_weight());
+
+		let (page, _) = full_page::<Test>();
+		let mut book = book_for::<Test>(&page);
+		Pages::<Test>::insert(MessageOrigin::Here, 0, page);
+
+		assert_storage_noop!(MessageQueue::service_page(
+			&MessageOrigin::Here,
 			&mut book,
 			&mut meter,
 			Weight::MAX
@@ -285,6 +347,7 @@ fn service_page_bails() {
 #[test]
 fn service_page_item_bails() {
 	new_test_ext::<Test>().execute_with(|| {
+		let _guard = StorageNoopGuard::default();
 		let (mut page, _) = full_page::<Test>();
 		let mut weight = WeightCounter::from_limit(10.into_weight());
 		let overweight_limit = 10.into_weight();
@@ -304,8 +367,42 @@ fn service_page_item_bails() {
 	});
 }
 
+/// `bump_service_head` does nothing when called with an insufficient weight limit.
 #[test]
-fn service_page_consumes_correct_weight() {
+fn bump_service_head_bails() {
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 2.into_weight());
+		setup_bump_service_head::<Test>(0.into(), 10.into());
+
+		let _guard = StorageNoopGuard::default();
+		let mut meter = WeightCounter::from_limit(1.into_weight());
+		assert!(MessageQueue::bump_service_head(&mut meter).is_none());
+		assert_eq!(meter.consumed, 0.into_weight());
+	});
+}
+
+#[test]
+fn bump_service_head_works() {
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 2.into_weight());
+		let mut meter = WeightCounter::unlimited();
+
+		assert_eq!(MessageQueue::bump_service_head(&mut meter), None, "Cannot bump");
+		assert_eq!(meter.consumed, 2.into_weight());
+
+		setup_bump_service_head::<Test>(0.into(), 1.into());
+
+		assert_eq!(MessageQueue::bump_service_head(&mut meter), Some(0.into()));
+		assert_eq!(ServiceHead::<Test>::get().unwrap(), 1.into(), "Bumped the head");
+		assert_eq!(meter.consumed, 4.into_weight());
+
+		assert_eq!(MessageQueue::bump_service_head(&mut meter), None, "Cannot bump");
+		assert_eq!(meter.consumed, 6.into_weight());
+	});
+}
+
+#[test]
+fn service_page_item_consumes_correct_weight() {
 	new_test_ext::<Test>().execute_with(|| {
 		let mut page = page::<Test>(b"weight=3");
 		let mut weight = WeightCounter::from_limit(10.into_weight());
@@ -329,7 +426,7 @@ fn service_page_consumes_correct_weight() {
 
 /// `service_page_item` skips a permanently `Overweight` message and marks it as `unprocessed`.
 #[test]
-fn service_page_skips_perm_overweight_message() {
+fn service_page_item_skips_perm_overweight_message() {
 	new_test_ext::<Test>().execute_with(|| {
 		let mut page = page::<Test>(b"TooMuch");
 		let mut weight = WeightCounter::from_limit(2.into_weight());
@@ -515,4 +612,42 @@ fn footprint_default_works() {
 		let origin = MessageOrigin::Here;
 		assert_eq!(MessageQueue::footprint(origin), Default::default());
 	})
+}
+
+#[test]
+fn execute_overweight_works() {
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("bump_service_head", 1.into_weight());
+		set_weight("service_queue_base", 1.into_weight());
+		set_weight("service_page_base_completion", 1.into_weight());
+		set_weight("process_message_payload", 1.into_weight());
+
+		// Enqueue a message
+		let origin = MessageOrigin::Here;
+		MessageQueue::enqueue_message(msg(&"weight=6"), origin);
+		// Load the current book
+		let book = BookStateFor::<Test>::get(&origin);
+		assert_eq!(book.message_count, 1);
+
+		// Mark the message as permanently overweight.
+		assert_eq!(MessageQueue::service_queues(5.into_weight()), 5.into_weight());
+		assert_last_event::<Test>(
+			Event::OverweightEnqueued {
+				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=6"),
+				origin: MessageOrigin::Here,
+				message_index: 0,
+				page_index: 0,
+			}
+			.into(),
+		);
+		// Now try to execute it.
+		let consumed = MessageQueue::do_execute_overweight(origin, 0, 0, 7.into_weight()).unwrap();
+		// There is no message left in the book.
+		let book = BookStateFor::<Test>::get(&origin);
+		assert_eq!(book.message_count, 0);
+		// Doing it again will error.
+		let consumed =
+			MessageQueue::do_execute_overweight(origin, 0, 0, 60.into_weight()).unwrap_err(); // TODO not 60
+		                                                                          // here
+	});
 }

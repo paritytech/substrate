@@ -119,3 +119,14 @@ pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) 
 	);
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
+
+/// Provide a setup for `bump_service_head`.
+pub fn setup_bump_service_head<T: Config>(
+	current: <<T as Config>::MessageProcessor as ProcessMessage>::Origin,
+	next: <<T as Config>::MessageProcessor as ProcessMessage>::Origin,
+) {
+	let mut book = single_page_book::<T>();
+	book.ready_neighbours = Some(Neighbours::<MessageOriginOf<T>> { prev: next.clone(), next });
+	ServiceHead::<T>::put(&current);
+	BookStateFor::<T>::insert(&current, &book);
+}
