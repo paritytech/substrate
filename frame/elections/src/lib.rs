@@ -109,12 +109,12 @@ use frame_support::{
 	weights::Weight,
 };
 use scale_info::TypeInfo;
-use sp_npos_elections::{ElectionResult, ExtendedBalance};
+use sp_npos_elections::{ElectionResult, ExtendedBalance, VoteWeight};
 use sp_runtime::{
 	traits::{Saturating, StaticLookup, Zero},
 	DispatchError, RuntimeDebug,
 };
-use sp_std::{cmp::Ordering, prelude::*};
+use sp_std::{cmp::Ordering, iter::IntoIterator, prelude::*};
 
 mod benchmarking;
 pub mod weights;
@@ -186,6 +186,17 @@ pub struct SeatHolder<AccountId, Balance> {
 	///
 	/// To be unreserved upon renouncing, or slashed upon being a loser.
 	pub deposit: Balance,
+}
+
+/// The results of running the pre-election step.
+#[derive(Debug, Clone)]
+pub struct PreElectionResults<T: Config> {
+	pub num_to_elect: usize,
+	pub candidate_ids: Vec<T::AccountId>,
+	pub candidates_and_deposit: Vec<(T::AccountId, BalanceOf<T>)>,
+	pub voters_and_stakes: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)>,
+	pub voters_and_votes: Vec<(T::AccountId, VoteWeight, Vec<T::AccountId>)>,
+	pub num_edges: u32,
 }
 
 pub use pallet::*;
@@ -908,6 +919,62 @@ impl<T: Config> Pallet<T> {
 	///
 	/// Calls the appropriate [`ChangeMembers`] function variant internally.
 	fn do_election() -> Weight {
+		let pre_election_results = match Self::do_pre_solve_election() {
+			Ok(results) => results,
+			Err(event) => match event {
+				Event::EmptyTerm => {
+					Self::deposit_event(event);
+					return T::DbWeight::get().reads(3)
+				},
+				Event::ElectionError => {
+					Self::deposit_event(event);
+					log::error!(
+						target: "runtime:elections",
+						"Failed to run election. Number of voters exceeded",
+					);
+					let max_voters = <T as Config>::MaxVoters::get() as usize;
+					return T::DbWeight::get().reads(3 + max_voters as u64)
+				},
+				_ => unreachable!("should not happen"),
+			},
+		};
+
+		let num_candidates = pre_election_results.candidates_and_deposit.len() as u32;
+		let num_voters = pre_election_results.voters_and_votes.len() as u32;
+		let num_edges = pre_election_results.num_edges;
+
+		let _ = T::ElectionSolver::solve(
+			pre_election_results.num_to_elect,
+			pre_election_results.candidate_ids,
+			pre_election_results.voters_and_votes,
+		)
+		.map(
+			|ElectionResult::<T::AccountId, <T::ElectionSolver as NposSolver>::Accuracy> {
+			     winners,
+			     assignments: _,
+			 }| {
+				Self::do_post_solve_election(
+					winners,
+					pre_election_results.candidates_and_deposit,
+					pre_election_results.voters_and_stakes,
+				);
+			},
+		)
+		.map_err(|e| {
+			log!(warn, "Failed to run election [{:?}].", e);
+			Self::deposit_event(Event::ElectionError);
+		});
+
+		// TODO(gpestana): pull pre/post weights from WeightInfo after benchmarking
+		let pre_solve_weight = Weight::zero();
+		let post_solve_weight = Weight::zero();
+
+		T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
+			.saturating_add(pre_solve_weight)
+			.saturating_sub(post_solve_weight)
+	}
+
+	fn do_pre_solve_election() -> Result<PreElectionResults<T>, Event<T>> {
 		let desired_seats = T::DesiredMembers::get() as usize;
 		let desired_runners_up = T::DesiredRunnersUp::get() as usize;
 		let num_to_elect = desired_runners_up + desired_seats;
@@ -918,7 +985,7 @@ impl<T: Config> Pallet<T> {
 
 		if candidates_and_deposit.len().is_zero() {
 			Self::deposit_event(Event::EmptyTerm);
-			return T::DbWeight::get().reads(3)
+			return Err(Event::EmptyTerm)
 		}
 
 		// All of the new winners that come out of the election will thus have a deposit recorded.
@@ -934,6 +1001,7 @@ impl<T: Config> Pallet<T> {
 		let max_voters = <T as Config>::MaxVoters::get() as usize;
 		// used for prime election.
 		let mut voters_and_stakes = Vec::new();
+
 		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
 			if voters_and_stakes.len() < max_voters {
 				voters_and_stakes.push((voter, stake, votes));
@@ -943,14 +1011,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}) {
 			Ok(_) => (),
-			Err(_) => {
-				log::error!(
-					target: "runtime::elections",
-					"Failed to run election. Number of voters exceeded",
-				);
-				Self::deposit_event(Event::ElectionError);
-				return T::DbWeight::get().reads(3 + max_voters as u64)
-			},
+			Err(_) => return Err(Event::ElectionError),
 		}
 
 		// used for elections.
@@ -963,49 +1024,22 @@ impl<T: Config> Pallet<T> {
 			})
 			.collect::<Vec<_>>();
 
-		let pre_solve_weight = T::WeightInfo::pre_election(
-			voters_and_stakes.len() as u32,
-			candidate_ids.len() as u32,
+		Ok(PreElectionResults {
+			num_to_elect,
+			candidate_ids,
+			candidates_and_deposit,
+			voters_and_stakes,
+			voters_and_votes,
 			num_edges,
-		);
-
-		let num_candidates = candidates_and_deposit.len() as u32;
-		let num_voters = voters_and_votes.len() as u32;
-		let post_election_weight =
-			T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
-				.map(
-					|ElectionResult::<
-						T::AccountId,
-						<T::ElectionSolver as NposSolver>::Accuracy,
-					> {
-					     winners,
-					     assignments: _,
-					 }| {
-						Self::do_post_election(
-							winners,
-							candidates_and_deposit,
-							voters_and_stakes,
-							desired_seats,
-						);
-						T::WeightInfo::post_election(1, 1, 1) // TODO(gpestana): finish
-					},
-				)
-				.map_err(|e| {
-					log!(warn, "Failed to run election [{:?}].", e);
-					Self::deposit_event(Event::ElectionError);
-				});
-
-		T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
-			.saturating_add(pre_solve_weight)
-			.saturating_sub(post_election_weight.unwrap()) // TODO(unwrap())
+		})
 	}
 
-	fn do_post_election(
+	fn do_post_solve_election(
 		winners: Vec<(T::AccountId, u128)>,
 		candidates_and_deposit: Vec<(T::AccountId, BalanceOf<T>)>,
 		voters_and_stakes: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)>,
-		desired_seats: usize,
 	) {
+		let desired_seats = T::DesiredMembers::get() as usize;
 		let total_issuance = T::Currency::total_issuance();
 		let to_balance = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
 
