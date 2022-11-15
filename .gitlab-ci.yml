@@ -231,6 +231,7 @@ skip-if-draft:
   script:
     - rm -f /usr/local/cargo/bin/diener
     - cargo install --git https://github.com/paritytech/diener --rev 8852911c3b5d39ec74077cb4eba0b8be3c7e37f4
+    - diener -V
     - git clone
         --depth=1
         --branch="$PIPELINE_SCRIPTS_TAG"
