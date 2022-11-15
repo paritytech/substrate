@@ -179,22 +179,6 @@ impl<T: Config<I>, I: 'static> fungibles::Create<T::AccountId> for Pallet<T, I> 
 	}
 }
 
-impl<T: Config<I>, I: 'static> fungibles::Destroy<T::AccountId> for Pallet<T, I> {
-	type DestroyWitness = DestroyWitness;
-
-	fn get_destroy_witness(asset: &T::AssetId) -> Option<Self::DestroyWitness> {
-		Asset::<T, I>::get(asset).map(|asset_details| asset_details.destroy_witness())
-	}
-
-	fn destroy(
-		id: T::AssetId,
-		witness: Self::DestroyWitness,
-		maybe_check_owner: Option<T::AccountId>,
-	) -> Result<Self::DestroyWitness, DispatchError> {
-		Self::do_destroy(id, witness, maybe_check_owner)
-	}
-}
-
 impl<T: Config<I>, I: 'static> fungibles::metadata::Inspect<<T as SystemConfig>::AccountId>
 	for Pallet<T, I>
 {

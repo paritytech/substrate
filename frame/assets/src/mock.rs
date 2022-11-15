@@ -100,6 +100,7 @@ impl Config for Test {
 	type Freezer = TestFreezer;
 	type WeightInfo = ();
 	type Extra = ();
+	type RemoveItemsLimit = ConstU32<5>;
 }
 
 use std::collections::HashMap;
