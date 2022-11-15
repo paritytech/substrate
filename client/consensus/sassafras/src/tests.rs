@@ -678,8 +678,8 @@ fn finalization_prunes_epoch_changes_and_removes_weights() {
 	//      *-----E(#7)---#11                                          		  < fork #1
 
 	// Finalize block #10 so that on next epoch change the tree is pruned
-	env.client.finalize_block(&canon[13], None, true).unwrap();
-	let canon_cont = env.propose_and_import_blocks(BlockId::Hash(*canon.last().unwrap()), 4);
+	env.client.finalize_block(canon[13], None, true).unwrap();
+	let canon_tail = env.propose_and_import_blocks(BlockId::Hash(*canon.last().unwrap()), 4);
 
 	// Post-finalize scenario.
 	//
@@ -688,10 +688,9 @@ fn finalization_prunes_epoch_changes_and_removes_weights() {
 	let epoch_changes = epoch_changes.shared_data();
 	let epoch_changes: Vec<_> = epoch_changes.tree().iter().map(|(h, _, _)| *h).collect();
 
-	// TODO-SASS-P2: this is fixed by a pending PR on substrate
-	//assert_eq!(epoch_changes, vec![canon[6], canon[12], canon[18], canon_cont[3]]);
+	assert_eq!(epoch_changes, vec![canon[6], canon[12], canon[18], canon_tail[3]]);
 
-	// TODO-SASS-P2
+	// TODO-SASS-P3
 	//todo!("Requires aux_storage_cleanup");
 }
 
@@ -777,7 +776,7 @@ fn revert_not_allowed_for_finalized() {
 	let canon = env.propose_and_import_blocks(BlockId::Number(0), 3);
 
 	// Finalize best block
-	env.client.finalize_block(&canon[2], None, false).unwrap();
+	env.client.finalize_block(canon[2], None, false).unwrap();
 
 	// Revert canon chain to last finalized block
 	crate::revert(env.backend.clone(), 100).expect("revert should work for baked test scenario");
