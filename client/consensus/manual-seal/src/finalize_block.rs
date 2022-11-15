@@ -46,7 +46,7 @@ where
 {
 	let FinalizeBlockParams { hash, mut sender, justification, finalizer, .. } = params;
 
-	match finalizer.finalize_block(&hash, justification, true) {
+	match finalizer.finalize_block(hash, justification, true) {
 		Err(e) => {
 			log::warn!("Failed to finalize block {}", e);
 			rpc::send_result(&mut sender, Err(e.into()))
