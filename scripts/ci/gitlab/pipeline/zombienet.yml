@@ -19,7 +19,7 @@
     - .kubernetes-env
     - .zombienet-refs
   variables:
-    GH_DIR:                        "https://github.com/paritytech/substrate/tree/${CI_COMMIT_SHORT_SHA}/zombienet/"
+    GH_DIR:                        "https://github.com/paritytech/substrate/tree/${CI_COMMIT_SHORT_SHA}/zombienet"
   allow_failure:                   true
   retry: 2
   tags:
