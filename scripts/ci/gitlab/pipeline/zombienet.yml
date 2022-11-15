@@ -22,7 +22,7 @@ zombienet-tests-build-blocks:
   script:
     - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
         --github-remote-dir="${GH_DIR}"
-        --test="0000-block-building.toml"
+        --test="0000-block-building.zndsl"
   allow_failure:                   false
   retry: 2
   tags:
