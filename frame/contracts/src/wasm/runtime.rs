@@ -2598,7 +2598,7 @@ pub mod env {
 	///
 	/// Returns 0 when there is no reentrancy.
 	#[unstable]
-	fn reentrant_count(ctx: Runtime<E>) -> Result<u32, TrapReason> {
+	fn reentrant_count(ctx: _, memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
 		Ok(ctx.ext.reentrant_count())
 	}
@@ -2614,10 +2614,10 @@ pub mod env {
 	///
 	/// Returns 0 when the contract does not exist on the call stack.
 	#[unstable]
-	fn account_reentrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
+	fn account_reentrance_count(ctx: _, memory: _, account_ptr: u32) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(account_ptr)?;
+			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 		Ok(ctx.ext.account_reentrance_count(&account_id))
 	}
 }
