@@ -49,7 +49,10 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(c: u32, s: u32, a: u32, ) -> Weight;
+	fn start_destroy() -> Weight;
+	fn destroy_accounts(c: u32) -> Weight;
+	fn destroy_approvals(m: u32) -> Weight;
+	fn finish_destroy() -> Weight;
 	fn mint() -> Weight;
 	fn burn() -> Weight;
 	fn transfer() -> Weight;
@@ -89,30 +92,49 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(1 as u64))
 	}
+
 	// Storage: Assets Asset (r:1 w:1)
-	// Storage: Assets Account (r:5002 w:5001)
-	// Storage: System Account (r:5000 w:5000)
-	// Storage: Assets Metadata (r:1 w:0)
-	// Storage: Assets Approvals (r:501 w:500)
-	/// The range of component `c` is `[0, 5000]`.
-	/// The range of component `s` is `[0, 5000]`.
-	/// The range of component `a` is `[0, 500]`.
-	fn destroy(c: u32, s: u32, a: u32, ) -> Weight {
-		// Minimum execution time: 76_222_544 nanoseconds.
-		Weight::from_ref_time(76_864_587_000 as u64)
-			// Standard Error: 127_086
-			.saturating_add(Weight::from_ref_time(8_645_143 as u64).saturating_mul(c as u64))
-			// Standard Error: 127_086
-			.saturating_add(Weight::from_ref_time(11_281_301 as u64).saturating_mul(s as u64))
-			.saturating_add(T::DbWeight::get().reads(5 as u64))
+	fn start_destroy() -> Weight {
+		Weight::from_ref_time(31_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+	}
+
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Account (r:1 w:0)
+	// Storage: System Account (r:20 w:20)
+	/// The range of component `c` is `[0, 1000]`.
+	fn destroy_accounts(c: u32, ) -> Weight {
+		Weight::from_ref_time(37_000_000 as u64)
+			// Standard Error: 19_301
+			.saturating_add(Weight::from_ref_time(25_467_908 as u64).saturating_mul(c as u64))
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().reads((2 as u64).saturating_mul(c as u64)))
-			.saturating_add(T::DbWeight::get().reads((2 as u64).saturating_mul(s as u64)))
-			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(a as u64)))
-			.saturating_add(T::DbWeight::get().writes(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 			.saturating_add(T::DbWeight::get().writes((2 as u64).saturating_mul(c as u64)))
-			.saturating_add(T::DbWeight::get().writes((2 as u64).saturating_mul(s as u64)))
+	}
+
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Approvals (r:1 w:0)
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy_approvals(a: u32, ) -> Weight {
+		Weight::from_ref_time(39_000_000 as u64)
+			// Standard Error: 14_298
+			.saturating_add(Weight::from_ref_time(27_632_144 as u64).saturating_mul(a as u64))
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(a as u64)))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
 			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(a as u64)))
 	}
+
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Metadata (r:1 w:0)
+	fn finish_destroy() -> Weight {
+		Weight::from_ref_time(33_000_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(2 as u64))
+			.saturating_add(T::DbWeight::get().writes(1 as u64))
+	}
+
 	// Storage: Assets Asset (r:1 w:1)
 	// Storage: Assets Account (r:1 w:1)
 	fn mint() -> Weight {
@@ -302,30 +324,49 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 	}
+
 	// Storage: Assets Asset (r:1 w:1)
-	// Storage: Assets Account (r:5002 w:5001)
-	// Storage: System Account (r:5000 w:5000)
-	// Storage: Assets Metadata (r:1 w:0)
-	// Storage: Assets Approvals (r:501 w:500)
-	/// The range of component `c` is `[0, 5000]`.
-	/// The range of component `s` is `[0, 5000]`.
-	/// The range of component `a` is `[0, 500]`.
-	fn destroy(c: u32, s: u32, a: u32, ) -> Weight {
-		// Minimum execution time: 76_222_544 nanoseconds.
-		Weight::from_ref_time(76_864_587_000 as u64)
-			// Standard Error: 127_086
-			.saturating_add(Weight::from_ref_time(8_645_143 as u64).saturating_mul(c as u64))
-			// Standard Error: 127_086
-			.saturating_add(Weight::from_ref_time(11_281_301 as u64).saturating_mul(s as u64))
-			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+	fn start_destroy() -> Weight {
+		Weight::from_ref_time(31_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+	}
+
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Account (r:1 w:0)
+	// Storage: System Account (r:20 w:20)
+	/// The range of component `c` is `[0, 1000]`.
+	fn destroy_accounts(c: u32, ) -> Weight {
+		Weight::from_ref_time(37_000_000 as u64)
+			// Standard Error: 19_301
+			.saturating_add(Weight::from_ref_time(25_467_908 as u64).saturating_mul(c as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().reads((2 as u64).saturating_mul(c as u64)))
-			.saturating_add(RocksDbWeight::get().reads((2 as u64).saturating_mul(s as u64)))
-			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(a as u64)))
-			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes((2 as u64).saturating_mul(c as u64)))
-			.saturating_add(RocksDbWeight::get().writes((2 as u64).saturating_mul(s as u64)))
+	}
+
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Approvals (r:1 w:0)
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy_approvals(a: u32, ) -> Weight {
+		Weight::from_ref_time(39_000_000 as u64)
+			// Standard Error: 14_298
+			.saturating_add(Weight::from_ref_time(27_632_144 as u64).saturating_mul(a as u64))
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(a as u64)))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(a as u64)))
 	}
+
+	// Storage: Assets Asset (r:1 w:1)
+	// Storage: Assets Metadata (r:1 w:0)
+	fn finish_destroy() -> Weight {
+		Weight::from_ref_time(33_000_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(2 as u64))
+			.saturating_add(RocksDbWeight::get().writes(1 as u64))
+	}
+
 	// Storage: Assets Asset (r:1 w:1)
 	// Storage: Assets Account (r:1 w:1)
 	fn mint() -> Weight {
