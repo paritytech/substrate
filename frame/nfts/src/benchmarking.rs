@@ -296,15 +296,18 @@ benchmarks_instance_pallet! {
 	}
 
 	force_collection_owner {
-		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let (collection, _, _) = create_collection::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
+		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
 		let call = Call::<T, I>::force_collection_owner {
 			collection,
-			owner: caller_lookup.clone(),
+			owner: target_lookup,
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::OwnerChanged { collection, new_owner: caller }.into());
+		assert_last_event::<T, I>(Event::OwnerChanged { collection, new_owner: target }.into());
 	}
 
 	force_collection_config {
