@@ -64,7 +64,7 @@ fn set_default_expecations_no_peers(
 	});
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn normal_network_poll_no_peers() {
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
@@ -88,7 +88,7 @@ async fn normal_network_poll_no_peers() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn request_justification() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
@@ -123,7 +123,7 @@ async fn request_justification() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn clear_justification_requests() {
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
 	// called)
@@ -151,7 +151,7 @@ async fn clear_justification_requests() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn set_sync_fork_request() {
 	// build `ChainSync` and set default expectations for it
 	let mut chain_sync =
@@ -190,7 +190,7 @@ async fn set_sync_fork_request() {
 	.await;
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn on_block_finalized() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 	// build `ChainSyncInterface` provider and set no expecations for it (i.e., it cannot be
@@ -237,7 +237,7 @@ async fn on_block_finalized() {
 
 // report from mock import queue that importing a justification was not successful
 // and verify that connection to the peer is closed
-#[async_std::test]
+#[tokio::test]
 async fn invalid_justification_imported() {
 	struct DummyImportQueue(
 		Arc<
@@ -325,7 +325,7 @@ async fn invalid_justification_imported() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection)
 		.await
 		.is_err()
 	{
@@ -333,7 +333,7 @@ async fn invalid_justification_imported() {
 	}
 }
 
-#[async_std::test]
+#[tokio::test]
 async fn disconnect_peer_using_chain_sync_handle() {
 	let client = Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0);
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
@@ -393,7 +393,7 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		while !std::matches!(event_stream1.next().await, Some(Event::SyncDisconnected { .. })) {}
 	};
 
-	if async_std::future::timeout(Duration::from_secs(5), wait_disconnection)
+	if tokio::time::timeout(Duration::from_secs(5), wait_disconnection)
 		.await
 		.is_err()
 	{
