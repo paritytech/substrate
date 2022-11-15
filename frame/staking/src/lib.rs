@@ -333,6 +333,10 @@ macro_rules! log {
 	};
 }
 
+/// Maximum number of winners (aka. active validators), as defined in the election provider of this
+/// pallet.
+pub type MaxWinnersOf<T> = <<T as Config>::ElectionProvider as frame_election_provider_support::ElectionProviderBase>::MaxWinners;
+
 /// Counter for the number of "reward" points earned by a given validator.
 pub type RewardPoint = u32;
 

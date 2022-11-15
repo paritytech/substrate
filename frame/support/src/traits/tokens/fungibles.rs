@@ -27,6 +27,8 @@ use sp_std::vec::Vec;
 
 pub mod approvals;
 mod balanced;
+pub mod enumerable;
+pub use enumerable::InspectEnumerable;
 pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;

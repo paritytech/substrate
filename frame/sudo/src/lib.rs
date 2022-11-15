@@ -59,7 +59,7 @@
 //! 	use frame_system::pallet_prelude::*;
 //!
 //! 	#[pallet::pallet]
-//! 	pub struct Pallet<T>(_);
+//! 	pub struct Pallet<T>(PhantomData<T>);
 //!
 //! 	#[pallet::config]
 //! 	pub trait Config: frame_system::Config {}
@@ -79,6 +79,13 @@
 //! # fn main() {}
 //! ```
 //!
+//! ### Signed Extension
+//!
+//! The Sudo pallet defines the following extension:
+//!
+//!   - [`CheckOnlySudoAccount`]: Ensures that the signed transactions are only valid if they are
+//!     signed by sudo account.
+//!
 //! ## Genesis Config
 //!
 //! The Sudo pallet depends on the [`GenesisConfig`].
@@ -97,11 +104,13 @@ use sp_std::prelude::*;
 
 use frame_support::{dispatch::GetDispatchInfo, traits::UnfilteredDispatchable};
 
+mod extension;
 #[cfg(test)]
 mod mock;
 #[cfg(test)]
 mod tests;
 
+pub use extension::CheckOnlySudoAccount;
 pub use pallet::*;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;

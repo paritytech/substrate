@@ -477,7 +477,7 @@ pub mod pallet {
 		VestingBalance,
 		/// Account liquidity restrictions prevent withdrawal
 		LiquidityRestrictions,
-		/// Balance too low to send value
+		/// Balance too low to send value.
 		InsufficientBalance,
 		/// Value too low to create account due to existential deposit
 		ExistentialDeposit,
@@ -1149,15 +1149,19 @@ impl<T: Config<I>, I: 'static> fungible::Transfer<T::AccountId> for Pallet<T, I>
 
 impl<T: Config<I>, I: 'static> fungible::Unbalanced<T::AccountId> for Pallet<T, I> {
 	fn set_balance(who: &T::AccountId, amount: Self::Balance) -> DispatchResult {
-		Self::mutate_account(who, |account| {
-			account.free = amount;
+		Self::mutate_account(who, |account| -> DispatchResult {
+			// fungibles::Unbalanced::decrease_balance didn't check account.reserved
+			// free = new_balance - reserved
+			account.free =
+				amount.checked_sub(&account.reserved).ok_or(ArithmeticError::Underflow)?;
 			Self::deposit_event(Event::BalanceSet {
 				who: who.clone(),
 				free: account.free,
 				reserved: account.reserved,
 			});
-		})?;
-		Ok(())
+
+			Ok(())
+		})?
 	}
 
 	fn set_total_issuance(amount: Self::Balance) {

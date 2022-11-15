@@ -47,6 +47,12 @@ pub struct BoundedVec<T, S>(
 	#[cfg_attr(feature = "std", serde(skip_serializing))] PhantomData<S>,
 );
 
+/// Create an object through truncation.
+pub trait TruncateFrom<T> {
+	/// Create an object through truncation.
+	fn truncate_from(unbound: T) -> Self;
+}
+
 #[cfg(feature = "std")]
 impl<'de, T, S: Get<u32>> Deserialize<'de> for BoundedVec<T, S>
 where
@@ -234,12 +240,12 @@ impl<'a, T: Ord, Bound: Get<u32>> Ord for BoundedSlice<'a, T, Bound> {
 }
 
 impl<'a, T, S: Get<u32>> TryFrom<&'a [T]> for BoundedSlice<'a, T, S> {
-	type Error = ();
+	type Error = &'a [T];
 	fn try_from(t: &'a [T]) -> Result<Self, Self::Error> {
 		if t.len() <= S::get() as usize {
 			Ok(BoundedSlice(t, PhantomData))
 		} else {
-			Err(())
+			Err(t)
 		}
 	}
 }
@@ -250,9 +256,25 @@ impl<'a, T, S> From<BoundedSlice<'a, T, S>> for &'a [T] {
 	}
 }
 
+impl<'a, T, S: Get<u32>> TruncateFrom<&'a [T]> for BoundedSlice<'a, T, S> {
+	fn truncate_from(unbound: &'a [T]) -> Self {
+		BoundedSlice::<T, S>::truncate_from(unbound)
+	}
+}
+
 impl<'a, T, S> Clone for BoundedSlice<'a, T, S> {
 	fn clone(&self) -> Self {
 		BoundedSlice(self.0, PhantomData)
+	}
+}
+
+impl<'a, T, S> sp_std::fmt::Debug for BoundedSlice<'a, T, S>
+where
+	&'a [T]: sp_std::fmt::Debug,
+	S: Get<u32>,
+{
+	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+		f.debug_tuple("BoundedSlice").field(&self.0).field(&S::get()).finish()
 	}
 }
 
@@ -273,6 +295,14 @@ impl<'a, T, S> sp_std::iter::IntoIterator for BoundedSlice<'a, T, S> {
 	type IntoIter = sp_std::slice::Iter<'a, T>;
 	fn into_iter(self) -> Self::IntoIter {
 		self.0.iter()
+	}
+}
+
+impl<'a, T, S: Get<u32>> BoundedSlice<'a, T, S> {
+	/// Create an instance from the first elements of the given slice (or all of it if it is smaller
+	/// than the length bound).
+	pub fn truncate_from(s: &'a [T]) -> Self {
+		Self(&s[0..(s.len().min(S::get() as usize))], PhantomData)
 	}
 }
 
@@ -620,12 +650,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if `index > len`.
-	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), ()> {
+	pub fn try_insert(&mut self, index: usize, element: T) -> Result<(), T> {
 		if self.len() < Self::bound() {
 			self.0.insert(index, element);
 			Ok(())
 		} else {
-			Err(())
+			Err(element)
 		}
 	}
 
@@ -635,12 +665,12 @@ impl<T, S: Get<u32>> BoundedVec<T, S> {
 	/// # Panics
 	///
 	/// Panics if the new capacity exceeds isize::MAX bytes.
-	pub fn try_push(&mut self, element: T) -> Result<(), ()> {
+	pub fn try_push(&mut self, element: T) -> Result<(), T> {
 		if self.len() < Self::bound() {
 			self.0.push(element);
 			Ok(())
 		} else {
-			Err(())
+			Err(element)
 		}
 	}
 }
@@ -673,14 +703,20 @@ where
 }
 
 impl<T, S: Get<u32>> TryFrom<Vec<T>> for BoundedVec<T, S> {
-	type Error = ();
+	type Error = Vec<T>;
 	fn try_from(t: Vec<T>) -> Result<Self, Self::Error> {
 		if t.len() <= Self::bound() {
 			// explicit check just above
 			Ok(Self::unchecked_from(t))
 		} else {
-			Err(())
+			Err(t)
 		}
+	}
+}
+
+impl<T, S: Get<u32>> TruncateFrom<Vec<T>> for BoundedVec<T, S> {
+	fn truncate_from(unbound: Vec<T>) -> Self {
+		BoundedVec::<T, S>::truncate_from(unbound)
 	}
 }
 
@@ -801,6 +837,12 @@ where
 	}
 }
 
+impl<'a, T: PartialEq, S: Get<u32>> PartialEq<&'a [T]> for BoundedSlice<'a, T, S> {
+	fn eq(&self, other: &&'a [T]) -> bool {
+		&self.0 == other
+	}
+}
+
 impl<T: PartialEq, S: Get<u32>> PartialEq<Vec<T>> for BoundedVec<T, S> {
 	fn eq(&self, other: &Vec<T>) -> bool {
 		&self.0 == other
@@ -885,6 +927,16 @@ where
 pub mod test {
 	use super::*;
 	use crate::{bounded_vec, ConstU32};
+
+	#[test]
+	fn slice_truncate_from_works() {
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3, 4, 5]);
+		assert_eq!(bounded.deref(), &[1, 2, 3, 4]);
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3, 4]);
+		assert_eq!(bounded.deref(), &[1, 2, 3, 4]);
+		let bounded = BoundedSlice::<u32, ConstU32<4>>::truncate_from(&[1, 2, 3]);
+		assert_eq!(bounded.deref(), &[1, 2, 3]);
+	}
 
 	#[test]
 	fn slide_works() {
@@ -1202,10 +1254,45 @@ pub mod test {
 	}
 
 	#[test]
+	fn bounded_vec_debug_works() {
+		let bound = BoundedVec::<u32, ConstU32<5>>::truncate_from(vec![1, 2, 3]);
+		assert_eq!(format!("{:?}", bound), "BoundedVec([1, 2, 3], 5)");
+	}
+
+	#[test]
+	fn bounded_slice_debug_works() {
+		let bound = BoundedSlice::<u32, ConstU32<5>>::truncate_from(&[1, 2, 3]);
+		assert_eq!(format!("{:?}", bound), "BoundedSlice([1, 2, 3], 5)");
+	}
+
+	#[test]
 	fn bounded_vec_sort_by_key_works() {
 		let mut v: BoundedVec<i32, ConstU32<5>> = bounded_vec![-5, 4, 1, -3, 2];
 		// Sort by absolute value.
 		v.sort_by_key(|k| k.abs());
 		assert_eq!(v, vec![1, 2, -3, 4, -5]);
+	}
+
+	#[test]
+	fn bounded_vec_truncate_from_works() {
+		let unbound = vec![1, 2, 3, 4, 5];
+		let bound = BoundedVec::<u32, ConstU32<3>>::truncate_from(unbound.clone());
+		assert_eq!(bound, vec![1, 2, 3]);
+	}
+
+	#[test]
+	fn bounded_slice_truncate_from_works() {
+		let unbound = [1, 2, 3, 4, 5];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::truncate_from(&unbound);
+		assert_eq!(bound, &[1, 2, 3][..]);
+	}
+
+	#[test]
+	fn bounded_slice_partialeq_slice_works() {
+		let unbound = [1, 2, 3];
+		let bound = BoundedSlice::<u32, ConstU32<3>>::truncate_from(&unbound);
+
+		assert_eq!(bound, &unbound[..]);
+		assert!(bound == &unbound[..]);
 	}
 }
