@@ -40,11 +40,11 @@ sc-telemetry = { version = "4.0.0-dev", path = "../telemetry" }
 sc-tracing = { version = "4.0.0-dev", path = "../tracing" }
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
-sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
-sp-panic-handler = { version = "4.0.0", path = "../../primitives/panic-handler" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
+sp-panic-handler = { version = "5.0.0", path = "../../primitives/panic-handler" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 
 [dev-dependencies]
