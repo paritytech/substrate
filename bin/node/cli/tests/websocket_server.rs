@@ -16,7 +16,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use async_std::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use core::pin::Pin;
 use futures::prelude::*;
 use soketto::handshake::{server::Response, Server};
@@ -71,7 +72,7 @@ pub struct WsServer {
 	negotiating: stream::FuturesUnordered<
 		Pin<
 			Box<
-				dyn Future<Output = Result<Server<'static, TcpStream>, Box<dyn std::error::Error>>>
+				dyn Future<Output = Result<Server<'static, Compat<TcpStream>>, Box<dyn std::error::Error>>>
 					+ Send,
 			>,
 		>,
@@ -120,7 +121,7 @@ impl WsServer {
 		let pending_incoming = self.pending_incoming.take().expect("no pending socket");
 
 		self.negotiating.push(Box::pin(async move {
-			let mut server = Server::new(pending_incoming);
+			let mut server = Server::new(pending_incoming.compat());
 
 			let websocket_key = match server.receive_request().await {
 				Ok(req) => req.key(),
