@@ -299,20 +299,28 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	force_collection_status {
+	force_collection_owner {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
 		let call = Call::<T, I>::force_collection_status {
 			collection,
 			owner: caller_lookup.clone(),
-			issuer: caller_lookup.clone(),
-			admin: caller_lookup.clone(),
-			freezer: caller_lookup,
+		};
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_last_event::<T, I>(Event::OwnerChanged { collection }.into());
+	}
+
+	force_collection_config {
+		let (collection, caller, caller_lookup) = create_collection::<T, I>();
+		let origin = T::ForceOrigin::successful_origin();
+		let call = Call::<T, I>::force_collection_status {
+			collection,
 			config: make_collection_config::<T, I>(CollectionSetting::DepositRequired.into()),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
+		assert_last_event::<T, I>(Event::CollectionConfigChanged { collection }.into());
 	}
 
 	lock_item_properties {

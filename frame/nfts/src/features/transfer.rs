@@ -135,4 +135,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::deposit_event(Event::OwnershipAcceptanceChanged { who, maybe_collection });
 		Ok(())
 	}
+
+	pub(crate) fn do_force_collection_owner(
+		collection: T::CollectionId,
+		owner: T::AccountId,
+	) -> DispatchResult {
+		Collection::<T, I>::try_mutate(collection, |maybe_details| {
+			let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
+			if details.owner == owner {
+				return Ok(())
+			}
+
+			// Move the deposit to the new owner.
+			T::Currency::repatriate_reserved(
+				&details.owner,
+				&owner,
+				details.total_deposit,
+				Reserved,
+			)?;
+
+			CollectionAccount::<T, I>::remove(&details.owner, &collection);
+			CollectionAccount::<T, I>::insert(&owner, &collection, ());
+			details.owner = owner.clone();
+
+			Self::deposit_event(Event::OwnerChanged { collection, new_owner: owner });
+			Ok(())
+		})
+	}
 }

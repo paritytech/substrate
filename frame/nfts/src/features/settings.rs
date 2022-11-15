@@ -19,39 +19,14 @@ use crate::*;
 use frame_support::pallet_prelude::*;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
-	pub(crate) fn do_force_collection_status(
+	pub(crate) fn do_force_collection_config(
 		collection: T::CollectionId,
-		new_owner: T::AccountId,
-		issuer: T::AccountId,
-		admin: T::AccountId,
-		freezer: T::AccountId,
 		config: CollectionConfigFor<T, I>,
 	) -> DispatchResult {
-		Collection::<T, I>::try_mutate(collection, |maybe_collection| {
-			let mut collection_info =
-				maybe_collection.take().ok_or(Error::<T, I>::UnknownCollection)?;
-			let old_owner = collection_info.owner;
-			collection_info.owner = new_owner.clone();
-			*maybe_collection = Some(collection_info);
-			CollectionAccount::<T, I>::remove(&old_owner, &collection);
-			CollectionAccount::<T, I>::insert(&new_owner, &collection, ());
-			CollectionConfigOf::<T, I>::insert(&collection, config);
-
-			// delete previous values
-			Self::clear_roles(&collection)?;
-
-			let account_to_role = Self::group_roles_by_account(vec![
-				(issuer, CollectionRole::Issuer),
-				(admin, CollectionRole::Admin),
-				(freezer, CollectionRole::Freezer),
-			]);
-			for (account, roles) in account_to_role {
-				CollectionRoleOf::<T, I>::insert(&collection, &account, roles);
-			}
-
-			Self::deposit_event(Event::CollectionStatusChanged { collection });
-			Ok(())
-		})
+		ensure!(Collection::<T, I>::contains_key(&collection), Error::<T, I>::UnknownCollection);
+		CollectionConfigOf::<T, I>::insert(&collection, config);
+		Self::deposit_event(Event::CollectionConfigChanged { collection });
+		Ok(())
 	}
 
 	pub(crate) fn do_set_collection_max_supply(

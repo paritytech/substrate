@@ -59,7 +59,8 @@ pub trait WeightInfo {
 	fn lock_collection() -> Weight;
 	fn transfer_ownership() -> Weight;
 	fn set_team() -> Weight;
-	fn force_collection_status() -> Weight;
+	fn force_collection_owner() -> Weight;
+	fn force_collection_config() -> Weight;
 	fn lock_item_properties() -> Weight;
 	fn set_attribute() -> Weight;
 	fn clear_attribute() -> Weight;
@@ -224,7 +225,15 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nfts Class (r:1 w:1)
 	// Storage: Nfts ClassAccount (r:0 w:1)
 	// Storage: Nfts CollectionConfigOf (r:0 w:1)
-	fn force_collection_status() -> Weight {
+	fn force_collection_owner() -> Weight {
+		Weight::from_ref_time(28_468_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(1 as u64))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts ClassAccount (r:0 w:1)
+	// Storage: Nfts CollectionConfigOf (r:0 w:1)
+	fn force_collection_config() -> Weight {
 		Weight::from_ref_time(28_468_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(1 as u64))
 			.saturating_add(T::DbWeight::get().writes(3 as u64))
@@ -524,7 +533,15 @@ impl WeightInfo for () {
 	// Storage: Nfts Class (r:1 w:1)
 	// Storage: Nfts ClassAccount (r:0 w:1)
 	// Storage: Nfts CollectionConfigOf (r:0 w:1)
-	fn force_collection_status() -> Weight {
+	fn force_collection_owner() -> Weight {
+		Weight::from_ref_time(28_468_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(1 as u64))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts ClassAccount (r:0 w:1)
+	// Storage: Nfts CollectionConfigOf (r:0 w:1)
+	fn force_collection_config() -> Weight {
 		Weight::from_ref_time(28_468_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(1 as u64))
 			.saturating_add(RocksDbWeight::get().writes(3 as u64))
