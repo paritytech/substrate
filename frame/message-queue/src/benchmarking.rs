@@ -41,9 +41,24 @@ benchmarks! {
 	}
 
 	// `service_page` without any message processing but with page completion.
-	service_page_base {
+	service_page_base_completion {
 		let origin: MessageOriginOf<T> = 0.into();
-		let (page, msgs) = full_page::<T>();
+		let page = PageOf::<T>::default();
+		Pages::<T>::insert(&origin, 0, &page);
+		let mut book_state = single_page_book::<T>();
+		let mut meter = WeightCounter::unlimited();
+		let limit = Weight::MAX;
+	}: {
+		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
+	}
+
+	// `service_page` without any message processing and without page completion.
+	service_page_base_no_completion {
+		let origin: MessageOriginOf<T> = 0.into();
+		let mut page = PageOf::<T>::default();
+		// Mock the storage such that `is_complete` returns `false` but `peek_first` returns `None`.
+		page.first = 1.into();
+		page.remaining = 1.into();
 		Pages::<T>::insert(&origin, 0, &page);
 		let mut book_state = single_page_book::<T>();
 		let mut meter = WeightCounter::unlimited();
@@ -66,32 +81,37 @@ benchmarks! {
 
 	// Processing a single message from a page.
 	service_page_item {
-		let (mut page, msgs) = full_page::<T>();
-		// Skip all messages besides the last one.
-		for i in 1..msgs {
-			page.skip_first(true);
-		}
-		assert!(page.peek_first().is_some(), "There is one message left");
+		let msg = vec![1u8; MaxMessageLenOf::<T>::get() as usize];
+		let mut page = page::<T>(&msg.clone());
+		let mut book = book_for::<T>(&page);
+		assert!(page.peek_first().is_some(), "There is one message");
 		let mut weight = WeightCounter::unlimited();
 	}: {
-		let status = MessageQueue::<T>::service_page_item(&0u32.into(), 0, &mut book_for::<T>(&page), &mut page, &mut weight, Weight::MAX);
+		let status = MessageQueue::<T>::service_page_item(&0u32.into(), 0, &mut book, &mut page, &mut weight, Weight::MAX);
 		assert_eq!(status, PageExecutionStatus::Partial);
 	} verify {
-		// Check for the `Processed` event.
+		// Check that it was processed.
 		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
+			hash: T::Hashing::hash(&msg), origin: 0.into(),
 			weight_used: 1.into_weight(), success: true
 		}.into());
+		let (_, processed, _) = page.peek_index(0).unwrap();
+		assert!(processed);
+		assert_eq!(book.message_count, 0);
 	}
 
-	// Contains the effort for fetching and (storing or removing) a page.
-	service_page_process_message { }: { }
-
 	// Worst case for calling `bump_service_head`.
-	bump_service_head { }: {}
+	bump_service_head {
+		setup_bump_service_head::<T>(0.into(), 10.into());
+		let mut weight = WeightCounter::unlimited();
+	}: {
+		MessageQueue::<T>::bump_service_head(&mut weight);
+	} verify {
+		assert_eq!(ServiceHead::<T>::get().unwrap(), 10u32.into());
+	}
 
 	reap_page {
-		// Mock the storage to get a cullable page that is not empty.
+		// Mock the storage to get a *cullable* but not *reapable* page.
 		let origin: MessageOriginOf<T> = 0.into();
 		let mut book = single_page_book::<T>();
 		let (page, msgs) = full_page::<T>();
@@ -107,11 +127,12 @@ benchmarks! {
 		}
 		book.begin = book.end - T::MaxStale::get();
 		BookStateFor::<T>::insert(&origin, &book);
+		assert!(Pages::<T>::contains_key(&origin, 0));
 
-		System::<T>::reset_events();
 	}: _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0)
 	verify {
 		assert_last_event::<T>(Event::PageReaped{ origin: 0.into(), index: 0 }.into());
+		assert!(!Pages::<T>::contains_key(&origin, 0));
 	}
 
 	execute_overweight {
@@ -129,18 +150,6 @@ benchmarks! {
 			hash: T::Hashing::hash(&0u32.encode()), origin: 0.into(),
 			weight_used: Weight::from_parts(1, 1), success: true
 		}.into());
-	}
-
-	// We need this mainly for the `T::Hashing::hash` effort.
-	process_message_payload {
-		let m in 0 .. MaxMessageLenOf::<T>::get();
-		let origin: MessageOriginOf<T> = 0.into();
-		let msg = vec![1u8; m as usize];
-		let mut meter = WeightCounter::unlimited();
-	}: {
-		MessageQueue::<T>::process_message_payload(origin, 0, 0u32.into(), &msg[..], &mut meter, Weight::MAX)
-	} verify {
-		assert_eq!(meter.consumed, Weight::from_parts(1, 1));
 	}
 
 	impl_benchmark_test_suite!(MessageQueue, crate::mock::new_test_ext::<crate::integration_test::Test>(), crate::integration_test::Test);

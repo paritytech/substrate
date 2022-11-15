@@ -26,15 +26,15 @@ use frame_support::{assert_noop, assert_ok, assert_storage_noop};
 #[test]
 fn mocked_weight_works() {
 	new_test_ext::<Test>().execute_with(|| {
-		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
+		assert!(<Test as Config>::WeightInfo::service_queue_base().is_zero());
 	});
 	new_test_ext::<Test>().execute_with(|| {
-		set_weight("service_page_base", Weight::MAX);
-		assert_eq!(<Test as Config>::WeightInfo::service_page_base(), Weight::MAX);
+		set_weight("service_queue_base", Weight::MAX);
+		assert_eq!(<Test as Config>::WeightInfo::service_queue_base(), Weight::MAX);
 	});
 	// The externalities reset it.
 	new_test_ext::<Test>().execute_with(|| {
-		assert!(<Test as Config>::WeightInfo::service_page_base().is_zero());
+		assert!(<Test as Config>::WeightInfo::service_queue_base().is_zero());
 	});
 }
 
