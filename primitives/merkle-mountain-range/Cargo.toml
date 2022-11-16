@@ -17,10 +17,10 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", features = ["derive"], optional = true }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../api" }
-sp-core = { version = "6.0.0", default-features = false, path = "../core" }
-sp-debug-derive = { version = "4.0.0", default-features = false, path = "../debug-derive" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../core" }
+sp-debug-derive = { version = "5.0.0", default-features = false, path = "../debug-derive" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 thiserror = "1.0"
 
 [dev-dependencies]

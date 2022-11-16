@@ -17,7 +17,7 @@ frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-staking = { version = "4.0.0-dev", path = "../../../frame/staking" }
 
 # primitives
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
 
 # third party
 chrono = { version = "0.4.19" }

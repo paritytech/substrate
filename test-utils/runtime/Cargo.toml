@@ -15,7 +15,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/beefy" }
 beefy-merkle-tree = { version = "4.0.0-dev", default-features = false, path = "../../frame/beefy-mmr/primitives" }
-sp-application-crypto = { version = "6.0.0", default-features = false, path = "../../primitives/application-crypto" }
+sp-application-crypto = { version = "7.0.0", default-features = false, path = "../../primitives/application-crypto" }
 sp-consensus-aura = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/aura" }
 sp-consensus-babe = { version = "0.10.0-dev", default-features = false, path = "../../primitives/consensus/babe" }
 sp-block-builder = { version = "4.0.0-dev", default-features = false, path = "../../primitives/block-builder" }
@@ -25,27 +25,27 @@ sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../
 sp-keyring = { version = "6.0.0", optional = true, path = "../../primitives/keyring" }
 memory-db = { version = "0.30.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-runtime-interface = { version = "6.0.0", default-features = false, path = "../../primitives/runtime-interface" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../primitives/runtime-interface" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../frame/babe" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
 sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
-sp-trie = { version = "6.0.0", default-features = false, path = "../../primitives/trie" }
+sp-trie = { version = "7.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
 trie-db = { version = "0.24.0", default-features = false }
 parity-util-mem = { version = "0.12.0", default-features = false, features = ["primitive-types"] }
 sc-service = { version = "0.10.0-dev", default-features = false, optional = true, features = ["test-helpers"], path = "../../client/service" }
-sp-state-machine = { version = "0.12.0", default-features = false, path = "../../primitives/state-machine" }
-sp-externalities = { version = "0.12.0", default-features = false, path = "../../primitives/externalities" }
+sp-state-machine = { version = "0.13.0", default-features = false, path = "../../primitives/state-machine" }
+sp-externalities = { version = "0.13.0", default-features = false, path = "../../primitives/externalities" }
 
 # 3rd party
 cfg-if = "1.0"
