@@ -5326,7 +5326,7 @@ dependencies = [
 
 [[package]]
 name = "pallet-contracts-primitives"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "bitflags",
  "parity-scale-codec",
@@ -9675,7 +9675,7 @@ dependencies = [
 
 [[package]]
 name = "sp-keyring"
-version = "6.0.0"
+version = "7.0.0"
 dependencies = [
  "lazy_static",
  "sp-core",
