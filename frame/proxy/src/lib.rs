@@ -250,10 +250,22 @@ pub mod pallet {
 			proxy_type: T::ProxyType,
 			delay: T::BlockNumber,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let delegate = T::Lookup::lookup(delegate)?;
-			Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
+			
+			Self::remove_all_proxy_delegates(&who, delegate, proxy_type, delay)
 		}
+
+		
+		#[pallet::weight(T::WeightInfo::remove_all_proxy_delegates(T::MaxProxies::get()))]
+		pub fn pub remove_all_proxy_delegates(origin: OriginFor<T>,
+			delegate: AccountIdLookupOf<T>,
+			proxy_type: T::ProxyType,
+			delay: T::BlockNumber,
+		)-> DispatchResult{
+				let who = ensure_signed(origin)?;
+				let delegate = T::Lookup::lookup(delegate)?;
+				Self::remove_proxy_delegate(&who, delegate, proxy_type, delay)
+		}
+
 
 		/// Unregister all proxy accounts for the sender.
 		///
