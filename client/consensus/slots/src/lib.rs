@@ -39,8 +39,9 @@ use sc_consensus::{BlockImport, JustificationSyncLink};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, CONSENSUS_WARN};
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
+use sp_consensus_babe::inherents::InherentType;
 use sp_consensus_slots::{Slot, SlotDuration};
-use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
+use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
 use std::{
 	fmt::Debug,
@@ -330,28 +331,9 @@ where
 
 		let claim = self.claim_slot(&slot_info.chain_head, slot, &aux_data).await?;
 
-		let inherent_data_providers = create_inherent_data_providers
-			.create_inherent_data_providers(slot_info.chain_head.hash(), ())
-			.await
-			.ok()?;
-
-		if Instant::now() > slot_info.ends_at {
-			log::warn!(
-				target: "slots",
-				"Creating inherent data providers took more time than we had left for the slot.",
-			);
-		}
-
-		let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-		let slot =
-			sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-				*timestamp,
-				SlotDuration::from_duration(slot_info.duration),
-			)
-			.slot();
-
-		let inherent_data = inherent_data_providers.create_inherent_data().ok()?;
+		let (inherent_data, slot) =
+			Self::extract_inherent_data_and_slot(&slot_info, create_inherent_data_providers)
+				.await?;
 
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
@@ -378,7 +360,6 @@ where
 			},
 		};
 
-		// use inherent_data here
 		let proposal = self
 			.propose(proposer, &claim, slot_info, inherent_data, proposing_remaining)
 			.await?;
@@ -451,6 +432,28 @@ where
 		}
 
 		Some(SlotResult { block: B::new(header, body), storage_proof })
+	}
+
+	/// Creates inherent data and returns it and its slot.
+	async fn extract_inherent_data_and_slot(
+		slot_info: &SlotInfo<B>,
+		create_inherent_data_providers: &CIDP,
+	) -> Option<(InherentData, InherentType)> {
+		let inherent_data_providers = create_inherent_data_providers
+			.create_inherent_data_providers(slot_info.chain_head.hash(), ())
+			.await
+			.ok()?;
+
+		if Instant::now() > slot_info.ends_at {
+			log::warn!(
+				target: "slots",
+				"Creating inherent data providers took more time than we had left for the slot.",
+			);
+		}
+
+		let inherent_data = inherent_data_providers.create_inherent_data().ok()?;
+
+		Some((inherent_data, inherent_data_providers.slot()))
 	}
 }
 

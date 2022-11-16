@@ -125,9 +125,10 @@ impl SlotDuration {
 		sp_std::time::Duration::from_millis(self.0)
 	}
 
-	/// Initiliase from given [`sp_std::time::Duration`].
-	pub const fn from_duration(duration: sp_std::time::Duration) -> Self {
-		Self::from_millis(duration.as_millis() as u64) // OH GOD NO
+	/// Initialise from given [`sp_std::time::Duration`].
+	pub fn from_duration(duration: sp_std::time::Duration) -> Option<Self> {
+		let millis: u64 = duration.as_millis().try_into().ok()?;
+		Some(Self::from_millis(millis))
 	}
 }
 

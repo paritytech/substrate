@@ -26,6 +26,7 @@ use sp_consensus_slots::SlotDuration;
 use sp_runtime::traits::Block as BlockT;
 
 use futures_timer::Delay;
+use sp_consensus_babe::inherents::InherentType;
 use std::time::{Duration, Instant};
 
 /// Returns current duration since unix epoch.
@@ -145,12 +146,18 @@ where
 				},
 			};
 
-			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-			let slot =
-			        sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-				        *timestamp,
-				        SlotDuration::from_duration(self.slot_duration),
-				).slot();
+			let slot = match self.get_slot() {
+				Some(x) => x,
+				None => {
+					log::warn!(
+						target: "slots",
+						"Unable to get_block in next_slot. Duration conversion error ",
+					);
+					// Let's try at the next slot..
+					self.inner_delay.take();
+					continue
+				},
+			};
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
@@ -159,5 +166,18 @@ where
 				break Ok(SlotInfo::new(slot, self.slot_duration, chain_head, None))
 			}
 		}
+	}
+
+	fn get_slot(&mut self) -> Option<InherentType> {
+		let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+		let slot_duration = SlotDuration::from_duration(self.slot_duration)?;
+		let slot =
+			sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+				*timestamp,
+				slot_duration,
+			)
+			.slot();
+
+		Some(slot)
 	}
 }

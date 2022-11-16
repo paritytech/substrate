@@ -494,7 +494,7 @@ where
 					chain_head_slot,
 					self.client.info().finalized_number,
 					slot,
-					"aura",
+					self.logging_target(),
 					//<AuraWorker<C, E, I, P, SO, L, BS, <<B as BlockT>::Header as HeaderT>::Number> as sc_consensus_slots::SimpleSlotWorker<B, CIDP>>::logging_target(self),
 				)
 			}
