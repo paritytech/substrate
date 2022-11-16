@@ -1356,7 +1356,7 @@ pub mod pallet {
 		///
 		/// Origin must be Signed and must be an owner of the `item`.
 		///
-		/// - `collection`: A collection of the item.
+		/// - `collection`: Collection that the item is contained within.
 		/// - `item`: The item that holds attributes.
 		/// - `delegate`: The previously approved account to remove.
 		///
