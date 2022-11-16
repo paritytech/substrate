@@ -1,3 +1,6 @@
+[settings]
+enable_tracing = false
+
 [relaychain]
 default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
 default_command = "substrate"
