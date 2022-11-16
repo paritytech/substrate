@@ -424,7 +424,7 @@ benchmarks_instance_pallet! {
 		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
 		for i in 0..n {
 			let mut key = vec![0u8; T::KeyLimit::get() as usize];
-			let mut s = Vec::from((i as u16).to_string().as_bytes());
+			let mut s = Vec::from((i as u16).to_be_bytes());
 			key.truncate(s.len());
 			key.append(&mut s);
 
