@@ -857,6 +857,80 @@ fn set_item_owner_attributes_should_work() {
 }
 
 #[test]
+fn set_external_account_attributes_should_work() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			1,
+			collection_config_with_all_settings_enabled()
+		));
+		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(1), 0, 0, 1, default_item_config()));
+		assert_ok!(Nfts::approve_item_attributes(RuntimeOrigin::signed(1), 0, 0, 2));
+
+		assert_noop!(
+			Nfts::set_attribute(
+				RuntimeOrigin::signed(2),
+				0,
+				Some(0),
+				AttributeNamespace::Account(1),
+				bvec![0],
+				bvec![0],
+			),
+			Error::<Test>::NoPermission,
+		);
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::Account(2),
+			bvec![0],
+			bvec![0],
+		));
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::Account(2),
+			bvec![1],
+			bvec![0],
+		));
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::Account(2), bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::Account(2), bvec![1], bvec![0]),
+			]
+		);
+		assert_eq!(Balances::reserved_balance(2), 6);
+
+		// remove permission to set attributes
+		assert_ok!(Nfts::cancel_item_attributes_approval(
+			RuntimeOrigin::signed(1),
+			0,
+			0,
+			2,
+			CancelAttributesApprovalWitness { account_attributes: 2 },
+		));
+		assert_eq!(attributes(0), vec![]);
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_noop!(
+			Nfts::set_attribute(
+				RuntimeOrigin::signed(2),
+				0,
+				Some(0),
+				AttributeNamespace::Account(2),
+				bvec![0],
+				bvec![0],
+			),
+			Error::<Test>::NoPermission,
+		);
+	});
+}
+
+#[test]
 fn set_attribute_should_respect_lock() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
