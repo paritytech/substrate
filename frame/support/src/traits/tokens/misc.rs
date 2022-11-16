@@ -17,6 +17,7 @@
 
 //! Miscellaneous types.
 
+use crate::PalletId;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
@@ -132,7 +133,7 @@ pub enum BalanceStatus {
 )]
 pub enum AttributeNamespace<AccountId> {
 	/// An attribute was set by the pallet.
-	Pallet,
+	Pallet(PalletId),
 	/// An attribute was set by collection's owner.
 	CollectionOwner,
 	/// An attribute was set by item's owner.
