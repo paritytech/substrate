@@ -224,13 +224,9 @@ benchmarks_instance_pallet! {
 		let i in 0 .. 5_000;
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let items = (0..i).map(|x| mint_item::<T, I>(x as u16).0).collect::<Vec<_>>();
-		Nfts::<T, I>::force_collection_status(
+		Nfts::<T, I>::force_collection_config(
 			SystemOrigin::Root.into(),
 			collection,
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup.clone(),
-			caller_lookup,
 			make_collection_config::<T, I>(CollectionSetting::DepositRequired.into()),
 		)?;
 	}: _(SystemOrigin::Signed(caller.clone()), collection, items.clone())
@@ -299,20 +295,31 @@ benchmarks_instance_pallet! {
 		}.into());
 	}
 
-	force_collection_status {
+	force_collection_owner {
+		let (collection, _, _) = create_collection::<T, I>();
+		let origin = T::ForceOrigin::successful_origin();
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
+		T::Currency::make_free_balance_be(&target, T::Currency::minimum_balance());
+		let call = Call::<T, I>::force_collection_owner {
+			collection,
+			owner: target_lookup,
+		};
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_last_event::<T, I>(Event::OwnerChanged { collection, new_owner: target }.into());
+	}
+
+	force_collection_config {
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		let origin = T::ForceOrigin::successful_origin();
-		let call = Call::<T, I>::force_collection_status {
+		let call = Call::<T, I>::force_collection_config {
 			collection,
-			owner: caller_lookup.clone(),
-			issuer: caller_lookup.clone(),
-			admin: caller_lookup.clone(),
-			freezer: caller_lookup,
 			config: make_collection_config::<T, I>(CollectionSetting::DepositRequired.into()),
 		};
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_last_event::<T, I>(Event::CollectionStatusChanged { collection }.into());
+		assert_last_event::<T, I>(Event::CollectionConfigChanged { collection }.into());
 	}
 
 	lock_item_properties {

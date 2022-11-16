@@ -406,8 +406,8 @@ pub mod pallet {
 		},
 		/// All approvals of an item got cancelled.
 		AllApprovalsCancelled { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
-		/// A `collection` has had its attributes changed by the `Force` origin.
-		CollectionStatusChanged { collection: T::CollectionId },
+		/// A `collection` has had its config changed by the `Force` origin.
+		CollectionConfigChanged { collection: T::CollectionId },
 		/// New metadata has been set for a `collection`.
 		CollectionMetadataSet { collection: T::CollectionId, data: BoundedVec<u8, T::StringLimit> },
 		/// Metadata has been cleared for a `collection`.
@@ -457,8 +457,6 @@ pub mod pallet {
 		CollectionMintSettingsUpdated { collection: T::CollectionId },
 		/// Event gets emmited when the `NextCollectionId` gets incremented.
 		NextCollectionIdIncremented { next_id: T::CollectionId },
-		/// The config of a collection has change.
-		CollectionConfigChanged { id: T::CollectionId },
 		/// The price was set for the instance.
 		ItemPriceSet {
 			collection: T::CollectionId,
@@ -695,10 +693,9 @@ pub mod pallet {
 			collection: T::CollectionId,
 			witness: DestroyWitness,
 		) -> DispatchResultWithPostInfo {
-			let maybe_check_owner = match T::ForceOrigin::try_origin(origin) {
-				Ok(_) => None,
-				Err(origin) => Some(ensure_signed(origin)?),
-			};
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			let details = Self::do_destroy_collection(collection, witness, maybe_check_owner)?;
 
 			Ok(Some(T::WeightInfo::destroy(
@@ -808,10 +805,9 @@ pub mod pallet {
 			owner: AccountIdLookupOf<T>,
 			item_config: ItemConfig,
 		) -> DispatchResult {
-			let maybe_check_origin = match T::ForceOrigin::try_origin(origin) {
-				Ok(_) => None,
-				Err(origin) => Some(ensure_signed(origin)?),
-			};
+			let maybe_check_origin = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			let owner = T::Lookup::lookup(owner)?;
 
 			if let Some(check_origin) = maybe_check_origin {
@@ -1048,7 +1044,8 @@ pub mod pallet {
 
 		/// Change the Issuer, Admin and Freezer of a collection.
 		///
-		/// Origin must be Signed and the sender should be the Owner of the `collection`.
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// `collection`.
 		///
 		/// - `collection`: The collection whose team should be changed.
 		/// - `issuer`: The new Issuer of this collection.
@@ -1066,16 +1063,60 @@ pub mod pallet {
 			admin: AccountIdLookupOf<T>,
 			freezer: AccountIdLookupOf<T>,
 		) -> DispatchResult {
-			let origin = ensure_signed(origin)?;
+			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
+				.map(|_| None)
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			let issuer = T::Lookup::lookup(issuer)?;
 			let admin = T::Lookup::lookup(admin)?;
 			let freezer = T::Lookup::lookup(freezer)?;
-			Self::do_set_team(origin, collection, issuer, admin, freezer)
+			Self::do_set_team(maybe_check_owner, collection, issuer, admin, freezer)
+		}
+
+		/// Change the Owner of a collection.
+		///
+		/// Origin must be `ForceOrigin`.
+		///
+		/// - `collection`: The identifier of the collection.
+		/// - `owner`: The new Owner of this collection.
+		///
+		/// Emits `OwnerChanged`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::force_collection_owner())]
+		pub fn force_collection_owner(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			owner: AccountIdLookupOf<T>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			let new_owner = T::Lookup::lookup(owner)?;
+			Self::do_force_collection_owner(collection, new_owner)
+		}
+
+		/// Change the config of a collection.
+		///
+		/// Origin must be `ForceOrigin`.
+		///
+		/// - `collection`: The identifier of the collection.
+		/// - `config`: The new config of this collection.
+		///
+		/// Emits `CollectionConfigChanged`.
+		///
+		/// Weight: `O(1)`
+		#[pallet::weight(T::WeightInfo::force_collection_config())]
+		pub fn force_collection_config(
+			origin: OriginFor<T>,
+			collection: T::CollectionId,
+			config: CollectionConfigFor<T, I>,
+		) -> DispatchResult {
+			T::ForceOrigin::ensure_origin(origin)?;
+			Self::do_force_collection_config(collection, config)
 		}
 
 		/// Approve an item to be transferred by a delegated third-party account.
 		///
-		/// Origin must be Signed and must be the owner of the `item`.
+		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
+		/// `item`.
 		///
 		/// - `collection`: The collection of the item to be approved for delegated transfer.
 		/// - `item`: The item to be approved for delegated transfer.
@@ -1162,38 +1203,6 @@ pub mod pallet {
 			Self::do_clear_all_transfer_approvals(maybe_check_origin, collection, item)
 		}
 
-		/// Alter the attributes of a given collection.
-		///
-		/// Origin must be `ForceOrigin`.
-		///
-		/// - `collection`: The identifier of the collection.
-		/// - `owner`: The new Owner of this collection.
-		/// - `issuer`: The new Issuer of this collection.
-		/// - `admin`: The new Admin of this collection.
-		/// - `freezer`: The new Freezer of this collection.
-		/// - `config`: Collection's config.
-		///
-		/// Emits `CollectionStatusChanged` with the identity of the item.
-		///
-		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::force_collection_status())]
-		pub fn force_collection_status(
-			origin: OriginFor<T>,
-			collection: T::CollectionId,
-			owner: AccountIdLookupOf<T>,
-			issuer: AccountIdLookupOf<T>,
-			admin: AccountIdLookupOf<T>,
-			freezer: AccountIdLookupOf<T>,
-			config: CollectionConfigFor<T, I>,
-		) -> DispatchResult {
-			T::ForceOrigin::ensure_origin(origin)?;
-			let new_owner = T::Lookup::lookup(owner)?;
-			let issuer = T::Lookup::lookup(issuer)?;
-			let admin = T::Lookup::lookup(admin)?;
-			let freezer = T::Lookup::lookup(freezer)?;
-			Self::do_force_collection_status(collection, new_owner, issuer, admin, freezer, config)
-		}
-
 		/// Disallows changing the metadata of attributes of the item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
@@ -1217,8 +1226,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
-
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_lock_item_properties(
 				maybe_check_owner,
 				collection,
@@ -1312,7 +1320,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_clear_attribute(maybe_check_owner, collection, maybe_item, key, namespace)
 		}
 
@@ -1382,7 +1390,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_set_item_metadata(maybe_check_owner, collection, item, data)
 		}
 
@@ -1407,7 +1415,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_clear_item_metadata(maybe_check_owner, collection, item)
 		}
 
@@ -1434,7 +1442,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_set_collection_metadata(maybe_check_owner, collection, data)
 		}
 
@@ -1457,7 +1465,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_clear_collection_metadata(maybe_check_owner, collection)
 		}
 
@@ -1497,7 +1505,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_set_collection_max_supply(maybe_check_owner, collection, max_supply)
 		}
 
@@ -1522,7 +1530,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
-				.or_else(|origin| ensure_signed(origin).map(Some))?;
+				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
 			Self::do_update_mint_settings(maybe_check_owner, collection, mint_settings)
 		}
 

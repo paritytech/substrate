@@ -20,8 +20,8 @@ beefy-gadget = { version = "4.0.0-dev", path = "../." }
 beefy-primitives = { version = "4.0.0-dev", path = "../../../primitives/beefy" }
 sc-rpc = { version = "4.0.0-dev", path = "../../rpc" }
 sc-utils = { version = "4.0.0-dev", path = "../../utils" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 serde_json = "1.0.85"

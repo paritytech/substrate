@@ -21,7 +21,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_set_team(
-		origin: T::AccountId,
+		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
 		issuer: T::AccountId,
 		admin: T::AccountId,
@@ -29,7 +29,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		Collection::<T, I>::try_mutate(collection, |maybe_details| {
 			let details = maybe_details.as_mut().ok_or(Error::<T, I>::UnknownCollection)?;
-			ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+			if let Some(check_origin) = maybe_check_owner {
+				ensure!(check_origin == details.owner, Error::<T, I>::NoPermission);
+			}
 
 			// delete previous values
 			Self::clear_roles(&collection)?;
