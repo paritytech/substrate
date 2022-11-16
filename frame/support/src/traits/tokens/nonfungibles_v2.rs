@@ -61,8 +61,8 @@ pub trait Inspect<AccountId> {
 	fn attribute(
 		_collection: &Self::CollectionId,
 		_item: &Self::ItemId,
-		_key: &[u8],
 		_namespace: &AttributeNamespace<AccountId>,
+		_key: &[u8],
 	) -> Option<Vec<u8>> {
 		None
 	}
@@ -74,10 +74,10 @@ pub trait Inspect<AccountId> {
 	fn typed_attribute<K: Encode, V: Decode>(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
-		key: &K,
 		namespace: &AttributeNamespace<AccountId>,
+		key: &K,
 	) -> Option<V> {
-		key.using_encoded(|d| Self::attribute(collection, item, d, namespace))
+		key.using_encoded(|d| Self::attribute(collection, item, namespace, d))
 			.and_then(|v| V::decode(&mut &v[..]).ok())
 	}
 

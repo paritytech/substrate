@@ -49,8 +49,8 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	fn attribute(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
-		key: &[u8],
 		namespace: &AttributeNamespace<<T as SystemConfig>::AccountId>,
+		key: &[u8],
 	) -> Option<Vec<u8>> {
 		if key.is_empty() {
 			// We make the empty key map to the item metadata value.

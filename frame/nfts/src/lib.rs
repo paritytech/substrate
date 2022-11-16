@@ -1263,12 +1263,12 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
+			namespace: AttributeNamespace<T::AccountId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
-			namespace: AttributeNamespace<T::AccountId>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
-			Self::do_set_attribute(origin, collection, maybe_item, key, value, namespace)
+			Self::do_set_attribute(origin, collection, maybe_item, namespace, key, value)
 		}
 
 		/// Force-set an attribute for a collection or item.
@@ -1294,12 +1294,12 @@ pub mod pallet {
 			set_as: Option<T::AccountId>,
 			collection: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
+			namespace: AttributeNamespace<T::AccountId>,
 			key: BoundedVec<u8, T::KeyLimit>,
 			value: BoundedVec<u8, T::ValueLimit>,
-			namespace: AttributeNamespace<T::AccountId>,
 		) -> DispatchResult {
 			T::ForceOrigin::ensure_origin(origin)?;
-			Self::do_force_set_attribute(set_as, collection, maybe_item, key, value, namespace)
+			Self::do_force_set_attribute(set_as, collection, maybe_item, namespace, key, value)
 		}
 
 		/// Clear an attribute for a collection or item.
@@ -1322,13 +1322,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			maybe_item: Option<T::ItemId>,
-			key: BoundedVec<u8, T::KeyLimit>,
 			namespace: AttributeNamespace<T::AccountId>,
+			key: BoundedVec<u8, T::KeyLimit>,
 		) -> DispatchResult {
 			let maybe_check_owner = T::ForceOrigin::try_origin(origin)
 				.map(|_| None)
 				.or_else(|origin| ensure_signed(origin).map(Some).map_err(DispatchError::from))?;
-			Self::do_clear_attribute(maybe_check_owner, collection, maybe_item, key, namespace)
+			Self::do_clear_attribute(maybe_check_owner, collection, maybe_item, namespace, key)
 		}
 
 		/// Approve item's attributes to be changed by a delegated third-party account.

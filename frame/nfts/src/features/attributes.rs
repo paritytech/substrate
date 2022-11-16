@@ -23,9 +23,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		origin: T::AccountId,
 		collection: T::CollectionId,
 		maybe_item: Option<T::ItemId>,
+		namespace: AttributeNamespace<T::AccountId>,
 		key: BoundedVec<u8, T::KeyLimit>,
 		value: BoundedVec<u8, T::ValueLimit>,
-		namespace: AttributeNamespace<T::AccountId>,
 	) -> DispatchResult {
 		ensure!(
 			Self::is_pallet_feature_enabled(PalletFeature::Attributes),
@@ -116,9 +116,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		set_as: Option<T::AccountId>,
 		collection: T::CollectionId,
 		maybe_item: Option<T::ItemId>,
+		namespace: AttributeNamespace<T::AccountId>,
 		key: BoundedVec<u8, T::KeyLimit>,
 		value: BoundedVec<u8, T::ValueLimit>,
-		namespace: AttributeNamespace<T::AccountId>,
 	) -> DispatchResult {
 		let mut collection_details =
 			Collection::<T, I>::get(&collection).ok_or(Error::<T, I>::UnknownCollection)?;
@@ -147,8 +147,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		maybe_check_owner: Option<T::AccountId>,
 		collection: T::CollectionId,
 		maybe_item: Option<T::ItemId>,
-		key: BoundedVec<u8, T::KeyLimit>,
 		namespace: AttributeNamespace<T::AccountId>,
+		key: BoundedVec<u8, T::KeyLimit>,
 	) -> DispatchResult {
 		if let Some((_, deposit)) =
 			Attribute::<T, I>::take((collection, maybe_item, &namespace, &key))

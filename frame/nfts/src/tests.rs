@@ -604,25 +604,25 @@ fn set_attribute_should_work() {
 			RuntimeOrigin::signed(1),
 			0,
 			None,
-			bvec![0],
-			bvec![0],
 			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![0],
 		));
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
 			0,
 			Some(0),
-			bvec![0],
-			bvec![0],
 			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![0],
 		));
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
 			0,
 			Some(0),
+			AttributeNamespace::CollectionOwner,
 			bvec![1],
 			bvec![0],
-			AttributeNamespace::CollectionOwner,
 		));
 		assert_eq!(
 			attributes(0),
@@ -638,9 +638,9 @@ fn set_attribute_should_work() {
 			RuntimeOrigin::signed(1),
 			0,
 			None,
+			AttributeNamespace::CollectionOwner,
 			bvec![0],
 			bvec![0; 10],
-			AttributeNamespace::CollectionOwner,
 		));
 		assert_eq!(
 			attributes(0),
@@ -656,8 +656,8 @@ fn set_attribute_should_work() {
 			RuntimeOrigin::signed(1),
 			0,
 			Some(0),
-			bvec![1],
 			AttributeNamespace::CollectionOwner,
+			bvec![1],
 		));
 		assert_eq!(
 			attributes(0),
@@ -689,25 +689,25 @@ fn set_attribute_should_respect_lock() {
 			RuntimeOrigin::signed(1),
 			0,
 			None,
-			bvec![0],
-			bvec![0],
 			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![0],
 		));
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
 			0,
 			Some(0),
-			bvec![0],
-			bvec![0],
 			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![0],
 		));
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
 			0,
 			Some(1),
-			bvec![0],
-			bvec![0],
 			AttributeNamespace::CollectionOwner,
+			bvec![0],
+			bvec![0],
 		));
 		assert_eq!(
 			attributes(0),
@@ -732,9 +732,9 @@ fn set_attribute_should_respect_lock() {
 				RuntimeOrigin::signed(1),
 				0,
 				None,
-				bvec![0],
-				bvec![0],
 				AttributeNamespace::CollectionOwner,
+				bvec![0],
+				bvec![0],
 			),
 			e
 		);
@@ -742,9 +742,9 @@ fn set_attribute_should_respect_lock() {
 			RuntimeOrigin::signed(1),
 			0,
 			Some(0),
+			AttributeNamespace::CollectionOwner,
 			bvec![0],
 			bvec![1],
-			AttributeNamespace::CollectionOwner,
 		));
 
 		assert_ok!(Nfts::lock_item_properties(RuntimeOrigin::signed(1), 0, 0, false, true));
@@ -754,9 +754,9 @@ fn set_attribute_should_respect_lock() {
 				RuntimeOrigin::signed(1),
 				0,
 				Some(0),
+				AttributeNamespace::CollectionOwner,
 				bvec![0],
 				bvec![1],
-				AttributeNamespace::CollectionOwner,
 			),
 			e
 		);
@@ -764,9 +764,9 @@ fn set_attribute_should_respect_lock() {
 			RuntimeOrigin::signed(1),
 			0,
 			Some(1),
+			AttributeNamespace::CollectionOwner,
 			bvec![0],
 			bvec![1],
-			AttributeNamespace::CollectionOwner,
 		));
 	});
 }
@@ -1997,9 +1997,9 @@ fn pallet_level_feature_flags_should_work() {
 				RuntimeOrigin::signed(user_id),
 				collection_id,
 				None,
-				bvec![0],
-				bvec![0],
 				AttributeNamespace::CollectionOwner,
+				bvec![0],
+				bvec![0],
 			),
 			Error::<Test>::MethodDisabled
 		);

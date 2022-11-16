@@ -114,9 +114,9 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		Some(item),
+		AttributeNamespace::CollectionOwner,
 		key.clone(),
 		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
-		AttributeNamespace::CollectionOwner,
 	));
 	(key, caller, caller_lookup)
 }
@@ -339,15 +339,15 @@ benchmarks_instance_pallet! {
 
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-	}: _(SystemOrigin::Signed(caller), collection, Some(item), key.clone(), value.clone(), AttributeNamespace::CollectionOwner)
+	}: _(SystemOrigin::Signed(caller), collection, Some(item), AttributeNamespace::CollectionOwner, key.clone(), value.clone())
 	verify {
 		assert_last_event::<T, I>(
 			Event::AttributeSet {
 				collection,
 				maybe_item: Some(item),
+				namespace: AttributeNamespace::CollectionOwner,
 				key,
 				value,
-				namespace: AttributeNamespace::CollectionOwner,
 			}
 			.into(),
 		);
@@ -359,15 +359,15 @@ benchmarks_instance_pallet! {
 
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-	}: _(SystemOrigin::Root, Some(caller), collection, Some(item), key.clone(), value.clone(), AttributeNamespace::CollectionOwner)
+	}: _(SystemOrigin::Root, Some(caller), collection, Some(item), AttributeNamespace::CollectionOwner, key.clone(), value.clone())
 	verify {
 		assert_last_event::<T, I>(
 			Event::AttributeSet {
 				collection,
 				maybe_item: Some(item),
+				namespace: AttributeNamespace::CollectionOwner,
 				key,
 				value,
-				namespace: AttributeNamespace::CollectionOwner,
 			}
 			.into(),
 		);
@@ -378,14 +378,14 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 		add_item_metadata::<T, I>(item);
 		let (key, ..) = add_item_attribute::<T, I>(item);
-	}: _(SystemOrigin::Signed(caller), collection, Some(item), key.clone(), AttributeNamespace::CollectionOwner)
+	}: _(SystemOrigin::Signed(caller), collection, Some(item), AttributeNamespace::CollectionOwner, key.clone())
 	verify {
 		assert_last_event::<T, I>(
 			Event::AttributeCleared {
 				collection,
 				maybe_item: Some(item),
-				key,
 				namespace: AttributeNamespace::CollectionOwner,
+				key,
 			}.into(),
 		);
 	}
@@ -432,9 +432,9 @@ benchmarks_instance_pallet! {
 				SystemOrigin::Signed(target.clone()).into(),
 				T::Helper::collection(0),
 				Some(item),
+				AttributeNamespace::Account(target.clone()),
 				key.try_into().unwrap(),
 				value.clone(),
-				AttributeNamespace::Account(target.clone()),
 			)?;
 		}
 		let witness = CancelAttributesApprovalWitness { account_attributes: n };
