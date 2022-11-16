@@ -63,7 +63,10 @@ pub trait WeightInfo {
 	fn force_collection_config() -> Weight;
 	fn lock_item_properties() -> Weight;
 	fn set_attribute() -> Weight;
+	fn force_set_attribute() -> Weight;
 	fn clear_attribute() -> Weight;
+	fn approve_item_attributes() -> Weight;
+	fn cancel_item_attributes_approval() -> Weight;
 	fn set_metadata() -> Weight;
 	fn clear_metadata() -> Weight;
 	fn set_collection_metadata() -> Weight;
@@ -258,7 +261,34 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nfts CollectionConfigOf (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:0)
 	// Storage: Nfts Attribute (r:1 w:1)
+	fn force_set_attribute() -> Weight {
+		Weight::from_ref_time(53_019_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts CollectionConfigOf (r:1 w:0)
+	// Storage: Nfts ItemConfigOf (r:1 w:0)
+	// Storage: Nfts Attribute (r:1 w:1)
 	fn clear_attribute() -> Weight {
+		Weight::from_ref_time(52_530_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts CollectionConfigOf (r:1 w:0)
+	// Storage: Nfts ItemConfigOf (r:1 w:0)
+	// Storage: Nfts Attribute (r:1 w:1)
+	fn approve_item_attributes() -> Weight {
+		Weight::from_ref_time(52_530_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
+			.saturating_add(T::DbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts CollectionConfigOf (r:1 w:0)
+	// Storage: Nfts ItemConfigOf (r:1 w:0)
+	// Storage: Nfts Attribute (r:1 w:1)
+	fn cancel_item_attributes_approval() -> Weight {
 		Weight::from_ref_time(52_530_000 as u64)
 			.saturating_add(T::DbWeight::get().reads(4 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
@@ -566,7 +596,34 @@ impl WeightInfo for () {
 	// Storage: Nfts CollectionConfigOf (r:1 w:0)
 	// Storage: Nfts ItemConfigOf (r:1 w:0)
 	// Storage: Nfts Attribute (r:1 w:1)
+	fn force_set_attribute() -> Weight {
+		Weight::from_ref_time(53_019_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts CollectionConfigOf (r:1 w:0)
+	// Storage: Nfts ItemConfigOf (r:1 w:0)
+	// Storage: Nfts Attribute (r:1 w:1)
 	fn clear_attribute() -> Weight {
+		Weight::from_ref_time(52_530_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts CollectionConfigOf (r:1 w:0)
+	// Storage: Nfts ItemConfigOf (r:1 w:0)
+	// Storage: Nfts Attribute (r:1 w:1)
+	fn approve_item_attributes() -> Weight {
+		Weight::from_ref_time(52_530_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
+			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	// Storage: Nfts Class (r:1 w:1)
+	// Storage: Nfts CollectionConfigOf (r:1 w:0)
+	// Storage: Nfts ItemConfigOf (r:1 w:0)
+	// Storage: Nfts Attribute (r:1 w:1)
+	fn cancel_item_attributes_approval() -> Weight {
 		Weight::from_ref_time(52_530_000 as u64)
 			.saturating_add(RocksDbWeight::get().reads(4 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))

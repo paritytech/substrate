@@ -1238,17 +1238,22 @@ pub mod pallet {
 
 		/// Set an attribute for a collection or item.
 		///
-		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
-		/// `collection`.
+		/// Origin must be Signed and must conform to the namespace ruleset:
+		/// - `CollectionOwner` namespace could be modified by the `collection` owner only;
+		/// - `ItemOwner` namespace could be modified by the `maybe_item` owner only. `maybe_item`
+		///   should be set in that case;
+		/// - `Account(AccountId)` namespace could be modified only when the `origin` was given a
+		///   permission to do so;
 		///
-		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
+		/// The funds of `origin` are reserved according to the formula:
+		/// `AttributeDepositBase + DepositPerByte * (key.len + value.len)` taking into
 		/// account any already reserved funds.
 		///
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
+		/// - `namespace`: Attribute's namespace.
 		///
 		/// Emits `AttributeSet`.
 		///
@@ -1270,19 +1275,20 @@ pub mod pallet {
 		///
 		/// Origin must be `ForceOrigin`.
 		///
-		/// If the origin is Signed, then funds of signer are reserved according to the formula:
-		/// `MetadataDepositBase + DepositPerByte * (key.len + value.len)` taking into
-		/// account any already reserved funds.
+		/// If the attribute already exist and it was set by another account, the deposit
+		/// will be returned to the previous owner.
 		///
+		/// - `set_as`: An optional owner if the attribute.
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
+		/// - `namespace`: Attribute's namespace.
 		///
 		/// Emits `AttributeSet`.
 		///
 		/// Weight: `O(1)`
-		#[pallet::weight(T::WeightInfo::set_attribute())]
+		#[pallet::weight(T::WeightInfo::force_set_attribute())]
 		pub fn force_set_attribute(
 			origin: OriginFor<T>,
 			set_as: Option<T::AccountId>,
@@ -1306,6 +1312,7 @@ pub mod pallet {
 		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `maybe_item`: The identifier of the item whose metadata to clear.
 		/// - `key`: The key of the attribute.
+		/// - `namespace`: Attribute's namespace.
 		///
 		/// Emits `AttributeCleared`.
 		///
@@ -1333,14 +1340,15 @@ pub mod pallet {
 		/// - `delegate`: The account to delegate permission to change attributes of the item.
 		///
 		/// Emits `ItemAttributesApprovalAdded` on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::approve_item_attributes())]
 		pub fn approve_item_attributes(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			delegate: T::AccountId,
+			delegate: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 			Self::do_approve_item_attributes(origin, collection, item, delegate)
 		}
 
@@ -1353,15 +1361,16 @@ pub mod pallet {
 		/// - `delegate`: The previously approved account to remove.
 		///
 		/// Emits `ItemAttributesApprovalRemoved` on success.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::cancel_item_attributes_approval())]
 		pub fn cancel_item_attributes_approval(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
 			item: T::ItemId,
-			delegate: T::AccountId,
+			delegate: AccountIdLookupOf<T>,
 			witness: CancelAttributesApprovalWitness,
 		) -> DispatchResult {
 			let origin = ensure_signed(origin)?;
+			let delegate = T::Lookup::lookup(delegate)?;
 			Self::do_cancel_item_attributes_approval(origin, collection, item, delegate, witness)
 		}
 
