@@ -1278,7 +1278,7 @@ pub mod pallet {
 		/// If the attribute already exists and it was set by another account, the deposit
 		/// will be returned to the previous owner.
 		///
-		/// - `set_as`: An optional owner if the attribute.
+		/// - `set_as`: An optional owner of the attribute.
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
 		/// - `key`: The key of the attribute.
