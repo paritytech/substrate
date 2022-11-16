@@ -39,11 +39,11 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "primitives" }
 pallet-contracts-proc-macro = { version = "4.0.0-dev", path = "proc-macro" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../primitives/sandbox" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 array-bytes = "4.1"
@@ -57,7 +57,7 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-randomness-collective-flip = { version = "4.0.0-dev", path = "../randomness-collective-flip" }
 pallet-utility = { version = "4.0.0-dev", path = "../utility" }
-sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
+sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 
 [features]
 default = ["std"]

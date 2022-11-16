@@ -18,12 +18,12 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 frame-metadata = { version = "15.0.0", default-features = false, features = ["v14"] }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-tracing = { version = "5.0.0", default-features = false, path = "../../primitives/tracing" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-arithmetic = { version = "5.0.0", default-features = false, path = "../../primitives/arithmetic" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-tracing = { version = "6.0.0", default-features = false, path = "../../primitives/tracing" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-arithmetic = { version = "6.0.0", default-features = false, path = "../../primitives/arithmetic" }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 sp-weights = { version = "4.0.0", default-features = false, path = "../../primitives/weights" }
@@ -31,7 +31,7 @@ tt-call = "1.0.8"
 frame-support-procedural = { version = "4.0.0-dev", default-features = false, path = "./procedural" }
 paste = "1.0"
 once_cell = { version = "1", default-features = false, optional = true }
-sp-state-machine = { version = "0.12.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
+sp-state-machine = { version = "0.13.0", default-features = false, optional = true, path = "../../primitives/state-machine" }
 bitflags = "1.3"
 impl-trait-for-tuples = "0.2.2"
 smallvec = "1.8.0"

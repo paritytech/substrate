@@ -22,23 +22,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub(crate) fn do_lock_collection(
 		origin: T::AccountId,
 		collection: T::CollectionId,
-		lock_config: CollectionConfig,
+		lock_settings: CollectionSettings,
 	) -> DispatchResult {
 		ensure!(
 			Self::has_role(&collection, &origin, CollectionRole::Freezer),
 			Error::<T, I>::NoPermission
 		);
+		ensure!(
+			!lock_settings.is_disabled(CollectionSetting::DepositRequired),
+			Error::<T, I>::WrongSetting
+		);
 		CollectionConfigOf::<T, I>::try_mutate(collection, |maybe_config| {
 			let config = maybe_config.as_mut().ok_or(Error::<T, I>::NoConfig)?;
 
-			if lock_config.has_disabled_setting(CollectionSetting::TransferableItems) {
-				config.disable_setting(CollectionSetting::TransferableItems);
-			}
-			if lock_config.has_disabled_setting(CollectionSetting::UnlockedMetadata) {
-				config.disable_setting(CollectionSetting::UnlockedMetadata);
-			}
-			if lock_config.has_disabled_setting(CollectionSetting::UnlockedAttributes) {
-				config.disable_setting(CollectionSetting::UnlockedAttributes);
+			for setting in lock_settings.get_disabled() {
+				config.disable_setting(setting);
 			}
 
 			Self::deposit_event(Event::<T, I>::CollectionLocked { collection });
