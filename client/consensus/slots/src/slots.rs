@@ -20,11 +20,10 @@
 //!
 //! This is used instead of `futures_timer::Interval` because it was unreliable.
 
-use super::{InherentDataProviderExt, Slot};
+use super::Slot;
 use sp_consensus::{Error, SelectChain};
 use sp_consensus_slots::SlotDuration;
-use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
+use sp_runtime::traits::Block as BlockT;
 
 use futures_timer::Delay;
 use std::time::{Duration, Instant};

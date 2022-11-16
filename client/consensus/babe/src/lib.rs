@@ -874,7 +874,7 @@ where
 					chain_head_slot,
 					self.client.info().finalized_number,
 					slot,
-					self.logging_target(),
+					<BabeSlotWorker<B, C, E, I, SO, L, BS> as sc_consensus_slots::SimpleSlotWorker<B, CIDP>>::logging_target(self),
 				)
 			}
 		}
@@ -910,7 +910,10 @@ where
 			&self.block_proposal_slot_portion,
 			self.max_block_proposal_slot_portion.as_ref(),
 			sc_consensus_slots::SlotLenienceType::Exponential,
-			self.logging_target(),
+			<BabeSlotWorker<B, C, E, I, SO, L, BS> as sc_consensus_slots::SimpleSlotWorker<
+				B,
+				CIDP,
+			>>::logging_target(self),
 		)
 	}
 }

@@ -40,9 +40,8 @@ use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO, 
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
-use sp_inherents::CreateInherentDataProviders;
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
-use sp_inherents::InherentDataProvider;
 use std::{
 	fmt::Debug,
 	ops::Deref,
@@ -333,7 +332,8 @@ where
 
 		let inherent_data_providers = create_inherent_data_providers
 			.create_inherent_data_providers(slot_info.chain_head.hash(), ())
-			.await.ok()?;
+			.await
+			.ok()?;
 
 		if Instant::now() > slot_info.ends_at {
 			log::warn!(
@@ -462,7 +462,8 @@ where
 pub struct SimpleSlotWorkerToSlotWorker<T>(pub T);
 
 #[async_trait::async_trait]
-impl<T, B, CIDP> SlotWorker<B, CIDP, <T::Proposer as Proposer<B>>::Proof> for SimpleSlotWorkerToSlotWorker<T>
+impl<T, B, CIDP> SlotWorker<B, CIDP, <T::Proposer as Proposer<B>>::Proof>
+	for SimpleSlotWorkerToSlotWorker<T>
 where
 	T: SimpleSlotWorker<B, CIDP> + Send + Sync,
 	B: BlockT,

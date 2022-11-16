@@ -494,7 +494,8 @@ where
 					chain_head_slot,
 					self.client.info().finalized_number,
 					slot,
-					self.logging_target(),
+					"aura",
+					//<AuraWorker<C, E, I, P, SO, L, BS, <<B as BlockT>::Header as HeaderT>::Number> as sc_consensus_slots::SimpleSlotWorker<B, CIDP>>::logging_target(self),
 				)
 			}
 		}
@@ -529,7 +530,8 @@ where
 			&self.block_proposal_slot_portion,
 			self.max_block_proposal_slot_portion.as_ref(),
 			sc_consensus_slots::SlotLenienceType::Exponential,
-			self.logging_target(),
+			"aura",
+			//<AuraWorker<C, E, I, P, SO, L, BS, <<B as BlockT>::Header as HeaderT>::Number> as sc_consensus_slots::SimpleSlotWorker<B, CIDP>>::logging_target(self),
 		)
 	}
 }
