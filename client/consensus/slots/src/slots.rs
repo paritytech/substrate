@@ -151,7 +151,7 @@ where
 				None => {
 					log::warn!(
 						target: "slots",
-						"Unable to get_block in next_slot. Duration conversion error ",
+						"Unable to get_slot in next_slot. Duration conversion error ",
 					);
 					// Let's try at the next slot..
 					self.inner_delay.take();
