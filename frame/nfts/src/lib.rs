@@ -1251,9 +1251,9 @@ pub mod pallet {
 		///
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
+		/// - `namespace`: Attribute's namespace.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
-		/// - `namespace`: Attribute's namespace.
 		///
 		/// Emits `AttributeSet`.
 		///
@@ -1281,9 +1281,9 @@ pub mod pallet {
 		/// - `set_as`: An optional owner of the attribute.
 		/// - `collection`: The identifier of the collection whose item's metadata to set.
 		/// - `maybe_item`: The identifier of the item whose metadata to set.
+		/// - `namespace`: Attribute's namespace.
 		/// - `key`: The key of the attribute.
 		/// - `value`: The value to which to set the attribute.
-		/// - `namespace`: Attribute's namespace.
 		///
 		/// Emits `AttributeSet`.
 		///
@@ -1311,8 +1311,8 @@ pub mod pallet {
 		///
 		/// - `collection`: The identifier of the collection whose item's metadata to clear.
 		/// - `maybe_item`: The identifier of the item whose metadata to clear.
-		/// - `key`: The key of the attribute.
 		/// - `namespace`: Attribute's namespace.
+		/// - `key`: The key of the attribute.
 		///
 		/// Emits `AttributeCleared`.
 		///
