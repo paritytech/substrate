@@ -810,7 +810,7 @@ where
 		let mut pending_ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
 			Default::default(),
-			self.overwrite_state_version.unwrap_or(state_version)
+			self.overwrite_state_version.unwrap_or(state_version),
 		);
 		let top_kv = self.load_top_remote(&mut pending_ext).await?;
 		let child_kv = self.load_child_remote(&top_kv, &mut pending_ext).await?;
@@ -861,7 +861,7 @@ where
 		let mut inner_ext = TestExternalities::new_with_code_and_state(
 			Default::default(),
 			Default::default(),
-			self.overwrite_state_version.unwrap_or(state_version)
+			self.overwrite_state_version.unwrap_or(state_version),
 		);
 
 		info!(target: LOG_TARGET, "injecting a total of {} top keys", top.len());
