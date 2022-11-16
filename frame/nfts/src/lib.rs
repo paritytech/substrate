@@ -1275,7 +1275,7 @@ pub mod pallet {
 		///
 		/// Origin must be `ForceOrigin`.
 		///
-		/// If the attribute already exist and it was set by another account, the deposit
+		/// If the attribute already exists and it was set by another account, the deposit
 		/// will be returned to the previous owner.
 		///
 		/// - `set_as`: An optional owner if the attribute.
