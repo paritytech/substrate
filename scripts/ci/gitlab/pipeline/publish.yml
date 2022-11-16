@@ -55,7 +55,7 @@
     - .build-refs
     - .build-push-docker-image-common
   variables:
-    IMAGE_PATH:                    paritypr/$PRODUCT_ALIAS
+    IMAGE_PATH:                    paritypr/$PRODUCT
     DOCKERIO_USER:                 $PARITYPR_USER
     DOCKERIO_PASS:                 $PARITYPR_PASS
 
@@ -74,7 +74,6 @@ publish-docker-substrate-temporary:
       artifacts:                   true
   variables:
     PRODUCT:                       substrate
-    PRODUCT_ALIAS:                 substrate-debug
   artifacts:
     reports:
       # this artifact is used in zombienet-tests job
