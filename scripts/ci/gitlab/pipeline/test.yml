@@ -416,6 +416,8 @@ cargo-check-each-crate:
   extends:
     - .docker-env
     - .test-refs
+    - .collect-artifacts
+    - .pipeline-stopper-artifacts
   variables:
     # $CI_JOB_NAME is set manually so that rusty-cachier can share the cache for all
     # "cargo-check-each-crate I/N" jobs
@@ -429,7 +431,10 @@ cargo-check-each-crate:
 
 cargo-check-each-crate-macos:
   stage: test
-  extends: .test-refs
+  extends:
+    - .test-refs
+    - .collect-artifacts
+    - .pipeline-stopper-artifacts
   before_script:
     - !reference [.rust-info-script, script]
     - !reference [.pipeline-stopper-vars, script]
