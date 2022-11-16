@@ -83,7 +83,6 @@ cargo-check-benches:
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
     # this job is executed in parallel on two runners
     - echo "___Running benchmarks___";
-    - if [ ${CI_NODE_INDEX} == 2 ]; then exit 1; fi
     - case ${CI_NODE_INDEX} in
         1)
           SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
