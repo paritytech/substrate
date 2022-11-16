@@ -1,4 +1,4 @@
-use crate as pallet_erc1155;
+use crate as pallet_nft_fractionalisation;
 use frame_support::{
 	parameter_types,
 	traits::{AsEnsureOriginWithArg, ConstU128, ConstU16, ConstU32, ConstU64},
@@ -30,7 +30,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		Erc1155: pallet_erc1155,
+		NftFractions: pallet_nft_fractionalisation,
 		Assets: pallet_assets,
 		Uniques: pallet_uniques,
 		Balances: pallet_balances,
@@ -132,12 +132,12 @@ impl pallet_uniques::Config for Test {
 }
 
 parameter_types! {
-	pub const ERC1155PalletId: PalletId = PalletId(*b"erc1155 ");
+	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
 }
 
-impl pallet_erc1155::Config for Test {
+impl pallet_nft_fractionalisation::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletId = ERC1155PalletId;
+	type PalletId = NftFractionsPalletIdPalletId;
 	type Currency = Balances;
 	type CollectionId = Uniques;
 	type ItemId = Uniques;

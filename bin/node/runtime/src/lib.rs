@@ -89,6 +89,8 @@ pub use pallet_sudo::Call as SudoCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
 
+pub use pallet_nft_fractionalisation;
+
 /// Implementations of some helper traits passed into runtime modules as associated types.
 pub mod impls;
 #[cfg(not(feature = "runtime-benchmarks"))]
@@ -1545,6 +1547,19 @@ impl pallet_nfts::Config for Runtime {
 	type Locker = ();
 }
 
+parameter_types! {
+	pub const NftFractionsPalletId: PalletId = PalletId(*b"fraction");
+}
+
+impl pallet_nft_fractionalisation::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type PalletId = NftFractionsPalletId;
+	type Currency = Balances;
+	type CollectionId = Uniques;
+	type ItemId = Uniques;
+	type AssetId = Assets;
+}
+
 impl pallet_transaction_storage::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Currency = Balances;
@@ -1702,6 +1717,7 @@ construct_runtime!(
 		Gilt: pallet_gilt,
 		Uniques: pallet_uniques,
 		Nfts: pallet_nfts,
+		NftFractions: pallet_nft_fractionalisation,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
 		StateTrieMigration: pallet_state_trie_migration,

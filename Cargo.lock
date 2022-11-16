@@ -3401,6 +3401,7 @@ dependencies = [
  "pallet-membership",
  "pallet-mmr",
  "pallet-multisig",
+ "pallet-nft-fractionalisation",
  "pallet-nfts",
  "pallet-nomination-pools",
  "pallet-nomination-pools-benchmarking",
@@ -5679,6 +5680,25 @@ dependencies = [
  "frame-system",
  "log",
  "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-nft-fractionalisation"
+version = "4.0.0-dev"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-uniques",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
