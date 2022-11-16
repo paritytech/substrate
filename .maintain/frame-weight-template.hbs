@@ -64,7 +64,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().writes({{benchmark.base_writes}}))
 			{{/if}}
 			{{#each benchmark.component_writes as |cw|}}
-			.saturating_add(T::DbWeight::get().writes(({{cw.slope}}_u64).saturating_mul({{cw.name}} as u64)))
+			.saturating_add(T::DbWeight::get().writes(({{cw.slope}}).saturating_mul({{cw.name}} as u64)))
 			{{/each}}
 	}
 	{{/each}}
