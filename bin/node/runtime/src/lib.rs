@@ -24,7 +24,8 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_election_provider_support::{
-	onchain, BalancingConfig, ElectionDataProvider, SequentialPhragmen, VoteWeight,
+	onchain, weights::SubstrateWeight, BalancingConfig, ElectionDataProvider, SequentialPhragmen,
+	VoteWeight,
 };
 use frame_support::{
 	construct_runtime,
@@ -999,15 +1000,15 @@ parameter_types! {
 	pub const DesiredRunnersUp: u32 = 7;
 	pub const MaxVoters: u32 = 10 * 1000;
 	pub const MaxCandidates: u32 = 1000;
-	pub const ElectionsPhragmenPalletId: LockIdentifier = *b"phrelect";
+	pub const ElectionsPalletId: LockIdentifier = *b"phrelect";
 }
 
 // Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.
 const_assert!(DesiredMembers::get() <= CouncilMaxMembers::get());
 
-impl pallet_elections_phragmen::Config for Runtime {
+impl pallet_elections::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type PalletId = ElectionsPhragmenPalletId;
+	type PalletId = ElectionsPalletId;
 	type Currency = Balances;
 	type ChangeMembers = Council;
 	// NOTE: this implies that council's genesis members cannot be set directly and must come from
@@ -1024,7 +1025,9 @@ impl pallet_elections_phragmen::Config for Runtime {
 	type TermDuration = TermDuration;
 	type MaxVoters = MaxVoters;
 	type MaxCandidates = MaxCandidates;
-	type WeightInfo = pallet_elections_phragmen::weights::SubstrateWeight<Runtime>;
+	type ElectionSolver = SequentialPhragmen<Self::AccountId, Perbill>;
+	type SolverWeightInfo = SubstrateWeight<Runtime>;
+	type WeightInfo = pallet_elections::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1638,7 +1641,7 @@ construct_runtime!(
 		Democracy: pallet_democracy,
 		Council: pallet_collective::<Instance1>,
 		TechnicalCommittee: pallet_collective::<Instance2>,
-		Elections: pallet_elections_phragmen,
+		Elections: pallet_elections,
 		TechnicalMembership: pallet_membership::<Instance1>,
 		Grandpa: pallet_grandpa,
 		Treasury: pallet_treasury,
@@ -1763,7 +1766,7 @@ mod benches {
 		[pallet_democracy, Democracy]
 		[pallet_election_provider_multi_phase, ElectionProviderMultiPhase]
 		[pallet_election_provider_support_benchmarking, EPSBench::<Runtime>]
-		[pallet_elections_phragmen, Elections]
+		[pallet_elections, Elections]
 		[pallet_fast_unstake, FastUnstake]
 		[pallet_gilt, Gilt]
 		[pallet_grandpa, Grandpa]

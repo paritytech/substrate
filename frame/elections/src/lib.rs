@@ -950,31 +950,32 @@ impl<T: Config> Pallet<T> {
 		let num_voters = voters_and_votes.len() as u32;
 		let num_edges = num_edges;
 
-		let _ = T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
-			.map(
-				|ElectionResult::<T::AccountId, <T::ElectionSolver as NposSolver>::Accuracy> {
-				     winners,
-				     assignments: _,
-				 }| {
-					Self::do_post_solve_election(
-						winners,
-						candidates_and_deposit,
-						voters_and_stakes,
-					);
-				},
-			)
-			.map_err(|e| {
-				log!(warn, "Failed to run election [{:?}].", e);
-				Self::deposit_event(Event::ElectionError);
-			});
+		let election_result =
+			T::ElectionSolver::solve(num_to_elect, candidate_ids, voters_and_votes)
+				.map(
+					|ElectionResult::<
+						T::AccountId,
+						<T::ElectionSolver as NposSolver>::Accuracy,
+					> {
+					     winners,
+					     assignments: _,
+					 }| winners,
+				)
+				.map_err(|e| {
+					log!(warn, "Failed to run election [{:?}].", e);
+					Self::deposit_event(Event::ElectionError);
+				});
 
-		// TODO(gpestana): pull pre/post weights from WeightInfo after benchmarking
-		let pre_solve_weight = Weight::zero();
-		let post_solve_weight = Weight::zero();
+		let pre_and_election_weight =
+			T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
+				.saturating_add(Weight::zero()); // replace with weights::pre_solve_election_weight();
 
-		T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
-			.saturating_add(pre_solve_weight)
-			.saturating_sub(post_solve_weight)
+		match election_result {
+			Ok(winners) =>
+				Self::do_post_solve_election(winners, candidates_and_deposit, voters_and_stakes)
+					.saturating_add(pre_and_election_weight),
+			Err(_) => pre_and_election_weight,
+		}
 	}
 
 	fn do_pre_solve_election() -> Result<PreElectionResults<T>, Event<T>> {
@@ -1041,7 +1042,7 @@ impl<T: Config> Pallet<T> {
 		winners: Vec<(T::AccountId, u128)>,
 		candidates_and_deposit: Vec<(T::AccountId, BalanceOf<T>)>,
 		voters_and_stakes: Vec<(T::AccountId, BalanceOf<T>, Vec<T::AccountId>)>,
-	) {
+	) -> Weight {
 		let desired_seats = T::DesiredMembers::get() as usize;
 		let total_issuance = T::Currency::total_issuance();
 		let to_balance = |e: ExtendedBalance| T::CurrencyToVote::to_currency(e, total_issuance);
@@ -1167,6 +1168,9 @@ impl<T: Config> Pallet<T> {
 		log!(info, "New term election successful.");
 		Self::deposit_event(Event::NewTerm { new_members: new_members_sorted_by_id });
 		<ElectionRounds<T>>::mutate(|v| *v += 1);
+
+		// TODO(gpestana): return the weight::post_solve_weight
+		Weight::zero()
 	}
 }
 
