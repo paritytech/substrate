@@ -83,6 +83,7 @@ cargo-check-benches:
     - mkdir -p ./artifacts/benches/$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
     # this job is executed in parallel on two runners
     - echo "___Running benchmarks___";
+    - if [ ${CI_NODE_INDEX} == 1 ]; then exit 1; fi
     - case ${CI_NODE_INDEX} in
         1)
           SKIP_WASM_BUILD=1 time cargo +nightly check --locked --benches --all;
@@ -226,7 +227,6 @@ test-linux-stable:
     # tests are partitioned by nextest and executed in parallel on $CI_NODE_TOTAL runners
     # node-cli is excluded until https://github.com/paritytech/substrate/issues/11321 fixed
     - echo "Node index - ${CI_NODE_INDEX}. Total amount - ${CI_NODE_TOTAL}"
-    - - if [ ${CI_NODE_INDEX} == 3 ]; then exit 1; fi
     - time cargo nextest run --workspace
                              --locked
                              --release
