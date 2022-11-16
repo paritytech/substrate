@@ -18,7 +18,7 @@
 //! Houses the code that implements the transactional overlay storage.
 
 use super::{Extrinsics, StorageKey, StorageValue};
-
+use crate::ext::AppendedValue;
 #[cfg(not(feature = "std"))]
 use sp_std::collections::btree_set::BTreeSet as Set;
 #[cfg(feature = "std")]
@@ -30,7 +30,7 @@ use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	hash::Hash,
 };
-
+use crate::ext::AppendedValue;
 const PROOF_OVERLAY_NON_EMPTY: &str = "\
 	An OverlayValue is always created with at least one transaction and dropped as soon
 	as the last transaction is removed; qed";
@@ -67,7 +67,7 @@ pub enum ExecutionMode {
 #[cfg_attr(test, derive(PartialEq))]
 struct InnerValue<V> {
 	/// Current value. None if value has been deleted.
-	value: V,
+	value: AppendedValue<V>,
 	/// The set of extrinsic indices where the values has been changed.
 	extrinsics: Extrinsics,
 }
@@ -154,12 +154,12 @@ impl Default for ExecutionMode {
 
 impl<V> OverlayedEntry<V> {
 	/// The value as seen by the current transaction.
-	pub fn value_ref(&self) -> &V {
+	pub fn value_ref(&self) -> &AppendedValue {
 		&self.transactions.last().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
 	/// The value as seen by the current transaction.
-	pub fn into_value(mut self) -> V {
+	pub fn into_value(mut self) -> AppendedValue {
 		self.transactions.pop().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
@@ -173,7 +173,7 @@ impl<V> OverlayedEntry<V> {
 	}
 
 	/// Mutable reference to the most recent version.
-	fn value_mut(&mut self) -> &mut V {
+	fn value_mut(&mut self) -> &mut AppendedValue {
 		&mut self.transactions.last_mut().expect(PROOF_OVERLAY_NON_EMPTY).value
 	}
 
@@ -193,9 +193,10 @@ impl<V> OverlayedEntry<V> {
 	/// rolled back when required.
 	fn set(&mut self, value: V, first_write_in_tx: bool, at_extrinsic: Option<u32>) {
 		if first_write_in_tx || self.transactions.is_empty() {
-			self.transactions.push(InnerValue { value, extrinsics: Default::default() });
+			self.transactions.push(InnerValue { value:AppendedValue{data:value,..Default::default()} , extrinsics: Default::default() });
 		} else {
-			*self.value_mut() = value;
+			let num = Compact::<u32>::from(<u32>::from(self.value_ref().num).saturating_add(1));
+			*self.value_mut() = AppendedValue{num,data:value,materialized:None};
 		}
 
 		if let Some(extrinsic) = at_extrinsic {
