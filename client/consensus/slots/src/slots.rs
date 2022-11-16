@@ -131,8 +131,6 @@ where
 			// reschedule delay for next slot.
 			self.inner_delay = Some(Delay::new(ends_in));
 
-			let ends_at = Instant::now() + ends_in;
-
 			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
@@ -147,28 +145,12 @@ where
 				},
 			};
 
-			//let inherent_data_providers = self
-			//	.create_inherent_data_providers
-			//	.create_inherent_data_providers(chain_head.hash(), ())
-			//	.await?;
-
-			if Instant::now() > ends_at {
-				log::warn!(
-					target: "slots",
-					"Creating inherent data providers took more time than we had left for the slot.",
-				);
-			}
-
 			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
 			let slot =
 			        sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
 				        *timestamp,
 				        SlotDuration::from_duration(self.slot_duration),
 				).slot();
-
-			//let slot = inherent_data_providers.slot();
-			//let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
