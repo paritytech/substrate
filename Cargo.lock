@@ -8321,6 +8321,7 @@ version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
  "async-std",
+ "async-trait",
  "fork-tree",
  "futures",
  "libp2p",

@@ -19,7 +19,15 @@
 use crate::{service::network::NetworkServiceProvider, ChainSync, ForkTarget};
 
 use libp2p::PeerId;
-use sc_network_common::{service::NetworkSyncForkRequest, sync::ChainSync as ChainSyncT};
+use sc_network_common::{
+	config::ProtocolId,
+	protocol::{
+		role::{Role, Roles},
+		ProtocolName,
+	},
+	service::NetworkSyncForkRequest,
+	sync::ChainSync as ChainSyncT,
+};
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_core::H256;
 use std::{sync::Arc, task::Poll};
@@ -30,13 +38,19 @@ use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _
 #[async_std::test]
 async fn delegate_to_chainsync() {
 	let (_chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
-	let (mut chain_sync, chain_sync_service) = ChainSync::new(
+	let (mut chain_sync, chain_sync_service, _) = ChainSync::new(
 		sc_network_common::sync::SyncMode::Full,
 		Arc::new(TestClientBuilder::with_default_backend().build_with_longest_chain().0),
+		ProtocolId::from("test-protocol-name"),
+		&Some(String::from("test-fork-id")),
+		Roles::from(&Role::Full),
 		Box::new(DefaultBlockAnnounceValidator),
 		1u32,
 		None,
 		chain_sync_network_handle,
+		ProtocolName::from("block-request"),
+		ProtocolName::from("state-request"),
+		None,
 	)
 	.unwrap();
 
