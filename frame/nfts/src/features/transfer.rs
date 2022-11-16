@@ -151,7 +151,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			T::Currency::repatriate_reserved(
 				&details.owner,
 				&owner,
-				details.total_deposit,
+				details.owner_deposit,
 				Reserved,
 			)?;
 
