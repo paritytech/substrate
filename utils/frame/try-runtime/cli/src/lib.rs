@@ -531,7 +531,8 @@ pub enum State {
 }
 
 impl State {
-	/// Create the [`sp_io::TestExternalities`] using [`remote-externalities`] from self.
+	/// Create the [`remote_externalities::RemoteExternalities`] using [`remote-externalities`] from
+	/// self.
 	///
 	/// This will override the code as it sees fit based on [`SharedParams::Runtime`]. It will also
 	/// check the spec-version and name.
@@ -570,6 +571,7 @@ impl State {
 						// we will always download this key, since it helps detect if we should do
 						// runtime migration or not.
 						[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
+						[twox_128(b"System"), twox_128(b"BlockNumber")].concat(),
 					],
 					hashed_prefixes: vec![],
 					threads: *threads,

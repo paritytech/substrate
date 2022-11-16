@@ -13,11 +13,6 @@ readme = "README.md"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-clap = { version = "4.0.9", features = ["derive"] }
-log = "0.4.17"
-parity-scale-codec = "3.0.0"
-serde = "1.0.136"
-zstd = { version = "0.11.2", default-features = false }
 remote-externalities = { version = "0.10.0-dev", path = "../../remote-externalities" }
 sc-chain-spec = { version = "4.0.0-dev", path = "../../../../client/chain-spec" }
 sc-cli = { version = "0.10.0-dev", path = "../../../../client/cli" }
@@ -33,8 +28,14 @@ sp-state-machine = { version = "0.12.0", path = "../../../../primitives/state-ma
 sp-version = { version = "5.0.0", path = "../../../../primitives/version" }
 sp-weights = { version = "4.0.0", path = "../../../../primitives/weights" }
 frame-try-runtime = { optional = true, path = "../../../../frame/try-runtime" }
-hex = "0.4.3"
 substrate-rpc-client = { path = "../../rpc/client" }
+
+parity-scale-codec = "3.0.0"
+hex = "0.4.3"
+clap = { version = "4.0.9", features = ["derive"] }
+log = "0.4.17"
+serde = "1.0.136"
+zstd = { version = "0.11.2", default-features = false }
 
 [dev-dependencies]
 tokio = "1.17.0"

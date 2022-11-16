@@ -24,7 +24,7 @@ use substrate_rpc_client::{ws_client, StateApi};
 /// Configurations of the [`Command::CreateSnapshot`].
 #[derive(Debug, Clone, clap::Parser)]
 pub struct CreateSnapshotCmd {
-	/// The source of the snapshot. Must be a remove node.
+	/// The source of the snapshot. Must be a remote node.
 	#[clap(flatten)]
 	from: LiveState,
 

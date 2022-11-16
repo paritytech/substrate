@@ -235,7 +235,7 @@ where
 		block: Block,
 		try_state_root: bool,
 		select: frame_try_runtime::TryStateSelect,
-	) -> Result<frame_support::weights::Weight, &'static str> {
+	) -> Result<Weight, &'static str> {
 		Self::initialize_block(block.header());
 		Self::initial_checks(&block);
 
@@ -243,7 +243,8 @@ where
 
 		Self::execute_extrinsics_with_book_keeping(extrinsics, *header.number());
 
-		// run the try-state checks of all pallets.
+		// run the try-state checks of all pallets, ensuring they don't alter any state.
+		let _guard = frame_support::StorageNoopGuard::default();
 		<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 			*header.number(),
 			select,
@@ -252,7 +253,7 @@ where
 			frame_support::log::error!(target: "runtime::executive", "failure: {:?}", e);
 			e
 		})?;
-
+		drop(_guard);
 		// do some of the checks that would normally happen in `final_checks`, but perhaps skip
 		// the state root check.
 		{
@@ -283,14 +284,8 @@ where
 
 	/// Execute all `OnRuntimeUpgrade` of this runtime, including the pre and post migration checks.
 	///
-	/// This should only be used for testing.
-	pub fn try_runtime_upgrade(
-		checks: bool,
-	) -> Result<frame_support::weights::Weight, &'static str> {
-		let weight =
-			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
-				checks,
-			);
+	/// Runs the try-state code both before and after the migration function.
+	pub fn try_runtime_upgrade(checks: bool) -> Result<Weight, &'static str> {
 		if checks {
 			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
 				frame_system::Pallet::<System>::block_number(),
@@ -298,6 +293,20 @@ where
 			)
 			.unwrap();
 		}
+
+		let weight =
+			<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::try_on_runtime_upgrade(
+				checks,
+			);
+
+		if checks {
+			<AllPalletsWithSystem as frame_support::traits::TryState<System::BlockNumber>>::try_state(
+				frame_system::Pallet::<System>::block_number(),
+				frame_try_runtime::TryStateSelect::All,
+			)
+			.unwrap();
+		}
+
 		Ok(weight)
 	}
 }
@@ -323,7 +332,7 @@ where
 	UnsignedValidator: ValidateUnsigned<Call = CallOf<Block::Extrinsic, Context>>,
 {
 	/// Execute all `OnRuntimeUpgrade` of this runtime, and return the aggregate weight.
-	pub fn execute_on_runtime_upgrade() -> frame_support::weights::Weight {
+	pub fn execute_on_runtime_upgrade() -> Weight {
 		<(COnRuntimeUpgrade, AllPalletsWithSystem) as OnRuntimeUpgrade>::on_runtime_upgrade()
 	}
 

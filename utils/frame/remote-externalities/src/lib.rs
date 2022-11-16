@@ -124,9 +124,9 @@ pub struct OfflineConfig {
 #[derive(Debug, Clone)]
 pub struct Transport {
 	/// Use the `URI` to open a new WebSocket connection.
-	pub uri: Option<String>,
+	uri: Option<String>,
 	/// Use existing WebSocket connection.
-	pub remote_client: Option<Arc<WsClient>>,
+	remote_client: Option<Arc<WsClient>>,
 }
 
 impl Transport {
@@ -145,21 +145,9 @@ impl Transport {
 	}
 }
 
-impl From<String> for Transport {
-	fn from(uri: String) -> Self {
-		Transport { uri: Some(uri), remote_client: None }
-	}
-}
-
-impl From<&str> for Transport {
-	fn from(uri: &str) -> Self {
-		Transport { uri: Some(uri.to_string()), remote_client: None }
-	}
-}
-
-impl From<Arc<WsClient>> for Transport {
-	fn from(_: Arc<WsClient>) -> Self {
-		unimplemented!("we should not allow this. any client must be first built with a uri");
+impl<T: AsRef<str>> From<T> for Transport {
+	fn from(uri: T) -> Self {
+		Transport { uri: Some(uri.as_ref().to_string()), remote_client: None }
 	}
 }
 
@@ -216,15 +204,9 @@ impl<B: BlockT> Default for OnlineConfig<B> {
 	}
 }
 
-impl<B: BlockT> From<String> for OnlineConfig<B> {
-	fn from(s: String) -> Self {
+impl<B: BlockT, T: AsRef<str>> From<T> for OnlineConfig<B> {
+	fn from(s: T) -> Self {
 		Self { transport: s.into(), ..Default::default() }
-	}
-}
-
-impl<B: BlockT> From<&str> for OnlineConfig<B> {
-	fn from(s: &str) -> Self {
-		Self { transport: s.to_string().into(), ..Default::default() }
 	}
 }
 
@@ -773,7 +755,10 @@ where
 		Ok(keys_and_values)
 	}
 
-	pub(crate) async fn init_remote_client(&mut self) -> Result<(), &'static str> {
+	/// The entry point of execution, if `mode` is online.
+	///
+	/// initializes the remote client in `transport`, and sets the `at` field, if not specified.
+	async fn init_remote_client(&mut self) -> Result<(), &'static str> {
 		// First, initialize the ws client.
 		self.as_online_mut().transport.map_uri().await?;
 
@@ -817,9 +802,11 @@ where
 		Ok(())
 	}
 
-	pub(crate) async fn load_remote_and_maybe_save(
-		&mut self,
-	) -> Result<TestExternalities, &'static str> {
+	/// Load the data from a remote server. The main code path is calling into `load_top_remote` and
+	/// `load_child_remote`.
+	///
+	/// Must be called after `init_remote_client`.
+	async fn load_remote_and_maybe_save(&mut self) -> Result<TestExternalities, &'static str> {
 		let state_version =
 			StateApi::<B::Hash>::runtime_version(self.as_online().rpc_client(), None)
 				.await
@@ -859,7 +846,7 @@ where
 		Ok(pending_ext)
 	}
 
-	pub(crate) fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
+	fn load_snapshot(&mut self, path: PathBuf) -> Result<Snapshot<B>, &'static str> {
 		info!(target: LOG_TARGET, "loading data from snapshot {:?}", path);
 		let bytes = fs::read(path).map_err(|_| "fs::read failed.")?;
 		Decode::decode(&mut &*bytes).map_err(|_| "decode failed")

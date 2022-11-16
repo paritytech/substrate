@@ -34,10 +34,6 @@ use substrate_rpc_client::{ws_client, ChainApi};
 ///
 /// This will always call into `TryRuntime_execute_block`, which can optionally skip the state-root
 /// check (useful for trying a unreleased runtime), and can execute runtime sanity checks as well.
-///
-/// An important sad nuance of this configuration is that the reference to the block number is
-/// coming from the `state` field. If state of block `n` is fetched, then block `n+1` should be
-/// executed on top of it. In other words, to run block x, feed `--at n-1` to the CLI.
 #[derive(Debug, Clone, clap::Parser)]
 pub struct ExecuteBlockCmd {
 	/// If set the state root check is disabled.
@@ -58,8 +54,11 @@ pub struct ExecuteBlockCmd {
 
 	/// The ws uri from which to fetch the block.
 	///
-	/// If the `live` state type is being used, then this can be omitted, and is equal to whatever
-	/// the `state::uri` is. Only use this (with care) when combined with a snapshot.
+	/// This will always fetch the next block of whatever `state` is referring to, because this is
+	/// the only sensible combination. In other words, if you have the state of block `n`, you
+	/// should execute block `n+1` on top of it.
+	///
+	/// If `state` is `Live`, this can be ignored.
 	#[arg(
 		long,
 		value_parser = crate::parse::url
@@ -67,10 +66,6 @@ pub struct ExecuteBlockCmd {
 	block_ws_uri: Option<String>,
 
 	/// The state type to use.
-	///
-	/// For this command only, if the `live` is used, then state of the parent block is fetched.
-	///
-	/// If `block_at` is provided, then the [`State::Live::at`] is being ignored.
 	#[command(subcommand)]
 	state: State,
 }
