@@ -25,6 +25,7 @@ use frame_support::{
 	traits::{tokens::nonfungibles_v2::Destroy, Currency, Get},
 };
 use pallet_balances::Error as BalancesError;
+use sp_core::bounded::BoundedVec;
 use sp_std::prelude::*;
 
 fn items() -> Vec<(u64, u32, u32)> {
@@ -67,11 +68,12 @@ macro_rules! bvec {
 	}
 }
 
-fn attributes(collection: u32) -> Vec<(Option<u32>, Vec<u8>, Vec<u8>)> {
+fn attributes(collection: u32) -> Vec<(Option<u32>, AttributeNamespace<u64>, Vec<u8>, Vec<u8>)> {
 	let mut s: Vec<_> = Attribute::<Test>::iter_prefix((collection,))
-		.map(|(k, v)| (k.0, k.2.into(), v.0.into()))
+		.map(|(k, v)| (k.0, k.1, k.2.into(), v.0.into()))
 		.collect();
-	s.sort();
+	s.sort_by_key(|k: &(Option<u32>, AttributeNamespace<u64>, Vec<u8>, Vec<u8>)| k.0);
+	s.sort_by_key(|k: &(Option<u32>, AttributeNamespace<u64>, Vec<u8>, Vec<u8>)| k.2.clone());
 	s
 }
 
@@ -589,7 +591,7 @@ fn set_item_metadata_should_work() {
 }
 
 #[test]
-fn set_attribute_should_work() {
+fn set_collection_owner_attributes_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
 
@@ -627,9 +629,9 @@ fn set_attribute_should_work() {
 		assert_eq!(
 			attributes(0),
 			vec![
-				(None, bvec![0], bvec![0]),
-				(Some(0), bvec![0], bvec![0]),
-				(Some(0), bvec![1], bvec![0]),
+				(None, AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![1], bvec![0]),
 			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 10);
@@ -645,9 +647,9 @@ fn set_attribute_should_work() {
 		assert_eq!(
 			attributes(0),
 			vec![
-				(None, bvec![0], bvec![0; 10]),
-				(Some(0), bvec![0], bvec![0]),
-				(Some(0), bvec![1], bvec![0]),
+				(None, AttributeNamespace::CollectionOwner, bvec![0], bvec![0; 10]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![1], bvec![0]),
 			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 19);
@@ -661,7 +663,10 @@ fn set_attribute_should_work() {
 		));
 		assert_eq!(
 			attributes(0),
-			vec![(None, bvec![0], bvec![0; 10]), (Some(0), bvec![0], bvec![0]),]
+			vec![
+				(None, AttributeNamespace::CollectionOwner, bvec![0], bvec![0; 10]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 16);
 
@@ -673,6 +678,185 @@ fn set_attribute_should_work() {
 }
 
 #[test]
+fn set_item_owner_attributes_should_work() {
+	new_test_ext().execute_with(|| {
+		Balances::make_free_balance_be(&1, 100);
+		Balances::make_free_balance_be(&2, 100);
+		Balances::make_free_balance_be(&3, 100);
+
+		assert_ok!(Nfts::force_create(
+			RuntimeOrigin::root(),
+			1,
+			collection_config_with_all_settings_enabled()
+		));
+		assert_ok!(Nfts::force_mint(RuntimeOrigin::signed(1), 0, 0, 2, default_item_config()));
+
+		// can't set for the collection
+		assert_noop!(
+			Nfts::set_attribute(
+				RuntimeOrigin::signed(2),
+				0,
+				None,
+				AttributeNamespace::ItemOwner,
+				bvec![0],
+				bvec![0],
+			),
+			Error::<Test>::NoPermission,
+		);
+		// can't set for the non-owned item
+		assert_noop!(
+			Nfts::set_attribute(
+				RuntimeOrigin::signed(1),
+				0,
+				Some(0),
+				AttributeNamespace::ItemOwner,
+				bvec![0],
+				bvec![0],
+			),
+			Error::<Test>::NoPermission,
+		);
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![0],
+			bvec![0],
+		));
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![1],
+			bvec![0],
+		));
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![2],
+			bvec![0],
+		));
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::ItemOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![1], bvec![0]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![2], bvec![0]),
+			]
+		);
+		assert_eq!(Balances::reserved_balance(2), 9);
+
+		// validate an attribute can be updated
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![0],
+			bvec![0; 10],
+		));
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::ItemOwner, bvec![0], bvec![0; 10]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![1], bvec![0]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![2], bvec![0]),
+			]
+		);
+		assert_eq!(Balances::reserved_balance(2), 18);
+
+		// validate only item's owner (or the root) can remove an attribute
+		assert_noop!(
+			Nfts::clear_attribute(
+				RuntimeOrigin::signed(1),
+				0,
+				Some(0),
+				AttributeNamespace::ItemOwner,
+				bvec![1],
+			),
+			Error::<Test>::NoPermission,
+		);
+		assert_ok!(Nfts::clear_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![1],
+		));
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::ItemOwner, bvec![0], bvec![0; 10]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![2], bvec![0])
+			]
+		);
+		assert_eq!(Balances::reserved_balance(2), 15);
+
+		// transfer item
+		assert_ok!(Nfts::transfer(RuntimeOrigin::signed(2), 0, 0, 3));
+
+		// validate the attribute are still here & the deposit belongs to the previous owner
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::ItemOwner, bvec![0], bvec![0; 10]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![2], bvec![0])
+			]
+		);
+		let key: BoundedVec<_, _> = bvec![0];
+		let (_, deposit) =
+			Attribute::<Test>::get((0, Some(0), AttributeNamespace::ItemOwner, &key)).unwrap();
+		assert_eq!(deposit.account, Some(2));
+		assert_eq!(deposit.amount, 12);
+
+		// on attribute update the deposit should be returned to the previous owner
+		assert_ok!(Nfts::set_attribute(
+			RuntimeOrigin::signed(3),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![0],
+			bvec![0; 11],
+		));
+		let (_, deposit) =
+			Attribute::<Test>::get((0, Some(0), AttributeNamespace::ItemOwner, &key)).unwrap();
+		assert_eq!(deposit.account, Some(3));
+		assert_eq!(deposit.amount, 13);
+		assert_eq!(Balances::reserved_balance(2), 3);
+		assert_eq!(Balances::reserved_balance(3), 13);
+
+		// validate attributes on item deletion
+		assert_ok!(Nfts::burn(RuntimeOrigin::signed(3), 0, 0, None));
+		assert_eq!(
+			attributes(0),
+			vec![
+				(Some(0), AttributeNamespace::ItemOwner, bvec![0], bvec![0; 11]),
+				(Some(0), AttributeNamespace::ItemOwner, bvec![2], bvec![0])
+			]
+		);
+		assert_ok!(Nfts::clear_attribute(
+			RuntimeOrigin::signed(3),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![0],
+		));
+		assert_ok!(Nfts::clear_attribute(
+			RuntimeOrigin::signed(2),
+			0,
+			Some(0),
+			AttributeNamespace::ItemOwner,
+			bvec![2],
+		));
+		assert_eq!(Balances::reserved_balance(2), 0);
+		assert_eq!(Balances::reserved_balance(3), 0);
+	});
+}
+
+#[test]
 fn set_attribute_should_respect_lock() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
@@ -680,7 +864,7 @@ fn set_attribute_should_respect_lock() {
 		assert_ok!(Nfts::force_create(
 			RuntimeOrigin::root(),
 			1,
-			collection_config_with_all_settings_enabled()
+			collection_config_with_all_settings_enabled(),
 		));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 0, None));
 		assert_ok!(Nfts::mint(RuntimeOrigin::signed(1), 0, 1, None));
@@ -712,9 +896,9 @@ fn set_attribute_should_respect_lock() {
 		assert_eq!(
 			attributes(0),
 			vec![
-				(None, bvec![0], bvec![0]),
-				(Some(0), bvec![0], bvec![0]),
-				(Some(1), bvec![0], bvec![0]),
+				(None, AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(0), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
+				(Some(1), AttributeNamespace::CollectionOwner, bvec![0], bvec![0]),
 			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 11);
