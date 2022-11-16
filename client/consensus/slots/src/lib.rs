@@ -42,7 +42,12 @@ use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
-use std::{fmt::Debug, ops::Deref, time::Duration};
+use sp_inherents::InherentDataProvider;
+use std::{
+	fmt::Debug,
+	ops::Deref,
+	time::{Duration, Instant},
+};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -64,19 +69,33 @@ pub struct SlotResult<Block: BlockT, Proof> {
 /// The implementation should not make any assumptions of the slot being bound to the time or
 /// similar. The only valid assumption is that the slot number is always increasing.
 #[async_trait::async_trait]
-pub trait SlotWorker<B: BlockT, Proof> {
+pub trait SlotWorker<B, CIDP, Proof>
+where
+	B: BlockT,
+	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+{
 	/// Called when a new slot is triggered.
 	///
 	/// Returns a future that resolves to a [`SlotResult`] iff a block was successfully built in
 	/// the slot. Otherwise `None` is returned.
-	async fn on_slot(&mut self, slot_info: SlotInfo<B>) -> Option<SlotResult<B, Proof>>;
+	async fn on_slot(
+		&mut self,
+		slot_info: SlotInfo<B>,
+		create_inherent_data_providers: &CIDP,
+	) -> Option<SlotResult<B, Proof>>;
 }
 
 /// A skeleton implementation for `SlotWorker` which tries to claim a slot at
 /// its beginning and tries to produce a block if successfully claimed, timing
 /// out if block production takes too long.
 #[async_trait::async_trait]
-pub trait SimpleSlotWorker<B: BlockT> {
+pub trait SimpleSlotWorker<B, CIDP>
+where
+	B: BlockT,
+	for<'async_trait> CIDP: CreateInherentDataProviders<B, ()> + Send + 'async_trait,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
+{
 	/// A handle to a `BlockImport`.
 	type BlockImport: BlockImport<B, Transaction = <Self::Proposer as Proposer<B>>::Transaction>
 		+ Send
@@ -184,6 +203,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		proposer: Self::Proposer,
 		claim: &Self::Claim,
 		slot_info: SlotInfo<B>,
+		inherent_data: sp_inherents::InherentData,
 		proposing_remaining: Delay,
 	) -> Option<
 		Proposal<
@@ -203,7 +223,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// the result to be returned.
 		let proposing = proposer
 			.propose(
-				slot_info.inherent_data,
+				inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
 				None,
@@ -246,6 +266,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
+		create_inherent_data_providers: &CIDP,
 	) -> Option<SlotResult<B, <Self::Proposer as Proposer<B>>::Proof>>
 	where
 		Self: Sync,
@@ -310,6 +331,28 @@ pub trait SimpleSlotWorker<B: BlockT> {
 
 		let claim = self.claim_slot(&slot_info.chain_head, slot, &aux_data).await?;
 
+		let inherent_data_providers = create_inherent_data_providers
+			.create_inherent_data_providers(slot_info.chain_head.hash(), ())
+			.await.ok()?;
+
+		if Instant::now() > slot_info.ends_at {
+			log::warn!(
+				target: "slots",
+				"Creating inherent data providers took more time than we had left for the slot.",
+			);
+		}
+
+		let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+		let slot =
+			sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+				*timestamp,
+				SlotDuration::from_duration(slot_info.duration),
+			)
+			.slot();
+
+		let inherent_data = inherent_data_providers.create_inherent_data().ok()?;
+
 		if self.should_backoff(slot, &slot_info.chain_head) {
 			return None
 		}
@@ -335,7 +378,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			},
 		};
 
-		let proposal = self.propose(proposer, &claim, slot_info, proposing_remaining).await?;
+		// use inherent_data here
+		let proposal = self
+			.propose(proposer, &claim, slot_info, inherent_data, proposing_remaining)
+			.await?;
 
 		let (block, storage_proof) = (proposal.block, proposal.proof);
 		let (header, body) = block.deconstruct();
@@ -416,14 +462,19 @@ pub trait SimpleSlotWorker<B: BlockT> {
 pub struct SimpleSlotWorkerToSlotWorker<T>(pub T);
 
 #[async_trait::async_trait]
-impl<T: SimpleSlotWorker<B> + Send + Sync, B: BlockT>
-	SlotWorker<B, <T::Proposer as Proposer<B>>::Proof> for SimpleSlotWorkerToSlotWorker<T>
+impl<T, B, CIDP> SlotWorker<B, CIDP, <T::Proposer as Proposer<B>>::Proof> for SimpleSlotWorkerToSlotWorker<T>
+where
+	T: SimpleSlotWorker<B, CIDP> + Send + Sync,
+	B: BlockT,
+	for<'async_trait> CIDP: CreateInherentDataProviders<B, ()> + Send + 'async_trait,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	async fn on_slot(
 		&mut self,
 		slot_info: SlotInfo<B>,
+		create_inherent_data_providers: &CIDP,
 	) -> Option<SlotResult<B, <T::Proposer as Proposer<B>>::Proof>> {
-		self.0.on_slot(slot_info).await
+		self.0.on_slot(slot_info, create_inherent_data_providers).await
 	}
 }
 
@@ -472,12 +523,12 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 ) where
 	B: BlockT,
 	C: SelectChain<B>,
-	W: SlotWorker<B, Proof>,
+	W: SlotWorker<B, CIDP, Proof>,
 	SO: SyncOracle + Send,
 	CIDP: CreateInherentDataProviders<B, ()> + Send,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
-	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
+	let mut slots = Slots::new(slot_duration.as_duration(), client);
 
 	loop {
 		let slot_info = match slots.next_slot().await {
@@ -493,7 +544,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 			continue
 		}
 
-		let _ = worker.on_slot(slot_info).await;
+		let _ = worker.on_slot(slot_info, &create_inherent_data_providers).await;
 	}
 }
 

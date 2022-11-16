@@ -715,7 +715,7 @@ struct BabeSlotWorker<B: BlockT, C, E, I, SO, L, BS> {
 }
 
 #[async_trait::async_trait]
-impl<B, C, E, I, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
+impl<B, C, E, I, Error, SO, L, BS, CIDP> sc_consensus_slots::SimpleSlotWorker<B, CIDP>
 	for BabeSlotWorker<B, C, E, I, SO, L, BS>
 where
 	B: BlockT,
@@ -728,6 +728,8 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Sync,
 	Error: std::error::Error + Send + From<ConsensusError> + From<I::Error> + 'static,
+	for<'async_trait> CIDP: CreateInherentDataProviders<B, ()> + Send + 'async_trait,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	type Claim = (PreDigest, AuthorityId);
 	type SyncOracle = SO;

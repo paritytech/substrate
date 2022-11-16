@@ -22,6 +22,7 @@
 
 use super::{InherentDataProviderExt, Slot};
 use sp_consensus::{Error, SelectChain};
+use sp_consensus_slots::SlotDuration;
 use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
@@ -52,8 +53,6 @@ pub struct SlotInfo<B: BlockT> {
 	pub slot: Slot,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
-	/// The inherent data.
-	pub inherent_data: InherentData,
 	/// Slot duration.
 	pub duration: Duration,
 	/// The chain header this slot is based on.
@@ -70,14 +69,12 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
-		inherent_data: InherentData,
 		duration: Duration,
 		chain_head: B::Header,
 		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
-			inherent_data,
 			duration,
 			chain_head,
 			block_size_limit,
@@ -87,39 +84,31 @@ impl<B: BlockT> SlotInfo<B> {
 }
 
 /// A stream that returns every time there is a new slot.
-pub(crate) struct Slots<Block, SC, IDP> {
+pub(crate) struct Slots<Block, SC> {
 	last_slot: Slot,
 	slot_duration: Duration,
 	inner_delay: Option<Delay>,
-	create_inherent_data_providers: IDP,
 	select_chain: SC,
 	_phantom: std::marker::PhantomData<Block>,
 }
 
-impl<Block, SC, IDP> Slots<Block, SC, IDP> {
+impl<Block, SC> Slots<Block, SC> {
 	/// Create a new `Slots` stream.
-	pub fn new(
-		slot_duration: Duration,
-		create_inherent_data_providers: IDP,
-		select_chain: SC,
-	) -> Self {
+	pub fn new(slot_duration: Duration, select_chain: SC) -> Self {
 		Slots {
 			last_slot: 0.into(),
 			slot_duration,
 			inner_delay: None,
-			create_inherent_data_providers,
 			select_chain,
 			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<Block, SC, IDP> Slots<Block, SC, IDP>
+impl<Block, SC> Slots<Block, SC>
 where
 	Block: BlockT,
 	SC: SelectChain<Block>,
-	IDP: CreateInherentDataProviders<Block, ()>,
-	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
 	pub async fn next_slot(&mut self) -> Result<SlotInfo<Block>, Error> {
@@ -159,10 +148,10 @@ where
 				},
 			};
 
-			let inherent_data_providers = self
-				.create_inherent_data_providers
-				.create_inherent_data_providers(chain_head.hash(), ())
-				.await?;
+			//let inherent_data_providers = self
+			//	.create_inherent_data_providers
+			//	.create_inherent_data_providers(chain_head.hash(), ())
+			//	.await?;
 
 			if Instant::now() > ends_at {
 				log::warn!(
@@ -171,14 +160,22 @@ where
 				);
 			}
 
-			let slot = inherent_data_providers.slot();
-			let inherent_data = inherent_data_providers.create_inherent_data()?;
+			let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+			let slot =
+			        sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+				        *timestamp,
+				        SlotDuration::from_duration(self.slot_duration),
+				).slot();
+
+			//let slot = inherent_data_providers.slot();
+			//let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(slot, inherent_data, self.slot_duration, chain_head, None))
+				break Ok(SlotInfo::new(slot, self.slot_duration, chain_head, None))
 			}
 		}
 	}

@@ -7953,11 +7953,13 @@ dependencies = [
  "sp-arithmetic",
  "sp-blockchain",
  "sp-consensus",
+ "sp-consensus-babe",
  "sp-consensus-slots",
  "sp-core",
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
+ "sp-timestamp",
  "substrate-test-runtime-client",
  "thiserror",
 ]

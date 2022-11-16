@@ -216,12 +216,12 @@ where
 	PF::Proposer: Proposer<B, Error = Error, Transaction = sp_api::TransactionFor<C, B>>,
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
 {
-	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
+	let worker = build_aura_worker::<P, _, _, _, _, _, _, _, _, _>(BuildAuraWorkerParams {
 		client,
 		block_import,
 		proposer_factory,
@@ -283,7 +283,7 @@ pub struct BuildAuraWorkerParams<C, I, PF, SO, L, BS, N> {
 /// Build the aura worker.
 ///
 /// The caller is responsible for running this worker, otherwise it will do nothing.
-pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
+pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error, CIDP>(
 	BuildAuraWorkerParams {
 		client,
 		block_import,
@@ -300,6 +300,7 @@ pub fn build_aura_worker<P, B, C, PF, I, SO, L, BS, Error>(
 	}: BuildAuraWorkerParams<C, I, PF, SO, L, BS, NumberFor<B>>,
 ) -> impl sc_consensus_slots::SimpleSlotWorker<
 	B,
+	CIDP,
 	Proposer = PF::Proposer,
 	BlockImport = I,
 	SyncOracle = SO,
@@ -321,6 +322,8 @@ where
 	SO: SyncOracle + Send + Sync + Clone,
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
+	for<'async_trait> CIDP: CreateInherentDataProviders<B, ()> + Send + 'async_trait,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	AuraWorker {
 		client,
@@ -356,7 +359,7 @@ struct AuraWorker<C, E, I, P, SO, L, BS, N> {
 }
 
 #[async_trait::async_trait]
-impl<B, C, E, I, P, Error, SO, L, BS> sc_consensus_slots::SimpleSlotWorker<B>
+impl<B, C, E, I, P, Error, SO, L, BS, CIDP> sc_consensus_slots::SimpleSlotWorker<B, CIDP>
 	for AuraWorker<C, E, I, P, SO, L, BS, NumberFor<B>>
 where
 	B: BlockT,
@@ -372,6 +375,8 @@ where
 	L: sc_consensus::JustificationSyncLink<B>,
 	BS: BackoffAuthoringBlocksStrategy<NumberFor<B>> + Send + Sync + 'static,
 	Error: std::error::Error + Send + From<sp_consensus::Error> + 'static,
+	for<'async_trait> CIDP: CreateInherentDataProviders<B, ()> + Send + 'async_trait,
+	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	type BlockImport = I;
 	type SyncOracle = SO;

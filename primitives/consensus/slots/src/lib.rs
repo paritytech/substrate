@@ -124,6 +124,11 @@ impl SlotDuration {
 	pub const fn as_duration(&self) -> sp_std::time::Duration {
 		sp_std::time::Duration::from_millis(self.0)
 	}
+
+	/// Initiliase from given [`sp_std::time::Duration`].
+	pub const fn from_duration(duration: sp_std::time::Duration) -> Self {
+		Self::from_millis(duration.as_millis() as u64) // OH GOD NO
+	}
 }
 
 /// Represents an equivocation proof. An equivocation happens when a validator
