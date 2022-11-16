@@ -2,10 +2,9 @@
 The `warp-sync` test works on predefined database which is stored in the cloud and
 fetched by the test. `alice` and `bob` nodes are spun up using this database snapshot.
 
-As `warp-sync` requires at least 3 peers, the test spawns the `charlie` node which is `--sync full`.
+As `warp-sync` requires at least 3 peers, the test spawns the `charlie` full node which uses the same database snapshot.
 
 The `dave` node executed with `--sync warp` syncs database with the rest of the network.
-
 
 # How to prepare database
 Database was prepared using the following zombienet file (`0001-generate-warp-sync-database.toml`):
@@ -39,8 +38,9 @@ commands:
 mkdir -p db-snapshot/{alice,bob}/data/chains/local_testnet/db/  
 cp -r db-test-gen/alice/data/chains/local_testnet/db/full db-snapshot/alice/data/chains/local_testnet/db/  
 cp -r db-test-gen/bob/data/chains/local_testnet/db/full   db-snapshot/bob/data/chains/local_testnet/db/
-
 ```
+
+Also refer to: [zombienet#578](https://github.com/paritytech/zombienet/issues/578)
 
 # Chain spec
 Chain spec was simply built with:

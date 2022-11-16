@@ -1,7 +1,6 @@
 [relaychain]
-default_image = "docker.io/parity/substrate:master"
-default_command = "/home/miszka/parity/05-zombienet-warp-sync/substrate-wrap.sh"
-# dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/network"
+default_image = "{{ZOMBIENET_INTEGRATION_TEST_IMAGE}}"
+default_command = "substrate"
 
 chain = "gen-db"
 chain_spec_path = "0001-chain-spec.json"
@@ -10,20 +9,23 @@ chain_spec_path = "0001-chain-spec.json"
   name = "alice"
   validator = true
 
+  # see: https://github.com/paritytech/zombienet/issues/578
+  # dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/node-db.tgz"
+
   [[relaychain.nodes]]
   name = "bob"
   validator = true
-  # dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/bob"
+  # dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/node-db.tgz"
 
   #we need at least 3 nodes for warp sync
   [[relaychain.nodes]]
   name = "charlie"
   validator = false
-  args = ["--sync full"]
+  # dir_snapshot="s3://bucket/0001-test-warp-sync/snapshots/node-db.tgz"
 
   [[relaychain.nodes]]
   name = "dave"
   validator = false
-  ws_port=39047
   args = ["--sync warp"]
-
+  # port is fixed for local debugging convenience
+  ws_port=39047
