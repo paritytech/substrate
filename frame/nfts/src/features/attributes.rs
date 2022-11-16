@@ -96,8 +96,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// collection's owner. This simplifies the collection's transfer to another owner.
 		let deposit_owner = match namespace {
 			AttributeNamespace::CollectionOwner => {
-				collection_details.owner_deposit.saturating_reduce(old_deposit.amount);
 				collection_details.owner_deposit.saturating_accrue(deposit);
+				collection_details.owner_deposit.saturating_reduce(old_deposit.amount);
 				None
 			},
 			_ => Some(origin),
