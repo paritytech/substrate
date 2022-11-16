@@ -2130,14 +2130,15 @@ impl_runtime_apis! {
 		) -> Weight {
 			log::info!(
 				target: "node-runtime",
-				"try-runtime: executing block {:?} / root checks: {:?} / try-state-select: {:?}",
+				"try-runtime: executing block {:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
 				block.header.hash(),
 				state_root_check,
+				false
 				select,
 			);
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
 			// have a backtrace here.
-			Executive::try_execute_block(block, state_root_check, select).unwrap()
+			Executive::try_execute_block(block, state_root_check, false, select).unwrap()
 		}
 	}
 

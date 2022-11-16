@@ -130,7 +130,7 @@ where
 				child_tree: true,
 				threads: 8,
 			});
-			let ext = state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
+			let ext = state.into_ext::<Block, HostFns>(&shared, &executor).await?;
 			maybe_state_ext = Some(ext);
 		}
 

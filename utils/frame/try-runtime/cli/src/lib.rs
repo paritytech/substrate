@@ -388,17 +388,14 @@ pub enum Command {
 
 #[derive(Debug, Clone)]
 enum Runtime {
-	/// Use the runtime of the local repository, fetched from the chain spec.
-	Local,
-
 	/// Use the given path to the wasm binary file.
 	Path(PathBuf),
 
-	/// Use the code of the remote node.
+	/// Use the code of the remote node, or the snapshot.
 	///
 	/// In almost all cases, this is not what you want, because the code in the remote node does
 	/// not have any of the try-runtime custom runtime APIs.
-	Remote,
+	Existing,
 }
 
 impl FromStr for Runtime {
@@ -406,8 +403,7 @@ impl FromStr for Runtime {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		Ok(match s.to_lowercase().as_ref() {
-			"remote" => Runtime::Remote,
-			"local" => Runtime::Local,
+			"existing" => Runtime::Existing,
 			x @ _ => Runtime::Path(x.into()),
 		})
 	}
@@ -418,12 +414,20 @@ impl FromStr for Runtime {
 #[group(skip)]
 pub struct SharedParams {
 	/// Shared parameters of substrate cli.
+	///
+	/// TODO: this is only needed because try-runtime is embedded in the substrate CLI. It should
+	/// go away.
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	shared_params: sc_cli::SharedParams,
 
-	#[arg(long, default_value = "local")]
+	#[arg(long)]
 	/// The runtime to use.
+	///
+	/// Must be a path to a wasm blob, preferably compiled with `try-runtime` feature flag.
+	///
+	/// Or, `existing`, indicating that you don't want to overwrite the runtime. This will use
+	/// whatever comes from the remote node, or the snapshot file.
 	runtime: Runtime,
 
 	/// Type of wasm execution used.
@@ -453,6 +457,8 @@ pub struct SharedParams {
 	heap_pages: Option<u64>,
 
 	/// When enabled, the spec check will not panic, and instead only show a warning.
+	///
+	/// The spec checking will always check the spec name and version of the local code and the
 	#[arg(long)]
 	no_spec_check_panic: bool,
 
@@ -539,7 +545,6 @@ impl State {
 	pub(crate) async fn into_ext<Block: BlockT + DeserializeOwned, HostFns: HostFunctions>(
 		&self,
 		shared: &SharedParams,
-		config: &Configuration,
 		executor: &WasmExecutor<HostFns>,
 	) -> sc_cli::Result<RemoteExternalities<Block>>
 	where
@@ -571,7 +576,7 @@ impl State {
 						// we will always download this key, since it helps detect if we should do
 						// runtime migration or not.
 						[twox_128(b"System"), twox_128(b"LastRuntimeUpgrade")].concat(),
-						[twox_128(b"System"), twox_128(b"BlockNumber")].concat(),
+						[twox_128(b"System"), twox_128(b"Number")].concat(),
 					],
 					hashed_prefixes: vec![],
 					threads: *threads,
@@ -598,18 +603,8 @@ impl State {
 
 		// then, we replace the code based on what the CLI wishes.
 		let maybe_code_to_overwrite = match shared.runtime {
-			Runtime::Local => Some(
-				config
-					.chain_spec
-					.build_storage()
-					.unwrap()
-					.top
-					.get(well_known_keys::CODE)
-					.unwrap()
-					.to_vec(),
-			),
 			Runtime::Path(ref path) => Some(std::fs::read(path)?),
-			Runtime::Remote => None,
+			Runtime::Existing => None,
 		};
 
 		if let Some(new_code) = maybe_code_to_overwrite {
@@ -621,12 +616,22 @@ impl State {
 				&mut &*executor.read_runtime_version(&original_code, &mut ext.ext()).unwrap(),
 			)
 			.unwrap();
+			log::info!(
+				target: LOG_TARGET,
+				"original spec: {:?}-{:?}",
+				old_version.spec_name,
+				old_version.spec_version
+			);
 			let new_version = <RuntimeVersion as Decode>::decode(
 				&mut &*executor.read_runtime_version(&new_code, &mut ext.ext()).unwrap(),
 			)
 			.unwrap();
-
-			ensure_matching_runtime_version(&old_version, &new_version, shared.no_spec_check_panic);
+			log::info!(
+				target: LOG_TARGET,
+				"new spec: {:?}-{:?}",
+				new_version.spec_name,
+				new_version.spec_version
+			);
 		}
 
 		Ok(ext)
@@ -839,27 +844,6 @@ pub(crate) fn state_machine_call_with_proof<Block: BlockT, HostFns: HostFunction
 		humanize(compressed_proof.len()),
 	);
 	Ok((changes, encoded_results))
-}
-
-fn ensure_matching_runtime_version(spec1: &RuntimeVersion, spec2: &RuntimeVersion, no_panic: bool) {
-	let log_or_panic = |err| {
-		if no_panic {
-			log::error!("{}", err);
-		} else {
-			panic!("{}", err);
-		}
-	};
-
-	if spec1.spec_name != spec2.spec_name {
-		let err = format!("incompatible spec-name: {:?} {:?}", spec1.spec_name, spec2.spec_name);
-		log_or_panic(err);
-	}
-
-	if spec1.spec_version != spec2.spec_version {
-		let err =
-			format!("incompatible spec-version: {:?} {:?}", spec1.spec_version, spec2.spec_version);
-		log_or_panic(err);
-	}
 }
 
 pub(crate) fn rpc_err_handler(error: impl Debug) -> &'static str {

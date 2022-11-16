@@ -989,6 +989,11 @@ pub trait Checkable<Context>: Sized {
 
 	/// Check self, given an instance of Context.
 	fn check(self, c: &Context) -> Result<Self::Checked, TransactionValidityError>;
+
+	/// Blindly check self.
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked(self, c: &Context)
+		-> Result<Self::Checked, TransactionValidityError>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -1009,6 +1014,14 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 
 	fn check(self, _c: &Context) -> Result<Self::Checked, TransactionValidityError> {
 		BlindCheckable::check(self)
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn unchecked_into_checked(
+		self,
+		_: &Context,
+	) -> Result<Self::Checked, TransactionValidityError> {
+		unreachable!();
 	}
 }
 

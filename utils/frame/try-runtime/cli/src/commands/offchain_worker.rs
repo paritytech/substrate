@@ -80,7 +80,7 @@ where
 {
 	let executor = build_executor(&shared, &config);
 	// we first build the externalities with the remote code.
-	let ext = command.state.into_ext::<Block, HostFns>(&shared, &config, &executor).await?;
+	let ext = command.state.into_ext::<Block, HostFns>(&shared, &executor).await?;
 
 	let header_ws_uri = command.header_ws_uri::<Block>();
 
