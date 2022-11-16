@@ -92,7 +92,7 @@ impl<T: Config<I>, I: 'static> Inspect<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfig>
+impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, CollectionConfigFor<T, I>>
 	for Pallet<T, I>
 {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
@@ -100,7 +100,7 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
-		config: &CollectionConfig,
+		config: &CollectionConfigFor<T, I>,
 	) -> DispatchResult {
 		// DepositRequired can be disabled by calling the force_create() only
 		ensure!(
@@ -134,16 +134,22 @@ impl<T: Config<I>, I: 'static> Destroy<<T as SystemConfig>::AccountId> for Palle
 	}
 }
 
-impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemSettings>
-	for Pallet<T, I>
-{
+impl<T: Config<I>, I: 'static> Mutate<<T as SystemConfig>::AccountId, ItemConfig> for Pallet<T, I> {
 	fn mint_into(
 		collection: &Self::CollectionId,
 		item: &Self::ItemId,
 		who: &T::AccountId,
-		settings: &ItemSettings,
+		item_config: &ItemConfig,
+		deposit_collection_owner: bool,
 	) -> DispatchResult {
-		Self::do_mint(*collection, *item, who.clone(), ItemConfig(*settings))
+		Self::do_mint(
+			*collection,
+			*item,
+			who.clone(),
+			*item_config,
+			deposit_collection_owner,
+			|_, _| Ok(()),
+		)
 	}
 
 	fn burn(
