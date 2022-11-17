@@ -129,7 +129,6 @@ pub const MAXIMUM_VOTE: usize = 16;
 pub(crate) const LOG_TARGET: &str = "runtime::elections";
 
 // logging helper.
-#[macro_export]
 macro_rules! log {
 	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
 		log::$level!(
