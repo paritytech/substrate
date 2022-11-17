@@ -18,7 +18,7 @@
 //! # Alliance Pallet
 //!
 //! The Alliance Pallet provides a collective that curates a list of accounts and URLs, deemed by
-//! the voting members to be unscrupulous actors. The alliance
+//! the voting members to be unscrupulous actors. The Alliance
 //!
 //! - provides a set of ethics against bad behavior, and
 //! - provides recognition and influence for those teams that contribute something back to the
@@ -36,19 +36,19 @@
 //! ### Terminology
 //!
 //! - Rule: The IPFS CID (hash) of the Alliance rules for the community to read and the Alliance
-//!   members to enforce. Similar to a Code of Conduct.
+//!   members to enforce. Similar to a Charter or Code of Conduct.
 //! - Announcement: An IPFS CID of some content that the Alliance want to announce.
 //! - Member: An account that is already in the group of the Alliance, including three types:
-//!   Founder, Fellow, or Ally. A member can also be kicked by the `MembershipManager` origin or
-//!   retire by itself.
-//! - Founder: An account who is initiated by Root with normal voting rights for basic motions and
-//!   special veto rights for rule change and Ally elevation motions.
-//! - Fellow: An account who is elevated from Ally by Founders and other Fellows.
-//! - Ally: An account who would like to join the alliance. To become a voting member, Fellow or
-//!   Founder, it will need approval from the `MembershipManager` origin. Any account can join as an
-//!   Ally either by placing a deposit or by nomination from a voting member.
-//! - Unscrupulous List: A list of bad websites and addresses, items can be added or removed by
-//!   Founders and Fellows.
+//!   FoundingFellow, Fellow, or Ally. A member can also be kicked by the `MembershipManager` origin
+//!   or retire by itself.
+//! - Fellow: An account who is elevated from Ally by other Fellows.
+//! - FoundingFellow: Operationally equivalent to a Fellow, but set by Root in the initialization of
+//!   the Alliance.
+//! - Ally: An account who would like to join the Alliance. To become a voting member (Fellow), it
+//!   will need approval from the `MembershipManager` origin. Any account can join as an Ally either
+//!   by placing a deposit or by nomination from a voting member.
+//! - Unscrupulous List: A list of bad websites and addresses; items can be added or removed by
+//!   voting members.
 //!
 //! ## Interface
 //!
@@ -64,10 +64,11 @@
 //!   pass in order to retire.
 //! - `retire` - Retire from the Alliance and release the caller's deposit.
 //!
-//! #### For Members (Founders/Fellows)
+//! #### For Voting Members
 //!
 //! - `propose` - Propose a motion.
 //! - `vote` - Vote on a motion.
+//! - `veto` - Veto on a motion about `set_rule` and `elevate_ally`.
 //! - `close` - Close a motion with enough votes or that has expired.
 //! - `set_rule` - Initialize or update the Alliance's rule by IPFS CID.
 //! - `announce` - Make announcement by IPFS CID.
@@ -77,10 +78,7 @@
 //! - `add_unscrupulous_items` - Add some items, either accounts or websites, to the list of
 //!   unscrupulous items.
 //! - `remove_unscrupulous_items` - Remove some items from the list of unscrupulous items.
-//!
-//! #### For Members (Only Founders)
-//!
-//! - `veto` - Veto on a motion about `set_rule` and `elevate_ally`.
+//! - `abdicate_fellow_status` - Abdicate one's voting rights, demoting themself to Ally.
 //!
 //! #### Root Calls
 //!
@@ -210,7 +208,7 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 /// The various roles that a member can hold.
 #[derive(Copy, Clone, PartialEq, Eq, RuntimeDebug, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum MemberRole {
-	Founder,
+	FoundingFellow,
 	Fellow,
 	Ally,
 	Retiring,
@@ -282,21 +280,22 @@ pub mod pallet {
 		/// Maximum number of proposals allowed to be active in parallel.
 		type MaxProposals: Get<ProposalIndex>;
 
-		/// The maximum number of founders supported by the pallet. Used for weight estimation.
+		/// The maximum number of founding Fellows supported by the pallet. Used for weight
+		/// estimation.
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependencies keep to the limit without enforcing it.
-		type MaxFounders: Get<u32>;
+		type MaxFoundingFellows: Get<u32>;
 
-		/// The maximum number of fellows supported by the pallet. Used for weight estimation.
+		/// The maximum number of Fellows supported by the pallet. Used for weight estimation.
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
 		/// + This pallet assumes that dependencies keep to the limit without enforcing it.
 		type MaxFellows: Get<u32>;
 
-		/// The maximum number of allies supported by the pallet. Used for weight estimation.
+		/// The maximum number of Allies supported by the pallet. Used for weight estimation.
 		///
 		/// NOTE:
 		/// + Benchmarks will need to be re-run and weights adjusted if this changes.
@@ -320,7 +319,7 @@ pub mod pallet {
 		type MaxAnnouncementsCount: Get<u32>;
 
 		/// The maximum number of members per member role. Should not exceed the sum of
-		/// `MaxFounders` and `MaxFellows`.
+		/// `MaxFoundingFellows` and `MaxFellows`.
 		#[pallet::constant]
 		type MaxMembersCount: Get<u32>;
 
@@ -344,8 +343,6 @@ pub mod pallet {
 		NotMember,
 		/// Account is not an ally.
 		NotAlly,
-		/// Account is not a founder.
-		NotFounder,
 		/// Account does not have voting rights.
 		NoVotingRights,
 		/// Account is already an elevated (fellow) member.
@@ -457,12 +454,12 @@ pub mod pallet {
 
 			if !self.founders.is_empty() {
 				assert!(
-					!Pallet::<T, I>::has_member(MemberRole::Founder),
+					!Pallet::<T, I>::has_member(MemberRole::FoundingFellow),
 					"Founders are already initialized!"
 				);
 				let members: BoundedVec<T::AccountId, T::MaxMembersCount> =
 					self.founders.clone().try_into().expect("Too many genesis founders");
-				Members::<T, I>::insert(MemberRole::Founder, members);
+				Members::<T, I>::insert(MemberRole::FoundingFellow, members);
 			}
 			if !self.fellows.is_empty() {
 				assert!(
@@ -498,9 +495,7 @@ pub mod pallet {
 	}
 
 	/// The IPFS CID of the alliance rule.
-	/// Founders and fellows can propose a new rule with a super-majority.
-	///
-	/// Any founder has a special one-vote veto right to the rule setting.
+	/// Fellows can propose a new rule with a super-majority.
 	#[pallet::storage]
 	#[pallet::getter(fn rule)]
 	pub type Rule<T: Config<I>, I: 'static = ()> = StorageValue<_, Cid, OptionQuery>;
@@ -552,10 +547,10 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Add a new proposal to be voted on.
 		///
-		/// Requires the sender to be a founder or fellow.
+		/// Must be called by a Fellow.
 		#[pallet::weight(T::WeightInfo::propose_proposed(
 			*length_bound, // B
-			T::MaxFounders::get(), // X
+			T::MaxFoundingFellows::get(), // X
 			T::MaxFellows::get(), // Y
 			T::MaxProposals::get(), // P2
 		))]
@@ -574,8 +569,8 @@ pub mod pallet {
 
 		/// Add an aye or nay vote for the sender to the given proposal.
 		///
-		/// Requires the sender to be a founder or fellow.
-		#[pallet::weight(T::WeightInfo::vote(T::MaxFounders::get(), T::MaxFellows::get()))]
+		/// Must be called by a Fellow.
+		#[pallet::weight(T::WeightInfo::vote(T::MaxFoundingFellows::get(), T::MaxFellows::get()))]
 		pub fn vote(
 			origin: OriginFor<T>,
 			proposal: T::Hash,
@@ -592,11 +587,11 @@ pub mod pallet {
 		/// Veto a proposal about `set_rule` and `elevate_ally`, close, and remove it from the
 		/// system, regardless of its current state.
 		///
-		/// Must be called by a founder.
+		/// Must be called by a Fellow.
 		#[pallet::weight(T::WeightInfo::veto(T::MaxProposals::get()))]
 		pub fn veto(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
 			let proposor = ensure_signed(origin)?;
-			ensure!(Self::is_founder(&proposor), Error::<T, I>::NotFounder);
+			ensure!(Self::has_voting_rights(&proposor), Error::<T, I>::NoVotingRights);
 
 			let proposal = T::ProposalProvider::proposal_of(proposal_hash)
 				.ok_or(Error::<T, I>::MissingProposalHash)?;
@@ -611,10 +606,10 @@ pub mod pallet {
 
 		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
 		///
-		/// Requires the sender to be a founder or fellow.
+		/// Must be called by a Fellow.
 		#[pallet::weight({
 			let b = *length_bound;
-			let x = T::MaxFounders::get();
+			let x = T::MaxFoundingFellows::get();
 			let y = T::MaxFellows::get();
 			let p1 = *proposal_weight_bound;
 			let p2 = T::MaxProposals::get();
@@ -642,8 +637,8 @@ pub mod pallet {
 
 		/// Initialize the Alliance, onboard founders, fellows, and allies.
 		///
-		/// Founders must be not empty.
-		/// The Alliance must be empty.
+		/// The Alliance must be empty, and the call must provide some founding members.
+		///
 		/// Must be called by the Root origin.
 		#[pallet::weight(T::WeightInfo::init_members(
 			founders.len() as u32,
@@ -673,7 +668,7 @@ pub mod pallet {
 			}
 
 			founders.sort();
-			Members::<T, I>::insert(&MemberRole::Founder, founders.clone());
+			Members::<T, I>::insert(&MemberRole::FoundingFellow, founders.clone());
 			fellows.sort();
 			Members::<T, I>::insert(&MemberRole::Fellow, fellows.clone());
 			allies.sort();
@@ -737,7 +732,7 @@ pub mod pallet {
 				}
 			}
 
-			Members::<T, I>::remove(&MemberRole::Founder);
+			Members::<T, I>::remove(&MemberRole::FoundingFellow);
 			Members::<T, I>::remove(&MemberRole::Fellow);
 			Members::<T, I>::remove(&MemberRole::Ally);
 
@@ -833,8 +828,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// A founder or fellow can nominate someone to join the alliance as an Ally.
-		/// There is no deposit required to the nominator or nominee.
+		/// A Fellow can nominate someone to join the alliance as an Ally. There is no deposit
+		/// required from the nominator or nominee.
 		#[pallet::weight(T::WeightInfo::nominate_ally())]
 		pub fn nominate_ally(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			let nominator = ensure_signed(origin)?;
@@ -858,7 +853,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Elevate an ally to fellow.
+		/// Elevate an Ally to Fellow.
 		#[pallet::weight(T::WeightInfo::elevate_ally())]
 		pub fn elevate_ally(origin: OriginFor<T>, ally: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
@@ -893,8 +888,10 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// As a member, retire from the alliance and unreserve the deposit.
-		/// This can only be done once you have `give_retirement_notice` and it has expired.
+		/// As a member, retire from the Alliance and unreserve the deposit.
+		///
+		/// This can only be done once you have called `give_retirement_notice` and the
+		/// `RetirementPeriod` has passed.
 		#[pallet::weight(T::WeightInfo::retire())]
 		pub fn retire(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
@@ -916,7 +913,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Kick a member from the alliance and slash its deposit.
+		/// Kick a member from the Alliance and slash its deposit.
 		#[pallet::weight(T::WeightInfo::kick_member())]
 		pub fn kick_member(origin: OriginFor<T>, who: AccountIdLookupOf<T>) -> DispatchResult {
 			T::MembershipManager::ensure_origin(origin)?;
@@ -962,7 +959,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Deem an item no longer unscrupulous.
+		/// Deem some items no longer unscrupulous.
 		#[pallet::weight(<T as Config<I>>::WeightInfo::remove_unscrupulous_items(
 			items.len() as u32, T::MaxWebsiteUrlLength::get()
 		))]
@@ -987,10 +984,10 @@ pub mod pallet {
 
 		/// Close a vote that is either approved, disapproved, or whose voting period has ended.
 		///
-		/// Requires the sender to be a founder or fellow.
+		/// Must be called by a Fellow.
 		#[pallet::weight({
 			let b = *length_bound;
-			let x = T::MaxFounders::get();
+			let x = T::MaxFoundingFellows::get();
 			let y = T::MaxFellows::get();
 			let p1 = *proposal_weight_bound;
 			let p2 = T::MaxProposals::get();
@@ -1035,7 +1032,7 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Check if the Alliance has been initialized.
 	fn is_initialized() -> bool {
-		Self::has_member(MemberRole::Founder) ||
+		Self::has_member(MemberRole::FoundingFellow) ||
 			Self::has_member(MemberRole::Fellow) ||
 			Self::has_member(MemberRole::Ally)
 	}
@@ -1061,24 +1058,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Members::<T, I>::get(role).contains(&who)
 	}
 
-	/// Check if an account is a founder.
-	fn is_founder(who: &T::AccountId) -> bool {
-		Self::is_member_of(who, MemberRole::Founder)
-	}
-
-	/// Check if an account is a fellow.
-	fn is_fellow(who: &T::AccountId) -> bool {
-		Self::is_member_of(who, MemberRole::Fellow)
-	}
-
-	/// Check if an account is an ally.
+	/// Check if an account is an Ally.
 	fn is_ally(who: &T::AccountId) -> bool {
 		Self::is_member_of(who, MemberRole::Ally)
 	}
 
 	/// Check if a member has voting rights.
 	fn has_voting_rights(who: &T::AccountId) -> bool {
-		Self::is_founder(who) || Self::is_fellow(who)
+		Self::is_member_of(who, MemberRole::FoundingFellow) ||
+			Self::is_member_of(who, MemberRole::Fellow)
 	}
 
 	/// Count of ally members.
@@ -1088,7 +1076,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Count of all members who have voting rights.
 	fn voting_members_count() -> u32 {
-		Members::<T, I>::decode_len(MemberRole::Founder)
+		Members::<T, I>::decode_len(MemberRole::FoundingFellow)
 			.unwrap_or(0)
 			.saturating_add(Members::<T, I>::decode_len(MemberRole::Fellow).unwrap_or(0)) as u32
 	}
@@ -1100,7 +1088,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Collect all members who have voting rights into one list.
 	fn voting_members() -> Vec<T::AccountId> {
-		let mut founders = Self::members_of(MemberRole::Founder);
+		let mut founders = Self::members_of(MemberRole::FoundingFellow);
 		let mut fellows = Self::members_of(MemberRole::Fellow);
 		founders.append(&mut fellows);
 		founders
@@ -1123,7 +1111,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		if role == MemberRole::Founder || role == MemberRole::Fellow {
+		if role == MemberRole::FoundingFellow || role == MemberRole::Fellow {
 			let members = Self::voting_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[who.clone()], &[], &members[..]);
 		}
@@ -1138,7 +1126,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(())
 		})?;
 
-		if matches!(role, MemberRole::Founder | MemberRole::Fellow) {
+		if matches!(role, MemberRole::FoundingFellow | MemberRole::Fellow) {
 			let members = Self::voting_members_sorted();
 			T::MembershipChanged::change_members_sorted(&[], &[who.clone()], &members[..]);
 		}
