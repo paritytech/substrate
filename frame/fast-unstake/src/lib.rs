@@ -166,9 +166,6 @@ pub mod pallet {
 		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
-		/// Some internal error happened while migrating stash. They are removed as head as a
-		/// consequence.
-		Errored { stash: T::AccountId },
 		/// An internal error happened. Operations will be paused now.
 		InternalError,
 		/// A batch was partially checked for the given eras, but the process did not finish.

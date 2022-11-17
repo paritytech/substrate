@@ -42,7 +42,7 @@ sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/c
 sp-core = { version = "7.0.0", path = "../../../primitives/core" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
 sp-io = { version = "7.0.0", path = "../../../primitives/io" }
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/timestamp" }
 substrate-test-client = { version = "2.0.0", path = "../../../test-utils/client" }

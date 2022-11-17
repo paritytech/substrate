@@ -42,7 +42,7 @@ sp-application-crypto = { version = "7.0.0", path = "../../../primitives/applica
 pallet-root-testing = { version = "1.0.0-dev", path = "../../../frame/root-testing" }
 sp-consensus-babe = { version = "0.10.0-dev", path = "../../../primitives/consensus/babe" }
 sp-externalities = { version = "0.13.0", path = "../../../primitives/externalities" }
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [features]
