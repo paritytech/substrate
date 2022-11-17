@@ -5,6 +5,10 @@
 
 .check-dependent-project:
   stage:                           build
+  # DAG: this is artificial dependency
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs-no-trigger-prs-only
@@ -147,6 +151,10 @@ build-rustdoc:
     expire_in:                     7 days
     paths:
     - ./crate-docs/
+  # DAG: this is artificial dependency
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   script:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps

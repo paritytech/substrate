@@ -1,6 +1,6 @@
 [package]
 name = "sp-wasm-interface"
-version = "6.0.0"
+version = "7.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -19,7 +19,7 @@ impl-trait-for-tuples = "0.2.2"
 log = { version = "0.4.17", optional = true }
 wasmi = { version = "0.13", optional = true }
 wasmtime = { version = "1.0.0", default-features = false, optional = true }
-sp-std = { version = "4.0.0", default-features = false, path = "../std" }
+sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [features]
 default = [ "std" ]

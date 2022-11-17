@@ -14,7 +14,7 @@ log = { version = "0.4", default-features = false, optional = true }
 
 beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/beefy" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 
 [dev-dependencies]
 array-bytes = "4.1"
