@@ -39,7 +39,7 @@ pallet-offences = { version = "4.0.0-dev", path = "../offences" }
 pallet-staking = { version = "4.0.0-dev", path = "../staking" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
-sp-keyring = { version = "6.0.0", path = "../../primitives/keyring" }
+sp-keyring = { version = "7.0.0", path = "../../primitives/keyring" }
 
 [features]
 default = ["std"]

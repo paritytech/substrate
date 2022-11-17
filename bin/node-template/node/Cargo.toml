@@ -37,7 +37,7 @@ sc-client-api = { version = "4.0.0-dev", path = "../../../client/api" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-timestamp = { version = "4.0.0-dev", path = "../../../primitives/timestamp" }
 sp-inherents = { version = "4.0.0-dev", path = "../../../primitives/inherents" }
-sp-keyring = { version = "6.0.0", path = "../../../primitives/keyring" }
+sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 frame-system = { version = "4.0.0-dev", path = "../../../frame/system" }
 pallet-transaction-payment = { version = "4.0.0-dev", default-features = false, path = "../../../frame/transaction-payment" }
 
