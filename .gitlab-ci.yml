@@ -280,6 +280,22 @@ rusty-cachier-notify:
     PR_NUM:                        "${PR_NUM}"
   trigger:
     project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch:                        "as-improve"
+
+remove-cancel-pipeline-message:
+  stage: .post
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  variables:
+    PROJECT_ID:                    "${CI_PROJECT_ID}"
+    PROJECT_NAME:                  "${CI_PROJECT_NAME}"
+    PIPELINE_ID:                   "${CI_PIPELINE_ID}"
+    FAILED_JOB_URL:                "https://gitlab.com"
+    FAILED_JOB_NAME:               "nope"
+    PR_NUM:                        "${CI_COMMIT_REF_NAME}"
+  trigger:
+    project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch:                        "as-improve"
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails
