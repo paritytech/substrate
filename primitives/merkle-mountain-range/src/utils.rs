@@ -20,11 +20,40 @@
 use codec::Encode;
 use mmr_lib::helper;
 
-use sp_runtime::traits::Header;
+use sp_runtime::traits::{CheckedAdd, CheckedSub, Header, One};
 #[cfg(not(feature = "std"))]
 use sp_std::prelude::Vec;
 
-use crate::{LeafIndex, NodeIndex};
+use crate::{Error, LeafIndex, NodeIndex};
+
+/// Get the first block with MMR.
+pub fn first_mmr_block_num<H: Header>(
+	best_block_num: H::Number,
+	num_mmr_blocks: H::Number,
+) -> Result<H::Number, Error> {
+	best_block_num
+		.checked_sub(&num_mmr_blocks)
+		.and_then(|last_non_mmr_block| last_non_mmr_block.checked_add(&One::one()))
+		.ok_or_else(|| {
+			Error::InvalidNumericOp
+				.log_debug("The best block should be greater than the number of mmr blocks.")
+		})
+}
+
+/// Convert a block number into a leaf index.
+pub fn block_num_to_leaf_index<H: Header>(
+	block_num: H::Number,
+	first_mmr_block_num: H::Number,
+) -> Result<LeafIndex, Error> {
+	let leaf_idx = block_num.checked_sub(&first_mmr_block_num).ok_or_else(|| {
+		Error::InvalidNumericOp
+			.log_debug("The provided block should be greater than the first mmr block.")
+	})?;
+
+	leaf_idx.try_into().map_err(|_| {
+		Error::InvalidNumericOp.log_debug("Couldn't convert the leaf index to `LeafIndex`.")
+	})
+}
 
 /// MMR nodes & size -related utilities.
 pub struct NodesUtils {

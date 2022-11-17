@@ -58,7 +58,7 @@
 
 use frame_support::{log, traits::Get, weights::Weight};
 use sp_runtime::{
-	traits::{self, CheckedSub, One, Saturating},
+	traits::{self, One, Saturating},
 	SaturatedConversion,
 };
 
@@ -72,6 +72,7 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
+use sp_mmr_primitives::utils;
 pub use sp_mmr_primitives::{
 	self as primitives, utils::NodesUtils, Error, LeafDataProvider, LeafIndex, NodeIndex,
 };
@@ -360,30 +361,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.saturating_add(leaf_index.saturated_into())
 	}
 
+	/// Get the number of MMR blocks in the chain.
+	pub fn num_mmr_blocks() -> Result<T::BlockNumber, Error> {
+		Self::mmr_leaves().try_into().map_err(|_| {
+			Error::InvalidNumericOp
+				.log_debug("The number of leaves couldn't be converted to a block number.")
+		})
+	}
+
 	/// Convert a block number into a leaf index.
-	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error>
+	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{
-		// leaf_idx = (leaves_count - 1) - (current_block_num - block_num);
-		let best_block_num = <frame_system::Pallet<T>>::block_number();
-		let blocks_diff = best_block_num.checked_sub(&block_num).ok_or_else(|| {
-			primitives::Error::BlockNumToLeafIndex
-				.log_debug("The provided block_number is greater than the best block number.")
-		})?;
-		let blocks_diff_as_leaf_idx = blocks_diff.try_into().map_err(|_| {
-			primitives::Error::BlockNumToLeafIndex
-				.log_debug("The `blocks_diff` couldn't be converted to `LeafIndex`.")
-		})?;
+		let first_mmr_block = utils::first_mmr_block_num::<T::Header>(
+			<frame_system::Pallet<T>>::block_number(),
+			Self::num_mmr_blocks()?,
+		)?;
 
-		let leaf_idx = Self::mmr_leaves()
-			.checked_sub(1)
-			.and_then(|last_leaf_idx| last_leaf_idx.checked_sub(blocks_diff_as_leaf_idx))
-			.ok_or_else(|| {
-				primitives::Error::BlockNumToLeafIndex
-					.log_debug("There aren't enough leaves in the chain.")
-			})?;
-		Ok(leaf_idx)
+		utils::block_num_to_leaf_index::<T::Header>(block_num, first_mmr_block)
 	}
 
 	/// Generate an MMR proof for the given `block_numbers`.

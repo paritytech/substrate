@@ -963,21 +963,18 @@ fn does_not_panic_when_generating_historical_proofs() {
 	register_offchain_ext(&mut ext);
 	ext.execute_with(|| {
 		// when leaf index is invalid
-		assert_eq!(
-			crate::Pallet::<Test>::generate_proof(vec![10], None),
-			Err(Error::BlockNumToLeafIndex),
-		);
+		assert_eq!(crate::Pallet::<Test>::generate_proof(vec![10], None), Err(Error::LeafNotFound),);
 
 		// when leaves count is invalid
 		assert_eq!(
 			crate::Pallet::<Test>::generate_proof(vec![3], Some(100)),
-			Err(Error::BlockNumToLeafIndex),
+			Err(Error::GenerateProof),
 		);
 
 		// when both leaf index and leaves count are invalid
 		assert_eq!(
 			crate::Pallet::<Test>::generate_proof(vec![10], Some(100)),
-			Err(Error::BlockNumToLeafIndex),
+			Err(Error::LeafNotFound),
 		);
 	});
 }

@@ -361,8 +361,8 @@ pub struct Proof<Hash> {
 #[derive(RuntimeDebug, codec::Encode, codec::Decode, PartialEq, Eq)]
 pub enum Error {
 	/// Error during translation of a block number into a leaf index.
-	#[cfg_attr(feature = "std", error("Error translation block number into leaf index"))]
-	BlockNumToLeafIndex,
+	#[cfg_attr(feature = "std", error("Error performing numeric op"))]
+	InvalidNumericOp,
 	/// Error while pushing new node.
 	#[cfg_attr(feature = "std", error("Error pushing new node"))]
 	Push,
@@ -422,6 +422,9 @@ sp_api::decl_runtime_apis! {
 	pub trait MmrApi<Hash: codec::Codec, BlockNumber: codec::Codec> {
 		/// Return the on-chain MMR root hash.
 		fn mmr_root() -> Result<Hash, Error>;
+
+		/// Return the number of MMR blocks in the chain.
+		fn num_mmr_blocks() -> Result<BlockNumber, Error>;
 
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.
