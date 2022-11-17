@@ -292,10 +292,9 @@ impl<'a, T: Config> ContractModule<'a, T> {
 
 	/// Scan an import section if any.
 	///
-	/// This accomplishes two tasks:
+	/// This makes sure that the import section looks as we expect it from a contract
+	/// and enforces and returns the memory type declared by the contract if any.
 	///
-	/// - checks any imported function against defined host functions set, incl. their signatures.
-	/// - if there is a memory import, returns it's descriptor
 	/// `import_fn_banlist`: list of function names that are disallowed to be imported
 	fn scan_imports(
 		&self,
