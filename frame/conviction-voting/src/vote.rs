@@ -233,7 +233,7 @@ where
 		AsMut::<PriorLock<BlockNumber, Balance>>::as_mut(self).rejig(now);
 	}
 
-	/// The amount of this account's balance that much currently be locked due to voting.
+	/// The amount of this account's balance that must currently be locked due to voting.
 	pub fn locked_balance(&self) -> Balance {
 		match self {
 			Voting::Casting(Casting { votes, prior, .. }) =>

@@ -31,6 +31,7 @@ use libp2p::{
 	Multiaddr, PeerId,
 };
 use log::{debug, error, info, log, trace, warn, Level};
+use lru::LruCache;
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
@@ -200,7 +201,7 @@ pub struct Protocol<B: BlockT, Client> {
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
 	/// A cache for the data that was associated to a block announcement.
-	block_announce_data_cache: lru::LruCache<B::Hash, Vec<u8>>,
+	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -356,10 +357,13 @@ where
 			)
 		};
 
-		let block_announce_data_cache = lru::LruCache::new(
-			network_config.default_peers_set.in_peers as usize +
-				network_config.default_peers_set.out_peers as usize,
-		);
+		let cache_capacity = NonZeroUsize::new(
+			(network_config.default_peers_set.in_peers as usize +
+				network_config.default_peers_set.out_peers as usize)
+				.max(1),
+		)
+		.expect("cache capacity is not zero");
+		let block_announce_data_cache = LruCache::new(cache_capacity);
 
 		let protocol = Self {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
@@ -947,18 +951,6 @@ where
 		self.chain_sync.clear_justification_requests();
 	}
 
-	/// Request syncing for the given block from given set of peers.
-	/// Uses `protocol` to queue a new block download request and tries to dispatch all pending
-	/// requests.
-	pub fn set_sync_fork_request(
-		&mut self,
-		peers: Vec<PeerId>,
-		hash: &B::Hash,
-		number: NumberFor<B>,
-	) {
-		self.chain_sync.set_sync_fork_request(peers, hash, number)
-	}
-
 	/// A batch of blocks have been processed, with or without errors.
 	/// Call this when a batch of blocks have been processed by the importqueue, with or without
 	/// errors.
@@ -1440,7 +1432,7 @@ where
 		for (id, request) in self
 			.chain_sync
 			.block_requests()
-			.map(|(peer_id, request)| (*peer_id, request))
+			.map(|(peer_id, request)| (peer_id, request))
 			.collect::<Vec<_>>()
 		{
 			let event =
@@ -1461,8 +1453,11 @@ where
 			self.pending_messages.push_back(event);
 		}
 
-		// Check if there is any block announcement validation finished.
-		while let Poll::Ready(result) = self.chain_sync.poll_block_announce_validation(cx) {
+		// Advance the state of `ChainSync`
+		//
+		// Process any received requests received from `NetworkService` and
+		// check if there is any block announcement validation finished.
+		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
 			match self.process_block_announce_validation_result(result) {
 				CustomMessageOutcome::None => {},
 				outcome => self.pending_messages.push_back(outcome),

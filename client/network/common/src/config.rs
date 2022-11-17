@@ -244,6 +244,10 @@ pub struct NonDefaultSetConfig {
 	/// `sc_network::protocol::event::Event::NotificationStreamOpened::negotiated_fallback`
 	pub fallback_names: Vec<protocol::ProtocolName>,
 	/// Handshake of the protocol
+	///
+	/// NOTE: Currently custom handshakes are not fully supported. See issue #5685 for more
+	/// details. This field is temporarily used to allow moving the hardcoded block announcement
+	/// protocol out of `protocol.rs`.
 	pub handshake: Option<NotificationHandshake>,
 	/// Maximum allowed size of single notifications.
 	pub max_notification_size: u64,
