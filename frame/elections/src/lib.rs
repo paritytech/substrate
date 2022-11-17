@@ -189,7 +189,7 @@ pub struct SeatHolder<AccountId, Balance> {
 
 /// The results of running the pre-election step.
 #[derive(Debug, Clone)]
-pub struct PreElectionResults<T: Config> {
+struct PreElectionResults<T: Config> {
 	pub num_to_elect: usize,
 	pub candidate_ids: Vec<T::AccountId>,
 	pub candidates_and_deposit: Vec<(T::AccountId, BalanceOf<T>)>,
@@ -642,6 +642,8 @@ pub mod pallet {
 		InvalidRenouncing,
 		/// Prediction regarding replacement after member removal is wrong.
 		InvalidReplacement,
+		/// No candidates for the next term.
+		EmptyTerm,
 	}
 
 	/// The current elected members.
@@ -928,15 +930,13 @@ impl<T: Config> Pallet<T> {
 		} = match Self::do_pre_solve_election() {
 			Ok(results) => results,
 			Err(event) => match event {
-				Event::EmptyTerm => {
-					Self::deposit_event(event);
+				Error::EmptyTerm => {
+					Self::deposit_event(Event::EmptyTerm);
 					return T::DbWeight::get().reads(3)
 				},
-				Event::ElectionError => {
-					Self::deposit_event(event);
-					log!(error,
-						"Failed to run election. Number of voters exceeded",
-					);
+				Error::TooManyVotes => {
+					Self::deposit_event(Event::ElectionError);
+					log!(error, "Failed to run election. Number of voters exceeded",);
 					let max_voters = <T as Config>::MaxVoters::get() as usize;
 					return T::DbWeight::get().reads(3 + max_voters as u64)
 				},
@@ -968,15 +968,15 @@ impl<T: Config> Pallet<T> {
 			T::ElectionSolver::weight::<T::SolverWeightInfo>(num_voters, num_candidates, num_edges)
 				.saturating_add(Weight::zero()); // replace with weights::pre_solve_election_weight();
 
-		match election_result {
-			Ok(winners) =>
-				Self::do_post_solve_election(winners, candidates_and_deposit, voters_and_stakes)
-					.saturating_add(pre_and_election_weight),
-			Err(_) => pre_and_election_weight,
+		if let Ok(winners) = election_result {
+			Self::do_post_solve_election(winners, candidates_and_deposit, voters_and_stakes)
+				.saturating_add(pre_and_election_weight)
+		} else {
+			pre_and_election_weight
 		}
 	}
 
-	fn do_pre_solve_election() -> Result<PreElectionResults<T>, Event<T>> {
+	fn do_pre_solve_election() -> Result<PreElectionResults<T>, Error<T>> {
 		let desired_seats = T::DesiredMembers::get() as usize;
 		let desired_runners_up = T::DesiredRunnersUp::get() as usize;
 		let num_to_elect = desired_runners_up + desired_seats;
@@ -986,8 +986,7 @@ impl<T: Config> Pallet<T> {
 		candidates_and_deposit.append(&mut Self::implicit_candidates_with_deposit());
 
 		if candidates_and_deposit.len().is_zero() {
-			Self::deposit_event(Event::EmptyTerm);
-			return Err(Event::EmptyTerm)
+			return Err(Error::EmptyTerm)
 		}
 
 		// All of the new winners that come out of the election will thus have a deposit recorded.
@@ -1013,7 +1012,7 @@ impl<T: Config> Pallet<T> {
 			}
 		}) {
 			Ok(_) => (),
-			Err(_) => return Err(Event::ElectionError),
+			Err(_) => return Err(Error::TooManyVotes),
 		}
 
 		// used for elections.
@@ -3280,25 +3279,6 @@ mod tests {
 			));
 
 			assert_ok!(Elections::clean_defunct_voters(RuntimeOrigin::root(), 4, 2));
-		})
-	}
-
-	#[test]
-	fn verify_weights() {
-		ExtBuilder::default().build_and_execute(|| {
-			assert_eq!(Elections::on_initialize(System::block_number()), Weight::zero());
-
-			assert_ok!(submit_candidacy(RuntimeOrigin::signed(4)));
-			assert_ok!(submit_candidacy(RuntimeOrigin::signed(5)));
-			assert_ok!(vote(RuntimeOrigin::signed(4), vec![4], 40));
-			assert_ok!(vote(RuntimeOrigin::signed(5), vec![5], 50));
-
-			System::set_block_number(5);
-
-			let election_weight = Elections::on_initialize(System::block_number());
-			let expected_weight: Weight = <() as WeightInfo>::election(2, 2, 2);
-
-			assert_eq!(expected_weight, election_weight);
 		})
 	}
 }
