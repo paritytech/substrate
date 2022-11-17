@@ -20,14 +20,19 @@ readarray -t workspace_crates < <(\
 
 crates_total=${#workspace_crates[*]}
 
-# We add `crates_total % groups_total > 0` (which evaluates to 1 in case there's a remainder for
-# `crates_total % groups_total`) to round UP `crates_total / groups_total` 's potentially-fractional
-# result to the nearest integer. Doing that ensures that we'll not miss any crate in case
-# `crates_total / groups_total` would normally result in a fractional number, since in those cases
-# Bash would round DOWN the result to the nearest integer. For example, if `crates_total = 5` and
-# `groups_total = 2`, then `crates_total / groups_total` would round down to 2; since the loop below
-# would then step by 2, we'd miss the 5th crate.
-crates_per_group=$(( (crates_total / groups_total) + (crates_total % groups_total > 0) ))
+if [ "$crates_total" -lt "$groups_total" ]; then
+  # `crates_total / groups_total` would result in 0, so round it up to 1
+  crates_per_group=1
+else
+  # We add `crates_total % groups_total > 0` (which evaluates to 1 in case there's a remainder for
+  # `crates_total % groups_total`) to round UP `crates_total / groups_total` 's
+  # potentially-fractional result to the nearest integer. Doing that ensures that we'll not miss any
+  # crate in case `crates_total / groups_total` would normally result in a fractional number, since
+  # in those cases Bash would round DOWN the result to the nearest integer. For example, if
+  # `crates_total = 5` and `groups_total = 2`, then `crates_total / groups_total` would round down
+  # to 2; since the loop below would then step by 2, we'd miss the 5th crate.
+  crates_per_group=$(( (crates_total / groups_total) + (crates_total % groups_total > 0) ))
+fi
 
 group=1
 for ((i=0; i < crates_total; i += crates_per_group)); do
