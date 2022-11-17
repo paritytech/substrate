@@ -36,7 +36,7 @@ pub mod v12 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
-				StorageVersion::<T>::get() == Releases::V11_0_0,
+				Pallet::<T>::on_chain_storage_version() == 11,
 				"Expected v11 before upgrading to v12"
 			);
 
@@ -53,9 +53,12 @@ pub mod v12 {
 		}
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if StorageVersion::<T>::get() == Releases::V11_0_0 {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			if current == 12 && onchain == 11 {
 				HistoryDepth::<T>::kill();
-				StorageVersion::<T>::put(Releases::V12_0_0);
+				current.put::<Pallet<T>>();
 
 				log!(info, "v12 applied successfully");
 				T::DbWeight::get().reads_writes(1, 2)
@@ -68,7 +71,7 @@ pub mod v12 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 			frame_support::ensure!(
-				StorageVersion::<T>::get() == crate::Releases::V12_0_0,
+				Pallet::<T>::on_chain_storage_version() == 12,
 				"v12 not applied"
 			);
 			Ok(())
@@ -92,7 +95,7 @@ pub mod v11 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
-				StorageVersion::<T>::get() == crate::Releases::V10_0_0,
+				Pallet::<T>::on_chain_storage_version() == 10,
 				"must upgrade linearly"
 			);
 			let old_pallet_prefix = twox_128(N::get().as_bytes());
@@ -114,12 +117,15 @@ pub mod v11 {
 		/// The migration will look into the storage version in order to avoid triggering a
 		/// migration on an up to date storage.
 		fn on_runtime_upgrade() -> Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
 			let old_pallet_name = N::get();
 			let new_pallet_name = <P as PalletInfoAccess>::name();
 
-			if StorageVersion::<T>::get() == Releases::V10_0_0 {
+			if current == 11 && onchain == 10 {
 				// bump version anyway, even if we don't need to move the prefix
-				StorageVersion::<T>::put(Releases::V11_0_0);
+				current.put::<Pallet<T>>();
 				if new_pallet_name == old_pallet_name {
 					log!(
 						warn,
@@ -139,7 +145,7 @@ pub mod v11 {
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
 			frame_support::ensure!(
-				StorageVersion::<T>::get() == crate::Releases::V11_0_0,
+				Pallet::<T>::on_chain_storage_version() == 11,
 				"wrong version after the upgrade"
 			);
 
@@ -184,7 +190,10 @@ pub mod v10 {
 	pub struct MigrateToV10<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV10<T> {
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			if StorageVersion::<T>::get() == Releases::V9_0_0 {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			if current == 10 && onchain == 9 {
 				let pending_slashes = <Pallet<T> as Store>::UnappliedSlashes::iter().take(512);
 				for (era, slashes) in pending_slashes {
 					for slash in slashes {
@@ -196,7 +205,7 @@ pub mod v10 {
 				}
 
 				EarliestUnappliedSlash::<T>::kill();
-				StorageVersion::<T>::put(Releases::V10_0_0);
+				current.put::<Pallet<T>>();
 
 				log!(info, "MigrateToV10 executed successfully");
 				T::DbWeight::get().reads_writes(1, 1)
@@ -221,7 +230,10 @@ pub mod v9 {
 	pub struct InjectValidatorsIntoVoterList<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for InjectValidatorsIntoVoterList<T> {
 		fn on_runtime_upgrade() -> Weight {
-			if StorageVersion::<T>::get() == Releases::V8_0_0 {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			if current == 9 && onchain == 8 {
 				let prev_count = T::VoterList::count();
 				let weight_of_cached = Pallet::<T>::weight_of_fn();
 				for (v, _) in Validators::<T>::iter() {
@@ -239,13 +251,13 @@ pub mod v9 {
 					T::VoterList::count(),
 				);
 
-				StorageVersion::<T>::put(crate::Releases::V9_0_0);
+				current.put::<Pallet<T>>();
 				T::BlockWeights::get().max_block
 			} else {
 				log!(
 					warn,
 					"InjectValidatorsIntoVoterList being executed on the wrong storage \
-				version, expected Releases::V8_0_0"
+				version, expected 8"
 				);
 				T::DbWeight::get().reads(1)
 			}
@@ -254,7 +266,7 @@ pub mod v9 {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
-				StorageVersion::<T>::get() == crate::Releases::V8_0_0,
+				Pallet::<T>::on_chain_storage_version() == 8,
 				"must upgrade linearly"
 			);
 
@@ -272,7 +284,7 @@ pub mod v9 {
 			assert!(post_count == prev_count + validators);
 
 			frame_support::ensure!(
-				StorageVersion::<T>::get() == crate::Releases::V9_0_0,
+				Pallet::<T>::on_chain_storage_version() == 9,
 				"must upgrade "
 			);
 			Ok(())
@@ -281,14 +293,15 @@ pub mod v9 {
 }
 
 pub mod v8 {
-	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
+	use super::*;
+	use crate::{Config, Nominators, Pallet, Weight};
 	use frame_election_provider_support::SortedListProvider;
-	use frame_support::traits::Get;
+	use frame_support::traits::{Get};
 
 	#[cfg(feature = "try-runtime")]
 	pub fn pre_migrate<T: Config>() -> Result<(), &'static str> {
 		frame_support::ensure!(
-			StorageVersion::<T>::get() == crate::Releases::V7_0_0,
+			Pallet::<T>::on_chain_storage_version() == 7
 			"must upgrade linearly"
 		);
 
@@ -298,8 +311,11 @@ pub mod v8 {
 
 	/// Migration to sorted `VoterList`.
 	pub fn migrate<T: Config>() -> Weight {
-		if StorageVersion::<T>::get() == crate::Releases::V7_0_0 {
-			crate::log!(info, "migrating staking to Releases::V8_0_0");
+		let current = Pallet::<T>::current_storage_version();
+		let onchain = Pallet::<T>::on_chain_storage_version();
+
+		if current == 8 && onchain == 7 {
+			crate::log!(info, "migrating staking to 8");
 
 			let migrated = T::VoterList::unsafe_regenerate(
 				Nominators::<T>::iter().map(|(id, _)| id),
@@ -307,10 +323,10 @@ pub mod v8 {
 			);
 			debug_assert_eq!(T::VoterList::try_state(), Ok(()));
 
-			StorageVersion::<T>::put(crate::Releases::V8_0_0);
+			current.put::<Pallet<T>>();
 			crate::log!(
 				info,
-				"👜 completed staking migration to Releases::V8_0_0 with {} voters migrated",
+				"👜 completed staking migration to 8_with {} voters migrated",
 				migrated,
 			);
 
@@ -348,20 +364,21 @@ pub mod v7 {
 		);
 		assert!(Validators::<T>::count().is_zero(), "Validators already set.");
 		assert!(Nominators::<T>::count().is_zero(), "Nominators already set.");
-		assert!(StorageVersion::<T>::get() == Releases::V6_0_0);
+		assert!(Pallet::<T>::on_chain_storage_version() == 6);
 		Ok(())
 	}
 
 	pub fn migrate<T: Config>() -> Weight {
-		log!(info, "Migrating staking to Releases::V7_0_0");
+		log!(info, "Migrating staking to 7");
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
 
 		CounterForValidators::<T>::put(validator_count);
 		CounterForNominators::<T>::put(nominator_count);
 
-		StorageVersion::<T>::put(Releases::V7_0_0);
-		log!(info, "Completed staking migration to Releases::V7_0_0");
+		Pallet::<T>::current_storage_version().put::<Pallet<T>>();
+
+		log!(info, "Completed staking migration to 7");
 
 		T::DbWeight::get().reads_writes(validator_count.saturating_add(nominator_count).into(), 2)
 	}
@@ -403,7 +420,7 @@ pub mod v6 {
 
 	/// Migrate storage to v6.
 	pub fn migrate<T: Config>() -> Weight {
-		log!(info, "Migrating staking to Releases::V6_0_0");
+		log!(info, "Migrating staking to 6");
 
 		SnapshotValidators::<T>::kill();
 		SnapshotNominators::<T>::kill();
@@ -412,7 +429,8 @@ pub mod v6 {
 		EraElectionStatus::<T>::kill();
 		IsCurrentSessionFinal::<T>::kill();
 
-		StorageVersion::<T>::put(Releases::V6_0_0);
+		Pallet::<T>::current_storage_version().put::<Pallet<T>>();
+
 		log!(info, "Done.");
 		T::DbWeight::get().writes(6 + 1)
 	}
