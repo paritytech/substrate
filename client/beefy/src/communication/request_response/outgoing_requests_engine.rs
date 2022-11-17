@@ -20,10 +20,7 @@
 
 use beefy_primitives::{crypto::AuthorityId, BeefyApi, ValidatorSet};
 use codec::Encode;
-use futures::{
-	channel::{oneshot, oneshot::Canceled},
-	stream::{self, StreamExt},
-};
+use futures::channel::{oneshot, oneshot::Canceled};
 use log::{debug, error, warn};
 use parking_lot::Mutex;
 use sc_network::{PeerId, ProtocolName};
@@ -50,8 +47,8 @@ type Response = Result<Vec<u8>, RequestFailure>;
 type ResponseReceiver = oneshot::Receiver<Response>;
 
 enum State<B: Block> {
-	Idle(stream::Pending<Result<Response, Canceled>>),
-	AwaitingResponse(PeerId, NumberFor<B>, stream::Once<ResponseReceiver>),
+	Idle,
+	AwaitingResponse(PeerId, NumberFor<B>, ResponseReceiver),
 }
 
 pub struct OnDemandJustificationsEngine<B: Block, R> {
@@ -83,7 +80,7 @@ where
 			protocol_name,
 			live_peers,
 			peers_cache: VecDeque::new(),
-			state: State::Idle(stream::pending()),
+			state: State::Idle,
 		}
 	}
 
@@ -118,15 +115,14 @@ where
 			IfDisconnected::ImmediateError,
 		);
 
-		self.state = State::AwaitingResponse(peer, block, stream::once(rx));
+		self.state = State::AwaitingResponse(peer, block, rx);
 	}
 
 	/// If no other request is in progress, start new justification request for `block`.
 	pub fn request(&mut self, block: NumberFor<B>) {
 		// ignore new requests while there's already one pending
-		match &self.state {
-			State::AwaitingResponse(_, _, _) => return,
-			State::Idle(_) => (),
+		if matches!(self.state, State::AwaitingResponse(_, _, _)) {
+			return
 		}
 		self.reset_peers_cache_for_block(block);
 
@@ -148,7 +144,7 @@ where
 					"🥩 cancel pending request for justification #{:?}",
 					number
 				);
-				self.state = State::Idle(stream::pending());
+				self.state = State::Idle;
 			},
 			_ => (),
 		}
@@ -194,19 +190,19 @@ where
 
 	pub async fn next(&mut self) -> Option<BeefyVersionedFinalityProof<B>> {
 		let (peer, block, resp) = match &mut self.state {
-			State::Idle(pending) => {
-				let _ = pending.next().await;
-				// This never happens since 'stream::pending' never generates any items.
+			State::Idle => {
+				futures::pending!();
+				// Doesn't happen as 'futures::pending!()' is an 'await' barrier that never passes.
 				return None
 			},
 			State::AwaitingResponse(peer, block, receiver) => {
-				let resp = receiver.next().await?;
+				let resp = receiver.await;
 				(*peer, *block, resp)
 			},
 		};
-		// We received the awaited response. Our 'stream::once()' receiver will never generate any
-		// other response, meaning we're done with current state. Move the engine to `State::Idle`.
-		self.state = State::Idle(stream::pending());
+		// We received the awaited response. Our 'receiver' will never generate any other response,
+		// meaning we're done with current state. Move the engine to `State::Idle`.
+		self.state = State::Idle;
 
 		let block_id = BlockId::number(block);
 		let validator_set = self

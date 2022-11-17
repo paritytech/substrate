@@ -19,61 +19,7 @@ use codec::{Decode, Encode, Error, Input};
 use scale_info::TypeInfo;
 use sp_std::{cmp, prelude::*};
 
-use crate::ValidatorSetId;
-
-/// Id of different payloads in the [`Commitment`] data
-pub type BeefyPayloadId = [u8; 2];
-
-/// Registry of all known [`BeefyPayloadId`].
-pub mod known_payload_ids {
-	use crate::BeefyPayloadId;
-
-	/// A [`Payload`](super::Payload) identifier for Merkle Mountain Range root hash.
-	///
-	/// Encoded value should contain a [`crate::MmrRootHash`] type (i.e. 32-bytes hash).
-	pub const MMR_ROOT_ID: BeefyPayloadId = *b"mh";
-}
-
-/// A BEEFY payload type allowing for future extensibility of adding additional kinds of payloads.
-///
-/// The idea is to store a vector of SCALE-encoded values with an extra identifier.
-/// Identifiers MUST be sorted by the [`BeefyPayloadId`] to allow efficient lookup of expected
-/// value. Duplicated identifiers are disallowed. It's okay for different implementations to only
-/// support a subset of possible values.
-#[derive(Decode, Encode, Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Hash, TypeInfo)]
-pub struct Payload(Vec<(BeefyPayloadId, Vec<u8>)>);
-
-impl Payload {
-	/// Construct a new payload given an initial vallue
-	pub fn new(id: BeefyPayloadId, value: Vec<u8>) -> Self {
-		Self(vec![(id, value)])
-	}
-
-	/// Returns a raw payload under given `id`.
-	///
-	/// If the [`BeefyPayloadId`] is not found in the payload `None` is returned.
-	pub fn get_raw(&self, id: &BeefyPayloadId) -> Option<&Vec<u8>> {
-		let index = self.0.binary_search_by(|probe| probe.0.cmp(id)).ok()?;
-		Some(&self.0[index].1)
-	}
-
-	/// Returns a decoded payload value under given `id`.
-	///
-	/// In case the value is not there or it cannot be decoded does not match `None` is returned.
-	pub fn get_decoded<T: Decode>(&self, id: &BeefyPayloadId) -> Option<T> {
-		self.get_raw(id).and_then(|raw| T::decode(&mut &raw[..]).ok())
-	}
-
-	/// Push a `Vec<u8>` with a given id into the payload vec.
-	/// This method will internally sort the payload vec after every push.
-	///
-	/// Returns self to allow for daisy chaining.
-	pub fn push_raw(mut self, id: BeefyPayloadId, value: Vec<u8>) -> Self {
-		self.0.push((id, value));
-		self.0.sort_by_key(|(id, _)| *id);
-		self
-	}
-}
+use crate::{Payload, ValidatorSetId};
 
 /// A commitment signed by GRANDPA validators as part of BEEFY protocol.
 ///
@@ -302,13 +248,11 @@ impl<N, S> From<SignedCommitment<N, S>> for VersionedFinalityProof<N, S> {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use crate::{crypto, known_payloads, KEY_TYPE};
+	use codec::Decode;
 	use sp_core::{keccak_256, Pair};
 	use sp_keystore::{testing::KeyStore, SyncCryptoStore, SyncCryptoStorePtr};
-
-	use super::*;
-	use codec::Decode;
-
-	use crate::{crypto, KEY_TYPE};
 
 	type TestCommitment = Commitment<u128>;
 	type TestSignedCommitment = SignedCommitment<u128, crypto::Signature>;
@@ -341,7 +285,8 @@ mod tests {
 	#[test]
 	fn commitment_encode_decode() {
 		// given
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -362,7 +307,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_encode_decode() {
 		// given
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -396,7 +342,8 @@ mod tests {
 	#[test]
 	fn signed_commitment_count_signatures() {
 		// given
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -421,7 +368,8 @@ mod tests {
 			block_number: u128,
 			validator_set_id: crate::ValidatorSetId,
 		) -> TestCommitment {
-			let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+			let payload =
+				Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 			Commitment { payload, block_number, validator_set_id }
 		}
 
@@ -441,7 +389,8 @@ mod tests {
 
 	#[test]
 	fn versioned_commitment_encode_decode() {
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 
@@ -467,7 +416,8 @@ mod tests {
 	#[test]
 	fn large_signed_commitment_encode_decode() {
 		// given
-		let payload = Payload::new(known_payload_ids::MMR_ROOT_ID, "Hello World!".encode());
+		let payload =
+			Payload::from_single_entry(known_payloads::MMR_ROOT_ID, "Hello World!".encode());
 		let commitment: TestCommitment =
 			Commitment { payload, block_number: 5, validator_set_id: 0 };
 

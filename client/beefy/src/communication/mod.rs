@@ -33,9 +33,6 @@ pub(crate) mod beefy_protocol_name {
 	/// BEEFY justifications protocol name suffix.
 	const JUSTIFICATIONS_NAME: &str = "/beefy/justifications/1";
 
-	/// Old names for the gossip protocol, used for backward compatibility.
-	pub(super) const LEGACY_NAMES: [&str; 1] = ["/paritytech/beefy/1"];
-
 	/// Name of the votes gossip protocol used by BEEFY.
 	///
 	/// Must be registered towards the networking in order for BEEFY voter to properly function.
@@ -73,9 +70,7 @@ pub fn beefy_peers_set_config(
 ) -> sc_network_common::config::NonDefaultSetConfig {
 	let mut cfg =
 		sc_network_common::config::NonDefaultSetConfig::new(gossip_protocol_name, 1024 * 1024);
-
 	cfg.allow_non_reserved(25, 25);
-	cfg.add_fallback_names(beefy_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect());
 	cfg
 }
 

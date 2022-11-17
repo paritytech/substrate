@@ -437,7 +437,7 @@ pub mod pallet {
 		///
 		/// This new collection has no items initially and its owner is the origin.
 		///
-		/// The origin must be Signed and the sender must have sufficient funds free.
+		/// The origin must conform to the configured `CreateOrigin` and have sufficient funds free.
 		///
 		/// `ItemDeposit` funds of sender are reserved.
 		///

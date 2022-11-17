@@ -19,7 +19,10 @@
 
 use super::*;
 use codec::{Decode, Encode, EncodeLike, MaxEncodedLen};
-use frame_support::{traits::schedule::Anon, Parameter};
+use frame_support::{
+	traits::{schedule::v3::Anon, Bounded},
+	Parameter,
+};
 use scale_info::TypeInfo;
 use sp_arithmetic::{Rounding::*, SignedRounding::*};
 use sp_runtime::{FixedI64, PerThing, RuntimeDebug};
@@ -31,6 +34,7 @@ pub type NegativeImbalanceOf<T, I> = <<T as Config<I>>::Currency as Currency<
 	<T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 pub type CallOf<T, I> = <T as Config<I>>::RuntimeCall;
+pub type BoundedCallOf<T, I> = Bounded<<T as Config<I>>::RuntimeCall>;
 pub type VotesOf<T, I> = <T as Config<I>>::Votes;
 pub type TallyOf<T, I> = <T as Config<I>>::Tally;
 pub type PalletsOriginOf<T> =
@@ -39,7 +43,7 @@ pub type ReferendumInfoOf<T, I> = ReferendumInfo<
 	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
 	<T as frame_system::Config>::BlockNumber,
-	<T as frame_system::Config>::Hash,
+	BoundedCallOf<T, I>,
 	BalanceOf<T, I>,
 	TallyOf<T, I>,
 	<T as frame_system::Config>::AccountId,
@@ -49,7 +53,7 @@ pub type ReferendumStatusOf<T, I> = ReferendumStatus<
 	TrackIdOf<T, I>,
 	PalletsOriginOf<T>,
 	<T as frame_system::Config>::BlockNumber,
-	<T as frame_system::Config>::Hash,
+	BoundedCallOf<T, I>,
 	BalanceOf<T, I>,
 	TallyOf<T, I>,
 	<T as frame_system::Config>::AccountId,
@@ -97,16 +101,16 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 pub struct DecidingStatus<BlockNumber> {
 	/// When this referendum began being "decided". If confirming, then the
 	/// end will actually be delayed until the end of the confirmation period.
-	pub(crate) since: BlockNumber,
+	pub since: BlockNumber,
 	/// If `Some`, then the referendum has entered confirmation stage and will end at
 	/// the block number as long as it doesn't lose its approval in the meantime.
-	pub(crate) confirming: Option<BlockNumber>,
+	pub confirming: Option<BlockNumber>,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Deposit<AccountId, Balance> {
-	pub(crate) who: AccountId,
-	pub(crate) amount: Balance,
+	pub who: AccountId,
+	pub amount: Balance,
 }
 
 #[derive(Clone, Encode, TypeInfo)]
@@ -160,35 +164,35 @@ pub struct ReferendumStatus<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Call: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 > {
 	/// The track of this referendum.
-	pub(crate) track: TrackId,
+	pub track: TrackId,
 	/// The origin for this referendum.
-	pub(crate) origin: RuntimeOrigin,
+	pub origin: RuntimeOrigin,
 	/// The hash of the proposal up for referendum.
-	pub(crate) proposal_hash: Hash,
+	pub proposal: Call,
 	/// The time the proposal should be scheduled for enactment.
-	pub(crate) enactment: DispatchTime<Moment>,
-	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if it
+	pub enactment: DispatchTime<Moment>,
+	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if
 	/// `deciding` is `None`.
-	pub(crate) submitted: Moment,
+	pub submitted: Moment,
 	/// The deposit reserved for the submission of this referendum.
-	pub(crate) submission_deposit: Deposit<AccountId, Balance>,
+	pub submission_deposit: Deposit<AccountId, Balance>,
 	/// The deposit reserved for this referendum to be decided.
-	pub(crate) decision_deposit: Option<Deposit<AccountId, Balance>>,
+	pub decision_deposit: Option<Deposit<AccountId, Balance>>,
 	/// The status of a decision being made. If `None`, it has not entered the deciding period.
-	pub(crate) deciding: Option<DecidingStatus<Moment>>,
+	pub deciding: Option<DecidingStatus<Moment>>,
 	/// The current tally of votes in this referendum.
-	pub(crate) tally: Tally,
+	pub tally: Tally,
 	/// Whether we have been placed in the queue for being decided or not.
-	pub(crate) in_queue: bool,
+	pub in_queue: bool,
 	/// The next scheduled wake-up, if `Some`.
-	pub(crate) alarm: Option<(Moment, ScheduleAddress)>,
+	pub alarm: Option<(Moment, ScheduleAddress)>,
 }
 
 /// Info regarding a referendum, present or past.
@@ -197,7 +201,7 @@ pub enum ReferendumInfo<
 	TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Moment: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-	Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+	Call: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 	AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
@@ -209,7 +213,7 @@ pub enum ReferendumInfo<
 			TrackId,
 			RuntimeOrigin,
 			Moment,
-			Hash,
+			Call,
 			Balance,
 			Tally,
 			AccountId,
@@ -220,7 +224,7 @@ pub enum ReferendumInfo<
 	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
 	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
-	/// Referendum finished with cancelation. Submission deposit is held.
+	/// Referendum finished with cancellation. Submission deposit is held.
 	Cancelled(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished and was never decided. Submission deposit is held.
 	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
@@ -232,12 +236,12 @@ impl<
 		TrackId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		RuntimeOrigin: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		Moment: Parameter + Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone + EncodeLike,
-		Hash: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
+		Call: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		Balance: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		Tally: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		AccountId: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 		ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
-	> ReferendumInfo<TrackId, RuntimeOrigin, Moment, Hash, Balance, Tally, AccountId, ScheduleAddress>
+	> ReferendumInfo<TrackId, RuntimeOrigin, Moment, Call, Balance, Tally, AccountId, ScheduleAddress>
 {
 	/// Take the Decision Deposit from `self`, if there is one. Returns an `Err` if `self` is not
 	/// in a valid state for the Decision Deposit to be refunded.

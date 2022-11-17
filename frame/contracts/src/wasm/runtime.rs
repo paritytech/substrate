@@ -251,6 +251,12 @@ pub enum RuntimeCosts {
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
 	EcdsaToEthAddress,
+	/// Weight of calling `seal_reentrant_count`
+	#[cfg(feature = "unstable-interface")]
+	ReentrantCount,
+	/// Weight of calling `seal_account_reentrance_count`
+	#[cfg(feature = "unstable-interface")]
+	AccountEntranceCount,
 }
 
 impl RuntimeCosts {
@@ -330,6 +336,10 @@ impl RuntimeCosts {
 			CallRuntime(weight) => weight.ref_time(),
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
+			#[cfg(feature = "unstable-interface")]
+			ReentrantCount => s.reentrant_count,
+			#[cfg(feature = "unstable-interface")]
+			AccountEntranceCount => s.account_reentrance_count,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -1021,7 +1031,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[unstable]
+	#[version(2)]
 	#[prefixed_alias]
 	fn set_storage(
 		ctx: Runtime<E>,
@@ -1053,7 +1063,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[unstable]
+	#[version(1)]
 	#[prefixed_alias]
 	fn clear_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.clear_storage(KeyType::Variable(key_len), key_ptr)
@@ -1102,7 +1112,7 @@ pub mod env {
 	/// # Errors
 	///
 	/// `ReturnCode::KeyNotFound`
-	#[unstable]
+	#[version(1)]
 	#[prefixed_alias]
 	fn get_storage(
 		ctx: Runtime<E>,
@@ -1145,7 +1155,7 @@ pub mod env {
 	///
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
-	#[unstable]
+	#[version(1)]
 	#[prefixed_alias]
 	fn contains_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
 		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
@@ -1188,6 +1198,7 @@ pub mod env {
 			Ok(ReturnCode::KeyNotFound)
 		}
 	}
+
 	/// Transfer some value to another account.
 	///
 	/// # Parameters
@@ -1354,6 +1365,7 @@ pub mod env {
 			output_len_ptr,
 		)
 	}
+
 	/// Instantiate a contract with the specified code hash.
 	///
 	/// # Deprecation
@@ -1976,11 +1988,7 @@ pub mod env {
 		data_len: u32,
 	) -> Result<(), TrapReason> {
 		fn has_duplicates<T: Ord>(items: &mut Vec<T>) -> bool {
-			// # Warning
-			//
-			// Unstable sorts are non-deterministic across architectures. The usage here is OK
-			// because we are rejecting duplicates which removes the non determinism.
-			items.sort_unstable();
+			items.sort();
 			// Find any two consecutive equal elements.
 			items.windows(2).any(|w| match &w {
 				&[a, b] => a == b,
@@ -2388,6 +2396,7 @@ pub mod env {
 	/// 2. Contracts using this API can't be assumed as having deterministic addresses. Said another
 	/// way, when using this API you lose the guarantee that an address always identifies a specific
 	/// code hash.
+	///
 	/// 3. If a contract calls into itself after changing its code the new call would use
 	/// the new code. However, if the original caller panics after returning from the sub call it
 	/// would revert the changes made by `seal_set_code_hash` and the next caller would use
@@ -2446,5 +2455,35 @@ pub mod env {
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
 		}
+	}
+
+	/// Returns the number of times the currently executing contract exists on the call stack in
+	/// addition to the calling instance.
+	///
+	/// # Return Value
+	///
+	/// Returns 0 when there is no reentrancy.
+	#[unstable]
+	fn reentrant_count(ctx: Runtime<E>) -> Result<u32, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
+		Ok(ctx.ext.reentrant_count())
+	}
+
+	/// Returns the number of times specified contract exists on the call stack. Delegated calls are
+	/// not counted as separate calls.
+	///
+	/// # Parameters
+	///
+	/// - `account_ptr`: a pointer to the contract address.
+	///
+	/// # Return Value
+	///
+	/// Returns 0 when the contract does not exist on the call stack.
+	#[unstable]
+	fn account_reentrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
+		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
+			ctx.read_sandbox_memory_as(account_ptr)?;
+		Ok(ctx.ext.account_reentrance_count(&account_id))
 	}
 }
