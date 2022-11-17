@@ -64,7 +64,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 		asset: Self::AssetId,
 		amount: Self::Balance,
 	) -> (DebtOf<AccountId, Self>, CreditOf<AccountId, Self>) {
-		(Self::rescind(asset, amount), Self::issue(asset, amount))
+		(Self::rescind(asset.clone(), amount), Self::issue(asset, amount))
 	}
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
@@ -139,7 +139,7 @@ pub trait Balanced<AccountId>: Inspect<AccountId> {
 	) -> Result<CreditOf<AccountId, Self>, DebtOf<AccountId, Self>> {
 		let amount = debt.peek();
 		let asset = debt.asset();
-		let credit = match Self::withdraw(asset, who, amount) {
+		let credit = match Self::withdraw(asset.clone(), who, amount) {
 			Err(_) => return Err(debt),
 			Ok(d) => d,
 		};
@@ -184,13 +184,13 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance(asset, who);
-		let (mut new_balance, mut amount) = if Self::reducible_balance(asset, who, false) < amount {
+		let old_balance = Self::balance(asset.clone(), who);
+		let (mut new_balance, mut amount) = if Self::reducible_balance(asset.clone(), who, false) < amount {
 			return Err(TokenError::NoFunds.into())
 		} else {
 			(old_balance - amount, amount)
 		};
-		if new_balance < Self::minimum_balance(asset) {
+		if new_balance < Self::minimum_balance(asset.clone()) {
 			amount = amount.saturating_add(new_balance);
 			new_balance = Zero::zero();
 		}
@@ -210,19 +210,19 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Self::Balance {
-		let old_balance = Self::balance(asset, who);
-		let old_free_balance = Self::reducible_balance(asset, who, false);
+		let old_balance = Self::balance(asset.clone(), who);
+		let old_free_balance = Self::reducible_balance(asset.clone(), who, false);
 		let (mut new_balance, mut amount) = if old_free_balance < amount {
 			(old_balance.saturating_sub(old_free_balance), old_free_balance)
 		} else {
 			(old_balance - amount, amount)
 		};
-		let minimum_balance = Self::minimum_balance(asset);
+		let minimum_balance = Self::minimum_balance(asset.clone());
 		if new_balance < minimum_balance {
 			amount = amount.saturating_add(new_balance);
 			new_balance = Zero::zero();
 		}
-		let mut r = Self::set_balance(asset, who, new_balance);
+		let mut r = Self::set_balance(asset.clone(), who, new_balance);
 		if r.is_err() {
 			// Some error, probably because we tried to destroy an account which cannot be
 			// destroyed.
@@ -249,9 +249,9 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let old_balance = Self::balance(asset, who);
+		let old_balance = Self::balance(asset.clone(), who);
 		let new_balance = old_balance.checked_add(&amount).ok_or(ArithmeticError::Overflow)?;
-		if new_balance < Self::minimum_balance(asset) {
+		if new_balance < Self::minimum_balance(asset.clone()) {
 			return Err(TokenError::BelowMinimum.into())
 		}
 		if old_balance != new_balance {
@@ -271,10 +271,10 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Self::Balance {
-		let old_balance = Self::balance(asset, who);
+		let old_balance = Self::balance(asset.clone(), who);
 		let mut new_balance = old_balance.saturating_add(amount);
 		let mut amount = new_balance - old_balance;
-		if new_balance < Self::minimum_balance(asset) {
+		if new_balance < Self::minimum_balance(asset.clone()) {
 			new_balance = Zero::zero();
 			amount = Zero::zero();
 		}
@@ -293,7 +293,7 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Bal
 	for IncreaseIssuance<AccountId, U>
 {
 	fn handle(asset: U::AssetId, amount: U::Balance) {
-		U::set_total_issuance(asset, U::total_issuance(asset).saturating_add(amount))
+		U::set_total_issuance(asset.clone(), U::total_issuance(asset).saturating_add(amount))
 	}
 }
 
@@ -304,7 +304,7 @@ impl<AccountId, U: Unbalanced<AccountId>> HandleImbalanceDrop<U::AssetId, U::Bal
 	for DecreaseIssuance<AccountId, U>
 {
 	fn handle(asset: U::AssetId, amount: U::Balance) {
-		U::set_total_issuance(asset, U::total_issuance(asset).saturating_sub(amount))
+		U::set_total_issuance(asset.clone(), U::total_issuance(asset).saturating_sub(amount))
 	}
 }
 
@@ -352,11 +352,11 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	type OnDropCredit = DecreaseIssuance<AccountId, U>;
 	type OnDropDebt = IncreaseIssuance<AccountId, U>;
 	fn rescind(asset: Self::AssetId, amount: Self::Balance) -> Debt<AccountId, Self> {
-		U::set_total_issuance(asset, U::total_issuance(asset).saturating_sub(amount));
+		U::set_total_issuance(asset.clone(), U::total_issuance(asset.clone()).saturating_sub(amount));
 		debt(asset, amount)
 	}
 	fn issue(asset: Self::AssetId, amount: Self::Balance) -> Credit<AccountId, Self> {
-		U::set_total_issuance(asset, U::total_issuance(asset).saturating_add(amount));
+		U::set_total_issuance(asset.clone(), U::total_issuance(asset.clone()).saturating_add(amount));
 		credit(asset, amount)
 	}
 	fn slash(
@@ -364,7 +364,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (Credit<AccountId, Self>, Self::Balance) {
-		let slashed = U::decrease_balance_at_most(asset, who, amount);
+		let slashed = U::decrease_balance_at_most(asset.clone(), who, amount);
 		// `slashed` could be less than, greater than or equal to `amount`.
 		// If slashed == amount, it means the account had at least amount in it and it could all be
 		//   removed without a problem.
@@ -379,7 +379,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Debt<AccountId, Self>, DispatchError> {
-		let increase = U::increase_balance(asset, who, amount)?;
+		let increase = U::increase_balance(asset.clone(), who, amount)?;
 		Ok(debt(asset, increase))
 	}
 	fn withdraw(
@@ -388,7 +388,7 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 		amount: Self::Balance,
 		// TODO: liveness: ExistenceRequirement,
 	) -> Result<Credit<AccountId, Self>, DispatchError> {
-		let decrease = U::decrease_balance(asset, who, amount)?;
+		let decrease = U::decrease_balance(asset.clone(), who, amount)?;
 		Ok(credit(asset, decrease))
 	}
 }

@@ -60,7 +60,7 @@ impl<
 {
 	fn drop(&mut self) {
 		if !self.amount.is_zero() {
-			OnDrop::handle(self.asset, self.amount)
+			OnDrop::handle(self.asset.clone(), self.amount)
 		}
 	}
 }
@@ -105,9 +105,9 @@ impl<
 	pub fn split(self, amount: B) -> (Self, Self) {
 		let first = self.amount.min(amount);
 		let second = self.amount - first;
-		let asset = self.asset;
+		let asset = self.asset.clone();
 		sp_std::mem::forget(self);
-		(Imbalance::new(asset, first), Imbalance::new(asset, second))
+		(Imbalance::new(asset.clone(), first), Imbalance::new(asset, second))
 	}
 	pub fn merge(mut self, other: Self) -> Result<Self, (Self, Self)> {
 		if self.asset == other.asset {
@@ -136,7 +136,7 @@ impl<
 	> {
 		if self.asset == other.asset {
 			let (a, b) = (self.amount, other.amount);
-			let asset = self.asset;
+			let asset = self.asset.clone();
 			sp_std::mem::forget((self, other));
 
 			if a == b {
@@ -155,7 +155,7 @@ impl<
 	}
 
 	pub fn asset(&self) -> A {
-		self.asset
+		self.asset.clone()
 	}
 }
 

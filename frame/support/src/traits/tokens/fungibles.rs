@@ -134,7 +134,7 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		Self::burn_from(asset, who, Self::reducible_balance(asset, who, false).min(amount))
+		Self::burn_from(asset.clone(), who, Self::reducible_balance(asset, who, false).min(amount))
 	}
 
 	/// Transfer funds from one account into another. The default implementation uses `mint_into`
@@ -145,16 +145,16 @@ pub trait Mutate<AccountId>: Inspect<AccountId> {
 		dest: &AccountId,
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
-		let extra = Self::can_withdraw(asset, &source, amount).into_result()?;
+		let extra = Self::can_withdraw(asset.clone(), &source, amount).into_result()?;
 		// As we first burn and then mint, we don't need to check if `mint` fits into the supply.
 		// If we can withdraw/burn it, we can also mint it again.
-		Self::can_deposit(asset, dest, amount.saturating_add(extra), false).into_result()?;
-		let actual = Self::burn_from(asset, source, amount)?;
+		Self::can_deposit(asset.clone(), dest, amount.saturating_add(extra), false).into_result()?;
+		let actual = Self::burn_from(asset.clone(), source, amount)?;
 		debug_assert!(
 			actual == amount.saturating_add(extra),
 			"can_withdraw must agree with withdraw; qed"
 		);
-		match Self::mint_into(asset, dest, actual) {
+		match Self::mint_into(asset.clone(), dest, actual) {
 			Ok(_) => Ok(actual),
 			Err(err) => {
 				debug_assert!(false, "can_deposit returned true previously; qed");
@@ -246,9 +246,9 @@ impl<AccountId, T: Balanced<AccountId> + MutateHold<AccountId>> BalancedHold<Acc
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> (CreditOf<AccountId, Self>, Self::Balance) {
-		let actual = match Self::release(asset, who, amount, true) {
+		let actual = match Self::release(asset.clone(), who, amount, true) {
 			Ok(x) => x,
-			Err(_) => return (Imbalance::zero(asset), amount),
+			Err(_) => return (Imbalance::zero(asset.clone()), amount),
 		};
 		<Self as fungibles::Balanced<AccountId>>::slash(asset, who, actual)
 	}
