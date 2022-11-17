@@ -58,11 +58,8 @@ pub trait WeightInfo {
 	fn remove_member_without_replacement() -> Weight;
 	fn remove_member_with_replacement() -> Weight;
 	fn clean_defunct_voters(v: u32, d: u32, ) -> Weight;
-	fn election(c: u32, v: u32, e: u32, ) -> Weight;
-
-    // TODO(gpestana): generate from benchmarks
-    fn pre_election(c: u32, v: u32, e: u32) -> Weight;
-    fn post_election(c: u32, v: u32, e: u32) -> Weight;
+	fn pre_solve_election(c: u32, v: u32, e: u32, ) -> Weight;
+	fn post_solve_election(c: u32, v: u32, e: u32, ) -> Weight;
 }
 
 /// Weights for pallet_elections using the Substrate node and recommended hardware.
@@ -192,39 +189,48 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads((3 as u64).saturating_mul(v as u64)))
 			.saturating_add(T::DbWeight::get().writes((3 as u64).saturating_mul(v as u64)))
 	}
-	// Storage: Elections Candidates (r:1 w:1)
+	// Storage: Elections Candidates (r:1 w:0)
+	// Storage: Elections Members (r:1 w:0)
+	// Storage: Elections RunnersUp (r:1 w:0)
+	// Storage: Elections Voting (r:10001 w:0)
+	/// The range of component `c` is `[1, 1000]`.
+	/// The range of component `v` is `[1, 10000]`.
+	/// The range of component `e` is `[10000, 160000]`.
+	fn pre_solve_election(_c: u32, v: u32, e: u32, ) -> Weight {
+		// Minimum execution time: 6_399_000 nanoseconds.
+		Weight::from_ref_time(1_581_352_360 as u64)
+			// Standard Error: 55_251
+			.saturating_add(Weight::from_ref_time(8_030_872 as u64).saturating_mul(v as u64))
+			// Standard Error: 3_683
+			.saturating_add(Weight::from_ref_time(13_203 as u64).saturating_mul(e as u64))
+			.saturating_add(T::DbWeight::get().reads(296 as u64))
+			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(v as u64)))
+	}
 	// Storage: Elections Members (r:1 w:1)
 	// Storage: Elections RunnersUp (r:1 w:1)
-	// Storage: Elections Voting (r:10001 w:0)
 	// Storage: Council Proposals (r:1 w:0)
 	// Storage: Elections ElectionRounds (r:1 w:1)
+	// Storage: Elections Candidates (r:0 w:1)
 	// Storage: Council Members (r:0 w:1)
 	// Storage: Council Prime (r:0 w:1)
 	// Storage: System Account (r:1 w:1)
 	/// The range of component `c` is `[1, 1000]`.
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn election(c: u32, v: u32, e: u32, ) -> Weight {
-		// Minimum execution time: 22_034_317 nanoseconds.
-		Weight::from_ref_time(22_110_020_000 as u64)
-			// Standard Error: 235_528
-			.saturating_add(Weight::from_ref_time(25_553_585 as u64).saturating_mul(v as u64))
-			// Standard Error: 15_114
-			.saturating_add(Weight::from_ref_time(1_032_330 as u64).saturating_mul(e as u64))
-			.saturating_add(T::DbWeight::get().reads(280 as u64))
+	fn post_solve_election(c: u32, v: u32, e: u32, ) -> Weight {
+		// Minimum execution time: 730_000 nanoseconds.
+		Weight::from_ref_time(747_000_000 as u64)
+			// Standard Error: 50_403
+			.saturating_add(Weight::from_ref_time(12_670_099 as u64).saturating_mul(c as u64))
+			// Standard Error: 5_039
+			.saturating_add(Weight::from_ref_time(342_861 as u64).saturating_mul(v as u64))
+			// Standard Error: 323
+			.saturating_add(Weight::from_ref_time(127 as u64).saturating_mul(e as u64))
+			.saturating_add(T::DbWeight::get().reads(4 as u64))
 			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(c as u64)))
-			.saturating_add(T::DbWeight::get().reads((1 as u64).saturating_mul(v as u64)))
 			.saturating_add(T::DbWeight::get().writes(6 as u64))
 			.saturating_add(T::DbWeight::get().writes((1 as u64).saturating_mul(c as u64)))
 	}
-
-   // TODO(gpestana): generate from benchmarks
-    fn pre_election(_c: u32, _v: u32, _e: u32) -> Weight {
-        Weight::zero()
-    }
-    fn post_election(_c: u32, _v: u32, _e: u32) -> Weight {
-        Weight::zero()
-    }
 }
 
 // For backwards compatibility and tests
@@ -353,37 +359,46 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads((3 as u64).saturating_mul(v as u64)))
 			.saturating_add(RocksDbWeight::get().writes((3 as u64).saturating_mul(v as u64)))
 	}
-	// Storage: Elections Candidates (r:1 w:1)
+	// Storage: Elections Candidates (r:1 w:0)
+	// Storage: Elections Members (r:1 w:0)
+	// Storage: Elections RunnersUp (r:1 w:0)
+	// Storage: Elections Voting (r:10001 w:0)
+	/// The range of component `c` is `[1, 1000]`.
+	/// The range of component `v` is `[1, 10000]`.
+	/// The range of component `e` is `[10000, 160000]`.
+	fn pre_solve_election(_c: u32, v: u32, e: u32, ) -> Weight {
+		// Minimum execution time: 6_399_000 nanoseconds.
+		Weight::from_ref_time(1_581_352_360 as u64)
+			// Standard Error: 55_251
+			.saturating_add(Weight::from_ref_time(8_030_872 as u64).saturating_mul(v as u64))
+			// Standard Error: 3_683
+			.saturating_add(Weight::from_ref_time(13_203 as u64).saturating_mul(e as u64))
+			.saturating_add(RocksDbWeight::get().reads(296 as u64))
+			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(v as u64)))
+	}
 	// Storage: Elections Members (r:1 w:1)
 	// Storage: Elections RunnersUp (r:1 w:1)
-	// Storage: Elections Voting (r:10001 w:0)
 	// Storage: Council Proposals (r:1 w:0)
 	// Storage: Elections ElectionRounds (r:1 w:1)
+	// Storage: Elections Candidates (r:0 w:1)
 	// Storage: Council Members (r:0 w:1)
 	// Storage: Council Prime (r:0 w:1)
 	// Storage: System Account (r:1 w:1)
 	/// The range of component `c` is `[1, 1000]`.
 	/// The range of component `v` is `[1, 10000]`.
 	/// The range of component `e` is `[10000, 160000]`.
-	fn election(c: u32, v: u32, e: u32, ) -> Weight {
-		// Minimum execution time: 22_034_317 nanoseconds.
-		Weight::from_ref_time(22_110_020_000 as u64)
-			// Standard Error: 235_528
-			.saturating_add(Weight::from_ref_time(25_553_585 as u64).saturating_mul(v as u64))
-			// Standard Error: 15_114
-			.saturating_add(Weight::from_ref_time(1_032_330 as u64).saturating_mul(e as u64))
-			.saturating_add(RocksDbWeight::get().reads(280 as u64))
+	fn post_solve_election(c: u32, v: u32, e: u32, ) -> Weight {
+		// Minimum execution time: 730_000 nanoseconds.
+		Weight::from_ref_time(747_000_000 as u64)
+			// Standard Error: 50_403
+			.saturating_add(Weight::from_ref_time(12_670_099 as u64).saturating_mul(c as u64))
+			// Standard Error: 5_039
+			.saturating_add(Weight::from_ref_time(342_861 as u64).saturating_mul(v as u64))
+			// Standard Error: 323
+			.saturating_add(Weight::from_ref_time(127 as u64).saturating_mul(e as u64))
+			.saturating_add(RocksDbWeight::get().reads(4 as u64))
 			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(c as u64)))
-			.saturating_add(RocksDbWeight::get().reads((1 as u64).saturating_mul(v as u64)))
 			.saturating_add(RocksDbWeight::get().writes(6 as u64))
 			.saturating_add(RocksDbWeight::get().writes((1 as u64).saturating_mul(c as u64)))
 	}
-
-   // TODO(gpestana): generate from benchmarks
-    fn pre_election(_c: u32, _v: u32, _e: u32) -> Weight {
-        Weight::zero()
-    }
-    fn post_election(_c: u32, _v: u32, _e: u32) -> Weight {
-        Weight::zero()
-    }
 }
