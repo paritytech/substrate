@@ -19,6 +19,55 @@
 use super::*;
 use frame_election_provider_support::SortedListProvider;
 use frame_support::traits::OnRuntimeUpgrade;
+use frame_support::dispatch::GetStorageVersion;
+
+pub mod v13 {
+	use super::*;
+	use frame_support::{pallet_prelude::ValueQuery, storage_alias};
+
+	#[storage_alias]
+	type StorageVersion<T: Config> = StorageValue<Pallet<T>, u32, ValueQuery>;
+
+	pub struct MigrateToV13<T>(sp_std::marker::PhantomData<T>);
+	impl<T: Config> OnRuntimeUpgrade for MigrateToV13<T> {
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
+			frame_support::ensure!(
+				Pallet::<T>::on_chain_storage_version() == 12,
+				"Required v12 before upgrading to v13"
+			);
+
+			Ok(Default::default())
+		}
+
+		fn on_runtime_upgrade() -> frame_support::weights::Weight {
+			let current = Pallet::<T>::current_storage_version();
+			let onchain = Pallet::<T>::on_chain_storage_version();
+
+			if current == 13 && onchain == 12 {
+				StorageVersion::<T>::kill();
+				current.put::<Pallet<T>>();
+
+				log!(info, "v13 applied successfully");
+				T::DbWeight::get().reads_writes(1, 2)
+			} else {
+				log!(warn, "Skipping v13, should be removed");
+				T::DbWeight::get().reads(1)
+			}
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(_state: Vec<u8>) -> Result<(), &'static str> {
+			frame_support::ensure!(
+				Pallet::<T>::on_chain_storage_version() == 13,
+				"v13 not applied"
+			);
+			Ok(())
+		}
+
+	}
+
+}
 
 pub mod v12 {
 	use super::*;
