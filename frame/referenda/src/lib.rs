@@ -607,42 +607,38 @@ pub mod pallet {
 			Ok(Some(branch.weight::<T, I>()).into())
 		}
 
-		/// Set the metadata to an ongoing referendum.
+		/// Set or clear metadata of a referendum.
 		///
-		/// - `origin`: Must be `Signed`, and the creator of the referendum.
-		/// - `index`: The index of the referendum to add metadata for.
-		/// - `hash`: The preimage hash of an on-chain stored preimage.
-		#[pallet::weight(T::WeightInfo::set_metadata())]
+		/// Parameters:
+		/// - `origin`: Must be `Signed` by a creator of a referendum or by anyone to clear a
+		///   metadata of a finished referendum.
+		/// - `index`:  The index of a referendum to set or clear metadata for.
+		/// - `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata.
+		#[pallet::weight(
+			maybe_hash.map_or(
+				T::WeightInfo::clear_metadata(), |_| T::WeightInfo::set_some_metadata())
+			)]
 		pub fn set_metadata(
 			origin: OriginFor<T>,
 			index: ReferendumIndex,
-			hash: PreimageHash,
+			maybe_hash: Option<PreimageHash>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let status = Self::ensure_ongoing(index)?;
-			ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
-			ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::PreimageNotExist);
-			T::Preimages::request(&hash);
-			MetadataOf::<T, I>::insert(index, hash);
-			Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });
-			Ok(())
-		}
-
-		/// Clear the referendum metadata.
-		///
-		/// - `origin`: Must be `Signed` or `Root`. If the referendum is ongoing, it must also be
-		///   the creator of the referendum.
-		/// - `index`: The index of the ongoing referendum to clear metadata for.
-		#[pallet::weight(T::WeightInfo::clear_metadata())]
-		pub fn clear_metadata(origin: OriginFor<T>, index: ReferendumIndex) -> DispatchResult {
-			let maybe_who = ensure_signed_or_root(origin)?;
-			if let Some(who) = maybe_who {
+			if let Some(hash) = maybe_hash {
+				let status = Self::ensure_ongoing(index)?;
+				ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
+				ensure!(T::Preimages::len(&hash).is_some(), Error::<T, I>::PreimageNotExist);
+				T::Preimages::request(&hash);
+				MetadataOf::<T, I>::insert(index, hash);
+				Self::deposit_event(Event::<T, I>::MetadataSet { index, hash });
+				Ok(())
+			} else {
 				if let Some(status) = Self::ensure_ongoing(index).ok() {
 					ensure!(status.submission_deposit.who == who, Error::<T, I>::NoPermission);
 				}
+				Self::do_clear_metadata(index);
+				Ok(())
 			}
-			Self::do_clear_metadata(index);
-			Ok(())
 		}
 	}
 }

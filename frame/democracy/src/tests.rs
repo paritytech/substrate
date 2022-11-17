@@ -44,6 +44,7 @@ mod lock_voting;
 mod public_proposals;
 mod scheduling;
 mod voting;
+mod metadata;
 
 const AYE: Vote = Vote { aye: true, conviction: Conviction::None };
 const NAY: Vote = Vote { aye: false, conviction: Conviction::None };

@@ -285,9 +285,10 @@ benchmarks! {
 		Democracy::<T>::external_propose_default(origin_propose.clone(), proposal)?;
 		// Set metadata to the external proposal.
 		let preimage_hash = note_preimage::<T>();
-		assert_ok!(Democracy::<T>::set_external_metadata(
+		assert_ok!(Democracy::<T>::set_metadata(
 			origin_propose,
-			preimage_hash.clone()));
+			MetadataOwner::External,
+			Some(preimage_hash)));
 		// NOTE: Instant origin may invoke a little bit more logic, but may not always succeed.
 		let origin_fast_track = T::FastTrackOrigin::successful_origin();
 		let voting_period = T::FastTrackVotingPeriod::get();
@@ -310,9 +311,10 @@ benchmarks! {
 		Democracy::<T>::external_propose_default(origin_propose.clone(), proposal)?;
 
 		let preimage_hash = note_preimage::<T>();
-		assert_ok!(Democracy::<T>::set_external_metadata(
+		assert_ok!(Democracy::<T>::set_metadata(
 			origin_propose,
-			preimage_hash.clone())
+			MetadataOwner::External,
+			Some(preimage_hash))
 		);
 
 		let mut vetoers: BoundedVec<T::AccountId, _> = Default::default();
@@ -339,10 +341,10 @@ benchmarks! {
 		// Add metadata to the first proposal.
 		let proposer = funded_account::<T>("proposer", 0);
 		let preimage_hash = note_preimage::<T>();
-		assert_ok!(Democracy::<T>::set_proposal_metadata(
+		assert_ok!(Democracy::<T>::set_metadata(
 			RawOrigin::Signed(proposer).into(),
-			0,
-			preimage_hash.clone()));
+			MetadataOwner::Proposal(0),
+			Some(preimage_hash)));
 		let cancel_origin = T::CancelProposalOrigin::successful_origin();
 	}: _<T::RuntimeOrigin>(cancel_origin, 0)
 	verify {
@@ -733,12 +735,13 @@ benchmarks! {
 		assert_ok!(
 			Democracy::<T>::external_propose(origin.clone(), make_proposal::<T>(0))
 		);
-		let preimage_hash = note_preimage::<T>();
-	}: _<T::RuntimeOrigin>(origin, preimage_hash)
+		let owner = MetadataOwner::External;
+		let hash = note_preimage::<T>();
+	}: set_metadata<T::RuntimeOrigin>(origin, owner.clone(), Some(hash))
 	verify {
 		assert_last_event::<T>(crate::Event::MetadataSet {
-			owner: MetadataOwner::External,
-			hash: preimage_hash,
+			owner,
+			hash,
 		}.into());
 	}
 
@@ -747,14 +750,15 @@ benchmarks! {
 		assert_ok!(
 			Democracy::<T>::external_propose(origin.clone(), make_proposal::<T>(0))
 		);
+		let owner = MetadataOwner::External;
 		let proposer = funded_account::<T>("proposer", 0);
-		let preimage_hash = note_preimage::<T>();
-		assert_ok!(Democracy::<T>::set_external_metadata(origin.clone(), preimage_hash.clone()));
-	}: _<T::RuntimeOrigin>(origin)
+		let hash = note_preimage::<T>();
+		assert_ok!(Democracy::<T>::set_metadata(origin.clone(), owner.clone(), Some(hash)));
+	}: set_metadata<T::RuntimeOrigin>(origin, owner.clone(), None)
 	verify {
 		assert_last_event::<T>(crate::Event::MetadataCleared {
-			owner: MetadataOwner::External,
-			hash: preimage_hash,
+			owner,
+			hash,
 		}.into());
 	}
 
@@ -763,13 +767,14 @@ benchmarks! {
 		for i in 0 .. T::MaxProposals::get() {
 			add_proposal::<T>(i)?;
 		}
+		let owner = MetadataOwner::Proposal(0);
 		let proposer = funded_account::<T>("proposer", 0);
-		let preimage_hash = note_preimage::<T>();
-	}: _<T::RuntimeOrigin>(RawOrigin::Signed(proposer).into(), 0, preimage_hash)
+		let hash = note_preimage::<T>();
+	}: set_metadata<T::RuntimeOrigin>(RawOrigin::Signed(proposer).into(), owner.clone(), Some(hash))
 	verify {
 		assert_last_event::<T>(crate::Event::MetadataSet {
-			owner: MetadataOwner::Proposal(0),
-			hash: preimage_hash,
+			owner,
+			hash,
 		}.into());
 	}
 
@@ -779,26 +784,52 @@ benchmarks! {
 			add_proposal::<T>(i)?;
 		}
 		let proposer = funded_account::<T>("proposer", 0);
-		let preimage_hash = note_preimage::<T>();
-		assert_ok!(Democracy::<T>::set_proposal_metadata(
+		let owner = MetadataOwner::Proposal(0);
+		let hash = note_preimage::<T>();
+		assert_ok!(Democracy::<T>::set_metadata(
 			RawOrigin::Signed(proposer.clone()).into(),
-			0,
-			preimage_hash.clone()));
-	}: _<T::RuntimeOrigin>(RawOrigin::Signed(proposer).into(), 0)
+			owner.clone(),
+			Some(hash)));
+	}: set_metadata<T::RuntimeOrigin>(RawOrigin::Signed(proposer).into(), owner.clone(), None)
 	verify {
 		assert_last_event::<T>(crate::Event::MetadataCleared {
-			owner: MetadataOwner::Proposal(0),
-			hash: preimage_hash,
+			owner,
+			hash,
+		}.into());
+	}
+
+	set_referendum_metadata {
+		// create not ongoing referendum.
+		ReferendumInfoOf::<T>::insert(
+			0,
+			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true },
+		);
+		let owner = MetadataOwner::Referendum(0);
+		let caller = funded_account::<T>("caller", 0);
+		let hash = note_preimage::<T>();
+	}: set_metadata<T::RuntimeOrigin>(RawOrigin::Root.into(), owner.clone(), Some(hash))
+	verify {
+		assert_last_event::<T>(crate::Event::MetadataSet {
+			owner,
+			hash,
 		}.into());
 	}
 
 	clear_referendum_metadata {
-		let (ref_index, _, preimage_hash) = add_referendum::<T>(0);
-	}: _(RawOrigin::Root, ref_index)
+		// create not ongoing referendum.
+		ReferendumInfoOf::<T>::insert(
+			0,
+			ReferendumInfo::Finished { end: T::BlockNumber::zero(), approved: true },
+		);
+		let owner = MetadataOwner::Referendum(0);
+		let hash = note_preimage::<T>();
+		MetadataOf::<T>::insert(owner.clone(), hash);
+		let caller = funded_account::<T>("caller", 0);
+	}: set_metadata<T::RuntimeOrigin>(RawOrigin::Signed(caller).into(), owner.clone(), None)
 	verify {
 		assert_last_event::<T>(crate::Event::MetadataCleared {
-			owner: MetadataOwner::Referendum(ref_index),
-			hash: preimage_hash,
+			owner,
+			hash,
 		}.into());
 	}
 

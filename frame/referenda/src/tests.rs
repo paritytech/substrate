@@ -536,7 +536,7 @@ fn set_metadata_works() {
 		let index = ReferendumCount::<Test>::get() - 1;
 		assert_ok!(Referenda::kill(RuntimeOrigin::root(), index));
 		assert_noop!(
-			Referenda::set_metadata(RuntimeOrigin::signed(1), index, invalid_hash),
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(invalid_hash)),
 			Error::<Test>::NotOngoing,
 		);
 		// no permission to set metadata.
@@ -548,19 +548,19 @@ fn set_metadata_works() {
 		));
 		let index = ReferendumCount::<Test>::get() - 1;
 		assert_noop!(
-			Referenda::set_metadata(RuntimeOrigin::signed(2), index, invalid_hash),
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, Some(invalid_hash)),
 			Error::<Test>::NoPermission,
 		);
 		// preimage does not exist.
 		let index = ReferendumCount::<Test>::get() - 1;
 		assert_noop!(
-			Referenda::set_metadata(RuntimeOrigin::signed(1), index, invalid_hash,),
+			Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(invalid_hash)),
 			Error::<Test>::PreimageNotExist,
 		);
 		// metadata set.
 		let index = ReferendumCount::<Test>::get() - 1;
 		let hash = note_preimage(1);
-		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, hash));
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
 		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataSet {
 			index,
 			hash,
@@ -580,13 +580,13 @@ fn clear_metadata_works() {
 			DispatchTime::At(1),
 		));
 		let index = ReferendumCount::<Test>::get() - 1;
-		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, hash));
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, Some(hash)));
 		assert!(Preimage::is_requested(&hash));
 		assert_noop!(
-			Referenda::clear_metadata(RuntimeOrigin::signed(2), index,),
+			Referenda::set_metadata(RuntimeOrigin::signed(2), index, None),
 			Error::<Test>::NoPermission,
 		);
-		assert_ok!(Referenda::clear_metadata(RuntimeOrigin::signed(1), index,),);
+		assert_ok!(Referenda::set_metadata(RuntimeOrigin::signed(1), index, None),);
 		System::assert_last_event(RuntimeEvent::Referenda(crate::Event::MetadataCleared {
 			index,
 			hash,

@@ -92,7 +92,11 @@ fn cancel_proposal_should_work() {
 		assert_ok!(propose_set_balance(1, 4, 4));
 		assert_noop!(Democracy::cancel_proposal(RuntimeOrigin::signed(1), 0), BadOrigin);
 		let hash = note_preimage(1);
-		assert_ok!(Democracy::set_proposal_metadata(RuntimeOrigin::signed(1), 0, hash));
+		assert_ok!(Democracy::set_metadata(
+			RuntimeOrigin::signed(1),
+			MetadataOwner::Proposal(0),
+			Some(hash)
+		));
 		assert!(<MetadataOf<Test>>::get(MetadataOwner::Proposal(0)).is_some());
 		assert!(Preimage::is_requested(&hash));
 		assert_ok!(Democracy::cancel_proposal(RuntimeOrigin::root(), 0));
@@ -147,62 +151,5 @@ fn runners_up_should_come_after() {
 		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), 1, aye(1)));
 		fast_forward_to(6);
 		assert_ok!(Democracy::vote(RuntimeOrigin::signed(1), 2, aye(1)));
-	});
-}
-
-#[test]
-fn set_external_metadata_works() {
-	new_test_ext().execute_with(|| {
-		use frame_support::traits::Hash as PreimageHash;
-		// invalid preimage hash.
-		let invalid_hash: PreimageHash = [1u8; 32].into();
-		// create an external proposal.
-		assert_ok!(propose_set_balance(1, 2, 5));
-		let index = Democracy::public_prop_count() - 1;
-		// fails to set non-existing preimage.
-		assert_noop!(
-			Democracy::set_proposal_metadata(RuntimeOrigin::signed(1), index, invalid_hash,),
-			Error::<Test>::PreimageNotExist,
-		);
-		// note preimage.
-		let hash = note_preimage(1);
-		// fails to set non-existing preimage.
-		assert_noop!(
-			Democracy::set_proposal_metadata(RuntimeOrigin::signed(3), index, hash,),
-			Error::<Test>::NoPermission,
-		);
-		// set metadata successful.
-		assert_ok!(Democracy::set_proposal_metadata(RuntimeOrigin::signed(1), index, hash,),);
-		System::assert_last_event(RuntimeEvent::Democracy(crate::Event::MetadataSet {
-			owner: MetadataOwner::Proposal(index),
-			hash,
-		}));
-		assert!(Preimage::is_requested(&hash));
-	});
-}
-
-#[test]
-fn clear_metadata_works() {
-	new_test_ext().execute_with(|| {
-		// create an external proposal.
-		assert_ok!(propose_set_balance(1, 2, 5));
-		let index = Democracy::public_prop_count() - 1;
-		// set metadata.
-		let hash = note_preimage(1);
-		assert!(!Preimage::is_requested(&hash));
-		assert_ok!(Democracy::set_proposal_metadata(RuntimeOrigin::signed(1), index, hash,));
-		assert!(Preimage::is_requested(&hash));
-		// fails to clear metadata with a wrong origin.
-		assert_noop!(
-			Democracy::clear_proposal_metadata(RuntimeOrigin::signed(3), index),
-			Error::<Test>::NoPermission,
-		);
-		// clear metadata successful.
-		assert_ok!(Democracy::clear_proposal_metadata(RuntimeOrigin::signed(1), index));
-		System::assert_last_event(RuntimeEvent::Democracy(crate::Event::MetadataCleared {
-			owner: MetadataOwner::Proposal(index),
-			hash,
-		}));
-		assert!(!Preimage::is_requested(&hash));
 	});
 }

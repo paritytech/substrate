@@ -155,6 +155,7 @@
 use codec::{Decode, Encode};
 use frame_support::{
 	ensure,
+	error::BadOrigin,
 	traits::{
 		defensive_prelude::*,
 		schedule::{v3::Named as ScheduleNamed, DispatchTime},
@@ -164,6 +165,7 @@ use frame_support::{
 	},
 	weights::Weight,
 };
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{
 	traits::{Bounded as ArithBounded, One, Saturating, StaticLookup, Zero},
 	ArithmeticError, DispatchError, DispatchResult,
@@ -1090,102 +1092,60 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Set the metadata to the external proposal.
+		/// Set or clear a metadata of a proposal or a referendum.
 		///
-		/// - `origin`: Must be an external origin and correspond to the proposal vote threshold,
-		///   `ExternalOrigin` for `SuperMajorityApprove`, `ExternalDefaultOrigin` for
-		///   `SuperMajorityAgainst` and `ExternalMajorityOrigin` for `SimpleMajority`.
-		/// - `hash`: The hash of an on-chain stored preimage.
-		#[pallet::weight(T::WeightInfo::set_external_metadata())]
-		pub fn set_external_metadata(origin: OriginFor<T>, hash: PreimageHash) -> DispatchResult {
-			let (_, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::NoProposal)?;
-			match threshold {
-				VoteThreshold::SuperMajorityApprove => {
-					let _ = T::ExternalOrigin::ensure_origin(origin)?;
-				},
-				VoteThreshold::SuperMajorityAgainst => {
-					let _ = T::ExternalDefaultOrigin::ensure_origin(origin)?;
-				},
-				VoteThreshold::SimpleMajority => {
-					let _ = T::ExternalMajorityOrigin::ensure_origin(origin)?;
-				},
-			};
-			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
-			T::Preimages::request(&hash);
-			MetadataOf::<T>::insert(MetadataOwner::External, hash);
-			Self::deposit_event(Event::<T>::MetadataSet { owner: MetadataOwner::External, hash });
-			Ok(())
-		}
-
-		/// Set the metadata of the public proposal.
-		///
-		/// - `origin`: Must be `Signed`, and the creator of the proposal.
-		/// - `index`: The index of the proposal.
-		/// - `hash`: The preimage hash of an on-chain stored preimage.
-		#[pallet::weight(T::WeightInfo::set_proposal_metadata())]
-		pub fn set_proposal_metadata(
+		/// Parameters:
+		/// - `origin`: Must correspond to the `MetadataOwner`.
+		///     - `ExternalOrigin` for an external proposal with the `SuperMajorityApprove` threshold.
+		///     - `ExternalDefaultOrigin` for an external proposal with the `SuperMajorityAgainst` threshold.
+		///     - `ExternalMajorityOrigin` for an external proposal with the `SimpleMajority` threshold.
+		///     - `Signed` by a creator for a public proposal.
+		///     - `Signed` to clear a metadata for a finished referendum.
+		///     - `Root` to set a metadata for an ongoing referendum.
+		/// - `owner`: an identifier of a metadata owner.
+		/// - `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata.
+		#[pallet::weight(
+			match (owner, maybe_hash) {
+				(MetadataOwner::External, Some(_)) => T::WeightInfo::set_external_metadata(),
+				(MetadataOwner::External, None) => T::WeightInfo::clear_external_metadata(),
+				(MetadataOwner::Proposal(_), Some(_)) => T::WeightInfo::set_proposal_metadata(),
+				(MetadataOwner::Proposal(_), None) => T::WeightInfo::clear_proposal_metadata(),
+				(MetadataOwner::Referendum(_), Some(_)) => T::WeightInfo::set_referendum_metadata(),
+				(MetadataOwner::Referendum(_), None) => T::WeightInfo::clear_referendum_metadata(),
+			}
+		)]
+		pub fn set_metadata(
 			origin: OriginFor<T>,
-			index: PropIndex,
-			hash: PreimageHash,
+			owner: MetadataOwner,
+			maybe_hash: Option<PreimageHash>,
 		) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let (_, _, proposer) = Self::proposal(index)?;
-			ensure!(proposer == who, Error::<T>::NoPermission);
-			ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
-			T::Preimages::request(&hash);
-			let owner = MetadataOwner::Proposal(index);
-			MetadataOf::<T>::insert(owner.clone(), hash);
-			Self::deposit_event(Event::<T>::MetadataSet { owner, hash });
-			Ok(())
-		}
-
-		/// Clear the external proposal metadata.
-		///
-		/// - `origin`: Must be an external origin and correspond to the proposal vote threshold,
-		///   `ExternalOrigin` for `SuperMajorityApprove`, `ExternalDefaultOrigin` for
-		///   `SuperMajorityAgainst` and `ExternalMajorityOrigin` for `SimpleMajority`.
-		#[pallet::weight(T::WeightInfo::clear_external_metadata())]
-		pub fn clear_external_metadata(origin: OriginFor<T>) -> DispatchResult {
-			let (_, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::NoProposal)?;
-			match threshold {
-				VoteThreshold::SuperMajorityApprove => {
-					let _ = T::ExternalOrigin::ensure_origin(origin)?;
+			match owner {
+				MetadataOwner::External => {
+					let (_, threshold) = <NextExternal<T>>::get().ok_or(Error::<T>::NoProposal)?;
+					Self::ensure_external_origin(threshold, origin)?;
 				},
-				VoteThreshold::SuperMajorityAgainst => {
-					let _ = T::ExternalDefaultOrigin::ensure_origin(origin)?;
+				MetadataOwner::Proposal(index) => {
+					let who = ensure_signed(origin)?;
+					let (_, _, proposer) = Self::proposal(index)?;
+					ensure!(proposer == who, Error::<T>::NoPermission);
 				},
-				VoteThreshold::SimpleMajority => {
-					let _ = T::ExternalMajorityOrigin::ensure_origin(origin)?;
+				MetadataOwner::Referendum(index) => {
+					let maybe_root = ensure_signed_or_root(origin)?.is_none();
+					ensure!(maybe_root || maybe_hash.is_none(), Error::<T>::NoPermission);
+					ensure!(
+						maybe_root || Self::referendum_status(index).is_err(),
+						Error::<T>::NoPermission
+					);
 				},
-			};
-			Self::clear_metadata(MetadataOwner::External);
-			Ok(())
-		}
-
-		/// Clear the public proposal metadata.
-		///
-		/// - `origin`: Must be `Signed`, and the creator of the proposal.
-		/// - `index`: The index of the proposal.
-		#[pallet::weight(T::WeightInfo::clear_proposal_metadata())]
-		pub fn clear_proposal_metadata(origin: OriginFor<T>, index: PropIndex) -> DispatchResult {
-			let who = ensure_signed(origin)?;
-			let (_, _, proposer) = Self::proposal(index)?;
-			ensure!(proposer == who, Error::<T>::NoPermission);
-			Self::clear_metadata(MetadataOwner::Proposal(index));
-			Ok(())
-		}
-
-		/// Clear the referendum metadata.
-		///
-		/// - `origin`: Must be `Root`.
-		/// - `index`: The index of the referendum.
-		#[pallet::weight(T::WeightInfo::clear_referendum_metadata())]
-		pub fn clear_referendum_metadata(
-			origin: OriginFor<T>,
-			index: ReferendumIndex,
-		) -> DispatchResult {
-			ensure_root(origin)?;
-			Self::clear_metadata(MetadataOwner::Referendum(index));
+			}
+			if let Some(hash) = maybe_hash {
+				ensure!(T::Preimages::len(&hash).is_some(), Error::<T>::PreimageNotExist);
+				T::Preimages::request(&hash);
+				MetadataOf::<T>::insert(owner.clone(), hash);
+				Self::deposit_event(Event::<T>::MetadataSet { owner, hash });
+			} else {
+				Self::clear_metadata(owner);
+			}
 			Ok(())
 		}
 	}
@@ -1730,6 +1690,25 @@ impl<T: Config> Pallet<T> {
 				hash,
 			});
 		}
+	}
+
+	/// Ensure external origin for corresponding vote threshold.
+	fn ensure_external_origin(
+		threshold: VoteThreshold,
+		origin: OriginFor<T>,
+	) -> Result<(), BadOrigin> {
+		match threshold {
+			VoteThreshold::SuperMajorityApprove => {
+				let _ = T::ExternalOrigin::ensure_origin(origin)?;
+			},
+			VoteThreshold::SuperMajorityAgainst => {
+				let _ = T::ExternalDefaultOrigin::ensure_origin(origin)?;
+			},
+			VoteThreshold::SimpleMajority => {
+				let _ = T::ExternalMajorityOrigin::ensure_origin(origin)?;
+			},
+		};
+		Ok(())
 	}
 }
 
