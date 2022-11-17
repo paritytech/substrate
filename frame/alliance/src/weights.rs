@@ -67,6 +67,7 @@ pub trait WeightInfo {
 	fn kick_member() -> Weight;
 	fn add_unscrupulous_items(n: u32, l: u32, ) -> Weight;
 	fn remove_unscrupulous_items(n: u32, l: u32, ) -> Weight;
+	fn abdicate_fellow_status() -> Weight;
 }
 
 /// Weights for pallet_alliance using the Substrate node and recommended hardware.
@@ -353,6 +354,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2 as u64))
 			.saturating_add(T::DbWeight::get().writes(2 as u64))
 	}
+	// Storage: Alliance Members (r:4 w:2)
+	// Storage: AllianceMotion Proposals (r:1 w:0)
+	// Storage: AllianceMotion Members (r:0 w:1)
+	// Storage: AllianceMotion Prime (r:0 w:1)
+	fn abdicate_fellow_status() -> Weight {
+		// Minimum execution time: 79_391 nanoseconds.
+		Weight::from_ref_time(80_373_000 as u64)
+			.saturating_add(T::DbWeight::get().reads(5 as u64))
+			.saturating_add(T::DbWeight::get().writes(4 as u64))
+	}
 }
 
 // For backwards compatibility and tests
@@ -637,5 +648,15 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_ref_time(496_642 as u64).saturating_mul(l as u64))
 			.saturating_add(RocksDbWeight::get().reads(2 as u64))
 			.saturating_add(RocksDbWeight::get().writes(2 as u64))
+	}
+	// Storage: Alliance Members (r:4 w:2)
+	// Storage: AllianceMotion Proposals (r:1 w:0)
+	// Storage: AllianceMotion Members (r:0 w:1)
+	// Storage: AllianceMotion Prime (r:0 w:1)
+	fn abdicate_fellow_status() -> Weight {
+		// Minimum execution time: 79_391 nanoseconds.
+		Weight::from_ref_time(80_373_000 as u64)
+			.saturating_add(RocksDbWeight::get().reads(5 as u64))
+			.saturating_add(RocksDbWeight::get().writes(4 as u64))
 	}
 }

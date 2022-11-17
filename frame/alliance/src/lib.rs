@@ -424,6 +424,8 @@ pub mod pallet {
 		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
 		/// Alliance disbanded. Includes number deleted members and unreserved deposits.
 		AllianceDisbanded { voting_members: u32, ally_members: u32, unreserved: u32 },
+		/// A member abdicated their voting rights. They are now an Ally.
+		MemberAbdicated { member: T::AccountId },
 	}
 
 	#[pallet::genesis_config]
@@ -1009,6 +1011,23 @@ pub mod pallet {
 			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
 
 			Self::do_close(proposal_hash, index, proposal_weight_bound, length_bound)
+		}
+
+		/// Abdicate one's position as a voting member and just be an Ally. May be used by Fellows
+		/// who do not want to leave the Alliance but do not have the capacity to participate
+		/// operationally for some time.
+		#[pallet::weight(T::WeightInfo::abdicate_fellow_status())]
+		pub fn abdicate_fellow_status(origin: OriginFor<T>) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let role = Self::member_role_of(&who).ok_or(Error::<T, I>::NotMember)?;
+			// Not applicable to members who are retiring or who are already Allies.
+			ensure!(Self::has_voting_rights(&who), Error::<T, I>::NoVotingRights);
+
+			Self::remove_member(&who, role)?;
+			Self::add_member(&who, MemberRole::Ally)?;
+
+			Self::deposit_event(Event::MemberAbdicated { member: who });
+			Ok(())
 		}
 	}
 }

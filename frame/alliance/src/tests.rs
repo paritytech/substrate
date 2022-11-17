@@ -564,11 +564,26 @@ fn retire_works() {
 		// Move time on:
 		System::set_block_number(System::block_number() + RetirementPeriod::get());
 
-		assert_powerless(RuntimeOrigin::signed(3));
+		assert_powerless(RuntimeOrigin::signed(3), false);
 	});
 }
 
-fn assert_powerless(user: RuntimeOrigin) {
+#[test]
+fn abdicate_works() {
+	new_test_ext().execute_with(|| {
+
+		assert_eq!(Alliance::members(MemberRole::Fellow), vec![3]);
+		assert_ok!(Alliance::abdicate_fellow_status(RuntimeOrigin::signed(3)));
+
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberAbdicated {
+			member: (3),
+		}));
+
+		assert_powerless(RuntimeOrigin::signed(3), true);
+	});
+}
+
+fn assert_powerless(user: RuntimeOrigin, user_is_member: bool) {
 	//vote / veto with a valid propsal
 	let cid = test_cid();
 	let (proposal, _, _) = make_kick_member_proposal(42);
@@ -584,7 +599,10 @@ fn assert_powerless(user: RuntimeOrigin) {
 
 	assert_noop!(Alliance::retire(user.clone()), Error::<Test, ()>::RetirementNoticeNotGiven);
 
-	assert_noop!(Alliance::give_retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
+	// Allies should be able to give retirement notice.
+	if !user_is_member {
+		assert_noop!(Alliance::give_retirement_notice(user.clone()), Error::<Test, ()>::NotMember);
+	}
 
 	assert_noop!(Alliance::elevate_ally(user.clone(), 4), BadOrigin);
 

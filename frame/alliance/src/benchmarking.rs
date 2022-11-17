@@ -885,5 +885,18 @@ benchmarks_instance_pallet! {
 		assert_last_event::<T, I>(Event::UnscrupulousItemRemoved { items: unscrupulous_list }.into());
 	}
 
+	abdicate_fellow_status {
+		set_members::<T, I>();
+		let fellow2 = fellow::<T, I>(2);
+		assert!(Alliance::<T, I>::is_fellow(&fellow2));
+	}: _(SystemOrigin::Signed(fellow2.clone()))
+	verify {
+		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Ally));
+
+		assert_last_event::<T, I>(
+			Event::MemberAbdicated {member: fellow2}.into()
+		);
+	}
+
 	impl_benchmark_test_suite!(Alliance, crate::mock::new_bench_ext(), crate::mock::Test);
 }
