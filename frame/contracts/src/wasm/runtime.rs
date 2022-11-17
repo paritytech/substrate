@@ -261,7 +261,7 @@ pub enum RuntimeCosts {
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
 	EcdsaToEthAddress,
-	/// Weight of calling `seal_reentrant_count`
+	/// Weight of calling `seal_reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	ReentrantCount,
 	/// Weight of calling `seal_account_reentrance_count`
@@ -347,7 +347,7 @@ impl RuntimeCosts {
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 			#[cfg(feature = "unstable-interface")]
-			ReentrantCount => s.reentrant_count,
+			ReentrantCount => s.reentrance_count,
 			#[cfg(feature = "unstable-interface")]
 			AccountEntranceCount => s.account_reentrance_count,
 		};
@@ -2598,9 +2598,9 @@ pub mod env {
 	///
 	/// Returns 0 when there is no reentrancy.
 	#[unstable]
-	fn reentrant_count(ctx: _, memory: _) -> Result<u32, TrapReason> {
+	fn reentrance_count(ctx: _, memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
-		Ok(ctx.ext.reentrant_count())
+		Ok(ctx.ext.reentrance_count())
 	}
 
 	/// Returns the number of times specified contract exists on the call stack. Delegated calls are

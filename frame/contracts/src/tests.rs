@@ -4412,8 +4412,8 @@ fn delegate_call_indeterministic_code() {
 
 #[test]
 #[cfg(feature = "unstable-interface")]
-fn reentrant_count_works_with_call() {
-	let (wasm, code_hash) = compile_module::<Test>("reentrant_count_call").unwrap();
+fn reentrance_count_works_with_call() {
+	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_call").unwrap();
 	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
@@ -4449,8 +4449,8 @@ fn reentrant_count_works_with_call() {
 
 #[test]
 #[cfg(feature = "unstable-interface")]
-fn reentrant_count_works_with_delegated_call() {
-	let (wasm, code_hash) = compile_module::<Test>("reentrant_count_delegated_call").unwrap();
+fn reentrance_count_works_with_delegated_call() {
+	let (wasm, code_hash) = compile_module::<Test>("reentrance_count_delegated_call").unwrap();
 	let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
@@ -4488,8 +4488,8 @@ fn reentrant_count_works_with_delegated_call() {
 #[cfg(feature = "unstable-interface")]
 fn account_reentrance_count_works() {
 	let (wasm, code_hash) = compile_module::<Test>("account_reentrance_count_call").unwrap();
-	let (wasm_reentrant_count, code_hash_reentrant_count) =
-		compile_module::<Test>("reentrant_count_call").unwrap();
+	let (wasm_reentrance_count, code_hash_reentrance_count) =
+		compile_module::<Test>("reentrance_count_call").unwrap();
 
 	ExtBuilder::default().existential_deposit(100).build().execute_with(|| {
 		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
@@ -4509,14 +4509,14 @@ fn account_reentrance_count_works() {
 			300_000,
 			GAS_LIMIT,
 			None,
-			wasm_reentrant_count,
+			wasm_reentrance_count,
 			vec![],
 			vec![]
 		));
 
 		let contract_addr = Contracts::contract_address(&ALICE, &code_hash, &[]);
 		let another_contract_addr =
-			Contracts::contract_address(&ALICE, &code_hash_reentrant_count, &[]);
+			Contracts::contract_address(&ALICE, &code_hash_reentrance_count, &[]);
 
 		let result1 = Contracts::bare_call(
 			ALICE,

@@ -2045,7 +2045,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_set_code_hash {
+	seal_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
@@ -2085,13 +2085,13 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	reentrant_count {
+	seal_account_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "reentrant_count",
+				name: "reentrance_count",
 				params: vec![],
 				return_type: Some(ValueType::I32),
 			}],

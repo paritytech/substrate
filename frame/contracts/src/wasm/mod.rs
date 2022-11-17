@@ -614,7 +614,7 @@ mod tests {
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 			Ok([2u8; 20])
 		}
-		fn reentrant_count(&self) -> u32 {
+		fn reentrance_count(&self) -> u32 {
 			12
 		}
 		fn account_reentrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
@@ -2890,10 +2890,10 @@ mod tests {
 
 	#[test]
 	#[cfg(feature = "unstable-interface")]
-	fn reentrant_count_works() {
+	fn reentrance_count_works() {
 		const CODE: &str = r#"
 (module
-	(import "__unstable__" "reentrant_count" (func $reentrant_count (result i32)))
+	(import "__unstable__" "reentrance_count" (func $reentrance_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func $assert (param i32)
 		(block $ok
@@ -2906,7 +2906,7 @@ mod tests {
 	(func (export "call")
 		(local $return_val i32)
 		(set_local $return_val
-			(call $reentrant_count)
+			(call $reentrance_count)
 		)
 		(call $assert
 			(i32.eq (get_local $return_val) (i32.const 12))

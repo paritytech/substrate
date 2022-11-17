@@ -110,8 +110,8 @@ pub trait WeightInfo {
 	fn seal_ecdsa_recover(r: u32, ) -> Weight;
 	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight;
 	fn seal_set_code_hash(r: u32, ) -> Weight;
-	fn reentrant_count(r: u32, ) -> Weight;
-	fn account_reentrance_count(r: u32, ) -> Weight;
+	fn seal_reentrance_count(r: u32, ) -> Weight;
+	fn seal_account_reentrance_count(r: u32, ) -> Weight;
 	fn instr_i64const(r: u32, ) -> Weight;
 	fn instr_i64load(r: u32, ) -> Weight;
 	fn instr_i64store(r: u32, ) -> Weight;
@@ -1031,7 +1031,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System EventTopics (r:2 w:2)
 	/// The range of component `r` is `[0, 20]`.
-	fn reentrant_count(r: u32, ) -> Weight {
+	fn seal_reentrance_count(r: u32, ) -> Weight {
 		// Minimum execution time: 290_954 nanoseconds.
 		Weight::from_ref_time(295_190_436 as u64)
 			// Standard Error: 40_295
@@ -1045,7 +1045,7 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System EventTopics (r:2 w:2)
 	/// The range of component `r` is `[0, 20]`.
-	fn account_reentrance_count(r: u32, ) -> Weight {
+	fn seal_account_reentrance_count(r: u32, ) -> Weight {
 		// Minimum execution time: 292_817 nanoseconds.
 		Weight::from_ref_time(331_195_835 as u64)
 			// Standard Error: 126_642
@@ -2277,7 +2277,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System EventTopics (r:2 w:2)
 	/// The range of component `r` is `[0, 20]`.
-	fn reentrant_count(r: u32, ) -> Weight {
+	fn seal_reentrance_count(r: u32, ) -> Weight {
 		// Minimum execution time: 290_954 nanoseconds.
 		Weight::from_ref_time(295_190_436 as u64)
 			// Standard Error: 40_295
@@ -2291,7 +2291,7 @@ impl WeightInfo for () {
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: System EventTopics (r:2 w:2)
 	/// The range of component `r` is `[0, 20]`.
-	fn account_reentrance_count(r: u32, ) -> Weight {
+	fn seal_account_reentrance_count(r: u32, ) -> Weight {
 		// Minimum execution time: 292_817 nanoseconds.
 		Weight::from_ref_time(331_195_835 as u64)
 			// Standard Error: 126_642
