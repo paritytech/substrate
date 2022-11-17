@@ -613,7 +613,7 @@ mod tests {
 			}
 
 			// gas is an implementation defined function and a contract can't import it.
-			fn gas(_ctx: _, _memory: _, _amount: u32) -> Result<(), TrapReason> {
+			fn gas(_ctx: _, _memory: _, _amount: u64) -> Result<(), TrapReason> {
 				Ok(())
 			}
 
