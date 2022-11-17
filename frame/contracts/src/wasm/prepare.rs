@@ -41,7 +41,7 @@ pub const IMPORT_MODULE_MEMORY: &str = "env";
 
 /// Determines whether a module should be instantiated during preparation.
 pub enum TryInstantiate {
-	/// Do the innstantiation to make sure that the module is valid.
+	/// Do the instantiation to make sure that the module is valid.
 	///
 	/// This should be used if a module is only uploaded but not executed. We need
 	/// to make sure that it can be actually instantiated.
@@ -455,7 +455,7 @@ where
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
 		PrefabWasmModule::<T>::instantiate::<E, _>(
-			original_code,
+			code,
 			(),
 			(initial, maximum),
 			stack_limits,

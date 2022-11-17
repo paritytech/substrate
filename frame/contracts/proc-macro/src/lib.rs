@@ -214,7 +214,7 @@ impl HostFn {
 		}?;
 
 		// process arguments: The first and second arg are treated differently (ctx, memory)
-		// hhey must exist and be `ctx: _` and `memory: _`.
+		// they must exist and be `ctx: _` and `memory: _`.
 		let msg = "Every function must start with two inferred parameters: ctx: _ and memory: _";
 		let special_args = item
 			.sig
@@ -367,7 +367,6 @@ fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
 
 /// Expands environment definiton.
 /// Should generate source code for:
-///  - wasm import satisfy checks (see `expand_can_satisfy()`);
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
 fn expand_env(def: &mut EnvDef) -> TokenStream2 {
@@ -379,8 +378,9 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 	}
 }
 
-/// Generates implementation for every host function, to register it in the contract execution
-/// environment.
+/// Generates for every host function:
+///   - real implementation, to register it in the contract execution environment;
+///   - dummy implementation, to be used as mocks for contract validation step. 
 fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	let impls = expand_functions(def, true, quote! { crate::wasm::Runtime<E> });
 	let dummy_impls = expand_functions(def, false, quote! { () });
