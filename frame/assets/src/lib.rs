@@ -1306,8 +1306,8 @@ pub mod pallet {
 			let delegate = T::Lookup::lookup(delegate)?;
 			let mut d = Asset::<T, I>::get(&id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-			let approval =
-				Approvals::<T, I>::take((id.clone(), &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			let approval = Approvals::<T, I>::take((id.clone(), &owner, &delegate))
+				.ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
 
 			d.approvals.saturating_dec();
@@ -1350,8 +1350,8 @@ pub mod pallet {
 			let owner = T::Lookup::lookup(owner)?;
 			let delegate = T::Lookup::lookup(delegate)?;
 
-			let approval =
-				Approvals::<T, I>::take((id.clone(), &owner, &delegate)).ok_or(Error::<T, I>::Unknown)?;
+			let approval = Approvals::<T, I>::take((id.clone(), &owner, &delegate))
+				.ok_or(Error::<T, I>::Unknown)?;
 			T::Currency::unreserve(&owner, approval.deposit);
 			d.approvals.saturating_dec();
 			Asset::<T, I>::insert(id.clone(), d);

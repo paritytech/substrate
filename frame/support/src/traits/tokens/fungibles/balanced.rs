@@ -185,11 +185,12 @@ pub trait Unbalanced<AccountId>: Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> Result<Self::Balance, DispatchError> {
 		let old_balance = Self::balance(asset.clone(), who);
-		let (mut new_balance, mut amount) = if Self::reducible_balance(asset.clone(), who, false) < amount {
-			return Err(TokenError::NoFunds.into())
-		} else {
-			(old_balance - amount, amount)
-		};
+		let (mut new_balance, mut amount) =
+			if Self::reducible_balance(asset.clone(), who, false) < amount {
+				return Err(TokenError::NoFunds.into())
+			} else {
+				(old_balance - amount, amount)
+			};
 		if new_balance < Self::minimum_balance(asset.clone()) {
 			amount = amount.saturating_add(new_balance);
 			new_balance = Zero::zero();
@@ -352,11 +353,17 @@ impl<AccountId, U: Unbalanced<AccountId>> Balanced<AccountId> for U {
 	type OnDropCredit = DecreaseIssuance<AccountId, U>;
 	type OnDropDebt = IncreaseIssuance<AccountId, U>;
 	fn rescind(asset: Self::AssetId, amount: Self::Balance) -> Debt<AccountId, Self> {
-		U::set_total_issuance(asset.clone(), U::total_issuance(asset.clone()).saturating_sub(amount));
+		U::set_total_issuance(
+			asset.clone(),
+			U::total_issuance(asset.clone()).saturating_sub(amount),
+		);
 		debt(asset, amount)
 	}
 	fn issue(asset: Self::AssetId, amount: Self::Balance) -> Credit<AccountId, Self> {
-		U::set_total_issuance(asset.clone(), U::total_issuance(asset.clone()).saturating_add(amount));
+		U::set_total_issuance(
+			asset.clone(),
+			U::total_issuance(asset.clone()).saturating_add(amount),
+		);
 		credit(asset, amount)
 	}
 	fn slash(

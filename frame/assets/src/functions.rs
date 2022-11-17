@@ -393,24 +393,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
 			check(details)?;
 
-			Account::<T, I>::try_mutate(id.clone(), beneficiary, |maybe_account| -> DispatchResult {
-				match maybe_account {
-					Some(ref mut account) => {
-						account.balance.saturating_accrue(amount);
-					},
-					maybe_account @ None => {
-						// Note this should never fail as it's already checked by `can_increase`.
-						ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
-						*maybe_account = Some(AssetAccountOf::<T, I> {
-							balance: amount,
-							reason: Self::new_account(beneficiary, details, None)?,
-							is_frozen: false,
-							extra: T::Extra::default(),
-						});
-					},
-				}
-				Ok(())
-			})?;
+			Account::<T, I>::try_mutate(
+				id.clone(),
+				beneficiary,
+				|maybe_account| -> DispatchResult {
+					match maybe_account {
+						Some(ref mut account) => {
+							account.balance.saturating_accrue(amount);
+						},
+						maybe_account @ None => {
+							// Note this should never fail as it's already checked by
+							// `can_increase`.
+							ensure!(amount >= details.min_balance, TokenError::BelowMinimum);
+							*maybe_account = Some(AssetAccountOf::<T, I> {
+								balance: amount,
+								reason: Self::new_account(beneficiary, details, None)?,
+								is_frozen: false,
+								extra: T::Extra::default(),
+							});
+						},
+					}
+					Ok(())
+				},
+			)?;
 			Ok(())
 		})?;
 		Ok(())
@@ -696,8 +701,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<u32, DispatchError> {
 		let mut dead_accounts: Vec<T::AccountId> = vec![];
 		let mut remaining_accounts = 0;
-		let _ =
-			Asset::<T, I>::try_mutate_exists(id.clone(), |maybe_details| -> Result<(), DispatchError> {
+		let _ = Asset::<T, I>::try_mutate_exists(
+			id.clone(),
+			|maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				// Should only destroy accounts while the asset is in a destroying state
 				ensure!(details.status == AssetStatus::Destroying, Error::<T, I>::IncorrectStatus);
@@ -711,7 +717,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 				remaining_accounts = details.accounts;
 				Ok(())
-			})?;
+			},
+		)?;
 
 		for who in &dead_accounts {
 			T::Freezer::died(id.clone(), &who);
@@ -734,8 +741,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		max_items: u32,
 	) -> Result<u32, DispatchError> {
 		let mut removed_approvals = 0;
-		let _ =
-			Asset::<T, I>::try_mutate_exists(id.clone(), |maybe_details| -> Result<(), DispatchError> {
+		let _ = Asset::<T, I>::try_mutate_exists(
+			id.clone(),
+			|maybe_details| -> Result<(), DispatchError> {
 				let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 
 				// Should only destroy accounts while the asset is in a destroying state.
@@ -755,7 +763,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					approvals_remaining: details.approvals as u32,
 				});
 				Ok(())
-			})?;
+			},
+		)?;
 		Ok(removed_approvals)
 	}
 
@@ -852,7 +861,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					approved.amount.checked_sub(&amount).ok_or(Error::<T, I>::Unapproved)?;
 
 				let f = TransferFlags { keep_alive: false, best_effort: false, burn_dust: false };
-				owner_died = Self::transfer_and_die(id.clone(), owner, destination, amount, None, f)?.1;
+				owner_died =
+					Self::transfer_and_die(id.clone(), owner, destination, amount, None, f)?.1;
 
 				if remaining.is_zero() {
 					T::Currency::unreserve(owner, approved.deposit);
