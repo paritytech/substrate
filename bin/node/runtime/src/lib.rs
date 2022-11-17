@@ -1557,7 +1557,9 @@ impl pallet_nft_fractionalisation::Config for Runtime {
 	type Currency = Balances;
 	type CollectionId = Uniques;
 	type ItemId = Uniques;
-	type AssetId = Assets;
+	type AssetBalance = <Self as pallet_balances::Config>::Balance;
+	type Assets = Assets;
+	type AssetId = <Self as pallet_assets::Config>::AssetId;
 }
 
 impl pallet_transaction_storage::Config for Runtime {
