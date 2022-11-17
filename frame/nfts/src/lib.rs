@@ -727,12 +727,13 @@ pub mod pallet {
 						},
 						MintType::HolderOf(collection_id) => {
 							let correct_witness = match witness_data {
-								Some(MintWitness { owner_of_item }) =>
+								Some(MintWitness { owner_of_item }) => {
 									Account::<T, I>::contains_key((
 										&caller,
 										&collection_id,
 										&owner_of_item,
-									)),
+									))
+								},
 								None => false,
 							};
 							ensure!(correct_witness, Error::<T, I>::BadWitness)
@@ -911,10 +912,10 @@ pub mod pallet {
 					if T::Currency::reserve(&details.deposit.account, deposit - old).is_err() {
 						// NOTE: No alterations made to collection_details in this iteration so far,
 						// so this is OK to do.
-						continue
+						continue;
 					}
 				} else {
-					continue
+					continue;
 				}
 				details.deposit.amount = deposit;
 				Item::<T, I>::insert(&collection, &item, &details);

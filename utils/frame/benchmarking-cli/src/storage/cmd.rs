@@ -178,7 +178,7 @@ impl StorageCmd {
 		if let Some((ChildType::ParentKeyId, storage_key)) =
 			ChildType::from_prefixed_key(&PrefixedStorageKey::new(key))
 		{
-			return Some(ChildInfo::new_default(storage_key))
+			return Some(ChildInfo::new_default(storage_key));
 		}
 		None
 	}

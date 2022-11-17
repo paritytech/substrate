@@ -141,10 +141,10 @@ impl Values {
 
 	/// Checks if all individual collections are empty
 	pub fn is_empty(&self) -> bool {
-		self.bool_values.is_empty() &&
-			self.i64_values.is_empty() &&
-			self.u64_values.is_empty() &&
-			self.string_values.is_empty()
+		self.bool_values.is_empty()
+			&& self.i64_values.is_empty()
+			&& self.u64_values.is_empty()
+			&& self.string_values.is_empty()
 	}
 }
 
@@ -175,10 +175,10 @@ impl Serialize for Values {
 	where
 		S: Serializer,
 	{
-		let len = self.bool_values.len() +
-			self.i64_values.len() +
-			self.u64_values.len() +
-			self.string_values.len();
+		let len = self.bool_values.len()
+			+ self.i64_values.len()
+			+ self.u64_values.len()
+			+ self.string_values.len();
 		let mut map = serializer.serialize_map(Some(len))?;
 		for (k, v) in &self.bool_values {
 			map.serialize_entry(k, v)?;
@@ -250,7 +250,7 @@ impl ProfilingLayer {
 	fn check_target(&self, target: &str, level: &Level) -> bool {
 		for t in &self.targets {
 			if target.starts_with(t.0.as_str()) && level <= &t.1 {
-				return true
+				return true;
 			}
 		}
 		false
@@ -627,7 +627,7 @@ mod tests {
 				tracing::event!(target: "test_target", tracing::Level::INFO, "test_event1");
 				for msg in rx.recv() {
 					if !msg {
-						break
+						break;
 					}
 				}
 				// guard2 and span2 dropped / exited

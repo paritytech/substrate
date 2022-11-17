@@ -42,7 +42,7 @@ where
 	let size = NodesUtils::new(proof.leaf_count).size();
 
 	if leaves.len() != proof.leaf_indices.len() {
-		return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"))
+		return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"));
 	}
 
 	let leaves_and_position_data = proof
@@ -103,7 +103,7 @@ where
 		);
 
 		if leaves.len() != proof.leaf_indices.len() {
-			return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"))
+			return Err(Error::Verify.log_debug("Proof leaf_indices not same length with leaves"));
 		}
 
 		let leaves_positions_and_data = proof

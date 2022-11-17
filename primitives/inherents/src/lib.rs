@@ -313,7 +313,7 @@ impl CheckInherentsResult {
 	) -> Result<(), Error> {
 		// Don't accept any other error
 		if self.fatal_error {
-			return Err(Error::FatalErrorReported)
+			return Err(Error::FatalErrorReported);
 		}
 
 		if error.is_fatal_error() {
@@ -361,9 +361,9 @@ impl CheckInherentsResult {
 #[cfg(feature = "std")]
 impl PartialEq for CheckInherentsResult {
 	fn eq(&self, other: &Self) -> bool {
-		self.fatal_error == other.fatal_error &&
-			self.okay == other.okay &&
-			self.errors.data == other.errors.data
+		self.fatal_error == other.fatal_error
+			&& self.okay == other.okay
+			&& self.errors.data == other.errors.data
 	}
 }
 

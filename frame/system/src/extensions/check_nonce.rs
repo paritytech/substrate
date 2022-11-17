@@ -86,7 +86,7 @@ where
 			} else {
 				InvalidTransaction::Future
 			}
-			.into())
+			.into());
 		}
 		account.nonce += T::Index::one();
 		crate::Account::<T>::insert(who, account);
@@ -103,7 +103,7 @@ where
 		// check index
 		let account = crate::Account::<T>::get(who);
 		if self.0 < account.nonce {
-			return InvalidTransaction::Stale.into()
+			return InvalidTransaction::Stale.into();
 		}
 
 		let provides = vec![Encode::encode(&(who, self.0))];

@@ -80,7 +80,7 @@ pub fn display_and_check_bags<Runtime: RuntimeT<Instance1>>(
 			Some(bag) => bag,
 			None => {
 				log::info!(target: LOG_TARGET, "{} NO VOTERS.", pretty_thresh);
-				continue
+				continue;
 			},
 		};
 

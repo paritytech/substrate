@@ -89,7 +89,7 @@ impl<B: BlockT> Stream for NeighborPacketWorker<B> {
 				this.delay.reset(this.rebroadcast_period);
 				this.last = Some((to.clone(), packet.clone()));
 
-				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet))))
+				return Poll::Ready(Some((to, GossipMessage::<B>::from(packet))));
 			},
 			// Don't return yet, maybe the timer fired.
 			Poll::Pending => {},
@@ -108,7 +108,7 @@ impl<B: BlockT> Stream for NeighborPacketWorker<B> {
 		while let Poll::Ready(()) = this.delay.poll_unpin(cx) {}
 
 		if let Some((ref to, ref packet)) = this.last {
-			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))))
+			return Poll::Ready(Some((to.clone(), GossipMessage::<B>::from(packet.clone()))));
 		}
 
 		Poll::Pending

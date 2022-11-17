@@ -35,8 +35,8 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 
 	let max_encoded_size = match data {
 		syn::Data::Struct(syn::DataStruct { fields, .. }) => match fields {
-			syn::Fields::Named(syn::FieldsNamed { named: fields, .. }) |
-			syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
+			syn::Fields::Named(syn::FieldsNamed { named: fields, .. })
+			| syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
 				let maybe_field_tys = fields
 					.iter()
 					.map(|f| generate_field_types(f, &frame_support))
@@ -94,7 +94,7 @@ pub fn derive_pallet_error(input: proc_macro::TokenStream) -> proc_macro::TokenS
 		},
 		syn::Data::Union(syn::DataUnion { union_token, .. }) => {
 			let msg = "Cannot derive `PalletError` for union; please implement it directly";
-			return syn::Error::new(union_token.span, msg).into_compile_error().into()
+			return syn::Error::new(union_token.span, msg).into_compile_error().into();
 		},
 	};
 
@@ -127,13 +127,15 @@ fn generate_field_types(
 					{
 						syn::NestedMeta::Meta(syn::Meta::Path(path))
 							if path.get_ident().map_or(false, |i| i == "skip") =>
-							return Ok(None),
+						{
+							return Ok(None)
+						},
 
 						syn::NestedMeta::Meta(syn::Meta::Path(path))
 							if path.get_ident().map_or(false, |i| i == "compact") =>
 						{
 							let field_ty = &field.ty;
-							return Ok(Some(quote::quote!(#scrate::codec::Compact<#field_ty>)))
+							return Ok(Some(quote::quote!(#scrate::codec::Compact<#field_ty>)));
 						},
 
 						syn::NestedMeta::Meta(syn::Meta::NameValue(syn::MetaNameValue {
@@ -142,7 +144,7 @@ fn generate_field_types(
 							..
 						})) if path.get_ident().map_or(false, |i| i == "encoded_as") => {
 							let ty = proc_macro2::TokenStream::from_str(&lit_str.value())?;
-							return Ok(Some(ty))
+							return Ok(Some(ty));
 						},
 
 						_ => (),
@@ -173,7 +175,9 @@ fn generate_variant_field_types(
 					{
 						syn::NestedMeta::Meta(syn::Meta::Path(path))
 							if path.get_ident().map_or(false, |i| i == "skip") =>
-							return Ok(None),
+						{
+							return Ok(None)
+						},
 
 						_ => (),
 					}
@@ -184,8 +188,8 @@ fn generate_variant_field_types(
 	}
 
 	match &variant.fields {
-		syn::Fields::Named(syn::FieldsNamed { named: fields, .. }) |
-		syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
+		syn::Fields::Named(syn::FieldsNamed { named: fields, .. })
+		| syn::Fields::Unnamed(syn::FieldsUnnamed { unnamed: fields, .. }) => {
 			let field_tys = fields
 				.iter()
 				.map(|field| generate_field_types(field, scrate))

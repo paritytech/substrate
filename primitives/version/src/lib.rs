@@ -288,9 +288,9 @@ pub fn core_version_from_apis(apis: &ApisVec) -> Option<u32> {
 impl RuntimeVersion {
 	/// Check if this version matches other version for calling into runtime.
 	pub fn can_call_with(&self, other: &RuntimeVersion) -> bool {
-		self.spec_version == other.spec_version &&
-			self.spec_name == other.spec_name &&
-			self.authoring_version == other.authoring_version
+		self.spec_version == other.spec_version
+			&& self.spec_name == other.spec_name
+			&& self.authoring_version == other.authoring_version
 	}
 
 	/// Check if the given api with `api_id` is implemented and the version passes the given
@@ -344,8 +344,8 @@ impl NativeVersion {
 				"`spec_name` does not match `{}` vs `{}`",
 				self.runtime_version.spec_name, other.spec_name,
 			))
-		} else if self.runtime_version.authoring_version != other.authoring_version &&
-			!self.can_author_with.contains(&other.authoring_version)
+		} else if self.runtime_version.authoring_version != other.authoring_version
+			&& !self.can_author_with.contains(&other.authoring_version)
 		{
 			Err(format!(
 				"`authoring_version` does not match `{version}` vs `{other_version}` and \

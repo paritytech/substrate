@@ -222,7 +222,7 @@ pub mod pallet {
 			let add = T::Lookup::lookup(add)?;
 
 			if remove == add {
-				return Ok(())
+				return Ok(());
 			}
 
 			let mut members = <Members<T, I>>::get();

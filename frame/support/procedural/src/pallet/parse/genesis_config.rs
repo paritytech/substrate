@@ -42,7 +42,7 @@ impl GenesisConfigDef {
 			syn::Item::Struct(item) => (&item.vis, &item.ident, &item.generics),
 			_ => {
 				let msg = "Invalid pallet::genesis_config, expected enum or struct";
-				return Err(syn::Error::new(item.span(), msg))
+				return Err(syn::Error::new(item.span(), msg));
 			},
 		};
 
@@ -60,12 +60,12 @@ impl GenesisConfigDef {
 
 		if !matches!(vis, syn::Visibility::Public(_)) {
 			let msg = "Invalid pallet::genesis_config, GenesisConfig must be public";
-			return Err(syn::Error::new(item_span, msg))
+			return Err(syn::Error::new(item_span, msg));
 		}
 
 		if ident != "GenesisConfig" {
 			let msg = "Invalid pallet::genesis_config, ident must `GenesisConfig`";
-			return Err(syn::Error::new(ident.span(), msg))
+			return Err(syn::Error::new(ident.span(), msg));
 		}
 
 		Ok(GenesisConfigDef { index, genesis_config: ident.clone(), instances, gen_kind })

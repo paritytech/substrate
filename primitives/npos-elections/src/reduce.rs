@@ -64,7 +64,7 @@ type Map<A> = BTreeMap<(A, A), A>;
 fn combinations_2<T: Clone>(input: &[T]) -> Vec<(T, T)> {
 	let n = input.len();
 	if n < 2 {
-		return Default::default()
+		return Default::default();
 	}
 
 	let mut comb = Vec::with_capacity(n * (n - 1) / 2);
@@ -142,13 +142,13 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 						.filter(|(t, _)| *t == v1 || *t == v2)
 						.count() != 2
 					{
-						continue
+						continue;
 					}
 
 					// check if other_who voted for the same pair v1, v2.
 					let maybe_other_assignments = assignments.iter().find(|a| a.who == *other_who);
 					if maybe_other_assignments.is_none() {
-						continue
+						continue;
 					}
 					let other_assignment =
 						maybe_other_assignments.expect("value is checked to be 'Some'");
@@ -177,7 +177,7 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 					if other_votes_count < 2 {
 						// This is not a cycle. Replace and continue.
 						*other_who = who.clone();
-						continue
+						continue;
 					} else if other_votes_count == 2 {
 						// This is a cycle.
 						let mut who_cycle_votes: Vec<(A, ExtendedBalance)> = Vec::with_capacity(2);
@@ -188,7 +188,7 @@ fn reduce_4<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32 {
 						});
 
 						if who_cycle_votes.len() != 2 {
-							continue
+							continue;
 						}
 
 						// Align the targets similarly. This helps with the circulation below.
@@ -334,7 +334,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 			let maybe_dist = assignments[assignment_index].distribution.get(dist_index);
 			if maybe_dist.is_none() {
 				// The rest of this loop is moot.
-				break
+				break;
 			}
 			let (target, _) = maybe_dist.expect("Value checked to be some").clone();
 
@@ -361,17 +361,17 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 				(false, false) => {
 					Node::set_parent_of(&target_node, &voter_node);
 					dist_index += 1;
-					continue
+					continue;
 				},
 				(false, true) => {
 					Node::set_parent_of(&voter_node, &target_node);
 					dist_index += 1;
-					continue
+					continue;
 				},
 				(true, false) => {
 					Node::set_parent_of(&target_node, &voter_node);
 					dist_index += 1;
-					continue
+					continue;
 				},
 				(true, true) => { /* don't continue and execute the rest */ },
 			};
@@ -492,7 +492,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 						) => (min_value, min_target, min_voter, min_index, min_direction),
 						_ => {
 							sp_runtime::print("UNREACHABLE code reached in `reduce` algorithm. This must be a bug.");
-							break
+							break;
 						},
 					};
 
@@ -608,7 +608,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 							let current = voter_root_path[i].clone().borrow().id.who.clone();
 							let next = voter_root_path[i + 1].clone().borrow().id.who.clone();
 							if min_edge.contains(&current) && min_edge.contains(&next) {
-								break
+								break;
 							}
 							Node::set_parent_of(&voter_root_path[i + 1], &voter_root_path[i]);
 						}
@@ -619,7 +619,7 @@ fn reduce_all<A: IdentifierT>(assignments: &mut Vec<StakedAssignment<A>>) -> u32
 							let current = target_root_path[i].clone().borrow().id.who.clone();
 							let next = target_root_path[i + 1].clone().borrow().id.who.clone();
 							if min_edge.contains(&current) && min_edge.contains(&next) {
-								break
+								break;
 							}
 							Node::set_parent_of(&target_root_path[i + 1], &target_root_path[i]);
 						}

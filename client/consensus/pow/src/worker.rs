@@ -163,7 +163,7 @@ where
 						target: "pow",
 						"Unable to import mined block: seal is invalid",
 					);
-					return false
+					return false;
 				},
 				Err(err) => {
 					warn!(
@@ -171,7 +171,7 @@ where
 						"Unable to import mined block: {}",
 						err,
 					);
-					return false
+					return false;
 				},
 			}
 		} else {
@@ -179,7 +179,7 @@ where
 				target: "pow",
 				"Unable to import mined block: metadata does not exist",
 			);
-			return false
+			return false;
 		}
 
 		let build = if let Some(build) = {
@@ -196,7 +196,7 @@ where
 				target: "pow",
 				"Unable to import mined block: build does not exist",
 			);
-			return false
+			return false;
 		};
 
 		let seal = DigestItem::Seal(POW_ENGINE_ID, seal);

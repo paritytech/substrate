@@ -354,11 +354,13 @@ impl<'a> DigestItemRef<'a> {
 	/// return the opaque data it contains.
 	pub fn try_as_raw(&self, id: OpaqueDigestItemId) -> Option<&'a [u8]> {
 		match (id, self) {
-			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s)) |
-			(OpaqueDigestItemId::Seal(w), &Self::Seal(v, s)) |
-			(OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
+			(OpaqueDigestItemId::Consensus(w), &Self::Consensus(v, s))
+			| (OpaqueDigestItemId::Seal(w), &Self::Seal(v, s))
+			| (OpaqueDigestItemId::PreRuntime(w), &Self::PreRuntime(v, s))
 				if v == w =>
-				Some(s),
+			{
+				Some(s)
+			},
 			(OpaqueDigestItemId::Other, &Self::Other(s)) => Some(s),
 			_ => None,
 		}
@@ -464,14 +466,18 @@ mod tests {
 		let check = |digest_item_type: DigestItemType| {
 			let (variant_name, digest_item) = match digest_item_type {
 				DigestItemType::Other => ("Other", DigestItem::Other(Default::default())),
-				DigestItemType::Consensus =>
-					("Consensus", DigestItem::Consensus(Default::default(), Default::default())),
-				DigestItemType::Seal =>
-					("Seal", DigestItem::Seal(Default::default(), Default::default())),
-				DigestItemType::PreRuntime =>
-					("PreRuntime", DigestItem::PreRuntime(Default::default(), Default::default())),
-				DigestItemType::RuntimeEnvironmentUpdated =>
-					("RuntimeEnvironmentUpdated", DigestItem::RuntimeEnvironmentUpdated),
+				DigestItemType::Consensus => {
+					("Consensus", DigestItem::Consensus(Default::default(), Default::default()))
+				},
+				DigestItemType::Seal => {
+					("Seal", DigestItem::Seal(Default::default(), Default::default()))
+				},
+				DigestItemType::PreRuntime => {
+					("PreRuntime", DigestItem::PreRuntime(Default::default(), Default::default()))
+				},
+				DigestItemType::RuntimeEnvironmentUpdated => {
+					("RuntimeEnvironmentUpdated", DigestItem::RuntimeEnvironmentUpdated)
+				},
 			};
 			let encoded = digest_item.encode();
 			let variant = variants

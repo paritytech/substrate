@@ -118,7 +118,7 @@ pub fn generate_random_votes(
 
 		// distribute the available stake randomly
 		let stake_distribution = if num_chosen_winners == 0 {
-			continue
+			continue;
 		} else {
 			let mut available_stake = 1000;
 			let mut stake_distribution = Vec::with_capacity(num_chosen_winners);

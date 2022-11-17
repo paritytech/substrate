@@ -270,7 +270,7 @@ where
 		execution_context: ExecutionContext,
 	) -> Result<(), Error<B>> {
 		if *block.header().number() < self.check_inherents_after {
-			return Ok(())
+			return Ok(());
 		}
 
 		let inherent_data = inherent_data_providers
@@ -372,7 +372,7 @@ where
 			&inner_seal,
 			difficulty,
 		)? {
-			return Err(Error::<B>::InvalidSeal.into())
+			return Err(Error::<B>::InvalidSeal.into());
 		}
 
 		aux.difficulty = difficulty;
@@ -417,19 +417,20 @@ impl<B: BlockT, Algorithm> PowVerifier<B, Algorithm> {
 		let hash = header.hash();
 
 		let (seal, inner_seal) = match header.digest_mut().pop() {
-			Some(DigestItem::Seal(id, seal)) =>
+			Some(DigestItem::Seal(id, seal)) => {
 				if id == POW_ENGINE_ID {
 					(DigestItem::Seal(id, seal.clone()), seal)
 				} else {
-					return Err(Error::WrongEngine(id))
-				},
+					return Err(Error::WrongEngine(id));
+				}
+			},
 			_ => return Err(Error::HeaderUnsealed(hash)),
 		};
 
 		let pre_hash = header.hash();
 
 		if !self.algorithm.preliminary_verify(&pre_hash, &inner_seal)?.unwrap_or(true) {
-			return Err(Error::FailedPreliminaryVerify)
+			return Err(Error::FailedPreliminaryVerify);
 		}
 
 		Ok((header, seal))
@@ -526,13 +527,13 @@ where
 	let task = async move {
 		loop {
 			if timer.next().await.is_none() {
-				break
+				break;
 			}
 
 			if sync_oracle.is_major_syncing() {
 				debug!(target: "pow", "Skipping proposal due to sync.");
 				worker.on_major_syncing();
-				continue
+				continue;
 			}
 
 			let best_header = match select_chain.best_chain().await {
@@ -544,13 +545,13 @@ where
 						 Select best chain error: {}",
 						err
 					);
-					continue
+					continue;
 				},
 			};
 			let best_hash = best_header.hash();
 
 			if worker.best_hash() == Some(best_hash) {
-				continue
+				continue;
 			}
 
 			// The worker is locked for the duration of the whole proposing period. Within this
@@ -565,7 +566,7 @@ where
 						 Fetch difficulty failed: {}",
 						err,
 					);
-					continue
+					continue;
 				},
 			};
 
@@ -581,7 +582,7 @@ where
 						 Creating inherent data providers failed: {}",
 						err,
 					);
-					continue
+					continue;
 				},
 			};
 
@@ -594,7 +595,7 @@ where
 						 Creating inherent data failed: {}",
 						e,
 					);
-					continue
+					continue;
 				},
 			};
 
@@ -614,7 +615,7 @@ where
 						 Creating proposer failed: {:?}",
 						err,
 					);
-					continue
+					continue;
 				},
 			};
 
@@ -628,7 +629,7 @@ where
 							 Creating proposal failed: {}",
 							err,
 						);
-						continue
+						continue;
 					},
 				};
 
@@ -655,8 +656,9 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 	for log in header.digest().logs() {
 		trace!(target: "pow", "Checking log {:?}, looking for pre runtime digest", log);
 		match (log, pre_digest.is_some()) {
-			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) =>
-				return Err(Error::MultiplePreRuntimeDigests),
+			(DigestItem::PreRuntime(POW_ENGINE_ID, _), true) => {
+				return Err(Error::MultiplePreRuntimeDigests)
+			},
 			(DigestItem::PreRuntime(POW_ENGINE_ID, v), false) => {
 				pre_digest = Some(v.clone());
 			},
@@ -670,12 +672,13 @@ fn find_pre_digest<B: BlockT>(header: &B::Header) -> Result<Option<Vec<u8>>, Err
 /// Fetch PoW seal.
 fn fetch_seal<B: BlockT>(digest: Option<&DigestItem>, hash: B::Hash) -> Result<Vec<u8>, Error<B>> {
 	match digest {
-		Some(DigestItem::Seal(id, seal)) =>
+		Some(DigestItem::Seal(id, seal)) => {
 			if id == &POW_ENGINE_ID {
 				Ok(seal.clone())
 			} else {
 				Err(Error::<B>::WrongEngine(*id))
-			},
+			}
+		},
 		_ => Err(Error::<B>::HeaderUnsealed(hash)),
 	}
 }

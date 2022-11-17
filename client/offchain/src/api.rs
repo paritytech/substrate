@@ -118,8 +118,9 @@ impl<Storage: OffchainStorage> offchain::DbExternalities for Db<Storage> {
 			"CAS",
 		);
 		match kind {
-			StorageKind::PERSISTENT =>
-				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value),
+			StorageKind::PERSISTENT => {
+				self.persistent.compare_and_set(STORAGE_PREFIX, key, old_value, new_value)
+			},
 			StorageKind::LOCAL => unavailable_yet(LOCAL_DB),
 		}
 	}

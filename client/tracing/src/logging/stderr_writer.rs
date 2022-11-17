@@ -105,9 +105,9 @@ fn log_autoflush_thread() {
 			buffer = BUFFER.lock();
 			if buffer.len() >= ASYNC_FLUSH_THRESHOLD {
 				// While we were busy flushing we picked up enough logs to do another flush.
-				continue
+				continue;
 			} else {
-				break
+				break;
 			}
 		}
 	}

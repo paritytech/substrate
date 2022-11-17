@@ -156,7 +156,7 @@ impl WasmBuilder {
 
 			provide_dummy_wasm_binary_if_not_exist(&file_path);
 
-			return
+			return;
 		}
 
 		build_project(
@@ -186,8 +186,8 @@ fn generate_crate_skip_build_env_name() -> String {
 
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
-	env::var(crate::SKIP_BUILD_ENV).is_ok() ||
-		env::var(generate_crate_skip_build_env_name()).is_ok()
+	env::var(crate::SKIP_BUILD_ENV).is_ok()
+		|| env::var(generate_crate_skip_build_env_name()).is_ok()
 }
 
 /// Provide a dummy WASM binary if there doesn't exist one.

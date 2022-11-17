@@ -709,25 +709,25 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 		let weight = match *instruction {
 			End | Unreachable | Return | Else => 0,
 			I32Const(_) | I64Const(_) | Block(_) | Loop(_) | Nop | Drop => w.i64const,
-			I32Load(_, _) |
-			I32Load8S(_, _) |
-			I32Load8U(_, _) |
-			I32Load16S(_, _) |
-			I32Load16U(_, _) |
-			I64Load(_, _) |
-			I64Load8S(_, _) |
-			I64Load8U(_, _) |
-			I64Load16S(_, _) |
-			I64Load16U(_, _) |
-			I64Load32S(_, _) |
-			I64Load32U(_, _) => w.i64load,
-			I32Store(_, _) |
-			I32Store8(_, _) |
-			I32Store16(_, _) |
-			I64Store(_, _) |
-			I64Store8(_, _) |
-			I64Store16(_, _) |
-			I64Store32(_, _) => w.i64store,
+			I32Load(_, _)
+			| I32Load8S(_, _)
+			| I32Load8U(_, _)
+			| I32Load16S(_, _)
+			| I32Load16U(_, _)
+			| I64Load(_, _)
+			| I64Load8S(_, _)
+			| I64Load8U(_, _)
+			| I64Load16S(_, _)
+			| I64Load16U(_, _)
+			| I64Load32S(_, _)
+			| I64Load32U(_, _) => w.i64load,
+			I32Store(_, _)
+			| I32Store8(_, _)
+			| I32Store16(_, _)
+			| I64Store(_, _)
+			| I64Store8(_, _)
+			| I64Store16(_, _)
+			| I64Store32(_, _) => w.i64store,
 			Select => w.select,
 			If(_) => w.r#if,
 			Br(_) => w.br,
@@ -780,8 +780,9 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 			// Returning None makes the gas instrumentation fail which we intend for
 			// unsupported or unknown instructions. Offchain we might allow indeterminism and hence
 			// use the fallback weight for those instructions.
-			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 =>
-				w.fallback,
+			_ if matches!(self.determinism, Determinism::AllowIndeterminism) && w.fallback > 0 => {
+				w.fallback
+			},
 			_ => return None,
 		};
 		Some(weight)

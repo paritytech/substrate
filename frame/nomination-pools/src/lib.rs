@@ -502,9 +502,10 @@ impl<T: Config> PoolMember<T> {
 	) -> Result<(), Error<T>> {
 		if let Some(new_points) = self.points.checked_sub(&points_dissolved) {
 			match self.unbonding_eras.get_mut(&unbonding_era) {
-				Some(already_unbonding_points) =>
+				Some(already_unbonding_points) => {
 					*already_unbonding_points =
-						already_unbonding_points.saturating_add(points_issued),
+						already_unbonding_points.saturating_add(points_issued)
+				},
 				None => self
 					.unbonding_eras
 					.try_insert(unbonding_era, points_issued)
@@ -746,8 +747,8 @@ impl<T: Config> BondedPool<T> {
 	}
 
 	fn can_nominate(&self, who: &T::AccountId) -> bool {
-		self.is_root(who) ||
-			self.roles.nominator.as_ref().map_or(false, |nominator| nominator == who)
+		self.is_root(who)
+			|| self.roles.nominator.as_ref().map_or(false, |nominator| nominator == who)
 	}
 
 	fn can_kick(&self, who: &T::AccountId) -> bool {
@@ -840,9 +841,9 @@ impl<T: Config> BondedPool<T> {
 
 		// any unbond must comply with the balance condition:
 		ensure!(
-			is_full_unbond ||
-				balance_after_unbond >=
-					if is_depositor {
+			is_full_unbond
+				|| balance_after_unbond
+					>= if is_depositor {
 						Pallet::<T>::depositor_min_bond()
 					} else {
 						MinJoinBond::<T>::get()
@@ -874,7 +875,7 @@ impl<T: Config> BondedPool<T> {
 			},
 			(false, true) => {
 				// the depositor can simply not be unbonded permissionlessly, period.
-				return Err(Error::<T>::DoesNotHavePermission.into())
+				return Err(Error::<T>::DoesNotHavePermission.into());
 			},
 		};
 
@@ -1578,10 +1579,12 @@ pub mod pallet {
 				Self::do_reward_payout(&who, &mut member, &mut bonded_pool, &mut reward_pool)?;
 
 			let (points_issued, bonded) = match extra {
-				BondExtra::FreeBalance(amount) =>
-					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount),
-				BondExtra::Rewards =>
-					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed),
+				BondExtra::FreeBalance(amount) => {
+					(bonded_pool.try_bond_funds(&who, amount, BondType::Later)?, amount)
+				},
+				BondExtra::Rewards => {
+					(bonded_pool.try_bond_funds(&who, claimed, BondType::Later)?, claimed)
+				},
 			};
 
 			bonded_pool.ok_to_be_open()?;
@@ -2134,7 +2137,7 @@ impl<T: Config> Pallet<T> {
 				let current_reward_counter = reward_pool
 					.current_reward_counter(pool_member.pool_id, bonded_pool.points)
 					.ok()?;
-				return pool_member.pending_rewards(current_reward_counter).ok()
+				return pool_member.pending_rewards(current_reward_counter).ok();
 			}
 		}
 
@@ -2276,7 +2279,7 @@ impl<T: Config> Pallet<T> {
 		let balance = |x| T::U256ToBalance::convert(x);
 		if current_balance.is_zero() || current_points.is_zero() || points.is_zero() {
 			// There is nothing to unbond
-			return Zero::zero()
+			return Zero::zero();
 		}
 
 		// Equivalent of (current_balance / current_points) * points
@@ -2304,7 +2307,7 @@ impl<T: Config> Pallet<T> {
 		let pending_rewards = member.pending_rewards(current_reward_counter)?;
 
 		if pending_rewards.is_zero() {
-			return Ok(pending_rewards)
+			return Ok(pending_rewards);
 		}
 
 		// IFF the reward is non-zero alter the member and reward pool info.
@@ -2438,7 +2441,7 @@ impl<T: Config> Pallet<T> {
 	#[cfg(any(feature = "try-runtime", feature = "fuzzing", test, debug_assertions))]
 	pub fn do_try_state(level: u8) -> Result<(), &'static str> {
 		if level.is_zero() {
-			return Ok(())
+			return Ok(());
 		}
 		// note: while a bit wacky, since they have the same key, even collecting to vec should
 		// result in the same set of keys, in the same order.
@@ -2490,8 +2493,8 @@ impl<T: Config> Pallet<T> {
 				RewardPool::<T>::current_balance(id)
 			);
 			assert!(
-				RewardPool::<T>::current_balance(id) >=
-					pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
+				RewardPool::<T>::current_balance(id)
+					>= pools_members_pending_rewards.get(&id).map(|x| *x).unwrap_or_default()
 			)
 		});
 
@@ -2506,8 +2509,8 @@ impl<T: Config> Pallet<T> {
 
 			let depositor = PoolMembers::<T>::get(&bonded_pool.roles.depositor).unwrap();
 			assert!(
-				bonded_pool.is_destroying_and_only_depositor(depositor.active_points()) ||
-					depositor.active_points() >= MinCreateBond::<T>::get(),
+				bonded_pool.is_destroying_and_only_depositor(depositor.active_points())
+					|| depositor.active_points() >= MinCreateBond::<T>::get(),
 				"depositor must always have MinCreateBond stake in the pool, except for when the \
 				pool is being destroyed and the depositor is the last member",
 			);
@@ -2515,7 +2518,7 @@ impl<T: Config> Pallet<T> {
 		assert!(MaxPoolMembers::<T>::get().map_or(true, |max| all_members <= max));
 
 		if level <= 1 {
-			return Ok(())
+			return Ok(());
 		}
 
 		for (pool_id, _pool) in BondedPools::<T>::iter() {

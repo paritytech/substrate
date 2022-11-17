@@ -102,7 +102,7 @@ impl<B: BlockT, Transaction: Send + 'static> BasicQueue<B, Transaction> {
 impl<B: BlockT, Transaction: Send> ImportQueue<B> for BasicQueue<B, Transaction> {
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>) {
 		if blocks.is_empty() {
-			return
+			return;
 		}
 
 		trace!(target: "sync", "Scheduling {} blocks for import", blocks.len());
@@ -183,7 +183,7 @@ async fn block_import_process<B: BlockT, Transaction: Send + 'static>(
 					target: "block-import",
 					"Stopping block import because the import channel was closed!",
 				);
-				return
+				return;
 			},
 		};
 
@@ -257,26 +257,27 @@ impl<B: BlockT> BlockImportWorker<B> {
 						target: "block-import",
 						"Stopping block import because result channel was closed!",
 					);
-					return
+					return;
 				}
 
 				// Make sure to first process all justifications
 				while let Poll::Ready(justification) = futures::poll!(justification_port.next()) {
 					match justification {
-						Some(ImportJustification(who, hash, number, justification)) =>
-							worker.import_justification(who, hash, number, justification).await,
+						Some(ImportJustification(who, hash, number, justification)) => {
+							worker.import_justification(who, hash, number, justification).await
+						},
 						None => {
 							log::debug!(
 								target: "block-import",
 								"Stopping block import because justification channel was closed!",
 							);
-							return
+							return;
 						},
 					}
 				}
 
 				if let Poll::Ready(()) = futures::poll!(&mut block_import_process) {
-					return
+					return;
 				}
 
 				// All futures that we polled are now pending.
@@ -370,7 +371,7 @@ async fn import_many_blocks<B: BlockT, V: Verifier<B>, Transaction: Send + 'stat
 			Some(b) => b,
 			None => {
 				// No block left to import, success!
-				return ImportManyBlocksResult { block_count: count, imported, results }
+				return ImportManyBlocksResult { block_count: count, imported, results };
 			},
 		};
 

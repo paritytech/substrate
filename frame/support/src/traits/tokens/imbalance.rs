@@ -83,7 +83,7 @@ pub trait Imbalance<Balance>: Sized + TryDrop + Default {
 	{
 		let total: u32 = first.saturating_add(second);
 		if total == 0 {
-			return (Self::zero(), Self::zero())
+			return (Self::zero(), Self::zero());
 		}
 		let amount1 = self.peek().saturating_mul(first.into()) / total.into();
 		self.split(amount1)

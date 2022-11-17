@@ -241,7 +241,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 		error: &[u8],
 	) -> Option<Result<(), sp_inherents::Error>> {
 		if *identifier != INHERENT_IDENTIFIER {
-			return None
+			return None;
 		}
 
 		match InherentError::try_from(&INHERENT_IDENTIFIER, error)? {
@@ -253,7 +253,7 @@ impl sp_inherents::InherentDataProvider for InherentDataProvider {
 				if valid > timestamp + max_drift {
 					return Some(Err(sp_inherents::Error::Application(Box::from(
 						InherentError::TooFarInFuture,
-					))))
+					))));
 				}
 
 				let diff = valid.checked_sub(timestamp).unwrap_or_default();

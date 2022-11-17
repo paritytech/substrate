@@ -85,11 +85,12 @@ pub fn invoke(
 				wasmer::Val::I64(val) => Value::I64(val),
 				wasmer::Val::F32(val) => Value::F32(f32::to_bits(val)),
 				wasmer::Val::F64(val) => Value::F64(f64::to_bits(val)),
-				_ =>
+				_ => {
 					return Err(Error::Sandbox(format!(
 						"Unsupported return value: {:?}",
 						wasm_value,
-					))),
+					)))
+				},
 			};
 
 			Ok(Some(wasmer_value))
@@ -160,7 +161,7 @@ pub fn instantiate(
 					index
 				} else {
 					// Missing import (should we abort here?)
-					continue
+					continue;
 				};
 
 				let supervisor_func_index = guest_env
@@ -189,8 +190,9 @@ pub fn instantiate(
 		wasmer::Instance::new(&module, &import_object).map_err(|error| match error {
 			wasmer::InstantiationError::Link(_) => InstantiationError::Instantiation,
 			wasmer::InstantiationError::Start(_) => InstantiationError::StartTrapped,
-			wasmer::InstantiationError::HostEnvInitialization(_) =>
-				InstantiationError::EnvironmentDefinitionCorrupted,
+			wasmer::InstantiationError::HostEnvInitialization(_) => {
+				InstantiationError::EnvironmentDefinitionCorrupted
+			},
 			wasmer::InstantiationError::CpuFeature(_) => InstantiationError::CpuFeature,
 		})
 	})?;
@@ -217,8 +219,9 @@ fn dispatch_function(
 					wasmer::Val::I64(val) => Ok(Value::I64(*val)),
 					wasmer::Val::F32(val) => Ok(Value::F32(f32::to_bits(*val))),
 					wasmer::Val::F64(val) => Ok(Value::F64(f64::to_bits(*val))),
-					_ =>
-						Err(RuntimeError::new(format!("Unsupported function argument: {:?}", val))),
+					_ => {
+						Err(RuntimeError::new(format!("Unsupported function argument: {:?}", val)))
+					},
 				})
 				.collect::<std::result::Result<Vec<_>, _>>()?
 				.encode();
@@ -246,7 +249,7 @@ fn dispatch_function(
 					"Failed dealloction after failed write of invoke arguments",
 				)?;
 
-				return Err(RuntimeError::new("Can't write invoke args into memory"))
+				return Err(RuntimeError::new("Can't write invoke args into memory"));
 			}
 
 			// Perform the actuall call

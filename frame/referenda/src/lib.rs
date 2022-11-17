@@ -755,8 +755,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		when: T::BlockNumber,
 	) -> Option<(T::BlockNumber, ScheduleAddressOf<T, I>)> {
 		let alarm_interval = T::AlarmInterval::get().max(One::one());
-		let when = when.saturating_add(alarm_interval).saturating_sub(One::one()) /
-			(alarm_interval.saturating_mul(alarm_interval)).max(One::one());
+		let when = when.saturating_add(alarm_interval).saturating_sub(One::one())
+			/ (alarm_interval.saturating_mul(alarm_interval)).max(One::one());
 		let maybe_result = T::Scheduler::schedule(
 			DispatchTime::At(when),
 			None,
@@ -872,7 +872,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(c) => c,
 			Err(_) => {
 				debug_assert!(false, "Unable to create a bounded call from `one_fewer_deciding`??",);
-				return
+				return;
 			},
 		};
 		let maybe_result = T::Scheduler::schedule(
@@ -911,7 +911,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							false,
 							"Unable to create a bounded call from `nudge_referendum`??",
 						);
-						return false
+						return false;
 					},
 				};
 			status.alarm = Self::set_alarm(call, alarm);
@@ -1012,7 +1012,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						),
 						true,
 						ServiceBranch::TimedOut,
-					)
+					);
 				}
 			},
 			Some(deciding) => {
@@ -1044,7 +1044,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								),
 								true,
 								ServiceBranch::Approved,
-							)
+							);
 						},
 						Some(_) => ServiceBranch::ContinueConfirming,
 						None => {
@@ -1069,7 +1069,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							),
 							true,
 							ServiceBranch::Rejected,
-						)
+						);
 					}
 					if deciding.confirming.is_some() {
 						// Stop confirming
@@ -1159,7 +1159,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		id: TrackIdOf<T, I>,
 	) -> bool {
 		let x = Perbill::from_rational(elapsed.min(period), period);
-		support_needed.passing(x, tally.support(id)) &&
-			approval_needed.passing(x, tally.approval(id))
+		support_needed.passing(x, tally.support(id))
+			&& approval_needed.passing(x, tally.approval(id))
 	}
 }

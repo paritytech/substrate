@@ -45,7 +45,7 @@ impl<'a> HashDB<Hasher, DBValue> for SimpleTrie<'a> {
 	fn get(&self, key: &Hash, prefix: Prefix) -> Option<DBValue> {
 		let key = sp_trie::prefixed_key::<Hasher>(key, prefix);
 		if let Some(value) = self.overlay.get(&key) {
-			return value.clone()
+			return value.clone();
 		}
 		self.db.get(0, &key).expect("Database backend error")
 	}

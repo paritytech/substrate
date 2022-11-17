@@ -287,10 +287,11 @@ impl<H: PartialEq> PartialEq for ValueCacheKey<'_, H> {
 			(Self::Hash { hash, .. }, _) => *hash == other.get_hash(),
 			(_, Self::Hash { hash: other_hash, .. }) => self.get_hash() == *other_hash,
 			// If both are not the `Hash` variant, we compare all the values.
-			_ =>
-				self.get_hash() == other.get_hash() &&
-					self.storage_root() == other.storage_root() &&
-					self.storage_key() == other.storage_key(),
+			_ => {
+				self.get_hash() == other.get_hash()
+					&& self.storage_root() == other.storage_root()
+					&& self.storage_key() == other.storage_key()
+			},
 		}
 	}
 }
@@ -405,12 +406,14 @@ impl<H: Eq + std::hash::Hash + Clone + Copy + AsRef<[u8]>> SharedValueCache<H> {
 						"`SharedValueCached::update` was called with a key to add \
 						that uses the `Hash` variant. This would lead to potential hash collision!",
 					);
-					return
+					return;
 				},
-				ValueCacheKey::Ref { storage_key, storage_root, hash } =>
-					(storage_root, storage_key.into(), hash),
-				ValueCacheKey::Value { storage_root, storage_key, hash } =>
-					(storage_root, storage_key, hash),
+				ValueCacheKey::Ref { storage_key, storage_root, hash } => {
+					(storage_root, storage_key.into(), hash)
+				},
+				ValueCacheKey::Value { storage_root, storage_key, hash } => {
+					(storage_root, storage_key, hash)
+				},
 			};
 
 			let (size_update, storage_key) =

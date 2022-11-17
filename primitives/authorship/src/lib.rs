@@ -91,7 +91,7 @@ impl<H: HeaderT> sp_inherents::InherentDataProvider for InherentDataProvider<H> 
 		mut error: &[u8],
 	) -> Option<Result<(), Error>> {
 		if *identifier != INHERENT_IDENTIFIER {
-			return None
+			return None;
 		}
 
 		let error = InherentError::decode(&mut error).ok()?;

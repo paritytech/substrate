@@ -87,7 +87,7 @@ where
 		// block was already finalized
 		if self.recent_finalized_block == new_hash {
 			log::debug!(target: "txpool", "handle_enactment: block already finalized");
-			return Ok(None)
+			return Ok(None);
 		}
 
 		// compute actual tree route from best_block to notified block, and use
@@ -109,7 +109,7 @@ where
 				"Recently finalized block {} would be retracted by ChainEvent {}, skipping",
 				self.recent_finalized_block, new_hash
 			);
-			return Ok(None)
+			return Ok(None);
 		}
 
 		if finalized {
@@ -124,7 +124,7 @@ where
 					target: "txpool",
 					"handle_enactment: no newly enacted blocks since recent best block"
 				);
-				return Ok(None)
+				return Ok(None);
 			}
 
 			// otherwise enacted finalized block becomes best block...

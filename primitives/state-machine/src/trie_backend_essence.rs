@@ -273,7 +273,7 @@ where
 		#[cfg(feature = "std")]
 		{
 			if let Some(result) = self.cache.read().child_root.get(child_info.storage_key()) {
-				return Ok(*result)
+				return Ok(*result);
 			}
 		}
 
@@ -469,7 +469,7 @@ where
 				Ok(None) => return,
 				Err(e) => {
 					debug!(target: "trie", "Error while iterating child storage: {}", e);
-					return
+					return;
 				},
 			}
 		} else {
@@ -492,7 +492,7 @@ where
 			Ok(None) => return,
 			Err(e) => {
 				debug!(target: "trie", "Error while iterating child storage: {}", e);
-				return
+				return;
 			},
 		};
 
@@ -538,8 +538,9 @@ where
 					.build();
 				let prefix = maybe_prefix.unwrap_or(&[]);
 				let iter = match maybe_start_at {
-					Some(start_at) =>
-						TrieDBKeyIterator::new_prefixed_then_seek(&trie, prefix, start_at),
+					Some(start_at) => {
+						TrieDBKeyIterator::new_prefixed_then_seek(&trie, prefix, start_at)
+					},
 					None => TrieDBKeyIterator::new_prefixed(&trie, prefix),
 				}?;
 
@@ -552,7 +553,7 @@ where
 						.unwrap_or(true));
 
 					if !f(&key) {
-						break
+						break;
 					}
 				}
 
@@ -599,7 +600,7 @@ where
 					debug_assert!(key.starts_with(prefix));
 
 					if !f(key, value) {
-						return Ok(false)
+						return Ok(false);
 					}
 				}
 
@@ -615,8 +616,9 @@ where
 		};
 		match result {
 			Ok(completed) => Ok(completed),
-			Err(e) if matches!(*e, TrieError::IncompleteDatabase(_)) && allow_missing_nodes =>
-				Ok(false),
+			Err(e) if matches!(*e, TrieError::IncompleteDatabase(_)) && allow_missing_nodes => {
+				Ok(false)
+			},
 			Err(e) => Err(format!("TrieDB iteration error: {}", e)),
 		}
 	}
@@ -727,7 +729,7 @@ where
 			self.with_recorder_and_cache_for_storage_root(Some(child_root), |recorder, cache| {
 				let mut eph = Ephemeral::new(self.backend_storage(), &mut write_overlay);
 				match match state_version {
-					StateVersion::V0 =>
+					StateVersion::V0 => {
 						child_delta_trie_root::<sp_trie::LayoutV0<H>, _, _, _, _, _, _>(
 							child_info.keyspace(),
 							&mut eph,
@@ -735,8 +737,9 @@ where
 							delta,
 							recorder,
 							cache,
-						),
-					StateVersion::V1 =>
+						)
+					},
+					StateVersion::V1 => {
 						child_delta_trie_root::<sp_trie::LayoutV1<H>, _, _, _, _, _, _>(
 							child_info.keyspace(),
 							&mut eph,
@@ -744,7 +747,8 @@ where
 							delta,
 							recorder,
 							cache,
-						),
+						)
+					},
 				} {
 					Ok(ret) => (Some(ret), ret),
 					Err(e) => {
@@ -876,7 +880,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: AsLocalTrieCache<H> + Send + Sync> 
 {
 	fn get(&self, key: &H::Out, prefix: Prefix) -> Option<DBValue> {
 		if *key == self.empty {
-			return Some([0u8].to_vec())
+			return Some([0u8].to_vec());
 		}
 		match self.storage.get(key, prefix) {
 			Ok(x) => x,

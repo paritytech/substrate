@@ -165,16 +165,16 @@ where
 
 	/// Returns `true` iff all storage entries related to code storage exist.
 	fn code_exists(hash: &CodeHash<T>) -> bool {
-		<PristineCode<T>>::contains_key(hash) &&
-			<CodeStorage<T>>::contains_key(&hash) &&
-			<OwnerInfoOf<T>>::contains_key(&hash)
+		<PristineCode<T>>::contains_key(hash)
+			&& <CodeStorage<T>>::contains_key(&hash)
+			&& <OwnerInfoOf<T>>::contains_key(&hash)
 	}
 
 	/// Returns `true` iff no storage entry related to code storage exist.
 	fn code_removed(hash: &CodeHash<T>) -> bool {
-		!<PristineCode<T>>::contains_key(hash) &&
-			!<CodeStorage<T>>::contains_key(&hash) &&
-			!<OwnerInfoOf<T>>::contains_key(&hash)
+		!<PristineCode<T>>::contains_key(hash)
+			&& !<CodeStorage<T>>::contains_key(&hash)
+			&& !<OwnerInfoOf<T>>::contains_key(&hash)
 	}
 }
 

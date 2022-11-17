@@ -57,7 +57,7 @@ fn kill_transaction_level() {
 fn inc_transaction_level() -> Result<StorageLayerGuard, ()> {
 	let existing_levels = get_transaction_level();
 	if existing_levels >= TRANSACTIONAL_LIMIT {
-		return Err(())
+		return Err(());
 	}
 	// Cannot overflow because of check above.
 	set_transaction_level(existing_levels + 1);
@@ -232,7 +232,7 @@ mod tests {
 
 	fn recursive_transactional(num: u32) -> DispatchResult {
 		if num == 0 {
-			return Ok(())
+			return Ok(());
 		}
 
 		with_transaction(|| -> TransactionOutcome<DispatchResult> {

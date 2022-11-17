@@ -197,15 +197,16 @@ impl NetworkParams {
 		// Activate if the user explicitly requested local discovery, `--dev` is given or the
 		// chain type is `Local`/`Development`
 		let allow_non_globals_in_dht =
-			self.discover_local ||
-				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
+			self.discover_local
+				|| is_dev || matches!(chain_type, ChainType::Local | ChainType::Development);
 
 		let allow_private_ipv4 = match (self.allow_private_ipv4, self.no_private_ipv4) {
 			(true, true) => unreachable!("`*_private_ipv4` flags are mutually exclusive; qed"),
 			(true, false) => true,
 			(false, true) => false,
-			(false, false) =>
-				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development),
+			(false, false) => {
+				is_dev || matches!(chain_type, ChainType::Local | ChainType::Development)
+			},
 		};
 
 		NetworkConfiguration {

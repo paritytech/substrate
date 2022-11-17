@@ -376,8 +376,9 @@ where
 
 				match result {
 					Ok(b) => b,
-					Err(crate::request_responses::RegisterError::DuplicateProtocol(proto)) =>
-						return Err(Error::DuplicateRequestResponseProtocol { protocol: proto }),
+					Err(crate::request_responses::RegisterError::DuplicateProtocol(proto)) => {
+						return Err(Error::DuplicateRequestResponseProtocol { protocol: proto })
+					},
 				}
 			};
 
@@ -602,7 +603,7 @@ where
 					} else {
 						error!(target: "sub-libp2p", "Found state inconsistency between custom protocol \
 						and debug information about {:?}", peer_id);
-						return None
+						return None;
 					};
 
 					Some((
@@ -896,7 +897,7 @@ where
 	fn add_reserved_peer(&self, peer: MultiaddrWithPeerId) -> Result<(), String> {
 		// Make sure the local peer ID is never added to the PSM.
 		if peer.peer_id == self.local_peer_id {
-			return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+			return Err("Local peer ID cannot be added as a reserved peer.".to_string());
 		}
 
 		let _ = self
@@ -922,7 +923,7 @@ where
 		for (peer_id, addr) in peers_addrs.into_iter() {
 			// Make sure the local peer ID is never added to the PSM.
 			if peer_id == self.local_peer_id {
-				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string());
 			}
 
 			peers.insert(peer_id);
@@ -951,7 +952,7 @@ where
 		for (peer_id, addr) in peers.into_iter() {
 			// Make sure the local peer ID is never added to the PSM.
 			if peer_id == self.local_peer_id {
-				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string());
 			}
 
 			if !addr.is_empty() {
@@ -985,7 +986,7 @@ where
 		for (peer_id, addr) in peers.into_iter() {
 			// Make sure the local peer ID is never added to the PSM.
 			if peer_id == self.local_peer_id {
-				return Err("Local peer ID cannot be added as a reserved peer.".to_string())
+				return Err("Local peer ID cannot be added as a reserved peer.".to_string());
 			}
 
 			if !addr.is_empty() {
@@ -1045,7 +1046,7 @@ where
 					"Attempted to send notification on missing or closed substream: {}, {:?}",
 					target, protocol,
 				);
-				return
+				return;
 			}
 		};
 
@@ -1077,7 +1078,7 @@ where
 			if let Some(sink) = peers_notifications_sinks.get(&(target, protocol.clone())) {
 				sink.clone()
 			} else {
-				return Err(NotificationSenderError::Closed)
+				return Err(NotificationSenderError::Closed);
 			}
 		};
 
@@ -1329,7 +1330,7 @@ where
 			num_iterations += 1;
 			if num_iterations >= 100 {
 				cx.waker().wake_by_ref();
-				break
+				break;
 			}
 
 			// Process the next message coming from the `NetworkService`.
@@ -1354,10 +1355,12 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.clear_justification_requests(),
-				ServiceToWorkerMsg::GetValue(key) =>
-					this.network_service.behaviour_mut().get_value(key),
-				ServiceToWorkerMsg::PutValue(key, value) =>
-					this.network_service.behaviour_mut().put_value(key, value),
+				ServiceToWorkerMsg::GetValue(key) => {
+					this.network_service.behaviour_mut().get_value(key)
+				},
+				ServiceToWorkerMsg::PutValue(key, value) => {
+					this.network_service.behaviour_mut().put_value(key, value)
+				},
 				ServiceToWorkerMsg::SetReservedOnly(reserved_only) => this
 					.network_service
 					.behaviour_mut()
@@ -1393,8 +1396,9 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.remove_set_reserved_peer(protocol, peer_id),
-				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) =>
-					this.network_service.behaviour_mut().add_known_address(peer_id, addr),
+				ServiceToWorkerMsg::AddKnownAddress(peer_id, addr) => {
+					this.network_service.behaviour_mut().add_known_address(peer_id, addr)
+				},
 				ServiceToWorkerMsg::AddToPeersSet(protocol, peer_id) => this
 					.network_service
 					.behaviour_mut()
@@ -1447,7 +1451,7 @@ where
 			num_iterations += 1;
 			if num_iterations >= 1000 {
 				cx.waker().wake_by_ref();
-				break
+				break;
 			}
 
 			// Process the next action coming from the network.
@@ -1575,11 +1579,15 @@ where
 									// inbound request whenever a request with an unsupported
 									// protocol is received. This is not reported in order to
 									// avoid confusions.
-										continue,
-									ResponseFailure::Network(InboundFailure::ResponseOmission) =>
-										"busy-omitted",
-									ResponseFailure::Network(InboundFailure::ConnectionClosed) =>
-										"connection-closed",
+									{
+										continue
+									},
+									ResponseFailure::Network(InboundFailure::ResponseOmission) => {
+										"busy-omitted"
+									},
+									ResponseFailure::Network(InboundFailure::ConnectionClosed) => {
+										"connection-closed"
+									},
 								};
 
 								metrics
@@ -1595,7 +1603,7 @@ where
 					duration,
 					result,
 					..
-				})) =>
+				})) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						match result {
 							Ok(_) => {
@@ -1610,11 +1618,13 @@ where
 									RequestFailure::UnknownProtocol => "unknown-protocol",
 									RequestFailure::Refused => "refused",
 									RequestFailure::Obsolete => "obsolete",
-									RequestFailure::Network(OutboundFailure::DialFailure) =>
-										"dial-failure",
+									RequestFailure::Network(OutboundFailure::DialFailure) => {
+										"dial-failure"
+									},
 									RequestFailure::Network(OutboundFailure::Timeout) => "timeout",
-									RequestFailure::Network(OutboundFailure::ConnectionClosed) =>
-										"connection-closed",
+									RequestFailure::Network(OutboundFailure::ConnectionClosed) => {
+										"connection-closed"
+									},
 									RequestFailure::Network(
 										OutboundFailure::UnsupportedProtocols,
 									) => "unsupported",
@@ -1626,14 +1636,16 @@ where
 									.inc();
 							},
 						}
-					},
+					}
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::ReputationChanges {
 					peer,
 					changes,
-				})) =>
+				})) => {
 					for change in changes {
 						this.network_service.behaviour().user_protocol().report_peer(peer, change);
-					},
+					}
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::PeerIdentify {
 					peer_id,
 					info:
@@ -1669,10 +1681,11 @@ where
 						.user_protocol_mut()
 						.add_default_set_discovered_nodes(iter::once(peer_id));
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) => {
 					if let Some(metrics) = this.metrics.as_ref() {
 						metrics.kademlia_random_queries_total.inc();
-					},
+					}
+				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
 					protocol,
@@ -1894,14 +1907,15 @@ where
 						let reason = match error {
 							DialError::ConnectionLimit(_) => Some("limit-reached"),
 							DialError::InvalidPeerId(_) => Some("invalid-peer-id"),
-							DialError::Transport(_) | DialError::ConnectionIo(_) =>
-								Some("transport-error"),
-							DialError::Banned |
-							DialError::LocalPeerId |
-							DialError::NoAddresses |
-							DialError::DialPeerConditionFalse(_) |
-							DialError::WrongPeerId { .. } |
-							DialError::Aborted => None, // ignore them
+							DialError::Transport(_) | DialError::ConnectionIo(_) => {
+								Some("transport-error")
+							},
+							DialError::Banned
+							| DialError::LocalPeerId
+							| DialError::NoAddresses
+							| DialError::DialPeerConditionFalse(_)
+							| DialError::WrongPeerId { .. }
+							| DialError::Aborted => None, // ignore them
 						};
 						if let Some(reason) = reason {
 							metrics
@@ -1935,8 +1949,8 @@ where
 						let reason = match error {
 							PendingConnectionError::ConnectionLimit(_) => Some("limit-reached"),
 							PendingConnectionError::WrongPeerId { .. } => Some("invalid-peer-id"),
-							PendingConnectionError::Transport(_) |
-							PendingConnectionError::IO(_) => Some("transport-error"),
+							PendingConnectionError::Transport(_)
+							| PendingConnectionError::IO(_) => Some("transport-error"),
 							PendingConnectionError::Aborted => None, // ignore it
 						};
 
@@ -2113,7 +2127,7 @@ fn ensure_addresses_consistent_with_transport<'a>(
 			return Err(Error::AddressesForAnotherTransport {
 				transport: transport.clone(),
 				addresses,
-			})
+			});
 		}
 	} else {
 		let addresses: Vec<_> = addresses
@@ -2125,7 +2139,7 @@ fn ensure_addresses_consistent_with_transport<'a>(
 			return Err(Error::AddressesForAnotherTransport {
 				transport: transport.clone(),
 				addresses,
-			})
+			});
 		}
 	}
 

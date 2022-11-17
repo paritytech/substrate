@@ -62,7 +62,7 @@ pub fn phragmms<AccountId: IdentifierT, P: PerThing128>(
 				balance(&mut voters, config);
 			}
 		} else {
-			break
+			break;
 		}
 	}
 

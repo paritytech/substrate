@@ -46,8 +46,9 @@ impl KeyValueDB for ParityDbWrapper {
 	fn write(&self, transaction: DBTransaction) -> io::Result<()> {
 		self.0
 			.commit(transaction.ops.iter().map(|op| match op {
-				kvdb::DBOp::Insert { col, key, value } =>
-					(*col as u8, &key[key.len() - 32..], Some(value.to_vec())),
+				kvdb::DBOp::Insert { col, key, value } => {
+					(*col as u8, &key[key.len() - 32..], Some(value.to_vec()))
+				},
 				kvdb::DBOp::Delete { col, key } => (*col as u8, &key[key.len() - 32..], None),
 				kvdb::DBOp::DeletePrefix { col: _, prefix: _ } => unimplemented!(),
 			}))

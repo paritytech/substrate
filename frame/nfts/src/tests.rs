@@ -1606,12 +1606,7 @@ fn claim_swap_should_work() {
 
 		assert_ok!(Nfts::force_create(RuntimeOrigin::root(), user_1, default_collection_config()));
 
-		assert_ok!(Nfts::mint(
-			RuntimeOrigin::signed(user_1),
-			collection_id,
-			item_1,
-			None,
-		));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_1, None,));
 		assert_ok!(Nfts::force_mint(
 			RuntimeOrigin::signed(user_1),
 			collection_id,
@@ -1626,12 +1621,7 @@ fn claim_swap_should_work() {
 			user_2,
 			default_item_config(),
 		));
-		assert_ok!(Nfts::mint(
-			RuntimeOrigin::signed(user_1),
-			collection_id,
-			item_4,
-			None,
-		));
+		assert_ok!(Nfts::mint(RuntimeOrigin::signed(user_1), collection_id, item_4, None,));
 		assert_ok!(Nfts::force_mint(
 			RuntimeOrigin::signed(user_1),
 			collection_id,
@@ -1860,9 +1850,9 @@ fn collection_locking_should_work() {
 
 		let stored_config = CollectionConfigOf::<Test>::get(collection_id).unwrap();
 		let full_lock_config = collection_config_from_disabled_settings(
-			CollectionSetting::TransferableItems |
-				CollectionSetting::UnlockedMetadata |
-				CollectionSetting::UnlockedAttributes,
+			CollectionSetting::TransferableItems
+				| CollectionSetting::UnlockedMetadata
+				| CollectionSetting::UnlockedAttributes,
 		);
 		assert_eq!(stored_config, full_lock_config);
 	});

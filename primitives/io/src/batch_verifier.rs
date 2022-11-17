@@ -65,7 +65,7 @@ impl BatchVerifier {
 	) -> bool {
 		// there is already invalid transaction encountered
 		if self.invalid.load(AtomicOrdering::Relaxed) {
-			return false
+			return false;
 		}
 
 		let invalid_clone = self.invalid.clone();
@@ -118,7 +118,7 @@ impl BatchVerifier {
 		message: Vec<u8>,
 	) -> bool {
 		if self.invalid.load(AtomicOrdering::Relaxed) {
-			return false
+			return false;
 		}
 		self.sr25519_items.push(Sr25519BatchItem { signature, pub_key, message });
 
@@ -172,7 +172,7 @@ impl BatchVerifier {
 		);
 
 		if !Self::verify_sr25519_batch(std::mem::take(&mut self.sr25519_items)) {
-			return false
+			return false;
 		}
 
 		if pending.len() > 0 {
@@ -196,7 +196,7 @@ impl BatchVerifier {
 					"Haven't received async result from verification task. Returning false.",
 				);
 
-				return false
+				return false;
 			}
 		}
 

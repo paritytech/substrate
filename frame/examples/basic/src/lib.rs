@@ -750,7 +750,7 @@ where
 	) -> TransactionValidity {
 		// if the transaction is too big, just drop it.
 		if len > 200 {
-			return InvalidTransaction::ExhaustsResources.into()
+			return InvalidTransaction::ExhaustsResources.into();
 		}
 
 		// check for `set_dummy`

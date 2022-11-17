@@ -66,7 +66,7 @@ pub mod utils {
 	{
 		move |base, hash| {
 			if base == hash {
-				return Ok(false)
+				return Ok(false);
 			}
 
 			let current = current.as_ref().map(|(c, p)| (c.borrow(), p.borrow()));
@@ -74,11 +74,11 @@ pub mod utils {
 			let mut hash = hash;
 			if let Some((current_hash, current_parent_hash)) = current {
 				if base == current_hash {
-					return Ok(false)
+					return Ok(false);
 				}
 				if hash == current_hash {
 					if base == current_parent_hash {
-						return Ok(true)
+						return Ok(true);
 					} else {
 						hash = current_parent_hash;
 					}

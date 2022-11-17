@@ -206,7 +206,7 @@ impl<T: Config> Pallet<T> {
 		origin: T::RuntimeOrigin,
 	) -> Result<Option<T::AccountId>, BadOrigin> {
 		if T::ManagerOrigin::ensure_origin(origin.clone()).is_ok() {
-			return Ok(None)
+			return Ok(None);
 		}
 		let who = ensure_signed(origin)?;
 		Ok(Some(who))
@@ -230,12 +230,15 @@ impl<T: Config> Pallet<T> {
 		// We take a deposit only if there is a provided depositor and the preimage was not
 		// previously requested. This also allows the tx to pay no fee.
 		let status = match (StatusFor::<T>::get(hash), maybe_depositor) {
-			(Some(RequestStatus::Requested { count, deposit, .. }), _) =>
-				RequestStatus::Requested { count, deposit, len: Some(len) },
-			(Some(RequestStatus::Unrequested { .. }), Some(_)) =>
-				return Err(Error::<T>::AlreadyNoted.into()),
-			(Some(RequestStatus::Unrequested { len, deposit }), None) =>
-				RequestStatus::Requested { deposit: Some(deposit), count: 1, len: Some(len) },
+			(Some(RequestStatus::Requested { count, deposit, .. }), _) => {
+				RequestStatus::Requested { count, deposit, len: Some(len) }
+			},
+			(Some(RequestStatus::Unrequested { .. }), Some(_)) => {
+				return Err(Error::<T>::AlreadyNoted.into())
+			},
+			(Some(RequestStatus::Unrequested { len, deposit }), None) => {
+				RequestStatus::Requested { deposit: Some(deposit), count: 1, len: Some(len) }
+			},
 			(None, None) => RequestStatus::Requested { count: 1, len: Some(len), deposit: None },
 			(None, Some(depositor)) => {
 				let length = preimage.len() as u32;

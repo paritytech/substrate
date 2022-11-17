@@ -49,7 +49,7 @@ impl DataSegmentsSnapshot {
 
 				// [op, End]
 				if init_expr.len() != 2 {
-					return Err(Error::InitializerHasTooManyExpressions)
+					return Err(Error::InitializerHasTooManyExpressions);
 				}
 				let offset = match &init_expr[0] {
 					Instruction::I32Const(v) => *v as u32,
@@ -60,7 +60,7 @@ impl DataSegmentsSnapshot {
 						// At the moment of writing the Substrate Runtime Interface does not provide
 						// any globals. There is nothing that prevents us from supporting this
 						// if/when we gain those.
-						return Err(Error::ImportedGlobalsUnsupported)
+						return Err(Error::ImportedGlobalsUnsupported);
 					},
 					insn => return Err(Error::InvalidInitializerExpression(format!("{:?}", insn))),
 				};

@@ -136,8 +136,7 @@ pub mod pallet {
 			match Self::do_lock_nft(origin.clone(), collection_id, item_id) {
 				Err(e) => return Err(e),
 				//Ok(()) => match Self::do_create_asset(origin.clone(), asset_id, admin, min_balance)
-				Ok(()) => match Self::do_create_asset(asset_id, admin_account_id, min_balance)
-				{
+				Ok(()) => match Self::do_create_asset(asset_id, admin_account_id, min_balance) {
 					Err(e) => return Err(e),
 					Ok(()) => match Self::do_mint_asset(
 						// Minting the asset is only possible from the pallet's origin.

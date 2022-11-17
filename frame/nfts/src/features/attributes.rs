@@ -60,8 +60,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let old_deposit = attribute.map_or(Zero::zero(), |m| m.1);
 		collection_details.total_deposit.saturating_reduce(old_deposit);
 		let mut deposit = Zero::zero();
-		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired) &&
-			maybe_check_owner.is_some()
+		if collection_config.is_setting_enabled(CollectionSetting::DepositRequired)
+			&& maybe_check_owner.is_some()
 		{
 			deposit = T::DepositPerByte::get()
 				.saturating_mul(((key.len() + value.len()) as u32).into())

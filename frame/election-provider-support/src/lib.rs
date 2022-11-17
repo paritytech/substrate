@@ -387,12 +387,13 @@ pub trait ElectionProviderBase {
 	/// [`Self::MaxWinners`].
 	fn desired_targets_checked() -> data_provider::Result<u32> {
 		match Self::DataProvider::desired_targets() {
-			Ok(desired_targets) =>
+			Ok(desired_targets) => {
 				if desired_targets <= Self::MaxWinners::get() {
 					Ok(desired_targets)
 				} else {
 					Err("desired_targets should not be greater than MaxWinners")
-				},
+				}
+			},
 			Err(e) => Err(e),
 		}
 	}

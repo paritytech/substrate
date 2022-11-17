@@ -114,12 +114,13 @@ where
 	for (id, ref mut peer) in peers.iter_mut() {
 		for (message_hash, topic, message) in messages.clone() {
 			let intent = match intent {
-				MessageIntent::Broadcast { .. } =>
+				MessageIntent::Broadcast { .. } => {
 					if peer.known_messages.contains(message_hash) {
-						continue
+						continue;
 					} else {
 						MessageIntent::Broadcast
-					},
+					}
+				},
 				MessageIntent::PeriodicRebroadcast => {
 					if peer.known_messages.contains(message_hash) {
 						MessageIntent::PeriodicRebroadcast
@@ -133,7 +134,7 @@ where
 			};
 
 			if !message_allowed(id, intent, topic, message) {
-				continue
+				continue;
 			}
 
 			peer.known_messages.insert(*message_hash);
@@ -355,7 +356,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 					"Ignored already known message",
 				);
 				network.report_peer(who, rep::DUPLICATE_GOSSIP);
-				continue
+				continue;
 			}
 
 			// validate the message
@@ -375,7 +376,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 						protocol = %self.protocol,
 						"Discard message from peer",
 					);
-					continue
+					continue;
 				},
 			};
 
@@ -388,7 +389,7 @@ impl<B: BlockT> ConsensusGossip<B> {
 						protocol = %self.protocol,
 						"Got message from unregistered peer",
 					);
-					continue
+					continue;
 				},
 			};
 
@@ -421,11 +422,11 @@ impl<B: BlockT> ConsensusGossip<B> {
 					if force { MessageIntent::ForcedBroadcast } else { MessageIntent::Broadcast };
 
 				if !force && peer.known_messages.contains(&entry.message_hash) {
-					continue
+					continue;
 				}
 
 				if !message_allowed(who, intent, &entry.topic, &entry.message) {
-					continue
+					continue;
 				}
 
 				peer.known_messages.insert(entry.message_hash);
