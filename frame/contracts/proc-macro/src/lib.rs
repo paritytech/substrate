@@ -380,7 +380,7 @@ fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 
 /// Generates for every host function:
 ///   - real implementation, to register it in the contract execution environment;
-///   - dummy implementation, to be used as mocks for contract validation step. 
+///   - dummy implementation, to be used as mocks for contract validation step.
 fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 	let impls = expand_functions(def, true, quote! { crate::wasm::Runtime<E> });
 	let dummy_impls = expand_functions(def, false, quote! { () });

@@ -38,9 +38,11 @@ use wasmi::{core::HostError, errors::LinkerError, Linker, Memory, Store};
 /// The maximum nesting depth a contract can use when encoding types.
 const MAX_DECODE_NESTING: u32 = 256;
 
-/// Trait implemented by the [`define_env`](pallet_contracts_proc_macro::define_env) macro for the emitted `Env` struct.
+/// Trait implemented by the [`define_env`](pallet_contracts_proc_macro::define_env) macro for the
+/// emitted `Env` struct.
 pub trait Environment<HostState> {
-	/// Adds all declared functions to the supplied [`Linker`](wasmi::Linker) and [`Store`](wasmi::Store).
+	/// Adds all declared functions to the supplied [`Linker`](wasmi::Linker) and
+	/// [`Store`](wasmi::Store).
 	fn define(
 		store: &mut Store<HostState>,
 		linker: &mut Linker<HostState>,

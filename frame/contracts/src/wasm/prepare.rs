@@ -454,16 +454,11 @@ where
 		// We don't actually ever run any code so we can get away with a minimal stack which
 		// reduces the amount of memory that needs to be zeroed.
 		let stack_limits = StackLimits::new(1, 1, 0).expect("initial <= max; qed");
-		PrefabWasmModule::<T>::instantiate::<E, _>(
-			code,
-			(),
-			(initial, maximum),
-			stack_limits,
-		)
-		.map_err(|err| {
-			log::debug!(target: "runtime::contracts", "{}", err);
-			(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
-		})?;
+		PrefabWasmModule::<T>::instantiate::<E, _>(&code, (), (initial, maximum), stack_limits)
+			.map_err(|err| {
+				log::debug!(target: "runtime::contracts", "{}", err);
+				(Error::<T>::CodeRejected.into(), "new code rejected after instrumentation")
+			})?;
 	}
 
 	Ok((code, (initial, maximum)))
