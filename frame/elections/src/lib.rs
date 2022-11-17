@@ -934,8 +934,7 @@ impl<T: Config> Pallet<T> {
 				},
 				Event::ElectionError => {
 					Self::deposit_event(event);
-					log::error!(
-						target: "runtime:elections",
+					log!(error,
 						"Failed to run election. Number of voters exceeded",
 					);
 					let max_voters = <T as Config>::MaxVoters::get() as usize;
