@@ -49,7 +49,7 @@ use sc_client_api::{
 };
 use serde::Serialize;
 use sp_api::CallApiAt;
-use sp_blockchain::HeaderBackend;
+use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
 use sp_runtime::{
 	generic::BlockId,
@@ -370,16 +370,17 @@ fn handle_finalized_blocks<Client, Block>(
 ) -> Result<(FollowEvent<Block::Hash>, Option<FollowEvent<Block::Hash>>), SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
-	Client: HeaderBackend<Block> + 'static,
+	Client: HeaderBackend<Block> + HeaderMetadata<Block, Error = BlockChainError> + 'static,
 {
+	let last_finalized = notification.hash;
 	// We might not receive all new blocks reports, also pin the block here.
-	handle.pin_block(notification.hash)?;
+	handle.pin_block(last_finalized)?;
 
 	// The tree route contains the exclusive path from the latest finalized block
 	// to the block reported by the notification. Ensure the finalized block is
 	// properly reported to that path.
 	let mut finalized_block_hashes = notification.tree_route.iter().cloned().collect::<Vec<_>>();
-	finalized_block_hashes.push(notification.hash);
+	finalized_block_hashes.push(last_finalized);
 
 	let pruned_block_hashes: Vec<_> = notification.stale_heads.iter().cloned().collect();
 
@@ -410,6 +411,23 @@ where
 				error!(target: "rpc-spec-v2", "Client does not contain different best block");
 				Ok((finalized_event, None))
 			} else {
+				let ancestor = sp_blockchain::lowest_common_ancestor(
+					&**client,
+					last_finalized,
+					best_block_hash,
+				)
+				.map_err(|_| {
+					SubscriptionManagementError::Custom("Could not find common ancestor".into())
+				})?;
+
+				// The client's best block must be a descendent of the last finalized block.
+				// In other words, the lowest common ancestor must be the last finalized block.
+				if ancestor.hash != last_finalized {
+					return Err(SubscriptionManagementError::Custom(
+						"The finalized block is not an ancestor of the best block".into(),
+					))
+				}
+
 				// The RPC needs to also submit a new best block changed before the
 				// finalized event.
 				*best_block_cache = Some(best_block_hash);
@@ -431,6 +449,7 @@ where
 	Client: BlockBackend<Block>
 		+ ExecutorProvider<Block>
 		+ HeaderBackend<Block>
+		+ HeaderMetadata<Block, Error = BlockChainError>
 		+ BlockchainEvents<Block>
 		+ CallApiAt<Block>
 		+ StorageProvider<Block, BE>

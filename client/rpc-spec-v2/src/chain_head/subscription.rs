@@ -33,6 +33,8 @@ pub enum SubscriptionManagementError {
 	/// the subscription has exceeded the maximum number
 	/// of blocks pinned.
 	ExceededLimits,
+	/// Custom error.
+	Custom(String),
 }
 
 /// Inner subscription data structure.
