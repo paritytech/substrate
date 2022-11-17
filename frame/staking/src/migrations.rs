@@ -26,14 +26,18 @@ pub mod v13 {
 	use frame_support::{pallet_prelude::ValueQuery, storage_alias};
 
 	#[storage_alias]
-	type StorageVersion<T: Config> = StorageValue<Pallet<T>, u32, ValueQuery>;
+	type StorageVersion<T: Config> = StorageValue<Pallet<T>, Releases, ValueQuery>;
 
+	#[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+	enum Releases {
+		V12_0_0,
+	}
 	pub struct MigrateToV13<T>(sp_std::marker::PhantomData<T>);
 	impl<T: Config> OnRuntimeUpgrade for MigrateToV13<T> {
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
 			frame_support::ensure!(
-				Pallet::<T>::on_chain_storage_version() == 12,
+				StorageVersion::<T>::get() == Releases::V12_0_0,
 				"Required v12 before upgrading to v13"
 			);
 
@@ -42,9 +46,9 @@ pub mod v13 {
 
 		fn on_runtime_upgrade() -> frame_support::weights::Weight {
 			let current = Pallet::<T>::current_storage_version();
-			let onchain = Pallet::<T>::on_chain_storage_version();
+			let onchain = StorageVersion::<T>::get();
 
-			if current == 13 && onchain == 12 {
+			if current == 13 && onchain == Releases::V12_0_0 {
 				StorageVersion::<T>::kill();
 				current.put::<Pallet<T>>();
 
@@ -62,6 +66,12 @@ pub mod v13 {
 				Pallet::<T>::on_chain_storage_version() == 13,
 				"v13 not applied"
 			);
+
+			frame_support::ensure!(
+				!StorageVersion::<T>::exists(),
+				"Storage version not migrated correctly"
+				);
+
 			Ok(())
 		}
 
