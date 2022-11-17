@@ -1353,6 +1353,7 @@ pub mod pallet {
 		}
 
 		/// Cancel the previously provided approval to change item's attributes.
+		/// All the previously set attributes by the `delegate` will be removed.
 		///
 		/// Origin must be Signed and must be an owner of the `item`.
 		///
