@@ -294,14 +294,15 @@ async fn submit_events<EventStream, T>(
 				stop_event = next_stop_event;
 			},
 			// Client disconnected.
-			Ok(false) => break,
+			Ok(false) => return,
 			Err(_) => {
 				// Failed to submit event.
-				let _ = sink.send(&FollowEvent::<String>::Stop);
 				break
 			},
 		}
 	}
+
+	let _ = sink.send(&FollowEvent::<String>::Stop);
 }
 
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
