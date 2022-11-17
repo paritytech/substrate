@@ -206,7 +206,7 @@ where
 	/// Store a value to be associated with the given keys from the map.
 	pub fn insert<KArg, VArg>(key: KArg, val: VArg)
 	where
-		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter + Clone,
+		KArg: EncodeLikeTuple<Key::KArg> + EncodeLike<Key::KArg> + TupleToEncodedIter,
 		VArg: EncodeLike<Value>,
 	{
 		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
@@ -216,8 +216,10 @@ where
 	}
 
 	/// Remove the value under the given keys.
-	pub fn remove<KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter + Clone>(key: KArg) {
-		if <Self as MapWrapper>::Map::contains_key(key.clone()) {
+	pub fn remove<KArg: EncodeLikeTuple<Key::KArg> + EncodeLike<Key::KArg> + TupleToEncodedIter>(
+		key: KArg,
+	) {
+		if <Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_dec());
 		}
 		<Self as MapWrapper>::Map::remove(key)
@@ -343,12 +345,12 @@ where
 	/// on overwrite.
 	pub fn append<Item, EncodeLikeItem, KArg>(key: KArg, item: EncodeLikeItem)
 	where
-		KArg: EncodeLikeTuple<Key::KArg> + TupleToEncodedIter + Clone,
+		KArg: EncodeLikeTuple<Key::KArg> + EncodeLike<Key::KArg> + TupleToEncodedIter,
 		Item: Encode,
 		EncodeLikeItem: EncodeLike<Item>,
 		Value: StorageAppend<Item>,
 	{
-		if !<Self as MapWrapper>::Map::contains_key(key.clone()) {
+		if !<Self as MapWrapper>::Map::contains_key(Ref::from(&key)) {
 			CounterFor::<Prefix>::mutate(|value| value.saturating_inc());
 		}
 		<Self as MapWrapper>::Map::append(key, item)
