@@ -684,7 +684,7 @@ where
 	///
 	/// - designated area is not within the bounds of the sandbox memory.
 	fn write_sandbox_memory(
-		&mut self,
+		&self,
 		memory: &mut [u8],
 		ptr: u32,
 		buf: &[u8],
@@ -709,7 +709,7 @@ where
 	///
 	/// The `input` and `output` buffers may overlap.
 	fn compute_hash_on_intermediate_buffer<F, R>(
-		&mut self,
+		&self,
 		memory: &mut [u8],
 		hash_fn: F,
 		input_ptr: u32,
