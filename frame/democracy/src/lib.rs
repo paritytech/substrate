@@ -1096,9 +1096,12 @@ pub mod pallet {
 		///
 		/// Parameters:
 		/// - `origin`: Must correspond to the `MetadataOwner`.
-		///     - `ExternalOrigin` for an external proposal with the `SuperMajorityApprove` threshold.
-		///     - `ExternalDefaultOrigin` for an external proposal with the `SuperMajorityAgainst` threshold.
-		///     - `ExternalMajorityOrigin` for an external proposal with the `SimpleMajority` threshold.
+		///     - `ExternalOrigin` for an external proposal with the `SuperMajorityApprove`
+		///       threshold.
+		///     - `ExternalDefaultOrigin` for an external proposal with the `SuperMajorityAgainst`
+		///       threshold.
+		///     - `ExternalMajorityOrigin` for an external proposal with the `SimpleMajority`
+		///       threshold.
 		///     - `Signed` by a creator for a public proposal.
 		///     - `Signed` to clear a metadata for a finished referendum.
 		///     - `Root` to set a metadata for an ongoing referendum.
