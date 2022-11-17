@@ -42,7 +42,7 @@ use jsonrpsee::{
 	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
-use log::error;
+use log::{debug, error};
 use sc_client_api::{
 	Backend, BlockBackend, BlockImportNotification, BlockchainEvents, CallExecutor, ChildInfo,
 	ExecutorProvider, FinalityNotification, StorageKey, StorageProvider,
@@ -288,16 +288,20 @@ async fn submit_events<EventStream, T>(
 	while let Either::Left((Some(event), next_stop_event)) =
 		futures_util::future::select(stream_item, stop_event).await
 	{
-		if let Err(_) = sink.send(&event) {
-			// Sink failed to submit the event.
-			break
+		match sink.send(&event) {
+			Ok(true) => {
+				stream_item = stream.next();
+				stop_event = next_stop_event;
+			},
+			// Client disconnected.
+			Ok(false) => break,
+			Err(_) => {
+				// Failed to submit event.
+				let _ = sink.send(&FollowEvent::<String>::Stop);
+				break
+			},
 		}
-
-		stream_item = stream.next();
-		stop_event = next_stop_event;
 	}
-
-	let _ = sink.send(&FollowEvent::<String>::Stop);
 }
 
 /// Generate the "NewBlock" event and potentially the "BestBlockChanged" event for
@@ -441,12 +445,15 @@ where
 		let Some((rx_stop, sub_handle)) = self.subscriptions.insert_subscription(sub_id.clone(), runtime_updates, self.max_pinned_blocks) else {
 			// Inserting the subscription can only fail if the JsonRPSee
 			// generated a duplicate subscription ID.
+			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription already accepted", sub_id);
 			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
 			return Ok(())
 		};
+		debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription accepted", sub_id);
 
 		let client = self.client.clone();
 		let handle = sub_handle.clone();
+		let subscription_id = sub_id.clone();
 
 		let stream_import = self
 			.client
@@ -456,6 +463,7 @@ where
 					Ok((new_block, None)) => stream::iter(vec![new_block]),
 					Ok((new_block, Some(best_block))) => stream::iter(vec![new_block, best_block]),
 					Err(_) => {
+						debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to import blocks", subscription_id);
 						handle.stop();
 						stream::iter(vec![])
 					},
@@ -465,6 +473,7 @@ where
 
 		let client = self.client.clone();
 		let handle = sub_handle.clone();
+		let subscription_id = sub_id.clone();
 
 		let stream_finalized = self
 			.client
@@ -475,6 +484,7 @@ where
 					Ok((finalized_event, Some(best_block))) =>
 						stream::iter(vec![best_block, finalized_event]),
 					Err(_) => {
+						debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to import finalized blocks", subscription_id);
 						handle.stop();
 						stream::iter(vec![])
 					},
@@ -486,6 +496,7 @@ where
 
 		let Ok(initial_events) = self.generate_initial_events(&sub_handle, runtime_updates) else {
 			// We stop the subscription right away if we exceeded the maximum number of blocks pinned.
+			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Exceeded max pinned blocks from initial events", sub_id);
 			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
 			return Ok(())
 		};
@@ -497,6 +508,7 @@ where
 			submit_events(&mut sink, stream.boxed(), rx_stop).await;
 			// The client disconnected or called the unsubscribe method.
 			subscriptions.remove_subscription(&sub_id);
+			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Subscription removed", sub_id);
 		};
 
 		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
@@ -534,6 +546,7 @@ where
 				},
 				Ok(None) => {
 					// The block's body was pruned. This subscription ID has become invalid.
+					debug!(target: "rpc-spec-v2", "[body][id={:?}] Stopping subscription because hash={:?} was pruned", follow_subscription, hash);
 					handle.stop();
 					ChainHeadEvent::<String>::Disjoint
 				},
