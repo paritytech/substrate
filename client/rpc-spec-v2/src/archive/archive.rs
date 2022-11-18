@@ -125,10 +125,38 @@ where
 
 	fn archive_unstable_hash_by_height(
 		&self,
-		mut _sink: SubscriptionSink,
-		_height: String,
+		mut sink: SubscriptionSink,
+		height: String,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
+		let height_str = height.trim_start_matches("0x");
+		let Ok(height_num) = u32::from_str_radix(&height_str, 16) else {
+			let _ = sink.reject(ArchiveRpcError::InvalidParam(height));
+			return Ok(())
+		};
+
+		let client = self.client.clone();
+
+		let fut = async move {
+			let finalized_number = client.info().finalized_number;
+
+			let mut result = Vec::new();
+
+			if let Ok(Some(hash)) = client.block_hash(height_num.into()) {
+				result.push(hash);
+			}
+
+			// If the height has been finalized, return only the finalized block.
+			if finalized_number >= height_num.into() {
+				let _ = sink.send(&ArchiveEvent::Done(ArchiveResult { result }));
+				return
+			}
+
+			// TODO: inspect displaced leaves and walk back the tree.
+			let _ = sink.send(&ArchiveEvent::Done(ArchiveResult { result }));
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 
