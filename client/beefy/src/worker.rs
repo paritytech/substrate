@@ -531,7 +531,15 @@ where
 				info!(target: "beefy", "🥩 Round #{} concluded, finality_proof: {:?}.", round.1, finality_proof);
 
 				// We created the `finality_proof` and know to be valid.
+				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
+			} else {
+				if self_vote {
+					// Persist state after handling self vote to avoid double voting in case
+					// of voter restarts.
+					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
+						.map_err(|e| Error::Backend(e.to_string()))?;
+				}
 			}
 		}
 		Ok(())
