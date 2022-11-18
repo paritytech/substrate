@@ -20,6 +20,7 @@
 
 use crate::{
 	archive::{
+		error::Error as ArchiveRpcError,
 		event::{ArchiveEvent, ArchiveResult, ErrorEvent},
 		ArchiveApiServer, NetworkConfig,
 	},
@@ -29,13 +30,16 @@ use codec::Encode;
 use futures::future::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
-	types::SubscriptionResult,
+	types::{SubscriptionEmptyError, SubscriptionResult},
 	SubscriptionSink,
 };
-use sc_client_api::{Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageProvider};
+use sc_client_api::{
+	Backend, BlockBackend, BlockchainEvents, ChildInfo, ExecutorProvider, StorageKey,
+	StorageProvider,
+};
 use sp_api::{BlockId, BlockT};
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
-use sp_core::hexdisplay::HexDisplay;
+use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys};
 use std::{marker::PhantomData, sync::Arc};
 
 /// An API for archive RPC calls.
@@ -60,6 +64,19 @@ impl<BE, Block: BlockT, Client> Archive<BE, Block, Client> {
 		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
 
 		Self { client, executor, genesis_hash, _phantom: PhantomData }
+	}
+}
+
+fn parse_hex_param(
+	sink: &mut SubscriptionSink,
+	param: String,
+) -> Result<Vec<u8>, SubscriptionEmptyError> {
+	match array_bytes::hex2bytes(&param) {
+		Ok(bytes) => Ok(bytes),
+		Err(_) => {
+			let _ = sink.reject(ArchiveRpcError::InvalidParam(param));
+			Err(SubscriptionEmptyError)
+		},
 	}
 }
 
@@ -141,12 +158,72 @@ where
 
 	fn archive_unstable_storage(
 		&self,
-		mut _sink: SubscriptionSink,
-		_hash: Block::Hash,
-		_key: String,
-		_child_key: Option<String>,
+		mut sink: SubscriptionSink,
+		hash: Block::Hash,
+		key: String,
+		child_key: Option<String>,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
+		let key = StorageKey(parse_hex_param(&mut sink, key)?);
+
+		let child_key = child_key
+			.map(|child_key| parse_hex_param(&mut sink, child_key))
+			.transpose()?
+			.map(ChildInfo::new_default_from_vec);
+
+		let client = self.client.clone();
+
+		let fut = async move {
+			// The child key is provided, use the key to query the child trie.
+			if let Some(child_key) = child_key {
+				// The child key must not be prefixed with ":child_storage:" nor
+				// ":child_storage:default:".
+				if well_known_keys::is_default_child_storage_key(child_key.storage_key()) ||
+					well_known_keys::is_child_storage_key(child_key.storage_key())
+				{
+					let _ =
+						sink.send(&ArchiveEvent::Done(ArchiveResult { result: None::<String> }));
+					return
+				}
+
+				let res = client
+					.child_storage(hash, &child_key, &key)
+					.map(|result| {
+						let result =
+							result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+						ArchiveEvent::Done(ArchiveResult { result })
+					})
+					.unwrap_or_else(|error| {
+						ArchiveEvent::Error(ErrorEvent { error: error.to_string() })
+					});
+				let _ = sink.send(&res);
+				return
+			}
+
+			// The main key must not be prefixed with b":child_storage:" nor
+			// b":child_storage:default:".
+			if well_known_keys::is_default_child_storage_key(&key.0) ||
+				well_known_keys::is_child_storage_key(&key.0)
+			{
+				let _ = sink.send(&ArchiveEvent::Done(ArchiveResult { result: None::<String> }));
+				return
+			}
+
+			// Main root trie storage query.
+			let res = client
+				.storage(hash, &key)
+				.map(|result| {
+					let result =
+						result.map(|storage| format!("0x{}", HexDisplay::from(&storage.0)));
+					ArchiveEvent::Done(ArchiveResult { result })
+				})
+				.unwrap_or_else(|error| {
+					ArchiveEvent::Error(ErrorEvent { error: error.to_string() })
+				});
+			let _ = sink.send(&res);
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 }
