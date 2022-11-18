@@ -276,6 +276,12 @@ fn mint_should_work() {
 			42,
 			Some(MintWitness { owner_of_item: 43 })
 		));
+
+		// can't mint twice
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(2), 1, 46, Some(MintWitness { owner_of_item: 43 })),
+			Error::<Test>::AlreadyClaimed
+		);
 	});
 }
 
@@ -587,6 +593,18 @@ fn set_item_metadata_should_work() {
 		);
 		assert_ok!(Nfts::clear_metadata(RuntimeOrigin::root(), 0, 42));
 		assert!(!ItemMetadataOf::<Test>::contains_key(0, 42));
+	});
+}
+
+#[test]
+fn test_smth() {
+	new_test_ext().execute_with(|| {
+		let attribute_key: BoundedVec<u8, <Test as Config>::KeyLimit> =
+			PalletAttributes::<<Test as Config>::CollectionId>::UsedToClaim(1)
+				.encode()
+				.try_into()
+				.unwrap();
+		dbg!(attribute_key);
 	});
 }
 
