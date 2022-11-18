@@ -147,14 +147,18 @@ where
 		let request = schema::v1::light::Request::decode(&payload[..])?;
 
 		let response = match &request.request {
-			Some(schema::v1::light::request::Request::RemoteCallRequest(r)) =>
-				self.on_remote_call_request(&peer, r)?,
-			Some(schema::v1::light::request::Request::RemoteReadRequest(r)) =>
-				self.on_remote_read_request(&peer, r)?,
-			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) =>
-				self.on_remote_read_child_request(&peer, r)?,
-			None =>
-				return Err(HandleRequestError::BadRequest("Remote request without request data.")),
+			Some(schema::v1::light::request::Request::RemoteCallRequest(r)) => {
+				self.on_remote_call_request(&peer, r)?
+			},
+			Some(schema::v1::light::request::Request::RemoteReadRequest(r)) => {
+				self.on_remote_read_request(&peer, r)?
+			},
+			Some(schema::v1::light::request::Request::RemoteReadChildRequest(r)) => {
+				self.on_remote_read_child_request(&peer, r)?
+			},
+			None => {
+				return Err(HandleRequestError::BadRequest("Remote request without request data."))
+			},
 		};
 
 		let mut data = Vec::new();
@@ -173,10 +177,7 @@ where
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let response = match self.client.execution_proof(block, &request.method, &request.data) {
-			Ok((_, proof)) => {
-				let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
-				Some(schema::v1::light::response::Response::RemoteCallResponse(r))
-			},
+			Ok((_, proof)) => schema::v1::light::RemoteCallResponse { proof: Some(proof.encode()) },
 			Err(e) => {
 				trace!(
 					"remote call request from {} ({} at {:?}) failed with: {}",
@@ -185,11 +186,13 @@ where
 					request.block,
 					e,
 				);
-				None
+				schema::v1::light::RemoteCallResponse { proof: None }
 			},
 		};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response {
+			response: Some(schema::v1::light::response::Response::RemoteCallResponse(response)),
+		})
 	}
 
 	fn on_remote_read_request(
@@ -199,7 +202,7 @@ where
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
 			debug!("Invalid remote read request sent by {}.", peer);
-			return Err(HandleRequestError::BadRequest("Remote read request without keys."))
+			return Err(HandleRequestError::BadRequest("Remote read request without keys."));
 		}
 
 		trace!(
@@ -213,10 +216,7 @@ where
 
 		let response =
 			match self.client.read_proof(block, &mut request.keys.iter().map(AsRef::as_ref)) {
-				Ok(proof) => {
-					let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
-					Some(schema::v1::light::response::Response::RemoteReadResponse(r))
-				},
+				Ok(proof) => schema::v1::light::RemoteReadResponse { proof: Some(proof.encode()) },
 				Err(error) => {
 					trace!(
 						"remote read request from {} ({} at {:?}) failed with: {}",
@@ -225,11 +225,13 @@ where
 						request.block,
 						error,
 					);
-					None
+					schema::v1::light::RemoteReadResponse { proof: None }
 				},
 			};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response {
+			response: Some(schema::v1::light::response::Response::RemoteReadResponse(response)),
+		})
 	}
 
 	fn on_remote_read_child_request(
@@ -239,7 +241,7 @@ where
 	) -> Result<schema::v1::light::Response, HandleRequestError> {
 		if request.keys.is_empty() {
 			debug!("Invalid remote child read request sent by {}.", peer);
-			return Err(HandleRequestError::BadRequest("Remove read child request without keys."))
+			return Err(HandleRequestError::BadRequest("Remove read child request without keys."));
 		}
 
 		trace!(
@@ -264,10 +266,7 @@ where
 				&mut request.keys.iter().map(AsRef::as_ref),
 			)
 		}) {
-			Ok(proof) => {
-				let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
-				Some(schema::v1::light::response::Response::RemoteReadResponse(r))
-			},
+			Ok(proof) => schema::v1::light::RemoteReadResponse { proof: Some(proof.encode()) },
 			Err(error) => {
 				trace!(
 					"remote read child request from {} ({} {} at {:?}) failed with: {}",
@@ -277,11 +276,13 @@ where
 					request.block,
 					error,
 				);
-				None
+				schema::v1::light::RemoteReadResponse { proof: None }
 			},
 		};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response {
+			response: Some(schema::v1::light::response::Response::RemoteReadResponse(response)),
+		})
 	}
 }
 
