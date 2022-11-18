@@ -40,7 +40,29 @@ cp -r db-test-gen/alice/data/chains/local_testnet/db/full db-snapshot/alice/data
 cp -r db-test-gen/bob/data/chains/local_testnet/db/full   db-snapshot/bob/data/chains/local_testnet/db/
 ```
 
+The file format should be `tar.gz`. File shall contain `local_testnet` folder and its subfolders, e.g.:
+```
+$ tar tzf chains.tgz | head
+local_testnet/
+local_testnet/db/
+local_testnet/db/full/
+...
+local_testnet/db/full/000469.log
+```
+
+Sample command to prepare archive:
+```
+tar -C db-snapshot/alice/data/chains/ -czf chains.tgz local_testnet
+```
+
 Also refer to: [zombienet#578](https://github.com/paritytech/zombienet/issues/578)
+
+# Where to upload database
+The access to this [bucket](https://console.cloud.google.com/storage/browser/zombienet-db-snaps/) is required.
+
+Sample public path is: `https://storage.googleapis.com/zombienet-db-snaps/substrate/0001-basic-warp-sync/chains-0bb3f0be2ce41b5615b224215bcc8363aa0416a6.tgz`.
+
+The database file path should be `substrate/XXXX-test-name/file-SHA1SUM.tgz`, where `SHA1SUM` is a `sha1sum` of the file.
 
 # Chain spec
 Chain spec was simply built with:

@@ -12,19 +12,22 @@ bob: reports node_roles is 4
 charlie: reports node_roles is 1
 dave: reports node_roles is 1
 
-alice: reports peers count is at least 3
-bob: reports peers count is at least 3
-charlie: reports peers count is at least 3
-dave: reports peers count is at least 3
+alice: reports peers count is at least 3 within 60 seconds
+bob: reports peers count is at least 3 within 60 seconds
+charlie: reports peers count is at least 3 within 60 seconds
+dave: reports peers count is at least 3 within 60 seconds
 
-dave: log line matches "Warp sync is complete" within 30 seconds
-dave: log line matches "Block history download is complete" within 30 seconds
 
 # db snapshot has 12133 blocks
-dave: reports block height is at least 1 within 30 seconds
-dave: reports block height is at least 12132 within 30 seconds
-dave: reports block height is at least 12133 within 30 seconds
+dave: reports block height is at least 1 within 60 seconds
+dave: reports block height is at least 12132 within 60 seconds
+dave: reports block height is at least 12133 within 60 seconds
 
-alice: reports block height is at least 12133 within 30 seconds
-bob: reports block height is at least 12133 within 30 seconds
-charlie: reports block height is at least 12133 within 30 seconds
+alice: reports block height is at least 12133 within 60 seconds
+bob: reports block height is at least 12133 within 60 seconds
+charlie: reports block height is at least 12133 within 60 seconds
+
+dave: log line matches "Warp sync is complete" within 60 seconds
+dave: log line matches "Block history download is complete" within 3 seconds
+
+dave: count of log lines containing "error" is 0 within 3 seconds
