@@ -310,6 +310,3 @@ inherits = "release"
 lto = "fat"
 # https://doc.rust-lang.org/rustc/codegen-options/index.html#codegen-units
 codegen-units = 1
-
-[patch.crates-io]
-jsonrpsee = { git = "https://github.com/paritytech/jsonrpsee" }
