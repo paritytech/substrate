@@ -534,9 +534,10 @@ where
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
 			} else {
-				if self_vote {
+				if self_vote || self.voting_oracle().mandatory_pending() == Some(round.1) {
 					// Persist state after handling self vote to avoid double voting in case
 					// of voter restarts.
+					// Also persist state after handling mandatory block vote.
 					crate::aux_schema::write_voter_state(&*self.backend, &self.persisted_state)
 						.map_err(|e| Error::Backend(e.to_string()))?;
 				}
