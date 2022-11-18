@@ -258,7 +258,7 @@ impl<B: Block> PersistedState<B> {
 	}
 
 	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
-		self.voting_oracle.min_block_delta = min_block_delta;
+		self.voting_oracle.min_block_delta = min_block_delta.max(1);
 	}
 
 	pub(crate) fn active_round_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
