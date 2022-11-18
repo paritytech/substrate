@@ -105,24 +105,28 @@ impl<T: Config<I>, I: 'static> Create<<T as SystemConfig>::AccountId, Collection
 {
 	/// Create a `collection` of nonfungible items to be owned by `who` and managed by `admin`.
 	fn create_collection(
-		collection: &Self::CollectionId,
 		who: &T::AccountId,
 		admin: &T::AccountId,
 		config: &CollectionConfigFor<T, I>,
-	) -> DispatchResult {
+	) -> Result<T::CollectionId, DispatchError> {
 		// DepositRequired can be disabled by calling the force_create() only
 		ensure!(
 			!config.has_disabled_setting(CollectionSetting::DepositRequired),
 			Error::<T, I>::WrongSetting
 		);
+
+		let collection =
+			NextCollectionId::<T, I>::get().unwrap_or(T::CollectionId::initial_value());
+
 		Self::do_create_collection(
-			*collection,
+			collection,
 			who.clone(),
 			admin.clone(),
 			*config,
 			T::CollectionDeposit::get(),
-			Event::Created { collection: *collection, creator: who.clone(), owner: admin.clone() },
-		)
+			Event::Created { collection, creator: who.clone(), owner: admin.clone() },
+		)?;
+		Ok(collection)
 	}
 }
 
