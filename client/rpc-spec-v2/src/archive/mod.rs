@@ -29,7 +29,9 @@
 //! Methods are prefixed by `archive`.
 
 pub mod api;
+pub mod archive;
 pub mod event;
 
 pub use api::ArchiveApiServer;
+pub use archive::Archive;
 pub use event::{ArchiveEvent, ArchiveResult, ErrorEvent, NetworkConfig};
