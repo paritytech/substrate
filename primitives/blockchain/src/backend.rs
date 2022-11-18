@@ -21,9 +21,11 @@ use log::warn;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header as HeaderT, NumberFor},
+	sp_std,
+	traits::{Block as BlockT, Header as HeaderT, NumberFor, Saturating},
 	Justifications,
 };
+use sp_std::collections::btree_set::BTreeSet;
 
 use crate::header_metadata::HeaderMetadata;
 
@@ -82,6 +84,60 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 			h.ok_or_else(|| Error::UnknownBlock(format!("Expect block hash from id: {}", id)))
 		})
 	}
+}
+
+/// Handles stale forks.
+pub trait ForkBackend<Block: BlockT>:
+	HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync
+{
+	/// Get all the header hashes that are part of the provided forks starting only from the fork
+	/// heads.
+	fn expand_forks(&self, fork_heads: &[Block::Hash]) -> BTreeSet<Block::Hash> {
+		let mut expanded_forks = BTreeSet::new();
+		for fork_head in fork_heads {
+			let mut hash = *fork_head;
+			// Insert stale blocks hashes until canonical chain is reached.
+			// If we reach a block that is already part of the `expanded_forks` we can stop
+			// processing the fork.
+			while expanded_forks.insert(hash) {
+				match self.header_metadata(hash) {
+					Ok(meta) => {
+						hash = meta.parent;
+
+						// If the parent is part of the canonical chain or there doesn't exist a
+						// block hash for the parent number (bug?!), we can abort adding blocks.
+						if self
+							.hash(meta.number.saturating_sub(1u32.into()))
+							.ok()
+							.flatten()
+							.map_or(true, |h| h == hash)
+						{
+							break
+						}
+					},
+					Err(err) => {
+						warn!(
+							target: "primitives::blockchain",
+							"Stale header {:?} lookup fail while expanding fork {:?}: {}",
+							fork_head,
+							hash,
+							err,
+						);
+						break
+					},
+				}
+			}
+		}
+
+		expanded_forks
+	}
+}
+
+impl<Block, T> ForkBackend<Block> for T
+where
+	Block: BlockT,
+	T: HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync,
+{
 }
 
 /// Blockchain database backend. Does not perform any validation.
