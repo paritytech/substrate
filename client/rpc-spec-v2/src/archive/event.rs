@@ -70,3 +70,57 @@ pub enum ArchiveEvent<T> {
 	/// An error occurred. This is definitive.
 	Error(ErrorEvent),
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn archive_done_event() {
+		let event: ArchiveEvent<String> = ArchiveEvent::Done(ArchiveResult { result: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"done","result":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ArchiveEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn archive_inaccessible_event() {
+		let event: ArchiveEvent<String> =
+			ArchiveEvent::Inaccessible(ErrorEvent { error: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"inaccessible","error":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ArchiveEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn archive_error_event() {
+		let event: ArchiveEvent<String> = ArchiveEvent::Error(ErrorEvent { error: "A".into() });
+
+		let ser = serde_json::to_string(&event).unwrap();
+		let exp = r#"{"event":"error","error":"A"}"#;
+		assert_eq!(ser, exp);
+
+		let event_dec: ArchiveEvent<String> = serde_json::from_str(exp).unwrap();
+		assert_eq!(event_dec, event);
+	}
+
+	#[test]
+	fn archive_network_config() {
+		let conf = NetworkConfig { total_attempts: 1, max_parallel: 2, timeout_ms: 3 };
+
+		let ser = serde_json::to_string(&conf).unwrap();
+		let exp = r#"{"totalAttempts":1,"maxParallel":2,"timeoutMs":3}"#;
+		assert_eq!(ser, exp);
+
+		let conf_dec: NetworkConfig = serde_json::from_str(exp).unwrap();
+		assert_eq!(conf_dec, conf);
+	}
+}
