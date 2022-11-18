@@ -89,13 +89,10 @@ where
 			let event = match client.block(&BlockId::Hash(hash)) {
 				Ok(Some(signed_block)) => {
 					let extrinsics = signed_block.block.extrinsics();
-					let result = Some(format!("0x{}", HexDisplay::from(&extrinsics.encode())));
+					let result = format!("0x{}", HexDisplay::from(&extrinsics.encode()));
 					ArchiveEvent::Done(ArchiveResult { result })
 				},
-				Ok(None) => {
-					// The block does not exist.
-					ArchiveEvent::Done(ArchiveResult { result: None })
-				},
+				Ok(None) => ArchiveEvent::Inaccessible,
 				Err(error) => ArchiveEvent::Error(ErrorEvent { error: error.to_string() }),
 			};
 			let _ = sink.send(&event);
@@ -120,10 +117,25 @@ where
 
 	fn archive_unstable_header(
 		&self,
-		mut _sink: SubscriptionSink,
-		_hash: Block::Hash,
+		mut sink: SubscriptionSink,
+		hash: Block::Hash,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
+		let client = self.client.clone();
+
+		let fut = async move {
+			let event = match client.header(BlockId::Hash(hash)) {
+				Ok(Some(header)) => {
+					let result = format!("0x{}", HexDisplay::from(&header.encode()));
+					ArchiveEvent::Done(ArchiveResult { result })
+				},
+				Ok(None) => ArchiveEvent::Inaccessible,
+				Err(error) => ArchiveEvent::Error(ErrorEvent { error: error.to_string() }),
+			};
+			let _ = sink.send(&event);
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 

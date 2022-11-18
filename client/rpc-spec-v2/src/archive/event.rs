@@ -66,7 +66,7 @@ pub enum ArchiveEvent<T> {
 	/// The resources requested are inaccessible.
 	///
 	/// Resubmitting the request later might succeed.
-	Inaccessible(ErrorEvent),
+	Inaccessible,
 	/// An error occurred. This is definitive.
 	Error(ErrorEvent),
 }
@@ -89,11 +89,10 @@ mod tests {
 
 	#[test]
 	fn archive_inaccessible_event() {
-		let event: ArchiveEvent<String> =
-			ArchiveEvent::Inaccessible(ErrorEvent { error: "A".into() });
+		let event: ArchiveEvent<String> = ArchiveEvent::Inaccessible;
 
 		let ser = serde_json::to_string(&event).unwrap();
-		let exp = r#"{"event":"inaccessible","error":"A"}"#;
+		let exp = r#"{"event":"inaccessible"}"#;
 		assert_eq!(ser, exp);
 
 		let event_dec: ArchiveEvent<String> = serde_json::from_str(exp).unwrap();
