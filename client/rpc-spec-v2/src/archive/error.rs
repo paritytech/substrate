@@ -16,23 +16,39 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-//! Substrate archive specification API.
-//!
-//! The *archive* functions inspect the history of the chain.
-//!
-//! They can be used to access recent information as well,
-//! but JSON-RPC clients should keep in mind that the chainHead
-//! functions could be more appropriate.
-//!
-//! # Note
-//!
-//! Methods are prefixed by `archive`.
+//! Error helpers for `archive` RPC module.
 
-pub mod api;
-pub mod archive;
-pub mod error;
-pub mod event;
+use jsonrpsee::{
+	core::Error as RpcError,
+	types::error::{CallError, ErrorObject},
+};
 
-pub use api::ArchiveApiServer;
-pub use archive::Archive;
-pub use event::{ArchiveEvent, ArchiveResult, ErrorEvent, NetworkConfig};
+/// Archive RPC errors.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	/// Invalid parameter provided to the RPC method.
+	#[error("Invalid parameter: {0}")]
+	InvalidParam(String),
+}
+
+// Base code for all `archive` errors.
+const BASE_ERROR: i32 = 3000;
+/// Invalid parameter error.
+const INVALID_PARAM_ERROR: i32 = BASE_ERROR + 1;
+
+impl From<Error> for ErrorObject<'static> {
+	fn from(e: Error) -> Self {
+		let msg = e.to_string();
+
+		match e {
+			Error::InvalidParam(_) => ErrorObject::owned(INVALID_PARAM_ERROR, msg, None::<()>),
+		}
+		.into()
+	}
+}
+
+impl From<Error> for RpcError {
+	fn from(e: Error) -> Self {
+		CallError::Custom(e.into()).into()
+	}
+}
