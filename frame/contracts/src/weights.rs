@@ -109,6 +109,7 @@ pub trait WeightInfo {
 	fn seal_hash_blake2_128_per_kb(n: u32, ) -> Weight;
 	fn seal_ecdsa_recover(r: u32, ) -> Weight;
 	fn seal_ecdsa_to_eth_address(r: u32, ) -> Weight;
+	fn seal_set_code_hash(r: u32, ) -> Weight;
 	fn seal_reentrance_count(r: u32, ) -> Weight;
 	fn seal_account_reentrance_count(r: u32, ) -> Weight;
 	fn account_reentrance_count(r: u32, ) -> Weight;
@@ -1005,6 +1006,16 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(Weight::from_ref_time(2_043_545_340 as u64).saturating_mul(r as u64))
 			.saturating_add(T::DbWeight::get().reads(6 as u64))
 			.saturating_add(T::DbWeight::get().writes(3 as u64))
+	}
+	fn seal_set_code_hash(r: u32, ) -> Weight {
+		// Minimum execution time: 293_390 nanoseconds.
+		Weight::from_ref_time(297_791_000 as u64)
+			// Standard Error: 2_704_135
+			.saturating_add(Weight::from_ref_time(1_426_040_282 as u64).saturating_mul(r as u64))
+			.saturating_add(T::DbWeight::get().reads(6 as u64))
+			.saturating_add(T::DbWeight::get().reads((225 as u64).saturating_mul(r as u64)))
+			.saturating_add(T::DbWeight::get().writes(3 as u64))
+			.saturating_add(T::DbWeight::get().writes((150 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)
@@ -2249,6 +2260,16 @@ impl WeightInfo for () {
 			.saturating_add(Weight::from_ref_time(2_043_545_340 as u64).saturating_mul(r as u64))
 			.saturating_add(RocksDbWeight::get().reads(6 as u64))
 			.saturating_add(RocksDbWeight::get().writes(3 as u64))
+	}
+	fn seal_set_code_hash(r: u32, ) -> Weight {
+		// Minimum execution time: 293_390 nanoseconds.
+		Weight::from_ref_time(297_791_000 as u64)
+			// Standard Error: 2_704_135
+			.saturating_add(Weight::from_ref_time(1_426_040_282 as u64).saturating_mul(r as u64))
+			.saturating_add(RocksDbWeight::get().reads(6 as u64))
+			.saturating_add(RocksDbWeight::get().reads((225 as u64).saturating_mul(r as u64)))
+			.saturating_add(RocksDbWeight::get().writes(3 as u64))
+			.saturating_add(RocksDbWeight::get().writes((150 as u64).saturating_mul(r as u64)))
 	}
 	// Storage: System Account (r:1 w:0)
 	// Storage: Contracts ContractInfoOf (r:1 w:1)

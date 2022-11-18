@@ -2045,7 +2045,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_reentrance_count {
+	seal_set_code_hash {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code_hashes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|i| {
@@ -2085,7 +2085,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	seal_account_reentrance_count {
+	seal_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
@@ -2105,7 +2105,7 @@ benchmarks! {
 		let origin = RawOrigin::Signed(instance.caller.clone());
 	}: call(origin, instance.addr, 0u32.into(), Weight::MAX, None, vec![])
 
-	account_reentrance_count {
+	seal_account_reentrance_count {
 		let r in 0 .. API_BENCHMARK_BATCHES;
 		let dummy_code = WasmModule::<T>::dummy_with_bytes(0);
 		let accounts = (0..r * API_BENCHMARK_BATCH_SIZE)
