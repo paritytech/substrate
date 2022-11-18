@@ -20,11 +20,13 @@ sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
+sc-client-api = { version = "4.0.0-dev", path = "../api" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 thiserror = "1.0"
 serde = "1.0"
+array-bytes = "4.1"
 hex = "0.4"
 futures = "0.3.21"
 
