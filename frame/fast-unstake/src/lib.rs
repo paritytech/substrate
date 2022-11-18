@@ -122,6 +122,7 @@ pub mod pallet {
 
 		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
 		/// the costs of resources on unsuccessful unstake.
+		#[pallet::constant]
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
