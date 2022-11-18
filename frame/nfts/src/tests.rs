@@ -635,6 +635,7 @@ fn set_collection_owner_attributes_should_work() {
 			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 10);
+		assert_eq!(Collection::<Test>::get(0).unwrap().owner_deposit, 9);
 
 		assert_ok!(Nfts::set_attribute(
 			RuntimeOrigin::signed(1),
@@ -653,6 +654,7 @@ fn set_collection_owner_attributes_should_work() {
 			]
 		);
 		assert_eq!(Balances::reserved_balance(1), 19);
+		assert_eq!(Collection::<Test>::get(0).unwrap().owner_deposit, 18);
 
 		assert_ok!(Nfts::clear_attribute(
 			RuntimeOrigin::signed(1),
