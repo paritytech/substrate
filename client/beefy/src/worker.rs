@@ -41,7 +41,7 @@ use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor},
+	traits::{Block, Header, NumberFor, Zero},
 	SaturatedConversion,
 };
 
@@ -92,17 +92,55 @@ pub(crate) struct VoterOracle<B: Block> {
 }
 
 impl<B: Block> VoterOracle<B> {
-	pub fn genesis(
-		session_start: NumberFor<B>,
-		validator_set: ValidatorSet<AuthorityId>,
+	/// Verify provided `sessions` satisfies requirements, then build `VoterOracle`.
+	pub fn checked_new(
+		sessions: VecDeque<Rounds<Payload, B>>,
 		min_block_delta: u32,
-	) -> Self {
-		let mut sessions = VecDeque::new();
-		sessions.push_back(Rounds::new(session_start, validator_set));
-		Self {
-			sessions,
-			// Always target at least one block better than current best beefy.
-			min_block_delta: min_block_delta.max(1),
+	) -> Option<Self> {
+		let mut prev_start = Zero::zero();
+		let mut prev_validator_id = None;
+		// verifies the
+		let mut validate = || -> bool {
+			if sessions.is_empty() {
+				println!("🥩 empty sessions");
+				return false
+			}
+			for (idx, session) in sessions.iter().enumerate() {
+				if session.validators().is_empty() {
+					println!("🥩 empty validators");
+					return false
+				}
+				if session.session_start() <= prev_start {
+					println!("🥩 bad start");
+					return false
+				}
+				#[cfg(not(test))]
+				if let Some(prev_id) = prev_validator_id {
+					if session.validator_set_id() <= prev_id {
+						println!("🥩 bad set id");
+						return false
+					}
+				}
+				if idx != 0 && session.mandatory_done() {
+					println!("🥩 bad queue state");
+					return false
+				}
+				prev_start = session.session_start();
+				prev_validator_id = Some(session.validator_set_id());
+			}
+			println!("🥩 VALID!");
+			true
+		};
+		if validate() {
+			Some(VoterOracle {
+				sessions,
+				// Always target at least one block better than current best beefy.
+				min_block_delta: min_block_delta.max(1),
+			})
+		} else {
+			error!(target: "beefy", "🥩 Invalid sessions queue: {:?}.", sessions);
+			println!("🥩 Invalid sessions queue: {:?}.", sessions);
+			None
 		}
 	}
 
@@ -243,26 +281,21 @@ pub(crate) struct PersistedState<B: Block> {
 }
 
 impl<B: Block> PersistedState<B> {
-	pub fn initialize(
+	pub fn checked_new(
 		grandpa_header: <B as Block>::Header,
 		best_beefy: NumberFor<B>,
-		session_start: NumberFor<B>,
-		validator_set: ValidatorSet<AuthorityId>,
+		sessions: VecDeque<Rounds<Payload, B>>,
 		min_block_delta: u32,
-	) -> Self {
-		PersistedState {
+	) -> Option<Self> {
+		VoterOracle::checked_new(sessions, min_block_delta).map(|voting_oracle| PersistedState {
 			best_grandpa_block_header: grandpa_header,
 			best_beefy_block: best_beefy,
-			voting_oracle: VoterOracle::genesis(session_start, validator_set, min_block_delta),
-		}
+			voting_oracle,
+		})
 	}
 
 	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
 		self.voting_oracle.min_block_delta = min_block_delta.max(1);
-	}
-
-	pub(crate) fn active_round_mut(&mut self) -> Option<&mut Rounds<Payload, B>> {
-		self.voting_oracle.active_rounds_mut()
 	}
 }
 
@@ -354,7 +387,7 @@ where
 		&self.persisted_state.voting_oracle
 	}
 
-	fn active_round(&mut self) -> Option<&Rounds<Payload, B>> {
+	fn active_rounds(&mut self) -> Option<&Rounds<Payload, B>> {
 		self.persisted_state.voting_oracle.active_rounds()
 	}
 
@@ -394,7 +427,7 @@ where
 		debug!(target: "beefy", "🥩 New active validator set: {:?}", validator_set);
 
 		// BEEFY should finalize a mandatory block during each session.
-		if let Some(active_session) = self.active_round() {
+		if let Some(active_session) = self.active_rounds() {
 			if !active_session.mandatory_done() {
 				debug!(
 					target: "beefy", "🥩 New session {} while active session {} is still lagging.",
@@ -1033,13 +1066,13 @@ pub(crate) mod tests {
 		);
 		let at = BlockId::number(Zero::zero());
 		let genesis_header = backend.blockchain().expect_header(at).unwrap();
-		let persisted_state = PersistedState::initialize(
+		let persisted_state = PersistedState::checked_new(
 			genesis_header,
 			Zero::zero(),
-			One::one(),
-			genesis_validator_set,
+			vec![Rounds::new(One::one(), genesis_validator_set)].into(),
 			min_block_delta,
-		);
+		)
+		.unwrap();
 		let payload_provider = MmrRootProvider::new(api);
 		let worker_params = crate::worker::WorkerParams {
 			backend,
@@ -1376,7 +1409,7 @@ pub(crate) mod tests {
 		// verify old session pruned
 		assert_eq!(worker.voting_oracle().sessions.len(), 1);
 		// new session starting at #2 is in front
-		assert_eq!(worker.active_round().unwrap().session_start(), 2);
+		assert_eq!(worker.active_rounds().unwrap().session_start(), 2);
 		// verify block finalized
 		assert_eq!(worker.best_beefy_block(), 2);
 		block_on(poll_fn(move |cx| {
@@ -1403,7 +1436,7 @@ pub(crate) mod tests {
 		let mut net = BeefyTestNet::new(1);
 		let mut worker = create_beefy_worker(&net.peer(0), &keys[0], 1, validator_set.clone());
 
-		let worker_rounds = worker.active_round().unwrap();
+		let worker_rounds = worker.active_rounds().unwrap();
 		assert_eq!(worker_rounds.session_start(), 1);
 		assert_eq!(worker_rounds.validators(), validator_set.validators());
 		assert_eq!(worker_rounds.validator_set_id(), validator_set.id());
@@ -1420,7 +1453,7 @@ pub(crate) mod tests {
 		rounds.test_set_mandatory_done(true);
 		worker.persisted_state.voting_oracle.try_prune();
 		// Now we should get the next round.
-		let rounds = worker.active_round().unwrap();
+		let rounds = worker.active_rounds().unwrap();
 		// Expect new values.
 		assert_eq!(rounds.session_start(), 11);
 		assert_eq!(rounds.validators(), new_validator_set.validators());
