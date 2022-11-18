@@ -19,6 +19,7 @@
 #![allow(non_snake_case)]
 
 //! API trait of the archive functions.
+use crate::archive::event::{ArchiveEvent, NetworkConfig};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server)]
@@ -33,9 +34,9 @@ pub trait ArchiveApi<Hash> {
 	#[subscription(
 		name = "archive_unstable_body",
 		unsubscribe = "archive_unstable_stopBody",
-		item = String,
+		item = ArchiveEvent<String>,
 	)]
-	fn archive_unstable_body(&self, hash: Hash, networkConfig: Option<String>);
+	fn archive_unstable_body(&self, hash: Hash, networkConfig: Option<NetworkConfig>);
 
 	/// Get the chain's genesis hash.
 	///
@@ -56,9 +57,9 @@ pub trait ArchiveApi<Hash> {
 	#[subscription(
 		name = "archive_unstable_hashByHeight",
 		unsubscribe = "archive_unstable_stopHashByHeight",
-		item = String,
+		item = ArchiveEvent<String>,
 	)]
-	fn archive_unstable_hash_by_height(&self, height: String, networkConfig: Option<String>);
+	fn archive_unstable_hash_by_height(&self, height: String, networkConfig: Option<NetworkConfig>);
 
 	/// Retrieves the header of an archive block.
 	///
@@ -71,9 +72,9 @@ pub trait ArchiveApi<Hash> {
 	#[subscription(
 		name = "archive_unstable_header",
 		unsubscribe = "archive_unstable_stopHeader",
-		item = String,
+		item = ArchiveEvent<String>,
 	)]
-	fn archive_unstable_header(&self, hash: Hash, networkConfig: Option<String>);
+	fn archive_unstable_header(&self, hash: Hash, networkConfig: Option<NetworkConfig>);
 
 	/// Return a storage entry at a specific block's state.
 	///
@@ -86,13 +87,13 @@ pub trait ArchiveApi<Hash> {
 	#[subscription(
 		name = "archive_unstable_storage",
 		unsubscribe = "archive_unstable_stopStorage",
-		item = String,
+		item = ArchiveEvent<String>,
 	)]
 	fn archive_unstable_storage(
 		&self,
 		hash: Hash,
 		key: String,
 		childKey: Option<String>,
-		networkConfig: Option<String>,
+		networkConfig: Option<NetworkConfig>,
 	);
 }
