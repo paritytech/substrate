@@ -19,25 +19,31 @@
 //! API implementation for `archive`.
 
 use crate::{
-	archive::{ArchiveApiServer, NetworkConfig},
+	archive::{
+		event::{ArchiveEvent, ArchiveResult, ErrorEvent},
+		ArchiveApiServer, NetworkConfig,
+	},
 	SubscriptionTaskExecutor,
 };
+use codec::Encode;
+use futures::future::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, RpcResult},
 	types::SubscriptionResult,
 	SubscriptionSink,
 };
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, ExecutorProvider, StorageProvider};
-use sp_api::BlockT;
+use sp_api::{BlockId, BlockT};
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
+use sp_core::hexdisplay::HexDisplay;
 use std::{marker::PhantomData, sync::Arc};
 
 /// An API for archive RPC calls.
 pub struct Archive<BE, Block: BlockT, Client> {
 	/// Substrate client.
-	_client: Arc<Client>,
+	client: Arc<Client>,
 	/// Executor to spawn subscriptions.
-	_executor: SubscriptionTaskExecutor,
+	executor: SubscriptionTaskExecutor,
 	/// The hexadecimal encoded hash of the genesis block.
 	genesis_hash: String,
 	/// Phantom member to pin the block type.
@@ -53,7 +59,7 @@ impl<BE, Block: BlockT, Client> Archive<BE, Block, Client> {
 	) -> Self {
 		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
 
-		Self { _client: client, _executor: executor, genesis_hash, _phantom: PhantomData }
+		Self { client, executor, genesis_hash, _phantom: PhantomData }
 	}
 }
 
@@ -73,10 +79,29 @@ where
 {
 	fn archive_unstable_body(
 		&self,
-		mut _sink: SubscriptionSink,
-		_hash: Block::Hash,
+		mut sink: SubscriptionSink,
+		hash: Block::Hash,
 		_network_config: Option<NetworkConfig>,
 	) -> SubscriptionResult {
+		let client = self.client.clone();
+
+		let fut = async move {
+			let event = match client.block(&BlockId::Hash(hash)) {
+				Ok(Some(signed_block)) => {
+					let extrinsics = signed_block.block.extrinsics();
+					let result = Some(format!("0x{}", HexDisplay::from(&extrinsics.encode())));
+					ArchiveEvent::Done(ArchiveResult { result })
+				},
+				Ok(None) => {
+					// The block does not exist.
+					ArchiveEvent::Done(ArchiveResult { result: None })
+				},
+				Err(error) => ArchiveEvent::Error(ErrorEvent { error: error.to_string() }),
+			};
+			let _ = sink.send(&event);
+		};
+
+		self.executor.spawn("substrate-rpc-subscription", Some("rpc"), fut.boxed());
 		Ok(())
 	}
 
