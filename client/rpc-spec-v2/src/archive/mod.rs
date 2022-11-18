@@ -27,3 +27,7 @@
 //! # Note
 //!
 //! Methods are prefixed by `archive`.
+
+pub mod api;
+
+pub use api::ArchiveApiServer;
