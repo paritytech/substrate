@@ -218,7 +218,9 @@ fn hosts_filter(enabled: bool, addrs: &[SocketAddr]) -> AllowHosts {
 	}
 }
 
-fn try_into_cors(maybe_cors: Option<&Vec<String>>) -> Result<CorsLayer, Box<dyn StdError + Send + Sync>> {
+fn try_into_cors(
+	maybe_cors: Option<&Vec<String>>,
+) -> Result<CorsLayer, Box<dyn StdError + Send + Sync>> {
 	if let Some(cors) = maybe_cors {
 		let mut list = Vec::new();
 		for origin in cors {
