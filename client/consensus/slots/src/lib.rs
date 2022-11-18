@@ -201,9 +201,10 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// deadline our production to 98% of the total time left for proposing. As we deadline
 		// the proposing below to the same total time left, the 2% margin should be enough for
 		// the result to be returned.
+		let inherent_data = slot_info.create_inherent_data.create_inherent_data().ok()?;
 		let proposing = proposer
 			.propose(
-				slot_info.inherent_data,
+				inherent_data,
 				sp_runtime::generic::Digest { logs },
 				proposing_remaining_duration.mul_f32(0.98),
 				None,
@@ -474,7 +475,7 @@ pub async fn start_slot_worker<B, C, W, SO, CIDP, Proof>(
 	C: SelectChain<B>,
 	W: SlotWorker<B, Proof>,
 	SO: SyncOracle + Send,
-	CIDP: CreateInherentDataProviders<B, ()> + Send,
+	CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
 	CIDP::InherentDataProviders: InherentDataProviderExt + Send,
 {
 	let mut slots = Slots::new(slot_duration.as_duration(), create_inherent_data_providers, client);
@@ -786,7 +787,7 @@ mod test {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
-			inherent_data: Default::default(),
+			create_inherent_data: Default::default(),
 			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
 				1,

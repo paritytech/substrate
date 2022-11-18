@@ -52,8 +52,8 @@ pub struct SlotInfo<B: BlockT> {
 	pub slot: Slot,
 	/// The instant at which the slot ends.
 	pub ends_at: Instant,
-	/// The inherent data.
-	pub inherent_data: InherentData,
+	/// The inherent data provider.
+	pub create_inherent_data: Box<dyn InherentDataProvider>,
 	/// Slot duration.
 	pub duration: Duration,
 	/// The chain header this slot is based on.
@@ -70,14 +70,14 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
-		inherent_data: InherentData,
+		inherent_data: Box<dyn InherentDataProvider>,
 		duration: Duration,
 		chain_head: B::Header,
 		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
-			inherent_data,
+			create_inherent_data: inherent_data,
 			duration,
 			chain_head,
 			block_size_limit,
@@ -118,7 +118,7 @@ impl<Block, SC, IDP> Slots<Block, SC, IDP>
 where
 	Block: BlockT,
 	SC: SelectChain<Block>,
-	IDP: CreateInherentDataProviders<Block, ()>,
+	IDP: CreateInherentDataProviders<Block, ()> + 'static,
 	IDP::InherentDataProviders: crate::InherentDataProviderExt,
 {
 	/// Returns a future that fires when the next slot starts.
@@ -172,13 +172,18 @@ where
 			}
 
 			let slot = inherent_data_providers.slot();
-			let inherent_data = inherent_data_providers.create_inherent_data()?;
 
 			// never yield the same slot twice.
 			if slot > self.last_slot {
 				self.last_slot = slot;
 
-				break Ok(SlotInfo::new(slot, inherent_data, self.slot_duration, chain_head, None))
+				break Ok(SlotInfo::new(
+					slot,
+					Box::new(inherent_data_providers),
+					self.slot_duration,
+					chain_head,
+					None,
+				))
 			}
 		}
 	}
