@@ -43,7 +43,7 @@ use beefy_primitives::{
 	KEY_TYPE as BeefyKeyType,
 };
 use sc_network::{config::RequestResponseConfig, ProtocolName};
-use sp_mmr_primitives::{BatchProof, EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
+use sp_mmr_primitives::{EncodableOpaqueLeaf, Error as MmrError, MmrApi, Proof};
 
 use sp_api::{ApiRef, ProvideRuntimeApi};
 use sp_consensus::BlockOrigin;
@@ -246,47 +246,25 @@ macro_rules! create_test_api {
 				}
 
 				impl MmrApi<Block, MmrRootHash, NumberFor<Block>> for RuntimeApi {
-					fn generate_proof(_block_number: u64)
-						-> Result<(EncodableOpaqueLeaf, Proof<MmrRootHash>), MmrError> {
+					fn mmr_root() -> Result<MmrRootHash, MmrError> {
+						Ok($mmr_root)
+					}
+
+					fn generate_proof(
+						_block_numbers: Vec<u64>,
+						_best_known_block_number: Option<u64>
+					) -> Result<(Vec<EncodableOpaqueLeaf>, Proof<MmrRootHash>), MmrError> {
 						unimplemented!()
 					}
 
-					fn verify_proof(_leaf: EncodableOpaqueLeaf, _proof: Proof<MmrRootHash>)
-						-> Result<(), MmrError> {
+					fn verify_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: Proof<MmrRootHash>) -> Result<(), MmrError> {
 						unimplemented!()
 					}
 
 					fn verify_proof_stateless(
 						_root: MmrRootHash,
-						_leaf: EncodableOpaqueLeaf,
-						_proof: Proof<MmrRootHash>
-					) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
-					fn mmr_root() -> Result<MmrRootHash, MmrError> {
-						Ok($mmr_root)
-					}
-
-					fn generate_batch_proof(_block_numbers: Vec<u64>) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
-						unimplemented!()
-					}
-
-					fn generate_historical_batch_proof(
-						_block_numbers: Vec<u64>,
-						_best_known_block_number: u64
-					) -> Result<(Vec<EncodableOpaqueLeaf>, BatchProof<MmrRootHash>), MmrError> {
-						unimplemented!()
-					}
-
-					fn verify_batch_proof(_leaves: Vec<EncodableOpaqueLeaf>, _proof: BatchProof<MmrRootHash>) -> Result<(), MmrError> {
-						unimplemented!()
-					}
-
-					fn verify_batch_proof_stateless(
-						_root: MmrRootHash,
 						_leaves: Vec<EncodableOpaqueLeaf>,
-						_proof: BatchProof<MmrRootHash>
+						_proof: Proof<MmrRootHash>
 					) -> Result<(), MmrError> {
 						unimplemented!()
 					}
