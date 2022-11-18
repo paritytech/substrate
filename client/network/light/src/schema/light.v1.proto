@@ -4,14 +4,6 @@ syntax = "proto2";
 
 package api.v1.light;
 
-// A pair of arbitrary bytes.
-message Pair {
-	// The first element of the pair.
-	required bytes fst = 1;
-	// The second element of the pair.
-	required bytes snd = 2;
-}
-
 // Enumerate all possible light client request messages.
 message Request {
 	oneof request {
