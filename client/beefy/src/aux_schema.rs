@@ -112,7 +112,7 @@ where
 
 	debug!(target: "beefy", "🥩 pallet available: header {:?} validator set {:?}", best_grandpa, active);
 
-	if active.id() == GENESIS_AUTHORITY_SET_ID {
+	let state = if active.id() == GENESIS_AUTHORITY_SET_ID {
 		let start = *best_grandpa.number();
 		info!(
 			target: "beefy",
@@ -120,63 +120,57 @@ where
 			Starting voting rounds at block {:?}.",
 			start
 		);
-		return Ok(PersistedState::initialize(
-			best_grandpa,
-			Zero::zero(),
-			start,
-			active,
-			min_block_delta,
-		))
-	}
-
-	// Walk back the imported blocks and initialize voter either, at the last block with
-	// a BEEFY justification, or at current session's boundary; voter will resume from there.
-	let blockchain = backend.blockchain();
-	let mut header = best_grandpa.clone();
-	let state = loop {
-		if let Some(true) = blockchain
-			.justifications(header.hash())
-			.ok()
-			.flatten()
-			.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
-		{
-			info!(
-				target: "beefy",
-				"🥩 Initialize BEEFY voter at last BEEFY finalized block: {:?}.",
-				*header.number()
-			);
-			let mut state = PersistedState::initialize(
-				best_grandpa,
-				*header.number(),
-				*header.number(),
-				active,
-				min_block_delta,
-			);
-			// Mark the round as already finalized.
-			if let Some(round) = state.active_round_mut() {
-				round.conclude(*header.number());
+		PersistedState::initialize(best_grandpa, Zero::zero(), start, active, min_block_delta)
+	} else {
+		// Walk back the imported blocks and initialize voter either, at the last block with
+		// a BEEFY justification, or at current session's boundary; voter will resume from there.
+		let blockchain = backend.blockchain();
+		let mut header = best_grandpa.clone();
+		loop {
+			if let Some(true) = blockchain
+				.justifications(header.hash())
+				.ok()
+				.flatten()
+				.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
+			{
+				info!(
+					target: "beefy",
+					"🥩 Initialize BEEFY voter at last BEEFY finalized block: {:?}.",
+					*header.number()
+				);
+				let mut state = PersistedState::initialize(
+					best_grandpa,
+					*header.number(),
+					*header.number(),
+					active,
+					min_block_delta,
+				);
+				// Mark the round as already finalized.
+				if let Some(round) = state.active_round_mut() {
+					round.conclude(*header.number());
+				}
+				break state
 			}
-			break state
-		}
 
-		if let Some(active) = crate::worker::find_authorities_change::<B>(&header) {
-			info!(
-				target: "beefy",
-				"🥩 Initialize BEEFY voter at current session boundary: {:?}.",
-				*header.number()
-			);
-			let state = PersistedState::initialize(
-				best_grandpa,
-				Zero::zero(),
-				*header.number(),
-				active,
-				min_block_delta,
-			);
-			break state
-		}
+			if let Some(active) = crate::worker::find_authorities_change::<B>(&header) {
+				info!(
+					target: "beefy",
+					"🥩 Initialize BEEFY voter at current session boundary: {:?}.",
+					*header.number()
+				);
+				let state = PersistedState::initialize(
+					best_grandpa,
+					Zero::zero(),
+					*header.number(),
+					active,
+					min_block_delta,
+				);
+				break state
+			}
 
-		// Move up the chain.
-		header = blockchain.expect_header(BlockId::Hash(*header.parent_hash()))?;
+			// Move up the chain.
+			header = blockchain.expect_header(BlockId::Hash(*header.parent_hash()))?;
+		}
 	};
 
 	write_voter_state(backend, &state)?;
