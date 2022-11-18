@@ -4242,7 +4242,7 @@ mod create {
 }
 
 #[test]
-fn set_claimable_action_works() {
+fn set_claimable_actor_works() {
 	ExtBuilder::default().build_and_execute(|| {
 		// Given
 		Balances::make_free_balance_be(&11, ExistentialDeposit::get() + 2);
@@ -4262,15 +4262,12 @@ fn set_claimable_action_works() {
 		);
 
 		// Give pool operator permission.
-		assert_eq!(ClaimableAction::<Runtime>::get(11), false);
-		assert_noop!(Pools::set_claimable_action(RuntimeOrigin::signed(12), true), Error::<T>::PoolMemberNotFound);
-		assert_ok!(Pools::set_claimable_action(RuntimeOrigin::signed(11), true));
+		assert_eq!(ClaimableAction::<Runtime>::get(11), BondExtraSource::Origin);
+		assert_noop!(Pools::set_claimable_actor(RuntimeOrigin::signed(12), BondExtraSource::Operator), Error::<T>::PoolMemberNotFound);
+		assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(11), BondExtraSource::Operator));
 
 		// then
-		assert_eq!(ClaimableAction::<Runtime>::get(11), true);
-
-		ClaimableAction::<Runtime>::remove(11);
-		assert_eq!(ClaimableAction::<Runtime>::get(11), false);
+		assert_eq!(ClaimableAction::<Runtime>::get(11), BondExtraSource::Operator);
 	});
 }
 
@@ -4636,7 +4633,7 @@ mod bond_extra {
 			assert_eq!(Balances::free_balance(20), 20);
 
 			assert_noop!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 10), Error::<Runtime>::DoesNotHavePermission);
-			assert_ok!(Pools::set_claimable_action(RuntimeOrigin::signed(10), true));
+			assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(10), BondExtraSource::Operator));
 			assert_ok!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 10));
 			assert_eq!(Balances::free_balance(&default_reward_account()), 7);
 
@@ -4647,7 +4644,7 @@ mod bond_extra {
 
 			// when
 			assert_noop!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 20), Error::<Runtime>::DoesNotHavePermission);
-			assert_ok!(Pools::set_claimable_action(RuntimeOrigin::signed(20), true));
+			assert_ok!(Pools::set_claimable_actor(RuntimeOrigin::signed(20), BondExtraSource::Operator));
 			assert_ok!(Pools::root_bond_extra(RuntimeOrigin::signed(900), 20));
 
 			// then

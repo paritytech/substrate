@@ -30,7 +30,7 @@ use frame_system::RawOrigin as RuntimeOrigin;
 use pallet_nomination_pools::{
 	BalanceOf, BondExtra, BondedPoolInner, BondedPools, ConfigOp, MaxPoolMembers,
 	MaxPoolMembersPerPool, MaxPools, Metadata, MinCreateBond, MinJoinBond, Pallet as Pools,
-	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage, ClaimableAction,
+	PoolMembers, PoolRoles, PoolState, RewardPools, SubPoolsStorage, ClaimableAction, BondExtraSource,
 };
 use sp_runtime::traits::{Bounded, StaticLookup, Zero};
 use sp_staking::{EraIndex, StakingInterface};
@@ -278,6 +278,8 @@ frame_benchmarking::benchmarks! {
 		let reward_account1 = Pools::<T>::create_reward_account(1);
 		assert!(extra >= CurrencyOf::<T>::minimum_balance());
 		CurrencyOf::<T>::deposit_creating(&reward_account1, extra);
+		Pools::<T>::set_claimable_actor(RuntimeOrigin::Signed(scenario.creator1.clone()).into(), BondExtraSource::Operator)
+			.unwrap();
 
 	}:_(RuntimeOrigin::Signed(scenario.creator1.clone()), scenario_creator1_lookup)
 	verify {
@@ -671,7 +673,7 @@ frame_benchmarking::benchmarks! {
 		assert!(T::Staking::nominations(Pools::<T>::create_bonded_account(1)).is_none());
 	}
 
-	set_claimable_action {
+	set_claimable_actor {
 		// Create a pool
 		let min_create_bond = Pools::<T>::depositor_min_bond();
 		let (depositor, pool_account) = create_pool_account::<T>(0, min_create_bond);
@@ -688,9 +690,9 @@ frame_benchmarking::benchmarks! {
 			T::Staking::active_stake(&pool_account).unwrap(),
 			min_create_bond + min_join_bond
 		);
-	}:_(RuntimeOrigin::Signed(joiner.clone()), true)
+	}:_(RuntimeOrigin::Signed(joiner.clone()), BondExtraSource::Operator)
 	verify {
-		assert_eq!(ClaimableAction::<T>::get(joiner), true);
+		assert_eq!(ClaimableAction::<T>::get(joiner), BondExtraSource::Operator);
 	}
 
 	impl_benchmark_test_suite!(

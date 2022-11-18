@@ -363,6 +363,21 @@ enum AccountType {
 	Reward,
 }
 
+// Account to increse the bond of a member
+#[derive(Encode, Decode, MaxEncodedLen, Clone, Copy, Debug, PartialEq, Eq, TypeInfo)]
+pub enum BondExtraSource {
+	// Action to be taken by the bonded member of a pool
+	Origin,
+	// Action to be taken by the pool operator on the member's behalf
+	Operator,
+}
+
+impl Default for BondExtraSource {
+	fn default() -> Self {
+		Self::Origin
+	}
+}
+
 /// A member in a pool.
 #[derive(Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebugNoBound, CloneNoBound)]
 #[cfg_attr(feature = "std", derive(frame_support::PartialEqNoBound, DefaultNoBound))]
@@ -1276,9 +1291,9 @@ pub mod pallet {
 	pub type ReversePoolIdLookup<T: Config> =
 		CountedStorageMap<_, Twox64Concat, T::AccountId, PoolId, OptionQuery>;
 
-	/// Member decision for operator claimable reward action.
+	/// ?
 	#[pallet::storage]
-	pub type ClaimableAction<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, bool, ValueQuery>;
+	pub type ClaimableAction<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, BondExtraSource, ValueQuery>;
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
@@ -1573,7 +1588,6 @@ pub mod pallet {
 		}
 
 		// TODO: Update weight info
-		// Investigate adding helper function to remove code duplication.
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
@@ -1589,7 +1603,7 @@ pub mod pallet {
 				Self::get_member_with_pools(&member_account)?;
 
 			ensure!(bonded_pool.is_root(&who), Error::<T>::NotRoot);
-			ensure!(ClaimableAction::<T>::get(&member_account), Error::<T>::DoesNotHavePermission);
+			ensure!(ClaimableAction::<T>::get(&member_account) == BondExtraSource::Operator, Error::<T>::DoesNotHavePermission);
 
 			// IMPORTANT: reward pool records must be updated with the old points. why?
 			reward_pool.update_records(bonded_pool.id, bonded_pool.points)?;
@@ -2141,15 +2155,14 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		// TODO: For when the pool member leaves or is kiked out, clear storage.
 		// Update weight info
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
-		pub fn set_claimable_action(origin: OriginFor<T>, action: bool) -> DispatchResult {
+		pub fn set_claimable_actor(origin: OriginFor<T>, actor: BondExtraSource) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			ensure!(PoolMembers::<T>::contains_key(&who), Error::<T>::PoolMemberNotFound);
-			<ClaimableAction::<T>>::mutate(who, |delegate| {
-				*delegate = action;	
+			<ClaimableAction::<T>>::mutate(who, |source| {
+				*source = actor;	
 			});
 			Ok(())
 		}
