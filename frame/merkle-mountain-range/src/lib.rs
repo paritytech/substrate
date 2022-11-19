@@ -22,7 +22,7 @@
 //! Details on Merkle Mountain Ranges (MMRs) can be found here:
 //! <https://github.com/mimblewimble/grin/blob/master/doc/mmr.md>
 //!
-//! The MMR pallet constructs a MMR from leaf data obtained on every block from
+//! The MMR pallet constructs an MMR from leaf data obtained on every block from
 //! `LeafDataProvider`. MMR nodes are stored both in:
 //! - on-chain storage - hashes only; not full leaf content)
 //! - off-chain storage - via Indexing API we push full leaf content (and all internal nodes as
@@ -50,7 +50,7 @@
 //!
 //! Secondary use case is to archive historical data, but still be able to retrieve them on-demand
 //! if needed. For instance if parent block hashes are stored in the MMR it's possible at any point
-//! in time to provide a MMR proof about some past block hash, while this data can be safely pruned
+//! in time to provide an MMR proof about some past block hash, while this data can be safely pruned
 //! from on-chain storage.
 //!
 //! NOTE This pallet is experimental and not proven to work in production.
@@ -103,7 +103,7 @@ pub trait WeightInfo {
 	fn on_initialize(peaks: NodeIndex) -> Weight;
 }
 
-/// A MMR specific to the pallet.
+/// An MMR specific to the pallet.
 type ModuleMmr<StorageType, T, I> = mmr::Mmr<StorageType, T, I, LeafOf<T, I>>;
 
 /// Leaf data.
@@ -287,15 +287,15 @@ pub mod pallet {
 
 /// Stateless MMR proof verification for batch of leaves.
 ///
-/// This function can be used to verify received MMR [primitives::BatchProof] (`proof`)
+/// This function can be used to verify received MMR [primitives::Proof] (`proof`)
 /// for given leaves set (`leaves`) against a known MMR root hash (`root`).
 /// Note, the leaves should be sorted such that corresponding leaves and leaf indices have the
 /// same position in both the `leaves` vector and the `leaf_indices` vector contained in the
-/// [primitives::BatchProof].
+/// [primitives::Proof].
 pub fn verify_leaves_proof<H, L>(
 	root: H::Output,
 	leaves: Vec<mmr::Node<H, L>>,
-	proof: primitives::BatchProof<H::Output>,
+	proof: primitives::Proof<H::Output>,
 ) -> Result<(), primitives::Error>
 where
 	H: traits::Hash,
@@ -381,37 +381,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(leaf_idx)
 	}
 
-	/// Generate a MMR proof for the given `block_numbers`.
+	/// Generate an MMR proof for the given `block_numbers`.
+	/// If `best_known_block_number = Some(n)`, this generates a historical proof for
+	/// the chain with head at height `n`.
+	/// Else it generates a proof for the MMR at the current block height.
 	///
 	/// Note this method can only be used from an off-chain context
 	/// (Offchain Worker or Runtime API call), since it requires
 	/// all the leaves to be present.
 	/// It may return an error or panic if used incorrectly.
-	pub fn generate_batch_proof(
+	pub fn generate_proof(
 		block_numbers: Vec<T::BlockNumber>,
-	) -> Result<
-		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
-		primitives::Error,
-	> {
-		Self::generate_historical_batch_proof(
-			block_numbers,
-			<frame_system::Pallet<T>>::block_number(),
-		)
-	}
+		best_known_block_number: Option<T::BlockNumber>,
+	) -> Result<(Vec<LeafOf<T, I>>, primitives::Proof<<T as Config<I>>::Hash>), primitives::Error> {
+		// check whether best_known_block_number provided, else use current best block
+		let best_known_block_number =
+			best_known_block_number.unwrap_or_else(|| <frame_system::Pallet<T>>::block_number());
 
-	/// Generate a MMR proof for the given `block_numbers` given the `best_known_block_number`.
-	///
-	/// Note this method can only be used from an off-chain context
-	/// (Offchain Worker or Runtime API call), since it requires
-	/// all the leaves to be present.
-	/// It may return an error or panic if used incorrectly.
-	pub fn generate_historical_batch_proof(
-		block_numbers: Vec<T::BlockNumber>,
-		best_known_block_number: T::BlockNumber,
-	) -> Result<
-		(Vec<LeafOf<T, I>>, primitives::BatchProof<<T as Config<I>>::Hash>),
-		primitives::Error,
-	> {
 		let leaves_count =
 			Self::block_num_to_leaf_index(best_known_block_number)?.saturating_add(1);
 
@@ -424,7 +410,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect::<Result<Vec<LeafIndex>, _>>()?;
 
 		let mmr: ModuleMmr<mmr::storage::OffchainStorage, T, I> = mmr::Mmr::new(leaves_count);
-		mmr.generate_batch_proof(leaf_indices)
+		mmr.generate_proof(leaf_indices)
 	}
 
 	/// Return the on-chain MMR root hash.
@@ -440,7 +426,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// or the proof is invalid.
 	pub fn verify_leaves(
 		leaves: Vec<LeafOf<T, I>>,
-		proof: primitives::BatchProof<<T as Config<I>>::Hash>,
+		proof: primitives::Proof<<T as Config<I>>::Hash>,
 	) -> Result<(), primitives::Error> {
 		if proof.leaf_count > Self::mmr_leaves() ||
 			proof.leaf_count == 0 ||
