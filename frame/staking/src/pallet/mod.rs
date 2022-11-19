@@ -59,7 +59,7 @@ pub mod pallet {
 	use super::*;
 
 	/// The current storage version.
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(12);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(crate) trait Store)]
