@@ -101,6 +101,8 @@ impl Config for Test {
 	type WeightInfo = ();
 	type Extra = ();
 	type RemoveItemsLimit = ConstU32<5>;
+	#[cfg(feature = "runtime-benchmarks")]
+	type Helper = ();
 }
 
 use std::collections::HashMap;
