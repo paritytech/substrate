@@ -48,7 +48,6 @@ pub mod v1 {
 						.defensive()
 					{
 						Queue::<T>::insert(stash, deposit);
-						current.put::<Pallet<T>>();
 					} else {
 						// not much we can do here -- head is already deleted.
 					}
@@ -56,6 +55,8 @@ pub mod v1 {
 				} else {
 					T::DbWeight::get().reads(2)
 				}
+
+				current.put::<Pallet<T>>();
 			} else {
 				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
