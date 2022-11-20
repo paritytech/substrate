@@ -47,7 +47,8 @@ variables:
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  CI_IMAGE:                        "paritytech/ci-linux@sha256:c977b383c2033de50083fad18f6b9e698644230455e016ba708da00eb98d4683" # staging 07.11.2022
+  CI_IMAGE:                        "paritytech/ci-linux:production"
+  BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
@@ -279,6 +280,22 @@ rusty-cachier-notify:
     PR_NUM:                        "${PR_NUM}"
   trigger:
     project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch:                        "as-improve"
+
+remove-cancel-pipeline-message:
+  stage: .post
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  variables:
+    PROJECT_ID:                    "${CI_PROJECT_ID}"
+    PROJECT_NAME:                  "${CI_PROJECT_NAME}"
+    PIPELINE_ID:                   "${CI_PIPELINE_ID}"
+    FAILED_JOB_URL:                "https://gitlab.com"
+    FAILED_JOB_NAME:               "nope"
+    PR_NUM:                        "${CI_COMMIT_REF_NAME}"
+  trigger:
+    project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch:                        "as-improve"
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails
