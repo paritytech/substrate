@@ -31,6 +31,7 @@ mod slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 pub use slots::SlotInfo;
 use slots::Slots;
+use std::time::Instant;
 
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
@@ -195,13 +196,15 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		let slot = slot_info.slot;
 		let telemetry = self.telemetry();
 		let logging_target = self.logging_target();
+
+		let inherent_data = Self::create_inherent_data(&slot_info, &logging_target).await?;
+
 		let proposing_remaining_duration = self.proposing_remaining_duration(&slot_info);
 		let logs = self.pre_digest_data(slot, claim);
 
 		// deadline our production to 98% of the total time left for proposing. As we deadline
 		// the proposing below to the same total time left, the 2% margin should be enough for
 		// the result to be returned.
-		let inherent_data = slot_info.create_inherent_data.create_inherent_data().await.ok()?;
 		let proposing = proposer
 			.propose(
 				inherent_data,
@@ -241,6 +244,36 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		};
 
 		Some(proposal)
+	}
+
+	/// Calls `create_inherent_data` and handles errors.
+	async fn create_inherent_data(
+		slot_info: &SlotInfo<B>,
+		logging_target: &str,
+	) -> Option<sp_inherents::InherentData> {
+		let inherent_data = match slot_info.create_inherent_data.create_inherent_data().await {
+			Ok(data) => data,
+			Err(err) => {
+				warn!(
+					target: logging_target,
+					"Unable to create inherent data for for block {:?}: {}",
+					slot_info.chain_head.hash(),
+					err,
+				);
+				return None
+			},
+		};
+
+		if Instant::now() > slot_info.ends_at {
+			warn!(
+				target: "slots",
+				"Creating inherent data took more time than we had left for the slot.",
+			);
+
+			return None
+		}
+
+		Some(inherent_data)
 	}
 
 	/// Implements [`SlotWorker::on_slot`].

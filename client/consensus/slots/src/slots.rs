@@ -142,9 +142,6 @@ where
 
 			// reschedule delay for next slot.
 			self.inner_delay = Some(Delay::new(ends_in));
-
-			let ends_at = Instant::now() + ends_in;
-
 			let chain_head = match self.select_chain.best_chain().await {
 				Ok(x) => x,
 				Err(e) => {
@@ -163,13 +160,6 @@ where
 				.create_inherent_data_providers
 				.create_inherent_data_providers(chain_head.hash(), ())
 				.await?;
-
-			if Instant::now() > ends_at {
-				log::warn!(
-					target: "slots",
-					"Creating inherent data providers took more time than we had left for the slot.",
-				);
-			}
 
 			let slot = inherent_data_providers.slot();
 
