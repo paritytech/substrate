@@ -1552,7 +1552,7 @@ impl<T: Config> Pallet<T> {
 		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
 		let supports = supports
 			.try_into()
-			.defensive_map_err(|_| FeasibilityError::BoundedConversionFailed);
+			.defensive_map_err(|_| FeasibilityError::BoundedConversionFailed)?;
 		Ok(ReadySolution { supports, compute, score })
 	}
 
