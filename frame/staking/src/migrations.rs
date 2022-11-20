@@ -427,20 +427,20 @@ pub mod v7 {
 		);
 		assert!(Validators::<T>::count().is_zero(), "Validators already set.");
 		assert!(Nominators::<T>::count().is_zero(), "Nominators already set.");
-		assert!(StorageVersion::<T>::get() == Releases::V6_0_0);
+		assert!(StorageVersion::<T>::get() == OldReleases::V6_0_0);
 		Ok(())
 	}
 
 	pub fn migrate<T: Config>() -> Weight {
-		log!(info, "Migrating staking to Releases::V7_0_0");
+		log!(info, "Migrating staking to OldReleases::V7_0_0");
 		let validator_count = Validators::<T>::iter().count() as u32;
 		let nominator_count = Nominators::<T>::iter().count() as u32;
 
 		CounterForValidators::<T>::put(validator_count);
 		CounterForNominators::<T>::put(nominator_count);
 
-		StorageVersion::<T>::put(Releases::V7_0_0);
-		log!(info, "Completed staking migration to Releases::V7_0_0");
+		StorageVersion::<T>::put(OldReleases::V7_0_0);
+		log!(info, "Completed staking migration to OldReleases::V7_0_0");
 
 		T::DbWeight::get().reads_writes(validator_count.saturating_add(nominator_count).into(), 2)
 	}
@@ -491,7 +491,7 @@ pub mod v6 {
 		EraElectionStatus::<T>::kill();
 		IsCurrentSessionFinal::<T>::kill();
 
-		StorageVersion::<T>::put(Releases::V6_0_0);
+		StorageVersion::<T>::put(OldReleases::V6_0_0);
 
 		log!(info, "Done.");
 		T::DbWeight::get().writes(6 + 1)
