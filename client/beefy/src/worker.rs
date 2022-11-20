@@ -500,19 +500,21 @@ where
 
 			self.on_demand_justifications.cancel_requests_older_than(block_num);
 
-			if let Err(e) = self.backend.append_justification(
-				BlockId::Number(block_num),
-				(BEEFY_ENGINE_ID, finality_proof.encode()),
-			) {
+			if let Err(e) = self
+				.backend
+				.blockchain()
+				.expect_block_hash_from_id(&BlockId::Number(block_num))
+				.and_then(|hash| {
+					self.links
+						.to_rpc_best_block_sender
+						.notify(|| Ok::<_, ()>(hash))
+						.expect("forwards closure result; the closure always returns Ok; qed.");
+
+					self.backend
+						.append_justification(hash, (BEEFY_ENGINE_ID, finality_proof.encode()))
+				}) {
 				error!(target: "beefy", "🥩 Error {:?} on appending justification: {:?}", e, finality_proof);
 			}
-
-			self.backend.blockchain().hash(block_num).ok().flatten().map(|hash| {
-				self.links
-					.to_rpc_best_block_sender
-					.notify(|| Ok::<_, ()>(hash))
-					.expect("forwards closure result; the closure always returns Ok; qed.")
-			});
 
 			self.links
 				.to_rpc_justif_sender
@@ -707,7 +709,7 @@ where
 			// a BEEFY justification, or at this session's boundary; voter will resume from there.
 			loop {
 				if let Some(true) = blockchain
-					.justifications(BlockId::hash(header.hash()))
+					.justifications(header.hash())
 					.ok()
 					.flatten()
 					.map(|justifs| justifs.get(BEEFY_ENGINE_ID).is_some())
@@ -1371,8 +1373,10 @@ pub(crate) mod tests {
 		let mut best_block_stream = best_block_streams.drain(..).next().unwrap();
 		net.peer(0).push_blocks(2, false);
 		// finalize 1 and 2 without justifications
-		backend.finalize_block(BlockId::number(1), None).unwrap();
-		backend.finalize_block(BlockId::number(2), None).unwrap();
+		let hashof1 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(1)).unwrap();
+		let hashof2 = backend.blockchain().expect_block_hash_from_id(&BlockId::Number(2)).unwrap();
+		backend.finalize_block(hashof1, None).unwrap();
+		backend.finalize_block(hashof2, None).unwrap();
 
 		let justif = create_finality_proof(2);
 		// create new session at block #2
@@ -1397,7 +1401,7 @@ pub(crate) mod tests {
 		}));
 
 		// check BEEFY justifications are also appended to backend
-		let justifs = backend.blockchain().justifications(BlockId::number(2)).unwrap().unwrap();
+		let justifs = backend.blockchain().justifications(hashof2).unwrap().unwrap();
 		assert!(justifs.get(BEEFY_ENGINE_ID).is_some())
 	}
 
@@ -1506,11 +1510,9 @@ pub(crate) mod tests {
 		// push 15 blocks with `AuthorityChange` digests every 10 blocks
 		net.generate_blocks_and_sync(15, 10, &validator_set, false);
 		// finalize 13 without justifications
-		net.peer(0)
-			.client()
-			.as_client()
-			.finalize_block(BlockId::number(13), None)
-			.unwrap();
+		let hashof13 =
+			backend.blockchain().expect_block_hash_from_id(&BlockId::Number(13)).unwrap();
+		net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
 
 		// Test initialization at session boundary.
 		{
@@ -1546,8 +1548,10 @@ pub(crate) mod tests {
 				commitment,
 				signatures: vec![None],
 			});
+			let hashof10 =
+				backend.blockchain().expect_block_hash_from_id(&BlockId::Number(10)).unwrap();
 			backend
-				.append_justification(BlockId::Number(10), (BEEFY_ENGINE_ID, justif.encode()))
+				.append_justification(hashof10, (BEEFY_ENGINE_ID, justif.encode()))
 				.unwrap();
 
 			// initialize voter at block 13, expect rounds initialized at last beefy finalized 10
@@ -1580,8 +1584,10 @@ pub(crate) mod tests {
 				commitment,
 				signatures: vec![None],
 			});
+			let hashof12 =
+				backend.blockchain().expect_block_hash_from_id(&BlockId::Number(12)).unwrap();
 			backend
-				.append_justification(BlockId::Number(12), (BEEFY_ENGINE_ID, justif.encode()))
+				.append_justification(hashof12, (BEEFY_ENGINE_ID, justif.encode()))
 				.unwrap();
 
 			// initialize voter at block 13, expect rounds initialized at last beefy finalized 12

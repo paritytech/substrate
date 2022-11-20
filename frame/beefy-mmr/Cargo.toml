@@ -21,10 +21,10 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 pallet-beefy = { version = "4.0.0-dev", default-features = false, path = "../beefy" }
 pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../merkle-mountain-range" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 array-bytes = "4.1"

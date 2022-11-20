@@ -46,7 +46,8 @@ use sc_network_common::{
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, state_request_handler::StateRequestHandler,
+	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
+	state_request_handler::StateRequestHandler,
 	warp_request_handler::RequestHandler as WarpSyncRequestHandler, ChainSync,
 };
 use sc_rpc::{
@@ -844,6 +845,7 @@ where
 		protocol_config
 	};
 
+	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (chain_sync, chain_sync_service) = ChainSync::new(
 		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
@@ -855,7 +857,9 @@ where
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
+		chain_sync_network_handle,
 	)?;
+
 	let block_announce_config = chain_sync.get_block_announce_proto_config(
 		protocol_id.clone(),
 		&config.chain_spec.fork_id().map(ToOwned::to_owned),
@@ -926,7 +930,13 @@ where
 		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() }),
 		config.prometheus_config.as_ref().map(|config| &config.registry),
 	)?;
+
 	spawn_handle.spawn("network-transactions-handler", Some("networking"), tx_handler.run());
+	spawn_handle.spawn(
+		"chain-sync-network-service-provider",
+		Some("networking"),
+		chain_sync_network_provider.run(network.clone()),
+	);
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
