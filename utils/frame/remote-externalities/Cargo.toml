@@ -19,9 +19,9 @@ log = "0.4.17"
 serde = "1.0.136"
 serde_json = "1.0"
 frame-support = { version = "4.0.0-dev", optional = true, path = "../../../frame/support" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-io = { version = "6.0.0", path = "../../../primitives/io" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../../primitives/io" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 sp-version = { version = "5.0.0", path = "../../../primitives/version" }
 substrate-rpc-client = { path = "../rpc/client" }
 

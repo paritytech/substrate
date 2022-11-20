@@ -16,12 +16,12 @@ beefy-primitives = { version = "4.0.0-dev", default-features = false, path = "..
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
 pallet-session = { version = "4.0.0-dev", default-features = false, path = "../session" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
 sp-staking = { version = "4.0.0-dev", path = "../../primitives/staking" }
 
 [features]

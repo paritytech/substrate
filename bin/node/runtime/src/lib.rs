@@ -910,6 +910,8 @@ impl pallet_remark::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 }
 
+impl pallet_root_testing::Config for Runtime {}
+
 parameter_types! {
 	pub const LaunchPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
 	pub const VotingPeriod: BlockNumber = 28 * 24 * 60 * MINUTES;
@@ -1455,6 +1457,7 @@ impl pallet_assets::Config for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 parameter_types! {
@@ -1676,6 +1679,7 @@ construct_runtime!(
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
 		Remark: pallet_remark,
+		RootTesting: pallet_root_testing,
 		ConvictionVoting: pallet_conviction_voting,
 		Whitelist: pallet_whitelist,
 		AllianceMotion: pallet_collective::<Instance3>,
