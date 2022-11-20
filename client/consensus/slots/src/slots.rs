@@ -22,7 +22,7 @@
 
 use super::{InherentDataProviderExt, Slot};
 use sp_consensus::{Error, SelectChain};
-use sp_inherents::{CreateInherentDataProviders, InherentData, InherentDataProvider};
+use sp_inherents::{CreateInherentDataProviders, InherentDataProvider};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT};
 
 use futures_timer::Delay;

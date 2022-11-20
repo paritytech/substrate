@@ -201,7 +201,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		// deadline our production to 98% of the total time left for proposing. As we deadline
 		// the proposing below to the same total time left, the 2% margin should be enough for
 		// the result to be returned.
-		let inherent_data = slot_info.create_inherent_data.create_inherent_data().ok()?;
+		let inherent_data = slot_info.create_inherent_data.create_inherent_data().await.ok()?;
 		let proposing = proposer
 			.propose(
 				inherent_data,
