@@ -49,7 +49,7 @@ use crate::{
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
-pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 100;
+pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -957,8 +957,8 @@ pub mod pallet {
 			// withdraw chunks older than `BondingDuration`, if there are no more unlocking chunks
 			// slots available.
 			let maybe_withdraw_weight = {
-				let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
 				if unlocking == T::MaxUnlockingChunks::get() as usize {
+					let real_num_slashing_spans = Self::slashing_spans(&controller).iter().count();
 					Self::do_withdraw_unbonded(&controller, real_num_slashing_spans as u32)?
 						.actual_weight
 				} else {
@@ -966,11 +966,11 @@ pub mod pallet {
 				}
 			};
 
+            // we need to fetch the ledger again because it may have been mutated in the call
+            // to `Self::do_withdraw_unbonded` above.
 			let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 			let mut value = value.min(ledger.active);
 
-			// this should not happen anymore, but we want to make sure the unbonding does not
-			// proceed if for some reason the chunks were not freed.
 			ensure!(
 				ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
 				Error::<T>::NoMoreChunks,
