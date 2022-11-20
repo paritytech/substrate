@@ -547,6 +547,11 @@ pub enum FeasibilityError {
 	UntrustedScoreTooLow,
 	/// Data Provider returned too many desired targets
 	TooManyDesiredTargets,
+	/// Conversion into bounded types failed.
+	///
+	/// Should never happen under correct configurations.
+	BoundedConversionFailed,
+	
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -1549,7 +1554,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
-		let supports = supports.try_into().expect("checked desired_targets <= MaxWinners; qed");
+		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundedConversionFailed);
 		Ok(ReadySolution { supports, compute, score })
 	}
 
