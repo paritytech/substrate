@@ -1620,12 +1620,11 @@ pub mod pallet {
 			Ok(())
 		}
 
-		// TODO: Update weight info
+		// TODO: Update Weight info
 		#[pallet::weight(
 			T::WeightInfo::bond_extra_transfer()
 			.max(T::WeightInfo::bond_extra_reward())
 		)]
-		#[transactional]
 		pub fn root_bond_extra(
 			origin: OriginFor<T>, 
 			member_account: AccountIdLookupOf<T>,
@@ -1659,7 +1658,7 @@ pub mod pallet {
 				BondType::Later
 			)?;
 
-		    bonded_pool.ok_to_be_open(pending_rewards)?;
+		    bonded_pool.ok_to_be_open()?;
 			member.points = member.points.saturating_add(points_issued);
 
 			Self::deposit_event(Event::<T>::Bonded {
@@ -2174,7 +2173,7 @@ pub mod pallet {
 			T::Staking::chill(&bonded_pool.bonded_account())
 		}
 
-		// Update weight info
+		// TODO: Update weight info
 		#[pallet::weight(T::DbWeight::get().reads_writes(1, 1))]
 		pub fn set_claimable_actor(origin: OriginFor<T>, actor: BondExtraSource) -> DispatchResult {
 			let who = ensure_signed(origin)?;
