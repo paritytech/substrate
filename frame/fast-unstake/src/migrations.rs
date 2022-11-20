@@ -39,6 +39,9 @@ pub mod v1 {
 			);
 
 			if current == 1 && onchain == 0 {
+				// update the version nonetheless.
+				current.put::<Pallet<T>>();
+
 				// if a head exists, then we put them back into the queue.
 				if Head::<T>::exists() {
 					if let Some((stash, _, deposit)) =
@@ -55,8 +58,6 @@ pub mod v1 {
 				} else {
 					T::DbWeight::get().reads(2)
 				}
-
-				current.put::<Pallet<T>>();
 			} else {
 				log!(info, "Migration did not execute. This probably should be removed");
 				T::DbWeight::get().reads(1)
