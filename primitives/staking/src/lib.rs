@@ -57,9 +57,9 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
-pub struct Stake<T: StakingInterface + ?Sized> {
+pub struct Stake<AccountId, Balance> {
 	/// The stash account whose balance is actually locked and at stake.
-	pub stash: T::AccountId,
+	pub stash: AccountId,
 	/// The total stake that `stash` has in the staking system. This includes the
 	/// `active` stake, and any funds currently in the process of unbonding via
 	/// [`StakingInterface::unbond`].
@@ -69,29 +69,29 @@ pub struct Stake<T: StakingInterface + ?Sized> {
 	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
 	/// non-staking locks on the bonded pair's balance this amount is going to be larger in
 	/// reality.
-	pub total: T::Balance,
+	pub total: Balance,
 	/// The total amount of the stash's balance that will be at stake in any forthcoming
 	/// rounds.
-	pub active: T::Balance,
+	pub active: Balance,
 }
 
 /// A generic staking event listener. Current used for implementations involved in stake tracking.
 /// Note that the interface is designed in a way that the events are fired post-action, so any
 /// pre-action data that is needed needs to be passed to interface methods.
 /// The rest of the data can be retrieved by using `StakingInterface`.
-pub trait OnStakingUpdate<T: StakingInterface> {
+pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Track ledger updates.
-	fn on_update_ledger(who: &T::AccountId, old_ledger: Stake<T>);
+	fn on_update_ledger(who: &AccountId, old_ledger: Stake<AccountId, Balance>);
 	/// Track nominators, those reinstated and also new ones.
-	fn on_nominator_add(who: &T::AccountId, old_nominations: Vec<T::AccountId>);
+	fn on_nominator_add(who: &AccountId, old_nominations: Vec<AccountId>);
 	/// Track validators, those reinstated and new.
-	fn on_validator_add(who: &T::AccountId);
+	fn on_validator_add(who: &AccountId);
 	/// Track removed validators. Either chilled or those that became nominators instead.
-	fn on_validator_remove(who: &T::AccountId); // only fire this event when this is an actual Validator
+	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
 	/// Track removed nominators.
-	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>); // only fire this if this is an actual Nominator
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
 	/// Track those participants of staking system that are kicked out for whatever reason.
-	fn on_reaped(who: &T::AccountId); // -> basically `kill_stash`
+	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
 }
 
 /// A generic representation of a staking implementation.
@@ -131,7 +131,8 @@ pub trait StakingInterface {
 	fn current_era() -> EraIndex;
 
 	/// Returns the stake of `who`.
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
+	fn stake(who: &Self::AccountId)
+		-> Result<Stake<Self::AccountId, Self::Balance>, DispatchError>;
 
 	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
 		Self::stake(who).map(|s| s.total)

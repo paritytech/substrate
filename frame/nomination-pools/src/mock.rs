@@ -116,7 +116,9 @@ impl sp_staking::StakingInterface for StakingMock {
 		unimplemented!("method currently not used in testing")
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(
+		who: &Self::AccountId,
+	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
 		match (
 			UnbondingBalanceMap::get().get(who).map(|v| *v),
 			BondedBalanceMap::get().get(who).map(|v| *v),

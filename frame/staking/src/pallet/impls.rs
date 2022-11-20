@@ -1551,7 +1551,9 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::current_era().unwrap_or(Zero::zero())
 	}
 
-	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError> {
+	fn stake(
+		who: &Self::AccountId,
+	) -> Result<Stake<Self::AccountId, Self::Balance>, DispatchError> {
 		Self::bonded(who)
 			.and_then(|c| Self::ledger(c))
 			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
