@@ -154,16 +154,6 @@ impl pallet_transaction_payment::Config for Runtime {
 
 type AssetId = u32;
 
-#[cfg(feature = "runtime-benchmarks")]
-trait BenchmarkHelper<AssetId> {
-	fn create_asset_id(id: u32) -> AssetId;
-}
-#[cfg(feature = "runtime-benchmarks")]
-impl<AssetId: From<u32>> BenchmarkHelper<AssetId> for () {
-	fn create_asset_id(id: u32) -> AssetId {
-		id.into()
-	}
-}
 impl pallet_assets::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = Balance;
