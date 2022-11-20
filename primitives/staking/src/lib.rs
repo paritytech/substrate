@@ -75,6 +75,25 @@ pub struct Stake<T: StakingInterface + ?Sized> {
 	pub active: T::Balance,
 }
 
+/// A generic staking event listener. Current used for implementations involved in stake tracking.
+/// Note that the interface is designed in a way that the events are fired post-action, so any
+/// pre-action data that is needed needs to be passed to interface methods.
+/// The rest of the data can be retrieved by using `StakingInterface`.
+pub trait OnStakingUpdate<T: StakingInterface> {
+	/// Track ledger updates.
+	fn on_update_ledger(who: &T::AccountId, old_ledger: Stake<T>);
+	/// Track nominators, those reinstated and also new ones.
+	fn on_nominator_add(who: &T::AccountId, old_nominations: Vec<T::AccountId>);
+	/// Track validators, those reinstated and new.
+	fn on_validator_add(who: &T::AccountId);
+	/// Track removed validators. Either chilled or those that became nominators instead.
+	fn on_validator_remove(who: &T::AccountId); // only fire this event when this is an actual Validator
+	/// Track removed nominators.
+	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>); // only fire this if this is an actual Nominator
+	/// Track those participants of staking system that are kicked out for whatever reason.
+	fn on_reaped(who: &T::AccountId); // -> basically `kill_stash`
+}
+
 /// A generic representation of a staking implementation.
 ///
 /// This interface uses the terminology of NPoS, but it is aims to be generic enough to cover other
