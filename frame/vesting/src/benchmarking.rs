@@ -377,7 +377,7 @@ benchmarks! {
 
 	force_remove_vesting_schedule {
 		let l in 0 .. MaxLocksOf::<T>::get() - 1;
-		let s in 0 .. T::MAX_VESTING_SCHEDULES;
+		let s in 2 .. T::MAX_VESTING_SCHEDULES;
 
 		let source: T::AccountId = account("source", 0, SEED);
 		let source_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(source.clone());
@@ -387,24 +387,25 @@ benchmarks! {
 		let target_lookup: <T::Lookup as StaticLookup>::Source = T::Lookup::unlookup(target.clone());
 
 		assert!(l <= u8::MAX.into());
-		// Give target existing locks
+		// Give target existing locks.
 		add_locks::<T>(&target, l as u8);
 
-		let per_block = T::MinVestedTransfer::get();
-		let transfer_amount = per_block.checked_mul(&20u32.into()).unwrap();
-		// 2 x transfer_amount because we will create 3 vesting schedules and remove one
+		let transfer_amount = T::MinVestedTransfer::get();
+		let per_block = transfer_amount.checked_div(&20u32.into()).unwrap();
+
 		let number_of_schedules_after_removal = T::MAX_VESTING_SCHEDULES - 1;
 		let expected_balance = transfer_amount.checked_mul(&number_of_schedules_after_removal.into()).unwrap();
-		// It will remove last vesting schedule
-		let schedule_index = 2;
+		
+		// It will remove last vesting schedule.
+		let schedule_index = T::MAX_VESTING_SCHEDULES - 1;
 
 		let vesting_schedule = VestingInfo::new(
 			transfer_amount,
 			per_block,
 			1u32.into(),
 		);
-		// Add max vesting schedules
-		for _ in 0..T::MAX_VESTING_SCHEDULES {
+		
+		for _ in 0..s {
 			assert_ok!(Vesting::<T>::do_vested_transfer(
 				source_lookup.clone(),
 				target_lookup.clone(),
