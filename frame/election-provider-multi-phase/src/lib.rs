@@ -551,7 +551,7 @@ pub enum FeasibilityError {
 	///
 	/// Should never happen under correct configurations.
 	BoundedConversionFailed,
-	
+
 }
 
 impl From<sp_npos_elections::Error> for FeasibilityError {
@@ -1554,7 +1554,7 @@ impl<T: Config> Pallet<T> {
 		ensure!(known_score == score, FeasibilityError::InvalidScore);
 
 		// Size of winners in miner solution is equal to `desired_targets` <= `MaxWinners`.
-		let supports = supports.try_into().map_err(|_| FeasibilityError::BoundedConversionFailed);
+		let supports = supports.try_into().defensive_map_err(|_| FeasibilityError::BoundedConversionFailed);
 		Ok(ReadySolution { supports, compute, score })
 	}
 
