@@ -132,6 +132,7 @@ members = [
 	"frame/staking",
 	"frame/staking/reward-curve",
 	"frame/staking/reward-fn",
+	"frame/stake-tracker",
 	"frame/state-trie-migration",
 	"frame/sudo",
 	"frame/root-offences",
