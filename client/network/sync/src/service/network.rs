@@ -81,6 +81,7 @@ impl NetworkServiceHandle {
 		let _ = self.tx.unbounded_send(ToServiceCommand::DisconnectPeer(who, protocol));
 	}
 
+	/// Send request to peer
 	pub fn start_request(
 		&self,
 		who: PeerId,
