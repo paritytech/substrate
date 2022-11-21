@@ -1367,8 +1367,8 @@ fn many_unbond_calls_should_work() {
 		current_era += 1;
 		mock::start_active_era(current_era);
 
-		// This chunk is locked at `current_era` through `current_era + 2` (because `BondingDuration`
-		// == 3).
+		// This chunk is locked at `current_era` through `current_era + 2` (because
+		// `BondingDuration` == 3).
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
 			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
@@ -1389,6 +1389,35 @@ fn many_unbond_calls_should_work() {
 			Staking::ledger(&10).map(|l| l.unlocking.len()).unwrap(),
 			<<Test as Config>::BondingDuration>::get() as usize
 		);
+	})
+}
+
+#[test]
+fn auto_withdraw_may_not_unlock_all_chunks() {
+	ExtBuilder::default().build_and_execute(|| {
+		// set `MaxUnlockingChunks` to a low number to test case when the unbonding period
+		// is larger than the number of unlocking chunks available, which may result on a
+		// `Error::NoMoreChunks`, even when the auto-withdraw tries to release locked chunks.
+		MaxUnlockingChunks::set(1);
+
+		let mut current_era = 0;
+
+		// fills the chunking slots for account
+		mock::start_active_era(current_era);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
+
+		current_era += 1;
+		mock::start_active_era(current_era);
+
+		// unbonding will fail because i) there are no remaining chunks and ii) no filled chunks
+		// can be released because current chunk hasn't stay in the queue for at least
+		// `BondingDuration`
+		assert!(Staking::unbond(RuntimeOrigin::signed(10), 1).is_err());
+
+		// fast-forward a few eras for unbond to be successful with implicit withdraw
+		current_era += 10;
+		mock::start_active_era(current_era);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 	})
 }
 
