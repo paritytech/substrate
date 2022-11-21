@@ -824,7 +824,7 @@ mod test {
 	const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
 
 	#[async_trait::async_trait]
-	impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
+	impl InherentDataProvider for TestInherentDataProvider {
 		async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
 			data.put_data(TEST_INHERENT_0, &42)
 		}
