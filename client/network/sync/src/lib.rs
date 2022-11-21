@@ -3192,7 +3192,10 @@ mod test {
 
 		// we wil send block requests to these peers
 		// for these blocks we don't know about
-		assert!(sync.block_requests().all(|(p, _)| { p == peer_id1 || p == peer_id2 }));
+		assert!(sync
+			.block_requests()
+			.into_iter()
+			.all(|(p, _)| { p == peer_id1 || p == peer_id2 }));
 
 		// add a new peer at a known block
 		sync.new_peer(peer_id3, b1_hash, b1_number).unwrap();
@@ -3282,7 +3285,7 @@ mod test {
 		max: u32,
 		peer: &PeerId,
 	) -> BlockRequest<Block> {
-		let requests = sync.block_requests().collect::<Vec<_>>();
+		let requests = sync.block_requests();
 
 		log::trace!(target: "sync", "Requests: {:?}", requests);
 
@@ -3378,7 +3381,7 @@ mod test {
 		sync.update_chain_info(&block3.hash(), 3);
 
 		// There should be no requests.
-		assert!(sync.block_requests().collect::<Vec<_>>().is_empty());
+		assert!(sync.block_requests().is_empty());
 
 		// Let peer2 announce a fork of block 3
 		send_block_announce(block3_fork.header().clone(), &peer_id2, &mut sync);
@@ -3534,15 +3537,16 @@ mod test {
 		// Let peer2 announce that it finished syncing
 		send_block_announce(best_block.header().clone(), &peer_id2, &mut sync);
 
-		let (peer1_req, peer2_req) = sync.block_requests().fold((None, None), |res, req| {
-			if req.0 == peer_id1 {
-				(Some(req.1), res.1)
-			} else if req.0 == peer_id2 {
-				(res.0, Some(req.1))
-			} else {
-				panic!("Unexpected req: {:?}", req)
-			}
-		});
+		let (peer1_req, peer2_req) =
+			sync.block_requests().into_iter().fold((None, None), |res, req| {
+				if req.0 == peer_id1 {
+					(Some(req.1), res.1)
+				} else if req.0 == peer_id2 {
+					(res.0, Some(req.1))
+				} else {
+					panic!("Unexpected req: {:?}", req)
+				}
+			});
 
 		// We should now do an ancestor search to find the correct common block.
 		let peer2_req = peer2_req.unwrap();
