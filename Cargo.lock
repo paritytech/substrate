@@ -8535,6 +8535,7 @@ name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
 dependencies = [
  "array-bytes",
+ "assert_matches",
  "futures",
  "hex",
  "jsonrpsee",
