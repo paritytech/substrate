@@ -20,10 +20,13 @@
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
+use crate::currency_to_vote::CurrencyToVote;
 use sp_runtime::{DispatchError, DispatchResult};
 use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod offence;
+
+pub mod currency_to_vote;
 
 /// Simple index type with which we can count sessions.
 pub type SessionIndex = u32;
@@ -81,17 +84,17 @@ pub struct Stake<AccountId, Balance> {
 /// The rest of the data can be retrieved by using `StakingInterface`.
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Track ledger updates.
-	fn on_update_ledger(who: &AccountId, old_ledger: Stake<AccountId, Balance>);
+	fn on_update_ledger(who: &AccountId, prev_stake: Stake<AccountId, Balance>) -> DispatchResult;
 	/// Track nominators, those reinstated and also new ones.
-	fn on_nominator_add(who: &AccountId, old_nominations: Vec<AccountId>);
+	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>) -> DispatchResult;
 	/// Track validators, those reinstated and new.
-	fn on_validator_add(who: &AccountId);
+	fn on_validator_add(who: &AccountId) -> DispatchResult;
 	/// Track removed validators. Either chilled or those that became nominators instead.
-	fn on_validator_remove(who: &AccountId); // only fire this event when this is an actual Validator
+	fn on_validator_remove(who: &AccountId) -> DispatchResult; // only fire this event when this is an actual Validator
 	/// Track removed nominators.
-	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>); // only fire this if this is an actual Nominator
+	fn on_nominator_remove(who: &AccountId, nominations: Vec<AccountId>) -> DispatchResult; // only fire this if this is an actual Nominator
 	/// Track those participants of staking system that are kicked out for whatever reason.
-	fn on_reaped(who: &AccountId); // -> basically `kill_stash`
+	fn on_reaped(who: &AccountId) -> DispatchResult; // -> basically `kill_stash`
 }
 
 /// A generic representation of a staking implementation.
@@ -104,6 +107,9 @@ pub trait StakingInterface {
 
 	/// AccountId type used by the staking system
 	type AccountId;
+
+	/// whatever
+	type CurrencyToVote: CurrencyToVote<Self::Balance>;
 
 	/// The minimum amount required to bond in order to set nomination intentions. This does not
 	/// necessarily mean the nomination will be counted in an election, but instead just enough to
@@ -196,8 +202,10 @@ pub trait StakingInterface {
 	/// Checks whether an account `staker` has been exposed in an era.
 	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool;
 
+	/// Checks whether or not this is a validator account.
+	fn is_validator(who: &Self::AccountId) -> bool;
+
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
-	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
