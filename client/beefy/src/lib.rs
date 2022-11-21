@@ -389,7 +389,8 @@ where
 		{
 			// We've reached pallet genesis, initialize voter here.
 			let genesis_num = *header.number();
-			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))?;
+			let genesis_set = expect_validator_set(runtime, BlockId::hash(header.hash()))
+				.and_then(genesis_set_sanity_check)?;
 			info!(
 				target: "beefy",
 				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
@@ -456,12 +457,14 @@ where
 	Err(ClientError::Backend(err_msg))
 }
 
-fn genesis_sanity_check(active: ValidatorSet<AuthorityId>) -> Option<ValidatorSet<AuthorityId>> {
+fn genesis_set_sanity_check(
+	active: ValidatorSet<AuthorityId>,
+) -> ClientResult<ValidatorSet<AuthorityId>> {
 	if active.id() == GENESIS_AUTHORITY_SET_ID {
-		Some(active)
+		Ok(active)
 	} else {
 		error!(target: "beefy", "🥩 Unexpected ID for genesis validator set {:?}.", active);
-		None
+		Err(ClientError::Backend("BEEFY Genesis sanity check failed.".into()))
 	}
 }
 
@@ -479,6 +482,5 @@ where
 		.validator_set(&at)
 		.ok()
 		.flatten()
-		.and_then(genesis_sanity_check)
-		.ok_or_else(|| ClientError::Backend("BEEFY Genesis sanity check failed.".into()))
+		.ok_or_else(|| ClientError::Backend("BEEFY pallet expected to be active.".into()))
 }

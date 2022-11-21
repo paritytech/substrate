@@ -946,8 +946,7 @@ where
 		let diff = best_grandpa.saturating_sub(best_beefy) + 1u32.into();
 		let diff = diff.saturated_into::<u32>() / 2;
 		let target = best_beefy + min_delta.max(diff.next_power_of_two()).into();
-
-		debug!(
+		trace!(
 			target: "beefy",
 			"🥩 vote target - diff: {:?}, next_power_of_two: {:?}, target block: #{:?}",
 			diff,
