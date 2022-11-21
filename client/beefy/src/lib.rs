@@ -36,7 +36,7 @@ use beefy_primitives::{
 	GENESIS_AUTHORITY_SET_ID,
 };
 use futures::{stream::Fuse, StreamExt};
-use log::{error, info};
+use log::{debug, error, info};
 use parking_lot::Mutex;
 use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
@@ -205,9 +205,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R>(
-	beefy_params: BeefyParams<B, BE, C, N, P, R>,
-) -> ClientResult<()>
+pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
 where
 	B: Block,
 	BE: Backend<B>,
@@ -254,11 +252,11 @@ where
 		prometheus_registry.as_ref().map(metrics::Metrics::register).and_then(
 			|result| match result {
 				Ok(metrics) => {
-					log::debug!(target: "beefy", "🥩 Registered metrics");
+					debug!(target: "beefy", "🥩 Registered metrics");
 					Some(metrics)
 				},
 				Err(err) => {
-					log::debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
+					debug!(target: "beefy", "🥩 Failed to register metrics: {:?}", err);
 					None
 				},
 			},
@@ -270,20 +268,18 @@ where
 	let block_import_justif = links.from_block_import_justif_stream.subscribe().fuse();
 
 	// Wait for BEEFY pallet to be active before starting voter.
-	let best_grandpa =
-		wait_for_runtime_pallet(&*runtime, &mut gossip_engine, &mut finality_notifications).await?;
-
-	// Initialize voter state from AUX DB or from pallet genesis.
-	let persisted_state = if let Some(mut state) = crate::aux_schema::load_persistent(&*backend)? {
-		// Overwrite persisted state with current best GRANDPA block.
-		state.set_best_grandpa(best_grandpa);
-		// Overwrite persisted data with newly provided `min_block_delta`.
-		state.set_min_block_delta(min_block_delta);
-		info!(target: "beefy", "🥩 Loading BEEFY voter state from db: {:?}.", state);
-		state
-	} else {
-		initialize_voter_state(&*backend, &*runtime, best_grandpa, min_block_delta)?
-	};
+	let persisted_state =
+		match wait_for_runtime_pallet(&*runtime, &mut gossip_engine, &mut finality_notifications)
+			.await
+			.and_then(|best_grandpa| {
+				load_or_init_voter_state(&*backend, &*runtime, best_grandpa, min_block_delta)
+			}) {
+			Ok(state) => state,
+			Err(e) => {
+				error!(target: "beefy", "Error: {:?}. Terminating.", e);
+				return
+			},
+		};
 
 	let worker_params = worker::WorkerParams {
 		backend,
@@ -306,7 +302,31 @@ where
 		on_demand_justifications_handler.run(),
 	)
 	.await;
-	Ok(())
+}
+
+fn load_or_init_voter_state<B, BE, R>(
+	backend: &BE,
+	runtime: &R,
+	best_grandpa: <B as Block>::Header,
+	min_block_delta: u32,
+) -> ClientResult<PersistedState<B>>
+where
+	B: Block,
+	BE: Backend<B>,
+	R: ProvideRuntimeApi<B>,
+	R::Api: BeefyApi<B>,
+{
+	// Initialize voter state from AUX DB or from pallet genesis.
+	if let Some(mut state) = crate::aux_schema::load_persistent(backend)? {
+		// Overwrite persisted state with current best GRANDPA block.
+		state.set_best_grandpa(best_grandpa);
+		// Overwrite persisted data with newly provided `min_block_delta`.
+		state.set_min_block_delta(min_block_delta);
+		info!(target: "beefy", "🥩 Loading BEEFY voter state from db: {:?}.", state);
+		Ok(state)
+	} else {
+		initialize_voter_state(backend, runtime, best_grandpa, min_block_delta)
+	}
 }
 
 // If no persisted state present, walk back the chain from first GRANDPA notification to either:

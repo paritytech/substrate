@@ -24,10 +24,11 @@ use crate::{
 	communication::request_response::{
 		on_demand_justifications_protocol_config, BeefyJustifsRequestHandler,
 	},
-	gossip_protocol_name, initialize_voter_state,
+	gossip_protocol_name,
 	justification::*,
 	keystore::tests::Keyring as BeefyKeyring,
-	wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers, PersistedState,
+	load_or_init_voter_state, wait_for_runtime_pallet, BeefyRPCLinks, BeefyVoterLinks, KnownPeers,
+	PersistedState,
 };
 use beefy_primitives::{
 	crypto::{AuthorityId, Signature},
@@ -945,7 +946,7 @@ fn on_demand_beefy_justification_sync() {
 fn test_voter_init_setup(
 	net: &mut BeefyTestNet,
 	finality: &mut futures::stream::Fuse<FinalityNotifications<Block>>,
-) -> Option<PersistedState<Block>> {
+) -> sp_blockchain::Result<PersistedState<Block>> {
 	let backend = net.peer(0).client().as_backend();
 	let api = Arc::new(crate::tests::two_validators::TestApi {});
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
@@ -960,9 +961,7 @@ fn test_voter_init_setup(
 	let best_grandpa =
 		futures::executor::block_on(wait_for_runtime_pallet(&*api, &mut gossip_engine, finality))
 			.unwrap();
-	load_persistent(&*backend)
-		.unwrap()
-		.or_else(|| initialize_voter_state(&*backend, &*api, best_grandpa, 1).ok())
+	load_or_init_voter_state(&*backend, &*api, best_grandpa, 1)
 }
 
 #[test]
