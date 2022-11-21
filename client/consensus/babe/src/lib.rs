@@ -1525,11 +1525,12 @@ where
 			if let Some(next_epoch_descriptor) = next_epoch_digest {
 				old_epoch_changes = Some((*epoch_changes).clone());
 
-				let viable_epoch = epoch_changes
+				let mut viable_epoch = epoch_changes
 					.viable_epoch(&epoch_descriptor, |slot| Epoch::genesis(&self.config, slot))
 					.ok_or_else(|| {
 						ConsensusError::ClientImport(Error::<Block>::FetchEpoch(parent_hash).into())
-					})?;
+					})?
+					.into_cloned();
 
 				let epoch_config = next_config_digest
 					.map(Into::into)
@@ -1541,6 +1542,47 @@ where
 				} else {
 					log::Level::Info
 				};
+
+				if viable_epoch.as_ref().end_slot() <= slot {
+					// some epochs must have been skipped as our current slot
+					// fits outside the current epoch. we will figure out
+					// which epoch it belongs to and we will re-use the same
+					// data for that epoch
+					let mut epoch_data = viable_epoch.as_mut();
+					let skipped_epochs =
+						*slot.saturating_sub(epoch_data.start_slot) / epoch_data.duration;
+
+					// NOTE: notice that we are only updating a local copy of the `Epoch`, this
+					// makes it so that when we insert the next epoch into `EpochChanges` below
+					// (after incrementing it), it will use the correct epoch index and start slot.
+					// we do not update the original epoch that will be re-used because there might
+					// be other forks (that we haven't imported) where the epoch isn't skipped, and
+					// to import those forks we want to keep the original epoch data. not updating
+					// the original epoch works because when we search the tree for which epoch to
+					// use for a given slot, we will search in-depth with the predicate
+					// `epoch.start_slot <= slot` which will still match correctly without updating
+					// `start_slot` to the correct value as below.
+					let epoch_index = epoch_data.epoch_index.checked_add(skipped_epochs).expect(
+						"epoch number is u64; it should be strictly smaller than number of slots; \
+						slots relate in some way to wall clock time; \
+						if u64 is not enough we should crash for safety; qed.",
+					);
+
+					let start_slot = skipped_epochs
+						.checked_mul(epoch_data.duration)
+						.and_then(|skipped_slots| epoch_data.start_slot.checked_add(skipped_slots))
+						.expect(
+							"slot number is u64; it should relate in some way to wall clock time; \
+							 if u64 is not enough we should crash for safety; qed.",
+						);
+
+					warn!(target: "babe", "👶 Epoch(s) skipped: from {} to {}",
+						epoch_data.epoch_index, epoch_index,
+					);
+
+					epoch_data.epoch_index = epoch_index;
+					epoch_data.start_slot = Slot::from(start_slot);
+				}
 
 				log!(target: "babe",
 					 log_level,
