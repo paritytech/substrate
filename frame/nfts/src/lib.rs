@@ -764,41 +764,37 @@ pub mod pallet {
 							)
 						},
 						MintType::HolderOf(collection_id) => {
-							if let Some(MintWitness { owner_of_item }) = witness_data {
-								let has_item = Account::<T, I>::contains_key((
-									&caller,
-									&collection_id,
-									&owner_of_item,
-								));
-								ensure!(has_item, Error::<T, I>::BadWitness);
+							let MintWitness { owner_of_item } =
+								witness_data.ok_or(Error::<T, I>::BadWitness)?;
 
-								let attribute_key = Self::construct_attribute_key(
-									PalletAttributes::<T::CollectionId>::UsedToClaim(
-										collection.clone(),
-									)
-									.encode(),
-								)?;
+							let has_item = Account::<T, I>::contains_key((
+								&caller,
+								&collection_id,
+								&owner_of_item,
+							));
+							ensure!(has_item, Error::<T, I>::BadWitness);
 
-								let key = (
-									&collection_id,
-									Some(owner_of_item),
-									AttributeNamespace::Pallet(T::PalletId::get()),
-									&attribute_key,
-								);
-								let already_claimed = Attribute::<T, I>::contains_key(key.clone());
-								ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
+							let attribute_key = Self::construct_attribute_key(
+								PalletAttributes::<T::CollectionId>::UsedToClaim(
+									collection.clone(),
+								)
+								.encode(),
+							)?;
 
-								let value = Self::construct_attribute_value(vec![0])?;
-								Attribute::<T, I>::insert(
-									key,
-									(
-										value,
-										AttributeDeposit { account: None, amount: Zero::zero() },
-									),
-								);
-							} else {
-								return Err(Error::<T, I>::BadWitness.into())
-							}
+							let key = (
+								&collection_id,
+								Some(owner_of_item),
+								AttributeNamespace::Pallet(T::PalletId::get()),
+								&attribute_key,
+							);
+							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
+							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
+
+							let value = Self::construct_attribute_value(vec![0])?;
+							Attribute::<T, I>::insert(
+								key,
+								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+							);
 						},
 						_ => {},
 					}
