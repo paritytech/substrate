@@ -856,7 +856,7 @@ where
 		client.clone(),
 		protocol_id.clone(),
 		&config.chain_spec.fork_id().map(ToOwned::to_owned),
-		Roles::from(&config.role.clone()),
+		Roles::from(&config.role),
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,

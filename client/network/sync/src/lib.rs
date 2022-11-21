@@ -2159,7 +2159,9 @@ where
 			(Some(first), Some(_)) => format!(" ({})", first),
 			_ => Default::default(),
 		};
-		trace!(target: "sync", "BlockResponse {} from {} with {} blocks {}",
+		trace!(
+			target: "sync",
+			"BlockResponse {} from {} with {} blocks {}",
 			block_response.id,
 			peer_id,
 			block_response.blocks.len(),
@@ -2226,7 +2228,6 @@ where
 	fn process_outbound_requests(&mut self) {
 		for (id, request) in self
 			.block_requests()
-			.map(|(peer_id, request)| (peer_id, request))
 			.collect::<Vec<_>>()
 		{
 			self.send_block_request(id, request);
