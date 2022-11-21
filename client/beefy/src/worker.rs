@@ -102,33 +102,27 @@ impl<B: Block> VoterOracle<B> {
 		// verifies the
 		let mut validate = || -> bool {
 			if sessions.is_empty() {
-				println!("🥩 empty sessions");
 				return false
 			}
 			for (idx, session) in sessions.iter().enumerate() {
 				if session.validators().is_empty() {
-					println!("🥩 empty validators");
 					return false
 				}
 				if session.session_start() <= prev_start {
-					println!("🥩 bad start");
 					return false
 				}
 				#[cfg(not(test))]
 				if let Some(prev_id) = prev_validator_id {
 					if session.validator_set_id() <= prev_id {
-						println!("🥩 bad set id");
 						return false
 					}
 				}
 				if idx != 0 && session.mandatory_done() {
-					println!("🥩 bad queue state");
 					return false
 				}
 				prev_start = session.session_start();
 				prev_validator_id = Some(session.validator_set_id());
 			}
-			println!("🥩 VALID!");
 			true
 		};
 		if validate() {
@@ -139,7 +133,6 @@ impl<B: Block> VoterOracle<B> {
 			})
 		} else {
 			error!(target: "beefy", "🥩 Invalid sessions queue: {:?}.", sessions);
-			println!("🥩 Invalid sessions queue: {:?}.", sessions);
 			None
 		}
 	}

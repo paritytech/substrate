@@ -331,8 +331,6 @@ where
 	let mut sessions = VecDeque::new();
 	let mut header = best_grandpa.clone();
 	let state = loop {
-		println!("🥩 currently looping/looking at {:?}", *header.number());
-
 		if let Some(true) = blockchain
 			.justifications(header.hash())
 			.ok()
@@ -341,10 +339,6 @@ where
 		{
 			info!(
 				target: "beefy",
-				"🥩 Initialize BEEFY voter at last BEEFY finalized block: {:?}.",
-				*header.number()
-			);
-			println!(
 				"🥩 Initialize BEEFY voter at last BEEFY finalized block: {:?}.",
 				*header.number()
 			);
@@ -382,11 +376,6 @@ where
 				Starting voting rounds at block {:?}, genesis validator set {:?}.",
 				genesis_num, genesis_set,
 			);
-			println!(
-				"🥩 Loading BEEFY voter state from genesis on what appears to be first startup. \
-				Starting voting rounds at block {:?}, genesis validator set {:?}.",
-				genesis_num, genesis_set,
-			);
 
 			sessions.push_front(Rounds::new(genesis_num, genesis_set));
 			break PersistedState::checked_new(best_grandpa, Zero::zero(), sessions, min_block_delta)
@@ -395,7 +384,6 @@ where
 
 		if let Some(active) = worker::find_authorities_change::<B>(&header) {
 			info!(target: "beefy", "🥩 Marking block {:?} as BEEFY Mandatory.", *header.number());
-			println!("🥩 Marking block {:?} as BEEFY Mandatory.", *header.number());
 			sessions.push_front(Rounds::new(*header.number(), active));
 		}
 
@@ -435,7 +423,6 @@ where
 						target: "beefy", "🥩 BEEFY pallet available: block {:?} validator set {:?}",
 						notif.header.number(), active
 					);
-					println!("🥩 pallet available: header {:?} validator set {:?}", notif.header, active);
 					return Ok(notif.header)
 				}
 			},
