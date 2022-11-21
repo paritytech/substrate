@@ -8539,6 +8539,7 @@ dependencies = [
  "hex",
  "jsonrpsee",
  "parity-scale-codec",
+ "sc-block-builder",
  "sc-chain-spec",
  "sc-client-api",
  "sc-transaction-pool-api",
@@ -8546,8 +8547,10 @@ dependencies = [
  "serde_json",
  "sp-api",
  "sp-blockchain",
+ "sp-consensus",
  "sp-core",
  "sp-runtime",
+ "substrate-test-runtime-client",
  "thiserror",
  "tokio",
 ]
