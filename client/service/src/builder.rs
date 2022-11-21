@@ -58,7 +58,7 @@ use sc_rpc::{
 	system::SystemApiServer,
 	DenyUnsafe, SubscriptionTaskExecutor,
 };
-use sc_rpc_spec_v2::transaction::TransactionApiServer;
+use sc_rpc_spec_v2::{archive::ArchiveApiServer, transaction::TransactionApiServer};
 use sc_telemetry::{telemetry, ConnectionMessage, Telemetry, TelemetryHandle, SUBSTRATE_INFO};
 use sc_transaction_pool_api::MaintainedTransactionPool;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedSender};
@@ -528,7 +528,7 @@ where
 			keystore.clone(),
 			system_rpc_tx.clone(),
 			&config,
-			backend.offchain_storage(),
+			backend.clone(),
 			&*rpc_builder,
 		)
 	};
@@ -627,7 +627,7 @@ fn gen_rpc_module<TBl, TBackend, TCl, TRpc, TExPool>(
 	keystore: SyncCryptoStorePtr,
 	system_rpc_tx: TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 	config: &Configuration,
-	offchain_storage: Option<<TBackend as sc_client_api::backend::Backend<TBl>>::OffchainStorage>,
+	backend: Arc<TBackend>,
 	rpc_builder: &(dyn Fn(DenyUnsafe, SubscriptionTaskExecutor) -> Result<RpcModule<TRpc>, Error>),
 ) -> Result<RpcModule<()>, Error>
 where
@@ -682,6 +682,14 @@ where
 	)
 	.into_rpc();
 
+	let archive_v2 = sc_rpc_spec_v2::archive::Archive::new(
+		client.clone(),
+		backend.clone(),
+		task_executor.clone(),
+		client.info().genesis_hash,
+	)
+	.into_rpc();
+
 	let author = sc_rpc::author::Author::new(
 		client.clone(),
 		transaction_pool,
@@ -693,13 +701,14 @@ where
 
 	let system = sc_rpc::system::System::new(system_info, system_rpc_tx, deny_unsafe).into_rpc();
 
-	if let Some(storage) = offchain_storage {
+	if let Some(storage) = backend.offchain_storage() {
 		let offchain = sc_rpc::offchain::Offchain::new(storage, deny_unsafe).into_rpc();
 
 		rpc_api.merge(offchain).map_err(|e| Error::Application(e.into()))?;
 	}
 
 	// Part of the RPC v2 spec.
+	rpc_api.merge(archive_v2).map_err(|e| Error::Application(e.into()))?;
 	rpc_api.merge(transaction_v2).map_err(|e| Error::Application(e.into()))?;
 
 	// Part of the old RPC spec.
