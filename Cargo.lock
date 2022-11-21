@@ -8551,6 +8551,7 @@ dependencies = [
  "sp-consensus",
  "sp-core",
  "sp-runtime",
+ "substrate-test-runtime",
  "substrate-test-runtime-client",
  "thiserror",
  "tokio",

@@ -2,13 +2,17 @@ use super::*;
 use assert_matches::assert_matches;
 use codec::Encode;
 use jsonrpsee::{
-	core::server::rpc_module::Subscription as RpcSubscription, types::EmptyParams, RpcModule,
+	core::{server::rpc_module::Subscription as RpcSubscription, Error},
+	types::{error::CallError, EmptyParams},
+	RpcModule,
 };
 use sc_block_builder::BlockBuilderProvider;
 use sc_client_api::ChildInfo;
+use sp_api::{BlockId, HeaderT};
 use sp_consensus::BlockOrigin;
 use sp_core::{hexdisplay::HexDisplay, testing::TaskExecutor};
 use std::sync::Arc;
+use substrate_test_runtime::Transfer;
 use substrate_test_runtime_client::{prelude::*, runtime, Backend, Client, ClientBlockImportExt};
 
 type Block = substrate_test_runtime_client::runtime::Block;
@@ -161,4 +165,91 @@ async fn get_storage() {
 		.unwrap();
 	let event: ArchiveEvent<Option<String>> = get_next_event(&mut sub).await;
 	assert_matches!(event, ArchiveEvent::<Option<String>>::Done(done) if done.result == expected_value);
+}
+
+#[tokio::test]
+async fn get_hash_by_height() {
+	let (mut client, api, _block) = setup_api().await;
+
+	// Invalid parameter.
+	let err = api.subscribe("archive_unstable_hashByHeight", ["0xdummy"]).await.unwrap_err();
+	assert_matches!(err,
+		Error::Call(CallError::Custom(ref err)) if err.code() == 3001 && err.message().contains("Invalid parameter")
+	);
+
+	// Genesis height.
+	let mut sub = api.subscribe("archive_unstable_hashByHeight", ["0"]).await.unwrap();
+	let event: ArchiveEvent<Vec<String>> = get_next_event(&mut sub).await;
+	let expected =
+		ArchiveEvent::Done(ArchiveResult { result: vec![format!("{:?}", client.genesis_hash())] });
+	assert_eq!(event, expected);
+
+	// Block tree:
+	// finalized -> block 1 -> block 2 -> block 3
+	//           -> block 1 -> block 4
+	//
+	//              ^^^ h = N
+	//                         ^^^ h =  N + 1
+	//                                     ^^^ h = N + 2
+	let block_1 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_1_hash = block_1.header.hash();
+	client.import(BlockOrigin::Own, block_1.clone()).await.unwrap();
+	let block_2 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_2_hash = block_2.header.hash();
+	client.import(BlockOrigin::Own, block_2.clone()).await.unwrap();
+	let block_3 = client.new_block(Default::default()).unwrap().build().unwrap().block;
+	let block_3_hash = block_3.header.hash();
+	client.import(BlockOrigin::Own, block_3.clone()).await.unwrap();
+	// Import block 4 fork.
+	let mut block_builder = client
+		.new_block_at(&BlockId::Hash(block_1_hash), Default::default(), false)
+		.unwrap();
+	// This push is required as otherwise block 3 has the same hash as block 1 and won't get
+	// imported
+	block_builder
+		.push_transfer(Transfer {
+			from: AccountKeyring::Alice.into(),
+			to: AccountKeyring::Ferdie.into(),
+			amount: 41,
+			nonce: 0,
+		})
+		.unwrap();
+	let block_4 = block_builder.build().unwrap().block;
+	let block_4_hash = block_4.header.hash();
+	client.import(BlockOrigin::Own, block_4.clone()).await.unwrap();
+
+	// Test nonfinalized heights.
+	// Height N must include block 1.
+	let mut height = block_1.header.number().clone();
+	let mut sub = api
+		.subscribe("archive_unstable_hashByHeight", [&format!("{:?}", height)])
+		.await
+		.unwrap();
+	let event: ArchiveEvent<Vec<String>> = get_next_event(&mut sub).await;
+	let expected =
+		ArchiveEvent::Done(ArchiveResult { result: vec![format!("{:?}", block_1_hash)] });
+	assert_eq!(event, expected);
+
+	// Height (N + 1) must include block 2 and 4.
+	height += 1;
+	let mut sub = api
+		.subscribe("archive_unstable_hashByHeight", [&format!("{:?}", height)])
+		.await
+		.unwrap();
+	let event: ArchiveEvent<Vec<String>> = get_next_event(&mut sub).await;
+	let expected = ArchiveEvent::Done(ArchiveResult {
+		result: vec![format!("{:?}", block_4_hash), format!("{:?}", block_2_hash)],
+	});
+	assert_eq!(event, expected);
+
+	// Height (N + 2) must include block 3.
+	height += 1;
+	let mut sub = api
+		.subscribe("archive_unstable_hashByHeight", [&format!("{:?}", height)])
+		.await
+		.unwrap();
+	let event: ArchiveEvent<Vec<String>> = get_next_event(&mut sub).await;
+	let expected =
+		ArchiveEvent::Done(ArchiveResult { result: vec![format!("{:?}", block_3_hash)] });
+	assert_eq!(event, expected);
 }
