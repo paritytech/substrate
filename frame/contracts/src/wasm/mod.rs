@@ -578,6 +578,12 @@ mod tests {
 		fn ecdsa_to_eth_address(&self, _pk: &[u8; 33]) -> Result<[u8; 20], ()> {
 			Ok([2u8; 20])
 		}
+		fn reentrant_count(&self) -> u32 {
+			12
+		}
+		fn account_reentrance_count(&self, _account_id: &AccountIdOf<Self::T>) -> u32 {
+			12
+		}
 	}
 
 	fn execute<E: BorrowMut<MockExt>>(wat: &str, input_data: Vec<u8>, mut ext: E) -> ExecResult {
@@ -2849,5 +2855,71 @@ mod tests {
 		execute(CODE, [0u8; 32].encode(), &mut mock_ext).unwrap();
 
 		assert_eq!(mock_ext.code_hashes.pop().unwrap(), H256::from_slice(&[17u8; 32]));
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn reentrant_count_works() {
+		const CODE: &str = r#"
+(module
+	(import "__unstable__" "reentrant_count" (func $reentrant_count (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(local $return_val i32)
+		(set_local $return_val
+			(call $reentrant_count)
+		)
+		(call $assert
+			(i32.eq (get_local $return_val) (i32.const 12))
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
+	}
+
+	#[test]
+	#[cfg(feature = "unstable-interface")]
+	fn account_reentrance_count_works() {
+		const CODE: &str = r#"
+(module
+	(import "__unstable__" "account_reentrance_count" (func $account_reentrance_count (param i32) (result i32)))
+	(import "env" "memory" (memory 1 1))
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+	(func (export "call")
+		(local $return_val i32)
+		(set_local $return_val
+			(call $account_reentrance_count (i32.const 0))
+		)
+		(call $assert
+			(i32.eq (get_local $return_val) (i32.const 12))
+		)
+	)
+
+	(func (export "deploy"))
+)
+"#;
+
+		let mut mock_ext = MockExt::default();
+		execute(CODE, vec![], &mut mock_ext).unwrap();
 	}
 }
