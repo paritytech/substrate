@@ -37,15 +37,21 @@ use sc_client_api::{
 	Backend, BlockBackend, BlockchainEvents, ChildInfo, ExecutorProvider, StorageKey,
 	StorageProvider,
 };
-use sp_api::{BlockId, BlockT};
-use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
+use sp_api::{BlockId, BlockT, NumberFor};
+use sp_blockchain::{
+	Backend as BlockchainBackend, Error as BlockChainError, HashAndNumber, HeaderBackend,
+	HeaderMetadata,
+};
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys};
+use sp_runtime::{traits::One, Saturating};
 use std::{marker::PhantomData, sync::Arc};
 
 /// An API for archive RPC calls.
 pub struct Archive<BE, Block: BlockT, Client> {
 	/// Substrate client.
 	client: Arc<Client>,
+	/// Backend of the chain.
+	backend: Arc<BE>,
 	/// Executor to spawn subscriptions.
 	executor: SubscriptionTaskExecutor,
 	/// The hexadecimal encoded hash of the genesis block.
@@ -58,12 +64,13 @@ impl<BE, Block: BlockT, Client> Archive<BE, Block, Client> {
 	/// Create a new [`Archive`].
 	pub fn new<GenesisHash: AsRef<[u8]>>(
 		client: Arc<Client>,
+		backend: Arc<BE>,
 		executor: SubscriptionTaskExecutor,
 		genesis_hash: GenesisHash,
 	) -> Self {
 		let genesis_hash = format!("0x{}", hex::encode(genesis_hash));
 
-		Self { client, executor, genesis_hash, _phantom: PhantomData }
+		Self { client, backend, executor, genesis_hash, _phantom: PhantomData }
 	}
 }
 
@@ -78,6 +85,38 @@ fn parse_hex_param(
 			Err(SubscriptionEmptyError)
 		},
 	}
+}
+
+fn get_blocks_by_height<BE, Block>(
+	backend: &Arc<BE>,
+	parent: HashAndNumber<Block>,
+	target_height: NumberFor<Block>,
+) -> Vec<Block::Hash>
+where
+	Block: BlockT + 'static,
+	BE: Backend<Block> + 'static,
+{
+	let mut result = Vec::new();
+	let mut next_hash = Vec::new();
+	next_hash.push(parent);
+
+	while let Some(parent) = next_hash.pop() {
+		if parent.number == target_height {
+			result.push(parent.hash);
+			continue
+		}
+
+		let Ok(blocks) = backend.blockchain().children(parent.hash) else {
+			continue
+		};
+
+		let child_number = parent.number.saturating_add(One::one());
+		for child_hash in blocks {
+			next_hash.push(HashAndNumber { number: child_number, hash: child_hash });
+		}
+	}
+
+	result
 }
 
 #[async_trait]
@@ -136,23 +175,31 @@ where
 		};
 
 		let client = self.client.clone();
+		let backend = self.backend.clone();
 
 		let fut = async move {
 			let finalized_number = client.info().finalized_number;
 
-			let mut result = Vec::new();
-
-			if let Ok(Some(hash)) = client.block_hash(height_num.into()) {
-				result.push(hash);
-			}
-
 			// If the height has been finalized, return only the finalized block.
 			if finalized_number >= height_num.into() {
+				let result = if let Ok(Some(hash)) = client.block_hash(height_num.into()) {
+					vec![hash]
+				} else {
+					// The block hash should have existed in the database. However,
+					// it may be possible that it was pruned.
+					vec![]
+				};
+
 				let _ = sink.send(&ArchiveEvent::Done(ArchiveResult { result }));
 				return
 			}
 
-			// TODO: inspect displaced leaves and walk back the tree.
+			let finalized_hash = client.info().finalized_hash;
+			let result = get_blocks_by_height(
+				&backend,
+				HashAndNumber { hash: finalized_hash, number: finalized_number },
+				height_num.into(),
+			);
 			let _ = sink.send(&ArchiveEvent::Done(ArchiveResult { result }));
 		};
 
