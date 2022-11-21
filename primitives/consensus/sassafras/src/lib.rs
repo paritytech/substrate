@@ -114,14 +114,43 @@ pub struct SassafrasEpochConfiguration {
 }
 
 /// Ticket type.
-pub type Ticket = VRFOutput;
+// TODO-SASS-P3: we are currently using Shnorrkel structures as placeholders.
+// Should switch to new RVRF primitive.
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct Ticket {
+	/// Ring VRF output.
+	pub output: VRFOutput,
+	/// Ring VRF commitment proof.
+	pub proof: VRFProof,
+	// Ticket opaque utility data.
+	// TODO-SASS-P3: Interpretation of this data is up to the application? Investigate
+	// Suggested by Jeff:
+	// - ephemeral_pk: public key used to...
+	// - revealed_pk: ???
+	// - gossip_auth_id: identifier to reach this actor in a separate gossip network
+	//pub data: Vec<u8>,
+}
+
+use core::cmp::Ordering;
+
+impl PartialOrd for Ticket {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		self.output.partial_cmp(&other.output)
+	}
+}
+
+impl Ord for Ticket {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.output.cmp(&other.output)
+	}
+}
 
 /// Ticket auxiliary information.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct TicketAux {
 	/// Attempt number.
 	pub attempt: u32,
-	/// Ticket proof.
+	/// Ticket revelation proof.
 	pub proof: VRFProof,
 }
 
@@ -144,7 +173,7 @@ pub fn compute_threshold(redundancy: u32, slots: u32, attempts: u32, validators:
 
 /// Returns true if the given VRF output is lower than the given threshold, false otherwise.
 pub fn check_threshold(ticket: &Ticket, threshold: U256) -> bool {
-	U256::from(ticket.as_bytes()) < threshold
+	U256::from(ticket.output.as_bytes()) < threshold
 }
 
 /// An opaque type used to represent the key ownership proof at the runtime API boundary.

@@ -55,7 +55,7 @@ use frame_system::offchain::{SendTransactionTypes, SubmitTransaction};
 use sp_consensus_sassafras::{
 	digests::{ConsensusLog, NextEpochDescriptor, PreDigest},
 	AuthorityId, EquivocationProof, Randomness, SassafrasAuthorityWeight,
-	SassafrasEpochConfiguration, Slot, Ticket, SASSAFRAS_ENGINE_ID,
+	SassafrasEpochConfiguration, Slot, Ticket, VRFOutput, VRFProof, SASSAFRAS_ENGINE_ID,
 };
 use sp_io::hashing;
 use sp_runtime::{
@@ -727,9 +727,14 @@ impl<T: Config> Pallet<T> {
 		let mut require_sort = max_iter != 0;
 
 		let mut sup = if new_segment.len() >= max_tickets {
-			new_segment[new_segment.len() - 1]
+			new_segment[new_segment.len() - 1].clone()
 		} else {
-			Ticket::try_from([0xFF; 32]).expect("This is a valid ticket value; qed")
+			Ticket {
+				output: VRFOutput::try_from([0xFF; 32])
+					.expect("This is a valid vrf output value; qed"),
+				proof: VRFProof::try_from([0xFF; 64])
+					.expect("This is a valid vrf proof value; qed"),
+			}
 		};
 
 		for _ in 0..max_iter {
@@ -740,7 +745,7 @@ impl<T: Config> Pallet<T> {
 				require_sort = false;
 				new_segment.sort_unstable();
 				new_segment.truncate(max_tickets);
-				sup = new_segment[new_segment.len() - 1];
+				sup = new_segment[new_segment.len() - 1].clone();
 			}
 
 			segments_count -= 1;
