@@ -559,6 +559,23 @@ fn page_from_message_basic_works() {
 	assert!(MaxOriginLenOf::<Test>::get() >= 3, "pre-condition unmet");
 	assert!(MaxMessageLenOf::<Test>::get() >= 3, "pre-condition unmet");
 
+#[test]
+fn page_try_append_message_max_msg_len_works_works() {
+	use super::integration_test::Test; // Run with larger page size.
+
+	// We start off with an empty page.
+	let mut page = PageOf::<Test>::default();
+	// … and append a message with maximum possible length.
+	let mut msg = vec![123u8; MaxMessageLenOf::<Test>::get() as usize];
+	// … which works.
+	page.try_append_message::<Test>(BoundedSlice::defensive_truncate_from(&msg))
+		.unwrap();
+	// Now we cannot append *anything* since the heap is full.
+	page.try_append_message::<Test>(BoundedSlice::defensive_truncate_from(&[]))
+		.unwrap_err();
+	assert_eq!(page.heap.len(), <Test as Config>::HeapSize::get() as usize);
+}
+
 	let _page = PageOf::<Test>::from_message::<Test>(BoundedSlice::defensive_truncate_from(b"MSG"));
 }
 

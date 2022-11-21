@@ -123,8 +123,7 @@
 //!
 //! - `Message`: A blob of data into which the pallet has no introspection, defined as
 //! [`BoundedSlice<u8, MaxMessageLenOf<T>>`]. The message length is limited by [`MaxMessageLenOf`]
-//! which is calculated implicitly from [`Config::HeapSize`], the MEL  of the `MessageOrigin` and
-//! the MEL of an [`ItemHeader`].
+//! which is calculated from [`Config::HeapSize`] and [`ItemHeader::max_encoded_len()`].
 //! - `MessageOrigin`: A generic *origin* of a message, defined as [`MessageOriginOf`]. The
 //! requirements for it are kept minimal to remain as generic as possible. The type is defined in
 //! [`frame_support::traits::ProcessMessage::Origin`].
@@ -1150,7 +1149,6 @@ impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>
 {
 	fn get() -> u32 {
 		(HeapSize::get().into())
-			.saturating_sub(Origin::max_encoded_len() as u32)
 			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
 	}
 }
