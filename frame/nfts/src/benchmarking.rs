@@ -114,6 +114,7 @@ fn add_item_attribute<T: Config<I>, I: 'static>(
 		SystemOrigin::Signed(caller.clone()).into(),
 		T::Helper::collection(0),
 		Some(item),
+		AttributeNamespace::CollectionOwner,
 		key.clone(),
 		vec![0; T::ValueLimit::get() as usize].try_into().unwrap(),
 	));
@@ -338,10 +339,38 @@ benchmarks_instance_pallet! {
 
 		let (collection, caller, _) = create_collection::<T, I>();
 		let (item, ..) = mint_item::<T, I>(0);
-		add_item_metadata::<T, I>(item);
-	}: _(SystemOrigin::Signed(caller), collection, Some(item), key.clone(), value.clone())
+	}: _(SystemOrigin::Signed(caller), collection, Some(item), AttributeNamespace::CollectionOwner, key.clone(), value.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeSet { collection, maybe_item: Some(item), key, value }.into());
+		assert_last_event::<T, I>(
+			Event::AttributeSet {
+				collection,
+				maybe_item: Some(item),
+				namespace: AttributeNamespace::CollectionOwner,
+				key,
+				value,
+			}
+			.into(),
+		);
+	}
+
+	force_set_attribute {
+		let key: BoundedVec<_, _> = vec![0u8; T::KeyLimit::get() as usize].try_into().unwrap();
+		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
+
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+	}: _(SystemOrigin::Root, Some(caller), collection, Some(item), AttributeNamespace::CollectionOwner, key.clone(), value.clone())
+	verify {
+		assert_last_event::<T, I>(
+			Event::AttributeSet {
+				collection,
+				maybe_item: Some(item),
+				namespace: AttributeNamespace::CollectionOwner,
+				key,
+				value,
+			}
+			.into(),
+		);
 	}
 
 	clear_attribute {
@@ -349,9 +378,76 @@ benchmarks_instance_pallet! {
 		let (item, ..) = mint_item::<T, I>(0);
 		add_item_metadata::<T, I>(item);
 		let (key, ..) = add_item_attribute::<T, I>(item);
-	}: _(SystemOrigin::Signed(caller), collection, Some(item), key.clone())
+	}: _(SystemOrigin::Signed(caller), collection, Some(item), AttributeNamespace::CollectionOwner, key.clone())
 	verify {
-		assert_last_event::<T, I>(Event::AttributeCleared { collection, maybe_item: Some(item), key }.into());
+		assert_last_event::<T, I>(
+			Event::AttributeCleared {
+				collection,
+				maybe_item: Some(item),
+				namespace: AttributeNamespace::CollectionOwner,
+				key,
+			}.into(),
+		);
+	}
+
+	approve_item_attributes {
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
+	}: _(SystemOrigin::Signed(caller), collection, item, target_lookup)
+	verify {
+		assert_last_event::<T, I>(
+			Event::ItemAttributesApprovalAdded {
+				collection,
+				item,
+				delegate: target,
+			}
+			.into(),
+		);
+	}
+
+	cancel_item_attributes_approval {
+		let n in 0 .. 1_000;
+
+		let (collection, caller, _) = create_collection::<T, I>();
+		let (item, ..) = mint_item::<T, I>(0);
+		let target: T::AccountId = account("target", 0, SEED);
+		let target_lookup = T::Lookup::unlookup(target.clone());
+		Nfts::<T, I>::approve_item_attributes(
+			SystemOrigin::Signed(caller.clone()).into(),
+			collection,
+			item,
+			target_lookup.clone(),
+		)?;
+		T::Currency::make_free_balance_be(&target, DepositBalanceOf::<T, I>::max_value());
+		let value: BoundedVec<_, _> = vec![0u8; T::ValueLimit::get() as usize].try_into().unwrap();
+		for i in 0..n {
+			let mut key = vec![0u8; T::KeyLimit::get() as usize];
+			let mut s = Vec::from((i as u16).to_be_bytes());
+			key.truncate(s.len());
+			key.append(&mut s);
+
+			Nfts::<T, I>::set_attribute(
+				SystemOrigin::Signed(target.clone()).into(),
+				T::Helper::collection(0),
+				Some(item),
+				AttributeNamespace::Account(target.clone()),
+				key.try_into().unwrap(),
+				value.clone(),
+			)?;
+		}
+		let witness = CancelAttributesApprovalWitness { account_attributes: n };
+	}: _(SystemOrigin::Signed(caller), collection, item, target_lookup, witness)
+	verify {
+		assert_last_event::<T, I>(
+			Event::ItemAttributesApprovalRemoved {
+				collection,
+				item,
+				delegate: target,
+			}
+			.into(),
+		);
 	}
 
 	set_metadata {

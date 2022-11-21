@@ -24,6 +24,7 @@ use enumflags2::{bitflags, BitFlags};
 use frame_support::{
 	pallet_prelude::{BoundedVec, MaxEncodedLen},
 	traits::Get,
+	BoundedBTreeMap, BoundedBTreeSet,
 };
 use scale_info::{build::Fields, meta_type, Path, Type, TypeInfo, TypeParameter};
 
@@ -36,8 +37,12 @@ pub(super) type ApprovalsOf<T, I = ()> = BoundedBTreeMap<
 	Option<<T as SystemConfig>::BlockNumber>,
 	<T as Config<I>>::ApprovalsLimit,
 >;
+pub(super) type ItemAttributesApprovals<T, I = ()> =
+	BoundedBTreeSet<<T as SystemConfig>::AccountId, <T as Config<I>>::ItemAttributesApprovalsLimit>;
 pub(super) type ItemDepositOf<T, I> =
 	ItemDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
+pub(super) type AttributeDepositOf<T, I> =
+	AttributeDeposit<DepositBalanceOf<T, I>, <T as SystemConfig>::AccountId>;
 pub(super) type ItemDetailsFor<T, I> =
 	ItemDetails<<T as SystemConfig>::AccountId, ItemDepositOf<T, I>, ApprovalsOf<T, I>>;
 pub(super) type BalanceOf<T, I = ()> =
@@ -65,9 +70,9 @@ impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Collection's owner.
 	pub(super) owner: AccountId,
-	/// The total balance deposited for the all storage associated with this collection.
-	/// Used by `destroy`.
-	pub(super) total_deposit: DepositBalance,
+	/// The total balance deposited by the owner for the all storage data associated with this
+	/// collection. Used by `destroy`.
+	pub(super) owner_deposit: DepositBalance,
 	/// The total number of outstanding items of this collection.
 	pub(super) items: u32,
 	/// The total number of outstanding item metadata of this collection.
@@ -98,6 +103,13 @@ impl<AccountId, DepositBalance> CollectionDetails<AccountId, DepositBalance> {
 			attributes: self.attributes,
 		}
 	}
+}
+
+/// Witness data for items mint transactions.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
+pub struct MintWitness<ItemId> {
+	/// Provide the id of the item in a required collection.
+	pub owner_of_item: ItemId,
 }
 
 /// Information concerning the ownership of a single unique item.
@@ -171,6 +183,15 @@ pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 	pub(super) price: Option<ItemPriceWithDirection>,
 	/// An optional deadline for the swap.
 	pub(super) deadline: Deadline,
+}
+
+/// Information about the reserved attribute deposit.
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub struct AttributeDeposit<DepositBalance, AccountId> {
+	/// A depositor account.
+	pub(super) account: Option<AccountId>,
+	/// An amount that gets reserved.
+	pub(super) amount: DepositBalance,
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
@@ -265,9 +286,9 @@ impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumb
 }
 
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
-pub struct MintWitness<ItemId> {
-	/// Provide the id of the item in a required collection.
-	pub owner_of_item: ItemId,
+pub struct CancelAttributesApprovalWitness {
+	/// An amount of attributes previously created by account.
+	pub account_attributes: u32,
 }
 
 #[derive(

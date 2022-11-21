@@ -115,7 +115,7 @@ pub use sp_runtime::{
 	self, print, traits::Printable, ConsensusEngineId, MAX_MODULE_ERROR_ENCODED_SIZE,
 };
 
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::TypeId;
 
@@ -127,7 +127,7 @@ pub const LOG_TARGET: &str = "runtime::frame-support";
 pub enum Never {}
 
 /// A pallet identifier. These are per pallet and should be stored in a registry somewhere.
-#[derive(Clone, Copy, Eq, PartialEq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct PalletId(pub [u8; 8]);
 
 impl TypeId for PalletId {

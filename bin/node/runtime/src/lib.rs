@@ -1491,6 +1491,7 @@ parameter_types! {
 	pub const KeyLimit: u32 = 32;
 	pub const ValueLimit: u32 = 256;
 	pub const ApprovalsLimit: u32 = 20;
+	pub const ItemAttributesApprovalsLimit: u32 = 20;
 	pub const MaxTips: u32 = 10;
 	pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
 }
@@ -1535,6 +1536,7 @@ impl pallet_nfts::Config for Runtime {
 	type KeyLimit = KeyLimit;
 	type ValueLimit = ValueLimit;
 	type ApprovalsLimit = ApprovalsLimit;
+	type ItemAttributesApprovalsLimit = ItemAttributesApprovalsLimit;
 	type MaxTips = MaxTips;
 	type MaxDeadlineDuration = MaxDeadlineDuration;
 	type Features = Features;

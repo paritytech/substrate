@@ -17,6 +17,7 @@
 
 //! Miscellaneous types.
 
+use crate::PalletId;
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use sp_arithmetic::traits::{AtLeast32BitUnsigned, Zero};
 use sp_core::RuntimeDebug;
@@ -124,6 +125,21 @@ pub enum BalanceStatus {
 	Free,
 	/// Funds are reserved, as corresponding to `reserved` item in Balances.
 	Reserved,
+}
+
+/// Attribute namespaces for non-fungible tokens.
+#[derive(
+	Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, scale_info::TypeInfo, MaxEncodedLen,
+)]
+pub enum AttributeNamespace<AccountId> {
+	/// An attribute was set by the pallet.
+	Pallet(PalletId),
+	/// An attribute was set by collection's owner.
+	CollectionOwner,
+	/// An attribute was set by item's owner.
+	ItemOwner,
+	/// An attribute was set by pre-approved account.
+	Account(AccountId),
 }
 
 bitflags::bitflags! {

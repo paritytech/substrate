@@ -105,6 +105,7 @@ impl Config for Test {
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
 	type ApprovalsLimit = ConstU32<10>;
+	type ItemAttributesApprovalsLimit = ConstU32<2>;
 	type MaxTips = ConstU32<10>;
 	type MaxDeadlineDuration = ConstU64<10000>;
 	type Features = Features;
