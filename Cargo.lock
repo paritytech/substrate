@@ -7737,6 +7737,7 @@ dependencies = [
  "futures-timer",
  "libp2p",
  "log",
+ "mockall",
  "parking_lot 0.12.1",
  "sc-client-api",
  "sc-utils",
@@ -8347,6 +8348,7 @@ dependencies = [
  "sp-runtime",
  "sp-test-primitives",
  "sp-tracing",
+ "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "thiserror",
 ]

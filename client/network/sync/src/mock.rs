@@ -25,7 +25,7 @@ use sc_consensus::{BlockImportError, BlockImportStatus};
 use sc_network_common::sync::{
 	message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse},
 	BadPeer, ChainSync as ChainSyncT, Metrics, OnBlockData, OnBlockJustification,
-	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, PollResult, SyncStatus,
+	OpaqueBlockResponse, PeerInfo, PollBlockAnnounceValidation, SyncStatus,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -60,6 +60,7 @@ mockall::mock! {
 			request: Option<BlockRequest<Block>>,
 			response: BlockResponse<Block>,
 		) -> Result<OnBlockData<Block>, BadPeer>;
+		fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<Block>, BadPeer>);
 		fn on_block_justification(
 			&mut self,
 			who: PeerId,
@@ -89,7 +90,7 @@ mockall::mock! {
 			&mut self,
 			cx: &mut std::task::Context<'a>,
 		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
-		fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
+		fn peer_disconnected(&mut self, who: &PeerId);
 		fn metrics(&self) -> Metrics;
 		fn block_response_into_blocks(
 			&self,
@@ -99,7 +100,7 @@ mockall::mock! {
 		fn poll<'a>(
 			&mut self,
 			cx: &mut std::task::Context<'a>,
-		) -> Poll<PollResult<Block>>;
+		) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 		fn send_block_request(
 			&mut self,
 			who: PeerId,

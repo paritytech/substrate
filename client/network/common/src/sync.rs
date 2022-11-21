@@ -317,6 +317,12 @@ pub trait ChainSync<Block: BlockT>: Send {
 		response: BlockResponse<Block>,
 	) -> Result<OnBlockData<Block>, BadPeer>;
 
+	/// Procss received block data.
+	fn process_block_response_data(
+		&mut self,
+		blocks_to_import: Result<OnBlockData<Block>, BadPeer>,
+	);
+
 	/// Handle a response from the remote to a justification request that we made.
 	///
 	/// `request` must be the original request that triggered `response`.
@@ -378,7 +384,7 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Call when a peer has disconnected.
 	/// Canceled obsolete block request may result in some blocks being ready for
 	/// import, so this functions checks for such blocks and returns them.
-	fn peer_disconnected(&mut self, who: &PeerId) -> Option<OnBlockData<Block>>;
+	fn peer_disconnected(&mut self, who: &PeerId);
 
 	/// Return some key metrics.
 	fn metrics(&self) -> Metrics;
@@ -395,7 +401,10 @@ pub trait ChainSync<Block: BlockT>: Send {
 	/// Internally calls [`ChainSync::poll_block_announce_validation()`] and
 	/// this function should be polled until it returns [`Poll::Pending`] to
 	/// consume all pending events.
-	fn poll(&mut self, cx: &mut std::task::Context) -> Poll<PollResult<Block>>;
+	fn poll(
+		&mut self,
+		cx: &mut std::task::Context,
+	) -> Poll<PollBlockAnnounceValidation<Block::Header>>;
 
 	/// Send block request to peer
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<Block>);

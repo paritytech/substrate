@@ -53,6 +53,7 @@ pub type DefaultImportQueue<Block, Client> =
 
 mod basic_queue;
 pub mod buffered_link;
+pub mod mock;
 
 /// Shared block import struct used by the queue.
 pub type BoxBlockImport<B, Transaction> =
@@ -105,10 +106,10 @@ pub trait Verifier<B: BlockT>: Send + Sync {
 /// Blocks import queue API.
 ///
 /// The `import_*` methods can be called in order to send elements for the import queue to verify.
-/// Afterwards, call `poll_actions` to determine how to respond to these elements.
-pub trait ImportQueue<B: BlockT>: Send {
+pub trait ImportQueueService<B: BlockT>: Send {
 	/// Import bunch of blocks.
 	fn import_blocks(&mut self, origin: BlockOrigin, blocks: Vec<IncomingBlock<B>>);
+
 	/// Import block justifications.
 	fn import_justifications(
 		&mut self,
@@ -117,12 +118,26 @@ pub trait ImportQueue<B: BlockT>: Send {
 		number: NumberFor<B>,
 		justifications: Justifications,
 	);
-	/// Polls for actions to perform on the network.
-	///
+}
+
+#[async_trait::async_trait]
+pub trait ImportQueue<B: BlockT>: Send {
+	/// Get a copy of the handle to [`ImportQueueService`].
+	fn service(&self) -> Box<dyn ImportQueueService<B>>;
+
+	/// Get a reference to the handle to [`ImportQueueService`].
+	fn service_ref(&mut self) -> &mut dyn ImportQueueService<B>;
+
 	/// This method should behave in a way similar to `Future::poll`. It can register the current
 	/// task and notify later when more actions are ready to be polled. To continue the comparison,
 	/// it is as if this method always returned `Poll::Pending`.
 	fn poll_actions(&mut self, cx: &mut futures::task::Context, link: &mut dyn Link<B>);
+
+	/// Start asynchronous runner for import queue.
+	///
+	/// Takes an object implementing [`Link`] which allows the import queue to
+	/// influece the synchronization process.
+	async fn run(self, link: Box<dyn Link<B>>);
 }
 
 /// Hooks that the verification queue can use to influence the synchronization
