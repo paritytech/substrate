@@ -436,30 +436,9 @@ mod tests {
 		assert!(data.put_data(TEST_INHERENT_0, &10).is_err());
 	}
 
-	#[derive(Clone)]
-	struct TestInherentDataProvider;
-
-	const ERROR_TO_STRING: &str = "Found error!";
-
-	#[async_trait::async_trait]
-	impl InherentDataProvider for TestInherentDataProvider {
-		async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
-			data.put_data(TEST_INHERENT_0, &42)
-		}
-
-		async fn try_handle_error(
-			&self,
-			_: &InherentIdentifier,
-			_: &[u8],
-		) -> Option<Result<(), Error>> {
-			Some(Err(Error::Application(Box::from(ERROR_TO_STRING))))
-		}
-	}
-
 	#[test]
 	fn create_inherent_data() {
-		let provider = TestInherentDataProvider;
-
+		let provider = substrate_test_runtime_client::runtime::TestInherentDataProvider;
 		let inherent_data = futures::executor::block_on(provider.create_inherent_data()).unwrap();
 
 		assert_eq!(inherent_data.get_data::<u32>(&TEST_INHERENT_0).unwrap().unwrap(), 42u32);

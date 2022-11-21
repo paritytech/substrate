@@ -45,7 +45,7 @@ use frame_support::{
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
-use sp_inherents::{CheckInherentsResult, InherentData};
+use sp_inherents::{CheckInherentsResult, InherentData, InherentIdentifier};
 #[cfg(feature = "std")]
 use sp_runtime::traits::NumberFor;
 use sp_runtime::{
@@ -1402,23 +1402,27 @@ mod tests {
 	}
 }
 
-//#[derive(Clone)]
-//struct TestInherentDataProvider;
-//
-//const ERROR_TO_STRING: &str = "Found error!";
-//const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
-//
-//#[async_trait::async_trait]
-//impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
-//	async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
-//		data.put_data(TEST_INHERENT_0, &42)
-//	}
-//
-//	async fn try_handle_error(
-//		&self,
-//		_: &InherentIdentifier,
-//		_: &[u8],
-//	) -> Option<Result<(), Error>> {
-//		Some(Err(Error::Application(Box::from(ERROR_TO_STRING))))
-//	}
-//}
+#[derive(Clone)]
+pub struct TestInherentDataProvider;
+
+const ERROR_TO_STRING: &str = "Found error!";
+const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
+
+#[cfg(feature = "std")]
+#[async_trait::async_trait]
+impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
+	async fn provide_inherent_data(
+		&self,
+		data: &mut InherentData,
+	) -> Result<(), sp_inherents::Error> {
+		data.put_data(TEST_INHERENT_0, &42)
+	}
+
+	async fn try_handle_error(
+		&self,
+		_: &InherentIdentifier,
+		_: &[u8],
+	) -> Option<Result<(), sp_inherents::Error>> {
+		Some(Err(sp_inherents::Error::Application(Box::from(ERROR_TO_STRING))))
+	}
+}

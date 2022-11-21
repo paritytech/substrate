@@ -9646,6 +9646,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
+ "substrate-test-runtime-client",
  "thiserror",
 ]
 
