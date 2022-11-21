@@ -136,7 +136,7 @@ default:
 # exclude cargo-check-benches from such runs
 .test-refs-check-benches:
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/ 
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -329,10 +329,20 @@ cancel-pipeline-test-linux-stable-int:
   needs:
     - job:                         test-linux-stable-int
 
-cancel-pipeline-cargo-check-subkey:
+cancel-pipeline-cargo-check-each-crate-1:
   extends:                         .cancel-pipeline-template
   needs:
-    - job:                         cargo-check-subkey
+    - job:                         "cargo-check-each-crate 1/2"
+
+cancel-pipeline-cargo-check-each-crate-2:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         "cargo-check-each-crate 2/2"
+
+cancel-pipeline-cargo-check-each-crate-macos:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         cargo-check-each-crate-macos
 
 cancel-pipeline-check-tracing:
   extends:                         .cancel-pipeline-template
