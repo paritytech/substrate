@@ -297,6 +297,10 @@ impl<B: Block> PersistedState<B> {
 	pub(crate) fn set_min_block_delta(&mut self, min_block_delta: u32) {
 		self.voting_oracle.min_block_delta = min_block_delta.max(1);
 	}
+
+	pub(crate) fn set_best_grandpa(&mut self, best_grandpa: <B as Block>::Header) {
+		self.best_grandpa_block_header = best_grandpa;
+	}
 }
 
 /// A BEEFY worker plays the BEEFY protocol
