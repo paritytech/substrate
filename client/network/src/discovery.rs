@@ -51,10 +51,7 @@ use futures::prelude::*;
 use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
-	core::{
-		connection::ConnectionId, transport::ListenerId, ConnectedPoint, Multiaddr, PeerId,
-		PublicKey,
-	},
+	core::{connection::ConnectionId, Multiaddr, PeerId, PublicKey},
 	kad::{
 		handler::KademliaHandlerProto,
 		record::{
@@ -67,7 +64,10 @@ use libp2p::{
 	mdns::{async_io::Behaviour as Mdns, Config as MdnsConfig, Event as MdnsEvent},
 	multiaddr::Protocol,
 	swarm::{
-		behaviour::toggle::{Toggle, ToggleIntoConnectionHandler},
+		behaviour::{
+			toggle::{Toggle, ToggleIntoConnectionHandler},
+			DialFailure, FromSwarm, NewExternalAddr,
+		},
 		ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
 		NetworkBehaviourAction, PollParameters,
 	},
@@ -78,7 +78,6 @@ use sp_core::hexdisplay::HexDisplay;
 use std::{
 	cmp,
 	collections::{HashMap, HashSet, VecDeque},
-	io,
 	num::NonZeroUsize,
 	task::{Context, Poll},
 	time::Duration,
@@ -516,127 +515,84 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 		list
 	}
 
-	fn inject_address_change(
-		&mut self,
-		peer_id: &PeerId,
-		connection_id: &ConnectionId,
-		old: &ConnectedPoint,
-		new: &ConnectedPoint,
-	) {
-		self.kademlia.inject_address_change(peer_id, connection_id, old, new)
-	}
-
-	fn inject_connection_established(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		failed_addresses: Option<&Vec<Multiaddr>>,
-		other_established: usize,
-	) {
-		self.num_connections += 1;
-		self.kademlia.inject_connection_established(
-			peer_id,
-			conn,
-			endpoint,
-			failed_addresses,
-			other_established,
-		)
-	}
-
-	fn inject_connection_closed(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-		remaining_established: usize,
-	) {
-		self.num_connections -= 1;
-		self.kademlia.inject_connection_closed(
-			peer_id,
-			conn,
-			endpoint,
-			handler,
-			remaining_established,
-		)
-	}
-
-	fn inject_dial_failure(
-		&mut self,
-		peer_id: Option<PeerId>,
-		handler: Self::ConnectionHandler,
-		error: &DialError,
-	) {
-		if let Some(peer_id) = peer_id {
-			if let DialError::Transport(errors) = error {
-				if let Some(list) = self.ephemeral_addresses.get_mut(&peer_id) {
-					for (addr, _error) in errors {
-						list.retain(|a| a != addr);
+	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+		match event {
+			FromSwarm::ConnectionEstablished(e) => {
+				self.num_connections += 1;
+				self.kademlia.on_swarm_event(FromSwarm::ConnectionEstablished(e));
+			},
+			FromSwarm::ConnectionClosed(e) => {
+				self.num_connections -= 1;
+				self.kademlia.on_swarm_event(FromSwarm::ConnectionClosed(e));
+			},
+			FromSwarm::DialFailure(e @ DialFailure { peer_id, error, .. }) => {
+				if let Some(peer_id) = peer_id {
+					if let DialError::Transport(errors) = error {
+						if let Some(list) = self.ephemeral_addresses.get_mut(&peer_id) {
+							for (addr, _error) in errors {
+								list.retain(|a| a != addr);
+							}
+						}
 					}
 				}
-			}
-		}
 
-		self.kademlia.inject_dial_failure(peer_id, handler, error)
+				self.kademlia.on_swarm_event(FromSwarm::DialFailure(e));
+			},
+			FromSwarm::ListenerClosed(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::ListenerClosed(e));
+			},
+			FromSwarm::ListenFailure(_) => {
+				// NetworkBehaviour::inject_listen_failure on Kademlia<MemoryStore> does nothing.
+			},
+			FromSwarm::ListenerError(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::ListenerError(e));
+			},
+			FromSwarm::ExpiredExternalAddr(e) => {
+				// We intentionally don't remove the element from `known_external_addresses` in
+				// order to not print the log line again.
+
+				self.kademlia.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+			},
+			FromSwarm::NewListener(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::NewListener(e));
+			},
+			FromSwarm::ExpiredListenAddr(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
+			},
+			FromSwarm::NewExternalAddr(e @ NewExternalAddr { addr }) => {
+				let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
+
+				if Self::can_add_to_dht(addr) {
+					// NOTE: we might re-discover the same address multiple times
+					// in which case we just want to refrain from logging.
+					if self.known_external_addresses.insert(new_addr.clone()) {
+						info!(
+						  target: "sub-libp2p",
+						  "🔍 Discovered new external address for our node: {}",
+						  new_addr,
+						);
+					}
+				}
+
+				self.kademlia.on_swarm_event(FromSwarm::NewExternalAddr(e));
+			},
+			FromSwarm::AddressChange(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::AddressChange(e));
+			},
+			FromSwarm::NewListenAddr(e) => {
+				self.kademlia.on_swarm_event(FromSwarm::NewListenAddr(e));
+			},
+		}
 	}
 
-	fn inject_event(
+	fn on_connection_handler_event(
 		&mut self,
 		peer_id: PeerId,
-		connection: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+		connection_id: ConnectionId,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
+      ConnectionHandler>::OutEvent,
 	) {
-		self.kademlia.inject_event(peer_id, connection, event)
-	}
-
-	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		let new_addr = addr.clone().with(Protocol::P2p(self.local_peer_id.into()));
-
-		if Self::can_add_to_dht(addr) {
-			// NOTE: we might re-discover the same address multiple times
-			// in which case we just want to refrain from logging.
-			if self.known_external_addresses.insert(new_addr.clone()) {
-				info!(
-					target: "sub-libp2p",
-					"🔍 Discovered new external address for our node: {}",
-					new_addr,
-				);
-			}
-		}
-
-		self.kademlia.inject_new_external_addr(addr)
-	}
-
-	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-		// We intentionally don't remove the element from `known_external_addresses` in order
-		// to not print the log line again.
-
-		self.kademlia.inject_expired_external_addr(addr)
-	}
-
-	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		self.kademlia.inject_expired_listen_addr(id, addr)
-	}
-
-	fn inject_new_listener(&mut self, id: ListenerId) {
-		self.kademlia.inject_new_listener(id)
-	}
-
-	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		self.kademlia.inject_new_listen_addr(id, addr)
-	}
-
-	fn inject_listen_failure(&mut self, _: &Multiaddr, _: &Multiaddr, _: Self::ConnectionHandler) {
-		// NetworkBehaviour::inject_listen_failure on Kademlia<MemoryStore> does nothing.
-	}
-
-	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
-		self.kademlia.inject_listener_error(id, err)
-	}
-
-	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		self.kademlia.inject_listener_closed(id, reason)
+		self.kademlia.on_connection_handler_event(peer_id, connection_id, event);
 	}
 
 	fn poll(
