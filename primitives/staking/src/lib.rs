@@ -22,7 +22,7 @@
 
 use crate::currency_to_vote::CurrencyToVote;
 use sp_runtime::{DispatchError, DispatchResult};
-use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
+use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
 pub mod offence;
 
@@ -103,7 +103,7 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 /// implementations as well.
 pub trait StakingInterface {
 	/// Balance type used by the staking system.
-	type Balance: PartialEq;
+	type Balance: Sub<Output = Self::Balance> + Ord + PartialEq + Default + Copy;
 
 	/// AccountId type used by the staking system
 	type AccountId;
@@ -206,7 +206,7 @@ pub trait StakingInterface {
 	fn is_validator(who: &Self::AccountId) -> bool;
 
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
-	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
+	fn nominations(who: &Self::AccountId) -> Option<Vec<Self::AccountId>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_era_stakers(

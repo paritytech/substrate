@@ -1606,7 +1606,7 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<Vec<T::AccountId>> {
+	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
 
