@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::VoterBagsListInstance;
 use frame_election_provider_support::VoteWeight;
 use frame_support::{pallet_prelude::*, parameter_types, traits::ConstU64, PalletId};
 use sp_runtime::{
@@ -32,16 +33,16 @@ impl frame_system::Config for Runtime {
 	type BlockWeights = ();
 	type BlockLength = ();
 	type DbWeight = ();
-	type Origin = Origin;
+	type RuntimeOrigin = RuntimeOrigin;
 	type Index = AccountIndex;
 	type BlockNumber = BlockNumber;
-	type Call = Call;
+	type RuntimeCall = RuntimeCall;
 	type Hash = sp_core::H256;
 	type Hashing = sp_runtime::traits::BlakeTwo256;
 	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = sp_runtime::testing::Header;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type BlockHashCount = ();
 	type Version = ();
 	type PalletInfo = PalletInfo;
@@ -69,7 +70,7 @@ impl pallet_balances::Config for Runtime {
 	type MaxReserves = ();
 	type ReserveIdentifier = [u8; 8];
 	type Balance = Balance;
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
@@ -96,7 +97,7 @@ impl pallet_staking::Config for Runtime {
 	type UnixTime = pallet_timestamp::Pallet<Self>;
 	type CurrencyToVote = frame_support::traits::SaturatingCurrencyToVote;
 	type RewardRemainder = ();
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type Slash = ();
 	type Reward = ();
 	type SessionsPerEra = ();
@@ -109,10 +110,12 @@ impl pallet_staking::Config for Runtime {
 	type MaxNominatorRewardedPerValidator = ConstU32<64>;
 	type OffendingValidatorsThreshold = ();
 	type ElectionProvider =
-		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking)>;
+		frame_election_provider_support::NoElection<(AccountId, BlockNumber, Staking, ())>;
 	type GenesisElectionProvider = Self::ElectionProvider;
-	type VoterList = pallet_bags_list::Pallet<Self>;
+	type VoterList = VoterList;
+	type TargetList = pallet_staking::UseValidatorsMap<Self>;
 	type MaxUnlockingChunks = ConstU32<32>;
+	type HistoryDepth = ConstU32<84>;
 	type OnStakerSlash = Pools;
 	type BenchmarkingConfig = pallet_staking::TestBenchmarkingConfig;
 	type WeightInfo = ();
@@ -122,8 +125,8 @@ parameter_types! {
 	pub static BagThresholds: &'static [VoteWeight] = &[10, 20, 30, 40, 50, 60, 1_000, 2_000, 10_000];
 }
 
-impl pallet_bags_list::Config for Runtime {
-	type Event = Event;
+impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type BagThresholds = BagThresholds;
 	type ScoreProvider = Staking;
@@ -151,14 +154,13 @@ parameter_types! {
 }
 
 impl pallet_nomination_pools::Config for Runtime {
-	type Event = Event;
+	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = ();
 	type Currency = Balances;
-	type CurrencyBalance = Balance;
 	type RewardCounter = FixedU128;
 	type BalanceToU256 = BalanceToU256;
 	type U256ToBalance = U256ToBalance;
-	type StakingInterface = Staking;
+	type Staking = Staking;
 	type PostUnbondingPoolsWindow = PostUnbondingPoolsWindow;
 	type MaxMetadataLen = ConstU32<256>;
 	type MaxUnbonding = ConstU32<8>;
@@ -180,7 +182,7 @@ frame_support::construct_runtime!(
 		Timestamp: pallet_timestamp::{Pallet, Call, Storage, Inherent},
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
 		Staking: pallet_staking::{Pallet, Call, Config<T>, Storage, Event<T>},
-		BagsList: pallet_bags_list::{Pallet, Call, Storage, Event<T>},
+		VoterList: pallet_bags_list::<Instance1>::{Pallet, Call, Storage, Event<T>},
 		Pools: pallet_nomination_pools::{Pallet, Call, Storage, Event<T>},
 	}
 );

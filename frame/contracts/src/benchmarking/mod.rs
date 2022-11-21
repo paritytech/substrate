@@ -57,7 +57,7 @@ const INSTR_BENCHMARK_BATCHES: u32 = 50;
 struct Contract<T: Config> {
 	caller: T::AccountId,
 	account_id: T::AccountId,
-	addr: <T::Lookup as StaticLookup>::Source,
+	addr: AccountIdLookupOf<T>,
 	value: BalanceOf<T>,
 }
 
@@ -87,7 +87,7 @@ where
 		module: WasmModule<T>,
 		data: Vec<u8>,
 	) -> Result<Contract<T>, &'static str> {
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let salt = vec![0xff];
 		let addr = Contracts::<T>::contract_address(&caller, &module.hash, &salt);
@@ -257,7 +257,7 @@ benchmarks! {
 		let instance = Contract::<T>::with_caller(
 			whitelisted_caller(), WasmModule::sized(c, Location::Deploy), vec![],
 		)?;
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr;
 	}: call(origin, callee, value, Weight::MAX, None, vec![])
@@ -280,7 +280,7 @@ benchmarks! {
 		let c in 0 .. Perbill::from_percent(49).mul_ceil(T::MaxCodeLen::get());
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let salt = vec![42u8; s as usize];
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
@@ -307,7 +307,7 @@ benchmarks! {
 	instantiate {
 		let s in 0 .. code::max_pages::<T>() * 64 * 1024;
 		let salt = vec![42u8; s as usize];
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		let caller = whitelisted_caller();
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
@@ -338,7 +338,7 @@ benchmarks! {
 		let instance = Contract::<T>::with_caller(
 			whitelisted_caller(), WasmModule::dummy(), vec![],
 		)?;
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		let callee = instance.addr.clone();
 		let before = T::Currency::free_balance(&instance.account_id);
@@ -371,7 +371,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::sized(c, Location::Call);
 		let origin = RawOrigin::Signed(caller.clone());
-	}: _(origin, code, None)
+	}: _(origin, code, None, Determinism::Deterministic)
 	verify {
 		// uploading the code reserves some balance in the callers account
 		assert!(T::Currency::reserved_balance(&caller) > 0u32.into());
@@ -386,7 +386,7 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&caller, caller_funding::<T>());
 		let WasmModule { code, hash, .. } = WasmModule::<T>::dummy();
 		let origin = RawOrigin::Signed(caller.clone());
-		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None)?;
+		let uploaded = <Contracts<T>>::bare_upload_code(caller.clone(), code, None, Determinism::Deterministic)?;
 		assert_eq!(uploaded.code_hash, hash);
 		assert_eq!(uploaded.deposit, T::Currency::reserved_balance(&caller));
 		assert!(<Contract<T>>::code_exists(&hash));
@@ -618,11 +618,11 @@ benchmarks! {
 			imported_functions: vec![ImportedFunction {
 				module: "seal0",
 				name: "gas",
-				params: vec![ValueType::I32],
+				params: vec![ValueType::I64],
 				return_type: None,
 			}],
 			call_body: Some(body::repeated(r * API_BENCHMARK_BATCH_SIZE, &[
-				Instruction::I32Const(42),
+				Instruction::I64Const(42),
 				Instruction::Call(0),
 			])),
 			.. Default::default()
@@ -767,13 +767,13 @@ benchmarks! {
 		let instance = Contract::<T>::new(code, vec![])?;
 		let origin = RawOrigin::Signed(instance.caller.clone());
 		assert_eq!(T::Currency::total_balance(&beneficiary), 0u32.into());
-		assert_eq!(T::Currency::free_balance(&instance.account_id), T::Currency::minimum_balance());
+		assert_eq!(T::Currency::free_balance(&instance.account_id), Pallet::<T>::min_balance());
 		assert_ne!(T::Currency::reserved_balance(&instance.account_id), 0u32.into());
 	}: call(origin, instance.addr.clone(), 0u32.into(), Weight::MAX, None, vec![])
 	verify {
 		if r > 0 {
 			assert_eq!(T::Currency::total_balance(&instance.account_id), 0u32.into());
-			assert_eq!(T::Currency::total_balance(&beneficiary), T::Currency::minimum_balance());
+			assert_eq!(T::Currency::total_balance(&beneficiary), Pallet::<T>::min_balance());
 		}
 	}
 
@@ -919,8 +919,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_set_storage",
+				module: "seal2",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -967,8 +967,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_set_storage",
+				module: "seal2",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1015,8 +1015,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_set_storage",
+				module: "seal2",
+				name: "set_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1067,8 +1067,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_clear_storage",
+				module: "seal1",
+				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1114,8 +1114,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_clear_storage",
+				module: "seal1",
+				name: "clear_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1162,8 +1162,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_get_storage",
+				module: "seal1",
+				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1216,8 +1216,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_get_storage",
+				module: "seal1",
+				name: "get_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1271,8 +1271,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_contains_storage",
+				module: "seal1",
+				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1318,8 +1318,8 @@ benchmarks! {
 		let code = WasmModule::<T>::from(ModuleDefinition {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
-				module: "__unstable__",
-				name: "seal_contains_storage",
+				module: "seal1",
+				name: "contains_storage",
 				params: vec![ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1367,7 +1367,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_take_storage",
+				name: "take_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1421,7 +1421,7 @@ benchmarks! {
 			memory: Some(ImportedMemory::max::<T>()),
 			imported_functions: vec![ImportedFunction {
 				module: "__unstable__",
-				name: "seal_take_storage",
+				name: "take_storage",
 				params: vec![ValueType::I32, ValueType::I32, ValueType::I32, ValueType::I32],
 				return_type: Some(ValueType::I32),
 			}],
@@ -1469,7 +1469,7 @@ benchmarks! {
 			.collect::<Vec<_>>();
 		let account_len = accounts.get(0).map(|i| i.encode().len()).unwrap_or(0);
 		let account_bytes = accounts.iter().flat_map(|x| x.encode()).collect();
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1705,7 +1705,7 @@ benchmarks! {
 		let hash_len = hashes.get(0).map(|x| x.encode().len()).unwrap_or(0);
 		let hashes_bytes = hashes.iter().flat_map(|x| x.encode()).collect::<Vec<_>>();
 		let hashes_len = hashes_bytes.len();
-		let value = T::Currency::minimum_balance();
+		let value = Pallet::<T>::min_balance();
 		assert!(value > 0u32.into());
 		let value_bytes = value.encode();
 		let value_len = value_bytes.len();
@@ -1890,7 +1890,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_sha2_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_sha2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1908,7 +1908,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_keccak_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_keccak_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1926,7 +1926,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_256 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_256", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1944,7 +1944,7 @@ benchmarks! {
 
 	// Only the overhead of calling the function itself with minimal arguments.
 	seal_hash_blake2_128 {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let instance = Contract::<T>::new(WasmModule::hasher(
 			"seal_hash_blake2_128", r * API_BENCHMARK_BATCH_SIZE, 0,
 		), vec![])?;
@@ -1963,7 +1963,7 @@ benchmarks! {
 	// Only calling the function itself with valid arguments.
 	// It generates different private keys and signatures for the message "Hello world".
 	seal_ecdsa_recover {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 
 		let message_hash = sp_io::hashing::blake2_256("Hello world".as_bytes());
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
@@ -2011,7 +2011,7 @@ benchmarks! {
 	// Only calling the function itself for the list of
 	// generated different ECDSA keys.
 	seal_ecdsa_to_eth_address {
-		let r in 0 .. API_BENCHMARK_BATCHES;
+		let r in 0 .. 1;
 		let key_type = sp_core::crypto::KeyTypeId(*b"code");
 		let pub_keys_bytes = (0..r * API_BENCHMARK_BATCH_SIZE)
 			.map(|_| {
@@ -2853,8 +2853,8 @@ benchmarks! {
 			println!("{:#?}", Schedule::<T>::default());
 			println!("###############################################");
 			println!("Lazy deletion throughput per block (empty queue, full queue): {}, {}",
-				weight_limit / weight_per_key,
-				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key,
+				weight_limit / weight_per_key.ref_time(),
+				(weight_limit - weight_per_queue_item * queue_depth) / weight_per_key.ref_time(),
 			);
 		}
 		#[cfg(not(feature = "std"))]
@@ -2894,6 +2894,7 @@ benchmarks! {
 			None,
 			data,
 			false,
+			Determinism::Deterministic,
 		)
 		.result?;
 	}
@@ -2941,6 +2942,7 @@ benchmarks! {
 			None,
 			data,
 			false,
+			Determinism::Deterministic,
 		)
 		.result?;
 	}

@@ -320,17 +320,19 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 			wasmtime::ProfilingStrategy::None
 		},
 	};
-	config
-		.profiler(profiler)
-		.map_err(|e| WasmError::Instantiation(format!("fail to set profiler: {:#}", e)))?;
+	config.profiler(profiler);
 
-	if let Some(DeterministicStackLimit { native_stack_max, .. }) =
-		semantics.deterministic_stack_limit
-	{
-		config
-			.max_wasm_stack(native_stack_max as usize)
-			.map_err(|e| WasmError::Other(format!("cannot set max wasm stack: {:#}", e)))?;
-	}
+	let native_stack_max = match semantics.deterministic_stack_limit {
+		Some(DeterministicStackLimit { native_stack_max, .. }) => native_stack_max,
+
+		// In `wasmtime` 0.35 the default stack size limit was changed from 1MB to 512KB.
+		//
+		// This broke at least one parachain which depended on the original 1MB limit,
+		// so here we restore it to what it was originally.
+		None => 1024 * 1024,
+	};
+
+	config.max_wasm_stack(native_stack_max as usize);
 
 	config.parallel_compilation(semantics.parallel_compilation);
 
@@ -393,9 +395,6 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 				// This determines how many instances of the module can be
 				// instantiated in parallel from the same `Module`.
-				//
-				// This includes nested instances spawned with `sp_tasks::spawn`
-				// from *within* the runtime.
 				count: 32,
 			},
 		});
@@ -542,6 +541,7 @@ pub struct Semantics {
 	pub max_memory_size: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct Config {
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
 	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is

@@ -27,10 +27,13 @@ use sp_std::prelude::*;
 
 pub mod approvals;
 mod balanced;
+pub mod enumerable;
+pub use enumerable::InspectEnumerable;
 pub mod metadata;
 pub use balanced::{Balanced, Unbalanced};
 mod imbalance;
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+pub mod roles;
 
 /// Trait for providing balance-inspection access to a set of named fungible assets.
 pub trait Inspect<AccountId> {
@@ -72,12 +75,6 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
-}
-
-/// Interface for enumerating assets in existence or owned by a given account.
-pub trait InspectEnumerable<AccountId>: Inspect<AccountId> {
-	/// Returns an iterator of the collections in existence.
-	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>>;
 }
 
 /// Trait for reading metadata from a fungible asset.

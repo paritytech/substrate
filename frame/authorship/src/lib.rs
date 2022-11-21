@@ -190,7 +190,7 @@ pub mod pallet {
 				T::EventHandler::note_author(author);
 			}
 
-			0
+			Weight::zero()
 		}
 
 		fn on_finalize(_: T::BlockNumber) {
@@ -460,7 +460,7 @@ mod tests {
 
 	parameter_types! {
 		pub BlockWeights: frame_system::limits::BlockWeights =
-			frame_system::limits::BlockWeights::simple_max(1024);
+			frame_system::limits::BlockWeights::simple_max(frame_support::weights::Weight::from_ref_time(1024));
 	}
 
 	impl frame_system::Config for Test {
@@ -468,16 +468,16 @@ mod tests {
 		type BlockWeights = ();
 		type BlockLength = ();
 		type DbWeight = ();
-		type Origin = Origin;
+		type RuntimeOrigin = RuntimeOrigin;
 		type Index = u64;
 		type BlockNumber = u64;
-		type Call = Call;
+		type RuntimeCall = RuntimeCall;
 		type Hash = H256;
 		type Hashing = BlakeTwo256;
 		type AccountId = u64;
 		type Lookup = IdentityLookup<Self::AccountId>;
 		type Header = Header;
-		type Event = Event;
+		type RuntimeEvent = RuntimeEvent;
 		type BlockHashCount = ConstU64<250>;
 		type Version = ();
 		type PalletInfo = PalletInfo;
@@ -738,7 +738,7 @@ mod tests {
 				System::reset_events();
 				System::initialize(&current_depth, &parent_hash, &Default::default());
 				Authorship::on_initialize(current_depth);
-				Authorship::set_uncles(Origin::none(), uncles).unwrap();
+				Authorship::set_uncles(RuntimeOrigin::none(), uncles).unwrap();
 				Authorship::on_finalize(current_depth);
 				max_item_count =
 					std::cmp::max(max_item_count, <Authorship as Store>::Uncles::get().len());

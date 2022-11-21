@@ -68,6 +68,7 @@ use sc_client_api::{
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
+use sc_network_common::protocol::ProtocolName;
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
@@ -143,72 +144,35 @@ use sp_finality_grandpa::{AuthorityList, AuthoritySignature, SetId};
 use until_imported::UntilGlobalMessageBlocksImported;
 
 // Re-export these two because it's just so damn convenient.
-pub use sp_finality_grandpa::{AuthorityId, AuthorityPair, GrandpaApi, ScheduledChange};
+pub use sp_finality_grandpa::{
+	AuthorityId, AuthorityPair, CatchUp, Commit, CompactCommit, GrandpaApi, Message, Precommit,
+	Prevote, PrimaryPropose, ScheduledChange, SignedMessage,
+};
 use std::marker::PhantomData;
 
 #[cfg(test)]
 mod tests;
 
-/// A GRANDPA message for a substrate chain.
-pub type Message<Block> = finality_grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
-
-/// A signed message.
-pub type SignedMessage<Block> = finality_grandpa::SignedMessage<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-
-/// A primary propose message for this chain's block type.
-pub type PrimaryPropose<Block> =
-	finality_grandpa::PrimaryPropose<<Block as BlockT>::Hash, NumberFor<Block>>;
-/// A prevote message for this chain's block type.
-pub type Prevote<Block> = finality_grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
-/// A precommit message for this chain's block type.
-pub type Precommit<Block> = finality_grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
-/// A catch up message for this chain's block type.
-pub type CatchUp<Block> = finality_grandpa::CatchUp<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-/// A commit message for this chain's block type.
-pub type Commit<Block> = finality_grandpa::Commit<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
-/// A compact commit message for this chain's block type.
-pub type CompactCommit<Block> = finality_grandpa::CompactCommit<
-	<Block as BlockT>::Hash,
-	NumberFor<Block>,
-	AuthoritySignature,
-	AuthorityId,
->;
 /// A global communication input stream for commits and catch up messages. Not
 /// exposed publicly, used internally to simplify types in the communication
 /// layer.
-type CommunicationIn<Block> = finality_grandpa::voter::CommunicationIn<
+type CommunicationIn<Block> = voter::CommunicationIn<
 	<Block as BlockT>::Hash,
 	NumberFor<Block>,
 	AuthoritySignature,
 	AuthorityId,
 >;
-
 /// Global communication input stream for commits and catch up messages, with
 /// the hash type not being derived from the block, useful for forcing the hash
 /// to some type (e.g. `H256`) when the compiler can't do the inference.
 type CommunicationInH<Block, H> =
-	finality_grandpa::voter::CommunicationIn<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+	voter::CommunicationIn<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
 
 /// Global communication sink for commits with the hash type not being derived
 /// from the block, useful for forcing the hash to some type (e.g. `H256`) when
 /// the compiler can't do the inference.
 type CommunicationOutH<Block, H> =
-	finality_grandpa::voter::CommunicationOut<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
+	voter::CommunicationOut<H, NumberFor<Block>, AuthoritySignature, AuthorityId>;
 
 /// Shared voter state for querying.
 pub struct SharedVoterState {
@@ -232,7 +196,7 @@ impl SharedVoterState {
 	}
 
 	/// Get the inner `VoterState` instance.
-	pub fn voter_state(&self) -> Option<voter::report::VoterState<AuthorityId>> {
+	pub fn voter_state(&self) -> Option<report::VoterState<AuthorityId>> {
 		self.inner.read().as_ref().map(|vs| vs.get())
 	}
 }
@@ -266,7 +230,7 @@ pub struct Config {
 	/// TelemetryHandle instance.
 	pub telemetry: Option<TelemetryHandle>,
 	/// Chain specific GRANDPA protocol name. See [`crate::protocol_standard_name`].
-	pub protocol_name: std::borrow::Cow<'static, str>,
+	pub protocol_name: ProtocolName,
 }
 
 impl Config {
@@ -723,19 +687,20 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 /// [`sc_network::config::NetworkConfiguration::extra_sets`].
 /// For standard protocol name see [`crate::protocol_standard_name`].
 pub fn grandpa_peers_set_config(
-	protocol_name: std::borrow::Cow<'static, str>,
-) -> sc_network::config::NonDefaultSetConfig {
+	protocol_name: ProtocolName,
+) -> sc_network_common::config::NonDefaultSetConfig {
 	use communication::grandpa_protocol_name;
-	sc_network::config::NonDefaultSetConfig {
+	sc_network_common::config::NonDefaultSetConfig {
 		notifications_protocol: protocol_name,
 		fallback_names: grandpa_protocol_name::LEGACY_NAMES.iter().map(|&n| n.into()).collect(),
 		// Notifications reach ~256kiB in size at the time of writing on Kusama and Polkadot.
 		max_notification_size: 1024 * 1024,
-		set_config: sc_network::config::SetConfig {
+		handshake: None,
+		set_config: sc_network_common::config::SetConfig {
 			in_peers: 0,
 			out_peers: 0,
 			reserved_nodes: Vec::new(),
-			non_reserved_mode: sc_network::config::NonReservedPeerMode::Deny,
+			non_reserved_mode: sc_network_common::config::NonReservedPeerMode::Deny,
 		},
 	}
 }

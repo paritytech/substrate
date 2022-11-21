@@ -1,0 +1,34 @@
+[package]
+name = "pallet-root-testing"
+version = "1.0.0-dev"
+authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
+license = "Apache-2.0"
+homepage = "https://substrate.io"
+repository = "https://github.com/paritytech/substrate/"
+description = "FRAME root testing pallet"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
+scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
+
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
+sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+
+[dev-dependencies]
+
+[features]
+try-runtime = ["frame-support/try-runtime"]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame-support/std",
+    "frame-system/std",
+	"scale-info/std",
+    "sp-runtime/std",
+]

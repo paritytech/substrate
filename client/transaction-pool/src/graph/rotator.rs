@@ -120,7 +120,7 @@ mod tests {
 		let tx = Transaction {
 			data: (),
 			bytes: 1,
-			hash: hash.clone(),
+			hash,
 			priority: 5,
 			valid_till: 1,
 			requires: vec![],

@@ -62,8 +62,8 @@ pub type BoxBlockImport<B, Transaction> =
 pub type BoxJustificationImport<B> =
 	Box<dyn JustificationImport<B, Error = ConsensusError> + Send + Sync>;
 
-/// Maps to the Origin used by the network.
-pub type Origin = libp2p::PeerId;
+/// Maps to the RuntimeOrigin used by the network.
+pub type RuntimeOrigin = libp2p::PeerId;
 
 /// Block data used by the queue.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -79,7 +79,7 @@ pub struct IncomingBlock<B: BlockT> {
 	/// Justification(s) if requested.
 	pub justifications: Option<Justifications>,
 	/// The peer, we received this from
-	pub origin: Option<Origin>,
+	pub origin: Option<RuntimeOrigin>,
 	/// Allow importing the block skipping state verification if parent state is missing.
 	pub allow_missing_state: bool,
 	/// Skip block execution and state verification.
@@ -112,7 +112,7 @@ pub trait ImportQueue<B: BlockT>: Send {
 	/// Import block justifications.
 	fn import_justifications(
 		&mut self,
-		who: Origin,
+		who: RuntimeOrigin,
 		hash: B::Hash,
 		number: NumberFor<B>,
 		justifications: Justifications,
@@ -140,7 +140,7 @@ pub trait Link<B: BlockT>: Send {
 	/// Justification import result.
 	fn justification_imported(
 		&mut self,
-		_who: Origin,
+		_who: RuntimeOrigin,
 		_hash: &B::Hash,
 		_number: NumberFor<B>,
 		_success: bool,
@@ -155,9 +155,9 @@ pub trait Link<B: BlockT>: Send {
 #[derive(Debug, PartialEq)]
 pub enum BlockImportStatus<N: std::fmt::Debug + PartialEq> {
 	/// Imported known block.
-	ImportedKnown(N, Option<Origin>),
+	ImportedKnown(N, Option<RuntimeOrigin>),
 	/// Imported unknown block.
-	ImportedUnknown(N, ImportedAux, Option<Origin>),
+	ImportedUnknown(N, ImportedAux, Option<RuntimeOrigin>),
 }
 
 impl<N: std::fmt::Debug + PartialEq> BlockImportStatus<N> {
@@ -175,15 +175,15 @@ impl<N: std::fmt::Debug + PartialEq> BlockImportStatus<N> {
 pub enum BlockImportError {
 	/// Block missed header, can't be imported
 	#[error("block is missing a header (origin = {0:?})")]
-	IncompleteHeader(Option<Origin>),
+	IncompleteHeader(Option<RuntimeOrigin>),
 
 	/// Block verification failed, can't be imported
 	#[error("block verification failed (origin = {0:?}): {1}")]
-	VerificationFailed(Option<Origin>, String),
+	VerificationFailed(Option<RuntimeOrigin>, String),
 
 	/// Block is known to be Bad
 	#[error("bad block (origin = {0:?})")]
-	BadBlock(Option<Origin>),
+	BadBlock(Option<RuntimeOrigin>),
 
 	/// Parent state is missing.
 	#[error("block is missing parent state")]
