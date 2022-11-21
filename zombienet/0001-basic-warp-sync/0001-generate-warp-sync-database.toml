@@ -1,0 +1,30 @@
+# this file is not intended to be executed in CI stage
+[relaychain]
+default_image = "docker.io/parity/substrate:latest"
+default_command = "substrate"
+
+chain = "gen-db"
+
+#built with: substrate build-spec --chain=local
+chain_spec_path = "0001-chain-spec.json"
+
+# to build the database:
+# ./zombienet-linux spawn --dir ./db-test-gen --provider native 0000x-gen-db.toml
+
+# to create snapshot for testing:
+# mkdir -p db-snapshot/{alice,bob}/data/chains/local_testnet/db/  
+# cp -r db-test-gen/alice/data/chains/local_testnet/db/full db-snapshot/alice/data/chains/local_testnet/db/  
+# cp -r db-test-gen/bob/data/chains/local_testnet/db/full   db-snapshot/bob/data/chains/local_testnet/db/
+# cp db-snapshot db
+
+# to run the test:
+# ./zombienet-linux spawn --dir db --provider native 0000y-test-db.toml
+
+
+  [[relaychain.nodes]]
+  name = "alice"
+  validator = true
+
+  [[relaychain.nodes]]
+  name = "bob"
+  validator = true

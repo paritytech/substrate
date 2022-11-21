@@ -1,0 +1,33 @@
+Description: Warp sync
+Network: ./0001-test-warp-sync.toml
+Creds: config
+
+alice: is up
+bob: is up
+charlie: is up
+dave: is up
+
+alice: reports node_roles is 4
+bob: reports node_roles is 4
+charlie: reports node_roles is 1
+dave: reports node_roles is 1
+
+alice: reports peers count is at least 3 within 60 seconds
+bob: reports peers count is at least 3 within 60 seconds
+charlie: reports peers count is at least 3 within 60 seconds
+dave: reports peers count is at least 3 within 60 seconds
+
+
+# db snapshot has 12133 blocks
+dave: reports block height is at least 1 within 60 seconds
+dave: reports block height is at least 12132 within 60 seconds
+dave: reports block height is at least 12133 within 60 seconds
+
+alice: reports block height is at least 12133 within 60 seconds
+bob: reports block height is at least 12133 within 60 seconds
+charlie: reports block height is at least 12133 within 60 seconds
+
+dave: log line matches "Warp sync is complete" within 60 seconds
+dave: log line matches "Block history download is complete" within 3 seconds
+
+dave: count of log lines containing "error" is 0 within 3 seconds
