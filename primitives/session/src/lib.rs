@@ -118,7 +118,7 @@ where
 	T: ProvideRuntimeApi<Block>,
 	T::Api: SessionKeys<Block>,
 {
-	if !seeds.is_empty() {
+	if seeds.is_empty() {
 		return Ok(())
 	}
 
