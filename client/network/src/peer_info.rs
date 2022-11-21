@@ -40,7 +40,6 @@ use sc_network_common::utils::interval;
 use smallvec::SmallVec;
 use std::{
 	collections::hash_map::Entry,
-	error, io,
 	pin::Pin,
 	task::{Context, Poll},
 	time::{Duration, Instant},
