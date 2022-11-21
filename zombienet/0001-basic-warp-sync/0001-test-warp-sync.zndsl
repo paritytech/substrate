@@ -28,6 +28,7 @@ bob: reports block height is at least 12133 within 60 seconds
 charlie: reports block height is at least 12133 within 60 seconds
 
 dave: log line matches "Warp sync is complete" within 60 seconds
-dave: log line matches "Block history download is complete" within 3 seconds
+dave: count of log lines containing  "Block history download is complete" is 1 within 10 seconds
 
-dave: count of log lines containing "error" is 0 within 3 seconds
+dave: count of log lines containing "error" is 0 within 10 seconds
+dave: count of log lines matching "verification failed" is 0 within 10 seconds
