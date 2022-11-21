@@ -953,7 +953,8 @@ mod tests {
 
 		let behaviour = RequestResponsesBehaviour::new(list, handle).unwrap();
 
-		let mut swarm = Swarm::new(transport, behaviour, keypair.public().to_peer_id());
+		let mut swarm =
+			Swarm::with_threadpool_executor(transport, behaviour, keypair.public().to_peer_id());
 		let listen_addr: Multiaddr = format!("/memory/{}", rand::random::<u64>()).parse().unwrap();
 
 		swarm.listen_on(listen_addr.clone()).unwrap();
