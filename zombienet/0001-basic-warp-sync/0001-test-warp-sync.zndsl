@@ -32,4 +32,4 @@ dave: count of log lines containing  "Block history download is complete" is 1 w
 
 dave: count of log lines containing "error" is 0 within 10 seconds
 dave: count of log lines containing "VRF verification failed" is 0 within 10 seconds
-dave: count of log lines containing "Verification failed" is 0 withing 10 seconds
+dave: count of log lines containing "Verification failed" is 0 within 10 seconds
