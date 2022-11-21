@@ -1402,10 +1402,13 @@ mod tests {
 	}
 }
 
+#[cfg(feature = "std")]
 #[derive(Clone)]
 pub struct TestInherentDataProvider;
 
+#[cfg(feature = "std")]
 const ERROR_TO_STRING: &str = "Found error!";
+#[cfg(feature = "std")]
 const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
 
 #[cfg(feature = "std")]
