@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Setup helpers for testing and benchmarking.
+//! Std setup helpers for testing and benchmarking.
 //!
 //! Cannot be put into mock.rs since benchmarks require no-std and mock.rs is std.
 

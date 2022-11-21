@@ -14,7 +14,166 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Pallet to handle XCM message queuing.
+//! # Generalized Message Queue Pallet
+//!
+//! Provides generalized message queuing and processing capabilities on a per-queue basis for
+//! arbitrary use-cases.
+//!
+//! # Design Goals
+//!
+//! - Minimal assumptions about `Message`s and `MessageOrigin`s. Both should be MEL bounded blobs.
+//!  This ensures the generality and reusability of the pallet.
+//! - Well known and tightly limited pre-dispatch PoV weights, especially for message execution.
+//!  This is paramount for the success of the pallet since message execution is done in
+//!  `on_initialize` which must _never_ under-estimate its PoV weight. It also needs a frugal PoV
+//!  footprint since PoV is scare and this is (possibly) done in every block. This must also hold in
+//!  the presence of unpredictable message size distributions.
+//! - Usable as XCMP, DMP and UMP message/dispatch queue - possibly through adapter types.
+//!
+//! # Design
+//!
+//! The pallet has means to enqueue, store and process messages. This is implemented by having
+//! *queues* which store enqueued messages and can be *served* to process said messages. A queue is
+//! identified by its origin in the `BookStateFor`. Each message has an origin which defines into
+//! which queue it will be stored. Messages are stored by being appended to the last [`Page`] of a
+//! book. Each book keeps track of its pages by indexing `Pages`. The `ReadyRing` contains all
+//! queues which hold at least one unprocessed message and are thereby *ready* to be serviced. The
+//! `ServiceHead` indicates which *ready* queue is the next to be serviced.  
+//! The pallet implements [`frame_support::traits::EnqueueMessage`],
+//! [`frame_support::traits::ServiceQueues`] and has [`frame_support::traits::ProcessMessage`] and
+//! [`OnQueueChanged`] hooks to communicate with the outside world.
+//!
+//! NOTE: The storage items are not linked since they are not public.
+//!
+//! **Message Execution**
+//!
+//! Executing a message is offloaded the [`Config::MessageProcessor`] which contains the actual
+//! logic of how to handle the message since they are blobs. A message can be temporarily or
+//! permanently overweight. The pallet will perpetually try to execute a temporarily overweight
+//! message. A permanently overweight message is skipped and must be executed manually.
+//!
+//! **Pagination**
+//!
+//! Queues are stored in a *paged* manner by splitting their messages into [`Page`]s. This results
+//! in a lot of complexity when implementing the pallet but is completely necessary to archive the
+//! second #[Design Goal](design-goals). The problem comes from the fact a message can *possibly* be
+//! quite large, lets say 64KiB. This then results in a *MEL* of at least 64KiB which results in a
+//! PoV of at least 64KiB. Now we have the assumption that most messages are much shorter than their
+//! maximum allowed length. This would result in most messages having a pre-dispatch PoV size which
+//! is much larger than their post-dispatch PoV size, possibly by a factor of thousand. Disregarding
+//! this observation would cripple the processing power of the pallet since it cannot straighten out
+//! this discrepancy at runtime. The implemented solution tightly packs multiple messages into a
+//! page, which allows for a post-dispatch PoV size which is much closer to the worst case
+//! pre-dispatch PoV size. To be more formal; the ratio between *Actual Encode Length* and *Max
+//! Encoded Length* per message: `AEL / MEL` is much closer to one than without the optimization.
+//!
+//! NOTE: The enqueuing and storing of messages are only a means to implement the processing and are
+//! not goals per se.
+//!
+//! **Weight Metering**
+//!
+//! The pallet utilizes the [`sp_weights::WeightMeter`] to manually track its consumption to always
+//! stay within the required limit. This implies that the message processor hook can calculate the
+//! weight of a message without executing it. This restricts the possible use-cases but is necessary
+//! since the pallet runs in `on_initialize` which has a hard weight limit. The weight meter is used
+//! in a way that `can_accrue` and `check_accrue` are always used to check the remaining weight of
+//! an operation before committing to it. The process of exiting due to insufficient weight is
+//! termed "bailing".
+//!
+//! # Scenario: Message enqueuing
+//!
+//! A message `m` is enqueued for origin `o` into queue `Q[o]` through
+//! [`frame_support::traits::EnqueueMessage::enqueue_message`]`(m, o)`.
+//!
+//! First the queue is either loaded if it exists or otherwise created with empty default values.
+//! The message is then inserted to the queue by appended it into its last `Page` or by creating a
+//! new `Page` just for `m` if it does not fit in there. The number of messages in the `Book` is
+//! incremented.
+//!
+//! `Q[o]` is now *ready* which will eventually result in `m` being processed.
+//!
+//! # Scenario: Message processing
+//!
+//! The pallet runs each block in `on_initialize` or when being manually called through
+//! [`frame_support::traits::ServiceQueues::service_queues`].
+//!
+//! First it tries to "rotate" the `ReadyRing` by one through advancing the `ServiceHead` to the
+//! next *ready* queue. It then starts to service this queue by servicing as many pages of it as
+//! possible. Servicing a page means to execute as many message of it as possible. Each executed
+//! message is marked as *processed* if the [`Config::MessageProcessor`] return Ok. An event
+//! [`Event::Processed`] is emitted afterwards. It is possible that the weight limit of the pallet
+//! will never allow a specific message to be executed. In this case it remains as unprocessed and
+//! is skipped. This process stops if either there are no more messages in the queue of the
+//! remaining weight became insufficient to service this queue. If there is enough weight it tries
+//! to advance to the next *ready* queue and service it. This continues until there are no more
+//! queues on which it can make progress or not enough weight to check that.
+//!
+//! # Scenario: Overweight execution
+//!
+//! A permanently over-weight message which was skipped by the message processing will never be
+//! executed automatically through `on_initialize` nor by calling
+//! [`frame_support::traits::ServiceQueues::service_queues`].
+//!
+//! Manual intervention in the form of
+//! [`frame_support::traits::ServiceQueues::execute_overweight`] is necessary. Overweight messages
+//! emit an [`Event::OverweightEnqueued`] event which can be used to extract the arguments for
+//! manual execution. This only works on permanently overweight messages.
+//!
+//! # Terminology
+//!
+//! - `Message`: A blob of data into which the pallet has no introspection, defined as
+//! [`BoundedSlice<u8, MaxMessageLenOf<T>>`]. The message length is limited by [`MaxMessageLenOf`]
+//! which is calculated implicitly from [`Config::HeapSize`], the MEL  of the `MessageOrigin` and
+//! the MEL of an [`ItemHeader`].
+//! - `MessageOrigin`: A generic *origin* of a message, defined as [`MessageOriginOf`]. The
+//! requirements for it are kept minimal to remain as generic as possible. The type is defined in
+//! [`frame_support::traits::ProcessMessage::Origin`].
+//! - `Page`: An array of `Message`s, see [`Page`]. Can never be empty.
+//! - `Book`: A list of `Page`s, see [`BookState`]. Can be empty.
+//! - `Queue`: A `Book` together with an `MessageOrigin` which can be part of the `ReadyRing`. Can
+//!   be empty.
+//! - `ReadyRing`: A double-linked list which contains all *ready* `Queue`s. It chains together the
+//!   queues via their `ready_neighbours` fields. A `Queue` is *ready* if it contains at least one
+//!   `Message` which can be processed. Can be empty.
+//! - `ServiceHead`: A pointer into the `ReadyRing` to the next `Queue` to be serviced.
+//! - (`un`)`processed`: A message is marked as *processed* after it was executed by the pallet. A
+//!   message which was either: not yet executed or could not be executed remains as `unprocessed`
+//!   which is the default state for a message after being enqueued.
+//! - `knitting`/`unknitting`: The means of adding or removing a `Queue` from the `ReadyRing`.
+//! - `MEL`: The Max Encoded Length of a type, see [`codec::MaxEncodedLen`].
+//!
+//! # Properties
+//!
+//! **Liveness - Enqueueing**
+//!
+//! It is always possible to enqueue any message for any `MessageOrigin`. TODO is this true?!
+//!
+//! **Liveness - Processing**
+//!
+//! `on_initialize` always respects its finite weight-limit.
+//!
+//! **Progress - Enqueueing**
+//!
+//! An enqueued message immediately becomes *unprocessed* and thereby eligible for execution.
+//!
+//! **Progress - Processing**
+//!
+//! The pallet will execute at least one unprocessed message per block, if there is any. Ensuring
+//! this property needs careful consideration of the concrete weights, since it is possible that the
+//! weight limit of `on_initialize` never allows for the execution of even one message; trivially if
+//! the limit is set to zero. `integrity_test` can be used to ensure that this property holds.
+//!
+//! **Fairness - Enqueuing**
+//!
+//! Enqueueing a message for a specific `MessageOrigin` does not influence the ability to enqueue a
+//! message for the same of any other `MessageOrigin`; guaranteed by **Liveness - Enqueueing**.
+//!
+//! **Fairness - Processing**
+//!
+//! The average amount of weight available for message processing is the same for each queue if the
+//! number of queues is constant. Creating a new queue must therefore be, possibly economically,
+//! expensive. Currently this is archived by having one queue per para-chain/thread, which keeps the
+//! number of queues within `O(n)` and should be "good enough".
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -249,7 +408,7 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 	}
 }
 
-/// Notifies the implementor of changes to a queue.
+/// Notifies the implementor of changes to a queue. Mainly when messages got added or removed.
 pub trait OnQueueChanged<Id> {
 	/// The queue `id` changed and now has these properties.
 	fn on_queue_changed(id: Id, items_count: u32, items_size: u32);
@@ -434,6 +593,7 @@ pub mod pallet {
 	}
 }
 
+/// One link of the double-linked ready ring which contains all *ready* queues.
 pub struct ReadyRing<T: Config> {
 	first: Option<MessageOriginOf<T>>,
 	next: Option<MessageOriginOf<T>>,
@@ -973,6 +1133,7 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
+/// Provides a [`sp_core::Get`] to access the `MEL` of a [`codec::MaxEncodedLen`] type.
 pub struct MaxEncodedLenOf<T>(sp_std::marker::PhantomData<T>);
 impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
 	fn get() -> u32 {
@@ -980,6 +1141,7 @@ impl<T: MaxEncodedLen> Get<u32> for MaxEncodedLenOf<T> {
 	}
 }
 
+/// Calculates the maximum message length and exposed it through the [`codec::MaxEncodedLen`] trait.
 pub struct MaxMessageLen<Origin, Size, HeapSize>(
 	sp_std::marker::PhantomData<(Origin, Size, HeapSize)>,
 );
@@ -993,14 +1155,22 @@ impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>
 	}
 }
 
+/// The maximal message length of this pallet.
 pub type MaxMessageLenOf<T> =
 	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
+/// The maximal encoded origin length of this pallet.
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
+/// The `MessageOrigin` or this pallet.
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
+/// The maximal heap size of this pallet.
 pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
+/// The [`Page`] of this pallet.
 pub type PageOf<T> = Page<<T as Config>::Size, <T as Config>::HeapSize>;
+/// The [`BookState`] of this pallet.
 pub type BookStateOf<T> = BookState<MessageOriginOf<T>>;
 
+/// Converts a [`sp_core::Get`] with returns a type that can be cast into an `u32` into a `Get`
+/// which returns an `u32`.
 pub struct IntoU32<T, O>(sp_std::marker::PhantomData<(T, O)>);
 impl<T: Get<O>, O: Into<u32>> Get<u32> for IntoU32<T, O> {
 	fn get() -> u32 {
