@@ -220,7 +220,7 @@ async fn get_hash_by_height() {
 
 	// Test nonfinalized heights.
 	// Height N must include block 1.
-	let mut height = block_1.header.number().clone();
+	let mut height = *block_1.header.number();
 	let mut sub = api
 		.subscribe("archive_unstable_hashByHeight", [&format!("{:?}", height)])
 		.await
