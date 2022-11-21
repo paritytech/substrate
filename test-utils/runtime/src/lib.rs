@@ -1401,3 +1401,24 @@ mod tests {
 		runtime_api.test_witness(&block_id, proof, root).unwrap();
 	}
 }
+
+//#[derive(Clone)]
+//struct TestInherentDataProvider;
+//
+//const ERROR_TO_STRING: &str = "Found error!";
+//const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
+//
+//#[async_trait::async_trait]
+//impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
+//	async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
+//		data.put_data(TEST_INHERENT_0, &42)
+//	}
+//
+//	async fn try_handle_error(
+//		&self,
+//		_: &InherentIdentifier,
+//		_: &[u8],
+//	) -> Option<Result<(), Error>> {
+//		Some(Err(Error::Application(Box::from(ERROR_TO_STRING))))
+//	}
+//}
