@@ -597,18 +597,6 @@ fn set_item_metadata_should_work() {
 }
 
 #[test]
-fn test_smth() {
-	new_test_ext().execute_with(|| {
-		let attribute_key: BoundedVec<u8, <Test as Config>::KeyLimit> =
-			PalletAttributes::<<Test as Config>::CollectionId>::UsedToClaim(1)
-				.encode()
-				.try_into()
-				.unwrap();
-		dbg!(attribute_key);
-	});
-}
-
-#[test]
 fn set_collection_owner_attributes_should_work() {
 	new_test_ext().execute_with(|| {
 		Balances::make_free_balance_be(&1, 100);
