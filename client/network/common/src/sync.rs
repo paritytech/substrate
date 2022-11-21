@@ -125,7 +125,7 @@ pub enum OnBlockJustification<Block: BlockT> {
 	},
 }
 
-/// Result of [`ChainSync::on_state_data`].
+/// Result of `ChainSync::on_state_data`.
 #[derive(Debug)]
 pub enum OnStateData<Block: BlockT> {
 	/// The block and state that should be imported.

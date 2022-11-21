@@ -2228,9 +2228,7 @@ where
 	}
 
 	fn process_outbound_requests(&mut self) {
-		for (id, request) in self
-			.block_requests()
-		{
+		for (id, request) in self.block_requests() {
 			self.send_block_request(id, request);
 		}
 
