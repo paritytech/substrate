@@ -64,7 +64,7 @@ use libp2p::{
 		GetClosestPeersError, Kademlia, KademliaBucketInserts, KademliaConfig, KademliaEvent,
 		QueryId, QueryResult, Quorum, Record,
 	},
-	mdns::{async_io::Mdns, Config as MdnsConfig, Event as MdnsEvent},
+	mdns::{async_io::Behaviour as Mdns, Config as MdnsConfig, Event as MdnsEvent},
 	multiaddr::Protocol,
 	swarm::{
 		behaviour::toggle::{Toggle, ToggleIntoConnectionHandler},
