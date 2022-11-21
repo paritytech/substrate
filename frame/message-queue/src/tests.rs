@@ -21,8 +21,8 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
-use rand::{Rng, SeedableRng};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, bounded_vec, StorageNoopGuard};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[test]
 fn mocked_weight_works() {
@@ -267,9 +267,9 @@ fn service_queue_bails() {
 
 #[test]
 fn service_page_works() {
-	use super::integration_test::Test;
+	use super::integration_test::Test; // Run with larger page size.
 	use MessageOrigin::*;
-	use PageExecutionStatus::*; // Run with larger page size.
+	use PageExecutionStatus::*;
 	new_test_ext::<Test>().execute_with(|| {
 		set_weight("service_page_base_completion", 2.into_weight());
 		set_weight("service_page_item", 3.into_weight());
@@ -556,8 +556,54 @@ fn is_complete_works() {
 
 #[test]
 fn page_from_message_basic_works() {
-	assert!(MaxOriginLenOf::<Test>::get() >= 3, "pre-condition unmet");
-	assert!(MaxMessageLenOf::<Test>::get() >= 3, "pre-condition unmet");
+	assert!(MaxMessageLenOf::<Test>::get() > 0, "pre-condition unmet");
+	let mut msg: BoundedVec<u8, MaxMessageLenOf<Test>> = Default::default();
+	msg.bounded_resize(MaxMessageLenOf::<Test>::get() as usize, 123);
+
+	let page = PageOf::<Test>::from_message::<Test>(msg.as_slice());
+	assert_eq!(page.remaining, 1);
+	assert_eq!(page.remaining_size as usize, msg.len());
+	assert!(page.first_index == 0 && page.first == 0 && page.last == 0);
+
+	// Verify the content of the heap.
+	let mut heap = Vec::<u8>::new();
+	let header =
+		ItemHeader::<<Test as Config>::Size> { payload_len: msg.len() as u32, is_processed: false };
+	heap.extend(header.encode());
+	heap.extend(msg.deref());
+	assert_eq!(page.heap, heap);
+}
+
+#[test]
+fn page_try_append_message_basic_works() {
+	use super::integration_test::Test; // Run with larger page size.
+
+	let mut page = PageOf::<Test>::default();
+	let mut msgs = 0;
+	// Append as many 4-byte message as possible.
+	for i in 0..u32::MAX {
+		let r = i.using_encoded(|i| page.try_append_message::<Test>(i.try_into().unwrap()));
+		if r.is_err() {
+			break
+		} else {
+			msgs += 1;
+		}
+	}
+	let expected_msgs = (<Test as Config>::HeapSize::get()) /
+		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 4);
+	assert_eq!(expected_msgs, msgs, "Wrong number of messages");
+	assert_eq!(page.remaining, msgs);
+	assert_eq!(page.remaining_size, msgs * 4);
+
+	// Verify that the heap content is correct.
+	let mut heap = Vec::<u8>::new();
+	for i in 0..msgs {
+		let header = ItemHeader::<<Test as Config>::Size> { payload_len: 4, is_processed: false };
+		heap.extend(header.encode());
+		heap.extend(i.encode());
+	}
+	assert_eq!(page.heap, heap);
+}
 
 #[test]
 fn page_try_append_message_max_msg_len_works_works() {
@@ -576,7 +622,47 @@ fn page_try_append_message_max_msg_len_works_works() {
 	assert_eq!(page.heap.len(), <Test as Config>::HeapSize::get() as usize);
 }
 
-	let _page = PageOf::<Test>::from_message::<Test>(BoundedSlice::defensive_truncate_from(b"MSG"));
+#[test]
+fn page_try_append_message_with_remaining_size_works_works() {
+	use super::integration_test::Test; // Run with larger page size.
+	let header_size = ItemHeader::<<Test as Config>::Size>::max_encoded_len();
+
+	// We start off with an empty page.
+	let mut page = PageOf::<Test>::default();
+	let mut remaining = <Test as Config>::HeapSize::get() as usize;
+	let mut msgs = Vec::new();
+	let mut rng = StdRng::seed_from_u64(42);
+	// Now we keep appending messages with different lengths.
+	while remaining >= header_size {
+		let take = rng.gen_range(0..=(remaining - header_size)) as usize;
+		let msg = vec![123u8; take];
+		page.try_append_message::<Test>(BoundedSlice::defensive_truncate_from(&msg))
+			.unwrap();
+		remaining -= take + header_size;
+		msgs.push(msg);
+	}
+	// Cannot even fit a single header in there now.
+	assert!(remaining < header_size);
+	assert_eq!(<Test as Config>::HeapSize::get() as usize - page.heap.len(), remaining);
+	assert_eq!(page.remaining as usize, msgs.len());
+	assert_eq!(
+		page.remaining_size as usize,
+		msgs.iter().fold(0, |mut a, m| {
+			a += m.len();
+			a
+		})
+	);
+	// Verify the heap content.
+	let mut heap = Vec::new();
+	for msg in msgs.into_iter() {
+		let header = ItemHeader::<<Test as Config>::Size> {
+			payload_len: msg.len() as u32,
+			is_processed: false,
+		};
+		heap.extend(header.encode());
+		heap.extend(msg);
+	}
+	assert_eq!(page.heap, heap);
 }
 
 // `Page::from_message` does not panic when called with the maximum message and origin lengths.
