@@ -22,11 +22,11 @@ use bytes::Bytes;
 use codec::{Decode, DecodeAll, Encode};
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
-	core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint},
+	core::connection::ConnectionId,
 	request_response::OutboundFailure,
 	swarm::{
-		ConnectionHandler, IntoConnectionHandler, NetworkBehaviour, NetworkBehaviourAction,
-		PollParameters,
+		behaviour::FromSwarm, ConnectionHandler, IntoConnectionHandler, NetworkBehaviour,
+		NetworkBehaviourAction, PollParameters,
 	},
 	Multiaddr, PeerId,
 };
@@ -65,7 +65,7 @@ use sp_runtime::{
 };
 use std::{
 	collections::{HashMap, HashSet, VecDeque},
-	io, iter,
+	iter,
 	num::NonZeroUsize,
 	pin::Pin,
 	sync::Arc,
@@ -1253,47 +1253,18 @@ where
 		self.behaviour.addresses_of_peer(peer_id)
 	}
 
-	fn inject_connection_established(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		failed_addresses: Option<&Vec<Multiaddr>>,
-		other_established: usize,
-	) {
-		self.behaviour.inject_connection_established(
-			peer_id,
-			conn,
-			endpoint,
-			failed_addresses,
-			other_established,
-		)
+	fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+		self.behaviour.on_swarm_event(event);
 	}
 
-	fn inject_connection_closed(
-		&mut self,
-		peer_id: &PeerId,
-		conn: &ConnectionId,
-		endpoint: &ConnectedPoint,
-		handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-		remaining_established: usize,
-	) {
-		self.behaviour.inject_connection_closed(
-			peer_id,
-			conn,
-			endpoint,
-			handler,
-			remaining_established,
-		)
-	}
-
-	fn inject_event(
+	fn on_connection_handler_event(
 		&mut self,
 		peer_id: PeerId,
-		connection: ConnectionId,
-		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+		connection_id: ConnectionId,
+		event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
+		ConnectionHandler>::OutEvent,
 	) {
-		self.behaviour.inject_event(peer_id, connection, event)
+		self.behaviour.on_connection_handler_event(peer_id, connection_id, event);
 	}
 
 	fn poll(
@@ -1672,42 +1643,5 @@ where
 		// message from the behaviour, the task is scheduled again.
 		cx.waker().wake_by_ref();
 		Poll::Pending
-	}
-
-	fn inject_dial_failure(
-		&mut self,
-		peer_id: Option<PeerId>,
-		handler: Self::ConnectionHandler,
-		error: &libp2p::swarm::DialError,
-	) {
-		self.behaviour.inject_dial_failure(peer_id, handler, error);
-	}
-
-	fn inject_new_listener(&mut self, id: ListenerId) {
-		self.behaviour.inject_new_listener(id)
-	}
-
-	fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		self.behaviour.inject_new_listen_addr(id, addr)
-	}
-
-	fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-		self.behaviour.inject_expired_listen_addr(id, addr)
-	}
-
-	fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_new_external_addr(addr)
-	}
-
-	fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-		self.behaviour.inject_expired_external_addr(addr)
-	}
-
-	fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
-		self.behaviour.inject_listener_error(id, err);
-	}
-
-	fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &io::Error>) {
-		self.behaviour.inject_listener_closed(id, reason);
 	}
 }
