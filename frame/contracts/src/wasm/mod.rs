@@ -193,6 +193,11 @@ where
 		}
 	}
 
+	/// Crates and returns an instance of the supplied code.
+	///
+	/// This is either used for later executing a contract or for validation of a contract.
+	/// When validating we pass `()` as `host_state`. Please note that such a dummy instance must
+	/// **never** be called executed since it will panic the executor.
 	pub fn instantiate<E, H>(
 		code: &[u8],
 		host_state: H,

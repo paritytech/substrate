@@ -263,10 +263,10 @@ pub enum RuntimeCosts {
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
 	EcdsaToEthAddress,
-	/// Weight of calling `seal_reentrance_count`
+	/// Weight of calling `reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	ReentrantCount,
-	/// Weight of calling `seal_account_reentrance_count`
+	/// Weight of calling `account_reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	AccountEntranceCount,
 }

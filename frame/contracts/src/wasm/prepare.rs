@@ -469,10 +469,10 @@ where
 ///
 /// The checks are:
 ///
-/// - provided code is a valid wasm module.
-/// - the module doesn't define an internal memory instance,
-/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`,
-/// - all imported functions from the external environment matches defined by `env` module,
+/// - the provided code is a valid wasm module
+/// - the module doesn't define an internal memory instance
+/// - imported memory (if any) doesn't reserve more memory than permitted by the `schedule`
+/// - all imported functions from the external environment matches defined by `env` module
 ///
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub fn prepare<E, T>(
