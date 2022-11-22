@@ -21,7 +21,9 @@
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
 
 use crate::currency_to_vote::CurrencyToVote;
-use sp_runtime::{DispatchError, DispatchResult};
+use codec::{Encode, EncodeLike, FullCodec, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_runtime::{DispatchError, DispatchResult, Saturating};
 use sp_std::{collections::btree_map::BTreeMap, ops::Sub, vec::Vec};
 
 pub mod offence;
@@ -103,7 +105,15 @@ pub trait OnStakingUpdate<AccountId, Balance> {
 /// implementations as well.
 pub trait StakingInterface {
 	/// Balance type used by the staking system.
-	type Balance: Sub<Output = Self::Balance> + Ord + PartialEq + Default + Copy;
+	type Balance: Sub<Output = Self::Balance>
+		+ Ord
+		+ PartialEq
+		+ Default
+		+ Copy
+		+ MaxEncodedLen
+		+ FullCodec
+		+ TypeInfo
+		+ Saturating;
 
 	/// AccountId type used by the staking system
 	type AccountId;

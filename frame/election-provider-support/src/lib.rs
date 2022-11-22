@@ -473,16 +473,9 @@ where
 	}
 }
 
-/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
-///
-/// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
-/// entity.
-///
-/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
-///
-/// Something that implements this trait will do a best-effort sort over ids, and thus can be
-/// used on the implementing side of [`ElectionDataProvider`].
-pub trait SortedListProvider<AccountId> {
+/// Basically a read-only part of the methods for [`SortedListProvider`] designed to be used in
+/// scenarios where the list is updated by another entity.
+pub trait ReadOnlySortedListProvider<AccountId> {
 	/// The list's error type.
 	type Error: sp_std::fmt::Debug;
 
@@ -503,6 +496,25 @@ pub trait SortedListProvider<AccountId> {
 	/// Return true if the list already contains `id`.
 	fn contains(id: &AccountId) -> bool;
 
+	/// Get the score of `id`.
+	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error>;
+
+	/// Check internal state of list. Only meant for debugging.
+	fn try_state() -> Result<(), &'static str>;
+}
+
+/// A utility trait for something to implement `ElectionDataProvider` in a sensible way.
+///
+/// This is generic over `AccountId` and it can represent a validator, a nominator, or any other
+/// entity.
+///
+/// The scores (see [`Self::Score`]) are ascending, the higher, the better.
+///
+/// Something that implements this trait will do a best-effort sort over ids, and thus can be
+/// used on the implementing side of [`ElectionDataProvider`].
+///
+/// Inherits [`ReadOnlySortedListProvider`], which provides basic types and read-only methods.
+pub trait SortedListProvider<AccountId>: ReadOnlySortedListProvider<AccountId> {
 	/// Hook for inserting a new id.
 	///
 	/// Implementation should return an error if duplicate item is being inserted.
@@ -514,9 +526,6 @@ pub trait SortedListProvider<AccountId> {
 	///
 	/// Returns `Ok(())` iff it successfully updates an item, an `Err(_)` otherwise.
 	fn on_update(id: &AccountId, score: Self::Score) -> Result<(), Self::Error>;
-
-	/// Get the score of `id`.
-	fn get_score(id: &AccountId) -> Result<Self::Score, Self::Error>;
 
 	/// Same as `on_update`, but incorporate some increased score.
 	fn on_increase(id: &AccountId, additional: Self::Score) -> Result<(), Self::Error> {
@@ -563,9 +572,6 @@ pub trait SortedListProvider<AccountId> {
 	/// This function should never be called in production settings because it can lead to an
 	/// unbounded amount of storage accesses.
 	fn unsafe_clear();
-
-	/// Check internal state of list. Only meant for debugging.
-	fn try_state() -> Result<(), &'static str>;
 
 	/// If `who` changes by the returned amount they are guaranteed to have a worst case change
 	/// in their list position.

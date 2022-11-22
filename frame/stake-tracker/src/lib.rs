@@ -15,21 +15,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::Pallet;
+use crate::pallet::{ApprovalStake, Pallet};
 use frame_election_provider_support::{SortedListProvider, VoteWeight};
 use frame_support::traits::{Currency, CurrencyToVote, Defensive};
 use pallet::Config;
-use sp_runtime::DispatchResult;
+use sp_runtime::{DispatchResult, Saturating};
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
-pub type AccountOf<T> = <<T as Config>::Staking as StakingInterface>::AccountId;
 
 #[frame_support::pallet]
 pub mod pallet {
 	use crate::*;
 	use frame_election_provider_support::{SortedListProvider, VoteWeight};
+	use frame_support::{pallet_prelude::*, Twox64Concat};
+
 	use sp_staking::StakingInterface;
 
 	#[pallet::pallet]
@@ -38,19 +39,31 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// This has to come from Staking::Currency
-		type Currency: Currency<AccountOf<Self>, Balance = BalanceOf<Self>>;
+		type Currency: Currency<Self::AccountId, Balance = BalanceOf<Self>>;
 
-		type Staking: StakingInterface;
+		type Staking: StakingInterface<AccountId = Self::AccountId>;
 
-		type VoterList: SortedListProvider<AccountOf<Self>, Score = VoteWeight>;
+		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
-		type TargetList: SortedListProvider<AccountOf<Self>, Score = BalanceOf<Self>>;
+		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
 	}
+
+	/// The map from validator stash key to their total approval stake. Not that this map is kept up
+	/// to date even if a validator chilled or turned into nominator. Entries from this map are only
+	/// ever removed if the stash is reaped.
+	///
+	/// NOTE: This is currently a CountedStorageMap for debugging purposes. We might actually want
+	/// to revisit this once this pallet starts populating the actual `TargetList` used by
+	/// `Staking`.
+	#[pallet::storage]
+	#[pallet::getter(fn approval_stake)]
+	pub type ApprovalStake<T: Config> =
+		CountedStorageMap<_, Twox64Concat, T::AccountId, BalanceOf<T>, OptionQuery>;
 }
 
 impl<T: Config> Pallet<T> {
 	/// The total balance that can be slashed from a stash account as of right now.
-	pub(crate) fn slashable_balance_of(who: AccountOf<T>) -> BalanceOf<T> {
+	pub(crate) fn slashable_balance_of(who: &T::AccountId) -> BalanceOf<T> {
 		// Weight note: consider making the stake accessible through stash.
 		T::Staking::stake(&who).map(|l| l.active).unwrap_or_default()
 	}
@@ -61,35 +74,37 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> OnStakingUpdate<AccountOf<T>, BalanceOf<T>> for Pallet<T> {
+impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	fn on_update_ledger(
-		who: &AccountOf<T>,
-		prev_stake: Stake<AccountOf<T>, BalanceOf<T>>,
+		who: &T::AccountId,
+		prev_stake: Stake<T::AccountId, BalanceOf<T>>,
 	) -> DispatchResult {
 		let prev_active = prev_stake.active;
 		let current_stake = T::Staking::stake(who)?;
 		let current_active = current_stake.active;
 
-		let update_target_list = |who: &AccountOf<T>| {
+		let update_approval_stake = |who: &T::AccountId| {
+			let mut approval_stake = Self::approval_stake(who).unwrap_or_default();
+
 			use sp_std::cmp::Ordering;
 			match current_active.cmp(&prev_active) {
 				Ordering::Greater => {
-					let _ =
-						T::TargetList::on_increase(who, current_active - prev_active).defensive();
+					approval_stake = approval_stake.saturating_add(current_active - prev_active);
 				},
 				Ordering::Less => {
-					let _ =
-						T::TargetList::on_decrease(who, prev_active - current_active).defensive();
+					approval_stake = approval_stake.saturating_sub(prev_active - current_active);
 				},
-				Ordering::Equal => (),
+				Ordering::Equal => return,
 			};
+			let _ = T::TargetList::on_update(who, approval_stake).defensive();
+			ApprovalStake::<T>::set(who, Some(approval_stake));
 		};
 
 		// if this is a nominator
 		if let Some(targets) = T::Staking::nominations(&current_stake.stash) {
 			// update the target list.
 			for target in targets {
-				update_target_list(&target);
+				update_approval_stake(&target);
 			}
 
 			// update the voter list.
@@ -98,7 +113,7 @@ impl<T: Config> OnStakingUpdate<AccountOf<T>, BalanceOf<T>> for Pallet<T> {
 		}
 
 		if T::Staking::is_validator(&current_stake.stash) {
-			update_target_list(&current_stake.stash);
+			update_approval_stake(&current_stake.stash);
 
 			let _ = T::VoterList::on_update(&current_stake.stash, Self::to_vote(current_active))
 				.defensive_proof("any validator should have an entry in the voter list.");
@@ -107,7 +122,7 @@ impl<T: Config> OnStakingUpdate<AccountOf<T>, BalanceOf<T>> for Pallet<T> {
 		Ok(())
 	}
 
-	fn on_nominator_add(who: &AccountOf<T>, prev_nominations: Vec<AccountOf<T>>) -> DispatchResult {
+	fn on_nominator_add(who: &T::AccountId, prev_nominations: Vec<T::AccountId>) -> DispatchResult {
 		// if Some(nominations) = T::Staking::nominations(who) {
 		// 	return Ok(())
 		// }
@@ -115,19 +130,35 @@ impl<T: Config> OnStakingUpdate<AccountOf<T>, BalanceOf<T>> for Pallet<T> {
 		Ok(())
 	}
 
-	fn on_validator_add(who: &AccountOf<T>) -> DispatchResult {
+	/// This should only be called if that stash isn't already a validator. Note, that if we want to
+	/// properly track ApprovalStake here - we need to make sure we subtract the validator stash
+	/// balance when they chill?
+	///	Why? Because we don't remove ApprovalStake when a validator chills and we need to make sure
+	/// their self-stake is up-to-date and not applied twice.
+	fn on_validator_add(who: &T::AccountId) -> DispatchResult {
+		let self_stake = Self::slashable_balance_of(who);
+		let new_stake = Self::approval_stake(who).unwrap_or_default().saturating_add(self_stake);
+
+		// maybe update sorted list.
+		let _ = T::VoterList::on_insert(who.clone(), Self::to_vote(self_stake)).defensive();
+
+		// TODO: Make sure this always works. Among other things we need to make sure that when the
+		// migration is run we only have active validators in TargetList and not the chilled ones.
+		let _ = T::TargetList::on_insert(who.clone(), new_stake).defensive();
+		ApprovalStake::<T>::set(who, Some(new_stake));
+
+		Ok(())
+	}
+
+	fn on_validator_remove(who: &T::AccountId) -> DispatchResult {
 		todo!()
 	}
 
-	fn on_validator_remove(who: &AccountOf<T>) -> DispatchResult {
+	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) -> DispatchResult {
 		todo!()
 	}
 
-	fn on_nominator_remove(who: &AccountOf<T>, nominations: Vec<AccountOf<T>>) -> DispatchResult {
-		todo!()
-	}
-
-	fn on_reaped(who: &AccountOf<T>) -> DispatchResult {
+	fn on_reaped(who: &T::AccountId) -> DispatchResult {
 		todo!()
 	}
 }

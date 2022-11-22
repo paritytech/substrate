@@ -36,6 +36,8 @@ sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
+frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+
 
 
 [features]
