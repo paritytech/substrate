@@ -30,7 +30,6 @@ sp-std = { version = "5.0.0", default-features = false, path = "../../primitives
 sp-runtime-interface = { version = "7.0.0", default-features = false, path = "../../primitives/runtime-interface" }
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../../frame/support" }
-sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/merkle-mountain-range" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../primitives/version" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../primitives/session" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../primitives/api" }
@@ -39,7 +38,6 @@ pallet-babe = { version = "4.0.0-dev", default-features = false, path = "../../f
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../../frame/system" }
 frame-system-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../frame/system/rpc/runtime-api" }
 pallet-timestamp = { version = "4.0.0-dev", default-features = false, path = "../../frame/timestamp" }
-pallet-mmr = { version = "4.0.0-dev", default-features = false, path = "../../frame/merkle-mountain-range" }
 sp-finality-grandpa = { version = "4.0.0-dev", default-features = false, path = "../../primitives/finality-grandpa" }
 sp-trie = { version = "7.0.0", default-features = false, path = "../../primitives/trie" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../primitives/transaction-pool" }
@@ -89,7 +87,6 @@ std = [
 	"sp-runtime-interface/std",
 	"sp-io/std",
 	"frame-support/std",
-	"sp-mmr-primitives/std",
 	"sp-version/std",
 	"serde",
 	"sp-session/std",
@@ -101,7 +98,6 @@ std = [
 	"frame-system-rpc-runtime-api/std",
 	"frame-system/std",
 	"pallet-timestamp/std",
-	"pallet-mmr/std",
 	"sc-service",
 	"sp-finality-grandpa/std",
 	"sp-trie/std",

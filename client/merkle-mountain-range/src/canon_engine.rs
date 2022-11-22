@@ -18,13 +18,13 @@
 
 use std::{marker::PhantomData, sync::Arc};
 
-use log::{debug, error};
+use log::{debug, error, warn};
 
 use sc_client_api::FinalityNotification;
 use sc_offchain::OffchainDb;
 use sp_blockchain::{ForkBackend, HeaderBackend, HeaderMetadata};
 use sp_core::offchain::{DbExternalities, OffchainStorage, StorageKind};
-use sp_mmr_primitives::{utils, utils::NodesUtils, LeafIndex, NodeIndex};
+use sp_mmr_primitives::{utils, utils::NodesUtils, NodeIndex};
 use sp_runtime::{
 	traits::{Block, Header, One},
 	Saturating,
@@ -47,25 +47,21 @@ where
 	S: OffchainStorage,
 	B: Block,
 {
-	fn block_number_to_leaf_index(
-		&self,
-		block_num: <B::Header as Header>::Number,
-	) -> Result<LeafIndex, sp_mmr_primitives::Error> {
-		utils::block_num_to_leaf_index::<B::Header>(block_num, self.first_mmr_block).map_err(|e| {
-			error!(
-				target: LOG_TARGET,
-				"Error converting block number {} to leaf index: {:?}", block_num, e
-			);
-			e
-		})
-	}
-
 	fn node_temp_offchain_key(&self, pos: NodeIndex, parent_hash: &B::Hash) -> Vec<u8> {
 		NodesUtils::node_temp_offchain_key::<B::Header>(&self.indexing_prefix, pos, parent_hash)
 	}
 
 	fn node_canon_offchain_key(&self, pos: NodeIndex) -> Vec<u8> {
 		NodesUtils::node_canon_offchain_key(&self.indexing_prefix, pos)
+	}
+
+	fn right_branch_ending_in_block(
+		&self,
+		block_num: <B::Header as Header>::Number,
+	) -> Result<Vec<NodeIndex>, sp_mmr_primitives::Error> {
+		let leaf_idx =
+			utils::block_num_to_leaf_index::<B::Header>(block_num, self.first_mmr_block)?;
+		Ok(NodesUtils::right_branch_ending_in_leaf(leaf_idx))
 	}
 
 	fn prune_branch(&mut self, block_hash: &B::Hash) {
@@ -80,15 +76,23 @@ where
 			},
 		};
 
-		// If we can't convert the block number to a leaf index, the chain state is probably
-		// corrupted. We only log the error, hoping that the chain state will be fixed.
-		let stale_leaf = match self.block_number_to_leaf_index(header.number) {
-			Ok(stale_leaf) => stale_leaf,
-			Err(_) => return,
-		};
 		// We prune the leaf associated with the provided block and all the nodes added by that
 		// leaf.
-		let stale_nodes = NodesUtils::right_branch_ending_in_leaf(stale_leaf);
+		let stale_nodes = match self.right_branch_ending_in_block(header.number) {
+			Ok(nodes) => nodes,
+			Err(e) => {
+				// If we can't convert the block number to a leaf index, the chain state is probably
+				// corrupted. We only log the error, hoping that the chain state will be fixed.
+				error!(
+					target: LOG_TARGET,
+					"Error converting block number {} to leaf index: {:?}. \
+					Won't be able to prune stale branch.",
+					header.number,
+					e
+				);
+				return
+			},
+		};
 		debug!(
 			target: LOG_TARGET,
 			"Nodes to prune for stale block {}: {:?}", header.number, stale_nodes
@@ -112,15 +116,23 @@ where
 			return
 		}
 
-		// If we can't convert the block number to a leaf index, the chain state is probably
-		// corrupted. We only log the error, hoping that the chain state will be fixed.
-		let to_canon_leaf = match self.block_number_to_leaf_index(block_num) {
-			Ok(to_canon_leaf) => to_canon_leaf,
-			Err(_) => return,
-		};
 		// We "canonicalize" the leaf associated with the provided block
 		// and all the nodes added by that leaf.
-		let to_canon_nodes = NodesUtils::right_branch_ending_in_leaf(to_canon_leaf);
+		let to_canon_nodes = match self.right_branch_ending_in_block(block_num) {
+			Ok(nodes) => nodes,
+			Err(e) => {
+				// If we can't convert the block number to a leaf index, the chain state is probably
+				// corrupted. We only log the error, hoping that the chain state will be fixed.
+				error!(
+					target: LOG_TARGET,
+					"Error converting block number {} to leaf index: {:?}. \
+					Won't be able to canonicalize finalized branch.",
+					block_num,
+					e
+				);
+				return
+			},
+		};
 		debug!(
 			target: LOG_TARGET,
 			"Nodes to canonicalize for block {}: {:?}", block_num, to_canon_nodes
@@ -173,7 +185,13 @@ where
 		}
 
 		// Remove offchain MMR nodes for stale forks.
-		let stale_forks = self.client.expand_forks(&notification.stale_heads);
+		let stale_forks = match self.client.expand_forks(&notification.stale_heads) {
+			Ok(stale_forks) => stale_forks,
+			Err((stale_forks, e)) => {
+				warn!(target: LOG_TARGET, "{:?}", e,);
+				stale_forks
+			},
+		};
 		for hash in stale_forks.iter() {
 			self.prune_branch(hash);
 		}

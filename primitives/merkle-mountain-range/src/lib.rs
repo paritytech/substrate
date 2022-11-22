@@ -424,7 +424,7 @@ sp_api::decl_runtime_apis! {
 		fn mmr_root() -> Result<Hash, Error>;
 
 		/// Return the number of MMR blocks in the chain.
-		fn num_mmr_blocks() -> Result<BlockNumber, Error>;
+		fn mmr_leaves_count() -> Result<LeafIndex, Error>;
 
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.

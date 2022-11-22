@@ -314,14 +314,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.saturating_add(leaf_index.saturated_into())
 	}
 
-	/// Get the number of MMR blocks in the chain.
-	pub fn num_mmr_blocks() -> Result<T::BlockNumber, Error> {
-		Self::mmr_leaves().try_into().map_err(|_| {
-			Error::InvalidNumericOp
-				.log_debug("The number of leaves couldn't be converted to a block number.")
-		})
-	}
-
 	/// Convert a block number into a leaf index.
 	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, Error>
 	where
@@ -329,7 +321,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	{
 		let first_mmr_block = utils::first_mmr_block_num::<T::Header>(
 			<frame_system::Pallet<T>>::block_number(),
-			Self::num_mmr_blocks()?,
+			Self::mmr_leaves(),
 		)?;
 
 		utils::block_num_to_leaf_index::<T::Header>(block_num, first_mmr_block)

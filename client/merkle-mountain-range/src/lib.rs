@@ -59,9 +59,9 @@ where
 	) -> Option<<B::Header as Header>::Number> {
 		if let MaybeCanonEngine::Uninitialized { client, .. } = self {
 			let best_block = *notification.header.number();
-			return match client.runtime_api().num_mmr_blocks(&BlockId::number(best_block)) {
-				Ok(Ok(num_mmr_blocks)) => {
-					match utils::first_mmr_block_num::<B::Header>(best_block, num_mmr_blocks) {
+			return match client.runtime_api().mmr_leaves_count(&BlockId::number(best_block)) {
+				Ok(Ok(mmr_leaves_count)) => {
+					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaves_count) {
 						Ok(first_mmr_block) => Some(first_mmr_block),
 						Err(e) => {
 							error!(

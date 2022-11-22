@@ -29,10 +29,14 @@ use crate::{Error, LeafIndex, NodeIndex};
 /// Get the first block with MMR.
 pub fn first_mmr_block_num<H: Header>(
 	best_block_num: H::Number,
-	num_mmr_blocks: H::Number,
+	mmr_leaves_count: LeafIndex,
 ) -> Result<H::Number, Error> {
+	let mmr_blocks_count = mmr_leaves_count.try_into().map_err(|_| {
+		Error::InvalidNumericOp
+			.log_debug("The number of leaves couldn't be converted to a block number.")
+	})?;
 	best_block_num
-		.checked_sub(&num_mmr_blocks)
+		.checked_sub(&mmr_blocks_count)
 		.and_then(|last_non_mmr_block| last_non_mmr_block.checked_add(&One::one()))
 		.ok_or_else(|| {
 			Error::InvalidNumericOp

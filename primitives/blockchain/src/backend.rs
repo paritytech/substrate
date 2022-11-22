@@ -90,46 +90,63 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 pub trait ForkBackend<Block: BlockT>:
 	HeaderMetadata<Block> + HeaderBackend<Block> + Send + Sync
 {
-	/// Get all the header hashes that are part of the provided forks starting only from the fork
-	/// heads.
-	fn expand_forks(&self, fork_heads: &[Block::Hash]) -> BTreeSet<Block::Hash> {
+	/// Best effort to get all the header hashes that are part of the provided forks
+	/// starting only from the fork heads.
+	///
+	/// The function tries to reconstruct the route from the fork head to the canonical chain.
+	/// If any of the hashes on the route can't be found in the db, the function won't be able
+	/// to reconstruct the route anymore. In this case it will give up expanding the current fork,
+	/// move on to the next ones and at the end it will return an error that also contains
+	/// the partially expanded forks.
+	fn expand_forks(
+		&self,
+		fork_heads: &[Block::Hash],
+	) -> sp_std::result::Result<BTreeSet<Block::Hash>, (BTreeSet<Block::Hash>, Error)> {
+		let mut missing_blocks = vec![];
 		let mut expanded_forks = BTreeSet::new();
 		for fork_head in fork_heads {
-			let mut hash = *fork_head;
+			let mut route_head = *fork_head;
 			// Insert stale blocks hashes until canonical chain is reached.
 			// If we reach a block that is already part of the `expanded_forks` we can stop
 			// processing the fork.
-			while expanded_forks.insert(hash) {
-				match self.header_metadata(hash) {
+			while expanded_forks.insert(route_head) {
+				match self.header_metadata(route_head) {
 					Ok(meta) => {
-						hash = meta.parent;
-
 						// If the parent is part of the canonical chain or there doesn't exist a
 						// block hash for the parent number (bug?!), we can abort adding blocks.
-						if self
-							.hash(meta.number.saturating_sub(1u32.into()))
-							.ok()
-							.flatten()
-							.map_or(true, |h| h == hash)
-						{
-							break
+						let parent_number = meta.number.saturating_sub(1u32.into());
+						match self.hash(parent_number) {
+							Ok(Some(parent_hash)) =>
+								if parent_hash == meta.parent {
+									break
+								},
+							Ok(None) | Err(_) => {
+								missing_blocks.push(BlockId::<Block>::Number(parent_number));
+								break
+							},
 						}
+
+						route_head = meta.parent;
 					},
-					Err(err) => {
-						warn!(
-							target: "primitives::blockchain",
-							"Stale header {:?} lookup fail while expanding fork {:?}: {}",
-							fork_head,
-							hash,
-							err,
-						);
+					Err(_e) => {
+						missing_blocks.push(BlockId::<Block>::Hash(route_head));
 						break
 					},
 				}
 			}
 		}
 
-		expanded_forks
+		if !missing_blocks.is_empty() {
+			return Err((
+				expanded_forks,
+				Error::UnknownBlocks(format!(
+					"Missing stale headers {:?} while expanding forks {:?}.",
+					fork_heads, missing_blocks
+				)),
+			))
+		}
+
+		Ok(expanded_forks)
 	}
 }
 

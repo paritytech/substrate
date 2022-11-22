@@ -2064,8 +2064,8 @@ impl_runtime_apis! {
 			Ok(Mmr::mmr_root())
 		}
 
-		fn num_mmr_blocks() -> Result<BlockNumber, mmr::Error> {
-			Mmr::num_mmr_blocks()
+		fn mmr_leaves_count() -> Result<BlockNumber, mmr::Error> {
+			Mmr::mmr_leaves()
 		}
 
 		fn generate_proof(
