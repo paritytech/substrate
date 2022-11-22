@@ -63,6 +63,7 @@ build-linux-substrate:
       artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/substrate/
+    - cat .git/HEAD
     - !reference [.rusty-cachier, before_script]
   script:
     - rusty-cachier snapshot create
