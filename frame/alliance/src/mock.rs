@@ -201,8 +201,7 @@ impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider
 }
 
 parameter_types! {
-	pub const MaxFoundingFellows: u32 = 10;
-	pub const MaxFellows: u32 = MaxMembers::get() - MaxFoundingFellows::get();
+	pub const MaxFellows: u32 = MaxMembers::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: u64 = 25;
 	pub const RetirementPeriod: BlockNumber = MOTION_DURATION_IN_BLOCKS + 1;
@@ -223,7 +222,6 @@ impl Config for Test {
 	type IdentityVerifier = ();
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = MaxProposals;
-	type MaxFoundingFellows = MaxFoundingFellows;
 	type MaxFellows = MaxFellows;
 	type MaxAllies = MaxAllies;
 	type MaxUnscrupulousItems = ConstU32<100>;
@@ -273,7 +271,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	GenesisBuild::<Test>::assimilate_storage(
 		&pallet_alliance::GenesisConfig {
-			founders: vec![],
 			fellows: vec![],
 			allies: vec![],
 			phantom: Default::default(),
@@ -361,7 +358,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			Error::<Test, ()>::AllianceNotYetInitialized
 		);
 
-		assert_ok!(Alliance::init_members(RuntimeOrigin::root(), vec![1, 2], vec![3], vec![]));
+		assert_ok!(Alliance::init_members(RuntimeOrigin::root(), vec![1, 2, 3], vec![]));
 
 		System::set_block_number(1);
 	});
@@ -397,10 +394,6 @@ pub fn make_proposal(proposal: RuntimeCall) -> (RuntimeCall, u32, H256) {
 	let len: u32 = proposal.using_encoded(|p| p.len() as u32);
 	let hash = BlakeTwo256::hash_of(&proposal);
 	(proposal, len, hash)
-}
-
-pub fn is_founder(who: &AccountId) -> bool {
-	Alliance::is_member_of(who, MemberRole::FoundingFellow)
 }
 
 pub fn is_fellow(who: &AccountId) -> bool {
