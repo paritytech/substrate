@@ -694,6 +694,14 @@ fn sweep_queue_works() {
 }
 
 #[test]
+fn sweep_queue_invalid_noops() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		assert_storage_noop!(MessageQueue::sweep_queue(Here));
+	});
+}
+
+#[test]
 fn footprint_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		let origin = MessageOrigin::Here;

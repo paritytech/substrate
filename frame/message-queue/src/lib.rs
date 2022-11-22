@@ -1273,8 +1273,11 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 
 	/// Force removes a queue from the ready ring.
 	///
-	/// Does not remove its pages from the storage.
+	/// Does not remove its pages from the storage. Does nothing if the queue does not exist.
 	fn sweep_queue(origin: MessageOriginOf<T>) {
+		if !BookStateFor::<T>::contains_key(&origin) {
+			return
+		}
 		let mut book_state = BookStateFor::<T>::get(&origin);
 		book_state.begin = book_state.end;
 		if let Some(neighbours) = book_state.ready_neighbours.take() {
