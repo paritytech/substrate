@@ -15,7 +15,8 @@ groups_total="$2"
 
 readarray -t workspace_crates < <(\
   cargo tree --workspace --depth 0 | \
-  awk '{ if (length($1) == 0 || substr($1, 1, 1) == "[") { skip } else { print $1 } }'
+  awk '{ if (length($1) == 0 || substr($1, 1, 1) == "[") { skip } else { print $1 } }' | \
+  sort
 )
 
 crates_total=${#workspace_crates[*]}
