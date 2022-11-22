@@ -615,7 +615,7 @@ fn page_from_message_basic_works() {
 	let mut msg: BoundedVec<u8, MaxMessageLenOf<Test>> = Default::default();
 	msg.bounded_resize(MaxMessageLenOf::<Test>::get() as usize, 123);
 
-	let page = PageOf::<Test>::from_message::<Test>(msg.as_slice());
+	let page = PageOf::<Test>::from_message::<Test>(msg.as_bounded_slice());
 	assert_eq!(page.remaining, 1);
 	assert_eq!(page.remaining_size as usize, msg.len());
 	assert!(page.first_index == 0 && page.first == 0 && page.last == 0);
