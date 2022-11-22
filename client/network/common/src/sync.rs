@@ -22,6 +22,8 @@ pub mod message;
 pub mod metrics;
 pub mod warp;
 
+use crate::protocol::role::Roles;
+
 use libp2p::PeerId;
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
 use sc_consensus::{
@@ -42,6 +44,17 @@ pub struct PeerInfo<Block: BlockT> {
 	pub best_hash: Block::Hash,
 	/// Their best block number.
 	pub best_number: NumberFor<Block>,
+}
+
+/// Info about a peer's known state (both full and light).
+#[derive(Clone, Debug)]
+pub struct ExtendedPeerInfo<B: BlockT> {
+	/// Roles
+	pub roles: Roles,
+	/// Peer best block hash
+	pub best_hash: B::Hash,
+	/// Peer best block number
+	pub best_number: NumberFor<B>,
 }
 
 /// Reported sync state.

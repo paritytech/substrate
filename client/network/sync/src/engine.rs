@@ -18,6 +18,8 @@
 
 use crate::{service, ChainSync, ChainSyncInterfaceHandle, ClientError};
 
+use libp2p::PeerId;
+use lru::LruCache;
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
@@ -25,13 +27,35 @@ use sc_consensus::import_queue::ImportQueueService;
 use sc_network_common::{
 	config::{NonDefaultSetConfig, ProtocolId},
 	protocol::{role::Roles, ProtocolName},
-	sync::{warp::WarpSyncProvider, ChainSync as ChainSyncT, SyncMode},
+	sync::{
+		message::{
+			generic::{BlockData, BlockResponse},
+			BlockAnnounce, BlockState,
+		},
+		warp::WarpSyncProvider,
+		ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncMode,
+	},
+	utils::LruHashSet,
 };
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header};
 
-use std::sync::Arc;
+use std::{collections::HashMap, num::NonZeroUsize, sync::Arc, task::Poll};
+
+mod rep {
+	use sc_peerset::ReputationChange as Rep;
+	// /// Reputation change when we are a light client and a peer is behind us.
+	// pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
+	// /// We received a message that failed to decode.
+	// pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
+	// /// Peer has different genesis.
+	// pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
+	// /// Peer role does not match (e.g. light peer connecting to another light peer).
+	// pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+	/// Peer send us a block announcement that failed at validation.
+	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
+}
 
 struct Metrics {
 	_peers: Gauge<U64>,
@@ -70,6 +94,14 @@ impl Metrics {
 	}
 }
 
+/// Peer information
+#[derive(Debug)]
+pub struct Peer<B: BlockT> {
+	pub info: ExtendedPeerInfo<B>,
+	/// Holds a set of blocks known to this peer.
+	pub known_blocks: LruHashSet<B::Hash>,
+}
+
 // TODO(aaro): reorder these properly and remove stuff that is not needed
 pub struct SyncingEngine<B: BlockT, Client> {
 	/// State machine that handles the list of in-progress requests. Only full node peers are
@@ -80,14 +112,20 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	_client: Arc<Client>,
 
 	/// Network service.
-	_network_service: service::network::NetworkServiceHandle,
+	network_service: service::network::NetworkServiceHandle,
 
 	// /// Interval at which we call `tick`.
 	// tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Assigned roles.
 	_roles: Roles,
-	// /// All connected peers. Contains both full and light node peers.
-	// peers: HashMap<PeerId, Peer<B>>,
+	/// All connected peers. Contains both full and light node peers.
+	pub peers: HashMap<PeerId, Peer<B>>,
+
+	/// A cache for the data that was associated to a block announcement.
+	pub block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
+
+	/// Protocol name used for block announcements
+	block_announce_protocol_name: ProtocolName,
 	// /// List of nodes for which we perform additional logging because they are important for the
 	// /// user.
 	// important_peers: HashSet<PeerId>,
@@ -116,8 +154,6 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	metrics: Option<Metrics>,
 	// /// The `PeerId`'s of all boot nodes.
 	// boot_node_ids: HashSet<PeerId>,
-	// /// A cache for the data that was associated to a block announcement.
-	// block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -131,6 +167,7 @@ where
 		+ Sync
 		+ 'static,
 {
+	// TODO(aaro): clean up these parameters
 	pub fn new(
 		roles: Roles,
 		client: Arc<Client>,
@@ -146,6 +183,7 @@ where
 		block_request_protocol_name: ProtocolName,
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
+		cache_capacity: NonZeroUsize,
 	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
 		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
 			mode,
@@ -164,12 +202,16 @@ where
 			warp_sync_protocol_name,
 		)?;
 
+		let block_announce_protocol_name = block_announce_config.notifications_protocol.clone();
 		Ok((
 			Self {
 				_roles: roles,
 				_client: client,
 				chain_sync: Box::new(chain_sync),
-				_network_service: network_service,
+				network_service,
+				peers: HashMap::new(),
+				block_announce_data_cache: LruCache::new(cache_capacity),
+				block_announce_protocol_name,
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r) {
 						Ok(metrics) => Some(metrics),
@@ -215,6 +257,126 @@ where
 				.justifications
 				.with_label_values(&["importing"])
 				.set(m.justifications.importing_requests.into());
+		}
+	}
+
+	fn update_peer_info(&mut self, who: &PeerId) {
+		if let Some(info) = self.chain_sync.peer_info(who) {
+			if let Some(ref mut peer) = self.peers.get_mut(who) {
+				peer.info.best_hash = info.best_hash;
+				peer.info.best_number = info.best_number;
+			}
+		}
+	}
+
+	// TODO: emit peernewbest event?
+	/// Process the result of the block announce validation.
+	pub fn process_block_announce_validation_result(
+		&mut self,
+		validation_result: PollBlockAnnounceValidation<B::Header>,
+	) {
+		let (header, _is_best, who) = match validation_result {
+			PollBlockAnnounceValidation::Skip => return,
+			PollBlockAnnounceValidation::Nothing { is_best: _, who, announce } => {
+				self.update_peer_info(&who);
+
+				if let Some(data) = announce.data {
+					if !data.is_empty() {
+						self.block_announce_data_cache.put(announce.header.hash(), data);
+					}
+				}
+
+				return
+			},
+			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
+				self.update_peer_info(&who);
+
+				if let Some(data) = announce.data {
+					if !data.is_empty() {
+						self.block_announce_data_cache.put(announce.header.hash(), data);
+					}
+				}
+
+				(announce.header, is_best, who)
+			},
+			PollBlockAnnounceValidation::Failure { who, disconnect } => {
+				if disconnect {
+					self.network_service
+						.disconnect_peer(who, self.block_announce_protocol_name.clone());
+				}
+
+				self.network_service.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
+				return
+			},
+		};
+
+		// to import header from announced block let's construct response to request that normally
+		// would have been sent over network (but it is not in our case)
+		let blocks_to_import = self.chain_sync.on_block_data(
+			&who,
+			None,
+			BlockResponse {
+				id: 0,
+				blocks: vec![BlockData {
+					hash: header.hash(),
+					header: Some(header),
+					body: None,
+					indexed_body: None,
+					receipt: None,
+					message_queue: None,
+					justification: None,
+					justifications: None,
+				}],
+			},
+		);
+
+		self.chain_sync.process_block_response_data(blocks_to_import);
+	}
+
+	/// Push a block announce validation.
+	///
+	/// It is required that [`ChainSync::poll_block_announce_validation`] is
+	/// called later to check for finished validations. The result of the validation
+	/// needs to be passed to [`Protocol::process_block_announce_validation_result`]
+	/// to finish the processing.
+	///
+	/// # Note
+	///
+	/// This will internally create a future, but this future will not be registered
+	/// in the task before being polled once. So, it is required to call
+	/// [`ChainSync::poll_block_announce_validation`] to ensure that the future is
+	/// registered properly and will wake up the task when being ready.
+	pub fn push_block_announce_validation(
+		&mut self,
+		who: PeerId,
+		announce: BlockAnnounce<B::Header>,
+	) {
+		let hash = announce.header.hash();
+
+		let peer = match self.peers.get_mut(&who) {
+			Some(p) => p,
+			None => {
+				log::error!(target: "sync", "Received block announce from disconnected peer {}", who);
+				debug_assert!(false);
+				return
+			},
+		};
+
+		peer.known_blocks.insert(hash);
+
+		let is_best = match announce.state.unwrap_or(BlockState::Best) {
+			BlockState::Best => true,
+			BlockState::Normal => false,
+		};
+
+		if peer.info.roles.is_full() {
+			self.chain_sync.push_block_announce_validation(who, hash, announce, is_best);
+		}
+	}
+
+	pub fn poll(&mut self, cx: &mut std::task::Context) {
+		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
+			self.process_block_announce_validation_result(result);
 		}
 	}
 }

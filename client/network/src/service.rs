@@ -34,7 +34,7 @@ use crate::{
 	network_state::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
-	protocol::{self, NotificationsSink, NotifsHandlerError, PeerInfo, Protocol, Ready},
+	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
 	transport, ChainSyncInterface, ReputationChange,
 };
 
@@ -69,7 +69,7 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::SyncStatus,
+	sync::{ExtendedPeerInfo, SyncStatus},
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
@@ -661,7 +661,7 @@ where
 	}
 
 	/// Get currently connected peers.
-	pub fn peers_debug_info(&mut self) -> Vec<(PeerId, PeerInfo<B>)> {
+	pub fn peers_debug_info(&mut self) -> Vec<(PeerId, ExtendedPeerInfo<B>)> {
 		self.network_service
 			.behaviour_mut()
 			.user_protocol_mut()

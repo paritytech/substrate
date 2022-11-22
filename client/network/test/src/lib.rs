@@ -25,6 +25,7 @@ mod sync;
 use std::{
 	collections::HashMap,
 	marker::PhantomData,
+	num::NonZeroUsize,
 	pin::Pin,
 	sync::Arc,
 	task::{Context as FutureContext, Poll},
@@ -894,6 +895,7 @@ where
 				block_request_protocol_config.name.clone(),
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
+				NonZeroUsize::new(16).unwrap(),
 			)
 			.unwrap();
 

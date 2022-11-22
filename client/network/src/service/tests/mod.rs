@@ -261,8 +261,7 @@ impl TestNetworkBuilder {
 				config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
 			},
 			protocol_id.clone(),
-			None,
-			&fork_id,
+			&None,
 			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
 			network_config.max_parallel_downloads,
 			None,
@@ -271,6 +270,7 @@ impl TestNetworkBuilder {
 			block_request_protocol_config.name.clone(),
 			state_request_protocol_config.name.clone(),
 			None,
+			std::num::NonZeroUsize::new(16).unwrap(),
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));

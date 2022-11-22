@@ -30,7 +30,6 @@ use libp2p::{
 	Multiaddr, PeerId,
 };
 use log::{debug, error, log, trace, warn, Level};
-use lru::LruCache;
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
@@ -39,12 +38,12 @@ use sc_network_common::{
 	error,
 	protocol::{role::Roles, ProtocolName},
 	sync::{
-		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockData, BlockResponse, BlockState},
-		BadPeer, PollBlockAnnounceValidation, SyncStatus,
+		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockState},
+		BadPeer, ExtendedPeerInfo, SyncStatus,
 	},
 	utils::{interval, LruHashSet},
 };
-use sc_network_sync::engine::SyncingEngine;
+use sc_network_sync::engine::{Peer, SyncingEngine};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::{
@@ -52,7 +51,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
 };
 use std::{
-	collections::{HashMap, HashSet, VecDeque},
+	collections::{HashSet, VecDeque},
 	io, iter,
 	num::NonZeroUsize,
 	pin::Pin,
@@ -98,8 +97,6 @@ mod rep {
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
 	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
-	/// Peer send us a block announcement that failed at validation.
-	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
 
 // Lock must always be taken in order declared here.
@@ -111,8 +108,6 @@ pub struct Protocol<B: BlockT, Client> {
 	/// Assigned roles.
 	roles: Roles,
 	genesis_hash: B::Hash,
-	// All connected peers. Contains both full and light node peers.
-	peers: HashMap<PeerId, Peer<B>>,
 	chain: Arc<Client>,
 	/// List of nodes for which we perform additional logging because they are important for the
 	/// user.
@@ -140,29 +135,8 @@ pub struct Protocol<B: BlockT, Client> {
 	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
-	/// A cache for the data that was associated to a block announcement.
-	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
 	// TODO: remove eventually
 	engine: SyncingEngine<B, Client>,
-}
-
-/// Peer information
-#[derive(Debug)]
-struct Peer<B: BlockT> {
-	info: PeerInfo<B>,
-	/// Holds a set of blocks known to this peer.
-	known_blocks: LruHashSet<B::Hash>,
-}
-
-/// Info about a peer's known state.
-#[derive(Clone, Debug)]
-pub struct PeerInfo<B: BlockT> {
-	/// Roles
-	pub roles: Roles,
-	/// Peer best block hash
-	pub best_hash: B::Hash,
-	/// Peer best block number
-	pub best_number: <B::Header as HeaderT>::Number,
 }
 
 impl<B, Client> Protocol<B, Client>
@@ -295,19 +269,10 @@ where
 			)
 		};
 
-		let cache_capacity = NonZeroUsize::new(
-			(network_config.default_peers_set.in_peers as usize +
-				network_config.default_peers_set.out_peers as usize)
-				.max(1),
-		)
-		.expect("cache capacity is not zero");
-		let block_announce_data_cache = LruCache::new(cache_capacity);
-
 		let protocol = Self {
 			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 			pending_messages: VecDeque::new(),
 			roles,
-			peers: HashMap::new(),
 			chain,
 			genesis_hash: info.genesis_hash,
 			important_peers,
@@ -327,7 +292,6 @@ where
 			bad_handshake_substreams: Default::default(),
 			engine,
 			boot_node_ids,
-			block_announce_data_cache,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -360,7 +324,7 @@ where
 
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
-		self.peers.len()
+		self.engine.peers.len()
 	}
 
 	/// Returns the number of peers we're connected to and that are being queried.
@@ -411,18 +375,9 @@ where
 		);
 	}
 
-	fn update_peer_info(&mut self, who: &PeerId) {
-		if let Some(info) = self.engine.chain_sync.peer_info(who) {
-			if let Some(ref mut peer) = self.peers.get_mut(who) {
-				peer.info.best_hash = info.best_hash;
-				peer.info.best_number = info.best_number;
-			}
-		}
-	}
-
 	/// Returns information about all the peers we are connected to after the handshake message.
-	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &PeerInfo<B>)> {
-		self.peers.iter().map(|(id, peer)| (id, &peer.info))
+	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &ExtendedPeerInfo<B>)> {
+		self.engine.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
 	/// Called by peer when it is disconnecting.
@@ -435,7 +390,7 @@ where
 			debug!(target: "sync", "{} disconnected", peer);
 		}
 
-		if let Some(_peer_data) = self.peers.remove(&peer) {
+		if let Some(_peer_data) = self.engine.peers.remove(&peer) {
 			self.engine.chain_sync.peer_disconnected(&peer);
 			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			Ok(())
@@ -461,7 +416,7 @@ where
 	) -> Result<(), ()> {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 
-		if self.peers.contains_key(&who) {
+		if self.engine.peers.contains_key(&who) {
 			error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
 			debug_assert!(false);
 			return Err(())
@@ -528,7 +483,7 @@ where
 		}
 
 		if status.roles.is_light() &&
-			(self.peers.len() - self.engine.chain_sync.num_peers()) >=
+			(self.engine.peers.len() - self.engine.chain_sync.num_peers()) >=
 				self.default_peers_set_num_light
 		{
 			// Make sure that not all slots are occupied by light clients.
@@ -538,7 +493,7 @@ where
 		}
 
 		let peer = Peer {
-			info: PeerInfo {
+			info: ExtendedPeerInfo {
 				roles: status.roles,
 				best_hash: status.best_hash,
 				best_number: status.best_number,
@@ -563,7 +518,7 @@ where
 
 		debug!(target: "sync", "Connected {}", who);
 
-		self.peers.insert(who, peer);
+		self.engine.peers.insert(who, peer);
 		if no_slot_peer {
 			self.default_peers_set_no_slot_connected_peers.insert(who);
 		}
@@ -603,10 +558,10 @@ where
 		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
 
 		let data = data
-			.or_else(|| self.block_announce_data_cache.get(&hash).cloned())
+			.or_else(|| self.engine.block_announce_data_cache.get(&hash).cloned())
 			.unwrap_or_default();
 
-		for (who, ref mut peer) in self.peers.iter_mut() {
+		for (who, ref mut peer) in self.engine.peers.iter_mut() {
 			let inserted = peer.known_blocks.insert(hash);
 			if inserted {
 				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
@@ -622,124 +577,7 @@ where
 		}
 	}
 
-	/// Push a block announce validation.
-	///
-	/// It is required that [`ChainSync::poll_block_announce_validation`] is
-	/// called later to check for finished validations. The result of the validation
-	/// needs to be passed to [`Protocol::process_block_announce_validation_result`]
-	/// to finish the processing.
-	///
-	/// # Note
-	///
-	/// This will internally create a future, but this future will not be registered
-	/// in the task before being polled once. So, it is required to call
-	/// [`ChainSync::poll_block_announce_validation`] to ensure that the future is
-	/// registered properly and will wake up the task when being ready.
-	fn push_block_announce_validation(&mut self, who: PeerId, announce: BlockAnnounce<B::Header>) {
-		let hash = announce.header.hash();
-
-		let peer = match self.peers.get_mut(&who) {
-			Some(p) => p,
-			None => {
-				log::error!(target: "sync", "Received block announce from disconnected peer {}", who);
-				debug_assert!(false);
-				return
-			},
-		};
-
-		peer.known_blocks.insert(hash);
-
-		let is_best = match announce.state.unwrap_or(BlockState::Best) {
-			BlockState::Best => true,
-			BlockState::Normal => false,
-		};
-
-		if peer.info.roles.is_full() {
-			self.engine
-				.chain_sync
-				.push_block_announce_validation(who, hash, announce, is_best);
-		}
-	}
-
-	/// Process the result of the block announce validation.
-	fn process_block_announce_validation_result(
-		&mut self,
-		validation_result: PollBlockAnnounceValidation<B::Header>,
-	) -> CustomMessageOutcome<B> {
-		let (header, is_best, who) = match validation_result {
-			PollBlockAnnounceValidation::Skip => return CustomMessageOutcome::None,
-			PollBlockAnnounceValidation::Nothing { is_best, who, announce } => {
-				self.update_peer_info(&who);
-
-				if let Some(data) = announce.data {
-					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
-					}
-				}
-
-				// `on_block_announce` returns `OnBlockAnnounce::ImportHeader`
-				// when we have all data required to import the block
-				// in the BlockAnnounce message. This is only when:
-				// 1) we're on light client;
-				// AND
-				// 2) parent block is already imported and not pruned.
-				if is_best {
-					return CustomMessageOutcome::PeerNewBest(who, *announce.header.number())
-				} else {
-					return CustomMessageOutcome::None
-				}
-			},
-			PollBlockAnnounceValidation::ImportHeader { announce, is_best, who } => {
-				self.update_peer_info(&who);
-
-				if let Some(data) = announce.data {
-					if !data.is_empty() {
-						self.block_announce_data_cache.put(announce.header.hash(), data);
-					}
-				}
-
-				(announce.header, is_best, who)
-			},
-			PollBlockAnnounceValidation::Failure { who, disconnect } => {
-				if disconnect {
-					self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-				}
-
-				self.report_peer(who, rep::BAD_BLOCK_ANNOUNCEMENT);
-				return CustomMessageOutcome::None
-			},
-		};
-
-		let number = *header.number();
-
-		// to import header from announced block let's construct response to request that normally
-		// would have been sent over network (but it is not in our case)
-		let blocks_to_import = self.engine.chain_sync.on_block_data(
-			&who,
-			None,
-			BlockResponse::<B> {
-				id: 0,
-				blocks: vec![BlockData::<B> {
-					hash: header.hash(),
-					header: Some(header),
-					body: None,
-					indexed_body: None,
-					receipt: None,
-					message_queue: None,
-					justification: None,
-					justifications: None,
-				}],
-			},
-		);
-		self.engine.chain_sync.process_block_response_data(blocks_to_import);
-
-		if is_best {
-			self.pending_messages.push_back(CustomMessageOutcome::PeerNewBest(who, number));
-		}
-
-		CustomMessageOutcome::None
-	}
-
+	// TODO: implement block fianalized for chainsyncinterface
 	/// Call this when a block has been finalized. The sync layer may have some additional
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
@@ -958,16 +796,8 @@ where
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
-		// Advance the state of `ChainSync`
-		//
-		// Process any received requests received from `NetworkService` and
-		// check if there is any block announcement validation finished.
-		while let Poll::Ready(result) = self.engine.chain_sync.poll(cx) {
-			match self.process_block_announce_validation_result(result) {
-				CustomMessageOutcome::None => {},
-				outcome => self.pending_messages.push_back(outcome),
-			}
-		}
+		// poll syncing engine
+		self.engine.poll(cx);
 
 		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
 			self.engine.report_metrics();
@@ -1061,7 +891,7 @@ where
 				} else {
 					match (
 						Roles::decode_all(&mut &received_handshake[..]),
-						self.peers.get(&peer_id),
+						self.engine.peers.get(&peer_id),
 					) {
 						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
 							remote: peer_id,
@@ -1131,19 +961,19 @@ where
 				}
 			},
 			NotificationsOut::Notification { peer_id, set_id, message } => match set_id {
-				HARDCODED_PEERSETS_SYNC if self.peers.contains_key(&peer_id) => {
+				HARDCODED_PEERSETS_SYNC if self.engine.peers.contains_key(&peer_id) => {
 					if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
-						self.push_block_announce_validation(peer_id, announce);
+						self.engine.push_block_announce_validation(peer_id, announce);
 
 						// Make sure that the newly added block announce validation future was
 						// polled once to be registered in the task.
 						if let Poll::Ready(res) =
 							self.engine.chain_sync.poll_block_announce_validation(cx)
 						{
-							self.process_block_announce_validation_result(res)
-						} else {
-							CustomMessageOutcome::None
+							self.engine.process_block_announce_validation_result(res)
 						}
+
+						CustomMessageOutcome::None
 					} else {
 						warn!(target: "sub-libp2p", "Failed to decode block announce");
 						CustomMessageOutcome::None

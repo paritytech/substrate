@@ -257,7 +257,6 @@ pub mod network_state;
 
 #[doc(inline)]
 pub use libp2p::{multiaddr, Multiaddr, PeerId};
-pub use protocol::PeerInfo;
 use sc_consensus::{JustificationSyncLink, Link};
 pub use sc_network_common::{
 	protocol::{
@@ -273,7 +272,7 @@ pub use sc_network_common::{
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		StateDownloadProgress, SyncState,
+		ExtendedPeerInfo, StateDownloadProgress, SyncState,
 	},
 };
 pub use service::{

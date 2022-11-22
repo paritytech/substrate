@@ -74,7 +74,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
 	BuildStorage,
 };
-use std::{str::FromStr, sync::Arc, time::SystemTime};
+use std::{num::NonZeroUsize, str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -866,6 +866,12 @@ where
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
+		NonZeroUsize::new(
+			(config.network.default_peers_set.in_peers as usize +
+				config.network.default_peers_set.out_peers as usize)
+				.max(1),
+		)
+		.expect("cache capacity is not zero"),
 	)?;
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
