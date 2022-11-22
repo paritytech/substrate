@@ -243,7 +243,9 @@ impl<MessageOrigin> Default for BookState<MessageOrigin> {
 	}
 }
 
+/// Handler code for when the items in a queue change.
 pub trait OnQueueChanged<Id> {
+	/// Note that the queue `id` now has `item_count` items in it, taking up `items_size` bytes.
 	fn on_queue_changed(id: Id, items_count: u32, items_size: u32);
 }
 
