@@ -35,17 +35,15 @@ use sc_network_common::{
 };
 use sc_network_gossip::GossipEngine;
 
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_api::{BlockId, BlockT, HeaderT, ProvideRuntimeApi};
+use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_blockchain::Backend as BlockchainBackend;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, NumberFor, Zero},
-	SaturatedConversion,
-	traits::{Block, NumberFor, CheckedConversion, ConstU32},
-	BoundedBTreeMap, SaturatedConversion,
+	traits::{Block, CheckedConversion, ConstU32, NumberFor, Zero},
+	BoundedBTreeMap, BoundedVec, SaturatedConversion,
 };
 
 use beefy_primitives::{
@@ -331,7 +329,10 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	/// Buffer holding votes for future processing.
 	pending_votes: BoundedBTreeMap<
 		NumberFor<B>,
-		BufferedVec<VoteMessage<NumberFor<B>, AuthorityId, Signature>, ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>>,
+		BoundedVec<
+			VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+			ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
+		>,
 		ConstU32<MAX_BUFFERED_VOTE_ROUNDS>,
 	>,
 	/// Buffer holding justifications for future processing.
@@ -539,8 +540,9 @@ where
 
 	/// An helper function to determine how to Enqueue votes
 	fn enqueue_votes<TBlockNumber>(&mut self, block_num: TBlockNumber)
-		where
-		TBlockNumber: cmp::Ord + Debug {
+	where
+		TBlockNumber: cmp::Ord + Debug,
+	{
 		if self.pending_votes.remove(&block_num).is_some() {
 			let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
 			vec_of_votes.push(vote);
