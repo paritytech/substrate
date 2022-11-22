@@ -34,14 +34,12 @@ use libp2p::{
 
 use sc_consensus::import_queue::{IncomingBlock, RuntimeOrigin};
 use sc_network_common::{
-	config::ProtocolId,
 	protocol::{
 		event::DhtEvent,
 		role::{ObservedRole, Roles},
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
-	sync::{warp::WarpProofRequest, OpaqueBlockRequest, OpaqueStateRequest},
 };
 use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_blockchain::HeaderBackend;
@@ -79,7 +77,7 @@ pub enum BehaviourOut<B: BlockT> {
 	JustificationImport(RuntimeOrigin, B::Hash, NumberFor<B>, Justifications),
 
 	/// Started a random iterative Kademlia discovery query.
-	RandomKademliaStarted(Vec<ProtocolId>),
+	RandomKademliaStarted,
 
 	/// We have received a request from a peer and answered it.
 	///
@@ -164,36 +162,6 @@ pub enum BehaviourOut<B: BlockT> {
 		messages: Vec<(ProtocolName, Bytes)>,
 	},
 
-	/// A new block request must be emitted.
-	BlockRequest {
-		/// Node we send the request to.
-		target: PeerId,
-		/// Opaque implementation-specific block request.
-		request: OpaqueBlockRequest,
-		/// One-shot channel to receive the response.
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-
-	/// A new state request must be emitted.
-	StateRequest {
-		/// Node we send the request to.
-		target: PeerId,
-		/// Opaque implementation-specific state request.
-		request: OpaqueStateRequest,
-		/// One-shot channel to receive the response.
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-
-	/// A new warp sync request must be emitted.
-	WarpSyncRequest {
-		/// Node we send the request to.
-		target: PeerId,
-		/// Warp sync request.
-		request: WarpProofRequest<B>,
-		/// One-shot channel to receive the response.
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-
 	/// Now connected to a new peer for syncing purposes.
 	SyncConnected(PeerId),
 
@@ -231,21 +199,9 @@ where
 		user_agent: String,
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
-		block_request_protocol_config: ProtocolConfig,
-		state_request_protocol_config: ProtocolConfig,
-		warp_sync_protocol_config: Option<ProtocolConfig>,
-		light_client_request_protocol_config: ProtocolConfig,
-		// All remaining request protocol configs.
-		mut request_response_protocols: Vec<ProtocolConfig>,
+		request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
 	) -> Result<Self, request_responses::RegisterError> {
-		if let Some(config) = warp_sync_protocol_config {
-			request_response_protocols.push(config);
-		}
-		request_response_protocols.push(block_request_protocol_config);
-		request_response_protocols.push(state_request_protocol_config);
-		request_response_protocols.push(light_client_request_protocol_config);
-
 		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
@@ -267,25 +223,20 @@ where
 		self.discovery.add_known_address(peer_id, addr)
 	}
 
-	/// Returns the number of nodes in each Kademlia kbucket for each Kademlia instance.
+	/// Returns the number of nodes in each Kademlia kbucket.
 	///
-	/// Identifies Kademlia instances by their [`ProtocolId`] and kbuckets by the base 2 logarithm
-	/// of their lower bound.
-	pub fn num_entries_per_kbucket(
-		&mut self,
-	) -> impl ExactSizeIterator<Item = (&ProtocolId, Vec<(u32, usize)>)> {
+	/// Identifies kbuckets by the base 2 logarithm of their lower bound.
+	pub fn num_entries_per_kbucket(&mut self) -> Option<Vec<(u32, usize)>> {
 		self.discovery.num_entries_per_kbucket()
 	}
 
 	/// Returns the number of records in the Kademlia record stores.
-	pub fn num_kademlia_records(&mut self) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+	pub fn num_kademlia_records(&mut self) -> Option<usize> {
 		self.discovery.num_kademlia_records()
 	}
 
 	/// Returns the total size in bytes of all the records in the Kademlia record stores.
-	pub fn kademlia_records_total_size(
-		&mut self,
-	) -> impl ExactSizeIterator<Item = (&ProtocolId, usize)> {
+	pub fn kademlia_records_total_size(&mut self) -> Option<usize> {
 		self.discovery.kademlia_records_total_size()
 	}
 
@@ -362,12 +313,6 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut<B> {
 				BehaviourOut::BlockImport(origin, blocks),
 			CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
 				BehaviourOut::JustificationImport(origin, hash, nb, justification),
-			CustomMessageOutcome::BlockRequest { target, request, pending_response } =>
-				BehaviourOut::BlockRequest { target, request, pending_response },
-			CustomMessageOutcome::StateRequest { target, request, pending_response } =>
-				BehaviourOut::StateRequest { target, request, pending_response },
-			CustomMessageOutcome::WarpSyncRequest { target, request, pending_response } =>
-				BehaviourOut::WarpSyncRequest { target, request, pending_response },
 			CustomMessageOutcome::NotificationStreamOpened {
 				remote,
 				protocol,
@@ -438,8 +383,7 @@ impl<B: BlockT> From<DiscoveryOut> for BehaviourOut<B> {
 				BehaviourOut::Dht(DhtEvent::ValuePut(key), duration),
 			DiscoveryOut::ValuePutFailed(key, duration) =>
 				BehaviourOut::Dht(DhtEvent::ValuePutFailed(key), duration),
-			DiscoveryOut::RandomKademliaStarted(protocols) =>
-				BehaviourOut::RandomKademliaStarted(protocols),
+			DiscoveryOut::RandomKademliaStarted => BehaviourOut::RandomKademliaStarted,
 		}
 	}
 }

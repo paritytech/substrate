@@ -30,11 +30,11 @@ sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/a
 sc-utils = { version = "4.0.0-dev", path = "../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-keystore = { version = "0.12.0", path = "../../primitives/keystore" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-keystore = { version = "0.13.0", path = "../../primitives/keystore" }
 sp-offchain = { version = "4.0.0-dev", path = "../../primitives/offchain" }
 sp-rpc = { version = "6.0.0", path = "../../primitives/rpc" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-session = { version = "4.0.0-dev", path = "../../primitives/session" }
 sp-version = { version = "5.0.0", path = "../../primitives/version" }
 
@@ -50,7 +50,7 @@ sc-network-common = { version = "0.10.0-dev", path = "../network/common" }
 sc-transaction-pool = { version = "4.0.0-dev", path = "../transaction-pool" }
 sp-consensus = { version = "0.10.0-dev", path = "../../primitives/consensus/common" }
 tokio = "1.17.0"
-sp-io = { version = "6.0.0", path = "../../primitives/io" }
+sp-io = { version = "7.0.0", path = "../../primitives/io" }
 substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]

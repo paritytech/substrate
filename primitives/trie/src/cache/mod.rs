@@ -490,7 +490,7 @@ mod tests {
 
 			{
 				let mut cache = local_cache.as_trie_db_cache(root);
-				let mut recorder = recorder.as_trie_recorder();
+				let mut recorder = recorder.as_trie_recorder(root);
 				let trie = TrieDBBuilder::<Layout>::new(&db, &root)
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)
@@ -538,7 +538,7 @@ mod tests {
 			{
 				let mut db = db.clone();
 				let mut cache = local_cache.as_trie_db_cache(root);
-				let mut recorder = recorder.as_trie_recorder();
+				let mut recorder = recorder.as_trie_recorder(root);
 				let mut trie = TrieDBMutBuilder::<Layout>::from_existing(&mut db, &mut new_root)
 					.with_cache(&mut cache)
 					.with_recorder(&mut recorder)

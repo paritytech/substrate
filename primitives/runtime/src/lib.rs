@@ -234,7 +234,7 @@ impl BuildStorage for () {
 /// Consensus engine unique ID.
 pub type ConsensusEngineId = [u8; 4];
 
-/// Signature verify that can work with any known signature types..
+/// Signature verify that can work with any known signature types.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Eq, PartialEq, Clone, Encode, Decode, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 pub enum MultiSignature {

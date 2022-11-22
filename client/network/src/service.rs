@@ -38,7 +38,6 @@ use crate::{
 	transport, ChainSyncInterface, ReputationChange,
 };
 
-use codec::Encode;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -70,13 +69,13 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::{SyncState, SyncStatus},
+	sync::SyncStatus,
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor, Zero};
 use std::{
 	cmp,
 	collections::{HashMap, HashSet},
@@ -94,8 +93,6 @@ use std::{
 
 pub use behaviour::{InboundFailure, OutboundFailure, ResponseFailure};
 
-#[cfg(test)]
-mod chainsync_tests;
 mod metrics;
 mod out_events;
 #[cfg(test)]
@@ -266,11 +263,6 @@ where
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
-		let block_request_protocol_name = params.block_request_protocol_config.name.clone();
-		let state_request_protocol_name = params.state_request_protocol_config.name.clone();
-		let warp_sync_protocol_name =
-			params.warp_sync_protocol_config.as_ref().map(|c| c.name.clone());
-
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
@@ -284,7 +276,13 @@ where
 				config.discovery_limit(
 					u64::from(params.network_config.default_peers_set.out_peers) + 15,
 				);
-				config.add_protocol(params.protocol_id.clone());
+				let genesis_hash = params
+					.chain
+					.hash(Zero::zero())
+					.ok()
+					.flatten()
+					.expect("Genesis block exists; qed");
+				config.with_kademlia(genesis_hash, params.fork_id.as_deref(), &params.protocol_id);
 				config.with_dht_random_walk(params.network_config.enable_dht_random_walk);
 				config.allow_non_globals_in_dht(params.network_config.allow_non_globals_in_dht);
 				config.use_kademlia_disjoint_query_paths(
@@ -362,10 +360,6 @@ where
 					user_agent,
 					local_public,
 					discovery_config,
-					params.block_request_protocol_config,
-					params.state_request_protocol_config,
-					params.warp_sync_protocol_config,
-					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
 				);
@@ -462,9 +456,6 @@ where
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
-			block_request_protocol_name,
-			state_request_protocol_name,
-			warp_sync_protocol_name,
 			_marker: Default::default(),
 		})
 	}
@@ -1283,15 +1274,6 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
-	/// Protocol name used to send out block requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	block_request_protocol_name: ProtocolName,
-	/// Protocol name used to send out state requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	state_request_protocol_name: ProtocolName,
-	/// Protocol name used to send out warp sync requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	warp_sync_protocol_name: Option<ProtocolName>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -1470,84 +1452,6 @@ where
 					}
 					this.import_queue.import_justifications(origin, hash, nb, justifications);
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockRequest {
-					target,
-					request,
-					pending_response,
-				})) => {
-					match this
-						.network_service
-						.behaviour()
-						.user_protocol()
-						.encode_block_request(&request)
-					{
-						Ok(data) => {
-							this.network_service.behaviour_mut().send_request(
-								&target,
-								&this.block_request_protocol_name,
-								data,
-								pending_response,
-								IfDisconnected::ImmediateError,
-							);
-						},
-						Err(err) => {
-							log::warn!(
-								target: "sync",
-								"Failed to encode block request {:?}: {:?}",
-								request, err
-							);
-						},
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::StateRequest {
-					target,
-					request,
-					pending_response,
-				})) => {
-					match this
-						.network_service
-						.behaviour()
-						.user_protocol()
-						.encode_state_request(&request)
-					{
-						Ok(data) => {
-							this.network_service.behaviour_mut().send_request(
-								&target,
-								&this.state_request_protocol_name,
-								data,
-								pending_response,
-								IfDisconnected::ImmediateError,
-							);
-						},
-						Err(err) => {
-							log::warn!(
-								target: "sync",
-								"Failed to encode state request {:?}: {:?}",
-								request, err
-							);
-						},
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::WarpSyncRequest {
-					target,
-					request,
-					pending_response,
-				})) => match &this.warp_sync_protocol_name {
-					Some(name) => this.network_service.behaviour_mut().send_request(
-						&target,
-						&name,
-						request.encode(),
-						pending_response,
-						IfDisconnected::ImmediateError,
-					),
-					None => {
-						log::warn!(
-							target: "sync",
-							"Trying to send warp sync request when no protocol is configured {:?}",
-							request,
-						);
-					},
-				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,
 					result,
@@ -1665,16 +1569,9 @@ where
 						.user_protocol_mut()
 						.add_default_set_discovered_nodes(iter::once(peer_id));
 				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted(
-					protocols,
-				))) =>
+				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::RandomKademliaStarted)) =>
 					if let Some(metrics) = this.metrics.as_ref() {
-						for protocol in protocols {
-							metrics
-								.kademlia_random_queries_total
-								.with_label_values(&[protocol.as_ref()])
-								.inc();
-						}
+						metrics.kademlia_random_queries_total.inc();
 					},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamOpened {
 					remote,
@@ -2006,37 +1903,32 @@ where
 			*this.external_addresses.lock() = external_addresses;
 		}
 
-		let is_major_syncing =
-			match this.network_service.behaviour_mut().user_protocol_mut().sync_state().state {
-				SyncState::Idle => false,
-				SyncState::Downloading => true,
-			};
+		let is_major_syncing = this
+			.network_service
+			.behaviour_mut()
+			.user_protocol_mut()
+			.sync_state()
+			.state
+			.is_major_syncing();
 
 		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
-			for (proto, buckets) in this.network_service.behaviour_mut().num_entries_per_kbucket() {
+			if let Some(buckets) = this.network_service.behaviour_mut().num_entries_per_kbucket() {
 				for (lower_ilog2_bucket_bound, num_entries) in buckets {
 					metrics
 						.kbuckets_num_nodes
-						.with_label_values(&[proto.as_ref(), &lower_ilog2_bucket_bound.to_string()])
+						.with_label_values(&[&lower_ilog2_bucket_bound.to_string()])
 						.set(num_entries as u64);
 				}
 			}
-			for (proto, num_entries) in this.network_service.behaviour_mut().num_kademlia_records()
-			{
-				metrics
-					.kademlia_records_count
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+			if let Some(num_entries) = this.network_service.behaviour_mut().num_kademlia_records() {
+				metrics.kademlia_records_count.set(num_entries as u64);
 			}
-			for (proto, num_entries) in
+			if let Some(num_entries) =
 				this.network_service.behaviour_mut().kademlia_records_total_size()
 			{
-				metrics
-					.kademlia_records_sizes_total
-					.with_label_values(&[proto.as_ref()])
-					.set(num_entries as u64);
+				metrics.kademlia_records_sizes_total.set(num_entries as u64);
 			}
 			metrics
 				.peerset_num_discovered
