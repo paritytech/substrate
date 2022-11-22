@@ -18,11 +18,11 @@ scale-info = { version = "2.1.1", default-features = false, features = ["derive"
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-mmr-primitives = { version = "4.0.0-dev", default-features = false, path = "../../primitives/merkle-mountain-range" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 [dev-dependencies]
 array-bytes = "4.1"
