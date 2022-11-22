@@ -19,6 +19,7 @@ use std::{borrow::Cow, process::Command};
 
 /// Generate the `cargo:` key output
 pub fn generate_cargo_keys() {
+	println!("cargo:warning=WARNING generate_cargo_keys called");
 	let commit = if let Ok(hash) = std::env::var("SUBSTRATE_CLI_GIT_COMMIT_HASH") {
 		Cow::from(hash.trim().to_owned())
 	} else {
