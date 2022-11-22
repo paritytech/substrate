@@ -28,7 +28,7 @@ use frame_support::{
 	traits::{
 		ConstU128, ConstU16, ConstU32, Currency, EnsureOneOf, EqualPrivilegeOnly, Everything,
 		Imbalance, InstanceFilter, KeyOwnerProofSystem, LockIdentifier, Nothing, OnUnbalanced,
-		U128CurrencyToVote,
+		U128CurrencyToVote, OnRuntimeUpgrade,
 	},
 	weights::{
 		constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
@@ -1297,8 +1297,30 @@ pub type Executive = frame_executive::Executive<
 	frame_system::ChainContext<Runtime>,
 	Runtime,
 	AllPalletsWithSystem,
-	pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
+	(
+		pallet_bags_list::migrations::CheckCounterPrefix<Runtime>,
+		SchedulerMigrationV3,
+	),
 >;
+
+// Migration for scheduler pallet to move from a plain Call to a CallOrHash.
+pub struct SchedulerMigrationV3;
+
+impl OnRuntimeUpgrade for SchedulerMigrationV3 {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		Scheduler::migrate_v2_to_v3()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn pre_upgrade() -> Result<(), &'static str> {
+		Scheduler::pre_migrate_to_v3()
+	}
+
+	#[cfg(feature = "try-runtime")]
+	fn post_upgrade() -> Result<(), &'static str> {
+		Scheduler::post_migrate_to_v3()
+	}
+}
 
 #[cfg(feature = "runtime-benchmarks")]
 #[macro_use]
