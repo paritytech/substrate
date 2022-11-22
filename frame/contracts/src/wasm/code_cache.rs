@@ -201,7 +201,7 @@ pub fn reinstrument<T: Config>(
 	// as the contract is already deployed and every change in size would be the result
 	// of changes in the instrumentation algorithm controlled by the chain authors.
 	prefab_module.code = WeakBoundedVec::force_from(
-		prepare::reinstrument_contract::<T>(&original_code, schedule)
+		prepare::reinstrument_contract::<T>(&original_code, schedule, prefab_module.determinism)
 			.map_err(|_| <Error<T>>::CodeRejected)?,
 		Some("Contract exceeds limit after re-instrumentation."),
 	);

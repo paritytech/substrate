@@ -414,14 +414,14 @@ where
 	}
 
 	/// Get a reference to the state at a given block.
-	pub fn state_at(&self, hash: &Block::Hash) -> sp_blockchain::Result<B::State> {
+	pub fn state_at(&self, hash: Block::Hash) -> sp_blockchain::Result<B::State> {
 		self.backend.state_at(hash)
 	}
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Vec<u8>> {
 		let hash = self.backend.blockchain().expect_block_hash_from_id(id)?;
-		Ok(StorageProvider::storage(self, &hash, &StorageKey(well_known_keys::CODE.to_vec()))?
+		Ok(StorageProvider::storage(self, hash, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect(
 				"None is returned if there's no value stored for the given key;\
 				':code' key is always defined; qed",
@@ -586,8 +586,7 @@ where
 			Some(storage_changes) => {
 				let storage_changes = match storage_changes {
 					sc_consensus::StorageChanges::Changes(storage_changes) => {
-						self.backend
-							.begin_state_operation(&mut operation.op, BlockId::Hash(parent_hash))?;
+						self.backend.begin_state_operation(&mut operation.op, parent_hash)?;
 						let (main_sc, child_sc, offchain_sc, tx, _, tx_index) =
 							storage_changes.into_inner();
 
@@ -642,7 +641,7 @@ where
 						if state_root != *import_headers.post().state_root() {
 							// State root mismatch when importing state. This should not happen in
 							// safe fast sync mode, but may happen in unsafe mode.
-							warn!("Error imporing state: State root mismatch.");
+							warn!("Error importing state: State root mismatch.");
 							return Err(Error::InvalidStateRoot)
 						}
 						None
@@ -657,7 +656,7 @@ where
 
 		// Ensure parent chain is finalized to maintain invariant that finality is called
 		// sequentially.
-		if finalized && parent_exists {
+		if finalized && parent_exists && info.finalized_hash != parent_hash {
 			self.apply_finality_with_block_hash(
 				operation,
 				parent_hash,
@@ -814,7 +813,7 @@ where
 					Block::new(import_block.header.clone(), body.clone()),
 				)?;
 
-				let state = self.backend.state_at(parent_hash)?;
+				let state = self.backend.state_at(*parent_hash)?;
 				let gen_storage_changes = runtime_api
 					.into_storage_changes(&state, *parent_hash)
 					.map_err(sp_blockchain::Error::Storage)?;
@@ -878,17 +877,17 @@ where
 			// plugable we cannot make a better choice here. usages that need
 			// an accurate "best" block need to go through `SelectChain`
 			// instead.
-			operation.op.mark_head(BlockId::Hash(block))?;
+			operation.op.mark_head(block)?;
 		}
 
 		let enacted = route_from_finalized.enacted();
 		assert!(enacted.len() > 0);
 		for finalize_new in &enacted[..enacted.len() - 1] {
-			operation.op.mark_finalized(BlockId::Hash(finalize_new.hash), None)?;
+			operation.op.mark_finalized(finalize_new.hash, None)?;
 		}
 
 		assert_eq!(enacted.last().map(|e| e.hash), Some(block));
-		operation.op.mark_finalized(BlockId::Hash(block), justification)?;
+		operation.op.mark_finalized(block, justification)?;
 
 		if notify {
 			let finalized =
@@ -1034,7 +1033,7 @@ where
 		};
 		match hash_and_number {
 			Some((hash, number)) =>
-				if self.backend.have_state_at(&hash, number) {
+				if self.backend.have_state_at(hash, number) {
 					Ok(BlockStatus::InChainWithState)
 				} else {
 					Ok(BlockStatus::InChainPruned)
@@ -1054,9 +1053,9 @@ where
 	/// Get block body by id.
 	pub fn body(
 		&self,
-		id: &BlockId<Block>,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		self.backend.blockchain().body(*id)
+		self.backend.blockchain().body(hash)
 	}
 
 	/// Gets the uncles of the block with `target_hash` going back `max_generation` ancestors.
@@ -1152,7 +1151,7 @@ where
 {
 	fn read_proof(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
 		self.state_at(hash)
@@ -1161,7 +1160,7 @@ where
 
 	fn read_child_proof(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof> {
@@ -1171,16 +1170,16 @@ where
 
 	fn execution_proof(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)> {
-		self.executor.prove_execution(&BlockId::Hash(*hash), method, call_data)
+		self.executor.prove_execution(&BlockId::Hash(hash), method, call_data)
 	}
 
 	fn read_proof_collection(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)> {
@@ -1191,22 +1190,22 @@ where
 		let (proof, count) = prove_range_read_with_child_with_size::<_, HashFor<Block>>(
 			state, size_limit, start_key,
 		)?;
-		// This is read proof only, we can use either LayoutV0 or LayoutV1.
-		let proof = sp_trie::encode_compact::<sp_trie::LayoutV0<HashFor<Block>>>(proof, root)
+		let proof = proof
+			.into_compact_proof::<HashFor<Block>>(root)
 			.map_err(|e| sp_blockchain::Error::from_state(Box::new(e)))?;
 		Ok((proof, count))
 	}
 
 	fn storage_collection(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>> {
 		if start_key.len() > MAX_NESTED_TRIE_DEPTH {
 			return Err(Error::Backend("Invalid start key.".to_string()))
 		}
-		let state = self.state_at(&hash)?;
+		let state = self.state_at(hash)?;
 		let child_info = |storage_key: &Vec<u8>| -> sp_blockchain::Result<ChildInfo> {
 			let storage_key = PrefixedStorageKey::new_ref(storage_key);
 			match ChildType::from_prefixed_key(storage_key) {
@@ -1399,7 +1398,7 @@ where
 {
 	fn storage_keys(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
 		let keys = self.state_at(hash)?.keys(&key_prefix.0).into_iter().map(StorageKey).collect();
@@ -1408,7 +1407,7 @@ where
 
 	fn storage_pairs(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<(StorageKey, StorageData)>> {
 		let state = self.state_at(hash)?;
@@ -1425,7 +1424,7 @@ where
 
 	fn storage_keys_iter<'a>(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
 	) -> sp_blockchain::Result<KeyIterator<'a, B::State, Block>> {
@@ -1436,7 +1435,7 @@ where
 
 	fn child_storage_keys_iter<'a>(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		child_info: ChildInfo,
 		prefix: Option<&'a StorageKey>,
 		start_key: Option<&StorageKey>,
@@ -1448,7 +1447,7 @@ where
 
 	fn storage(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>> {
 		Ok(self
@@ -1460,7 +1459,7 @@ where
 
 	fn storage_hash(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.state_at(hash)?
@@ -1470,7 +1469,7 @@ where
 
 	fn child_storage_keys(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		child_info: &ChildInfo,
 		key_prefix: &StorageKey,
 	) -> sp_blockchain::Result<Vec<StorageKey>> {
@@ -1485,7 +1484,7 @@ where
 
 	fn child_storage(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<StorageData>> {
@@ -1498,7 +1497,7 @@ where
 
 	fn child_storage_hash(
 		&self,
-		hash: &<Block as BlockT>::Hash,
+		hash: <Block as BlockT>::Hash,
 		child_info: &ChildInfo,
 		key: &StorageKey,
 	) -> sp_blockchain::Result<Option<Block::Hash>> {
@@ -1684,7 +1683,7 @@ where
 
 	fn state_at(&self, at: &BlockId<Block>) -> Result<Self::StateBackend, sp_api::ApiError> {
 		let hash = self.backend.blockchain().expect_block_hash_from_id(at)?;
-		self.state_at(&hash).map_err(Into::into)
+		self.state_at(hash).map_err(Into::into)
 	}
 }
 
@@ -1845,29 +1844,22 @@ where
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		let last_best = self.backend.blockchain().info().best_hash;
-		let to_finalize_hash = self.backend.blockchain().expect_block_hash_from_id(&id)?;
-		self.apply_finality_with_block_hash(
-			operation,
-			to_finalize_hash,
-			justification,
-			last_best,
-			notify,
-		)
+		self.apply_finality_with_block_hash(operation, hash, justification, last_best, notify)
 	}
 
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
 		self.lock_import_and_run(|operation| {
-			self.apply_finality(operation, id, justification, notify)
+			self.apply_finality(operation, hash, justification, notify)
 		})
 	}
 }
@@ -1881,20 +1873,20 @@ where
 	fn apply_finality(
 		&self,
 		operation: &mut ClientImportOperation<Block, B>,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		(**self).apply_finality(operation, id, justification, notify)
+		(**self).apply_finality(operation, hash, justification, notify)
 	}
 
 	fn finalize_block(
 		&self,
-		id: BlockId<Block>,
+		hash: Block::Hash,
 		justification: Option<Justification>,
 		notify: bool,
 	) -> sp_blockchain::Result<()> {
-		(**self).finalize_block(id, justification, notify)
+		(**self).finalize_block(hash, justification, notify)
 	}
 }
 
@@ -1947,16 +1939,22 @@ where
 {
 	fn block_body(
 		&self,
-		id: &BlockId<Block>,
+		hash: Block::Hash,
 	) -> sp_blockchain::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		self.body(id)
+		self.body(hash)
 	}
 
 	fn block(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<SignedBlock<Block>>> {
-		Ok(match (self.header(id)?, self.body(id)?, self.justifications(id)?) {
-			(Some(header), Some(extrinsics), justifications) =>
-				Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
-			_ => None,
+		Ok(match self.header(id)? {
+			Some(header) => {
+				let hash = header.hash();
+				match (self.body(hash)?, self.justifications(hash)?) {
+					(Some(extrinsics), justifications) =>
+						Some(SignedBlock { block: Block::new(header, extrinsics), justifications }),
+					_ => None,
+				}
+			},
+			None => None,
 		})
 	}
 
@@ -1964,27 +1962,24 @@ where
 		Client::block_status(self, id)
 	}
 
-	fn justifications(&self, id: &BlockId<Block>) -> sp_blockchain::Result<Option<Justifications>> {
-		self.backend.blockchain().justifications(*id)
+	fn justifications(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Justifications>> {
+		self.backend.blockchain().justifications(hash)
 	}
 
 	fn block_hash(&self, number: NumberFor<Block>) -> sp_blockchain::Result<Option<Block::Hash>> {
 		self.backend.blockchain().hash(number)
 	}
 
-	fn indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
+	fn indexed_transaction(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Vec<u8>>> {
 		self.backend.blockchain().indexed_transaction(hash)
 	}
 
-	fn has_indexed_transaction(&self, hash: &Block::Hash) -> sp_blockchain::Result<bool> {
+	fn has_indexed_transaction(&self, hash: Block::Hash) -> sp_blockchain::Result<bool> {
 		self.backend.blockchain().has_indexed_transaction(hash)
 	}
 
-	fn block_indexed_body(
-		&self,
-		id: &BlockId<Block>,
-	) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
-		self.backend.blockchain().block_indexed_body(*id)
+	fn block_indexed_body(&self, hash: Block::Hash) -> sp_blockchain::Result<Option<Vec<Vec<u8>>>> {
+		self.backend.blockchain().block_indexed_body(hash)
 	}
 
 	fn requires_full_sync(&self) -> bool {
@@ -2075,9 +2070,19 @@ where
 		&self,
 		number: NumberFor<B>,
 	) -> Result<Option<Vec<Vec<u8>>>, sp_transaction_storage_proof::Error> {
+		let hash = match self
+			.backend
+			.blockchain()
+			.block_hash_from_id(&BlockId::Number(number))
+			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))?
+		{
+			Some(hash) => hash,
+			None => return Ok(None),
+		};
+
 		self.backend
 			.blockchain()
-			.block_indexed_body(BlockId::number(number))
+			.block_indexed_body(hash)
 			.map_err(|e| sp_transaction_storage_proof::Error::Application(Box::new(e)))
 	}
 

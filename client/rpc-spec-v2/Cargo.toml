@@ -18,8 +18,8 @@ jsonrpsee = { version = "0.15.1", features = ["server", "macros"] }
 sc-chain-spec = { version = "4.0.0-dev", path = "../chain-spec" }
 # Pool for submitting extrinsics required by "transaction"
 sc-transaction-pool-api = { version = "4.0.0-dev", path = "../transaction-pool/api" }
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../primitives/runtime" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../primitives/blockchain" }
 codec = { package = "parity-scale-codec", version = "3.0.0" }
