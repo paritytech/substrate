@@ -7,8 +7,8 @@ bob: is up
 charlie: is up
 dave: is up
 
-alice: reports node_roles is 1
-bob: reports node_roles is 1
+alice: reports node_roles is 4
+bob: reports node_roles is 4
 charlie: reports node_roles is 1
 dave: reports node_roles is 1
 
