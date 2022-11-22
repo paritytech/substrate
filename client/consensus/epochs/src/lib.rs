@@ -517,8 +517,6 @@ where
 	) -> Result<(), fork_tree::Error<D::Error>> {
 		let is_descendent_of = descendent_of_builder.build_is_descendent_of(None);
 
-		// Prevents removal of epoch0 data while we are in epoch1
-		// (these two epochs are kept in the same node)
 		let predicate = |epoch: &PersistedEpochHeader<E>| match *epoch {
 			PersistedEpochHeader::Genesis(_, ref epoch_1) => epoch_1.start_slot <= slot,
 			PersistedEpochHeader::Regular(ref epoch_n) => epoch_n.start_slot <= slot,
