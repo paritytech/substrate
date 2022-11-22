@@ -102,7 +102,7 @@ impl Config for Test {
 	type Extra = ();
 	type RemoveItemsLimit = ConstU32<5>;
 	#[cfg(feature = "runtime-benchmarks")]
-	type Helper = ();
+	type BenchmarkHelper = ();
 }
 
 use std::collections::HashMap;

@@ -275,7 +275,7 @@ pub mod pallet {
 
 		/// Helper trait for benchmarks.
 		#[cfg(feature = "runtime-benchmarks")]
-		type Helper: BenchmarkHelper<Self::AssetId>;
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
 	}
 
 	#[pallet::storage]

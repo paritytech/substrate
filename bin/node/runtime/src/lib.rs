@@ -1453,7 +1453,7 @@ impl pallet_assets::Config for Runtime {
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 	type RemoveItemsLimit = ConstU32<1000>;
 	#[cfg(feature = "runtime-benchmarks")]
-	type Helper = ();
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {
