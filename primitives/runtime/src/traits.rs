@@ -532,7 +532,7 @@ impl<A, B: From<A>> Convert<A, B> for ConvertInto {
 /// Extensible conversion trait. Generic over both source and destination types.
 pub trait ConvertBack<A, B>: Convert<A, B> {
 	/// Make conversion back.
-	fn convert_back(a: B) -> A;
+	fn convert_back(b: B) -> A;
 }
 
 /// Convenience type to work around the highly unergonomic syntax needed
