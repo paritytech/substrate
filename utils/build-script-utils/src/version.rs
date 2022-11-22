@@ -41,6 +41,7 @@ pub fn generate_cargo_keys() {
 		}
 	};
 
+	println!("cargo:warning=WARNING rustc:env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit));
 	println!("cargo:rustc-env=SUBSTRATE_CLI_IMPL_VERSION={}", get_version(&commit))
 }
 
