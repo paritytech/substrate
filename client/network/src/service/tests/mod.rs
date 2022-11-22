@@ -216,31 +216,6 @@ impl TestNetworkBuilder {
 			None,
 		)));
 
-		let (chain_sync_network_provider, chain_sync_network_handle) =
-			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
-
-		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
-			let (chain_sync, chain_sync_service) = ChainSync::new(
-				match network_config.sync_mode {
-					config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						sc_network_common::sync::SyncMode::LightState {
-							skip_proofs,
-							storage_chain_mode,
-						},
-					config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-				},
-				client.clone(),
-				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
-				network_config.max_parallel_downloads,
-				None,
-				chain_sync_network_handle,
-			)
-			.unwrap();
-
-			(Box::new(chain_sync), chain_sync_service)
-		});
-
 		let protocol_id = ProtocolId::from("test-protocol-name");
 		let fork_id = Some(String::from("test-fork-id"));
 
@@ -289,6 +264,37 @@ impl TestNetworkBuilder {
 			},
 		};
 
+		let (chain_sync_network_provider, chain_sync_network_handle) =
+			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
+
+		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
+			let (chain_sync, chain_sync_service, _) = ChainSync::new(
+				match network_config.sync_mode {
+					config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+						sc_network_common::sync::SyncMode::LightState {
+							skip_proofs,
+							storage_chain_mode,
+						},
+					config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+				},
+				client.clone(),
+				protocol_id.clone(),
+				&fork_id,
+				Roles::from(&config::Role::Full),
+				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
+				network_config.max_parallel_downloads,
+				None,
+				chain_sync_network_handle,
+				block_request_protocol_config.name.clone(),
+				state_request_protocol_config.name.clone(),
+				None,
+			)
+			.unwrap();
+
+			(Box::new(chain_sync), chain_sync_service)
+		});
+
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
@@ -305,11 +311,12 @@ impl TestNetworkBuilder {
 			chain_sync,
 			chain_sync_service,
 			metrics_registry: None,
-			block_request_protocol_config,
-			state_request_protocol_config,
-			light_client_request_protocol_config,
-			warp_sync_protocol_config: None,
-			request_response_protocol_configs: Vec::new(),
+			request_response_protocol_configs: [
+				block_request_protocol_config,
+				state_request_protocol_config,
+				light_client_request_protocol_config,
+			]
+			.to_vec(),
 		})
 		.unwrap();
 

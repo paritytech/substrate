@@ -46,7 +46,6 @@ sp-keyring = { version = "7.0.0", path = "../../../primitives/keyring" }
 sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
 
 [features]
-wasmtime = ["sc-executor/wasmtime"]
 stress-test = []
 
 [[bench]]
