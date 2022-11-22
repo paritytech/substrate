@@ -1,6 +1,6 @@
 # Test design
 The `warp-sync` test works on predefined database which is stored in the cloud and
-fetched by the test. `alice` and `bob` nodes are spun up using this database snapshot.
+fetched by the test. `alice` and `bob` nodes are spun up using this database snapshot in full node mode.
 
 As `warp-sync` requires at least 3 peers, the test spawns the `charlie` full node which uses the same database snapshot.
 
@@ -57,6 +57,8 @@ tar -C db-snapshot/alice/data/chains/ -czf chains.tgz local_testnet
 
 Also refer to: [zombienet#578](https://github.com/paritytech/zombienet/issues/578)
 
+The `raw` chain-spec shall also be saved: `db-test-gen/gen-db-raw.json`.
+
 # Where to upload database
 The access to this [bucket](https://console.cloud.google.com/storage/browser/zombienet-db-snaps/) is required.
 
@@ -67,8 +69,10 @@ The database file path should be `substrate/XXXX-test-name/file-SHA1SUM.tgz`, wh
 # Chain spec
 Chain spec was simply built with:
 ```
-substrate build-spec --chain=local > 0001-chain-spec.json
+substrate build-spec --chain=local > chain-spec.json
 ```
+
+Please note that `0001-chain-spec.json` committed into repository is `raw` version produced by `zombienet` during database snapshot generation. Zombienet applies some modifications to plain versions of chain-spec.
 
 # Run the test
 Test can be run with the following command:

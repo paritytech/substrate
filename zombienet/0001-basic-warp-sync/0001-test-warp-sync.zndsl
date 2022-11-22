@@ -7,8 +7,8 @@ bob: is up
 charlie: is up
 dave: is up
 
-alice: reports node_roles is 4
-bob: reports node_roles is 4
+alice: reports node_roles is 1
+bob: reports node_roles is 1
 charlie: reports node_roles is 1
 dave: reports node_roles is 1
 
@@ -28,8 +28,8 @@ bob: reports block height is at least 12133 within 60 seconds
 charlie: reports block height is at least 12133 within 60 seconds
 
 dave: log line matches "Warp sync is complete" within 60 seconds
+# workaround for: https://github.com/paritytech/zombienet/issues/580
 dave: count of log lines containing  "Block history download is complete" is 1 within 10 seconds
 
 dave: count of log lines containing "error" is 0 within 10 seconds
-dave: count of log lines containing "VRF verification failed" is 0 within 10 seconds
-dave: count of log lines containing "Verification failed" is 0 within 10 seconds
+dave: count of log lines containing "verification failed" is 0 within 10 seconds
