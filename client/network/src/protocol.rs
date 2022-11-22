@@ -33,7 +33,7 @@ use log::{debug, error, log, trace, warn, Level};
 use lru::LruCache;
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
-use sc_client_api::HeaderBackend;
+use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_network_common::{
 	config::NonReservedPeerMode,
 	error,
@@ -46,6 +46,7 @@ use sc_network_common::{
 };
 use sc_network_sync::engine::SyncingEngine;
 use sp_arithmetic::traits::SaturatedConversion;
+use sp_blockchain::HeaderMetadata;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
@@ -167,7 +168,13 @@ pub struct PeerInfo<B: BlockT> {
 impl<B, Client> Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
 {
 	/// Create a new instance.
 	pub fn new(
@@ -880,7 +887,13 @@ pub enum CustomMessageOutcome<B: BlockT> {
 impl<B, Client> NetworkBehaviour for Protocol<B, Client>
 where
 	B: BlockT,
-	Client: HeaderBackend<B> + 'static,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
 {
 	type ConnectionHandler = <Notifications as NetworkBehaviour>::ConnectionHandler;
 	type OutEvent = CustomMessageOutcome<B>;

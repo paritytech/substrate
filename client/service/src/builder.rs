@@ -48,7 +48,7 @@ use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, engine::SyncingEngine,
 	service::network::NetworkServiceProvider, state_request_handler::StateRequestHandler,
-	warp_request_handler::RequestHandler as WarpSyncRequestHandler, ChainSync,
+	warp_request_handler::RequestHandler as WarpSyncRequestHandler,
 };
 use sc_rpc::{
 	author::AuthorApiServer,
@@ -846,34 +846,27 @@ where
 	};
 
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
-	let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
+	let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
+		Roles::from(&config.role),
+		client.clone(),
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
 		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
 				sc_network_common::sync::SyncMode::LightState { skip_proofs, storage_chain_mode },
 			SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
 		},
-		client.clone(),
 		protocol_id.clone(),
 		&config.chain_spec.fork_id().map(ToOwned::to_owned),
-		Roles::from(&config.role),
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
 		chain_sync_network_handle,
 		import_queue.service(),
 		block_request_protocol_config.name.clone(),
 		state_request_protocol_config.name.clone(),
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
 	)?;
-
-	let engine = SyncingEngine::new(
-		Roles::from(&config.role),
-		client.clone(),
-		Box::new(chain_sync),
-		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
-	);
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());

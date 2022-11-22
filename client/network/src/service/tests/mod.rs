@@ -34,9 +34,9 @@ use sc_network_common::{
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler,
+	engine::SyncingEngine,
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
-	engine::SyncingEngine,
 	ChainSync,
 };
 use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
@@ -244,75 +244,36 @@ impl TestNetworkBuilder {
 			protocol_config
 		};
 
-		let block_announce_config = NonDefaultSetConfig {
-			notifications_protocol: BLOCK_ANNOUNCE_PROTO_NAME.into(),
-			fallback_names: vec![],
-			max_notification_size: 1024 * 1024,
-			handshake: Some(NotificationHandshake::new(BlockAnnouncesHandshake::<
-				substrate_test_runtime_client::runtime::Block,
-			>::build(
-				Roles::from(&config::Role::Full),
-				client.info().best_number,
-				client.info().best_hash,
-				client
-					.block_hash(Zero::zero())
-					.ok()
-					.flatten()
-					.expect("Genesis block exists; qed"),
-			))),
-			set_config: SetConfig {
-				in_peers: 0,
-				out_peers: 0,
-				reserved_nodes: Vec::new(),
-				non_reserved_mode: NonReservedPeerMode::Deny,
-			},
-		};
-
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			self.chain_sync_network.unwrap_or(NetworkServiceProvider::new());
 
-		let (chain_sync, chain_sync_service) = self.chain_sync.unwrap_or({
-			let (chain_sync, chain_sync_service, _) = ChainSync::new(
-				match network_config.sync_mode {
-					config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
-					config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
-						sc_network_common::sync::SyncMode::LightState {
-							skip_proofs,
-							storage_chain_mode,
-						},
-					config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
-				},
-				client.clone(),
-				protocol_id.clone(),
-				&fork_id,
-				Roles::from(&config::Role::Full),
-				Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
-				network_config.max_parallel_downloads,
-				None,
-				None,
-				chain_sync_network_handle,
-				import_queue.service(),
-				block_request_protocol_config.name.clone(),
-				state_request_protocol_config.name.clone(),
-				None,
-			)
-			.unwrap();
-
-			if let None = self.link {
-				self.link = Some(Box::new(chain_sync_service.clone()));
-			}
-			(Box::new(chain_sync), Box::new(chain_sync_service))
-		});
-		let mut link = self
-			.link
-			.unwrap_or(Box::new(sc_network_sync::service::mock::MockChainSyncInterface::new()));
-
-    	let engine = SyncingEngine::new(
-    		Roles::from(&config::Role::Full),
-    		client.clone(),
-    		chain_sync,
-    		None,
-    	);
+		let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
+			Roles::from(&config::Role::Full),
+			client.clone(),
+			None,
+			match network_config.sync_mode {
+				config::SyncMode::Full => sc_network_common::sync::SyncMode::Full,
+				config::SyncMode::Fast { skip_proofs, storage_chain_mode } =>
+					sc_network_common::sync::SyncMode::LightState {
+						skip_proofs,
+						storage_chain_mode,
+					},
+				config::SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
+			},
+			protocol_id.clone(),
+			None,
+			&fork_id,
+			Box::new(sp_consensus::block_validation::DefaultBlockAnnounceValidator),
+			network_config.max_parallel_downloads,
+			None,
+			chain_sync_network_handle,
+			import_queue.service(),
+			block_request_protocol_config.name.clone(),
+			state_request_protocol_config.name.clone(),
+			None,
+		)
+		.unwrap();
+		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));
 
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
@@ -327,7 +288,7 @@ impl TestNetworkBuilder {
 			protocol_id,
 			fork_id,
 			engine,
-			chain_sync_service,
+			chain_sync_service: Box::new(chain_sync_service),
 			metrics_registry: None,
 			request_response_protocol_configs: [
 				block_request_protocol_config,

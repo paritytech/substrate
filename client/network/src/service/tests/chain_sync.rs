@@ -16,6 +16,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+/*
 use crate::{
 	config,
 	service::tests::{TestNetworkBuilder, BLOCK_ANNOUNCE_PROTO_NAME},
@@ -443,3 +444,4 @@ async fn disconnect_peer_using_chain_sync_handle() {
 		panic!("did not receive disconnection event in time");
 	}
 }
+*/

@@ -16,9 +16,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+use crate::{service, ChainSync, ChainSyncInterfaceHandle, ClientError};
+
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 
-use sc_network_common::{protocol::role::Roles, sync::ChainSync};
+use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
+use sc_consensus::import_queue::ImportQueueService;
+use sc_network_common::{
+	config::{NonDefaultSetConfig, ProtocolId},
+	protocol::{role::Roles, ProtocolName},
+	sync::{warp::WarpSyncProvider, ChainSync as ChainSyncT, SyncMode},
+};
+use sp_blockchain::HeaderMetadata;
+use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::traits::Block as BlockT;
 
 use std::sync::Arc;
@@ -60,19 +70,24 @@ impl Metrics {
 	}
 }
 
+// TODO(aaro): reorder these properly and remove stuff that is not needed
 pub struct SyncingEngine<B: BlockT, Client> {
-	// /// Interval at which we call `tick`.
-	// tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
-	// /// Pending list of messages to return from `poll` as a priority.
-	// pending_messages: VecDeque<CustomMessageOutcome<B>>,
-	/// Assigned roles.
-	_roles: Roles,
 	/// State machine that handles the list of in-progress requests. Only full node peers are
 	/// registered.
-	pub chain_sync: Box<dyn ChainSync<B>>,
+	pub chain_sync: Box<dyn ChainSyncT<B>>,
+
+	/// Blockchain client.
+	_client: Arc<Client>,
+
+	/// Network service.
+	_network_service: service::network::NetworkServiceHandle,
+
+	// /// Interval at which we call `tick`.
+	// tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
+	/// Assigned roles.
+	_roles: Roles,
 	// /// All connected peers. Contains both full and light node peers.
 	// peers: HashMap<PeerId, Peer<B>>,
-	_client: Arc<Client>,
 	// /// List of nodes for which we perform additional logging because they are important for the
 	// /// user.
 	// important_peers: HashSet<PeerId>,
@@ -105,29 +120,71 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	// block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
 }
 
-impl<B: BlockT, Client> SyncingEngine<B, Client> {
+impl<B: BlockT, Client> SyncingEngine<B, Client>
+where
+	B: BlockT,
+	Client: HeaderBackend<B>
+		+ BlockBackend<B>
+		+ HeaderMetadata<B, Error = sp_blockchain::Error>
+		+ ProofProvider<B>
+		+ Send
+		+ Sync
+		+ 'static,
+{
 	pub fn new(
 		roles: Roles,
 		client: Arc<Client>,
-		chain_sync: Box<dyn ChainSync<B>>,
 		metrics_registry: Option<&Registry>,
-	) -> Self {
-		Self {
-			_roles: roles,
-			_client: client,
-			chain_sync,
-			metrics: if let Some(r) = metrics_registry {
-				match Metrics::register(r) {
-					Ok(metrics) => Some(metrics),
-					Err(err) => {
-						log::error!(target: "sync", "Failed to register metrics {err:?}");
-						None
-					},
-				}
-			} else {
-				None
+		mode: SyncMode,
+		protocol_id: ProtocolId,
+		fork_id: &Option<String>,
+		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
+		max_parallel_downloads: u32,
+		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+		network_service: service::network::NetworkServiceHandle,
+		import_queue: Box<dyn ImportQueueService<B>>,
+		block_request_protocol_name: ProtocolName,
+		state_request_protocol_name: ProtocolName,
+		warp_sync_protocol_name: Option<ProtocolName>,
+	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
+		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
+			mode,
+			client.clone(),
+			protocol_id,
+			fork_id,
+			roles,
+			block_announce_validator,
+			max_parallel_downloads,
+			warp_sync_provider,
+			metrics_registry,
+			network_service.clone(),
+			import_queue,
+			block_request_protocol_name,
+			state_request_protocol_name,
+			warp_sync_protocol_name,
+		)?;
+
+		Ok((
+			Self {
+				_roles: roles,
+				_client: client,
+				chain_sync: Box::new(chain_sync),
+				_network_service: network_service,
+				metrics: if let Some(r) = metrics_registry {
+					match Metrics::register(r) {
+						Ok(metrics) => Some(metrics),
+						Err(err) => {
+							log::error!(target: "sync", "Failed to register metrics {err:?}");
+							None
+						},
+					}
+				} else {
+					None
+				},
 			},
-		}
+			chain_sync_service,
+			block_announce_config,
+		))
 	}
 
 	/// Report Prometheus metrics.
