@@ -466,9 +466,9 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 	///
 	/// By default this is retrieved from [`WebRTCCertificateParams`] if it is available. Otherwise
 	/// its [`WebRTCConfig::Ephemeral`].
-	fn webrtc(&self, net_config_dir: &PathBuf) -> Result<WebRTCConfig> {
+	fn webrtc(&self, config_dir: &PathBuf) -> Result<WebRTCConfig> {
 		self.webrtc_certificate_params()
-			.map(|x| x.webrtc_certificate(net_config_dir))
+			.map(|x| x.webrtc_certificate(config_dir))
 			.unwrap_or_else(|| Ok(WebRTCConfig::Ephemeral))
 	}
 
@@ -520,7 +520,7 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			},
 		);
 		let node_key = self.node_key(&net_config_dir)?;
-		let webrtc = self.webrtc(&net_config_dir)?;
+		let webrtc = self.webrtc(&config_dir)?;
 		let role = self.role(is_dev)?;
 		let max_runtime_instances = self.max_runtime_instances()?.unwrap_or(8);
 		let is_validator = role.is_authority();
