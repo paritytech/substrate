@@ -30,6 +30,7 @@
 
 pub mod block_request_handler;
 pub mod blocks;
+pub mod engine;
 pub mod mock;
 mod schema;
 pub mod service;

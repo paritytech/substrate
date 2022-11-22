@@ -224,9 +224,8 @@ where
 			From::from(&params.role),
 			params.chain.clone(),
 			&params.network_config,
-			params.metrics_registry.as_ref(),
-			params.chain_sync,
 			params.block_announce_config,
+			params.engine,
 		)?;
 
 		// List of multiaddresses that we know in the network.

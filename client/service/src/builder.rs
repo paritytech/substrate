@@ -46,8 +46,8 @@ use sc_network_common::{
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
-	state_request_handler::StateRequestHandler,
+	block_request_handler::BlockRequestHandler, engine::SyncingEngine,
+	service::network::NetworkServiceProvider, state_request_handler::StateRequestHandler,
 	warp_request_handler::RequestHandler as WarpSyncRequestHandler, ChainSync,
 };
 use sc_rpc::{
@@ -868,6 +868,13 @@ where
 		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
 	)?;
 
+	let engine = SyncingEngine::new(
+		Roles::from(&config.role),
+		client.clone(),
+		Box::new(chain_sync),
+		config.prometheus_config.as_ref().map(|config| config.registry.clone()).as_ref(),
+	);
+
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
 		spawn_handle.spawn("bitswap-request-handler", Some("networking"), handler.run());
@@ -886,7 +893,7 @@ where
 		chain: client.clone(),
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		chain_sync: Box::new(chain_sync),
+		engine,
 		chain_sync_service: Box::new(chain_sync_service.clone()),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,

@@ -33,7 +33,6 @@ use log::{debug, error, log, trace, warn, Level};
 use lru::LruCache;
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
-use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 use sc_client_api::HeaderBackend;
 use sc_network_common::{
 	config::NonReservedPeerMode,
@@ -41,10 +40,11 @@ use sc_network_common::{
 	protocol::{role::Roles, ProtocolName},
 	sync::{
 		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockData, BlockResponse, BlockState},
-		BadPeer, ChainSync, PollBlockAnnounceValidation, SyncStatus,
+		BadPeer, PollBlockAnnounceValidation, SyncStatus,
 	},
 	utils::{interval, LruHashSet},
 };
+use sc_network_sync::engine::SyncingEngine;
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_runtime::{
 	generic::BlockId,
@@ -101,43 +101,6 @@ mod rep {
 	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
 
-struct Metrics {
-	peers: Gauge<U64>,
-	queued_blocks: Gauge<U64>,
-	fork_targets: Gauge<U64>,
-	justifications: GaugeVec<U64>,
-}
-
-impl Metrics {
-	fn register(r: &Registry) -> Result<Self, PrometheusError> {
-		Ok(Self {
-			peers: {
-				let g = Gauge::new("substrate_sync_peers", "Number of peers we sync with")?;
-				register(g, r)?
-			},
-			queued_blocks: {
-				let g =
-					Gauge::new("substrate_sync_queued_blocks", "Number of blocks in import queue")?;
-				register(g, r)?
-			},
-			fork_targets: {
-				let g = Gauge::new("substrate_sync_fork_targets", "Number of fork sync targets")?;
-				register(g, r)?
-			},
-			justifications: {
-				let g = GaugeVec::new(
-					Opts::new(
-						"substrate_sync_extra_justifications",
-						"Number of extra justifications requests",
-					),
-					&["status"],
-				)?;
-				register(g, r)?
-			},
-		})
-	}
-}
-
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, Client> {
 	/// Interval at which we call `tick`.
@@ -147,9 +110,6 @@ pub struct Protocol<B: BlockT, Client> {
 	/// Assigned roles.
 	roles: Roles,
 	genesis_hash: B::Hash,
-	/// State machine that handles the list of in-progress requests. Only full node peers are
-	/// registered.
-	chain_sync: Box<dyn ChainSync<B>>,
 	// All connected peers. Contains both full and light node peers.
 	peers: HashMap<PeerId, Peer<B>>,
 	chain: Arc<Client>,
@@ -177,12 +137,12 @@ pub struct Protocol<B: BlockT, Client> {
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
 	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
-	/// Prometheus metrics.
-	metrics: Option<Metrics>,
 	/// The `PeerId`'s of all boot nodes.
 	boot_node_ids: HashSet<PeerId>,
 	/// A cache for the data that was associated to a block announcement.
 	block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
+	// TODO: remove eventually
+	engine: SyncingEngine<B, Client>,
 }
 
 /// Peer information
@@ -214,9 +174,8 @@ where
 		roles: Roles,
 		chain: Arc<Client>,
 		network_config: &config::NetworkConfiguration,
-		metrics_registry: Option<&Registry>,
-		chain_sync: Box<dyn ChainSync<B>>,
 		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
+		engine: SyncingEngine<B, Client>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
 
@@ -344,7 +303,6 @@ where
 			peers: HashMap::new(),
 			chain,
 			genesis_hash: info.genesis_hash,
-			chain_sync,
 			important_peers,
 			default_peers_set_no_slot_peers,
 			default_peers_set_no_slot_connected_peers: HashSet::new(),
@@ -360,11 +318,7 @@ where
 				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
 				.collect(),
 			bad_handshake_substreams: Default::default(),
-			metrics: if let Some(r) = metrics_registry {
-				Some(Metrics::register(r)?)
-			} else {
-				None
-			},
+			engine,
 			boot_node_ids,
 			block_announce_data_cache,
 		};
@@ -404,44 +358,44 @@ where
 
 	/// Returns the number of peers we're connected to and that are being queried.
 	pub fn num_active_peers(&self) -> usize {
-		self.chain_sync.num_active_peers()
+		self.engine.chain_sync.num_active_peers()
 	}
 
 	/// Current global sync state.
 	pub fn sync_state(&self) -> SyncStatus<B> {
-		self.chain_sync.status()
+		self.engine.chain_sync.status()
 	}
 
 	/// Target sync block number.
 	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.chain_sync.status().best_seen_block
+		self.engine.chain_sync.status().best_seen_block
 	}
 
 	/// Number of peers participating in syncing.
 	pub fn num_sync_peers(&self) -> u32 {
-		self.chain_sync.status().num_peers
+		self.engine.chain_sync.status().num_peers
 	}
 
 	/// Number of blocks in the import queue.
 	pub fn num_queued_blocks(&self) -> u32 {
-		self.chain_sync.status().queued_blocks
+		self.engine.chain_sync.status().queued_blocks
 	}
 
 	/// Number of downloaded blocks.
 	pub fn num_downloaded_blocks(&self) -> usize {
-		self.chain_sync.num_downloaded_blocks()
+		self.engine.chain_sync.num_downloaded_blocks()
 	}
 
 	/// Number of active sync requests.
 	pub fn num_sync_requests(&self) -> usize {
-		self.chain_sync.num_sync_requests()
+		self.engine.chain_sync.num_sync_requests()
 	}
 
 	/// Inform sync about new best imported block.
 	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
 		debug!(target: "sync", "New best block imported {:?}/#{}", hash, number);
 
-		self.chain_sync.update_chain_info(&hash, number);
+		self.engine.chain_sync.update_chain_info(&hash, number);
 
 		self.behaviour.set_notif_protocol_handshake(
 			HARDCODED_PEERSETS_SYNC,
@@ -451,7 +405,7 @@ where
 	}
 
 	fn update_peer_info(&mut self, who: &PeerId) {
-		if let Some(info) = self.chain_sync.peer_info(who) {
+		if let Some(info) = self.engine.chain_sync.peer_info(who) {
 			if let Some(ref mut peer) = self.peers.get_mut(who) {
 				peer.info.best_hash = info.best_hash;
 				peer.info.best_number = info.best_number;
@@ -475,7 +429,7 @@ where
 		}
 
 		if let Some(_peer_data) = self.peers.remove(&peer) {
-			self.chain_sync.peer_disconnected(&peer);
+			self.engine.chain_sync.peer_disconnected(&peer);
 			self.default_peers_set_no_slot_connected_peers.remove(&peer);
 			Ok(())
 		} else {
@@ -486,13 +440,6 @@ where
 	/// Adjusts the reputation of a node.
 	pub fn report_peer(&self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
-	}
-
-	/// Perform time based maintenance.
-	///
-	/// > **Note**: This method normally doesn't have to be called except for testing purposes.
-	pub fn tick(&mut self) {
-		self.report_metrics()
 	}
 
 	/// Called on the first connection between two peers on the default set, after their exchange
@@ -563,7 +510,7 @@ where
 		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
 
 		if status.roles.is_full() &&
-			self.chain_sync.num_peers() >=
+			self.engine.chain_sync.num_peers() >=
 				self.default_peers_set_num_full +
 					self.default_peers_set_no_slot_connected_peers.len() +
 					this_peer_reserved_slot
@@ -574,7 +521,8 @@ where
 		}
 
 		if status.roles.is_light() &&
-			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
+			(self.peers.len() - self.engine.chain_sync.num_peers()) >=
+				self.default_peers_set_num_light
 		{
 			// Make sure that not all slots are occupied by light clients.
 			debug!(target: "sync", "Too many light nodes, rejecting {}", who);
@@ -594,7 +542,7 @@ where
 		};
 
 		let req = if peer.info.roles.is_full() {
-			match self.chain_sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
+			match self.engine.chain_sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
 				Ok(req) => req,
 				Err(BadPeer(id, repu)) => {
 					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
@@ -616,7 +564,7 @@ where
 			.push_back(CustomMessageOutcome::PeerNewBest(who, status.best_number));
 
 		if let Some(req) = req {
-			self.chain_sync.send_block_request(who, req);
+			self.engine.chain_sync.send_block_request(who, req);
 		}
 
 		Ok(())
@@ -700,7 +648,9 @@ where
 		};
 
 		if peer.info.roles.is_full() {
-			self.chain_sync.push_block_announce_validation(who, hash, announce, is_best);
+			self.engine
+				.chain_sync
+				.push_block_announce_validation(who, hash, announce, is_best);
 		}
 	}
 
@@ -757,7 +707,7 @@ where
 
 		// to import header from announced block let's construct response to request that normally
 		// would have been sent over network (but it is not in our case)
-		let blocks_to_import = self.chain_sync.on_block_data(
+		let blocks_to_import = self.engine.chain_sync.on_block_data(
 			&who,
 			None,
 			BlockResponse::<B> {
@@ -774,7 +724,7 @@ where
 				}],
 			},
 		);
-		self.chain_sync.process_block_response_data(blocks_to_import);
+		self.engine.chain_sync.process_block_response_data(blocks_to_import);
 
 		if is_best {
 			self.pending_messages.push_back(CustomMessageOutcome::PeerNewBest(who, number));
@@ -786,7 +736,7 @@ where
 	/// Call this when a block has been finalized. The sync layer may have some additional
 	/// requesting to perform.
 	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
-		self.chain_sync.on_block_finalized(&hash, *header.number())
+		self.engine.chain_sync.on_block_finalized(&hash, *header.number())
 	}
 
 	/// Set whether the syncing peers set is in reserved-only mode.
@@ -885,35 +835,6 @@ where
 				"remove_from_peers_set with unknown protocol: {}",
 				protocol
 			);
-		}
-	}
-
-	fn report_metrics(&self) {
-		if let Some(metrics) = &self.metrics {
-			let n = u64::try_from(self.peers.len()).unwrap_or(std::u64::MAX);
-			metrics.peers.set(n);
-
-			let m = self.chain_sync.metrics();
-
-			metrics.fork_targets.set(m.fork_targets.into());
-			metrics.queued_blocks.set(m.queued_blocks.into());
-
-			metrics
-				.justifications
-				.with_label_values(&["pending"])
-				.set(m.justifications.pending_requests.into());
-			metrics
-				.justifications
-				.with_label_values(&["active"])
-				.set(m.justifications.active_requests.into());
-			metrics
-				.justifications
-				.with_label_values(&["failed"])
-				.set(m.justifications.failed_requests.into());
-			metrics
-				.justifications
-				.with_label_values(&["importing"])
-				.set(m.justifications.importing_requests.into());
 		}
 	}
 }
@@ -1028,7 +949,7 @@ where
 		//
 		// Process any received requests received from `NetworkService` and
 		// check if there is any block announcement validation finished.
-		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
+		while let Poll::Ready(result) = self.engine.chain_sync.poll(cx) {
 			match self.process_block_announce_validation_result(result) {
 				CustomMessageOutcome::None => {},
 				outcome => self.pending_messages.push_back(outcome),
@@ -1036,7 +957,7 @@ where
 		}
 
 		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
-			self.tick();
+			self.engine.report_metrics();
 		}
 
 		if let Some(message) = self.pending_messages.pop_front() {
@@ -1203,7 +1124,8 @@ where
 
 						// Make sure that the newly added block announce validation future was
 						// polled once to be registered in the task.
-						if let Poll::Ready(res) = self.chain_sync.poll_block_announce_validation(cx)
+						if let Poll::Ready(res) =
+							self.engine.chain_sync.poll_block_announce_validation(cx)
 						{
 							self.process_block_announce_validation_result(res)
 						} else {

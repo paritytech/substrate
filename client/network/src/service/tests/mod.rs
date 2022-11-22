@@ -36,6 +36,7 @@ use sc_network_sync::{
 	block_request_handler::BlockRequestHandler,
 	service::network::{NetworkServiceHandle, NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
+	engine::SyncingEngine,
 	ChainSync,
 };
 use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
@@ -306,6 +307,13 @@ impl TestNetworkBuilder {
 			.link
 			.unwrap_or(Box::new(sc_network_sync::service::mock::MockChainSyncInterface::new()));
 
+    	let engine = SyncingEngine::new(
+    		Roles::from(&config::Role::Full),
+    		client.clone(),
+    		chain_sync,
+    		None,
+    	);
+
 		let worker = NetworkWorker::<
 			substrate_test_runtime_client::runtime::Block,
 			substrate_test_runtime_client::runtime::Hash,
@@ -318,7 +326,7 @@ impl TestNetworkBuilder {
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			chain_sync,
+			engine,
 			chain_sync_service,
 			metrics_registry: None,
 			request_response_protocol_configs: [

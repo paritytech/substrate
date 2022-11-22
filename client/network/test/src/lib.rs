@@ -895,6 +895,13 @@ where
 		)
 		.unwrap();
 
+		let engine = sc_network_sync::engine::SyncingEngine::new(
+			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
+			client.clone(),
+			Box::new(chain_sync),
+			None,
+		);
+
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
 			executor: None,
@@ -902,7 +909,7 @@ where
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			chain_sync: Box::new(chain_sync),
+			engine,
 			chain_sync_service: Box::new(chain_sync_service.clone()),
 			metrics_registry: None,
 			block_announce_config,

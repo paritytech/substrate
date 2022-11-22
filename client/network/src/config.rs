@@ -30,6 +30,7 @@ pub use sc_network_common::{
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
+use sc_network_sync::engine::SyncingEngine;
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
@@ -40,9 +41,8 @@ use libp2p::{
 	multiaddr, Multiaddr,
 };
 use prometheus_endpoint::Registry;
-use sc_network_common::{
-	config::{MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig},
-	sync::ChainSync,
+use sc_network_common::config::{
+	MultiaddrWithPeerId, NonDefaultSetConfig, SetConfig, TransportConfig,
 };
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -82,8 +82,8 @@ where
 	/// name on the wire.
 	pub fork_id: Option<String>,
 
-	/// Instance of chain sync implementation.
-	pub chain_sync: Box<dyn ChainSync<B>>,
+	/// Syncing engine.
+	pub engine: SyncingEngine<B, Client>,
 
 	/// Interface that can be used to delegate syncing-related function calls to `ChainSync`
 	pub chain_sync_service: Box<dyn ChainSyncInterface<B>>,
