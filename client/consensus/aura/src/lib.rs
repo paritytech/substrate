@@ -656,9 +656,33 @@ mod tests {
 		time::{Duration, Instant},
 	};
 	use substrate_test_runtime_client::{
-		runtime::{Header, TestInherentDataProvider, H256},
+		runtime::{Header, H256},
 		TestClient,
 	};
+
+	#[derive(Clone)]
+	struct TestInherentDataProvider;
+
+	const ERROR_TO_STRING: &str = "Found error!";
+	const TEST_INHERENT_0: sp_inherents::InherentIdentifier = *b"testinh0";
+
+	#[async_trait::async_trait]
+	impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
+		async fn provide_inherent_data(
+			&self,
+			data: &mut sp_inherents::InherentData,
+		) -> Result<(), sp_inherents::Error> {
+			data.put_data(TEST_INHERENT_0, &42)
+		}
+
+		async fn try_handle_error(
+			&self,
+			_: &sp_inherents::InherentIdentifier,
+			_: &[u8],
+		) -> Option<Result<(), sp_inherents::Error>> {
+			Some(Err(sp_inherents::Error::Application(Box::from(ERROR_TO_STRING))))
+		}
+	}
 
 	const SLOT_DURATION_MS: u64 = 1000;
 

@@ -810,11 +810,33 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
+	use sp_inherents::{Error, InherentData, InherentDataProvider, InherentIdentifier};
 	use sp_runtime::traits::NumberFor;
 	use std::time::{Duration, Instant};
-	use substrate_test_runtime_client::runtime::{Block, Header, TestInherentDataProvider};
+	use substrate_test_runtime_client::runtime::{Block, Header};
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
+
+	#[derive(Clone)]
+	struct TestInherentDataProvider;
+
+	const ERROR_TO_STRING: &str = "Found error!";
+	const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
+
+	#[async_trait::async_trait]
+	impl InherentDataProvider for TestInherentDataProvider {
+		async fn provide_inherent_data(&self, data: &mut InherentData) -> Result<(), Error> {
+			data.put_data(TEST_INHERENT_0, &42)
+		}
+
+		async fn try_handle_error(
+			&self,
+			_: &InherentIdentifier,
+			_: &[u8],
+		) -> Option<Result<(), Error>> {
+			Some(Err(Error::Application(Box::from(ERROR_TO_STRING))))
+		}
+	}
 
 	fn slot(slot: u64) -> super::slots::SlotInfo<Block> {
 		super::slots::SlotInfo {

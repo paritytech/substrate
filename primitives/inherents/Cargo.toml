@@ -24,7 +24,6 @@ sp-std = { version = "5.0.0", default-features = false, path = "../std" }
 
 [dev-dependencies]
 futures = "0.3.21"
-substrate-test-runtime-client = { version = "2.0.0", path = "../../test-utils/runtime/client" }
 
 [features]
 default = [ "std" ]

@@ -45,8 +45,6 @@ use frame_support::{
 use frame_system::limits::{BlockLength, BlockWeights};
 use sp_api::{decl_runtime_apis, impl_runtime_apis};
 pub use sp_core::hash::H256;
-#[cfg(feature = "std")]
-use sp_inherents::InherentIdentifier;
 use sp_inherents::{CheckInherentsResult, InherentData};
 #[cfg(feature = "std")]
 use sp_runtime::traits::NumberFor;
@@ -1401,33 +1399,5 @@ mod tests {
 		let block_id = BlockId::Hash(client.chain_info().best_hash);
 
 		runtime_api.test_witness(&block_id, proof, root).unwrap();
-	}
-}
-
-#[cfg(feature = "std")]
-#[derive(Clone)]
-pub struct TestInherentDataProvider;
-
-#[cfg(feature = "std")]
-const ERROR_TO_STRING: &str = "Found error!";
-#[cfg(feature = "std")]
-const TEST_INHERENT_0: InherentIdentifier = *b"testinh0";
-
-#[cfg(feature = "std")]
-#[async_trait::async_trait]
-impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
-	async fn provide_inherent_data(
-		&self,
-		data: &mut InherentData,
-	) -> Result<(), sp_inherents::Error> {
-		data.put_data(TEST_INHERENT_0, &42)
-	}
-
-	async fn try_handle_error(
-		&self,
-		_: &InherentIdentifier,
-		_: &[u8],
-	) -> Option<Result<(), sp_inherents::Error>> {
-		Some(Err(sp_inherents::Error::Application(Box::from(ERROR_TO_STRING))))
 	}
 }
