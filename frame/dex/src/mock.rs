@@ -27,7 +27,7 @@ use frame_support::{
 	traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 	PalletId,
 };
-use frame_system::EnsureSigned;
+use frame_system::{EnsureSigned, EnsureSignedBy};
 use sp_core::H256;
 use sp_keystore::{testing::KeyStore, KeystoreExt};
 use sp_runtime::{
@@ -48,7 +48,7 @@ construct_runtime!(
 		System: frame_system,
 		Balances: pallet_balances,
 		Assets: pallet_assets::<Instance1>,
-		PoolAssets:  pallet_assets::<Instance2>,
+		PoolAssets: pallet_assets::<Instance2>,
 		Dex: pallet_dex,
 	}
 );
@@ -110,14 +110,13 @@ impl pallet_assets::Config<Instance1> for Test {
 	type Extra = ();
 }
 
-//TODO: limit creation only to dex pallet
 impl pallet_assets::Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u64;
 	type AssetId = u32;
 	type Currency = Balances;
 	type ForceOrigin = frame_system::EnsureRoot<u64>;
-	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<u64>>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<DexAccount, u64>>;
 	type AssetDeposit = ConstU64<0>;
 	type AssetAccountDeposit = ConstU64<0>;
 	type MetadataDepositBase = ConstU64<0>;
@@ -131,6 +130,10 @@ impl pallet_assets::Config<Instance2> for Test {
 
 parameter_types! {
 	pub const DexPalletId: PalletId = PalletId(*b"py/dexer");
+}
+
+frame_support::ord_parameter_types! {
+	pub const DexAccount: u64 = 33; //TODO: this should be DexPalletId
 }
 
 impl Config for Test {
