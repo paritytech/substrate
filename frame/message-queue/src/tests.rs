@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Tests for Multisig Pallet
+//! Tests for Message Queue Pallet.
 
 #![cfg(test)]
 

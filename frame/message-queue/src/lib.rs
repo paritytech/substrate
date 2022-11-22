@@ -70,6 +70,14 @@
 //! NOTE: The enqueuing and storing of messages are only a means to implement the processing and are
 //! not goals per se.
 //!
+//! **Page Data Layout**
+//!
+//! A Page contains a heap which holds all its messages. The heap is built by concatenating
+//! `(ItemHeader, Message)` pairs. The [`ItemHeader`] contains the length of the message which is
+//! needed for retrieving it. This layout allows for constant access time of the next message and
+//! linear access time for any message in the page. The header must remain minimal to reduce its PoV
+//! impact.
+//!
 //! **Weight Metering**
 //!
 //! The pallet utilizes the [`sp_weights::WeightMeter`] to manually track its consumption to always
@@ -267,7 +275,7 @@ impl<
 		}
 	}
 
-	/// Try to append one message from an origin.
+	/// Try to append one message to a page.
 	fn try_append_message<T: Config>(
 		&mut self,
 		message: BoundedSlice<u8, MaxMessageLenOf<T>>,
@@ -355,6 +363,8 @@ impl<
 
 	/// Set the `is_processed` flag for the item at `pos` to be `true` if not already and decrement
 	/// the `remaining` counter of the page.
+	///
+	/// Does nothing if no [`ItemHeader`] could be decoded at the given position.
 	fn note_processed_at_pos(&mut self, pos: usize) {
 		if let Ok(mut h) = ItemHeader::<Size>::decode(&mut &self.heap[pos..]) {
 			if !h.is_processed {
@@ -366,6 +376,7 @@ impl<
 		}
 	}
 
+	/// Returns whether the page is *complete* which means that no messages remain.
 	fn is_complete(&self) -> bool {
 		self.remaining.is_zero()
 	}
@@ -592,7 +603,7 @@ pub mod pallet {
 	}
 }
 
-/// One link of the double-linked ready ring which contains all *ready* queues.
+/// Current and next *ready* queues.
 pub struct ReadyRing<T: Config> {
 	first: Option<MessageOriginOf<T>>,
 	next: Option<MessageOriginOf<T>>,
