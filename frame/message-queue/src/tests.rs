@@ -365,6 +365,29 @@ fn service_page_item_bails() {
 	});
 }
 
+#[test]
+fn bump_service_head_works() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		// Create a ready ring with three queues.
+		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		knit(&Here);
+		BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+		knit(&There);
+		BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+		knit(&Everywhere(0));
+
+		// Bump 99 times.
+		for i in 0..99 {
+			let current = MessageQueue::bump_service_head(&mut WeightMeter::max_limit()).unwrap();
+			assert_eq!(current, [Here, There, Everywhere(0)][i % 3]);
+		}
+
+		// The ready ring is intact and the service head is still `Here`.
+		assert_ring(&[Here, There, Everywhere(0)]);
+	});
+}
+
 /// `bump_service_head` does nothing when called with an insufficient weight limit.
 #[test]
 fn bump_service_head_bails() {
@@ -380,7 +403,7 @@ fn bump_service_head_bails() {
 }
 
 #[test]
-fn bump_service_head_works() {
+fn bump_service_head_trivial_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		set_weight("bump_service_head", 2.into_weight());
 		let mut meter = WeightMeter::max_limit();
@@ -396,6 +419,26 @@ fn bump_service_head_works() {
 
 		assert_eq!(MessageQueue::bump_service_head(&mut meter), None, "Cannot bump");
 		assert_eq!(meter.consumed, 6.into_weight());
+	});
+}
+
+#[test]
+fn bump_service_head_no_head_noops() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		// Create a ready ring with three queues.
+		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		knit(&Here);
+		BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+		knit(&There);
+		BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+		knit(&Everywhere(0));
+
+		// But remove the service head.
+		ServiceHead::<Test>::kill();
+
+		// Nothing happens.
+		assert_storage_noop!(MessageQueue::bump_service_head(&mut WeightMeter::max_limit()));
 	});
 }
 
@@ -517,6 +560,16 @@ fn note_processed_at_pos_works() {
 			assert_eq!(page.remaining as usize, msgs - i - 1);
 		}
 	});
+}
+
+#[test]
+fn note_processed_at_pos_idempotent() {
+	let (mut page, msgs) = full_page::<Test>();
+	page.note_processed_at_pos(0);
+
+	let original = page.clone();
+	page.note_processed_at_pos(0);
+	assert_eq!(page.heap, original.heap);
 }
 
 #[test]
@@ -677,20 +730,48 @@ fn page_from_message_max_len_works() {
 
 #[test]
 fn sweep_queue_works() {
+	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
-		let origin = MessageOrigin::Here;
-		let (page, _) = full_page::<Test>();
-		let book = book_for::<Test>(&page);
-		assert!(book.begin != book.end, "pre-condition: the book is not empty");
-		Pages::<Test>::insert(&origin, &0, &page);
-		BookStateFor::<Test>::insert(&origin, &book);
+		build_triple_ring();
 
-		MessageQueue::sweep_queue(origin);
+		let book = BookStateFor::<Test>::get(&Here);
+		assert!(book.begin != book.end);
+		// Removing the service head works
+		assert_eq!(ServiceHead::<Test>::get(), Some(Here));
+		MessageQueue::sweep_queue(Here);
+		assert_ring(&[There, Everywhere(0)]);
 		// The book still exits, but has updated begin and end.
-		let book = BookStateFor::<Test>::get(&origin);
-		assert_eq!(book.begin, book.end, "Begin and end are now the same");
-		assert!(Pages::<Test>::contains_key(&origin, &0), "Page was not swept");
+		let book = BookStateFor::<Test>::get(&Here);
+		assert_eq!(book.begin, book.end);
+
+		// Removing something that is not the service head works.
+		assert!(ServiceHead::<Test>::get() != Some(Everywhere(0)));
+		MessageQueue::sweep_queue(Everywhere(0));
+		assert_ring(&[There]);
+		// The book still exits, but has updated begin and end.
+		let book = BookStateFor::<Test>::get(&Everywhere(0));
+		assert_eq!(book.begin, book.end);
+
+		MessageQueue::sweep_queue(There);
+		// The book still exits, but has updated begin and end.
+		let book = BookStateFor::<Test>::get(&There);
+		assert_eq!(book.begin, book.end);
+		assert_ring(&[]);
 	})
+}
+
+/// Test that `sweep_queue` also works if the ReadyRing wraps around.
+#[test]
+fn sweep_queue_wraps_works() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		knit(&Here);
+
+		MessageQueue::sweep_queue(Here);
+		let book = BookStateFor::<Test>::get(Here);
+		assert!(book.ready_neighbours.is_none());
+	});
 }
 
 #[test]
@@ -723,6 +804,24 @@ fn footprint_default_works() {
 	})
 }
 
+/// The footprint of a swept queue is still correct.
+#[test]
+fn footprint_on_swept_works() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		let mut book = empty_book::<Test>();
+		book.message_count = 3;
+		book.size = 10;
+		BookStateFor::<Test>::insert(Here, &book);
+		knit(&Here);
+
+		MessageQueue::sweep_queue(Here);
+		let fp = MessageQueue::footprint(Here);
+		assert_eq!(fp.count, 3);
+		assert_eq!(fp.size, 10);
+	})
+}
+
 #[test]
 fn execute_overweight_works() {
 	new_test_ext::<Test>().execute_with(|| {
@@ -748,15 +847,26 @@ fn execute_overweight_works() {
 			}
 			.into(),
 		);
-		// Now try to execute it.
-		let consumed = MessageQueue::do_execute_overweight(origin, 0, 0, 7.into_weight()).unwrap();
+		// Now try to execute it with too few weight.
+		let consumed =
+			<MessageQueue as ServiceQueues>::execute_overweight(5.into_weight(), (origin, 0, 0));
+		assert_eq!(consumed, Err(ExecuteOverweightError::InsufficientWeight));
+
+		// Execute it with enough weight.
+		let consumed =
+			<MessageQueue as ServiceQueues>::execute_overweight(7.into_weight(), (origin, 0, 0))
+				.unwrap();
 		assert_eq!(consumed, 6.into_weight());
 		// There is no message left in the book.
 		let book = BookStateFor::<Test>::get(&origin);
 		assert_eq!(book.message_count, 0);
-		// Doing it again will error.
+
+		// Doing it again with enough weight will error.
 		let consumed =
-			MessageQueue::do_execute_overweight(origin, 0, 0, 60.into_weight()).unwrap_err();
+			<MessageQueue as ServiceQueues>::execute_overweight(70.into_weight(), (origin, 0, 0));
+		assert_eq!(consumed, Err(ExecuteOverweightError::NotFound));
+	});
+}
 
 /// Checks that (un)knitting the ready ring works with just one queue.
 ///

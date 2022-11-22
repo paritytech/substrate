@@ -83,6 +83,10 @@ pub fn single_page_book<T: Config>() -> BookStateOf<T> {
 	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
 }
 
+pub fn empty_book<T: Config>() -> BookStateOf<T> {
+	BookState { begin: 0, end: 1, count: 1, ready_neighbours: None, message_count: 0, size: 0 }
+}
+
 /// Returns a full page of messages with their index as payload and the number of messages.
 pub fn full_page<T: Config>() -> (PageOf<T>, usize) {
 	let mut msgs = 0;
