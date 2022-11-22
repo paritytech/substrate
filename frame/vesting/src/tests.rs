@@ -1181,12 +1181,7 @@ fn remove_vesting_schedule() {
 		// Verify that root can remove the schedule.
 		assert_ok!(Vesting::force_remove_vesting_schedule(RawOrigin::Root.into(), 4, 0));
 		// Verify that last event is VestingCompleted.
-		System::assert_last_event(
-			Event::VestingCompleted {
-			  account: 4
-			}
-			.into(),
-		  );
+		System::assert_last_event(Event::VestingCompleted { account: 4 }.into());
 		// Appropriate storage is cleaned up.
 		assert!(!<VestingStorage<Test>>::contains_key(4));
 		// Check the vesting balance is zero.

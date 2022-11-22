@@ -395,7 +395,7 @@ benchmarks! {
 
 		let number_of_schedules_after_removal = T::MAX_VESTING_SCHEDULES - 1;
 		let expected_balance = transfer_amount.checked_mul(&number_of_schedules_after_removal.into()).unwrap();
-		
+
 		// It will remove last vesting schedule.
 		let schedule_index = T::MAX_VESTING_SCHEDULES - 1;
 
@@ -404,7 +404,7 @@ benchmarks! {
 			per_block,
 			1u32.into(),
 		);
-		
+
 		for _ in 0..s {
 			assert_ok!(Vesting::<T>::do_vested_transfer(
 				source_lookup.clone(),
