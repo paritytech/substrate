@@ -196,8 +196,8 @@ use frame_support::{
 	defensive,
 	pallet_prelude::*,
 	traits::{
-		DefensiveTruncateFrom, EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage,
-		ProcessMessageError, ServiceQueues,
+		Defensive, DefensiveTruncateFrom, EnqueueMessage, ExecuteOverweightError, Footprint,
+		ProcessMessage, ProcessMessageError, ServiceQueues,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
@@ -384,6 +384,7 @@ impl<
 
 /// The neighbours of a queue in the a double-linked list
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(PartialEq))]
 pub struct Neighbours<MessageOrigin> {
 	prev: MessageOrigin,
 	next: MessageOrigin,
@@ -1159,8 +1160,7 @@ impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>
 	for MaxMessageLen<Origin, Size, HeapSize>
 {
 	fn get() -> u32 {
-		(HeapSize::get().into())
-			.saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
+		(HeapSize::get().into()).saturating_sub(ItemHeader::<Size>::max_encoded_len() as u32)
 	}
 }
 
