@@ -314,6 +314,27 @@ pub(crate) fn create_beefy_keystore(authority: BeefyKeyring) -> SyncCryptoStoreP
 	keystore
 }
 
+fn voter_init_setup(
+	net: &mut BeefyTestNet,
+	finality: &mut futures::stream::Fuse<FinalityNotifications<Block>>,
+) -> sp_blockchain::Result<PersistedState<Block>> {
+	let backend = net.peer(0).client().as_backend();
+	let api = Arc::new(crate::tests::two_validators::TestApi {});
+	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
+	let gossip_validator =
+		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
+	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
+		net.peer(0).network_service().clone(),
+		"/beefy/whatever",
+		gossip_validator,
+		None,
+	);
+	let best_grandpa =
+		futures::executor::block_on(wait_for_runtime_pallet(&*api, &mut gossip_engine, finality))
+			.unwrap();
+	load_or_init_voter_state(&*backend, &*api, best_grandpa, 1)
+}
+
 // Spawns beefy voters. Returns a future to spawn on the runtime.
 fn initialize_beefy<API>(
 	net: &mut BeefyTestNet,
@@ -943,27 +964,6 @@ fn on_demand_beefy_justification_sync() {
 	finalize_block_and_wait_for_beefy(&net, all_peers, &mut runtime, &[30], &[30]);
 }
 
-fn test_voter_init_setup(
-	net: &mut BeefyTestNet,
-	finality: &mut futures::stream::Fuse<FinalityNotifications<Block>>,
-) -> sp_blockchain::Result<PersistedState<Block>> {
-	let backend = net.peer(0).client().as_backend();
-	let api = Arc::new(crate::tests::two_validators::TestApi {});
-	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
-	let gossip_validator =
-		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
-	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
-		net.peer(0).network_service().clone(),
-		"/beefy/whatever",
-		gossip_validator,
-		None,
-	);
-	let best_grandpa =
-		futures::executor::block_on(wait_for_runtime_pallet(&*api, &mut gossip_engine, finality))
-			.unwrap();
-	load_or_init_voter_state(&*backend, &*api, best_grandpa, 1)
-}
-
 #[test]
 fn should_initialize_voter_at_genesis() {
 	let keys = &[BeefyKeyring::Alice];
@@ -981,7 +981,7 @@ fn should_initialize_voter_at_genesis() {
 	net.peer(0).client().as_client().finalize_block(hashof13, None).unwrap();
 
 	// load persistent state - nothing in DB, should init at session boundary
-	let persisted_state = test_voter_init_setup(&mut net, &mut finality).unwrap();
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
 
 	// Test initialization at session boundary.
 	// verify voter initialized with two sessions starting at blocks 1 and 10
@@ -1044,7 +1044,7 @@ fn should_initialize_voter_when_last_final_is_session_boundary() {
 	// expect rounds initialized at last beefy finalized 10.
 
 	// load persistent state - nothing in DB, should init at session boundary
-	let persisted_state = test_voter_init_setup(&mut net, &mut finality).unwrap();
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
 
 	// verify voter initialized with single session starting at block 10
 	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);
@@ -1103,7 +1103,7 @@ fn should_initialize_voter_at_latest_finalized() {
 	// Test initialization at last BEEFY finalized.
 
 	// load persistent state - nothing in DB, should init at last BEEFY finalized
-	let persisted_state = test_voter_init_setup(&mut net, &mut finality).unwrap();
+	let persisted_state = voter_init_setup(&mut net, &mut finality).unwrap();
 
 	// verify voter initialized with single session starting at block 12
 	assert_eq!(persisted_state.voting_oracle().sessions().len(), 1);

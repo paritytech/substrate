@@ -770,6 +770,29 @@ where
 		Ok(())
 	}
 
+	fn process_new_state(&mut self) {
+		// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
+		if let Err(err) = self.try_pending_justif_and_votes() {
+			debug!(target: "beefy", "🥩 {}", err);
+		}
+
+		// Don't bother voting or requesting justifications during major sync.
+		if !self.network.is_major_syncing() {
+			// There were external events, 'state' is changed, author a vote if needed/possible.
+			if let Err(err) = self.try_to_vote() {
+				debug!(target: "beefy", "🥩 {}", err);
+			}
+			// If the current target is a mandatory block,
+			// make sure there's also an on-demand justification request out for it.
+			if let Some(block) = self.voting_oracle().mandatory_pending() {
+				// This only starts new request if there isn't already an active one.
+				self.on_demand_justifications.request(block);
+			}
+		} else {
+			info!(target: "beefy", "🥩 Skipping voting while major syncing.");
+		}
+	}
+
 	/// Main loop for BEEFY worker.
 	///
 	/// Wait for BEEFY runtime pallet to be available, then start the main async loop
@@ -796,25 +819,12 @@ where
 		);
 
 		loop {
-			// Don't bother voting or requesting justifications during major sync.
-			if !self.network.is_major_syncing() {
-				// If the current target is a mandatory block,
-				// make sure there's also an on-demand justification request out for it.
-				if let Some(block) = self.voting_oracle().mandatory_pending() {
-					// This only starts new request if there isn't already an active one.
-					self.on_demand_justifications.request(block);
-				}
-				// There were external events, 'state' is changed, author a vote if needed/possible.
-				if let Err(err) = self.try_to_vote() {
-					debug!(target: "beefy", "🥩 {}", err);
-				}
-			} else {
-				debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
-			}
+			// Act on changed 'state'.
+			self.process_new_state();
 
 			let mut gossip_engine = &mut self.gossip_engine;
 			// Wait for, and handle external events.
-			// The branches below only change 'state', actual voting happen afterwards,
+			// The branches below only change 'state', actual voting happens afterwards,
 			// based on the new resulting 'state'.
 			futures::select_biased! {
 				// Use `select_biased!` to prioritize order below.
@@ -864,11 +874,6 @@ where
 						return;
 					}
 				},
-			}
-
-			// Handle pending justifications and/or votes for now GRANDPA finalized blocks.
-			if let Err(err) = self.try_pending_justif_and_votes() {
-				debug!(target: "beefy", "🥩 {}", err);
 			}
 		}
 	}
