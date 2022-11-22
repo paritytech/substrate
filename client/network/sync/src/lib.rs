@@ -71,7 +71,7 @@ use sc_network_common::{
 			BlockAnnounce, BlockAnnouncesHandshake, BlockAttributes, BlockData, BlockRequest,
 			BlockResponse, Direction, FromBlock,
 		},
-		warp::{EncodedProof, WarpProofRequest, WarpSyncPhase, WarpSyncProgress, WarpSyncProvider},
+		warp::{EncodedProof, WarpProofRequest, WarpSyncParams, WarpSyncPhase, WarpSyncProgress},
 		BadPeer, ChainSync as ChainSyncT, ImportResult, Metrics, OnBlockData, OnBlockJustification,
 		OnStateData, OpaqueBlockRequest, OpaqueBlockResponse, OpaqueStateRequest,
 		OpaqueStateResponse, PeerInfo, PeerRequest, PollBlockAnnounceValidation, SyncMode,
@@ -318,8 +318,8 @@ pub struct ChainSync<B: BlockT, Client> {
 	state_sync: Option<StateSync<B, Client>>,
 	/// Warp sync in progress, if any.
 	warp_sync: Option<WarpSync<B, Client>>,
-	/// Warp sync provider.
-	warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
+	/// Warp sync params. Provider vs TargetBlock.
+	warp_sync_params: Option<WarpSyncParams<B>>,
 	/// Enable importing existing blocks. This is used used after the state download to
 	/// catch up to the latest state while re-importing blocks.
 	import_existing: bool,
@@ -633,14 +633,20 @@ where
 				if let SyncMode::Warp = &self.mode {
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
-						log::debug!(target: "sync", "Starting warp state sync.");
-						if let Some(provider) = &self.warp_sync_provider {
-							self.warp_sync =
-								Some(WarpSync::new(self.client.clone(), provider.clone()));
-						}
+						async move {
+							match self.warp_sync_params.as_mut().unwrap() {
+								WarpSyncParams::WithProvider(warp_with_provider) => {
+									log::debug!(target: "sync", "Starting warp state sync.");
+									self.warp_sync = Some(WarpSync::new(self.client.clone(), warp_with_provider.clone()));
+								}
+								WarpSyncParams::WaitForTarget(header) => {
+									log::debug!(target: "sync", "Waiting for target block.");
+									self.warp_sync = Some(WarpSync::new_with_target_block(self.client.clone(), header.await.unwrap()));
+								}
+							}
+						}.boxed();
 					}
 				}
-
 				Ok(req)
 			},
 			Ok(BlockStatus::Queued) |
@@ -1427,8 +1433,8 @@ where
 		roles: Roles,
 		block_announce_validator: Box<dyn BlockAnnounceValidator<B> + Send>,
 		max_parallel_downloads: u32,
-		warp_sync_provider: Option<Arc<dyn WarpSyncProvider<B>>>,
 		metrics_registry: Option<&Registry>,
+		warp_sync_params: Option<WarpSyncParams<B>>,
 		network_service: service::network::NetworkServiceHandle,
 		import_queue: Box<dyn ImportQueueService<B>>,
 		block_request_protocol_name: ProtocolName,
@@ -1467,13 +1473,13 @@ where
 			block_announce_validation_per_peer_stats: Default::default(),
 			state_sync: None,
 			warp_sync: None,
-			warp_sync_provider,
 			import_existing: false,
 			gap_sync: None,
 			service_rx,
 			network_service,
 			block_request_protocol_name,
 			state_request_protocol_name,
+			warp_sync_params,
 			warp_sync_protocol_name,
 			block_announce_protocol_name: block_announce_config
 				.notifications_protocol

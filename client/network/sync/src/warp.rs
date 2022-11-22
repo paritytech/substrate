@@ -36,7 +36,7 @@ use sp_runtime::traits::{Block as BlockT, Header, NumberFor, Zero};
 use std::sync::Arc;
 
 enum Phase<B: BlockT, Client> {
-	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash },
+	WarpProof { set_id: SetId, authorities: AuthorityList, last_hash: B::Hash, warp_sync_provider: Arc<dyn WarpSyncProvider<B>> },
 	TargetBlock(B::Header),
 	State(StateSync<B, Client>),
 }
@@ -61,7 +61,6 @@ pub enum TargetBlockImportResult {
 pub struct WarpSync<B: BlockT, Client> {
 	phase: Phase<B, Client>,
 	client: Arc<Client>,
-	warp_sync_provider: Arc<dyn WarpSyncProvider<B>>,
 	total_proof_bytes: u64,
 }
 
@@ -77,8 +76,14 @@ where
 			set_id: 0,
 			authorities: warp_sync_provider.current_authorities(),
 			last_hash,
+			warp_sync_provider
 		};
-		Self { client, warp_sync_provider, phase, total_proof_bytes: 0 }
+		Self { client, phase, total_proof_bytes: 0 }
+	}
+
+	pub fn new_with_target_block(client: Arc<Client>, target: <B>::Header) -> Self {
+		let phase = Phase::TargetBlock(target);
+		Self { client, phase, total_proof_bytes: 0 }
 	}
 
 	///  Validate and import a state response.
@@ -99,8 +104,8 @@ where
 				log::debug!(target: "sync", "Unexpected warp proof response");
 				WarpProofImportResult::BadResponse
 			},
-			Phase::WarpProof { set_id, authorities, last_hash } => {
-				match self.warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
+			Phase::WarpProof { set_id, authorities, last_hash, warp_sync_provider } => {
+				match warp_sync_provider.verify(&response, *set_id, authorities.clone()) {
 					Err(e) => {
 						log::debug!(target: "sync", "Bad warp proof response: {}", e);
 						WarpProofImportResult::BadResponse

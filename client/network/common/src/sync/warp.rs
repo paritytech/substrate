@@ -17,7 +17,8 @@
 use codec::{Decode, Encode};
 pub use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
-use std::fmt;
+use std::{fmt, sync::Arc};
+use futures::channel::oneshot;
 
 /// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
@@ -27,6 +28,14 @@ pub struct EncodedProof(pub Vec<u8>);
 pub struct WarpProofRequest<B: BlockT> {
 	/// Start collecting proofs from this block.
 	pub begin: B::Hash,
+}
+
+/// Defines different types of syncs
+pub enum WarpSyncParams<Block: BlockT> {
+	/// Standard warp sync for the relay chain
+	WithProvider(Arc<dyn WarpSyncProvider<Block>>),
+	/// New sync that waits for a header from the relaychain
+	WaitForTarget(oneshot::Receiver<<Block as BlockT>::Header>),
 }
 
 /// Proof verification result.

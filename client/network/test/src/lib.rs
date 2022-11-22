@@ -56,7 +56,7 @@ use sc_network_common::{
 	},
 	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
-	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
+	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
@@ -903,7 +903,7 @@ where
 			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 			block_announce_validator,
 			network_config.max_parallel_downloads,
-			Some(warp_sync),
+			Some(WarpSyncParams::WithProvider(warp_sync)),
 			None,
 			chain_sync_network_handle,
 			import_queue.service(),
