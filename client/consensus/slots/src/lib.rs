@@ -820,7 +820,7 @@ mod test {
 		super::slots::SlotInfo {
 			slot: slot.into(),
 			duration: SLOT_DURATION,
-			create_inherent_data: Box::new(TestInherentDataProvider),
+			create_inherent_data: Box::new(|_, ()| Ok(sp_timestamp::InherentDataProvider::from_system_time())),
 			ends_at: Instant::now() + SLOT_DURATION,
 			chain_head: Header::new(
 				1,
