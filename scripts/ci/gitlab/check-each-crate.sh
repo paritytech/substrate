@@ -8,7 +8,7 @@
 set -Eeu -o pipefail
 shopt -s inherit_errexit
 
-set -x
+set -vx
 
 target_group="$1"
 groups_total="$2"
@@ -38,7 +38,9 @@ fi
 group=1
 for ((i=0; i < crates_total; i += crates_per_group)); do
   if [ $group -eq "$target_group" ]; then
-    for crate in "${workspace_crates[@]:$i:$crates_per_group}"; do
+    crates_in_group=("${workspace_crates[@]:$i:$crates_per_group}")
+    printf "crates in the group: ${crates_in_group[*]}" >/dev/null # >/dev/null due to "set -x"
+    for crate in "${crates_in_group[@]}"; do
       cargo check --locked --release -p "$crate"
     done
     break
