@@ -36,7 +36,7 @@ use crate::Pallet as Assets;
 const SEED: u32 = 0;
 
 fn default_asset_id<T: Config<I>, I: 'static>() -> T::AssetId {
-	T::Helper::create_asset_id(0)
+	T::BenchmarkHelper::create_asset_id(0)
 }
 
 fn create_default_asset<T: Config<I>, I: 'static>(
