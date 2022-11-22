@@ -210,48 +210,6 @@ benchmarks_instance_pallet! {
 	verify {
 	}
 
-	veto {
-		let p in 1 .. T::MaxProposals::get();
-
-		let m = 3;
-		let b = MAX_BYTES;
-		let bytes_in_storage = b + size_of::<Cid>() as u32 + 32;
-
-		// Construct `members`.
-		let fellows = (0 .. m).map(fellow::<T, I>).collect::<Vec<_>>();
-		let vetor = fellows[0].clone();
-
-		Alliance::<T, I>::init_members(
-			SystemOrigin::Root.into(),
-			fellows,
-			vec![],
-		)?;
-
-		// Threshold is one less than total members so that two nays will disapprove the vote
-		let threshold = m - 1;
-
-		// Add proposals
-		let mut last_hash = T::Hash::default();
-		for i in 0 .. p {
-			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = AllianceCall::<T, I>::set_rule {
-				rule: rule(vec![i as u8; b as usize])
-			}.into();
-			Alliance::<T, I>::propose(
-				SystemOrigin::Signed(vetor.clone()).into(),
-				threshold,
-				Box::new(proposal.clone()),
-				bytes_in_storage,
-			)?;
-			last_hash = T::Hashing::hash_of(&proposal);
-		}
-
-	}: _(SystemOrigin::Signed(vetor), last_hash.clone())
-	verify {
-		// The proposal is removed
-		assert_eq!(T::ProposalProvider::proposal_of(last_hash), None);
-	}
-
 	close_early_disapproved {
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. T::MaxFellows::get();

@@ -237,56 +237,6 @@ fn vote_works() {
 }
 
 #[test]
-fn veto_works() {
-	new_test_ext().execute_with(|| {
-		let (proposal, proposal_len, hash) = make_remark_proposal(42);
-		assert_ok!(Alliance::propose(
-			RuntimeOrigin::signed(1),
-			3,
-			Box::new(proposal.clone()),
-			proposal_len
-		));
-		// only set_rule/elevate_ally can be veto
-		assert_noop!(
-			Alliance::veto(RuntimeOrigin::signed(1), hash),
-			Error::<Test, ()>::NotVetoableProposal
-		);
-
-		let cid = test_cid();
-		let (vetoable_proposal, vetoable_proposal_len, vetoable_hash) = make_set_rule_proposal(cid);
-		assert_ok!(Alliance::propose(
-			RuntimeOrigin::signed(1),
-			3,
-			Box::new(vetoable_proposal.clone()),
-			vetoable_proposal_len
-		));
-
-		assert_ok!(Alliance::veto(RuntimeOrigin::signed(2), vetoable_hash));
-		let record = |event| EventRecord { phase: Phase::Initialization, event, topics: vec![] };
-		assert_eq!(
-			System::events(),
-			vec![
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
-					account: 1,
-					proposal_index: 0,
-					proposal_hash: hash,
-					threshold: 3
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Proposed {
-					account: 1,
-					proposal_index: 1,
-					proposal_hash: vetoable_hash,
-					threshold: 3
-				})),
-				record(mock::RuntimeEvent::AllianceMotion(AllianceMotionEvent::Disapproved {
-					proposal_hash: vetoable_hash
-				})),
-			]
-		);
-	})
-}
-
-#[test]
 fn close_works() {
 	new_test_ext().execute_with(|| {
 		let (proposal, proposal_len, hash) = make_remark_proposal(42);

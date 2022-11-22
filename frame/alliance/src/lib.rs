@@ -65,7 +65,6 @@
 //!
 //! - `propose` - Propose a motion.
 //! - `vote` - Vote on a motion.
-//! - `veto` - Veto on a motion about `set_rule` and `elevate_ally`.
 //! - `close` - Close a motion with enough votes or that has expired.
 //! - `set_rule` - Initialize or update the Alliance's rule by IPFS CID.
 //! - `announce` - Make announcement by IPFS CID.
@@ -185,10 +184,6 @@ pub trait ProposalProvider<AccountId, Hash, Proposal> {
 		index: ProposalIndex,
 		approve: bool,
 	) -> Result<bool, DispatchError>;
-
-	/// Veto a proposal, closing and removing it from the system, regardless of its current state.
-	/// Returns an active proposals count, which includes removed proposal.
-	fn veto_proposal(proposal_hash: Hash) -> u32;
 
 	/// Close a proposal that is either approved, disapproved, or whose voting period has ended.
 	fn close_proposal(
@@ -354,8 +349,6 @@ pub mod pallet {
 		WithoutGoodIdentityJudgement,
 		/// The proposal hash is not found.
 		MissingProposalHash,
-		/// The proposal is not vetoable.
-		NotVetoableProposal,
 		/// The announcement is not found.
 		MissingAnnouncement,
 		/// Number of members exceeds `MaxMembersCount`.
@@ -544,26 +537,6 @@ pub mod pallet {
 
 			T::ProposalProvider::vote_proposal(who, proposal, index, approve)?;
 			Ok(())
-		}
-
-		/// Veto a proposal about `set_rule` and `elevate_ally`, close, and remove it from the
-		/// system, regardless of its current state.
-		///
-		/// Must be called by a Fellow.
-		#[pallet::weight(T::WeightInfo::veto(T::MaxProposals::get()))]
-		pub fn veto(origin: OriginFor<T>, proposal_hash: T::Hash) -> DispatchResult {
-			let proposor = ensure_signed(origin)?;
-			ensure!(Self::has_voting_rights(&proposor), Error::<T, I>::NoVotingRights);
-
-			let proposal = T::ProposalProvider::proposal_of(proposal_hash)
-				.ok_or(Error::<T, I>::MissingProposalHash)?;
-			match proposal.is_sub_type() {
-				Some(Call::set_rule { .. }) | Some(Call::elevate_ally { .. }) => {
-					T::ProposalProvider::veto_proposal(proposal_hash);
-					Ok(())
-				},
-				_ => Err(Error::<T, I>::NotVetoableProposal.into()),
-			}
 		}
 
 		/// Close a vote that is either approved, disapproved, or whose voting period has ended.

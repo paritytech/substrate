@@ -182,10 +182,6 @@ impl ProposalProvider<AccountId, H256, RuntimeCall> for AllianceProposalProvider
 		AllianceMotion::do_vote(who, proposal, index, approve)
 	}
 
-	fn veto_proposal(proposal_hash: H256) -> u32 {
-		AllianceMotion::do_disapprove_proposal(proposal_hash)
-	}
-
 	fn close_proposal(
 		proposal_hash: H256,
 		proposal_index: ProposalIndex,
@@ -380,10 +376,6 @@ pub fn test_cid() -> Cid {
 
 pub fn make_remark_proposal(value: u64) -> (RuntimeCall, u32, H256) {
 	make_proposal(RuntimeCall::System(frame_system::Call::remark { remark: value.encode() }))
-}
-
-pub fn make_set_rule_proposal(rule: Cid) -> (RuntimeCall, u32, H256) {
-	make_proposal(RuntimeCall::Alliance(pallet_alliance::Call::set_rule { rule }))
 }
 
 pub fn make_kick_member_proposal(who: AccountId) -> (RuntimeCall, u32, H256) {

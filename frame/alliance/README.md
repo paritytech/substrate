@@ -22,11 +22,9 @@ to update the Alliance's rule and make announcements.
   members to enforce. Similar to a Charter or Code of Conduct.
 - Announcement: An IPFS CID of some content that the Alliance want to announce.
 - Member: An account that is already in the group of the Alliance, including three types:
-  FoundingFellow, Fellow, or Ally. A member can also be kicked by the `MembershipManager` origin
+  Fellow, or Ally. A member can also be kicked by the `MembershipManager` origin
   or retire by itself.
 - Fellow: An account who is elevated from Ally by other Fellows.
-- FoundingFellow: Operationally equivalent to a Fellow, but set by Root in the initialization of
-  the Alliance.
 - Ally: An account who would like to join the Alliance. To become a voting member (Fellow), it
   will need approval from the `MembershipManager` origin. Any account can join as an Ally either
   by placing a deposit or by nomination from a voting member.
@@ -51,7 +49,6 @@ to update the Alliance's rule and make announcements.
 
 - `propose` - Propose a motion.
 - `vote` - Vote on a motion.
-- `veto` - Veto on a motion about `set_rule` and `elevate_ally`.
 - `close` - Close a motion with enough votes or that has expired.
 - `set_rule` - Initialize or update the Alliance's rule by IPFS CID.
 - `announce` - Make announcement by IPFS CID.
@@ -65,5 +62,5 @@ to update the Alliance's rule and make announcements.
 
 #### Root Calls
 
-- `init_members` - Initialize the Alliance, onboard founders, fellows, and allies.
+- `init_members` - Initialize the Alliance, onboard fellows and allies.
 - `disband` - Disband the Alliance, remove all active members and unreserve deposits.
