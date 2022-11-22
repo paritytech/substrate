@@ -31,7 +31,7 @@ use frame_support::{
 	parameter_types,
 	traits::{ConstU32, ConstU64},
 };
-use rand::{Rng, SeedableRng};
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::Pareto;
 use sp_core::H256;
 use sp_runtime::{
@@ -103,86 +103,122 @@ impl Config for Test {
 
 /// Simulates heavy usage by enqueueing and processing large amounts of messages.
 ///
-/// Best to run with `--release`.
+/// Best to run with `-r`, `RUST_LOG=info` and `RUSTFLAGS='-Cdebug-assertions=y'`.
 ///
 /// # Example output
 ///
-/// Each block produces a print in this form:
-///
 /// ```pre
-/// Enqueued 35298 messages across 5266 queues. Total payload 621.85 KiB
-/// Processing 20758 messages...
-/// Processing 2968 messages...
-/// Processing 7686 messages...
-/// Processing 3287 messages...
-/// Processing 461 messages...
-/// Processing 14 messages...
-/// Processing 112 messages...
-/// Processing 5 messages...
-/// Processing 6 messages...
-/// Processing 1 messages...
+/// Enqueued 1189 messages across 176 queues. Payload 46.97 KiB    
+/// Processing 772 of 1189 messages    
+/// Enqueued 9270 messages across 1559 queues. Payload 131.85 KiB    
+/// Processing 6262 of 9687 messages    
+/// Enqueued 5025 messages across 1225 queues. Payload 100.23 KiB    
+/// Processing 1739 of 8450 messages    
+/// Enqueued 42061 messages across 6357 queues. Payload 536.29 KiB    
+/// Processing 11675 of 48772 messages    
+/// Enqueued 20253 messages across 2420 queues. Payload 288.34 KiB    
+/// Processing 28711 of 57350 messages
+/// Processing all remaining 28639 messages
 /// ```
 #[test]
+#[ignore] // Only run in the CI.
 fn stress_test_enqueue_and_service() {
-	let blocks = 10;
+	let blocks = 20;
 	let max_queues = 10_000;
-	let max_messages_per_queue = 100_000;
+	let max_messages_per_queue = 10_000;
 	let max_msg_len = MaxMessageLenOf::<Test>::get();
-	let mut rng = rand::rngs::StdRng::seed_from_u64(2);
+	let mut rng = StdRng::seed_from_u64(42);
 
 	new_test_ext::<Test>().execute_with(|| {
+		let mut msgs_remaining = 0;
 		for block in 0..blocks {
-			let num_queues = rng.gen_range(1..max_queues);
-			let mut num_messages = 0;
-			let mut total_msg_len = 0;
+			// Start by enqueuing a large number of messages.
+			let (enqueued, total_msg_len) =
+				enqueue_messages(max_queues, max_messages_per_queue, max_msg_len, &mut rng);
+			msgs_remaining += enqueued;
 
-			for origin in 0..num_queues {
-				let num_messages_per_queue =
-					(rng.sample(Pareto::new(1.0, 1.1).unwrap()) as u32).min(max_messages_per_queue);
-
-				for m in 0..num_messages_per_queue {
-					let mut message = format!("{}:{}", &origin, &m).into_bytes();
-					let msg_len = (rng.sample(Pareto::new(1.0, 1.0).unwrap()) as u32)
-						.clamp(message.len() as u32, max_msg_len);
-					message.resize(msg_len as usize, 0);
-					MessageQueue::enqueue_message(
-						BoundedSlice::defensive_truncate_from(&message),
-						origin.into(),
-					);
-					total_msg_len += msg_len;
-				}
-				num_messages += num_messages_per_queue;
-			}
-			log::info!(
-				"Enqueued {} messages across {} queues. Total payload {:.2} KiB",
-				num_messages,
-				num_queues,
-				total_msg_len as f64 / 1024.0
-			);
-
-			let mut msgs_remaining = num_messages as u64;
-			while !msgs_remaining.is_zero() {
-				// We have to use at least 1 here since otherwise messages will marked as
-				// permanently overweight.
-				let weight = rng.gen_range(1..=msgs_remaining).into_weight();
-				ServiceWeight::set(Some(weight));
-
-				log::info!("Processing {} messages...", weight.ref_time());
-				let consumed = MessageQueue::on_initialize(block);
-				if consumed != weight {
-					panic!(
-						"consumed != weight: {} != {}\n{}",
-						consumed,
-						weight,
-						MessageQueue::debug_info()
-					);
-				}
-				let processed = NumMessagesProcessed::take();
-				assert_eq!(processed, weight.ref_time() as usize);
-				System::reset_events();
-				msgs_remaining = msgs_remaining.saturating_sub(weight.ref_time());
-			}
-			assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero(), "Nothing left");
+			// Pick a fraction of all messages currently in queue and process them.
+			let processed = rng.gen_range(1..=msgs_remaining);
+			log::info!("Processing {} of all messages {}", processed, msgs_remaining);
+			process_messages(processed); // This also advances the block.
+			msgs_remaining -= processed;
 		}
+		log::info!("Processing all remaining {} messages", msgs_remaining);
+		process_messages(msgs_remaining);
+		post_conditions();
 	});
+}
+
+/// Enqueue a random number of random messages into a random number of queues.
+fn enqueue_messages(
+	max_queues: u32,
+	max_per_queue: u32,
+	max_msg_len: u32,
+	rng: &mut StdRng,
+) -> (u32, usize) {
+	let num_queues = rng.gen_range(1..max_queues);
+	let mut num_messages = 0;
+	let mut total_msg_len = 0;
+	for origin in 0..num_queues {
+		let num_messages_per_queue =
+			(rng.sample(Pareto::new(1.0, 1.1).unwrap()) as u32).min(max_per_queue);
+
+		for m in 0..num_messages_per_queue {
+			let mut message = format!("{}:{}", &origin, &m).into_bytes();
+			let msg_len = (rng.sample(Pareto::new(1.0, 1.0).unwrap()) as u32)
+				.clamp(message.len() as u32, max_msg_len);
+			message.resize(msg_len as usize, 0);
+			MessageQueue::enqueue_message(
+				BoundedSlice::defensive_truncate_from(&message),
+				origin.into(),
+			);
+			total_msg_len += msg_len;
+		}
+		num_messages += num_messages_per_queue;
+	}
+	log::info!(
+		"Enqueued {} messages across {} queues. Payload {:.2} KiB",
+		num_messages,
+		num_queues,
+		total_msg_len as f64 / 1024.0
+	);
+	(num_messages, total_msg_len as usize)
+}
+
+/// Process the number of messages.
+fn process_messages(num_msgs: u32) {
+	let weight = (num_msgs as u64).into_weight();
+	ServiceWeight::set(Some(weight));
+	let consumed = next_block();
+
+	assert_eq!(consumed, weight, "\n{}", MessageQueue::debug_info());
+	assert_eq!(NumMessagesProcessed::take(), num_msgs as usize);
+}
+
+/// Returns the weight consumed by `MessageQueue::on_initialize()`.
+fn next_block() -> Weight {
+	MessageQueue::on_finalize(System::block_number());
+	System::on_finalize(System::block_number());
+	System::set_block_number(System::block_number() + 1);
+	System::on_initialize(System::block_number());
+	MessageQueue::on_initialize(System::block_number())
+}
+
+/// Assert that the pallet is in the expected post state.
+fn post_conditions() {
+	// All queues are empty.
+	for (_, book) in BookStateFor::<Test>::iter() {
+		assert!(book.end >= book.begin);
+		assert_eq!(book.count, 0);
+		assert_eq!(book.size, 0);
+		assert_eq!(book.message_count, 0);
+		assert!(book.ready_neighbours.is_none());
+	}
+	// No pages remain.
+	assert_eq!(Pages::<Test>::iter().count(), 0);
+	// Service head is gone.
+	assert!(ServiceHead::<Test>::get().is_none());
+	// This still works fine.
+	assert_eq!(MessageQueue::service_queues(Weight::MAX), Weight::zero(), "Nothing left");
+	next_block();
 }
