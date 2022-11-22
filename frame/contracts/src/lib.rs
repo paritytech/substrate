@@ -830,8 +830,13 @@ pub mod pallet {
 		/// to determine whether a reversion has taken place.
 		ContractReverted,
 		/// The contract's code was found to be invalid during validation or instrumentation.
+		///
+		/// The most likely cause of this is that an API was used which is not supported by the
+		/// node. This hapens if an older node is used with a new version of ink!. Try updating
+		/// your node to the newest available version.
+		///
 		/// A more detailed error can be found on the node console if debug messages are enabled
-		/// or in the debug buffer which is returned to RPC clients.
+		/// by supplying `-lruntime::contracts=debug`.
 		CodeRejected,
 		/// An indetermistic code was used in a context where this is not permitted.
 		Indeterministic,
