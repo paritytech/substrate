@@ -131,9 +131,9 @@ fn stress_test_enqueue_and_service() {
 
 	new_test_ext::<Test>().execute_with(|| {
 		let mut msgs_remaining = 0;
-		for block in 0..blocks {
+		for _ in 0..blocks {
 			// Start by enqueuing a large number of messages.
-			let (enqueued, total_msg_len) =
+			let (enqueued, _) =
 				enqueue_messages(max_queues, max_messages_per_queue, max_msg_len, &mut rng);
 			msgs_remaining += enqueued;
 

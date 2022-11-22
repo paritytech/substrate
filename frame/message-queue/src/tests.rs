@@ -21,7 +21,9 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_noop, assert_ok, assert_storage_noop, bounded_vec, StorageNoopGuard};
+use frame_support::{
+	assert_noop, assert_ok, assert_storage_noop, traits::Defensive, StorageNoopGuard,
+};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[test]
@@ -564,7 +566,7 @@ fn note_processed_at_pos_works() {
 
 #[test]
 fn note_processed_at_pos_idempotent() {
-	let (mut page, msgs) = full_page::<Test>();
+	let (mut page, _) = full_page::<Test>();
 	page.note_processed_at_pos(0);
 
 	let original = page.clone();
@@ -665,7 +667,7 @@ fn page_try_append_message_max_msg_len_works_works() {
 	// We start off with an empty page.
 	let mut page = PageOf::<Test>::default();
 	// … and append a message with maximum possible length.
-	let mut msg = vec![123u8; MaxMessageLenOf::<Test>::get() as usize];
+	let msg = vec![123u8; MaxMessageLenOf::<Test>::get() as usize];
 	// … which works.
 	page.try_append_message::<Test>(BoundedSlice::defensive_truncate_from(&msg))
 		.unwrap();

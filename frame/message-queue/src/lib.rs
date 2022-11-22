@@ -196,8 +196,8 @@ use frame_support::{
 	defensive,
 	pallet_prelude::*,
 	traits::{
-		Defensive, DefensiveTruncateFrom, EnqueueMessage, ExecuteOverweightError, Footprint,
-		ProcessMessage, ProcessMessageError, ServiceQueues,
+		DefensiveTruncateFrom, EnqueueMessage, ExecuteOverweightError, Footprint, ProcessMessage,
+		ProcessMessageError, ServiceQueues,
 	},
 	BoundedSlice, CloneNoBound, DefaultNoBound,
 };
