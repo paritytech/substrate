@@ -17,7 +17,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{BTreeMap, BTreeSet, VecDeque},
+	collections::{BTreeMap, BTreeSet, VecDeque, BufferedVec},
 	fmt::Debug,
 	marker::PhantomData,
 	sync::Arc,
@@ -66,11 +66,14 @@ use crate::{
 	round::Rounds,
 	BeefyVoterLinks, Client, KnownPeers,
 };
-
-/// Depicts the bound for the number of pending votes
-const MAX_PENDING_VOTES: u32 = 50;
-/// Depicts the bound for the number of pending justifications
-const MAX_PENDING_JUSTIFICATIONS: u32 = 50;
+use sp_runtime::sp_std::cmp;
+/// Bound for the number of buffered future voting rounds.
+const MAX_BUFFERED_VOTE_ROUNDS: u32 = 20;
+/// Bound for the number of buffered votes per round number.
+const MAX_BUFFERED_VOTES_PER_ROUND: u32 = 1000;
+/// Bound for the number of pending justifications - use 2400 - the max number
+/// of justifications possible in a single session.
+const MAX_BUFFERED_JUSTIFICATIONS: u32 = 2400;
 
 enum RoundAction {
 	Drop,
@@ -246,14 +249,14 @@ pub(crate) struct BeefyWorker<B: Block, BE, C, P, R, N> {
 	/// Buffer holding votes for future processing.
 	pending_votes: BoundedBTreeMap<
 		NumberFor<B>,
-		Vec<VoteMessage<NumberFor<B>, AuthorityId, Signature>>,
-		ConstU32<MAX_PENDING_VOTES>,
+		BufferedVec<VoteMessage<NumberFor<B>, AuthorityId, Signature>, ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>>,
+		ConstU32<MAX_BUFFERED_VOTE_ROUNDS>,
 	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BoundedBTreeMap<
 		NumberFor<B>,
 		BeefyVersionedFinalityProof<B>,
-		ConstU32<MAX_PENDING_JUSTIFICATIONS>,
+		ConstU32<MAX_BUFFERED_JUSTIFICATIONS>,
 	>,
 	/// Chooses which incoming votes to accept and which votes to generate.
 	voting_oracle: VoterOracle<B>,
@@ -442,6 +445,25 @@ where
 			RoundAction::Drop => (),
 		};
 		Ok(())
+	}
+
+	/// An helper function to determine how to Enqueue votes
+	fn enqueue_votes<TBlockNumber>(&mut self, block_num: TBlockNumber)
+		where
+		TBlockNumber: cmp::Ord + Debug {
+		if self.pending_votes.remove(&block_num).is_some() {
+			let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
+			vec_of_votes.push(vote);
+			if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+				warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
+			}
+		} else {
+			let mut vec_of_votes = vec![];
+			vec_of_votes.push(vote);
+			if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+				warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
+			}
+		}
 	}
 
 	/// Based on [VoterOracle] this justification is either processed here or enqueued for later.
