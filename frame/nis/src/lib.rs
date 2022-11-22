@@ -500,6 +500,11 @@ pub mod pallet {
 			}
 			weight_counter.used
 		}
+		
+		fn integrity_test() {
+			assert!(!T::IntakePeriod::get().is_zero());
+			assert!(!T::MaxQueueLen::get().is_zero());
+		}
 	}
 
 	#[pallet::call]
