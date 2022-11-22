@@ -775,10 +775,8 @@ pub mod pallet {
 							ensure!(has_item, Error::<T, I>::BadWitness);
 
 							let attribute_key = Self::construct_attribute_key(
-								PalletAttributes::<T::CollectionId>::UsedToClaim(
-									collection.clone(),
-								)
-								.encode(),
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
+									.encode(),
 							)?;
 
 							let key = (
