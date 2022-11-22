@@ -1,6 +1,6 @@
 # Test design
 The `warp-sync` test works on predefined database which is stored in the cloud and
-fetched by the test. `alice` and `bob` nodes are spun up using this database snapshot.
+fetched by the test. `alice` and `bob` nodes are spun up using this database snapshot in full node mode.
 
 As `warp-sync` requires at least 3 peers, the test spawns the `charlie` full node which uses the same database snapshot.
 

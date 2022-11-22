@@ -28,5 +28,3 @@ chain_spec_path = "zombienet/0001-basic-warp-sync/0001-chain-spec.json"
   name = "dave"
   validator = false
   args = ["--sync warp"]
-  # port is fixed for local debugging convenience
-  ws_port=39047
