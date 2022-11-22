@@ -24,7 +24,7 @@ use sp_core::storage::StorageKey;
 use sp_database::{ColumnId, Database};
 use sp_runtime::traits::{Block as BlockT, HashFor};
 use sp_state_machine::Storage;
-use sp_storage::StateVersion;
+use sp_storage::{ChildInfo, ChildType, PrefixedStorageKey, StateVersion};
 
 use clap::{Args, Parser};
 use log::info;
@@ -68,37 +68,55 @@ pub struct StorageParams {
 	pub hostinfo: HostInfoParams,
 
 	/// Skip the `read` benchmark.
-	#[clap(long)]
+	#[arg(long)]
 	pub skip_read: bool,
 
 	/// Skip the `write` benchmark.
-	#[clap(long)]
+	#[arg(long)]
 	pub skip_write: bool,
 
 	/// Specify the Handlebars template to use for outputting benchmark results.
-	#[clap(long)]
+	#[arg(long)]
 	pub template_path: Option<PathBuf>,
 
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[arg(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
+
 	/// Path to write the raw 'read' results in JSON format to. Can be a file or directory.
-	#[clap(long)]
+	#[arg(long)]
 	pub json_read_path: Option<PathBuf>,
 
 	/// Path to write the raw 'write' results in JSON format to. Can be a file or directory.
-	#[clap(long)]
+	#[arg(long)]
 	pub json_write_path: Option<PathBuf>,
 
 	/// Rounds of warmups before measuring.
-	#[clap(long, default_value = "1")]
+	#[arg(long, default_value_t = 1)]
 	pub warmups: u32,
 
 	/// The `StateVersion` to use. Substrate `--dev` should use `V1` and Polkadot `V0`.
 	/// Selecting the wrong version can corrupt the DB.
-	#[clap(long, possible_values = ["0", "1"])]
+	#[arg(long, value_parser = clap::value_parser!(u8).range(0..=1))]
 	pub state_version: u8,
 
-	/// State cache size.
-	#[clap(long, default_value = "0")]
-	pub state_cache_size: usize,
+	/// Trie cache size in bytes.
+	///
+	/// Providing `0` will disable the cache.
+	#[arg(long, value_name = "Bytes", default_value_t = 67108864)]
+	pub trie_cache_size: usize,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[arg(long)]
+	pub enable_trie_cache: bool,
+
+	/// Include child trees in benchmark.
+	#[arg(long)]
+	pub include_child_trees: bool,
 }
 
 impl StorageCmd {
@@ -116,7 +134,7 @@ impl StorageCmd {
 		Block: BlockT<Hash = DbHash>,
 		C: UsageProvider<Block> + StorageProvider<Block, BA> + HeaderBackend<Block>,
 	{
-		let mut template = TemplateData::new(&cfg, &self.params);
+		let mut template = TemplateData::new(&cfg, &self.params)?;
 
 		let block_id = BlockId::<Block>::Number(client.usage_info().chain.best_number);
 		template.set_block_number(block_id.to_string());
@@ -155,6 +173,16 @@ impl StorageCmd {
 		}
 	}
 
+	/// Returns Some if child node and None if regular
+	pub(crate) fn is_child_key(&self, key: Vec<u8>) -> Option<ChildInfo> {
+		if let Some((ChildType::ParentKeyId, storage_key)) =
+			ChildType::from_prefixed_key(&PrefixedStorageKey::new(key))
+		{
+			return Some(ChildInfo::new_default(storage_key))
+		}
+		None
+	}
+
 	/// Run some rounds of the (read) benchmark as warmup.
 	/// See `frame_benchmarking_cli::storage::read::bench_read` for detailed comments.
 	fn bench_warmup<B, BA, C>(&self, client: &Arc<C>) -> Result<()>
@@ -163,17 +191,17 @@ impl StorageCmd {
 		B: BlockT + Debug,
 		BA: ClientBackend<B>,
 	{
-		let block = BlockId::Number(client.usage_info().chain.best_number);
+		let hash = client.usage_info().chain.best_hash;
 		let empty_prefix = StorageKey(Vec::new());
-		let mut keys = client.storage_keys(&block, &empty_prefix)?;
+		let mut keys = client.storage_keys(hash, &empty_prefix)?;
 		let (mut rng, _) = new_rng(None);
 		keys.shuffle(&mut rng);
 
 		for i in 0..self.params.warmups {
 			info!("Warmup round {}/{}", i + 1, self.params.warmups);
-			for key in keys.clone() {
+			for key in keys.as_slice() {
 				let _ = client
-					.storage(&block, &key)
+					.storage(hash, &key)
 					.expect("Checked above to exist")
 					.ok_or("Value unexpectedly empty");
 			}
@@ -197,7 +225,11 @@ impl CliConfiguration for StorageCmd {
 		Some(&self.pruning_params)
 	}
 
-	fn state_cache_size(&self) -> Result<usize> {
-		Ok(self.params.state_cache_size)
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.params.enable_trie_cache && self.params.trie_cache_size > 0 {
+			Ok(Some(self.params.trie_cache_size))
+		} else {
+			Ok(None)
+		}
 	}
 }

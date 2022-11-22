@@ -36,7 +36,7 @@ use frame_support::{
 	},
 };
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating, Zero},
+	traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
 	ArithmeticError, Perbill,
 };
 use sp_std::prelude::*;
@@ -62,6 +62,7 @@ pub mod benchmarking;
 
 const CONVICTION_VOTING_ID: LockIdentifier = *b"pyconvot";
 
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 type BalanceOf<T, I = ()> =
 	<<T as Config<I>>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type VotingOf<T, I = ()> = Voting<
@@ -97,7 +98,8 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config<I: 'static = ()>: frame_system::Config + Sized {
 		// System level stuff.
-		type Event: From<Event<Self, I>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self, I>>
+			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Weight information for extrinsics in this pallet.
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
@@ -119,8 +121,8 @@ pub mod pallet {
 
 		/// The maximum number of concurrent votes an account may have.
 		///
-		/// Also used to compute weight, an overly large value can
-		/// lead to extrinsic with large weight estimation: see `delegate` for instance.
+		/// Also used to compute weight, an overly large value can lead to extrinsics with large
+		/// weight estimation: see `delegate` for instance.
 		#[pallet::constant]
 		type MaxVotes: Get<u32>;
 
@@ -245,11 +247,12 @@ pub mod pallet {
 		pub fn delegate(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
-			to: T::AccountId,
+			to: AccountIdLookupOf<T>,
 			conviction: Conviction,
 			balance: BalanceOf<T, I>,
 		) -> DispatchResultWithPostInfo {
 			let who = ensure_signed(origin)?;
+			let to = T::Lookup::lookup(to)?;
 			let votes = Self::try_delegate(who, class, to, conviction, balance)?;
 
 			Ok(Some(T::WeightInfo::delegate(votes)).into())
@@ -258,7 +261,7 @@ pub mod pallet {
 		/// Undelegate the voting power of the sending account for a particular class of polls.
 		///
 		/// Tokens may be unlocked following once an amount of time consistent with the lock period
-		/// of the conviction with which the delegation was issued.
+		/// of the conviction with which the delegation was issued has passed.
 		///
 		/// The dispatch origin of this call must be _Signed_ and the signing account must be
 		/// currently delegating.
@@ -281,7 +284,7 @@ pub mod pallet {
 			Ok(Some(T::WeightInfo::undelegate(votes)).into())
 		}
 
-		/// Remove the lock caused prior voting/delegating which has expired within a particluar
+		/// Remove the lock caused by prior voting/delegating which has expired within a particular
 		/// class.
 		///
 		/// The dispatch origin of this call must be _Signed_.
@@ -294,9 +297,10 @@ pub mod pallet {
 		pub fn unlock(
 			origin: OriginFor<T>,
 			class: ClassOf<T, I>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 		) -> DispatchResult {
 			ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			Self::update_lock(&class, &target);
 			Ok(())
 		}
@@ -359,11 +363,12 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::remove_other_vote())]
 		pub fn remove_other_vote(
 			origin: OriginFor<T>,
-			target: T::AccountId,
+			target: AccountIdLookupOf<T>,
 			class: ClassOf<T, I>,
 			index: PollIndexOf<T, I>,
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
+			let target = T::Lookup::lookup(target)?;
 			let scope = if target == who { UnvoteScope::Any } else { UnvoteScope::OnlyExpired };
 			Self::try_remove_vote(&target, index, Some(class), scope)?;
 			Ok(())
@@ -395,7 +400,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						Err(i) => {
 							votes
 								.try_insert(i, (poll_index, vote))
-								.map_err(|()| Error::<T, I>::MaxVotesReached)?;
+								.map_err(|_| Error::<T, I>::MaxVotesReached)?;
 						},
 					}
 					// Shouldn't be possible to fail, but we handle it gracefully.
@@ -470,7 +475,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Return the number of votes for `who`
+	/// Return the number of votes for `who`.
 	fn increase_upstream_delegation(
 		who: &T::AccountId,
 		class: &ClassOf<T, I>,
@@ -498,7 +503,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		})
 	}
 
-	/// Return the number of votes for `who`
+	/// Return the number of votes for `who`.
 	fn reduce_upstream_delegation(
 		who: &T::AccountId,
 		class: &ClassOf<T, I>,

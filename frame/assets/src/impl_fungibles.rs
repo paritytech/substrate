@@ -264,11 +264,33 @@ impl<T: Config<I>, I: 'static> fungibles::approvals::Mutate<<T as SystemConfig>:
 	}
 }
 
+impl<T: Config<I>, I: 'static> fungibles::roles::Inspect<<T as SystemConfig>::AccountId>
+	for Pallet<T, I>
+{
+	fn owner(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
+		Asset::<T, I>::get(asset).map(|x| x.owner)
+	}
+
+	fn issuer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
+		Asset::<T, I>::get(asset).map(|x| x.issuer)
+	}
+
+	fn admin(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
+		Asset::<T, I>::get(asset).map(|x| x.admin)
+	}
+
+	fn freezer(asset: T::AssetId) -> Option<<T as SystemConfig>::AccountId> {
+		Asset::<T, I>::get(asset).map(|x| x.freezer)
+	}
+}
+
 impl<T: Config<I>, I: 'static> fungibles::InspectEnumerable<T::AccountId> for Pallet<T, I> {
+	type AssetsIterator = KeyPrefixIterator<<T as Config<I>>::AssetId>;
+
 	/// Returns an iterator of the assets in existence.
 	///
 	/// NOTE: iterating this list invokes a storage read per item.
-	fn assets() -> Box<dyn Iterator<Item = Self::AssetId>> {
-		Box::new(Asset::<T, I>::iter_keys())
+	fn asset_ids() -> Self::AssetsIterator {
+		Asset::<T, I>::iter_keys()
 	}
 }

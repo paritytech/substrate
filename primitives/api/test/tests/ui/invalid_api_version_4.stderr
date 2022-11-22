@@ -1,0 +1,5 @@
+error: Unexpected `api_version` attribute. The supported format is `api_version(1)`
+ --> tests/ui/invalid_api_version_4.rs:3:3
+  |
+3 |         #[api_version("1")]
+  |         ^

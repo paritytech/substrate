@@ -54,7 +54,7 @@ impl<T: Config + Send + Sync> CheckGenesis<T> {
 
 impl<T: Config + Send + Sync> SignedExtension for CheckGenesis<T> {
 	type AccountId = T::AccountId;
-	type Call = <T as Config>::Call;
+	type Call = <T as Config>::RuntimeCall;
 	type AdditionalSigned = T::Hash;
 	type Pre = ();
 	const IDENTIFIER: &'static str = "CheckGenesis";

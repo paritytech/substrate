@@ -18,7 +18,6 @@
 use sp_api::{
 	decl_runtime_apis, impl_runtime_apis, mock_impl_runtime_apis, ApiError, ApiExt, RuntimeApiInfo,
 };
-use sp_core::NativeOrEncoded;
 use sp_runtime::{
 	generic::BlockId,
 	traits::{Block as BlockT, GetNodeBlockType},
@@ -47,6 +46,15 @@ decl_runtime_apis! {
 		#[changed_in(2)]
 		fn same_name() -> String;
 	}
+
+	#[api_version(2)]
+	pub trait ApiWithMultipleVersions {
+		fn stable_one(data: u64);
+		#[api_version(3)]
+		fn new_one();
+		#[api_version(4)]
+		fn glory_one();
+	}
 }
 
 impl_runtime_apis! {
@@ -70,6 +78,13 @@ impl_runtime_apis! {
 
 	impl self::ApiWithCustomVersion<Block> for Runtime {
 		fn same_name() {}
+	}
+
+	#[api_version(3)]
+	impl self::ApiWithMultipleVersions<Block> for Runtime {
+		fn stable_one(_: u64) {}
+
+		fn new_one() {}
 	}
 
 	impl sp_api::Core<Block> for Runtime {
@@ -104,22 +119,12 @@ mock_impl_runtime_apis! {
 		}
 
 		#[advanced]
-		fn same_name(_: &BlockId<Block>) ->
-			Result<
-				NativeOrEncoded<()>,
-				ApiError
-			>
-		{
+		fn same_name(_: &BlockId<Block>) -> Result<(), ApiError> {
 			Ok(().into())
 		}
 
 		#[advanced]
-		fn wild_card(at: &BlockId<Block>, _: u32) ->
-			Result<
-				NativeOrEncoded<()>,
-				ApiError
-			>
-		{
+		fn wild_card(at: &BlockId<Block>, _: u32) -> Result<(), ApiError> {
 			if let BlockId::Number(1337) = at {
 				// yeah
 				Ok(().into())
@@ -176,6 +181,9 @@ fn check_runtime_api_info() {
 		&runtime_decl_for_ApiWithCustomVersion::ID,
 	);
 	assert_eq!(<dyn ApiWithCustomVersion::<Block>>::VERSION, 2);
+
+	// The stable version of the API
+	assert_eq!(<dyn ApiWithMultipleVersions::<Block>>::VERSION, 2);
 }
 
 fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
@@ -186,6 +194,9 @@ fn check_runtime_api_versions_contains<T: RuntimeApiInfo + ?Sized>() {
 fn check_runtime_api_versions() {
 	check_runtime_api_versions_contains::<dyn Api<Block>>();
 	check_runtime_api_versions_contains::<dyn ApiWithCustomVersion<Block>>();
+	assert!(RUNTIME_API_VERSIONS
+		.iter()
+		.any(|v| v == &(<dyn ApiWithMultipleVersions<Block>>::ID, 3)));
 	check_runtime_api_versions_contains::<dyn sp_api::Core<Block>>();
 }
 
@@ -198,7 +209,7 @@ fn mock_runtime_api_has_api() {
 }
 
 #[test]
-#[should_panic(expected = "Mocked runtime apis don't support calling deprecated api versions")]
+#[should_panic(expected = "Calling deprecated methods is not supported by mocked runtime api.")]
 fn mock_runtime_api_panics_on_calling_old_version() {
 	let mock = MockApi { block: None };
 

@@ -201,11 +201,11 @@ impl<Block: traits::Block> ExecutionExtensions<Block> {
 	///
 	/// Based on the execution context and capabilities it produces
 	/// the right manager and extensions object to support desired set of APIs.
-	pub fn manager_and_extensions<E: std::fmt::Debug, R: codec::Codec>(
+	pub fn manager_and_extensions<E: std::fmt::Debug>(
 		&self,
 		at: &BlockId<Block>,
 		context: ExecutionContext,
-	) -> (ExecutionManager<DefaultHandler<R, E>>, Extensions) {
+	) -> (ExecutionManager<DefaultHandler<E>>, Extensions) {
 		let manager = match context {
 			ExecutionContext::BlockConstruction => self.strategies.block_construction.get_manager(),
 			ExecutionContext::Syncing => self.strategies.syncing.get_manager(),

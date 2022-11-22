@@ -23,12 +23,12 @@ use sc_cli::{CliConfiguration, ImportParams, Result, SharedParams};
 use sc_client_api::Backend as ClientBackend;
 use sc_service::Configuration;
 use sp_api::{ApiExt, ProvideRuntimeApi};
-use sp_runtime::{traits::Block as BlockT, OpaqueExtrinsic};
+use sp_runtime::{traits::Block as BlockT, DigestItem, OpaqueExtrinsic};
 
 use clap::{Args, Parser};
 use log::info;
 use serde::Serialize;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use crate::{
 	extrinsic::{
@@ -69,6 +69,18 @@ pub struct OverheadParams {
 	#[allow(missing_docs)]
 	#[clap(flatten)]
 	pub hostinfo: HostInfoParams,
+
+	/// Add a header to the generated weight output file.
+	///
+	/// Good for adding LICENSE headers.
+	#[arg(long, value_name = "PATH")]
+	pub header: Option<PathBuf>,
+
+	/// Enable the Trie cache.
+	///
+	/// This should only be used for performance analysis and not for final results.
+	#[arg(long)]
+	pub enable_trie_cache: bool,
 }
 
 /// Type of a benchmark.
@@ -90,6 +102,7 @@ impl OverheadCmd {
 		cfg: Configuration,
 		client: Arc<C>,
 		inherent_data: sp_inherents::InherentData,
+		digest_items: Vec<DigestItem>,
 		ext_builder: &dyn ExtrinsicBuilder,
 	) -> Result<()>
 	where
@@ -101,7 +114,7 @@ impl OverheadCmd {
 		if ext_builder.pallet() != "system" || ext_builder.extrinsic() != "remark" {
 			return Err(format!("The extrinsic builder is required to build `System::Remark` extrinsics but builds `{}` extrinsics instead", ext_builder.name()).into());
 		}
-		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data);
+		let bench = Benchmark::new(client, self.params.bench.clone(), inherent_data, digest_items);
 
 		// per-block execution overhead
 		{
@@ -148,5 +161,13 @@ impl CliConfiguration for OverheadCmd {
 
 	fn import_params(&self) -> Option<&ImportParams> {
 		Some(&self.import_params)
+	}
+
+	fn trie_cache_maximum_size(&self) -> Result<Option<usize>> {
+		if self.params.enable_trie_cache {
+			Ok(self.import_params().map(|x| x.trie_cache_maximum_size()).unwrap_or_default())
+		} else {
+			Ok(None)
+		}
 	}
 }

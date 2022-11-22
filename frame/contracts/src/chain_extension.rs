@@ -38,7 +38,7 @@
 //!
 //! However, only extensions implementing [`RegisteredChainExtension`] can be put into a tuple.
 //! This is because the [`RegisteredChainExtension::ID`] is used to decide which of those extensions
-//! should should be used when the contract calls a chain extensions. Extensions which are generally
+//! should be used when the contract calls a chain extensions. Extensions which are generally
 //! useful should claim their `ID` with [the registry](https://github.com/paritytech/chainextension-registry)
 //! so that no collisions with other vendors will occur.
 //!
@@ -84,7 +84,6 @@ pub use crate::{exec::Ext, Config};
 pub use frame_system::Config as SysConfig;
 pub use pallet_contracts_primitives::ReturnFlags;
 pub use sp_core::crypto::UncheckedFrom;
-pub use state::Init as InitState;
 
 /// Result that returns a [`DispatchError`] on error.
 pub type Result<T> = sp_std::result::Result<T, DispatchError>;
@@ -198,7 +197,7 @@ pub enum RetVal {
 ///
 /// It uses [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html)
 /// to enforce the correct usage of the parameters passed to the chain extension.
-pub struct Environment<'a, 'b, E: Ext, S: state::State> {
+pub struct Environment<'a, 'b, E: Ext, S: State> {
 	/// The actual data of this type.
 	inner: Inner<'a, 'b, E>,
 	/// `S` is only used in the type system but never as value.
@@ -206,7 +205,7 @@ pub struct Environment<'a, 'b, E: Ext, S: state::State> {
 }
 
 /// Functions that are available in every state of this type.
-impl<'a, 'b, E: Ext, S: state::State> Environment<'a, 'b, E, S>
+impl<'a, 'b, E: Ext, S: State> Environment<'a, 'b, E, S>
 where
 	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
@@ -215,7 +214,7 @@ where
 	/// It returns the two least significant bytes of the `id` passed by a contract as the other
 	/// two bytes represent the chain extension itself (the code which is calling this function).
 	pub fn func_id(&self) -> u16 {
-		(self.inner.id & 0x00FF) as u16
+		(self.inner.id & 0x0000FFFF) as u16
 	}
 
 	/// The chain extension id within the `id` passed by a contract.
@@ -239,7 +238,7 @@ where
 	///
 	/// Weight is synonymous with gas in substrate.
 	pub fn charge_weight(&mut self, amount: Weight) -> Result<ChargedAmount> {
-		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount))
+		self.inner.runtime.charge_gas(RuntimeCosts::ChainExtension(amount.ref_time()))
 	}
 
 	/// Adjust a previously charged amount down to its actual amount.
@@ -249,7 +248,7 @@ where
 	pub fn adjust_weight(&mut self, charged: ChargedAmount, actual_weight: Weight) {
 		self.inner
 			.runtime
-			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight))
+			.adjust_gas(charged, RuntimeCosts::ChainExtension(actual_weight.ref_time()))
 	}
 
 	/// Grants access to the execution environment of the current contract call.
@@ -264,7 +263,7 @@ where
 ///
 /// Those are the functions that determine how the arguments to the chain extensions
 /// should be consumed.
-impl<'a, 'b, E: Ext> Environment<'a, 'b, E, state::Init> {
+impl<'a, 'b, E: Ext> Environment<'a, 'b, E, InitState> {
 	/// Creates a new environment for consumption by a chain extension.
 	///
 	/// It is only available to this crate because only the wasm runtime module needs to
@@ -284,23 +283,23 @@ impl<'a, 'b, E: Ext> Environment<'a, 'b, E, state::Init> {
 	}
 
 	/// Use all arguments as integer values.
-	pub fn only_in(self) -> Environment<'a, 'b, E, state::OnlyIn> {
+	pub fn only_in(self) -> Environment<'a, 'b, E, OnlyInState> {
 		Environment { inner: self.inner, phantom: PhantomData }
 	}
 
 	/// Use input arguments as integer and output arguments as pointer to a buffer.
-	pub fn prim_in_buf_out(self) -> Environment<'a, 'b, E, state::PrimInBufOut> {
+	pub fn prim_in_buf_out(self) -> Environment<'a, 'b, E, PrimInBufOutState> {
 		Environment { inner: self.inner, phantom: PhantomData }
 	}
 
 	/// Use input and output arguments as pointers to a buffer.
-	pub fn buf_in_buf_out(self) -> Environment<'a, 'b, E, state::BufInBufOut> {
+	pub fn buf_in_buf_out(self) -> Environment<'a, 'b, E, BufInBufOutState> {
 		Environment { inner: self.inner, phantom: PhantomData }
 	}
 }
 
 /// Functions to use the input arguments as integers.
-impl<'a, 'b, E: Ext, S: state::PrimIn> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, S: PrimIn> Environment<'a, 'b, E, S> {
 	/// The `input_ptr` argument.
 	pub fn val0(&self) -> u32 {
 		self.inner.input_ptr
@@ -313,7 +312,7 @@ impl<'a, 'b, E: Ext, S: state::PrimIn> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the output arguments as integers.
-impl<'a, 'b, E: Ext, S: state::PrimOut> Environment<'a, 'b, E, S> {
+impl<'a, 'b, E: Ext, S: PrimOut> Environment<'a, 'b, E, S> {
 	/// The `output_ptr` argument.
 	pub fn val2(&self) -> u32 {
 		self.inner.output_ptr
@@ -326,7 +325,7 @@ impl<'a, 'b, E: Ext, S: state::PrimOut> Environment<'a, 'b, E, S> {
 }
 
 /// Functions to use the input arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: state::BufIn> Environment<'a, 'b, E, S>
+impl<'a, 'b, E: Ext, S: BufIn> Environment<'a, 'b, E, S>
 where
 	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
@@ -389,7 +388,7 @@ where
 }
 
 /// Functions to use the output arguments as pointer to a buffer.
-impl<'a, 'b, E: Ext, S: state::BufOut> Environment<'a, 'b, E, S>
+impl<'a, 'b, E: Ext, S: BufOut> Environment<'a, 'b, E, S>
 where
 	<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 {
@@ -412,7 +411,8 @@ where
 			buffer,
 			allow_skip,
 			|len| {
-				weight_per_byte.map(|w| RuntimeCosts::ChainExtension(w.saturating_mul(len.into())))
+				weight_per_byte
+					.map(|w| RuntimeCosts::ChainExtension(w.ref_time().saturating_mul(len.into())))
 			},
 		)
 	}
@@ -438,31 +438,54 @@ struct Inner<'a, 'b, E: Ext> {
 	output_len_ptr: u32,
 }
 
-/// Private submodule with public types to prevent other modules from naming them.
-mod state {
-	pub trait State {}
+/// Any state of an [`Environment`] implements this trait.
+/// See [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html).
+pub trait State: sealed::Sealed {}
 
-	pub trait PrimIn: State {}
-	pub trait PrimOut: State {}
-	pub trait BufIn: State {}
-	pub trait BufOut: State {}
+/// A state that uses primitive inputs.
+pub trait PrimIn: State {}
 
-	/// The initial state of an [`Environment`](`super::Environment`).
-	/// See [typestate programming](https://docs.rust-embedded.org/book/static-guarantees/typestate-programming.html).
-	pub enum Init {}
-	pub enum OnlyIn {}
-	pub enum PrimInBufOut {}
-	pub enum BufInBufOut {}
+/// A state that uses primitive outputs.
+pub trait PrimOut: State {}
 
-	impl State for Init {}
-	impl State for OnlyIn {}
-	impl State for PrimInBufOut {}
-	impl State for BufInBufOut {}
+/// A state that uses a buffer as input.
+pub trait BufIn: State {}
 
-	impl PrimIn for OnlyIn {}
-	impl PrimOut for OnlyIn {}
-	impl PrimIn for PrimInBufOut {}
-	impl BufOut for PrimInBufOut {}
-	impl BufIn for BufInBufOut {}
-	impl BufOut for BufInBufOut {}
+/// A state that uses a buffer as output.
+pub trait BufOut: State {}
+
+/// The initial state of an [`Environment`].
+pub enum InitState {}
+
+/// A state that uses all arguments as primitive inputs.
+pub enum OnlyInState {}
+
+/// A state that uses two arguments as primitive inputs and the other two as buffer output.
+pub enum PrimInBufOutState {}
+
+/// Uses a buffer for input and a buffer for output.
+pub enum BufInBufOutState {}
+
+mod sealed {
+	use super::*;
+
+	/// Trait to prevent users from implementing `State` for anything else.
+	pub trait Sealed {}
+
+	impl Sealed for InitState {}
+	impl Sealed for OnlyInState {}
+	impl Sealed for PrimInBufOutState {}
+	impl Sealed for BufInBufOutState {}
+
+	impl State for InitState {}
+	impl State for OnlyInState {}
+	impl State for PrimInBufOutState {}
+	impl State for BufInBufOutState {}
+
+	impl PrimIn for OnlyInState {}
+	impl PrimOut for OnlyInState {}
+	impl PrimIn for PrimInBufOutState {}
+	impl BufOut for PrimInBufOutState {}
+	impl BufIn for BufInBufOutState {}
+	impl BufOut for BufInBufOutState {}
 }

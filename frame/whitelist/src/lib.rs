@@ -26,8 +26,8 @@
 //! and allow another configurable origin: [`Config::DispatchWhitelistedOrigin`] to dispatch them
 //! with the root origin.
 //!
-//! In the meantime the call corresponding to the hash must have been submitted to the to the
-//! pre-image handler [`PreimageProvider`].
+//! In the meantime the call corresponding to the hash must have been submitted to the pre-image
+//! handler [`PreimageProvider`].
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -38,12 +38,14 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
+pub use weights::WeightInfo;
 
 use codec::{DecodeLimit, Encode, FullCodec};
 use frame_support::{
+	dispatch::{GetDispatchInfo, PostDispatchInfo},
 	ensure,
 	traits::{PreimageProvider, PreimageRecipient},
-	weights::{GetDispatchInfo, PostDispatchInfo, Weight},
+	weights::Weight,
 };
 use scale_info::TypeInfo;
 use sp_runtime::traits::{Dispatchable, Hash};
@@ -54,18 +56,17 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use crate::weights::WeightInfo;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The overarching event type.
-		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
+		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The overarching call type.
-		type Call: IsType<<Self as frame_system::Config>::Call>
-			+ Dispatchable<Origin = Self::Origin, PostInfo = PostDispatchInfo>
+		type RuntimeCall: IsType<<Self as frame_system::Config>::RuntimeCall>
+			+ Dispatchable<RuntimeOrigin = Self::RuntimeOrigin, PostInfo = PostDispatchInfo>
 			+ GetDispatchInfo
 			+ FullCodec
 			+ TypeInfo
@@ -73,10 +74,10 @@ pub mod pallet {
 			+ Parameter;
 
 		/// Required origin for whitelisting a call.
-		type WhitelistOrigin: EnsureOrigin<Self::Origin>;
+		type WhitelistOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Required origin for dispatching whitelisted call with root origin.
-		type DispatchWhitelistedOrigin: EnsureOrigin<Self::Origin>;
+		type DispatchWhitelistedOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The handler of pre-images.
 		// NOTE: recipient is only needed for benchmarks.
@@ -165,14 +166,14 @@ pub mod pallet {
 			let call = T::PreimageProvider::get_preimage(&call_hash)
 				.ok_or(Error::<T>::UnavailablePreImage)?;
 
-			let call = <T as Config>::Call::decode_all_with_depth_limit(
+			let call = <T as Config>::RuntimeCall::decode_all_with_depth_limit(
 				sp_api::MAX_EXTRINSIC_DEPTH,
 				&mut &call[..],
 			)
 			.map_err(|_| Error::<T>::UndecodableCall)?;
 
 			ensure!(
-				call.get_dispatch_info().weight <= call_weight_witness,
+				call.get_dispatch_info().weight.all_lte(call_weight_witness),
 				Error::<T>::InvalidCallWeightWitness
 			);
 
@@ -191,7 +192,7 @@ pub mod pallet {
 		})]
 		pub fn dispatch_whitelisted_call_with_preimage(
 			origin: OriginFor<T>,
-			call: Box<<T as Config>::Call>,
+			call: Box<<T as Config>::RuntimeCall>,
 		) -> DispatchResultWithPostInfo {
 			T::DispatchWhitelistedOrigin::ensure_origin(origin)?;
 
@@ -216,7 +217,7 @@ impl<T: Config> Pallet<T> {
 	/// Clean whitelisting/preimage and dispatch call.
 	///
 	/// Return the call actual weight of the dispatched call if there is some.
-	fn clean_and_dispatch(call_hash: T::Hash, call: <T as Config>::Call) -> Option<Weight> {
+	fn clean_and_dispatch(call_hash: T::Hash, call: <T as Config>::RuntimeCall) -> Option<Weight> {
 		WhitelistedCall::<T>::remove(call_hash);
 
 		T::PreimageProvider::unrequest_preimage(&call_hash);
