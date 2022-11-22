@@ -757,5 +757,101 @@ fn execute_overweight_works() {
 		// Doing it again will error.
 		let consumed =
 			MessageQueue::do_execute_overweight(origin, 0, 0, 60.into_weight()).unwrap_err();
+
+/// Checks that (un)knitting the ready ring works with just one queue.
+///
+/// This case is interesting since it wraps and a lot of `mutate` now operate on the same object.
+#[test]
+fn ready_ring_knit_basic_works() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+
+		for i in 0..10 {
+			if i % 2 == 0 {
+				knit(&Here);
+				assert_ring(&[Here]);
+			} else {
+				unknit(&Here);
+				assert_ring(&[]);
+			}
+		}
+		assert_ring(&[]);
 	});
+}
+
+#[test]
+fn ready_ring_knit_and_unknit_works() {
+	use MessageOrigin::*;
+
+	new_test_ext::<Test>().execute_with(|| {
+		// Place three queues into the storage.
+		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+
+		// Knit them into the ready ring.
+		assert_ring(&[]);
+		knit(&Here);
+		assert_ring(&[Here]);
+		knit(&There);
+		assert_ring(&[Here, There]);
+		knit(&Everywhere(0));
+		assert_ring(&[Here, There, Everywhere(0)]);
+
+		// Now unknit…
+		unknit(&Here);
+		assert_ring(&[There, Everywhere(0)]);
+		unknit(&There);
+		assert_ring(&[Everywhere(0)]);
+		unknit(&Everywhere(0));
+		assert_ring(&[]);
+	});
+}
+
+/// Knit a queue into the ready-ring and write it back to storage.
+fn knit(o: &MessageOrigin) {
+	let mut b = BookStateFor::<Test>::get(o);
+	b.ready_neighbours = MessageQueue::ready_ring_knit(o).ok().defensive();
+	BookStateFor::<Test>::insert(o, b);
+}
+
+/// Unknit a queue into the ready-ring and write it back to storage.
+fn unknit(o: &MessageOrigin) {
+	let mut b = BookStateFor::<Test>::get(o);
+	MessageQueue::ready_ring_unknit(o, b.ready_neighbours.unwrap());
+	b.ready_neighbours = None;
+	BookStateFor::<Test>::insert(o, b);
+}
+
+/// Build a ring with three queues: `Here`, `There` and `Everywhere(0)`.
+pub fn build_triple_ring() {
+	use MessageOrigin::*;
+	BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+	BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+	BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+
+	// Knit them into the ready ring.
+	knit(&Here);
+	knit(&There);
+	knit(&Everywhere(0));
+	assert_ring(&[Here, There, Everywhere(0)]);
+}
+
+/// Check that the Ready Ring consists of `neighbours` in that exact order.
+///
+/// Also check that the first element is the service head.
+fn assert_ring(neighbours: &[MessageOrigin]) {
+	for (i, origin) in neighbours.iter().enumerate() {
+		let book = BookStateFor::<Test>::get(&origin);
+		assert_eq!(
+			book.ready_neighbours,
+			Some(Neighbours {
+				prev: neighbours[(i + neighbours.len() - 1) % neighbours.len()],
+				next: neighbours[(i + 1) % neighbours.len()],
+			})
+		);
+	}
+	assert_eq!(ServiceHead::<Test>::get(), neighbours.first().cloned());
 }
