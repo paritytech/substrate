@@ -66,7 +66,7 @@ fn count_migrate<'a, H: Hasher>(
 			_ => (),
 		}
 	}
-	Ok((nb, trie))
+	Ok((nb, total_nb, trie))
 }
 
 /// Check trie migration status.
@@ -154,7 +154,8 @@ where
 
 		let hash = at.unwrap_or_else(|| self.client.info().best_hash);
 		let state = self.backend.state_at(hash).map_err(error_into_rpc_err)?;
-		let (top, child, total_top, total_child) = migration_status(&state).map_err(error_into_rpc_err)?;
+		let (top, child, total_top, total_child) =
+			migration_status(&state).map_err(error_into_rpc_err)?;
 
 		Ok(MigrationStatusResult {
 			top_remaining_to_migrate: top,
