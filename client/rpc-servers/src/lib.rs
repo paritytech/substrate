@@ -93,12 +93,11 @@ pub async fn start_http<M: Send + Sync + 'static>(
 	let max_payload_in = payload_size_or_default(max_payload_in_mb) as u32;
 	let max_payload_out = payload_size_or_default(max_payload_out_mb) as u32;
 	let host_filter = hosts_filter(cors.is_some(), &addrs);
-	let cors = try_into_cors(cors)?;
 
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
-		.layer(cors.clone());
+		.layer(try_into_cors(cors)?);
 
 	let builder = ServerBuilder::new()
 		.max_request_body_size(max_payload_in)
@@ -120,9 +119,9 @@ pub async fn start_http<M: Send + Sync + 'static>(
 	};
 
 	log::info!(
-		"Running JSON-RPC HTTP server: addr={}, cors={:?}",
+		"Running JSON-RPC WS server: addr={}, allowed origins={}",
 		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
-		cors
+		format_cors(cors),
 	);
 
 	Ok(handle)
@@ -142,12 +141,11 @@ pub async fn start<M: Send + Sync + 'static>(
 		ws_config.deconstruct();
 
 	let host_filter = hosts_filter(cors.is_some(), &addrs);
-	let cors = try_into_cors(cors)?;
 
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
-		.layer(cors.clone());
+		.layer(try_into_cors(cors)?);
 
 	let mut builder = ServerBuilder::new()
 		.max_request_body_size(max_payload_in)
@@ -177,9 +175,9 @@ pub async fn start<M: Send + Sync + 'static>(
 	};
 
 	log::info!(
-		"Running JSON-RPC WS server: addr={}, cors={:?}",
+		"Running JSON-RPC WS server: addr={}, allowed origins={}",
 		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
-		cors
+		format_cors(cors),
 	);
 
 	Ok(handle)
@@ -230,5 +228,13 @@ fn try_into_cors(
 	} else {
 		// allow all cors
 		Ok(CorsLayer::permissive())
+	}
+}
+
+fn format_cors(maybe_cors: Option<&Vec<String>>) -> String {
+	if let Some(cors) = maybe_cors {
+		format!("{:?}", cors)
+	} else {
+		format!("{:?}", ["*"])
 	}
 }
