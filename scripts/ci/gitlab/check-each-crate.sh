@@ -14,8 +14,8 @@ target_group="$1"
 groups_total="$2"
 
 readarray -t workspace_crates < <(\
-  cargo tree --workspace --depth 0 --prefix none | \
-  awk '{ if (length($1) == 0 || substr($1, 1, 1) == "[") { skip } else { print $1 } }' | \
+  cargo tree --workspace --depth 0 --prefix none |
+  awk '{ if (length($1) == 0 || substr($1, 1, 1) == "[") { skip } else { print $1 } }' |
   sort |
   uniq
 )
