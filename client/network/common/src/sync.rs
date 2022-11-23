@@ -25,6 +25,7 @@ pub mod warp;
 use crate::protocol::role::Roles;
 
 use libp2p::PeerId;
+
 use message::{BlockAnnounce, BlockData, BlockRequest, BlockResponse};
 use sc_consensus::{
 	import_queue::RuntimeOrigin, BlockImportError, BlockImportStatus, IncomingBlock,
@@ -34,8 +35,9 @@ use sp_runtime::{
 	traits::{Block as BlockT, NumberFor},
 	Justifications,
 };
-use std::{any::Any, fmt, fmt::Formatter, task::Poll};
 use warp::WarpSyncProgress;
+
+use std::{any::Any, fmt, fmt::Formatter, sync::Arc, task::Poll};
 
 /// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
@@ -85,7 +87,7 @@ pub struct StateDownloadProgress {
 }
 
 /// Syncing status and statistics.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct SyncStatus<Block: BlockT> {
 	/// Current global sync state.
 	pub state: SyncState<NumberFor<Block>>,
@@ -263,6 +265,24 @@ pub struct OpaqueBlockResponse(pub Box<dyn Any + Send>);
 impl fmt::Debug for OpaqueBlockResponse {
 	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
 		f.debug_struct("OpaqueBlockResponse").finish()
+	}
+}
+
+#[async_trait::async_trait]
+pub trait SyncStatusProvider<Block: BlockT>: Send + Sync {
+	/// Get high-level view of the syncing status.
+	async fn status(&self) -> Result<SyncStatus<Block>, ()>;
+}
+
+#[async_trait::async_trait]
+impl<T, Block> SyncStatusProvider<Block> for Arc<T>
+where
+	T: ?Sized,
+	T: SyncStatusProvider<Block>,
+	Block: BlockT,
+{
+	async fn status(&self) -> Result<SyncStatus<Block>, ()> {
+		T::status(self).await
 	}
 }
 

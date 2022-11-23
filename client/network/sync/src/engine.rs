@@ -459,9 +459,14 @@ where
 		)
 	}
 
+	// TODO(aaro): reorder match properly
 	pub fn poll(&mut self, cx: &mut std::task::Context) {
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
 			match event {
+				ToServiceCommand::Status(tx) =>
+					if let Err(_) = tx.send(self.chain_sync.status()) {
+						log::warn!(target: "sync", "Failed to respond to `Status` query");
+					},
 				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
 					self.chain_sync.set_sync_fork_request(peers, &hash, number);
 				},

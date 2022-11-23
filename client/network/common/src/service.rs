@@ -96,45 +96,33 @@ where
 
 /// Overview status of the network.
 #[derive(Clone)]
-pub struct NetworkStatus<B: BlockT> {
-	/// Current global sync state.
-	pub sync_state: SyncState<NumberFor<B>>,
-	/// Target sync block number.
-	pub best_seen_block: Option<NumberFor<B>>,
-	/// Number of peers participating in syncing.
-	pub num_sync_peers: u32,
-	/// Total number of connected peers
+pub struct NetworkStatus {
+	/// Total number of connected peers.
 	pub num_connected_peers: usize,
-	/// Total number of active peers.
-	pub num_active_peers: usize,
 	/// The total number of bytes received.
 	pub total_bytes_inbound: u64,
 	/// The total number of bytes sent.
 	pub total_bytes_outbound: u64,
-	/// State sync in progress.
-	pub state_sync: Option<StateDownloadProgress>,
-	/// Warp sync in progress.
-	pub warp_sync: Option<WarpSyncProgress<B>>,
 }
 
 /// Provides high-level status information about network.
 #[async_trait::async_trait]
-pub trait NetworkStatusProvider<Block: BlockT> {
+pub trait NetworkStatusProvider {
 	/// High-level network status information.
 	///
 	/// Returns an error if the `NetworkWorker` is no longer running.
-	async fn status(&self) -> Result<NetworkStatus<Block>, ()>;
+	async fn status(&self) -> Result<NetworkStatus, ()>;
 }
 
 // Manual implementation to avoid extra boxing here
-impl<T, Block: BlockT> NetworkStatusProvider<Block> for Arc<T>
+impl<T> NetworkStatusProvider for Arc<T>
 where
 	T: ?Sized,
-	T: NetworkStatusProvider<Block>,
+	T: NetworkStatusProvider,
 {
 	fn status<'life0, 'async_trait>(
 		&'life0 self,
-	) -> Pin<Box<dyn Future<Output = Result<NetworkStatus<Block>, ()>> + Send + 'async_trait>>
+	) -> Pin<Box<dyn Future<Output = Result<NetworkStatus, ()>> + Send + 'async_trait>>
 	where
 		'life0: 'async_trait,
 		Self: 'async_trait,

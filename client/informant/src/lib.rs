@@ -24,7 +24,7 @@ use futures_timer::Delay;
 use log::{debug, info, trace};
 use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
-use sc_network_common::service::NetworkStatusProvider;
+use sc_network_common::{service::NetworkStatusProvider, sync::SyncStatusProvider};
 use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
@@ -53,16 +53,18 @@ impl Default for OutputFormat {
 }
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C, N, P>(
+pub async fn build<B: BlockT, C, N, P, S>(
 	client: Arc<C>,
 	network: N,
+	syncing: S,
 	pool: Arc<P>,
 	format: OutputFormat,
 ) where
-	N: NetworkStatusProvider<B>,
+	N: NetworkStatusProvider,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
 	P: TransactionPool + MallocSizeOf,
+	S: SyncStatusProvider<B>,
 {
 	let mut display = display::InformantDisplay::new(format.clone());
 
@@ -70,10 +72,15 @@ pub async fn build<B: BlockT, C, N, P>(
 
 	let display_notifications = interval(Duration::from_millis(5000))
 		.filter_map(|_| async {
-			let status = network.status().await;
-			status.ok()
+			let net_status = network.status().await;
+			let sync_status = syncing.status().await;
+
+			match (net_status.ok(), sync_status.ok()) {
+				(Some(net), Some(sync)) => Some((net, sync)),
+				_ => None,
+			}
 		})
-		.for_each(move |net_status| {
+		.for_each(move |(net_status, sync_status)| {
 			let info = client_1.usage_info();
 			if let Some(ref usage) = info.usage {
 				trace!(target: "usage", "Usage statistics: {}", usage);
@@ -88,7 +95,7 @@ pub async fn build<B: BlockT, C, N, P>(
 				"Subsystems memory [txpool: {} kB]",
 				parity_util_mem::malloc_size(&*pool) / 1024,
 			);
-			display.display(&info, net_status);
+			display.display(&info, net_status, sync_status);
 			future::ready(())
 		});
 

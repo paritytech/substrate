@@ -37,7 +37,7 @@ use sc_client_db::{Backend, DatabaseSettings};
 use sc_consensus::import_queue::ImportQueue;
 use sc_executor::RuntimeVersionOf;
 use sc_keystore::LocalKeystore;
-use sc_network::{config::SyncMode, NetworkService};
+use sc_network::{config::SyncMode, ChainSyncInterface, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
 	protocol::role::Roles,
@@ -327,12 +327,7 @@ where
 
 /// Shared network instance implementing a set of mandatory traits.
 pub trait SpawnTaskNetwork<Block: BlockT>:
-	sc_offchain::NetworkProvider
-	+ NetworkStateInfo
-	+ NetworkStatusProvider<Block>
-	+ Send
-	+ Sync
-	+ 'static
+	sc_offchain::NetworkProvider + NetworkStateInfo + NetworkStatusProvider + Send + Sync + 'static
 {
 }
 
@@ -341,7 +336,7 @@ where
 	Block: BlockT,
 	T: sc_offchain::NetworkProvider
 		+ NetworkStateInfo
-		+ NetworkStatusProvider<Block>
+		+ NetworkStatusProvider
 		+ Send
 		+ Sync
 		+ 'static,
@@ -372,6 +367,8 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	/// Controller for transactions handlers
 	pub tx_handler_controller:
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
+	/// Syncing service.
+	pub sync_service: Arc<dyn ChainSyncInterface<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
 }
@@ -451,6 +448,7 @@ where
 		network,
 		system_rpc_tx,
 		tx_handler_controller,
+		sync_service,
 		telemetry,
 	} = params;
 
@@ -513,7 +511,12 @@ where
 	spawn_handle.spawn(
 		"telemetry-periodic-send",
 		None,
-		metrics_service.run(client.clone(), transaction_pool.clone(), network.clone()),
+		metrics_service.run(
+			client.clone(),
+			transaction_pool.clone(),
+			network.clone(),
+			sync_service.clone(),
+		),
 	);
 
 	let rpc_id_provider = config.rpc_id_provider.take();
@@ -543,6 +546,7 @@ where
 		sc_informant::build(
 			client.clone(),
 			network,
+			sync_service.clone(),
 			transaction_pool.clone(),
 			config.informant_output_format,
 		),
@@ -742,6 +746,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 		NetworkStarter,
+		Arc<dyn ChainSyncInterface<TBl>>,
 	),
 	Error,
 >
@@ -926,6 +931,7 @@ where
 	let has_bootnodes = !network_params.network_config.boot_nodes.is_empty();
 	let network_mut = sc_network::NetworkWorker::new(network_params)?;
 	let network = network_mut.service().clone();
+	let sync_service = chain_sync_service.clone();
 
 	let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
 		network.clone(),
@@ -939,7 +945,7 @@ where
 		Some("networking"),
 		chain_sync_network_provider.run(network.clone()),
 	);
-	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(chain_sync_service)));
+	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service)));
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 
@@ -988,7 +994,13 @@ where
 		future.await
 	});
 
-	Ok((network, system_rpc_tx, tx_handler_controller, NetworkStarter(network_start_tx)))
+	Ok((
+		network,
+		system_rpc_tx,
+		tx_handler_controller,
+		NetworkStarter(network_start_tx),
+		Arc::new(chain_sync_service),
+	))
 }
 
 /// Object used to start the network.

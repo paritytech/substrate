@@ -119,7 +119,7 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	/// nodes it should be connected to or not.
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
-	to_worker: TracingUnboundedSender<ServiceToWorkerMsg<B>>,
+	to_worker: TracingUnboundedSender<ServiceToWorkerMsg>,
 	/// Interface that can be used to delegate calls to `ChainSync`
 	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
@@ -465,18 +465,11 @@ where
 	}
 
 	/// High-level network status information.
-	pub fn status(&self) -> NetworkStatus<B> {
-		let status = self.sync_state();
+	pub fn status(&self) -> NetworkStatus {
 		NetworkStatus {
-			sync_state: status.state,
-			best_seen_block: self.best_seen_block(),
-			num_sync_peers: self.num_sync_peers(),
 			num_connected_peers: self.num_connected_peers(),
-			num_active_peers: self.num_active_peers(),
 			total_bytes_inbound: self.total_bytes_inbound(),
 			total_bytes_outbound: self.total_bytes_outbound(),
-			state_sync: status.state_sync,
-			warp_sync: status.warp_sync,
 		}
 	}
 
@@ -498,11 +491,6 @@ where
 	/// Returns the number of peers we're connected to and that are being queried.
 	pub fn num_active_peers(&self) -> usize {
 		self.network_service.behaviour().user_protocol().num_active_peers()
-	}
-
-	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncStatus<B> {
-		self.network_service.behaviour().user_protocol().sync_state()
 	}
 
 	/// Target sync block number.
@@ -817,12 +805,12 @@ where
 }
 
 #[async_trait::async_trait]
-impl<B, H> NetworkStatusProvider<B> for NetworkService<B, H>
+impl<B, H> NetworkStatusProvider for NetworkService<B, H>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
 {
-	async fn status(&self) -> Result<NetworkStatus<B>, ()> {
+	async fn status(&self) -> Result<NetworkStatus, ()> {
 		let (tx, rx) = oneshot::channel();
 
 		let _ = self
@@ -1205,7 +1193,7 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 /// Messages sent from the `NetworkService` to the `NetworkWorker`.
 ///
 /// Each entry corresponds to a method of `NetworkService`.
-enum ServiceToWorkerMsg<B: BlockT> {
+enum ServiceToWorkerMsg {
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
@@ -1227,7 +1215,7 @@ enum ServiceToWorkerMsg<B: BlockT> {
 		connect: IfDisconnected,
 	},
 	NetworkStatus {
-		pending_response: oneshot::Sender<Result<NetworkStatus<B>, RequestFailure>>,
+		pending_response: oneshot::Sender<Result<NetworkStatus, RequestFailure>>,
 	},
 	NetworkState {
 		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
@@ -1263,7 +1251,7 @@ where
 	/// The *actual* network.
 	network_service: Swarm<Behaviour<B, Client>>,
 	/// Messages from the [`NetworkService`] that must be processed.
-	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg<B>>,
+	from_service: TracingUnboundedReceiver<ServiceToWorkerMsg>,
 	/// Senders for events that happen on the network.
 	event_streams: out_events::OutChannels,
 	/// Prometheus network metrics.

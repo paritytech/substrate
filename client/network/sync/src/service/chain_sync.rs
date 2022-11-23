@@ -16,15 +16,25 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// TODO(aaro): reorder traits properly
+// TODO(aaro): document functions
+// TODO(aaro): rename this file to sync_service.rs?
+
+use futures::channel::oneshot;
+
 use libp2p::PeerId;
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
-use sc_network_common::service::{NetworkBlock, NetworkSyncForkRequest};
+use sc_network_common::{
+	service::{NetworkBlock, NetworkSyncForkRequest},
+	sync::{SyncStatus, SyncStatusProvider},
+};
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 /// Commands send to `ChainSync`
 #[derive(Debug)]
 pub enum ToServiceCommand<B: BlockT> {
+	Status(oneshot::Sender<SyncStatus<B>>),
 	SetSyncForkRequest(Vec<PeerId>, B::Hash, NumberFor<B>),
 	RequestJustification(B::Hash, NumberFor<B>),
 	ClearJustificationRequests,
@@ -80,6 +90,17 @@ impl<B: BlockT> JustificationSyncLink<B> for ChainSyncInterfaceHandle<B> {
 
 	fn clear_justification_requests(&self) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::ClearJustificationRequests);
+	}
+}
+
+#[async_trait::async_trait]
+impl<B: BlockT> SyncStatusProvider<B> for ChainSyncInterfaceHandle<B> {
+	/// Get high-level view of the syncing status.
+	async fn status(&self) -> Result<SyncStatus<B>, ()> {
+		let (rtx, rrx) = oneshot::channel();
+
+		let _ = self.tx.unbounded_send(ToServiceCommand::Status(rtx));
+		rrx.await.map_err(|_| ())
 	}
 }
 
