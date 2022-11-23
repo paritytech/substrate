@@ -153,6 +153,10 @@ impl NetworkNotification for TestNetwork {
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		unimplemented!();
 	}
+
+	fn set_notification_handshake(&self, _protocol: ProtocolName, _handshake: Vec<u8>) {
+		unimplemented!();
+	}
 }
 
 impl NetworkBlock<Hash, NumberFor<Block>> for TestNetwork {

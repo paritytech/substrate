@@ -297,7 +297,12 @@ const MAX_CONNECTIONS_ESTABLISHED_INCOMING: u32 = 10_000;
 
 /// Abstraction over syncing-related services
 pub trait ChainSyncInterface<B: BlockT>:
-	NetworkSyncForkRequest<B::Hash, NumberFor<B>> + JustificationSyncLink<B> + Link<B> + Send + Sync
+	NetworkSyncForkRequest<B::Hash, NumberFor<B>>
+	+ JustificationSyncLink<B>
+	+ Link<B>
+	+ NetworkBlock<B::Hash, NumberFor<B>>
+	+ Send
+	+ Sync
 {
 }
 
@@ -305,6 +310,7 @@ impl<T, B: BlockT> ChainSyncInterface<B> for T where
 	T: NetworkSyncForkRequest<B::Hash, NumberFor<B>>
 		+ JustificationSyncLink<B>
 		+ Link<B>
+		+ NetworkBlock<B::Hash, NumberFor<B>>
 		+ Send
 		+ Sync
 {

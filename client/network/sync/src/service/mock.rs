@@ -23,7 +23,10 @@ use sc_network_common::{
 	config::MultiaddrWithPeerId,
 	protocol::ProtocolName,
 	request_responses::{IfDisconnected, RequestFailure},
-	service::{NetworkPeers, NetworkRequest, NetworkSyncForkRequest},
+	service::{
+		NetworkNotification, NetworkPeers, NetworkRequest, NetworkSyncForkRequest,
+		NotificationSender, NotificationSenderError,
+	},
 };
 use sc_peerset::ReputationChange;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
@@ -124,5 +127,15 @@ mockall::mock! {
 			tx: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
 			connect: IfDisconnected,
 		);
+	}
+
+	impl NetworkNotification for Network {
+		fn write_notification(&self, target: PeerId, protocol: ProtocolName, message: Vec<u8>);
+		fn notification_sender(
+			&self,
+			target: PeerId,
+			protocol: ProtocolName,
+		) -> Result<Box<dyn NotificationSender>, NotificationSenderError>;
+		fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 	}
 }

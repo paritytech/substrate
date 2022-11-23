@@ -16,9 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+/*
 use crate::{service::network::NetworkServiceProvider, ChainSync, ForkTarget};
 
 use libp2p::PeerId;
+
 use sc_network_common::{
 	config::ProtocolId,
 	protocol::{
@@ -30,8 +32,9 @@ use sc_network_common::{
 };
 use sp_consensus::block_validation::DefaultBlockAnnounceValidator;
 use sp_core::H256;
-use std::{sync::Arc, task::Poll};
 use substrate_test_runtime_client::{TestClientBuilder, TestClientBuilderExt as _};
+
+use std::{sync::Arc, task::Poll};
 
 // verify that the fork target map is empty, then submit a new sync fork request,
 // poll `ChainSync` and verify that a new sync fork request has been registered
@@ -76,3 +79,4 @@ async fn delegate_to_chainsync() {
 		panic!("expected to contain `ForkTarget`");
 	}
 }
+*/

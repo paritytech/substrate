@@ -50,7 +50,7 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
-	Multiaddr, NetworkService, NetworkWorker,
+	ChainSyncInterface, Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
 	config::{
@@ -235,6 +235,7 @@ pub struct Peer<D, BlockImport> {
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, <Block as BlockT>::Hash, PeersFullClient>,
+	chain_sync_service: Box<dyn ChainSyncInterface<Block>>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	listen_addr: Multiaddr,
@@ -396,7 +397,7 @@ where
 		}
 
 		if inform_sync_about_new_best_block {
-			self.network.new_best_block_imported(
+			self.chain_sync_service.new_best_block_imported(
 				at,
 				*full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number(),
 			);
@@ -926,8 +927,9 @@ where
 		async_std::task::spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
+		let service = Box::new(chain_sync_service.clone());
 		async_std::task::spawn(async move {
-			import_queue.run(Box::new(chain_sync_service)).await;
+			import_queue.run(service).await;
 		});
 
 		self.mut_peers(move |peers| {
@@ -950,6 +952,7 @@ where
 				block_import,
 				verifier,
 				network,
+				chain_sync_service: Box::new(chain_sync_service),
 				listen_addr,
 			});
 		});

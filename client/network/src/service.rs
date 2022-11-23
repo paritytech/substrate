@@ -549,14 +549,6 @@ where
 			.on_block_finalized(hash, &header);
 	}
 
-	/// Inform the network service about new best imported block.
-	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		self.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.new_best_block_imported(hash, number);
-	}
-
 	/// Returns the local `PeerId`.
 	pub fn local_peer_id(&self) -> &PeerId {
 		Swarm::<Behaviour<B, Client>>::local_peer_id(&self.network_service)
@@ -1077,6 +1069,12 @@ where
 
 		Ok(Box::new(NotificationSender { sink, protocol_name: protocol, notification_size_metric }))
 	}
+
+	fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>) {
+		let _ = self
+			.to_worker
+			.unbounded_send(ServiceToWorkerMsg::SetNotificationHandshake(protocol, handshake));
+	}
 }
 
 #[async_trait::async_trait]
@@ -1129,13 +1127,11 @@ where
 	H: ExHashT,
 {
 	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::AnnounceBlock(hash, data));
+		let _ = self.chain_sync_service.announce_block(hash, data);
 	}
 
 	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self
-			.to_worker
-			.unbounded_send(ServiceToWorkerMsg::NewBestBlockImported(hash, number));
+		let _ = self.chain_sync_service.new_best_block_imported(hash, number);
 	}
 }
 
@@ -1210,7 +1206,6 @@ impl<'a> NotificationSenderReadyT for NotificationSenderReady<'a> {
 ///
 /// Each entry corresponds to a method of `NetworkService`.
 enum ServiceToWorkerMsg<B: BlockT> {
-	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	GetValue(KademliaKey),
 	PutValue(KademliaKey, Vec<u8>),
 	AddKnownAddress(PeerId, Multiaddr),
@@ -1238,7 +1233,7 @@ enum ServiceToWorkerMsg<B: BlockT> {
 		pending_response: oneshot::Sender<Result<NetworkState, RequestFailure>>,
 	},
 	DisconnectPeer(PeerId, ProtocolName),
-	NewBestBlockImported(B::Hash, NumberFor<B>),
+	SetNotificationHandshake(ProtocolName, Vec<u8>),
 }
 
 /// Main network worker. Must be polled in order for the network to advance.
@@ -1323,11 +1318,6 @@ where
 				Poll::Pending => break,
 			};
 			match msg {
-				ServiceToWorkerMsg::AnnounceBlock(hash, data) => this
-					.network_service
-					.behaviour_mut()
-					.user_protocol_mut()
-					.announce_block(hash, data),
 				ServiceToWorkerMsg::GetValue(key) =>
 					this.network_service.behaviour_mut().get_value(key),
 				ServiceToWorkerMsg::PutValue(key, value) =>
@@ -1406,11 +1396,11 @@ where
 					.behaviour_mut()
 					.user_protocol_mut()
 					.disconnect_peer(&who, protocol_name),
-				ServiceToWorkerMsg::NewBestBlockImported(hash, number) => this
+				ServiceToWorkerMsg::SetNotificationHandshake(protocol, handshake) => this
 					.network_service
 					.behaviour_mut()
 					.user_protocol_mut()
-					.new_best_block_imported(hash, number),
+					.set_notification_handshake(protocol, handshake),
 			}
 		}
 

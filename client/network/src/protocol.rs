@@ -38,7 +38,7 @@ use sc_network_common::{
 	error,
 	protocol::{role::Roles, ProtocolName},
 	sync::{
-		message::{BlockAnnounce, BlockAnnouncesHandshake, BlockState},
+		message::{BlockAnnounce, BlockAnnouncesHandshake},
 		BadPeer, ExtendedPeerInfo, SyncStatus,
 	},
 	utils::{interval, LruHashSet},
@@ -46,10 +46,7 @@ use sc_network_common::{
 use sc_network_sync::engine::{Peer, SyncingEngine};
 use sp_arithmetic::traits::SaturatedConversion;
 use sp_blockchain::HeaderMetadata;
-use sp_runtime::{
-	generic::BlockId,
-	traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero},
-};
+use sp_runtime::traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero};
 use std::{
 	collections::{HashSet, VecDeque},
 	io, iter,
@@ -322,6 +319,7 @@ where
 		self.behaviour.peerset_debug_info()
 	}
 
+	// TODO(aaro): implement using behaviour?
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
 		self.engine.peers.len()
@@ -362,19 +360,7 @@ where
 		self.engine.chain_sync.num_sync_requests()
 	}
 
-	/// Inform sync about new best imported block.
-	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
-		debug!(target: "sync", "New best block imported {:?}/#{}", hash, number);
-
-		self.engine.chain_sync.update_chain_info(&hash, number);
-
-		self.behaviour.set_notif_protocol_handshake(
-			HARDCODED_PEERSETS_SYNC,
-			BlockAnnouncesHandshake::<B>::build(self.roles, number, hash, self.genesis_hash)
-				.encode(),
-		);
-	}
-
+	// TODO(aaro): implement using ChainSyncInterface
 	/// Returns information about all the peers we are connected to after the handshake message.
 	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &ExtendedPeerInfo<B>)> {
 		self.engine.peers.iter().map(|(id, peer)| (id, &peer.info))
@@ -532,48 +518,17 @@ where
 		Ok(())
 	}
 
-	/// Make sure an important block is propagated to peers.
-	///
-	/// In chain-based consensus, we often need to make sure non-best forks are
-	/// at least temporarily synced.
-	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let header = match self.chain.header(BlockId::Hash(hash)) {
-			Ok(Some(header)) => header,
-			Ok(None) => {
-				warn!("Trying to announce unknown block: {}", hash);
-				return
-			},
-			Err(e) => {
-				warn!("Error reading block header {}: {}", hash, e);
-				return
-			},
-		};
-
-		// don't announce genesis block since it will be ignored
-		if header.number().is_zero() {
-			return
-		}
-
-		let is_best = self.chain.info().best_hash == hash;
-		debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
-
-		let data = data
-			.or_else(|| self.engine.block_announce_data_cache.get(&hash).cloned())
-			.unwrap_or_default();
-
-		for (who, ref mut peer) in self.engine.peers.iter_mut() {
-			let inserted = peer.known_blocks.insert(hash);
-			if inserted {
-				trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
-				let message = BlockAnnounce {
-					header: header.clone(),
-					state: if is_best { Some(BlockState::Best) } else { Some(BlockState::Normal) },
-					data: Some(data.clone()),
-				};
-
-				self.behaviour
-					.write_notification(who, HARDCODED_PEERSETS_SYNC, message.encode());
-			}
+	/// Set handshake for the notification protocol.
+	pub fn set_notification_handshake(&mut self, protocol: ProtocolName, handshake: Vec<u8>) {
+		if let Some(index) = self.notification_protocols.iter().position(|p| *p == protocol) {
+			self.behaviour
+				.set_notif_protocol_handshake(sc_peerset::SetId::from(index), handshake);
+		} else {
+			error!(
+				target: "sub-libp2p",
+				"set_notification_handshake with unknown protocol: {}",
+				protocol
+			);
 		}
 	}
 
@@ -846,7 +801,18 @@ where
 								genesis_hash: handshake.genesis_hash,
 							};
 
+							let roles = handshake.roles;
 							if self.on_sync_peer_connected(peer_id, handshake).is_ok() {
+								self.pending_messages.push_back(
+									CustomMessageOutcome::NotificationStreamOpened {
+										remote: peer_id,
+										protocol: self.notification_protocols[usize::from(set_id)]
+											.clone(),
+										negotiated_fallback,
+										roles,
+										notifications_sink,
+									},
+								);
 								CustomMessageOutcome::SyncConnected(peer_id)
 							} else {
 								CustomMessageOutcome::None
@@ -866,8 +832,21 @@ where
 							match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
 								&mut &received_handshake[..],
 							) {
+								// TODO: korjaa tämä toimimaan
 								Ok(handshake) => {
+									let roles = handshake.roles;
 									if self.on_sync_peer_connected(peer_id, handshake).is_ok() {
+										self.pending_messages.push_back(
+											CustomMessageOutcome::NotificationStreamOpened {
+												remote: peer_id,
+												protocol: self.notification_protocols
+													[usize::from(set_id)]
+												.clone(),
+												negotiated_fallback,
+												roles,
+												notifications_sink,
+											},
+										);
 										CustomMessageOutcome::SyncConnected(peer_id)
 									} else {
 										CustomMessageOutcome::None

@@ -504,6 +504,9 @@ pub trait NetworkNotification {
 		target: PeerId,
 		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError>;
+
+	/// Set handshake for the notification protocol.
+	fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>);
 }
 
 impl<T> NetworkNotification for Arc<T>
@@ -521,6 +524,10 @@ where
 		protocol: ProtocolName,
 	) -> Result<Box<dyn NotificationSender>, NotificationSenderError> {
 		T::notification_sender(self, target, protocol)
+	}
+
+	fn set_notification_handshake(&self, protocol: ProtocolName, handshake: Vec<u8>) {
+		T::set_notification_handshake(self, protocol, handshake)
 	}
 }
 

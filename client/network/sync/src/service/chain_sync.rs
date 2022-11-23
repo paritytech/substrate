@@ -18,7 +18,7 @@
 
 use libp2p::PeerId;
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
-use sc_network_common::service::NetworkSyncForkRequest;
+use sc_network_common::service::{NetworkBlock, NetworkSyncForkRequest};
 use sc_utils::mpsc::TracingUnboundedSender;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
@@ -34,6 +34,8 @@ pub enum ToServiceCommand<B: BlockT> {
 		Vec<(Result<BlockImportStatus<NumberFor<B>>, BlockImportError>, B::Hash)>,
 	),
 	JustificationImported(PeerId, B::Hash, NumberFor<B>, bool),
+	AnnounceBlock(B::Hash, Option<Vec<u8>>),
+	NewBestBlockImported(B::Hash, NumberFor<B>),
 }
 
 /// Handle for communicating with `ChainSync` asynchronously
@@ -107,5 +109,15 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::RequestJustification(*hash, number));
+	}
+}
+
+impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for ChainSyncInterfaceHandle<B> {
+	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::AnnounceBlock(hash, data));
+	}
+
+	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
+		let _ = self.tx.unbounded_send(ToServiceCommand::NewBestBlockImported(hash, number));
 	}
 }

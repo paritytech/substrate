@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// Copyright (C) 2017-2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: GPL-3.0-or-later WITH Classpath-exception-2.0
 
 // This program is free software: you can redistribute it and/or modify
@@ -16,12 +16,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{service, ChainSync, ChainSyncInterfaceHandle, ClientError};
+use crate::{
+	service::{self, chain_sync::ToServiceCommand},
+	ChainSync, ChainSyncInterfaceHandle, ClientError,
+};
 
+use futures::StreamExt;
 use libp2p::PeerId;
 use lru::LruCache;
 use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
 
+use codec::Encode;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network_common::{
@@ -30,16 +35,20 @@ use sc_network_common::{
 	sync::{
 		message::{
 			generic::{BlockData, BlockResponse},
-			BlockAnnounce, BlockState,
+			BlockAnnounce, BlockAnnouncesHandshake, BlockState,
 		},
 		warp::WarpSyncProvider,
-		ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncMode,
+		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncMode,
 	},
 	utils::LruHashSet,
 };
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
-use sp_runtime::traits::{Block as BlockT, Header};
+use sp_runtime::{
+	generic::BlockId,
+	traits::{Block as BlockT, Header, NumberFor, Zero},
+};
 
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc, task::Poll};
 
@@ -109,15 +118,22 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	pub chain_sync: Box<dyn ChainSyncT<B>>,
 
 	/// Blockchain client.
-	_client: Arc<Client>,
+	client: Arc<Client>,
 
 	/// Network service.
 	network_service: service::network::NetworkServiceHandle,
 
+	/// Channel for receiving service commands
+	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
+
 	// /// Interval at which we call `tick`.
 	// tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Assigned roles.
-	_roles: Roles,
+	roles: Roles,
+
+	/// Genesis hash.
+	genesis_hash: B::Hash,
+
 	/// All connected peers. Contains both full and light node peers.
 	pub peers: HashMap<PeerId, Peer<B>>,
 
@@ -185,7 +201,7 @@ where
 		warp_sync_protocol_name: Option<ProtocolName>,
 		cache_capacity: NonZeroUsize,
 	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
-		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
+		let (chain_sync, block_announce_config) = ChainSync::new(
 			mode,
 			client.clone(),
 			protocol_id,
@@ -203,15 +219,24 @@ where
 		)?;
 
 		let block_announce_protocol_name = block_announce_config.notifications_protocol.clone();
+		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
+		let genesis_hash = client
+			.block_hash(0u32.into())
+			.ok()
+			.flatten()
+			.expect("Genesis block exists; qed");
+
 		Ok((
 			Self {
-				_roles: roles,
-				_client: client,
+				roles,
+				client,
 				chain_sync: Box::new(chain_sync),
 				network_service,
 				peers: HashMap::new(),
 				block_announce_data_cache: LruCache::new(cache_capacity),
 				block_announce_protocol_name,
+				service_rx,
+				genesis_hash,
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r) {
 						Ok(metrics) => Some(metrics),
@@ -224,7 +249,7 @@ where
 					None
 				},
 			},
-			chain_sync_service,
+			ChainSyncInterfaceHandle::new(tx),
 			block_announce_config,
 		))
 	}
@@ -374,7 +399,106 @@ where
 		}
 	}
 
+	/// Make sure an important block is propagated to peers.
+	///
+	/// In chain-based consensus, we often need to make sure non-best forks are
+	/// at least temporarily synced.
+	pub fn announce_block(&mut self, hash: B::Hash, data: Option<Vec<u8>>) {
+		let header = match self.client.header(BlockId::Hash(hash)) {
+			Ok(Some(header)) => header,
+			Ok(None) => {
+				log::warn!(target: "sync", "Trying to announce unknown block: {}", hash);
+				return
+			},
+			Err(e) => {
+				log::warn!(target: "sync", "Error reading block header {}: {}", hash, e);
+				return
+			},
+		};
+
+		// don't announce genesis block since it will be ignored
+		if header.number().is_zero() {
+			return
+		}
+
+		let is_best = self.client.info().best_hash == hash;
+		log::debug!(target: "sync", "Reannouncing block {:?} is_best: {}", hash, is_best);
+
+		let data = data
+			.or_else(|| self.block_announce_data_cache.get(&hash).cloned())
+			.unwrap_or_default();
+
+		for (who, ref mut peer) in self.peers.iter_mut() {
+			let inserted = peer.known_blocks.insert(hash);
+			if inserted {
+				log::trace!(target: "sync", "Announcing block {:?} to {}", hash, who);
+				let message = BlockAnnounce {
+					header: header.clone(),
+					state: if is_best { Some(BlockState::Best) } else { Some(BlockState::Normal) },
+					data: Some(data.clone()),
+				};
+
+				self.network_service.write_notification(
+					*who,
+					self.block_announce_protocol_name.clone(),
+					message.encode(),
+				);
+			}
+		}
+	}
+
+	/// Inform sync about new best imported block.
+	pub fn new_best_block_imported(&mut self, hash: B::Hash, number: NumberFor<B>) {
+		log::debug!(target: "sync", "New best block imported {:?}/#{}", hash, number);
+
+		self.chain_sync.update_chain_info(&hash, number);
+		self.network_service.set_notification_handshake(
+			self.block_announce_protocol_name.clone(),
+			BlockAnnouncesHandshake::<B>::build(self.roles, number, hash, self.genesis_hash)
+				.encode(),
+		)
+	}
+
 	pub fn poll(&mut self, cx: &mut std::task::Context) {
+		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
+			match event {
+				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
+					self.chain_sync.set_sync_fork_request(peers, &hash, number);
+				},
+				ToServiceCommand::RequestJustification(hash, number) =>
+					self.chain_sync.request_justification(&hash, number),
+				ToServiceCommand::ClearJustificationRequests =>
+					self.chain_sync.clear_justification_requests(),
+				ToServiceCommand::BlocksProcessed(imported, count, results) => {
+					for result in self.chain_sync.on_blocks_processed(imported, count, results) {
+						match result {
+							Ok((id, req)) => self.chain_sync.send_block_request(id, req),
+							Err(BadPeer(id, repu)) => {
+								self.network_service
+									.disconnect_peer(id, self.block_announce_protocol_name.clone());
+								self.network_service.report_peer(id, repu)
+							},
+						}
+					}
+				},
+				ToServiceCommand::JustificationImported(peer, hash, number, success) => {
+					self.chain_sync.on_justification_import(hash, number, success);
+					if !success {
+						log::info!(target: "sync", "💔 Invalid justification provided by {} for #{}", peer, hash);
+						self.network_service
+							.disconnect_peer(peer, self.block_announce_protocol_name.clone());
+						self.network_service.report_peer(
+							peer,
+							sc_peerset::ReputationChange::new_fatal("Invalid justification"),
+						);
+					}
+				},
+				ToServiceCommand::AnnounceBlock(hash, data) => self.announce_block(hash, data),
+				ToServiceCommand::NewBestBlockImported(hash, number) =>
+					self.new_best_block_imported(hash, number),
+			}
+		}
+
 		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
 			self.process_block_announce_validation_result(result);
 		}

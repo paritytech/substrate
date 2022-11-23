@@ -554,48 +554,6 @@ impl Notifications {
 		self.peerset.reserved_peers(set_id)
 	}
 
-	/// Sends a notification to a peer.
-	///
-	/// Has no effect if the custom protocol is not open with the given peer.
-	///
-	/// Also note that even if we have a valid open substream, it may in fact be already closed
-	/// without us knowing, in which case the packet will not be received.
-	///
-	/// The `fallback` parameter is used for backwards-compatibility reason if the remote doesn't
-	/// support our protocol. One needs to pass the equivalent of what would have been passed
-	/// with `send_packet`.
-	pub fn write_notification(
-		&mut self,
-		target: &PeerId,
-		set_id: sc_peerset::SetId,
-		message: impl Into<Vec<u8>>,
-	) {
-		let notifs_sink = match self.peers.get(&(*target, set_id)).and_then(|p| p.get_open()) {
-			None => {
-				trace!(
-					target: "sub-libp2p",
-					"Tried to sent notification to {:?} without an open channel.",
-					target,
-				);
-				return
-			},
-			Some(sink) => sink,
-		};
-
-		let message = message.into();
-
-		trace!(
-			target: "sub-libp2p",
-			"External API => Notification({:?}, {:?}, {} bytes)",
-			target,
-			set_id,
-			message.len(),
-		);
-		trace!(target: "sub-libp2p", "Handler({:?}) <= Sync notification", target);
-
-		notifs_sink.send_sync_notification(message);
-	}
-
 	/// Returns the state of the peerset manager, for debugging purposes.
 	pub fn peerset_debug_info(&mut self) -> serde_json::Value {
 		self.peerset.debug_info()
