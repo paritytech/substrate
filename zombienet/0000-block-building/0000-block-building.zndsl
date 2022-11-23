@@ -16,3 +16,5 @@ bob: reports block height is at least 5 within 20 seconds
 
 alice: count of log lines containing "error" is 0 within 2 seconds
 bob: count of log lines containing "error" is 0 within 2 seconds
+
+alice: js-script ./0000-transaction-gets-finalized.js within 30 seconds
