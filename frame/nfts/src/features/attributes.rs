@@ -304,4 +304,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		Ok(result)
 	}
+
+	/// A helper method to construct attribute's key.
+	pub fn construct_attribute_key(
+		key: Vec<u8>,
+	) -> Result<BoundedVec<u8, T::KeyLimit>, DispatchError> {
+		Ok(BoundedVec::try_from(key).map_err(|_| Error::<T, I>::IncorrectData)?)
+	}
+
+	/// A helper method to construct attribute's value.
+	pub fn construct_attribute_value(
+		value: Vec<u8>,
+	) -> Result<BoundedVec<u8, T::ValueLimit>, DispatchError> {
+		Ok(BoundedVec::try_from(value).map_err(|_| Error::<T, I>::IncorrectData)?)
+	}
 }

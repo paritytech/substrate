@@ -65,7 +65,7 @@ type AccountIdLookupOf<T> = <<T as SystemConfig>::Lookup as StaticLookup>::Sourc
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement};
+	use frame_support::{pallet_prelude::*, traits::ExistenceRequirement, PalletId};
 	use frame_system::pallet_prelude::*;
 
 	#[pallet::pallet]
@@ -170,6 +170,10 @@ pub mod pallet {
 		/// Disables some of pallet's features.
 		#[pallet::constant]
 		type Features: Get<PalletFeatures>;
+
+		/// The pallet's id.
+		#[pallet::constant]
+		type PalletId: Get<PalletId>;
 
 		#[cfg(feature = "runtime-benchmarks")]
 		/// A set of helper functions for benchmarking.
@@ -583,6 +587,10 @@ pub mod pallet {
 		MintNotStated,
 		/// Mint has already ended.
 		MintEnded,
+		/// The provided Item was already used for claiming.
+		AlreadyClaimed,
+		/// The provided data is incorrect.
+		IncorrectData,
 	}
 
 	#[pallet::call]
@@ -756,16 +764,35 @@ pub mod pallet {
 							)
 						},
 						MintType::HolderOf(collection_id) => {
-							let correct_witness = match witness_data {
-								Some(MintWitness { owner_of_item }) =>
-									Account::<T, I>::contains_key((
-										&caller,
-										&collection_id,
-										&owner_of_item,
-									)),
-								None => false,
-							};
-							ensure!(correct_witness, Error::<T, I>::BadWitness)
+							let MintWitness { owner_of_item } =
+								witness_data.ok_or(Error::<T, I>::BadWitness)?;
+
+							let has_item = Account::<T, I>::contains_key((
+								&caller,
+								&collection_id,
+								&owner_of_item,
+							));
+							ensure!(has_item, Error::<T, I>::BadWitness);
+
+							let attribute_key = Self::construct_attribute_key(
+								PalletAttributes::<T::CollectionId>::UsedToClaim(collection)
+									.encode(),
+							)?;
+
+							let key = (
+								&collection_id,
+								Some(owner_of_item),
+								AttributeNamespace::Pallet(T::PalletId::get()),
+								&attribute_key,
+							);
+							let already_claimed = Attribute::<T, I>::contains_key(key.clone());
+							ensure!(!already_claimed, Error::<T, I>::AlreadyClaimed);
+
+							let value = Self::construct_attribute_value(vec![0])?;
+							Attribute::<T, I>::insert(
+								key,
+								(value, AttributeDeposit { account: None, amount: Zero::zero() }),
+							);
 						},
 						_ => {},
 					}

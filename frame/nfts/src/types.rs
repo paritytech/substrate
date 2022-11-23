@@ -291,6 +291,12 @@ pub struct CancelAttributesApprovalWitness {
 	pub account_attributes: u32,
 }
 
+#[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum PalletAttributes<CollectionId> {
+	/// Marks an item as being used in order to claim another item.
+	UsedToClaim(CollectionId),
+}
+
 #[derive(
 	Clone, Copy, Decode, Default, Encode, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo,
 )]

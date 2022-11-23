@@ -276,6 +276,12 @@ fn mint_should_work() {
 			42,
 			Some(MintWitness { owner_of_item: 43 })
 		));
+
+		// can't mint twice
+		assert_noop!(
+			Nfts::mint(RuntimeOrigin::signed(2), 1, 46, Some(MintWitness { owner_of_item: 43 })),
+			Error::<Test>::AlreadyClaimed
+		);
 	});
 }
 
