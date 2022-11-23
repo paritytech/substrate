@@ -633,7 +633,6 @@ where
 				if let SyncMode::Warp = &self.mode {
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
-						async move {
 							match self.warp_sync_params.as_mut().unwrap() {
 								WarpSyncParams::WithProvider(warp_with_provider) => {
 									log::debug!(target: "sync", "Starting warp state sync.");
@@ -641,10 +640,11 @@ where
 								}
 								WarpSyncParams::WaitForTarget(header) => {
 									log::debug!(target: "sync", "Waiting for target block.");
-									self.warp_sync = Some(WarpSync::new_with_target_block(self.client.clone(), header.await.unwrap()));
+									async_std::task::block_on(async {
+										self.warp_sync = Some(WarpSync::new_with_target_block(self.client.clone(), header.await.unwrap()));
+									});
 								}
 							}
-						}.boxed();
 					}
 				}
 				Ok(req)
