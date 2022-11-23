@@ -104,6 +104,15 @@ pub(crate) mod v1_to_v2 {
 		let mut fellows_vec = take_members::<T, I>(MemberRoleV1::Fellow).into_inner();
 		let allies = take_members::<T, I>(MemberRoleV1::Ally);
 		let retiring = take_members::<T, I>(MemberRoleV1::Retiring);
+		if founders_vec
+			.len()
+			.saturating_add(fellows_vec.len())
+			.saturating_add(allies.len())
+			.saturating_add(retiring.len()) ==
+			0
+		{
+			return T::DbWeight::get().reads(4)
+		}
 		log::info!(
 			target: LOG_TARGET,
 			"Members storage v1 contains, '{}' founders, '{}' fellows, '{}' allies, '{}' retiring members.",
