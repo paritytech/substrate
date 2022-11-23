@@ -256,7 +256,7 @@ pub trait SimpleSlotWorker<B: BlockT> {
 			Err(err) => {
 				warn!(
 					target: logging_target,
-					"Unable to create inherent data for for block {:?}: {}",
+					"Unable to create inherent data for block {:?}: {}",
 					slot_info.chain_head.hash(),
 					err,
 				);
