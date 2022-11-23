@@ -4781,6 +4781,7 @@ dependencies = [
  "node-executor",
  "node-primitives",
  "pallet-asset-tx-payment",
+ "pallet-assets",
  "pallet-transaction-payment",
  "parity-scale-codec",
  "sc-block-builder",
