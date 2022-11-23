@@ -47,11 +47,10 @@ variables:
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
+  CI_IMAGE:                        "paritytech/ci-linux:staging"
   BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
-  RUSTY_CACHIER_SNEAKY_BYPASS: "true"
 
 default:
   retry:
