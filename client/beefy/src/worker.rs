@@ -47,8 +47,8 @@ use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, Header, ConstU32, NumberFor, Zero},
-	SaturatedConversion, BoundedVec
+	traits::{Block, ConstU32, Header, NumberFor, Zero},
+	BoundedVec, SaturatedConversion,
 };
 use std::{
 	collections::{BTreeMap, BTreeSet, VecDeque},
@@ -314,10 +314,13 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	/// BEEFY client metrics.
 	metrics: Option<Metrics>,
 	/// Buffer holding votes for future processing.
-	pending_votes: BTreeMap<NumberFor<B>, BoundedVec<
-		VoteMessage<NumberFor<B>, AuthorityId, Signature>,
-		ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
-	>>,
+	pending_votes: BTreeMap<
+		NumberFor<B>,
+		BoundedVec<
+			VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+			ConstU32<MAX_BUFFERED_VOTES_PER_ROUND>,
+		>,
+	>,
 	/// Buffer holding justifications for future processing.
 	pending_justifications: BTreeMap<NumberFor<B>, BeefyVersionedFinalityProof<B>>,
 	/// Persisted voter state.
