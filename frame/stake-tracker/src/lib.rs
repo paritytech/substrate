@@ -15,9 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{ApprovalStake, Pallet};
-use frame_election_provider_support::{SortedListProvider, VoteWeight};
-use frame_support::traits::{Currency, CurrencyToVote, Defensive};
+use crate::pallet::{ApprovalStake, Error, Pallet};
+use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider, VoteWeight};
+use frame_support::{
+	defensive,
+	traits::{Currency, CurrencyToVote, Defensive, DefensiveOption},
+};
 use pallet::Config;
 use sp_runtime::{DispatchResult, Saturating};
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
@@ -46,6 +49,12 @@ pub mod pallet {
 		type VoterList: SortedListProvider<Self::AccountId, Score = VoteWeight>;
 
 		type TargetList: SortedListProvider<Self::AccountId, Score = BalanceOf<Self>>;
+	}
+
+	#[pallet::error]
+	pub enum Error<T> {
+		/// ApprovalStake entry does not exist.
+		DoesNotExist,
 	}
 
 	/// The map from validator stash key to their total approval stake. Not that this map is kept up
@@ -123,10 +132,38 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_nominator_add(who: &T::AccountId, prev_nominations: Vec<T::AccountId>) -> DispatchResult {
-		// if Some(nominations) = T::Staking::nominations(who) {
-		// 	return Ok(())
-		// }
-		// T::VoterList::on_insert(who.clone(), Self::weight_of(stash)).defensive();
+		let nominations = T::Staking::nominations(who).unwrap_or_default();
+		let new = nominations.iter().filter(|n| !prev_nominations.contains(&n));
+		let obsolete = prev_nominations.iter().filter(|n| !nominations.contains(&n));
+
+		let update_approval_stake = |nomination: &T::AccountId, new_stake: BalanceOf<T>| {
+			ApprovalStake::<T>::set(&nomination, Some(new_stake));
+
+			// TODO: this is probably not always true, but we keep track of approval stake in the
+			// map anyway.
+			if T::TargetList::contains(&nomination) {
+				let _ = T::TargetList::on_update(&nomination, new_stake).defensive();
+			}
+		};
+
+		for nomination in new {
+			// Create a new entry if it does not exist
+			let new_stake = Self::approval_stake(&nomination)
+				.defensive_ok_or(Error::<T>::DoesNotExist)?
+				.saturating_add(Self::slashable_balance_of(who));
+
+			update_approval_stake(&nomination, new_stake);
+		}
+
+		for nomination in obsolete {
+			// we should actually fail if an old nomination was not in the map, which should never
+			// happen.
+			let new_stake = Self::approval_stake(&nomination)
+				.defensive_ok_or(Error::<T>::DoesNotExist)?
+				.saturating_sub(Self::slashable_balance_of(who));
+
+			update_approval_stake(&nomination, new_stake);
+		}
 		Ok(())
 	}
 
@@ -151,11 +188,29 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_validator_remove(who: &T::AccountId) -> DispatchResult {
-		todo!()
+		let _ = T::TargetList::on_remove(who).defensive();
+		let _ = T::VoterList::on_remove(who).defensive();
+
+		ApprovalStake::<T>::mutate(who, |x: &mut Option<BalanceOf<T>>| {
+			x.map(|b| b.saturating_sub(Self::slashable_balance_of(who)))
+		})
+		.ok_or(Error::<T>::DoesNotExist)?;
+
+		Ok(())
 	}
 
 	fn on_nominator_remove(who: &T::AccountId, nominations: Vec<T::AccountId>) -> DispatchResult {
-		todo!()
+		let score = Self::slashable_balance_of(who);
+		let _ = T::VoterList::on_remove(who).defensive();
+		for validator in nominations {
+			ApprovalStake::<T>::mutate(&validator, |x: &mut Option<BalanceOf<T>>| {
+				x.map(|b| b.saturating_sub(score))
+			})
+			.ok_or(Error::<T>::DoesNotExist)
+			.defensive();
+		}
+
+		Ok(())
 	}
 
 	fn on_reaped(who: &T::AccountId) -> DispatchResult {
