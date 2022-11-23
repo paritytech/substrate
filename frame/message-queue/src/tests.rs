@@ -554,7 +554,7 @@ fn peek_index_works() {
 }
 
 #[test]
-fn peek_first_works() {
+fn peek_first_and_skip_first_works() {
 	use super::integration_test::Test; // Run with larger page size.
 	new_test_ext::<Test>().execute_with(|| {
 		// Fill a page with messages.
@@ -567,6 +567,12 @@ fn peek_first_works() {
 			page.skip_first(i % 2 == 0); // True of False should not matter here.
 		}
 		assert!(page.peek_first().is_none(), "Page must be at the end");
+
+		// Check that all messages were correctly marked as (un)processed.
+		for i in 0..msgs {
+			let (_, processed, _) = page.peek_index(i).unwrap();
+			assert_eq!(processed, i % 2 == 0);
+		}
 	});
 }
 
@@ -587,6 +593,12 @@ fn note_processed_at_pos_works() {
 			assert_eq!(processed, true);
 			assert_eq!(page.remaining as usize, msgs - i - 1);
 		}
+		// `skip_first` still works fine.
+		for i in 0..msgs {
+			page.peek_first().unwrap();
+			page.skip_first(false);
+		}
+		assert!(page.peek_first().is_none());
 	});
 }
 
@@ -946,50 +958,4 @@ fn ready_ring_knit_and_unknit_works() {
 		unknit(&Everywhere(0));
 		assert_ring(&[]);
 	});
-}
-
-/// Knit a queue into the ready-ring and write it back to storage.
-fn knit(o: &MessageOrigin) {
-	let mut b = BookStateFor::<Test>::get(o);
-	b.ready_neighbours = MessageQueue::ready_ring_knit(o).ok().defensive();
-	BookStateFor::<Test>::insert(o, b);
-}
-
-/// Unknit a queue into the ready-ring and write it back to storage.
-fn unknit(o: &MessageOrigin) {
-	let mut b = BookStateFor::<Test>::get(o);
-	MessageQueue::ready_ring_unknit(o, b.ready_neighbours.unwrap());
-	b.ready_neighbours = None;
-	BookStateFor::<Test>::insert(o, b);
-}
-
-/// Build a ring with three queues: `Here`, `There` and `Everywhere(0)`.
-pub fn build_triple_ring() {
-	use MessageOrigin::*;
-	BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
-	BookStateFor::<Test>::insert(There, &empty_book::<Test>());
-	BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
-
-	// Knit them into the ready ring.
-	knit(&Here);
-	knit(&There);
-	knit(&Everywhere(0));
-	assert_ring(&[Here, There, Everywhere(0)]);
-}
-
-/// Check that the Ready Ring consists of `neighbours` in that exact order.
-///
-/// Also check that the first element is the service head.
-fn assert_ring(neighbours: &[MessageOrigin]) {
-	for (i, origin) in neighbours.iter().enumerate() {
-		let book = BookStateFor::<Test>::get(&origin);
-		assert_eq!(
-			book.ready_neighbours,
-			Some(Neighbours {
-				prev: neighbours[(i + neighbours.len() - 1) % neighbours.len()],
-				next: neighbours[(i + 1) % neighbours.len()],
-			})
-		);
-	}
-	assert_eq!(ServiceHead::<Test>::get(), neighbours.first().cloned());
 }

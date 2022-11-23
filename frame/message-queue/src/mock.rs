@@ -22,7 +22,7 @@ use super::*;
 use crate as pallet_message_queue;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64},
+	traits::{ConstU32, ConstU64, Defensive},
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -241,10 +241,40 @@ pub fn assert_pages(indices: &[u32]) {
 		assert!(Pages::<Test>::contains_key(&MessageOrigin::Here, i));
 	}
 }
+
+/// Knit a queue into the ready-ring and write it back to storage.
+pub fn knit(o: &MessageOrigin) {
+	let mut b = BookStateFor::<Test>::get(o);
+	b.ready_neighbours = MessageQueue::ready_ring_knit(o).ok().defensive();
+	BookStateFor::<Test>::insert(o, b);
+}
+
+/// Unknit a queue into the ready-ring and write it back to storage.
+pub fn unknit(o: &MessageOrigin) {
+	let mut b = BookStateFor::<Test>::get(o);
+	MessageQueue::ready_ring_unknit(o, b.ready_neighbours.unwrap());
+	b.ready_neighbours = None;
+	BookStateFor::<Test>::insert(o, b);
+}
+
+/// Build a ring with three queues: `Here`, `There` and `Everywhere(0)`.
+pub fn build_triple_ring() {
+	use MessageOrigin::*;
+	BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+	BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+	BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+
+	// Knit them into the ready ring.
+	knit(&Here);
+	knit(&There);
+	knit(&Everywhere(0));
+	assert_ring(&[Here, There, Everywhere(0)]);
+}
+
 /// Check that the Ready Ring consists of `neighbours` in that exact order.
 ///
 /// Also check that all backlinks are valid and that the first element is the service head.
-fn assert_ring(neighbours: &[MessageOrigin]) {
+pub fn assert_ring(neighbours: &[MessageOrigin]) {
 	for (i, origin) in neighbours.iter().enumerate() {
 		let book = BookStateFor::<Test>::get(&origin);
 		assert_eq!(
