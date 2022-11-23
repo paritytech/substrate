@@ -1020,6 +1020,40 @@ impl pallet_ddc_metrics_offchain_worker::Config for Runtime {
 	type Call = Call;
 }
 
+pub struct CustomOnRuntimeUpgrade;
+impl frame_support::traits::OnRuntimeUpgrade for CustomOnRuntimeUpgrade {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		// Update scheduler origin usage
+		#[derive(Encode, Decode)]
+		#[allow(non_camel_case_types)]
+		pub enum OldOriginCaller {
+			system(frame_system::Origin<Runtime>),
+			pallet_collective_Instance1(
+				pallet_collective::Origin<Runtime, pallet_collective::Instance1>
+			),
+			pallet_collective_Instance2(
+				pallet_collective::Origin<Runtime, pallet_collective::Instance2>
+			),
+		}
+
+		impl Into<OriginCaller> for OldOriginCaller {
+			fn into(self) -> OriginCaller {
+				match self {
+					OldOriginCaller::system(o) => OriginCaller::system(o),
+					OldOriginCaller::pallet_collective_Instance1(o) =>
+						OriginCaller::pallet_collective_Instance1(o),
+					OldOriginCaller::pallet_collective_Instance2(o) =>
+						OriginCaller::pallet_collective_Instance2(o),
+				}
+			}
+		}
+
+		pallet_scheduler::Module::<Runtime>::migrate_origin::<OldOriginCaller>();
+
+		RuntimeBlockWeights::get().max_block
+	}
+}
+
 construct_runtime!(
 	pub enum Runtime where
 		Block = Block,
