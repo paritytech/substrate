@@ -44,7 +44,7 @@ use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
 use sc_network_common::service::NetworkRequest;
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
-use sp_api::{BlockT, HeaderT, NumberFor, ProvideRuntimeApi};
+use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
 };
@@ -214,8 +214,6 @@ where
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
-	u64: From<NumberFor<B>>,
-	<<B as BlockT>::Header as HeaderT>::Number: From<u64>,
 {
 	let BeefyParams {
 		client,
