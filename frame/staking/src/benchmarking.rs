@@ -22,7 +22,7 @@ use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;
 
 use codec::Decode;
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	pallet_prelude::*,
