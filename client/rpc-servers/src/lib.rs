@@ -119,9 +119,9 @@ pub async fn start_http<M: Send + Sync + 'static>(
 	};
 
 	log::info!(
-		"Running JSON-RPC WS server: addr={}, allowed origins={}",
+		"Running JSON-RPC HTTP server: addr={}, allowed origins={}",
 		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
-		format_cors(cors),
+		format_cors(cors)
 	);
 
 	Ok(handle)
@@ -177,7 +177,7 @@ pub async fn start<M: Send + Sync + 'static>(
 	log::info!(
 		"Running JSON-RPC WS server: addr={}, allowed origins={}",
 		addr.map_or_else(|_| "unknown".to_string(), |a| a.to_string()),
-		format_cors(cors),
+		format_cors(cors)
 	);
 
 	Ok(handle)
