@@ -244,7 +244,6 @@ where
 	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(
 		network.clone(),
-		runtime.clone(),
 		justifications_protocol_name,
 		known_peers,
 	);
@@ -295,7 +294,7 @@ where
 		persisted_state,
 	};
 
-	let worker = worker::BeefyWorker::<_, _, _, _, _>::new(worker_params);
+	let worker = worker::BeefyWorker::<_, _, _, _>::new(worker_params);
 
 	futures::future::join(
 		worker.run(block_import_justif, finality_notifications),
