@@ -41,9 +41,6 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, Header
 use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
-use sp_api::{BlockId, ProvideRuntimeApi};
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
-
 use sp_api::{BlockId, BlockT, HeaderT, ProvideRuntimeApi};
 use sp_arithmetic::traits::AtLeast32Bit;
 use sp_consensus::SyncOracle;
