@@ -30,7 +30,7 @@ zombienet-0000-block-building:
     - .zombienet-common
   script:
     - /home/nonroot/zombie-net/scripts/ci/run-test-env-manager.sh
-        --github-remote-dir="${GH_DIR}/0000_block_building"
+        --github-remote-dir="${GH_DIR}/0000-block-building"
         --test="0000-block-building.zndsl"
 
 
