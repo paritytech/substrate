@@ -234,6 +234,13 @@ pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);
 }
 
+/// Assert that exactly these pages are present. Assumes `Here` origin.
+pub fn assert_pages(indices: &[u32]) {
+	assert_eq!(Pages::<Test>::iter().count(), indices.len());
+	for i in indices {
+		assert!(Pages::<Test>::contains_key(&MessageOrigin::Here, i));
+	}
+}
 /// Check that the Ready Ring consists of `neighbours` in that exact order.
 ///
 /// Also check that all backlinks are valid and that the first element is the service head.

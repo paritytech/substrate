@@ -847,7 +847,7 @@ impl<T: Config> Pallet<T> {
 				Some(x) => x + 1,
 				None => return false,
 			};
-			let backlog = (max_stale * max_stale / overflow).max(max_stale);
+			let backlog = (max_stale / overflow).max(max_stale);
 			let watermark = book_state.begin.saturating_sub(backlog);
 			page_index < watermark
 		};

@@ -149,29 +149,37 @@ fn queue_priority_reset_once_serviced() {
 
 #[test]
 fn reap_page_permanent_overweight_works() {
-	assert!(MaxStale::get() >= 2, "pre-condition unmet");
+	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
-		use MessageOrigin::*;
-		// Create pages with messages with a weight of two.
-		for _ in 0..(MaxStale::get() * MaxStale::get()) {
+		// Create 10 pages more than the stale limit.
+		for i in 0..(MaxStale::get() + 10) {
 			MessageQueue::enqueue_message(msg(&"weight=2"), Here);
 		}
-
-		// … but only allow the processing to take at most weight 1.
+		assert_eq!(Pages::<Test>::iter().count(), MaxStale::get() as usize + 10);
+		// Mark all pages as stale since their message is permanently overweight.
 		MessageQueue::service_queues(1.into_weight());
 
-		// We can now reap the first one since they are permanently overweight and over the MaxStale
-		// limit.
-		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
-		// Cannot reap again.
-		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
+		// Cannot reap any page within the stale limit.
+		for i in 10..(MaxStale::get() + 10) {
+			assert_noop!(MessageQueue::do_reap_page(&Here, 10), Error::<Test>::NotReapable);
+		}
+		// Can reap the stale ones below the watermark.
+		for i in 0..10 {
+			assert_ok!(MessageQueue::do_reap_page(&Here, i));
+		}
+		// Cannot reap any more pages.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+		}
 	});
 }
 
 #[test]
 fn reaping_overweight_fails_properly() {
+	use MessageOrigin::*;
+	assert_eq!(MaxStale::get(), 2, "The stale limit is two");
+
 	new_test_ext::<Test>().execute_with(|| {
-		use MessageOrigin::*;
 		// page 0
 		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
 		MessageQueue::enqueue_message(msg(&"a"), Here);
@@ -187,42 +195,72 @@ fn reaping_overweight_fails_properly() {
 		MessageQueue::enqueue_message(msg(&"bigbig 2"), Here);
 		// page 5
 		MessageQueue::enqueue_message(msg(&"bigbig 3"), Here);
+		// Double-check that exactly these pages exist.
+		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
+		// Start by servicing with 2 weight; this is enough for 0:"a" and 1:"b".
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"a"), Here), (vmsg(&"b"), Here)]);
-		// 2 stale now.
+		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
-		// Not reapable yet, because we haven't hit the stale limit.
-		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NotReapable);
+		// 0 and 1 are now since they both contain a permanently overweight message.
+		// Nothing is reapable yet, because we haven't hit the stale limit of 2.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+		}
 
+		// Service with 1 weight; this is enough for 2:"c".
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"c"), Here)]);
-		// 3 stale now: can take something 4 pages in history.
 
+		// 0, 1 and 2 are stale now because of a permanently overweight message.
+		// 0 should be reapable since it is over the stale limit of 2.
+		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
+		assert_pages(&[1, 2, 3, 4, 5]);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
+		// ... but no other pages.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+		}
+
+		// Service page 3.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 1"), Here)]);
+		assert_pages(&[1, 2, 4, 5]);
 
-		// Not reapable yet, because we haven't hit the stale limit.
-		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NotReapable);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
+		// Nothing reapable.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+		}
 
+		// Service page 4.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 2"), Here)]);
+		assert_pages(&[1, 2, 5]);
+		assert_noop!(MessageQueue::do_reap_page(&Here, 3), Error::<Test>::NoPage);
 
-		// First is now reapable as it is too far behind the first ready page (5).
-		assert_ok!(MessageQueue::do_reap_page(&Here, 0));
-		// Others not reapable yet, because we haven't hit the stale limit.
-		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
+		// Nothing reapable.
+		for (o, i, _) in Pages::<Test>::iter() {
+			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+		}
 
-		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
-		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 3"), Here)]);
+		// Mark 5 as stale by being permanently overweight.
+		assert_eq!(MessageQueue::service_queues(0.into_weight()), 0.into_weight());
+		assert!(MessagesProcessed::take().is_empty());
 
-		assert_noop!(MessageQueue::do_reap_page(&Here, 0), Error::<Test>::NoPage);
-		// Still not reapable, since the number of stale pages is only 2.
-		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NotReapable);
-		assert_noop!(MessageQueue::do_reap_page(&Here, 2), Error::<Test>::NotReapable);
+		// 1, 2 and 5 stale now: 1 should be reapable.
+		assert_ok!(MessageQueue::do_reap_page(&Here, 1));
+		assert_noop!(MessageQueue::do_reap_page(&Here, 1), Error::<Test>::NoPage);
+
+		// 2 and 5 are present but not reapable.
+		assert_pages(&[2, 5]);
+		for i in [2, 5] {
+			assert_noop!(MessageQueue::do_reap_page(&Here, i), Error::<Test>::NotReapable);
+		}
+		// 0, 1, 3 and 4 are gone.
+		for i in [0, 1, 3, 4] {
+			assert_noop!(MessageQueue::do_reap_page(&Here, i), Error::<Test>::NoPage);
+		}
 	});
 }
 
