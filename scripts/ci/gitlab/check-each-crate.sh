@@ -40,7 +40,7 @@ group=1
 for ((i=0; i < crates_total; i += crates_per_group)); do
   if [ $group -eq "$target_group" ]; then
     crates_in_group=("${workspace_crates[@]:$i:$crates_per_group}")
-    printf "crates in the group: ${crates_in_group[*]}" >/dev/null # >/dev/null due to "set -x"
+    echo "crates in the group: ${crates_in_group[*]}" >/dev/null # >/dev/null due to "set -x"
     for crate in "${crates_in_group[@]}"; do
       cargo check --locked --release -p "$crate"
     done
