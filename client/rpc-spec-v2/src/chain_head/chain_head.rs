@@ -49,7 +49,9 @@ use sc_client_api::{
 };
 use serde::Serialize;
 use sp_api::CallApiAt;
-use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
+use sp_blockchain::{
+	Backend as BlockChainBackend, Error as BlockChainError, HeaderBackend, HeaderMetadata,
+};
 use sp_core::{hexdisplay::HexDisplay, storage::well_known_keys, Bytes};
 use sp_runtime::{
 	generic::BlockId,
@@ -164,10 +166,9 @@ where
 			runtime_updates,
 		});
 
-		let mut initial_blocks = Vec::new();
-		get_initial_blocks(&self.backend, finalized_block_hash, &mut initial_blocks);
-
+		let initial_blocks = get_initial_blocks(&self.backend, finalized_block_hash);
 		let mut in_memory_blocks = Vec::with_capacity(initial_blocks.len() + 1);
+
 		in_memory_blocks.push(initialized_event);
 		for (child, parent) in initial_blocks.into_iter() {
 			handle.pin_block(child)?;
@@ -255,21 +256,27 @@ where
 fn get_initial_blocks<BE, Block>(
 	backend: &Arc<BE>,
 	parent_hash: Block::Hash,
-	result: &mut Vec<(Block::Hash, Block::Hash)>,
-) where
+) -> Vec<(Block::Hash, Block::Hash)>
+where
 	Block: BlockT + 'static,
 	BE: Backend<Block> + 'static,
 {
-	use sp_blockchain::Backend;
+	let mut result = Vec::new();
+	let mut next_hash = Vec::new();
+	next_hash.push(parent_hash);
 
-	match backend.blockchain().children(parent_hash) {
-		Ok(blocks) =>
-			for child_hash in blocks {
-				result.push((child_hash, parent_hash));
-				get_initial_blocks(backend, child_hash, result);
-			},
-		Err(_) => (),
+	while let Some(parent_hash) = next_hash.pop() {
+		let Ok(blocks) = backend.blockchain().children(parent_hash) else {
+			continue
+		};
+
+		for child_hash in blocks {
+			result.push((child_hash, parent_hash));
+			next_hash.push(child_hash);
+		}
 	}
+
+	result
 }
 
 /// Submit the events from the provided stream to the RPC client
