@@ -1098,7 +1098,26 @@ pub type SignedPayload = generic::SignedPayload<Call, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Call, SignedExtra>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = frame_executive::Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllModules>;
+pub type Executive = frame_executive::Executive<
+	Runtime,
+	Block,
+	frame_system::ChainContext<Runtime>,
+	Runtime,
+	AllModules,
+	PhragmenElectionDepositRuntimeUpgrade,
+>;
+
+pub struct PhragmenElectionDepositRuntimeUpgrade;
+impl pallet_elections_phragmen::migrations_3_0_0::V2ToV3 for PhragmenElectionDepositRuntimeUpgrade {
+	type AccountId = AccountId;
+	type Balance = Balance;
+	type Module = Elections;
+}
+impl frame_support::traits::OnRuntimeUpgrade for PhragmenElectionDepositRuntimeUpgrade {
+	fn on_runtime_upgrade() -> frame_support::weights::Weight {
+		pallet_elections_phragmen::migrations_3_0_0::apply::<Self>(5 * CENTS, DOLLARS)
+	}
+}
 
 impl_runtime_apis! {
 	impl sp_api::Core<Block> for Runtime {
