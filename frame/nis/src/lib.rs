@@ -922,13 +922,7 @@ pub mod pallet {
 			summary.proportion_owed.defensive_saturating_accrue(proportion);
 			summary.index += 1;
 
-			let e = Event::Issued {
-				index,
-				expiry,
-				who: who.clone(),
-				amount,
-				proportion,
-			};
+			let e = Event::Issued { index, expiry, who: who.clone(), amount, proportion };
 			Self::deposit_event(e);
 			let receipt = ReceiptRecord { proportion, who: who.clone(), expiry };
 			Receipts::<T>::insert(index, receipt);
