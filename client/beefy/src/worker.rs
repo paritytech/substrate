@@ -42,12 +42,12 @@ use sc_network_common::service::{NetworkEventStream, NetworkRequest};
 use sc_network_gossip::GossipEngine;
 use sc_utils::notification::NotificationReceiver;
 use sp_api::{BlockId, BlockT, HeaderT, ProvideRuntimeApi};
-use sp_arithmetic::traits::AtLeast32Bit;
+use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
 	generic::OpaqueDigestItemId,
-	traits::{Block, CheckedConversion, ConstU32, NumberFor, Zero},
+	traits::{Block, ConstU32, NumberFor, Zero},
 	BoundedBTreeMap, BoundedVec, SaturatedConversion,
 };
 use std::{
@@ -679,32 +679,15 @@ where
 			u64: From<NumberFor<B>>,
 			<<B as BlockT>::Header as HeaderT>::Number: From<u64>,
 		{
-			let mut to_handle = BTreeMap::new();
-
-			let mut still_pending = BTreeMap::new();
-
-			let end: u64 = end.into();
-			let start: u64 = start.into();
-			let still_pending_range = end.saturating_add(1u32.into())..U.into();
-
-			for i in still_pending_range {
-				let value_to_be_removed = pending.remove(&i.into());
-				if value_to_be_removed.is_some() {
-					still_pending.insert(i.into(), value_to_be_removed.unwrap());
-				}
-			}
-
-			let to_handle_range = start..=end;
-
-			for i in to_handle_range {
-				let value_to_be_removed = pending.remove(&i.into());
-				if value_to_be_removed.is_some() {
-					to_handle.insert(i.into(), value_to_be_removed.unwrap());
-				}
-			}
-
-			*pending = BoundedBTreeMap::checked_from(still_pending).expect("Should not fail");
-
+			// These are still pending.
+			let still_pending = pending.split_off(&end.saturating_add(1u32.into()));
+			// These can be processed.
+			let to_handle = pending.split_off(&start);
+			let bounded_still_pending =
+				BoundedBTreeMap::<NumberFor<B>, T, ConstU32<U>>::unchecked_from(still_pending);
+			// The rest can be dropped.
+			*pending = bounded_still_pending;
+			// Return ones to process.
 			to_handle
 		}
 		// Interval of blocks for which we can process justifications and votes right now.

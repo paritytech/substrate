@@ -19,7 +19,12 @@
 
 use crate::{Get, TryCollect};
 use codec::{Decode, Encode, MaxEncodedLen};
-use sp_std::{borrow::Borrow, collections::btree_map::BTreeMap, marker::PhantomData, ops::Deref};
+use sp_std::{
+	borrow::Borrow,
+	collections::btree_map::BTreeMap,
+	marker::PhantomData,
+	ops::{Deref, DerefMut},
+};
 
 /// A bounded map based on a B-Tree.
 ///
@@ -67,7 +72,7 @@ where
 	S: Get<u32>,
 {
 	/// Create `Self` from `t` without any checks.
-	fn unchecked_from(t: BTreeMap<K, V>) -> Self {
+	pub fn unchecked_from(t: BTreeMap<K, V>) -> Self {
 		Self(t, Default::default())
 	}
 
@@ -325,6 +330,15 @@ where
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
+	}
+}
+
+impl<K, V, S> DerefMut for BoundedBTreeMap<K, V, S>
+where
+	K: Ord,
+{
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.0
 	}
 }
 
