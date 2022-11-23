@@ -38,7 +38,7 @@ use sp_runtime::{
 };
 use sp_staking::{
 	offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
-	EraIndex, SessionIndex, Stake, StakingInterface,
+	EraIndex, OnStakingUpdate, SessionIndex, Stake, StakingInterface,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 
@@ -230,8 +230,13 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
+		let prev_ledger = Self::ledger(controller)
+			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
+			.unwrap_or_default();
+
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
+		let _ = T::EventListener::on_update_ledger(prev_ledger);
 	}
 
 	/// Chill a stash account.
@@ -620,6 +625,7 @@ impl<T: Config> Pallet<T> {
 		<Payee<T>>::remove(stash);
 		Self::do_remove_validator(stash);
 		Self::do_remove_nominator(stash);
+		let _ = T::EventListener::on_reaped(stash);
 
 		frame_system::Pallet::<T>::dec_consumers(stash);
 
@@ -835,12 +841,15 @@ impl<T: Config> Pallet<T> {
 	/// to `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_add_nominator(who: &T::AccountId, nominations: Nominations<T>) {
-		if !Nominators::<T>::contains_key(who) {
+		let prev_nominations = Self::nominations(who);
+		if !prev_nominations.is_none() {
 			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
 		}
 		Nominators::<T>::insert(who, nominations);
+		let _ = T::EventListener::on_nominator_add(who, prev_nominations.unwrap_or_default())
+			.defensive();
 
 		debug_assert_eq!(
 			Nominators::<T>::count() + Validators::<T>::count(),
@@ -857,12 +866,13 @@ impl<T: Config> Pallet<T> {
 	/// `Nominators` or `VoterList` outside of this function is almost certainly
 	/// wrong.
 	pub fn do_remove_nominator(who: &T::AccountId) -> bool {
-		let outcome = if Nominators::<T>::contains_key(who) {
+		let outcome = if let Some(nominations) = Self::nominations(who) {
 			Nominators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
+			let _ = T::EventListener::on_nominator_remove(who, nominations);
 			true
 		} else {
-			false
+			true
 		};
 
 		debug_assert_eq!(
@@ -885,6 +895,7 @@ impl<T: Config> Pallet<T> {
 			// maybe update sorted list.
 			let _ = T::VoterList::on_insert(who.clone(), Self::weight_of(who))
 				.defensive_unwrap_or_default();
+			let _ = T::EventListener::on_validator_add(who);
 		}
 		Validators::<T>::insert(who, prefs);
 
@@ -905,6 +916,7 @@ impl<T: Config> Pallet<T> {
 		let outcome = if Validators::<T>::contains_key(who) {
 			Validators::<T>::remove(who);
 			let _ = T::VoterList::on_remove(who).defensive();
+			let _ = T::EventListener::on_validator_remove(who);
 			true
 		} else {
 			false

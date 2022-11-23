@@ -84,12 +84,9 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_update_ledger(
-		who: &T::AccountId,
-		prev_stake: Stake<T::AccountId, BalanceOf<T>>,
-	) -> DispatchResult {
+	fn on_update_ledger(prev_stake: Stake<T::AccountId, BalanceOf<T>>) -> DispatchResult {
+		let current_stake = T::Staking::stake(&prev_stake.stash)?;
 		let prev_active = prev_stake.active;
-		let current_stake = T::Staking::stake(who)?;
 		let current_active = current_stake.active;
 
 		let update_approval_stake = |who: &T::AccountId| {
@@ -164,6 +161,9 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 
 			update_approval_stake(&nomination, new_stake);
 		}
+		let _ =
+			T::VoterList::on_insert(who.clone(), Self::to_vote(Self::slashable_balance_of(who)))
+				.defensive_unwrap_or_default();
 		Ok(())
 	}
 

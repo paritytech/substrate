@@ -62,6 +62,7 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 
 /// A struct that reflects stake that an account has in the staking system. Provides a set of
 /// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
+#[derive(Default)]
 pub struct Stake<AccountId, Balance> {
 	/// The stash account whose balance is actually locked and at stake.
 	pub stash: AccountId,
@@ -86,7 +87,7 @@ pub struct Stake<AccountId, Balance> {
 /// The rest of the data can be retrieved by using `StakingInterface`.
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Track ledger updates.
-	fn on_update_ledger(who: &AccountId, prev_stake: Stake<AccountId, Balance>) -> DispatchResult;
+	fn on_update_ledger(prev_stake: Stake<AccountId, Balance>) -> DispatchResult;
 	/// Track nominators, those reinstated and also new ones.
 	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>) -> DispatchResult;
 	/// Track validators, those reinstated and new.
