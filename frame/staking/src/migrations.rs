@@ -210,6 +210,7 @@ pub mod v10 {
 
 pub mod v9 {
 	use super::*;
+	use frame_election_provider_support::ReadOnlySortedListProvider;
 	#[cfg(feature = "try-runtime")]
 	use frame_support::codec::{Decode, Encode};
 	#[cfg(feature = "try-runtime")]
@@ -282,7 +283,7 @@ pub mod v9 {
 
 pub mod v8 {
 	use crate::{Config, Nominators, Pallet, StorageVersion, Weight};
-	use frame_election_provider_support::SortedListProvider;
+	use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider};
 	use frame_support::traits::Get;
 
 	#[cfg(feature = "try-runtime")]

@@ -18,8 +18,8 @@
 //! Implementations for the Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider, ScoreProvider,
-	SortedListProvider, VoteWeight, VoterOf,
+	data_provider, BoundedSupportsOf, ElectionDataProvider, ElectionProvider,
+	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight, VoterOf,
 };
 use frame_support::{
 	dispatch::WithPostDispatchInfo,
@@ -1366,9 +1366,9 @@ impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
 /// does not provide validators in sorted order. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list`].
 pub struct UseValidatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
-	type Score = BalanceOf<T>;
+impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	type Error = ();
+	type Score = BalanceOf<T>;
 
 	/// Returns iterator over voter list, which can have `take` called on it.
 	fn iter() -> Box<dyn Iterator<Item = T::AccountId>> {
@@ -1390,13 +1390,20 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn contains(id: &T::AccountId) -> bool {
 		Validators::<T>::contains_key(id)
 	}
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id).into())
+	}
+	fn try_state() -> Result<(), &'static str> {
+		Ok(())
+	}
+}
+
+impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id).into())
-	}
+
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
 		Ok(())
@@ -1412,9 +1419,7 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 		// nothing to do upon regenerate.
 		0
 	}
-	fn try_state() -> Result<(), &'static str> {
-		Ok(())
-	}
+
 	fn unsafe_clear() {
 		#[allow(deprecated)]
 		Validators::<T>::remove_all();
@@ -1430,7 +1435,8 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseValidatorsMap<T> {
 /// does not provided nominators in sorted ordered. If you desire nominators in a sorted order take
 /// a look at [`pallet-bags-list].
 pub struct UseNominatorsAndValidatorsMap<T>(sp_std::marker::PhantomData<T>);
-impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
+
+impl<T: Config> ReadOnlySortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	type Error = ();
 	type Score = VoteWeight;
 
@@ -1464,13 +1470,20 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	fn contains(id: &T::AccountId) -> bool {
 		Nominators::<T>::contains_key(id) || Validators::<T>::contains_key(id)
 	}
+	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
+		Ok(Pallet::<T>::weight_of(id))
+	}
+	fn try_state() -> Result<(), &'static str> {
+		Ok(())
+	}
+}
+
+impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsMap<T> {
 	fn on_insert(_: T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on insert.
 		Ok(())
 	}
-	fn get_score(id: &T::AccountId) -> Result<Self::Score, Self::Error> {
-		Ok(Pallet::<T>::weight_of(id))
-	}
+
 	fn on_update(_: &T::AccountId, _weight: Self::Score) -> Result<(), Self::Error> {
 		// nothing to do on update.
 		Ok(())
@@ -1485,9 +1498,6 @@ impl<T: Config> SortedListProvider<T::AccountId> for UseNominatorsAndValidatorsM
 	) -> u32 {
 		// nothing to do upon regenerate.
 		0
-	}
-	fn try_state() -> Result<(), &'static str> {
-		Ok(())
 	}
 
 	fn unsafe_clear() {
@@ -1605,7 +1615,6 @@ impl<T: Config> StakingInterface for Pallet<T> {
 		Self::nominate(RawOrigin::Signed(ctrl).into(), targets)
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
 	fn nominations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
 		Nominators::<T>::get(who).map(|n| n.targets.into_inner())
 	}
@@ -1627,6 +1636,12 @@ impl<T: Config> StakingInterface for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(era: EraIndex) {
 		CurrentEra::<T>::put(era);
+	}
+
+	type CurrencyToVote = T::CurrencyToVote;
+
+	fn is_validator(who: &Self::AccountId) -> bool {
+		Validators::<T>::contains_key(who)
 	}
 }
 

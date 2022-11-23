@@ -16,7 +16,7 @@
 
 //! Test to execute the sanity-check of the voter bag.
 
-use frame_election_provider_support::SortedListProvider;
+use frame_election_provider_support::ReadOnlySortedListProvider;
 use frame_support::{
 	storage::generator::StorageMap,
 	traits::{Get, PalletInfoAccess},

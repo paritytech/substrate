@@ -17,7 +17,7 @@
 
 //! Utilities for remote-testing pallet-bags-list.
 
-use frame_election_provider_support::ScoreProvider;
+use frame_election_provider_support::{ReadOnlySortedListProvider, ScoreProvider};
 use pallet_bags_list::Instance1;
 use sp_std::prelude::*;
 

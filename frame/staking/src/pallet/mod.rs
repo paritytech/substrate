@@ -18,7 +18,8 @@
 //! Staking FRAME Pallet.
 
 use frame_election_provider_support::{
-	ElectionProvider, ElectionProviderBase, SortedListProvider, VoteWeight,
+	ElectionProvider, ElectionProviderBase, ReadOnlySortedListProvider, SortedListProvider,
+	VoteWeight,
 };
 use frame_support::{
 	dispatch::Codec,

@@ -3,7 +3,7 @@ use crate::{self as pools};
 use frame_support::{assert_ok, parameter_types, PalletId};
 use frame_system::RawOrigin;
 use sp_runtime::FixedU128;
-use sp_staking::Stake;
+use sp_staking::{currency_to_vote::U128CurrencyToVote, Stake};
 
 pub type BlockNumber = u64;
 pub type AccountId = u128;
@@ -107,8 +107,7 @@ impl sp_staking::StakingInterface for StakingMock {
 		Ok(())
 	}
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(_: Self::AccountId) -> Option<Vec<Self::AccountId>> {
+	fn nominations(_: &Self::AccountId) -> Option<Vec<Self::AccountId>> {
 		Nominations::get()
 	}
 
@@ -154,6 +153,12 @@ impl sp_staking::StakingInterface for StakingMock {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_current_era(_era: EraIndex) {
 		unimplemented!("method currently not used in testing")
+	}
+
+	type CurrencyToVote = U128CurrencyToVote;
+
+	fn is_validator(_who: &Self::AccountId) -> bool {
+		false
 	}
 }
 
