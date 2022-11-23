@@ -26,7 +26,7 @@ use frame_system::RawOrigin;
 use sp_arithmetic::Perquintill;
 use sp_runtime::{
 	traits::{Bounded, One, Zero},
-	DispatchError,
+	DispatchError, PerThing,
 };
 use sp_std::prelude::*;
 
@@ -110,7 +110,10 @@ benchmarks! {
 		T::Currency::make_free_balance_be(&Nis::<T>::account_id(), BalanceOf::<T>::min_value());
 	}: _<T::RuntimeOrigin>(origin)
 	verify {
-		assert_eq!(original, T::Currency::free_balance(&Nis::<T>::account_id()));
+		// Must fund at least 99.999% of the required amount.
+		let missing = Perquintill::from_rational(
+			T::Currency::free_balance(&Nis::<T>::account_id()), original).left_from_one();
+		assert!(missing <= Perquintill::one() / 100_000);
 	}
 
 	thaw {
