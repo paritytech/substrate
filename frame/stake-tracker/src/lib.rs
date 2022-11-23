@@ -214,6 +214,8 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 	}
 
 	fn on_reaped(who: &T::AccountId) -> DispatchResult {
-		todo!()
+		ApprovalStake::<T>::remove(who);
+
+		Ok(())
 	}
 }
