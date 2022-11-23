@@ -36,8 +36,7 @@ use sc_network_common::{
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, BlockT, HeaderT, ProvideRuntimeApi};
-use sp_arithmetic::traits::{AtLeast32Bit, Saturating};
-use sp_blockchain::Backend as BlockchainBackend;
+use sp_arithmetic::traits::AtLeast32Bit;
 use sp_consensus::SyncOracle;
 use sp_mmr_primitives::MmrApi;
 use sp_runtime::{
@@ -66,7 +65,6 @@ use crate::{
 	round::Rounds,
 	BeefyVoterLinks, KnownPeers,
 };
-use sp_runtime::sp_std::cmp;
 /// Bound for the number of buffered future voting rounds.
 const MAX_BUFFERED_VOTE_ROUNDS: u32 = 20;
 /// Bound for the number of buffered votes per round number.
@@ -343,8 +341,6 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	>,
 	/// Persisted voter state.
 	persisted_state: PersistedState<B>,
-	/// Chooses which incoming votes to accept and which votes to generate.
-	voting_oracle: VoterOracle<B>,
 }
 
 impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
@@ -519,19 +515,7 @@ where
 			)?,
 			RoundAction::Enqueue => {
 				debug!(target: "beefy", "🥩 Buffer vote for round: {:?}.", block_num);
-				if self.pending_votes.remove(&block_num).is_some() {
-					let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
-					vec_of_votes.push(vote);
-					if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
-						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
-					}
-				} else {
-					let mut vec_of_votes = vec![];
-					vec_of_votes.push(vote);
-					if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
-						warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
-					}
-				}
+				self.enqueue_votes(block_num, vote);
 			},
 			RoundAction::Drop => (),
 		};
@@ -539,20 +523,29 @@ where
 	}
 
 	/// An helper function to determine how to Enqueue votes
-	fn enqueue_votes<TBlockNumber>(&mut self, block_num: TBlockNumber)
-	where
-		TBlockNumber: cmp::Ord + Debug,
-	{
+	fn enqueue_votes(
+		&mut self,
+		block_num: NumberFor<B>,
+		vote: VoteMessage<NumberFor<B>, AuthorityId, Signature>,
+	) {
 		if self.pending_votes.remove(&block_num).is_some() {
 			let mut vec_of_votes = self.pending_votes.remove(&block_num).unwrap();
-			vec_of_votes.push(vote);
-			if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+			vec_of_votes.try_extend(vec![vote].into_iter()).unwrap();
+			if self
+				.pending_votes
+				.try_insert(block_num, vec_of_votes.try_into().expect("Too many votes"))
+				.is_err()
+			{
 				warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
 			}
 		} else {
 			let mut vec_of_votes = vec![];
 			vec_of_votes.push(vote);
-			if self.pending_votes.try_insert(block_num, vec_of_votes).is_err() {
+			if self
+				.pending_votes
+				.try_insert(block_num, vec_of_votes.try_into().expect("Too many votes"))
+				.is_err()
+			{
 				warn!(target: "beefy", "🥩 Buffer vote dropped for round: {:?}.", block_num)
 			}
 		}
