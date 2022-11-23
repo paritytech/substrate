@@ -56,7 +56,9 @@ use sc_network_common::{
 	},
 	protocol::{role::Roles, ProtocolName},
 	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
-	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider},
+	sync::warp::{
+		AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncParams, WarpSyncProvider,
+	},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{

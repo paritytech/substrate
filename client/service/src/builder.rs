@@ -843,10 +843,9 @@ where
 		protocol_config
 	};
 
-	let mut warp_sync_protocol_config = None;
-	match warp_sync_params.as_ref().unwrap() {
-		WarpSyncParams::WithProvider(warp_with_provider) => {
-			(_, warp_sync_protocol_config) = Some(warp_with_provider)
+	let warp_sync_protocol_config = match warp_sync_params.as_ref() {
+		Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
+			let (_, warp_sync_protocol_config) = Some(warp_with_provider)
 				.map(|provider| {
 					// Allow both outgoing and incoming requests.
 					let (handler, protocol_config) = WarpSyncRequestHandler::new(
@@ -859,14 +858,18 @@ where
 						config.chain_spec.fork_id(),
 						provider.clone(),
 					);
-					spawn_handle.spawn("warp-sync-request-handler", Some("networking"), handler.run());
+					spawn_handle.spawn(
+						"warp-sync-request-handler",
+						Some("networking"),
+						handler.run(),
+					);
 					(Some(provider), Some(protocol_config))
 				})
 				.unwrap_or_default();
+			warp_sync_protocol_config
 		},
-		_ => {
-		}
-	}
+		_ => None,
+	};
 
 	let light_client_request_protocol_config = {
 		// Allow both outgoing and incoming requests.

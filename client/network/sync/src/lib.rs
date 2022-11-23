@@ -565,6 +565,7 @@ where
 					info!("💔 New peer with unknown genesis hash {} ({}).", best_hash, best_number);
 					return Err(BadPeer(who, rep::GENESIS_MISMATCH))
 				}
+
 				// If there are more than `MAJOR_SYNC_BLOCKS` in the import queue then we have
 				// enough to do in the import queue that it's not worth kicking off
 				// an ancestor search, which is what we do in the next match case below.
@@ -633,18 +634,25 @@ where
 				if let SyncMode::Warp = &self.mode {
 					if self.peers.len() >= MIN_PEERS_TO_START_WARP_SYNC && self.warp_sync.is_none()
 					{
-							match self.warp_sync_params.as_mut().unwrap() {
-								WarpSyncParams::WithProvider(warp_with_provider) => {
-									log::debug!(target: "sync", "Starting warp state sync.");
-									self.warp_sync = Some(WarpSync::new(self.client.clone(), warp_with_provider.clone()));
-								}
-								WarpSyncParams::WaitForTarget(header) => {
-									log::debug!(target: "sync", "Waiting for target block.");
-									async_std::task::block_on(async {
-										self.warp_sync = Some(WarpSync::new_with_target_block(self.client.clone(), header.await.unwrap()));
-									});
-								}
-							}
+						match self.warp_sync_params.as_mut() {
+							Some(WarpSyncParams::WithProvider(warp_with_provider)) => {
+								log::debug!(target: "sync", "Starting warp state sync.");
+								self.warp_sync = Some(WarpSync::new(
+									self.client.clone(),
+									warp_with_provider.clone(),
+								));
+							},
+							Some(WarpSyncParams::WaitForTarget(target_block)) => {
+								log::debug!(target: "sync", "Waiting for target block.");
+								futures::executor::block_on(async {
+									self.warp_sync = Some(WarpSync::new_with_target_block(
+										self.client.clone(),
+										target_block.await.unwrap(),
+									));
+								});
+							},
+							None => {},
+						}
 					}
 				}
 				Ok(req)

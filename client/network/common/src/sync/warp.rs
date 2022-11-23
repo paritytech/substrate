@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Decode, Encode};
+use futures::channel::oneshot;
 pub use sp_finality_grandpa::{AuthorityList, SetId};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{fmt, sync::Arc};
-use futures::channel::oneshot;
 
 /// Scale-encoded warp sync proof response.
 pub struct EncodedProof(pub Vec<u8>);
@@ -34,7 +34,7 @@ pub struct WarpProofRequest<B: BlockT> {
 pub enum WarpSyncParams<Block: BlockT> {
 	/// Standard warp sync for the relay chain
 	WithProvider(Arc<dyn WarpSyncProvider<Block>>),
-	/// New sync that waits for a header from the relaychain
+	/// Skip downloading proofs and wait for a header from the relaychain
 	WaitForTarget(oneshot::Receiver<<Block as BlockT>::Header>),
 }
 
