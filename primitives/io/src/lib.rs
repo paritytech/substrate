@@ -534,6 +534,22 @@ pub trait Trie {
 	}
 
 	/// A trie root formed from the iterated items.
+	fn blake3_256_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake3Hasher>::trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake3Hasher>::trie_root(input),
+		}
+	}
+
+	/// A trie root formed from the enumerated items.
+	fn blake3_256_ordered_root(input: Vec<Vec<u8>>, version: StateVersion) -> H256 {
+		match version {
+			StateVersion::V0 => LayoutV0::<sp_core::Blake3Hasher>::ordered_trie_root(input),
+			StateVersion::V1 => LayoutV1::<sp_core::Blake3Hasher>::ordered_trie_root(input),
+		}
+	}
+
+	/// A trie root formed from the iterated items.
 	fn keccak_256_root(input: Vec<(Vec<u8>, Vec<u8>)>) -> H256 {
 		LayoutV0::<sp_core::KeccakHasher>::trie_root(input)
 	}
@@ -590,6 +606,32 @@ pub trait Trie {
 			.is_ok(),
 			StateVersion::V1 => sp_trie::verify_trie_proof::<
 				LayoutV1<sp_core::Blake2Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+		}
+	}
+
+	/// Verify trie proof
+	fn blake3_256_verify_proof(
+		root: H256,
+		proof: &[Vec<u8>],
+		key: &[u8],
+		value: &[u8],
+		version: StateVersion,
+	) -> bool {
+		match version {
+			StateVersion::V0 => sp_trie::verify_trie_proof::<
+				LayoutV0<sp_core::Blake3Hasher>,
+				_,
+				_,
+				_,
+			>(&root, proof, &[(key, Some(value))])
+			.is_ok(),
+			StateVersion::V1 => sp_trie::verify_trie_proof::<
+				LayoutV1<sp_core::Blake3Hasher>,
 				_,
 				_,
 				_,
@@ -1101,6 +1143,16 @@ pub trait Hashing {
 	/// Conduct a 256-bit Blake2 hash.
 	fn blake2_256(data: &[u8]) -> [u8; 32] {
 		sp_core::hashing::blake2_256(data)
+	}
+
+	/// Conduct a 128-bit Blake3 hash.
+	fn blake3_128(data: &[u8]) -> [u8; 16] {
+		sp_core::hashing::blake3_128(data)
+	}
+
+	/// Conduct a 256-bit Blake3 hash.
+	fn blake3_256(data: &[u8]) -> [u8; 32] {
+		sp_core::hashing::blake3_256(data)
 	}
 
 	/// Conduct four XX hashes to give a 256-bit result.

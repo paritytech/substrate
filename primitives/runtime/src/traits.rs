@@ -708,6 +708,33 @@ impl Hash for BlakeTwo256 {
 	}
 }
 
+/// Blake3-256 Hash implementation.
+#[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct BlakeThree256;
+
+impl Hasher for BlakeThree256 {
+	type Out = sp_core::H256;
+	type StdHasher = hash256_std_hasher::Hash256StdHasher;
+	const LENGTH: usize = 32;
+
+	fn hash(s: &[u8]) -> Self::Out {
+		sp_io::hashing::blake3_256(s).into()
+	}
+}
+
+impl Hash for BlakeThree256 {
+	type Output = sp_core::H256;
+
+	fn trie_root(input: Vec<(Vec<u8>, Vec<u8>)>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake3_256_root(input, version)
+	}
+
+	fn ordered_trie_root(input: Vec<Vec<u8>>, version: StateVersion) -> Self::Output {
+		sp_io::trie::blake3_256_ordered_root(input, version)
+	}
+}
+
 /// Keccak-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone, RuntimeDebug, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

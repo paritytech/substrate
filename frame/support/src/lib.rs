@@ -98,8 +98,8 @@ pub use self::storage::storage_noop_guard::StorageNoopGuard;
 pub use self::{
 	dispatch::{Callable, Parameter},
 	hash::{
-		Blake2_128, Blake2_128Concat, Blake2_256, Hashable, Identity, ReversibleStorageHasher,
-		StorageHasher, Twox128, Twox256, Twox64Concat,
+		Blake2_128, Blake2_128Concat, Blake2_256, Blake3_128, Blake3_128Concat, Blake3_256,
+		Hashable, Identity, ReversibleStorageHasher, StorageHasher, Twox128, Twox256, Twox64Concat,
 	},
 	storage::{
 		bounded_btree_map::BoundedBTreeMap,
@@ -1404,8 +1404,9 @@ pub mod pallet_prelude {
 			ConstU32, EnsureOrigin, Get, GetDefault, GetStorageVersion, Hooks, IsType,
 			PalletInfoAccess, StorageInfoTrait, StorageVersion, TypedGet,
 		},
-		Blake2_128, Blake2_128Concat, Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Identity,
-		PartialEqNoBound, RuntimeDebug, RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
+		Blake2_128, Blake2_128Concat, Blake2_256, Blake3_128, Blake3_128Concat, Blake3_256,
+		CloneNoBound, DebugNoBound, EqNoBound, Identity, PartialEqNoBound, RuntimeDebug,
+		RuntimeDebugNoBound, Twox128, Twox256, Twox64Concat,
 	};
 	pub use codec::{Decode, Encode, MaxEncodedLen};
 	pub use frame_support::pallet_macros::*;

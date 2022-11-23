@@ -35,6 +35,9 @@ mod keyword {
 	syn::custom_keyword!(opaque_blake2_256);
 	syn::custom_keyword!(opaque_blake2_128);
 	syn::custom_keyword!(blake2_128_concat);
+	syn::custom_keyword!(opaque_blake3_256);
+	syn::custom_keyword!(opaque_blake3_128);
+	syn::custom_keyword!(blake3_128_concat);
 	syn::custom_keyword!(opaque_twox_256);
 	syn::custom_keyword!(opaque_twox_128);
 	syn::custom_keyword!(twox_64_concat);
@@ -275,6 +278,9 @@ enum Hasher {
 	Blake2_256(keyword::opaque_blake2_256),
 	Blake2_128(keyword::opaque_blake2_128),
 	Blake2_128Concat(keyword::blake2_128_concat),
+	Blake3_256(keyword::opaque_blake3_256),
+	Blake3_128(keyword::opaque_blake3_128),
+	Blake3_128Concat(keyword::blake3_128_concat),
 	Twox256(keyword::opaque_twox_256),
 	Twox128(keyword::opaque_twox_128),
 	Twox64Concat(keyword::twox_64_concat),
@@ -290,6 +296,12 @@ impl syn::parse::Parse for Hasher {
 			Ok(Self::Blake2_128(input.parse()?))
 		} else if lookahead.peek(keyword::blake2_128_concat) {
 			Ok(Self::Blake2_128Concat(input.parse()?))
+		} else if lookahead.peek(keyword::opaque_blake3_256) {
+			Ok(Self::Blake3_256(input.parse()?))
+		} else if lookahead.peek(keyword::opaque_blake3_128) {
+			Ok(Self::Blake3_128(input.parse()?))
+		} else if lookahead.peek(keyword::blake3_128_concat) {
+			Ok(Self::Blake3_128Concat(input.parse()?))
 		} else if lookahead.peek(keyword::opaque_twox_256) {
 			Ok(Self::Twox256(input.parse()?))
 		} else if lookahead.peek(keyword::opaque_twox_128) {
@@ -346,6 +358,9 @@ impl From<Hasher> for super::HasherKind {
 			Hasher::Blake2_256(_) => super::HasherKind::Blake2_256,
 			Hasher::Blake2_128(_) => super::HasherKind::Blake2_128,
 			Hasher::Blake2_128Concat(_) => super::HasherKind::Blake2_128Concat,
+			Hasher::Blake3_256(_) => super::HasherKind::Blake3_256,
+			Hasher::Blake3_128(_) => super::HasherKind::Blake3_128,
+			Hasher::Blake3_128Concat(_) => super::HasherKind::Blake3_128Concat,
 			Hasher::Twox256(_) => super::HasherKind::Twox256,
 			Hasher::Twox128(_) => super::HasherKind::Twox128,
 			Hasher::Twox64Concat(_) => super::HasherKind::Twox64Concat,

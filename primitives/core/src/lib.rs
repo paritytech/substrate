@@ -50,7 +50,9 @@ pub use impl_serde::serialize as bytes;
 pub mod hashing;
 
 #[cfg(feature = "full_crypto")]
-pub use hashing::{blake2_128, blake2_256, keccak_256, twox_128, twox_256, twox_64};
+pub use hashing::{
+	blake2_128, blake2_256, blake3_128, blake3_256, keccak_256, twox_128, twox_256, twox_64,
+};
 pub mod bounded;
 pub mod crypto;
 pub mod hexdisplay;
@@ -77,6 +79,8 @@ pub use crypto::{ByteArray, DeriveJunction, Pair, Public};
 
 #[cfg(feature = "std")]
 pub use self::hasher::blake2::Blake2Hasher;
+#[cfg(feature = "std")]
+pub use self::hasher::blake3::Blake3Hasher;
 #[cfg(feature = "std")]
 pub use self::hasher::keccak::KeccakHasher;
 pub use hash_db::Hasher;

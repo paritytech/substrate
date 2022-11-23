@@ -79,6 +79,54 @@ pub fn blake2_64(data: &[u8]) -> [u8; 8] {
 	r
 }
 
+/// Do a Blake3 512-bit hash and place result in `dest`.
+pub fn blake3_512_into(data: &[u8], dest: &mut [u8; 64]) {
+	blake3::Hasher::new().update(data).finalize_xof().fill(&mut dest[..]);
+}
+
+/// Do a Blake3 512-bit hash and return result.
+pub fn blake3_512(data: &[u8]) -> [u8; 64] {
+	let mut r = [0; 64];
+	blake3_512_into(data, &mut r);
+	r
+}
+
+/// Do a Blake3 256-bit hash and place result in `dest`.
+pub fn blake3_256_into(data: &[u8], dest: &mut [u8; 32]) {
+	blake3::Hasher::new().update(data).finalize_xof().fill(&mut dest[..]);
+}
+
+/// Do a Blake3 256-bit hash and return result.
+pub fn blake3_256(data: &[u8]) -> [u8; 32] {
+	let mut r = [0; 32];
+	blake3_256_into(data, &mut r);
+	r
+}
+
+/// Do a Blake3 128-bit hash and place result in `dest`.
+pub fn blake3_128_into(data: &[u8], dest: &mut [u8; 16]) {
+	blake3::Hasher::new().update(data).finalize_xof().fill(&mut dest[..]);
+}
+
+/// Do a Blake3 128-bit hash and return result.
+pub fn blake3_128(data: &[u8]) -> [u8; 16] {
+	let mut r = [0; 16];
+	blake3_128_into(data, &mut r);
+	r
+}
+
+/// Do a Blake3 64-bit hash and place result in `dest`.
+pub fn blake3_64_into(data: &[u8], dest: &mut [u8; 8]) {
+	blake3::Hasher::new().update(data).finalize_xof().fill(&mut dest[..]);
+}
+
+/// Do a Blake3 64-bit hash and return result.
+pub fn blake3_64(data: &[u8]) -> [u8; 8] {
+	let mut r = [0; 8];
+	blake3_64_into(data, &mut r);
+	r
+}
+
 /// Do a XX 64-bit hash and place result in `dest`.
 pub fn twox_64_into(data: &[u8], dest: &mut [u8; 8]) {
 	let r0 = twox_hash::XxHash::with_seed(0).chain_update(data).finish();

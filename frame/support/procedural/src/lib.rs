@@ -114,11 +114,15 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 ///
 ///   `$hash` representing a choice of hashing algorithms available in the
 ///   [`Hashable`](../frame_support/trait.Hashable.html) trait. You will generally want to use one
-///   of three hashers:
+///   of four hashers:
 ///   * `blake2_128_concat`: The default, safe choice. Use if you are unsure or don't care. It is
 ///     secure against user-tainted keys, fairly fast and memory-efficient and supports iteration
-///     over its keys and values. This must be used if the keys of your map can be selected *en
-///     masse* by untrusted users.
+///     over its keys and values. A Blake* hash must be used if the keys of your map can be selected
+///     *en masse* by untrusted users.
+///   * `blake3_128_concat`: The future default, safe choice. Use if you care for performance. It is
+///     secure against user-tainted keys, super fast and memory-efficient and supports iteration
+///     over its keys and values. A Blake* hash must be used if the keys of your map can be selected
+///     *en masse* by untrusted users.
 ///   * `twox_64_concat`: This is an insecure hasher and can only be used safely if you know that
 ///     the preimages cannot be chosen at will by untrusted users. It is memory-efficient, extremely
 ///     performant and supports iteration over its keys and values. You can safely use this is the
@@ -174,6 +178,8 @@ fn get_cargo_env_var<T: FromStr>(version_env: &str) -> std::result::Result<T, ()
 ///   already. The most efficient and iterable over keys.
 /// * `twox_64_concat` - TwoX with 64bit + key concatenated. Use only when an untrusted source
 ///   cannot select and insert key values. Very efficient and iterable over keys.
+/// * `blake3_128_concat` - Blake3 with 128bit + key concatenated. Fast and safe to use in all
+///   circumstances. Iterable over keys.
 /// * `blake2_128_concat` - Blake2 with 128bit + key concatenated. Slower but safe to use in all
 ///   circumstances. Iterable over keys.
 ///

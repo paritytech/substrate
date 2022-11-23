@@ -36,6 +36,25 @@ pub mod blake2 {
 		}
 	}
 }
+pub mod blake3 {
+	use crate::hash::H256;
+	use hash256_std_hasher::Hash256StdHasher;
+	use hash_db::Hasher;
+
+	/// Concrete implementation of Hasher using Blake3 256-bit hashes
+	#[derive(Debug)]
+	pub struct Blake3Hasher;
+
+	impl Hasher for Blake3Hasher {
+		type Out = H256;
+		type StdHasher = Hash256StdHasher;
+		const LENGTH: usize = 32;
+
+		fn hash(x: &[u8]) -> Self::Out {
+			crate::hashing::blake3_256(x).into()
+		}
+	}
+}
 
 pub mod keccak {
 	use crate::hash::H256;

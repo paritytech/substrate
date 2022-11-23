@@ -36,6 +36,13 @@ mod test {
 	}
 
 	#[test]
+	fn blake3() {
+		assert_eq!(sp_core_hashing_proc_macro::blake3_64!(b""), blake3_64(b"")[..]);
+		assert_eq!(sp_core_hashing_proc_macro::blake3_256!(b"test"), blake3_256(b"test")[..]);
+		assert_eq!(sp_core_hashing_proc_macro::blake3_512!(b""), blake3_512(b"")[..]);
+	}
+
+	#[test]
 	fn keccak() {
 		assert_eq!(sp_core_hashing_proc_macro::keccak_256!(b"test"), keccak_256(b"test")[..]);
 		assert_eq!(sp_core_hashing_proc_macro::keccak_512!(b"test"), keccak_512(b"test")[..]);

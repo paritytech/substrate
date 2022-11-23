@@ -19,7 +19,7 @@
 
 use crate::metadata;
 use codec::{Codec, MaxEncodedLen};
-use sp_io::hashing::{blake2_128, blake2_256, twox_128, twox_256, twox_64};
+use sp_io::hashing::{blake2_128, blake2_256, blake3_128, blake3_256, twox_128, twox_256, twox_64};
 use sp_std::prelude::Vec;
 
 // This trait must be kept coherent with frame-support-procedural HasherKind usage
@@ -27,6 +27,9 @@ pub trait Hashable: Sized {
 	fn blake2_128(&self) -> [u8; 16];
 	fn blake2_256(&self) -> [u8; 32];
 	fn blake2_128_concat(&self) -> Vec<u8>;
+	fn blake3_128(&self) -> [u8; 16];
+	fn blake3_256(&self) -> [u8; 32];
+	fn blake3_128_concat(&self) -> Vec<u8>;
 	fn twox_128(&self) -> [u8; 16];
 	fn twox_256(&self) -> [u8; 32];
 	fn twox_64_concat(&self) -> Vec<u8>;
@@ -42,6 +45,15 @@ impl<T: Codec> Hashable for T {
 	}
 	fn blake2_128_concat(&self) -> Vec<u8> {
 		self.using_encoded(Blake2_128Concat::hash)
+	}
+	fn blake3_128(&self) -> [u8; 16] {
+		self.using_encoded(blake3_128)
+	}
+	fn blake3_256(&self) -> [u8; 32] {
+		self.using_encoded(blake3_256)
+	}
+	fn blake3_128_concat(&self) -> Vec<u8> {
+		self.using_encoded(Blake3_128Concat::hash)
 	}
 	fn twox_128(&self) -> [u8; 16] {
 		self.using_encoded(twox_128)
@@ -165,6 +177,54 @@ impl StorageHasher for Blake2_256 {
 	}
 }
 
+/// Hash storage keys with `concat(blake3_128(key), key)`
+pub struct Blake3_128Concat;
+impl StorageHasher for Blake3_128Concat {
+	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake3_128Concat;
+	type Output = Vec<u8>;
+	fn hash(x: &[u8]) -> Vec<u8> {
+		blake3_128(x).iter().chain(x.iter()).cloned().collect::<Vec<_>>()
+	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		K::max_encoded_len().saturating_add(16)
+	}
+}
+impl ReversibleStorageHasher for Blake3_128Concat {
+	fn reverse(x: &[u8]) -> &[u8] {
+		if x.len() < 16 {
+			log::error!("Invalid reverse: hash length too short");
+			return &[]
+		}
+		&x[16..]
+	}
+}
+
+/// Hash storage keys with blake3 128
+pub struct Blake3_128;
+impl StorageHasher for Blake3_128 {
+	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake3_128;
+	type Output = [u8; 16];
+	fn hash(x: &[u8]) -> [u8; 16] {
+		blake3_128(x)
+	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		16
+	}
+}
+
+/// Hash storage keys with blake3 256
+pub struct Blake3_256;
+impl StorageHasher for Blake3_256 {
+	const METADATA: metadata::StorageHasher = metadata::StorageHasher::Blake3_256;
+	type Output = [u8; 32];
+	fn hash(x: &[u8]) -> [u8; 32] {
+		blake3_256(x)
+	}
+	fn max_len<K: MaxEncodedLen>() -> usize {
+		32
+	}
+}
+
 /// Hash storage keys with twox 128
 pub struct Twox128;
 impl StorageHasher for Twox128 {
@@ -208,6 +268,12 @@ mod tests {
 	}
 
 	#[test]
+	fn test_blake3_128_concat() {
+		let r = Blake3_128Concat::hash(b"foo");
+		assert_eq!(r.split_at(16), (&blake3_128(b"foo")[..], &b"foo"[..]))
+	}
+
+	#[test]
 	fn max_lengths() {
 		use codec::Encode;
 		let encoded_0u32 = &0u32.encode()[..];
@@ -217,6 +283,9 @@ mod tests {
 		assert_eq!(Blake2_128::hash(encoded_0u32).len(), Blake2_128::max_len::<u32>());
 		assert_eq!(Blake2_128Concat::hash(encoded_0u32).len(), Blake2_128Concat::max_len::<u32>());
 		assert_eq!(Blake2_256::hash(encoded_0u32).len(), Blake2_256::max_len::<u32>());
+		assert_eq!(Blake3_128::hash(encoded_0u32).len(), Blake3_128::max_len::<u32>());
+		assert_eq!(Blake3_128Concat::hash(encoded_0u32).len(), Blake3_128Concat::max_len::<u32>());
+		assert_eq!(Blake3_256::hash(encoded_0u32).len(), Blake3_256::max_len::<u32>());
 		assert_eq!(Identity::hash(encoded_0u32).len(), Identity::max_len::<u32>());
 	}
 }

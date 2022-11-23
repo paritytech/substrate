@@ -83,6 +83,33 @@ pub fn blake2b_512(input: TokenStream) -> TokenStream {
 	impls::blake2b_512(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
 }
 
+/// Process a Blake3 64-bit hash of bytes parameter outputs a `[u8; 8]`.
+/// Multiple inputs are concatenated before hashing.
+/// Input can be identifier (name of identifier as bytes is used), byte string or
+/// array of bytes.
+#[proc_macro]
+pub fn blake3_64(input: TokenStream) -> TokenStream {
+	impls::blake3_64(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+}
+
+/// Apply a Blake3 256-bit hash of bytes parameter, outputs a `[u8; 32]`.
+/// Multiple inputs are concatenated before hashing.
+/// Input can be identifier (name of identifier as bytes is used), byte string or
+/// array of bytes.
+#[proc_macro]
+pub fn blake3_256(input: TokenStream) -> TokenStream {
+	impls::blake3_256(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+}
+
+/// Apply a Blake3 512-bit hash of bytes parameter, outputs a `[u8; 64]`.
+/// Multiple inputs are concatenated before hashing.
+/// Input can be identifier (name of identifier as bytes is used), byte string or
+/// array of bytes.
+#[proc_macro]
+pub fn blake3_512(input: TokenStream) -> TokenStream {
+	impls::blake3_512(syn::parse_macro_input!(input as MultipleInputBytes).concatenated())
+}
+
 /// Apply a XX 64-bit hash on its bytes parameter, outputs a `[u8; 8]`.
 /// Multiple inputs are concatenated before hashing.
 /// Input can be identifier (name of identifier as bytes is used), byte string or

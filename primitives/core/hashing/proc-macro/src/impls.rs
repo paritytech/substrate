@@ -102,6 +102,18 @@ pub(super) fn blake2b_64(bytes: Vec<u8>) -> TokenStream {
 	bytes_to_array(sp_core_hashing::blake2_64(bytes.as_slice()))
 }
 
+pub(super) fn blake3_512(bytes: Vec<u8>) -> TokenStream {
+	bytes_to_array(sp_core_hashing::blake3_512(bytes.as_slice()))
+}
+
+pub(super) fn blake3_256(bytes: Vec<u8>) -> TokenStream {
+	bytes_to_array(sp_core_hashing::blake3_256(bytes.as_slice()))
+}
+
+pub(super) fn blake3_64(bytes: Vec<u8>) -> TokenStream {
+	bytes_to_array(sp_core_hashing::blake3_64(bytes.as_slice()))
+}
+
 pub(super) fn keccak_256(bytes: Vec<u8>) -> TokenStream {
 	bytes_to_array(sp_core_hashing::keccak_256(bytes.as_slice()))
 }
