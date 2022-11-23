@@ -1,7 +1,7 @@
 # Substrate Node Template
 
 A fresh FRAME-based [Substrate](https://substrate.io/) node, ready for hacking :rocket:
-This is template is available from two locations:
+This template is available from two locations:
 
 1. The maintained upstream version in the [Substrate repository](https://github.com/paritytech/substrate/tree/master/bin/node-template) that is updated as the rest of Substrate is developed.
 1. The snapshot downstream version in the [stand-alone template](https://github.com/substrate-developer-hub/substrate-node-template) that is updated only on major Polkadot version releases.
@@ -87,7 +87,7 @@ db keystore network
 
 ### Connect with Polkadot-JS Apps Front-End
 
-Once the node template is running locally, you can interact with it with **Polkadot-JS Apps** front-end.
+Once the node template is running locally, you can interact with it using the **Polkadot-JS Apps** front-end.
 A hosted version is [available here](https://polkadot.js.org/apps/#/explorer?rpc=ws://localhost:9944) and on [IPFS (redirect) here](https://dotapps.io/) or [IPNS (direct) here](ipns://dotapps.io/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer) connecting the Apps to your local node template.
 The source and instructions to host your own instance is [available here](https://github.com/polkadot-js/apps).
 
@@ -161,10 +161,8 @@ Instead of installing dependencies and building this source directly, you may co
 
 ### Nix
 
-Install [nix](https://nixos.org/) and optionally [direnv](https://github.com/direnv/direnv) and
-[lorri](https://github.com/nix-community/lorri) for a fully plug and play experience for setting up
-the development environment. To get all the correct dependencies activate direnv `direnv allow` and
-lorri `lorri shell`.
+Install [nix](https://nixos.org/), and optionally [direnv](https://github.com/direnv/direnv) as well as [lorri](https://github.com/nix-community/lorri) for a fully plug and play experience for setting up the development environment.
+To get all the correct dependencies activate direnv `direnv allow` and lorri `lorri shell`.
 
 ### Docker
 
