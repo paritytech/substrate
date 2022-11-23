@@ -124,14 +124,15 @@ pub(crate) mod v1_to_v2 {
 		// merge founders with fellows and sort.
 		fellows_vec.extend(founders_vec);
 		fellows_vec.sort();
+		if fellows_vec.len() as u32 > T::MaxMembersCount::get() {
+			fellows_vec.truncate(T::MaxMembersCount::get() as usize);
+			log::error!(
+				target: LOG_TARGET,
+				"Merged list of founders and fellows do not fit into `T::MaxMembersCount` bound. Truncating the merged set into max members count."
+			);
+		}
 		let fellows: BoundedVec<T::AccountId, T::MaxMembersCount> =
-			fellows_vec.try_into().unwrap_or_else(|_| {
-				log::error!(
-					target: LOG_TARGET,
-					"Merged Founders and Fellows do not fit into `T::MaxMembersCount` bound."
-				);
-				BoundedVec::default()
-			});
+			fellows_vec.try_into().unwrap_or_default();
 		// insert members with new storage map key.
 		Members::<T, I>::insert(&MemberRole::Fellow, fellows.clone());
 		Members::<T, I>::insert(&MemberRole::Ally, allies.clone());
