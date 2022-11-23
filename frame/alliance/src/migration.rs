@@ -125,11 +125,11 @@ pub(crate) mod v1_to_v2 {
 		fellows_vec.extend(founders_vec);
 		fellows_vec.sort();
 		if fellows_vec.len() as u32 > T::MaxMembersCount::get() {
-			fellows_vec.truncate(T::MaxMembersCount::get() as usize);
 			log::error!(
 				target: LOG_TARGET,
 				"Merged list of founders and fellows do not fit into `T::MaxMembersCount` bound. Truncating the merged set into max members count."
 			);
+			fellows_vec.truncate(T::MaxMembersCount::get() as usize);
 		}
 		let fellows: BoundedVec<T::AccountId, T::MaxMembersCount> =
 			fellows_vec.try_into().unwrap_or_default();
