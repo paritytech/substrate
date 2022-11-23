@@ -23,7 +23,7 @@ mod block_import;
 mod sync;
 
 use std::{
-	collections::HashMap,
+	collections::{HashMap, HashSet},
 	marker::PhantomData,
 	num::NonZeroUsize,
 	pin::Pin,
@@ -897,6 +897,45 @@ where
 				state_request_protocol_config.name.clone(),
 				Some(warp_protocol_config.name.clone()),
 				NonZeroUsize::new(16).unwrap(),
+				{
+					let mut imp_p = HashSet::new();
+					for reserved in &network_config.default_peers_set.reserved_nodes {
+						imp_p.insert(reserved.peer_id);
+					}
+					for reserved in network_config
+						.extra_sets
+						.iter()
+						.flat_map(|s| s.set_config.reserved_nodes.iter())
+					{
+						imp_p.insert(reserved.peer_id);
+					}
+					imp_p.shrink_to_fit();
+					imp_p
+				},
+				{
+					let mut list = HashSet::new();
+					for node in &network_config.boot_nodes {
+						list.insert(node.peer_id);
+					}
+					list.shrink_to_fit();
+					list
+				},
+				{
+					let mut no_slot_p: HashSet<PeerId> = network_config
+						.default_peers_set
+						.reserved_nodes
+						.iter()
+						.map(|reserved| reserved.peer_id)
+						.collect();
+					no_slot_p.shrink_to_fit();
+					no_slot_p
+				},
+				network_config.default_peers_set_num_full as usize,
+				{
+					let total = network_config.default_peers_set.out_peers +
+						network_config.default_peers_set.in_peers;
+					total.saturating_sub(network_config.default_peers_set_num_full) as usize
+				},
 			)
 			.unwrap();
 

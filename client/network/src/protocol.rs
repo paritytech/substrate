@@ -106,17 +106,6 @@ pub struct Protocol<B: BlockT, Client> {
 	roles: Roles,
 	genesis_hash: B::Hash,
 	chain: Arc<Client>,
-	/// List of nodes for which we perform additional logging because they are important for the
-	/// user.
-	important_peers: HashSet<PeerId>,
-	/// List of nodes that should never occupy peer slots.
-	default_peers_set_no_slot_peers: HashSet<PeerId>,
-	/// Actual list of connected no-slot nodes.
-	default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
-	/// Value that was passed as part of the configuration. Used to cap the number of full nodes.
-	default_peers_set_num_full: usize,
-	/// Number of slots to allocate to light nodes.
-	default_peers_set_num_light: usize,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
@@ -130,8 +119,6 @@ pub struct Protocol<B: BlockT, Client> {
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
 	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
-	/// The `PeerId`'s of all boot nodes.
-	boot_node_ids: HashSet<PeerId>,
 	// TODO: remove eventually
 	engine: SyncingEngine<B, Client>,
 }
@@ -156,31 +143,6 @@ where
 		engine: SyncingEngine<B, Client>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let info = chain.info();
-
-		let boot_node_ids = {
-			let mut list = HashSet::new();
-			for node in &network_config.boot_nodes {
-				list.insert(node.peer_id);
-			}
-			list.shrink_to_fit();
-			list
-		};
-
-		let important_peers = {
-			let mut imp_p = HashSet::new();
-			for reserved in &network_config.default_peers_set.reserved_nodes {
-				imp_p.insert(reserved.peer_id);
-			}
-			for reserved in network_config
-				.extra_sets
-				.iter()
-				.flat_map(|s| s.set_config.reserved_nodes.iter())
-			{
-				imp_p.insert(reserved.peer_id);
-			}
-			imp_p.shrink_to_fit();
-			imp_p
-		};
 
 		let default_peers_set_no_slot_peers = {
 			let mut no_slot_p: HashSet<PeerId> = network_config
@@ -272,15 +234,6 @@ where
 			roles,
 			chain,
 			genesis_hash: info.genesis_hash,
-			important_peers,
-			default_peers_set_no_slot_peers,
-			default_peers_set_no_slot_connected_peers: HashSet::new(),
-			default_peers_set_num_full: network_config.default_peers_set_num_full as usize,
-			default_peers_set_num_light: {
-				let total = network_config.default_peers_set.out_peers +
-					network_config.default_peers_set.in_peers;
-				total.saturating_sub(network_config.default_peers_set_num_full) as usize
-			},
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
@@ -288,7 +241,6 @@ where
 				.collect(),
 			bad_handshake_substreams: Default::default(),
 			engine,
-			boot_node_ids,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -366,156 +318,9 @@ where
 		self.engine.peers.iter().map(|(id, peer)| (id, &peer.info))
 	}
 
-	/// Called by peer when it is disconnecting.
-	///
-	/// Returns a result if the handshake of this peer was indeed accepted.
-	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> Result<(), ()> {
-		if self.important_peers.contains(&peer) {
-			warn!(target: "sync", "Reserved peer {} disconnected", peer);
-		} else {
-			debug!(target: "sync", "{} disconnected", peer);
-		}
-
-		if let Some(_peer_data) = self.engine.peers.remove(&peer) {
-			self.engine.chain_sync.peer_disconnected(&peer);
-			self.default_peers_set_no_slot_connected_peers.remove(&peer);
-			Ok(())
-		} else {
-			Err(())
-		}
-	}
-
 	/// Adjusts the reputation of a node.
 	pub fn report_peer(&self, who: PeerId, reputation: sc_peerset::ReputationChange) {
 		self.peerset_handle.report_peer(who, reputation)
-	}
-
-	/// Called on the first connection between two peers on the default set, after their exchange
-	/// of handshake.
-	///
-	/// Returns `Ok` if the handshake is accepted and the peer added to the list of peers we sync
-	/// from.
-	fn on_sync_peer_connected(
-		&mut self,
-		who: PeerId,
-		status: BlockAnnouncesHandshake<B>,
-	) -> Result<(), ()> {
-		trace!(target: "sync", "New peer {} {:?}", who, status);
-
-		if self.engine.peers.contains_key(&who) {
-			error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
-			debug_assert!(false);
-			return Err(())
-		}
-
-		if status.genesis_hash != self.genesis_hash {
-			log!(
-				target: "sync",
-				if self.important_peers.contains(&who) { Level::Warn } else { Level::Debug },
-				"Peer is on different chain (our genesis: {} theirs: {})",
-				self.genesis_hash, status.genesis_hash
-			);
-			self.peerset_handle.report_peer(who, rep::GENESIS_MISMATCH);
-			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-
-			if self.boot_node_ids.contains(&who) {
-				error!(
-					target: "sync",
-					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
-					who,
-					self.genesis_hash,
-					status.genesis_hash,
-				);
-			}
-
-			return Err(())
-		}
-
-		if self.roles.is_light() {
-			// we're not interested in light peers
-			if status.roles.is_light() {
-				debug!(target: "sync", "Peer {} is unable to serve light requests", who);
-				self.peerset_handle.report_peer(who, rep::BAD_ROLE);
-				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-				return Err(())
-			}
-
-			// we don't interested in peers that are far behind us
-			let self_best_block = self.chain.info().best_number;
-			let blocks_difference = self_best_block
-				.checked_sub(&status.best_number)
-				.unwrap_or_else(Zero::zero)
-				.saturated_into::<u64>();
-			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
-				debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
-				self.peerset_handle.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
-				self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-				return Err(())
-			}
-		}
-
-		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
-		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
-
-		if status.roles.is_full() &&
-			self.engine.chain_sync.num_peers() >=
-				self.default_peers_set_num_full +
-					self.default_peers_set_no_slot_connected_peers.len() +
-					this_peer_reserved_slot
-		{
-			debug!(target: "sync", "Too many full nodes, rejecting {}", who);
-			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-			return Err(())
-		}
-
-		if status.roles.is_light() &&
-			(self.engine.peers.len() - self.engine.chain_sync.num_peers()) >=
-				self.default_peers_set_num_light
-		{
-			// Make sure that not all slots are occupied by light clients.
-			debug!(target: "sync", "Too many light nodes, rejecting {}", who);
-			self.behaviour.disconnect_peer(&who, HARDCODED_PEERSETS_SYNC);
-			return Err(())
-		}
-
-		let peer = Peer {
-			info: ExtendedPeerInfo {
-				roles: status.roles,
-				best_hash: status.best_hash,
-				best_number: status.best_number,
-			},
-			known_blocks: LruHashSet::new(
-				NonZeroUsize::new(MAX_KNOWN_BLOCKS).expect("Constant is nonzero"),
-			),
-		};
-
-		let req = if peer.info.roles.is_full() {
-			match self.engine.chain_sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
-				Ok(req) => req,
-				Err(BadPeer(id, repu)) => {
-					self.behaviour.disconnect_peer(&id, HARDCODED_PEERSETS_SYNC);
-					self.peerset_handle.report_peer(id, repu);
-					return Err(())
-				},
-			}
-		} else {
-			None
-		};
-
-		debug!(target: "sync", "Connected {}", who);
-
-		self.engine.peers.insert(who, peer);
-		if no_slot_peer {
-			self.default_peers_set_no_slot_connected_peers.insert(who);
-		}
-		self.pending_messages
-			.push_back(CustomMessageOutcome::PeerNewBest(who, status.best_number));
-
-		if let Some(req) = req {
-			self.engine.chain_sync.send_block_request(who, req);
-		}
-
-		Ok(())
 	}
 
 	/// Set handshake for the notification protocol.
@@ -802,7 +607,7 @@ where
 							};
 
 							let roles = handshake.roles;
-							if self.on_sync_peer_connected(peer_id, handshake).is_ok() {
+							if self.engine.on_sync_peer_connected(peer_id, handshake).is_ok() {
 								self.pending_messages.push_back(
 									CustomMessageOutcome::NotificationStreamOpened {
 										remote: peer_id,
@@ -832,10 +637,13 @@ where
 							match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
 								&mut &received_handshake[..],
 							) {
-								// TODO: korjaa tämä toimimaan
 								Ok(handshake) => {
 									let roles = handshake.roles;
-									if self.on_sync_peer_connected(peer_id, handshake).is_ok() {
+									if self
+										.engine
+										.on_sync_peer_connected(peer_id, handshake)
+										.is_ok()
+									{
 										self.pending_messages.push_back(
 											CustomMessageOutcome::NotificationStreamOpened {
 												remote: peer_id,
@@ -914,10 +722,11 @@ where
 						notifications_sink,
 					}
 				},
+			// TODO(aaro): listen on event stream in `SyncingEngine`
 			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
-					if self.on_sync_peer_disconnected(peer_id).is_ok() {
+					if self.engine.on_sync_peer_disconnected(peer_id).is_ok() {
 						CustomMessageOutcome::SyncDisconnected(peer_id)
 					} else {
 						log::trace!(

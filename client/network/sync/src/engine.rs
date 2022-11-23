@@ -47,21 +47,35 @@ use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block as BlockT, Header, NumberFor, Zero},
+	traits::{Block as BlockT, CheckedSub, Header, NumberFor, Zero},
+	SaturatedConversion,
 };
 
-use std::{collections::HashMap, num::NonZeroUsize, sync::Arc, task::Poll};
+use std::{
+	collections::{HashMap, HashSet},
+	num::NonZeroUsize,
+	sync::Arc,
+	task::Poll,
+};
+
+/// When light node connects to the full node and the full node is behind light node
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
+/// and disconnect to free connection slot.
+const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
+
+/// Maximum number of known block hashes to keep for a peer.
+const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
-	// /// Reputation change when we are a light client and a peer is behind us.
-	// pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
-	// /// We received a message that failed to decode.
-	// pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
-	// /// Peer has different genesis.
-	// pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
-	// /// Peer role does not match (e.g. light peer connecting to another light peer).
-	// pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
+	/// Reputation change when we are a light client and a peer is behind us.
+	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
+	/// We received a message that failed to decode.
+	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
+	/// Peer has different genesis.
+	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
+	/// Peer role does not match (e.g. light peer connecting to another light peer).
+	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
 	/// Peer send us a block announcement that failed at validation.
 	pub const BAD_BLOCK_ANNOUNCEMENT: Rep = Rep::new(-(1 << 12), "Bad block announcement");
 }
@@ -126,8 +140,6 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// Channel for receiving service commands
 	service_rx: TracingUnboundedReceiver<ToServiceCommand<B>>,
 
-	// /// Interval at which we call `tick`.
-	// tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Assigned roles.
 	roles: Roles,
 
@@ -137,39 +149,34 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// All connected peers. Contains both full and light node peers.
 	pub peers: HashMap<PeerId, Peer<B>>,
 
+	/// List of nodes for which we perform additional logging because they are important for the
+	/// user.
+	pub important_peers: HashSet<PeerId>,
+
+	/// Actual list of connected no-slot nodes.
+	pub default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
+
+	/// List of nodes that should never occupy peer slots.
+	pub default_peers_set_no_slot_peers: HashSet<PeerId>,
+
+	/// Value that was passed as part of the configuration. Used to cap the number of full
+	/// nodes.
+	default_peers_set_num_full: usize,
+
+	/// Number of slots to allocate to light nodes.
+	default_peers_set_num_light: usize,
+
 	/// A cache for the data that was associated to a block announcement.
 	pub block_announce_data_cache: LruCache<B::Hash, Vec<u8>>,
 
+	/// The `PeerId`'s of all boot nodes.
+	pub boot_node_ids: HashSet<PeerId>,
+
 	/// Protocol name used for block announcements
 	block_announce_protocol_name: ProtocolName,
-	// /// List of nodes for which we perform additional logging because they are important for the
-	// /// user.
-	// important_peers: HashSet<PeerId>,
-	// /// List of nodes that should never occupy peer slots.
-	// default_peers_set_no_slot_peers: HashSet<PeerId>,
-	// /// Actual list of connected no-slot nodes.
-	// default_peers_set_no_slot_connected_peers: HashSet<PeerId>,
-	// /// Value that was passed as part of the configuration. Used to cap the number of full
-	// nodes. default_peers_set_num_full: usize,
-	// /// Number of slots to allocate to light nodes.
-	// default_peers_set_num_light: usize,
-	// /// Used to report reputation changes.
-	// peerset_handle: sc_peerset::PeersetHandle,
-	// /// Handles opening the unique substream and sending and receiving raw messages.
-	// behaviour: Notifications,
-	// /// List of notifications protocols that have been registered.
-	// notification_protocols: Vec<ProtocolName>,
-	// /// If we receive a new "substream open" event that contains an invalid handshake, we ask
-	// the /// inner layer to force-close the substream. Force-closing the substream will generate
-	// a /// "substream closed" event. This is a problem: since we can't propagate the "substream
-	// open" /// event to the outer layers, we also shouldn't propagate this "substream closed"
-	// event. To /// solve this, an entry is added to this map whenever an invalid handshake is
-	// received. /// Entries are removed when the corresponding "substream closed" is later
-	// received. bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
+
 	/// Prometheus metrics.
 	metrics: Option<Metrics>,
-	// /// The `PeerId`'s of all boot nodes.
-	// boot_node_ids: HashSet<PeerId>,
 }
 
 impl<B: BlockT, Client> SyncingEngine<B, Client>
@@ -200,6 +207,11 @@ where
 		state_request_protocol_name: ProtocolName,
 		warp_sync_protocol_name: Option<ProtocolName>,
 		cache_capacity: NonZeroUsize,
+		important_peers: HashSet<PeerId>,
+		boot_node_ids: HashSet<PeerId>,
+		default_peers_set_no_slot_peers: HashSet<PeerId>,
+		default_peers_set_num_full: usize,
+		default_peers_set_num_light: usize,
 	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
 		let (chain_sync, block_announce_config) = ChainSync::new(
 			mode,
@@ -237,6 +249,12 @@ where
 				block_announce_protocol_name,
 				service_rx,
 				genesis_hash,
+				important_peers,
+				default_peers_set_no_slot_connected_peers: HashSet::new(),
+				boot_node_ids,
+				default_peers_set_no_slot_peers,
+				default_peers_set_num_full,
+				default_peers_set_num_light,
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r) {
 						Ok(metrics) => Some(metrics),
@@ -507,5 +525,156 @@ where
 		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
 			self.process_block_announce_validation_result(result);
 		}
+	}
+
+	/// Called by peer when it is disconnecting.
+	///
+	/// Returns a result if the handshake of this peer was indeed accepted.
+	pub fn on_sync_peer_disconnected(&mut self, peer: PeerId) -> Result<(), ()> {
+		if self.important_peers.contains(&peer) {
+			log::warn!(target: "sync", "Reserved peer {} disconnected", peer);
+		} else {
+			log::debug!(target: "sync", "{} disconnected", peer);
+		}
+
+		if let Some(_peer_data) = self.peers.remove(&peer) {
+			self.chain_sync.peer_disconnected(&peer);
+			self.default_peers_set_no_slot_connected_peers.remove(&peer);
+			Ok(())
+		} else {
+			Err(())
+		}
+	}
+
+	// TODO: peernewbest
+	/// Called on the first connection between two peers on the default set, after their exchange
+	/// of handshake.
+	///
+	/// Returns `Ok` if the handshake is accepted and the peer added to the list of peers we sync
+	/// from.
+	pub fn on_sync_peer_connected(
+		&mut self,
+		who: PeerId,
+		status: BlockAnnouncesHandshake<B>,
+	) -> Result<(), ()> {
+		log::trace!(target: "sync", "New peer {} {:?}", who, status);
+
+		if self.peers.contains_key(&who) {
+			log::error!(target: "sync", "Called on_sync_peer_connected with already connected peer {}", who);
+			debug_assert!(false);
+			return Err(())
+		}
+
+		if status.genesis_hash != self.genesis_hash {
+			log::log!(
+				target: "sync",
+				if self.important_peers.contains(&who) { log::Level::Warn } else { log::Level::Debug },
+				"Peer is on different chain (our genesis: {} theirs: {})",
+				self.genesis_hash, status.genesis_hash
+			);
+			self.network_service.report_peer(who, rep::GENESIS_MISMATCH);
+			self.network_service
+				.disconnect_peer(who, self.block_announce_protocol_name.clone());
+
+			if self.boot_node_ids.contains(&who) {
+				log::error!(
+					target: "sync",
+					"Bootnode with peer id `{}` is on a different chain (our genesis: {} theirs: {})",
+					who,
+					self.genesis_hash,
+					status.genesis_hash,
+				);
+			}
+
+			return Err(())
+		}
+
+		if self.roles.is_light() {
+			// we're not interested in light peers
+			if status.roles.is_light() {
+				log::debug!(target: "sync", "Peer {} is unable to serve light requests", who);
+				self.network_service.report_peer(who, rep::BAD_ROLE);
+				self.network_service
+					.disconnect_peer(who, self.block_announce_protocol_name.clone());
+				return Err(())
+			}
+
+			// we don't interested in peers that are far behind us
+			let self_best_block = self.client.info().best_number;
+			let blocks_difference = self_best_block
+				.checked_sub(&status.best_number)
+				.unwrap_or_else(Zero::zero)
+				.saturated_into::<u64>();
+			if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
+				log::debug!(target: "sync", "Peer {} is far behind us and will unable to serve light requests", who);
+				self.network_service.report_peer(who, rep::PEER_BEHIND_US_LIGHT);
+				self.network_service
+					.disconnect_peer(who, self.block_announce_protocol_name.clone());
+				return Err(())
+			}
+		}
+
+		let no_slot_peer = self.default_peers_set_no_slot_peers.contains(&who);
+		let this_peer_reserved_slot: usize = if no_slot_peer { 1 } else { 0 };
+
+		if status.roles.is_full() &&
+			self.chain_sync.num_peers() >=
+				self.default_peers_set_num_full +
+					self.default_peers_set_no_slot_connected_peers.len() +
+					this_peer_reserved_slot
+		{
+			log::debug!(target: "sync", "Too many full nodes, rejecting {}", who);
+			self.network_service
+				.disconnect_peer(who, self.block_announce_protocol_name.clone());
+			return Err(())
+		}
+
+		if status.roles.is_light() &&
+			(self.peers.len() - self.chain_sync.num_peers()) >= self.default_peers_set_num_light
+		{
+			// Make sure that not all slots are occupied by light clients.
+			log::debug!(target: "sync", "Too many light nodes, rejecting {}", who);
+			self.network_service
+				.disconnect_peer(who, self.block_announce_protocol_name.clone());
+			return Err(())
+		}
+
+		let peer = Peer {
+			info: ExtendedPeerInfo {
+				roles: status.roles,
+				best_hash: status.best_hash,
+				best_number: status.best_number,
+			},
+			known_blocks: LruHashSet::new(
+				NonZeroUsize::new(MAX_KNOWN_BLOCKS).expect("Constant is nonzero"),
+			),
+		};
+
+		let req = if peer.info.roles.is_full() {
+			match self.chain_sync.new_peer(who, peer.info.best_hash, peer.info.best_number) {
+				Ok(req) => req,
+				Err(BadPeer(id, repu)) => {
+					self.network_service
+						.disconnect_peer(id, self.block_announce_protocol_name.clone());
+					self.network_service.report_peer(id, repu);
+					return Err(())
+				},
+			}
+		} else {
+			None
+		};
+
+		log::debug!(target: "sync", "Connected {}", who);
+
+		self.peers.insert(who, peer);
+		if no_slot_peer {
+			self.default_peers_set_no_slot_connected_peers.insert(who);
+		}
+
+		if let Some(req) = req {
+			self.chain_sync.send_block_request(who, req);
+		}
+
+		Ok(())
 	}
 }

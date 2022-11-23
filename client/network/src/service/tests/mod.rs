@@ -40,7 +40,7 @@ use sc_network_sync::{
 	ChainSync,
 };
 use sp_runtime::traits::{Block as BlockT, Header as _, Zero};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 use substrate_test_runtime_client::{
 	runtime::{Block as TestBlock, Hash as TestHash},
 	TestClient, TestClientBuilder, TestClientBuilderExt as _,
@@ -271,6 +271,11 @@ impl TestNetworkBuilder {
 			state_request_protocol_config.name.clone(),
 			None,
 			std::num::NonZeroUsize::new(16).unwrap(),
+			HashSet::new(),
+			HashSet::new(),
+			HashSet::new(),
+			0usize,
+			0usize,
 		)
 		.unwrap();
 		let mut link = self.link.unwrap_or(Box::new(chain_sync_service.clone()));

@@ -22,7 +22,7 @@ use crate::{
 	config::{Configuration, KeystoreConfig, PrometheusConfig},
 	error::Error,
 	metrics::MetricsService,
-	start_rpc_servers, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
+	start_rpc_servers, PeerId, RpcHandlers, SpawnTaskHandle, TaskManager, TransactionPoolAdapter,
 };
 use futures::{channel::oneshot, future::ready, FutureExt, StreamExt};
 use jsonrpsee::RpcModule;
@@ -74,7 +74,7 @@ use sp_runtime::{
 	traits::{Block as BlockT, BlockIdTo, NumberFor, Zero},
 	BuildStorage,
 };
-use std::{num::NonZeroUsize, str::FromStr, sync::Arc, time::SystemTime};
+use std::{collections::HashSet, num::NonZeroUsize, str::FromStr, sync::Arc, time::SystemTime};
 
 /// Full client type.
 pub type TFullClient<TBl, TRtApi, TExec> =
@@ -850,6 +850,7 @@ where
 		protocol_config
 	};
 
+	// TODO(aaro): expose `config.network` through common crate
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
 	let (engine, chain_sync_service, block_announce_config) = SyncingEngine::new(
 		Roles::from(&config.role),
@@ -877,6 +878,47 @@ where
 				.max(1),
 		)
 		.expect("cache capacity is not zero"),
+		{
+			let mut imp_p = HashSet::new();
+			for reserved in &config.network.default_peers_set.reserved_nodes {
+				imp_p.insert(reserved.peer_id);
+			}
+			for reserved in config
+				.network
+				.extra_sets
+				.iter()
+				.flat_map(|s| s.set_config.reserved_nodes.iter())
+			{
+				imp_p.insert(reserved.peer_id);
+			}
+			imp_p.shrink_to_fit();
+			imp_p
+		},
+		{
+			let mut list = HashSet::new();
+			for node in &config.network.boot_nodes {
+				list.insert(node.peer_id);
+			}
+			list.shrink_to_fit();
+			list
+		},
+		{
+			let mut no_slot_p: HashSet<PeerId> = config
+				.network
+				.default_peers_set
+				.reserved_nodes
+				.iter()
+				.map(|reserved| reserved.peer_id)
+				.collect();
+			no_slot_p.shrink_to_fit();
+			no_slot_p
+		},
+		config.network.default_peers_set_num_full as usize,
+		{
+			let total = config.network.default_peers_set.out_peers +
+				config.network.default_peers_set.in_peers;
+			total.saturating_sub(config.network.default_peers_set_num_full) as usize
+		},
 	)?;
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
