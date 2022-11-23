@@ -927,7 +927,7 @@ pub mod pallet {
 				expiry,
 				who: who.clone(),
 				amount,
-				proportion: proportion.clone(),
+				proportion,
 			};
 			Self::deposit_event(e);
 			let receipt = ReceiptRecord { proportion, who: who.clone(), expiry };
