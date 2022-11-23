@@ -19,8 +19,9 @@
 
 //! A crate which contains primitives that are useful for implementation that uses staking
 //! approaches in general. Definitions related to sessions, slashing, etc go here.
+
 use sp_runtime::{DispatchError, DispatchResult};
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{collections::btree_map::BTreeMap, vec::Vec};
 
 pub mod offence;
 
@@ -54,25 +55,55 @@ impl<AccountId, Balance> OnStakerSlash<AccountId, Balance> for () {
 	}
 }
 
-/// Trait for communication with the staking pallet.
+/// A struct that reflects stake that an account has in the staking system. Provides a set of
+/// methods to operate on it's properties. Aimed at making `StakingInterface` more concise.
+pub struct Stake<T: StakingInterface + ?Sized> {
+	/// The stash account whose balance is actually locked and at stake.
+	pub stash: T::AccountId,
+	/// The total stake that `stash` has in the staking system. This includes the
+	/// `active` stake, and any funds currently in the process of unbonding via
+	/// [`StakingInterface::unbond`].
+	///
+	/// # Note
+	///
+	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
+	/// non-staking locks on the bonded pair's balance this amount is going to be larger in
+	/// reality.
+	pub total: T::Balance,
+	/// The total amount of the stash's balance that will be at stake in any forthcoming
+	/// rounds.
+	pub active: T::Balance,
+}
+
+/// A generic representation of a staking implementation.
+///
+/// This interface uses the terminology of NPoS, but it is aims to be generic enough to cover other
+/// implementations as well.
 pub trait StakingInterface {
 	/// Balance type used by the staking system.
-	type Balance;
+	type Balance: PartialEq;
 
 	/// AccountId type used by the staking system
 	type AccountId;
 
-	/// The minimum amount required to bond in order to be a nominator. This does not necessarily
-	/// mean the nomination will be counted in an election, but instead just enough to be stored as
-	/// a nominator. In other words, this is the minimum amount to register the intention to
-	/// nominate.
-	fn minimum_bond() -> Self::Balance;
+	/// The minimum amount required to bond in order to set nomination intentions. This does not
+	/// necessarily mean the nomination will be counted in an election, but instead just enough to
+	/// be stored as a nominator. In other words, this is the minimum amount to register the
+	/// intention to nominate.
+	fn minimum_nominator_bond() -> Self::Balance;
+
+	/// The minimum amount required to bond in order to set validation intentions.
+	fn minimum_validator_bond() -> Self::Balance;
+
+	/// Return a stash account that is controlled by a `controller`.
+	///
+	/// ## Note
+	///
+	/// The controller abstraction is not permanent and might go away. Avoid using this as much as
+	/// possible.
+	fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError>;
 
 	/// Number of eras that staked funds must remain bonded for.
-	///
-	/// # Note
-	///
-	/// This must be strictly greater than the staking systems slash deffer duration.
 	fn bonding_duration() -> EraIndex;
 
 	/// The current era index.
@@ -80,41 +111,39 @@ pub trait StakingInterface {
 	/// This should be the latest planned era that the staking system knows about.
 	fn current_era() -> EraIndex;
 
-	/// The amount of active stake that `stash` has in the staking system.
-	fn active_stake(stash: &Self::AccountId) -> Option<Self::Balance>;
+	/// Returns the stake of `who`.
+	fn stake(who: &Self::AccountId) -> Result<Stake<Self>, DispatchError>;
 
-	/// The total stake that `stash` has in the staking system. This includes the
-	/// [`Self::active_stake`], and any funds currently in the process of unbonding via
-	/// [`Self::unbond`].
-	///
-	/// # Note
-	///
-	/// This is only guaranteed to reflect the amount locked by the staking system. If there are
-	/// non-staking locks on the bonded pair's balance this may not be accurate.
-	fn total_stake(stash: &Self::AccountId) -> Option<Self::Balance>;
+	fn total_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
+		Self::stake(who).map(|s| s.total)
+	}
 
-	/// Bond (lock) `value` of `stash`'s balance. `controller` will be set as the account
-	/// controlling `stash`. This creates what is referred to as "bonded pair".
-	fn bond(
-		stash: Self::AccountId,
-		controller: Self::AccountId,
-		value: Self::Balance,
-		payee: Self::AccountId,
-	) -> DispatchResult;
+	fn active_stake(who: &Self::AccountId) -> Result<Self::Balance, DispatchError> {
+		Self::stake(who).map(|s| s.active)
+	}
 
-	/// Have `controller` nominate `validators`.
-	fn nominate(
-		controller: Self::AccountId,
-		validators: sp_std::vec::Vec<Self::AccountId>,
-	) -> DispatchResult;
+	fn is_unbonding(who: &Self::AccountId) -> Result<bool, DispatchError> {
+		Self::stake(who).map(|s| s.active != s.total)
+	}
 
-	/// Chill `stash`.
-	fn chill(controller: Self::AccountId) -> DispatchResult;
+	fn fully_unbond(who: &Self::AccountId) -> DispatchResult {
+		Self::unbond(who, Self::stake(who)?.active)
+	}
 
-	/// Bond some extra amount in the _Stash_'s free balance against the active bonded balance of
-	/// the account. The amount extra actually bonded will never be more than the _Stash_'s free
+	/// Bond (lock) `value` of `who`'s balance, while forwarding any rewards to `payee`.
+	fn bond(who: &Self::AccountId, value: Self::Balance, payee: &Self::AccountId)
+		-> DispatchResult;
+
+	/// Have `who` nominate `validators`.
+	fn nominate(who: &Self::AccountId, validators: Vec<Self::AccountId>) -> DispatchResult;
+
+	/// Chill `who`.
+	fn chill(who: &Self::AccountId) -> DispatchResult;
+
+	/// Bond some extra amount in `who`'s free balance against the active bonded balance of
+	/// the account. The amount extra actually bonded will never be more than `who`'s free
 	/// balance.
-	fn bond_extra(stash: Self::AccountId, extra: Self::Balance) -> DispatchResult;
+	fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult;
 
 	/// Schedule a portion of the active bonded balance to be unlocked at era
 	/// [Self::current_era] + [`Self::bonding_duration`].
@@ -125,7 +154,7 @@ pub trait StakingInterface {
 	/// The amount of times this can be successfully called is limited based on how many distinct
 	/// eras funds are schedule to unlock in. Calling [`Self::withdraw_unbonded`] after some unlock
 	/// schedules have reached their unlocking era should allow more calls to this function.
-	fn unbond(stash: Self::AccountId, value: Self::Balance) -> DispatchResult;
+	fn unbond(stash: &Self::AccountId, value: Self::Balance) -> DispatchResult;
 
 	/// Unlock any funds schedule to unlock before or at the current era.
 	///
@@ -135,7 +164,29 @@ pub trait StakingInterface {
 		num_slashing_spans: u32,
 	) -> Result<bool, DispatchError>;
 
+	/// The ideal number of active validators.
+	fn desired_validator_count() -> u32;
+
+	/// Whether or not there is an ongoing election.
+	fn election_ongoing() -> bool;
+
+	/// Force a current staker to become completely unstaked, immediately.
+	fn force_unstake(who: Self::AccountId) -> DispatchResult;
+
+	/// Checks whether an account `staker` has been exposed in an era.
+	fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool;
+
 	/// Get the nominations of a stash, if they are a nominator, `None` otherwise.
 	#[cfg(feature = "runtime-benchmarks")]
-	fn nominations(who: Self::AccountId) -> Option<sp_std::prelude::Vec<Self::AccountId>>;
+	fn nominations(who: Self::AccountId) -> Option<Vec<Self::AccountId>>;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn add_era_stakers(
+		current_era: &EraIndex,
+		stash: &Self::AccountId,
+		exposures: Vec<(Self::AccountId, Self::Balance)>,
+	);
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_current_era(era: EraIndex);
 }
