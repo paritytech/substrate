@@ -301,8 +301,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type MaxAnnouncementsCount: Get<u32>;
 
-		/// The maximum number of members per member role. Should not exceed the sum of
-		/// `MaxFellows` and `MaxAllies`.
+		/// The maximum number of members per member role.
 		#[pallet::constant]
 		type MaxMembersCount: Get<u32>;
 
