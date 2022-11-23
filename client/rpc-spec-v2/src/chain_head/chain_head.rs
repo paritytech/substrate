@@ -133,74 +133,76 @@ impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client> {
 	}
 }
 
-impl<BE, Block: BlockT, Client> ChainHead<BE, Block, Client>
+/// Generate the initial events reported by the RPC `follow` method.
+///
+/// This includes the "Initialized" event followed by the in-memory
+/// blocks via "NewBlock" and the "BestBlockChanged".
+fn generate_initial_events<Block, BE, Client>(
+	client: &Arc<Client>,
+	backend: &Arc<BE>,
+	handle: &SubscriptionHandle<Block>,
+	runtime_updates: bool,
+) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError>
 where
 	Block: BlockT + 'static,
 	Block::Header: Unpin,
 	BE: Backend<Block> + 'static,
 	Client: HeaderBackend<Block> + CallApiAt<Block> + 'static,
 {
-	/// Generate the initial events reported by the RPC `follow` method.
-	///
-	/// This includes the "Initialized" event followed by the in-memory
-	/// blocks via "NewBlock" and the "BestBlockChanged".
-	fn generate_initial_events(
-		&self,
-		handle: &SubscriptionHandle<Block>,
-		runtime_updates: bool,
-	) -> Result<Vec<FollowEvent<Block::Hash>>, SubscriptionManagementError> {
-		// The initialized event is the first one sent.
-		let finalized_block_hash = self.client.info().finalized_hash;
-		handle.pin_block(finalized_block_hash)?;
+	// The initialized event is the first one sent.
+	let finalized_block_hash = client.info().finalized_hash;
+	handle.pin_block(finalized_block_hash)?;
 
-		let finalized_block_runtime = generate_runtime_event(
-			&self.client,
+	let finalized_block_runtime = generate_runtime_event(
+		&client,
+		runtime_updates,
+		&BlockId::Hash(finalized_block_hash),
+		None,
+	);
+
+	let initialized_event = FollowEvent::Initialized(Initialized {
+		finalized_block_hash,
+		finalized_block_runtime,
+		runtime_updates,
+	});
+
+	let initial_blocks = get_initial_blocks(&backend, finalized_block_hash);
+	let mut in_memory_blocks = Vec::with_capacity(initial_blocks.len() + 1);
+
+	in_memory_blocks.push(initialized_event);
+	for (child, parent) in initial_blocks.into_iter() {
+		handle.pin_block(child)?;
+
+		let new_runtime = generate_runtime_event(
+			&client,
 			runtime_updates,
-			&BlockId::Hash(finalized_block_hash),
-			None,
+			&BlockId::Hash(child),
+			Some(&BlockId::Hash(parent)),
 		);
 
-		let initialized_event = FollowEvent::Initialized(Initialized {
-			finalized_block_hash,
-			finalized_block_runtime,
+		let event = FollowEvent::NewBlock(NewBlock {
+			block_hash: child,
+			parent_block_hash: parent,
+			new_runtime,
 			runtime_updates,
 		});
 
-		let initial_blocks = get_initial_blocks(&self.backend, finalized_block_hash);
-		let mut in_memory_blocks = Vec::with_capacity(initial_blocks.len() + 1);
-
-		in_memory_blocks.push(initialized_event);
-		for (child, parent) in initial_blocks.into_iter() {
-			handle.pin_block(child)?;
-
-			let new_runtime = generate_runtime_event(
-				&self.client,
-				runtime_updates,
-				&BlockId::Hash(child),
-				Some(&BlockId::Hash(parent)),
-			);
-
-			let event = FollowEvent::NewBlock(NewBlock {
-				block_hash: child,
-				parent_block_hash: parent,
-				new_runtime,
-				runtime_updates,
-			});
-
-			in_memory_blocks.push(event);
-		}
-
-		// Generate a new best block event.
-		let best_block_hash = self.client.info().best_hash;
-		if best_block_hash != finalized_block_hash {
-			let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
-			in_memory_blocks.push(best_block);
-		};
-
-		Ok(in_memory_blocks)
+		in_memory_blocks.push(event);
 	}
+
+	// Generate a new best block event.
+	let best_block_hash = client.info().best_hash;
+	if best_block_hash != finalized_block_hash {
+		let best_block = FollowEvent::BestBlockChanged(BestBlockChanged { best_block_hash });
+		in_memory_blocks.push(best_block);
+	};
+
+	Ok(in_memory_blocks)
 }
 
+/// Parse hex-encoded string parameter as raw bytes.
+///
+/// If the parsing fails, the subscription is rejected.
 fn parse_hex_param(
 	sink: &mut SubscriptionSink,
 	param: String,
@@ -214,6 +216,7 @@ fn parse_hex_param(
 	}
 }
 
+/// Conditionally generate the runtime event of the given block.
 fn generate_runtime_event<Client, Block>(
 	client: &Arc<Client>,
 	runtime_updates: bool,
@@ -253,6 +256,9 @@ where
 	}
 }
 
+/// Get the in-memory blocks of the client, starting from the provided finalized hash.
+///
+/// Returns a tuple of block hash with parent hash.
 fn get_initial_blocks<BE, Block>(
 	backend: &Arc<BE>,
 	parent_hash: Block::Hash,
@@ -520,18 +526,19 @@ where
 			.flatten();
 
 		let merged = tokio_stream::StreamExt::merge(stream_import, stream_finalized);
-
-		let Ok(initial_events) = self.generate_initial_events(&sub_handle, runtime_updates) else {
-			// We stop the subscription right away if we exceeded the maximum number of blocks pinned.
-			debug!(target: "rpc-spec-v2", "[follow][id={:?}] Exceeded max pinned blocks from initial events", sub_id);
-			let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
-			return Ok(())
-		};
-
-		let stream = stream::iter(initial_events).chain(merged);
-
 		let subscriptions = self.subscriptions.clone();
+		let client = self.client.clone();
+		let backend = self.backend.clone();
 		let fut = async move {
+			let Ok(initial_events) = generate_initial_events(&client, &backend, &sub_handle, runtime_updates) else {
+				// Stop the subscription if we exceeded the maximum number of blocks pinned.
+				debug!(target: "rpc-spec-v2", "[follow][id={:?}] Exceeded max pinned blocks from initial events", sub_id);
+				let _ = sink.send(&FollowEvent::<Block::Hash>::Stop);
+				return
+			};
+
+			let stream = stream::iter(initial_events).chain(merged);
+
 			submit_events(&mut sink, stream.boxed(), rx_stop).await;
 			// The client disconnected or called the unsubscribe method.
 			subscriptions.remove_subscription(&sub_id);
