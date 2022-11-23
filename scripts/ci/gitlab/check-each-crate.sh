@@ -21,6 +21,10 @@ readarray -t workspace_crates < <(\
 )
 
 crates_total=${#workspace_crates[*]}
+if [ "$crates_total" -lt 1 ]; then
+  >&2 echo "No crates detected for $PWD"
+  exit 1
+fi
 
 if [ "$crates_total" -lt "$groups_total" ]; then
   # `crates_total / groups_total` would result in 0, so round it up to 1
