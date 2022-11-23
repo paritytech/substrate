@@ -89,24 +89,15 @@ fn enqueue_within_one_page_works() {
 fn queue_priority_retains() {
 	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
-		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![]);
+		assert_ring(&[]);
 		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
-		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![Everywhere(1)]);
+		assert_ring(&[Everywhere(1)]);
 		MessageQueue::enqueue_message(msg(&"b"), Everywhere(2));
-		assert_eq!(
-			ReadyRing::<Test>::new().collect::<Vec<_>>(),
-			vec![Everywhere(1), Everywhere(2)]
-		);
+		assert_ring(&[Everywhere(1), Everywhere(2)]);
 		MessageQueue::enqueue_message(msg(&"c"), Everywhere(3));
-		assert_eq!(
-			ReadyRing::<Test>::new().collect::<Vec<_>>(),
-			vec![Everywhere(1), Everywhere(2), Everywhere(3)]
-		);
+		assert_ring(&[Everywhere(1), Everywhere(2), Everywhere(3)]);
 		MessageQueue::enqueue_message(msg(&"d"), Everywhere(2));
-		assert_eq!(
-			ReadyRing::<Test>::new().collect::<Vec<_>>(),
-			vec![Everywhere(1), Everywhere(2), Everywhere(3)]
-		);
+		assert_ring(&[Everywhere(1), Everywhere(2), Everywhere(3)]);
 		// service head is 1, it will process a, leaving service head at 2. it also processes b but
 		// doees not empty queue 2, so service head will end at 2.
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
@@ -114,10 +105,7 @@ fn queue_priority_retains() {
 			MessagesProcessed::get(),
 			vec![(vmsg(&"a"), Everywhere(1)), (vmsg(&"b"), Everywhere(2)),]
 		);
-		assert_eq!(
-			ReadyRing::<Test>::new().collect::<Vec<_>>(),
-			vec![Everywhere(2), Everywhere(3)]
-		);
+		assert_ring(&[Everywhere(2), Everywhere(3)]);
 		// service head is 2, so will process d first, then c.
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
@@ -129,7 +117,7 @@ fn queue_priority_retains() {
 				(vmsg(&"c"), Everywhere(3)),
 			]
 		);
-		assert_eq!(ReadyRing::<Test>::new().collect::<Vec<_>>(), vec![]);
+		assert_ring(&[]);
 	});
 }
 

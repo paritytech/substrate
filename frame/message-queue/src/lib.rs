@@ -604,32 +604,6 @@ pub mod pallet {
 	}
 }
 
-/// Current and next *ready* queues.
-pub struct ReadyRing<T: Config> {
-	first: Option<MessageOriginOf<T>>,
-	next: Option<MessageOriginOf<T>>,
-}
-impl<T: Config> ReadyRing<T> {
-	pub fn new() -> Self {
-		Self { first: ServiceHead::<T>::get(), next: ServiceHead::<T>::get() }
-	}
-}
-impl<T: Config> Iterator for ReadyRing<T> {
-	type Item = MessageOriginOf<T>;
-	fn next(&mut self) -> Option<Self::Item> {
-		match self.next.take() {
-			None => None,
-			Some(last) => {
-				self.next = BookStateFor::<T>::get(&last)
-					.ready_neighbours
-					.map(|n| n.next)
-					.filter(|n| Some(n) != self.first.as_ref());
-				Some(last)
-			},
-		}
-	}
-}
-
 /// The status of a page after trying to execute its next message.
 #[derive(PartialEq, Debug)]
 enum PageExecutionStatus {

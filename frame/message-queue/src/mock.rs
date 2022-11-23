@@ -233,3 +233,20 @@ where
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);
 }
+
+/// Check that the Ready Ring consists of `neighbours` in that exact order.
+///
+/// Also check that all backlinks are valid and that the first element is the service head.
+fn assert_ring(neighbours: &[MessageOrigin]) {
+	for (i, origin) in neighbours.iter().enumerate() {
+		let book = BookStateFor::<Test>::get(&origin);
+		assert_eq!(
+			book.ready_neighbours,
+			Some(Neighbours {
+				prev: neighbours[(i + neighbours.len() - 1) % neighbours.len()],
+				next: neighbours[(i + 1) % neighbours.len()],
+			})
+		);
+	}
+	assert_eq!(ServiceHead::<Test>::get(), neighbours.first().cloned());
+}
