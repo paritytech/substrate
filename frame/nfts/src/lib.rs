@@ -310,7 +310,7 @@ pub mod pallet {
 	>;
 
 	/// Stores the `CollectionId` that is going to be used for the next collection.
-	/// This gets incremented by 1 whenever a new collection is created.
+	/// This gets incremented whenever a new collection is created.
 	#[pallet::storage]
 	pub(super) type NextCollectionId<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, T::CollectionId, OptionQuery>;
