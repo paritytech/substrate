@@ -33,7 +33,6 @@ pub use types::*;
 // TODO: make it configurable
 // TODO: weights and benchmarking.
 // TODO: more specific error codes.
-// TODO: remove setup.
 pub const MIN_LIQUIDITY: u64 = 1;
 
 #[frame_support::pallet]
@@ -48,7 +47,7 @@ pub mod pallet {
 				metadata::Mutate as MutateMetadata, Create, Inspect, InspectEnumerable, Mutate,
 				Transfer,
 			},
-			Currency, ExistenceRequirement, ReservableCurrency,
+			Currency, ReservableCurrency,
 		},
 		PalletId,
 	};
@@ -123,12 +122,10 @@ pub mod pallet {
 	pub type BalanceOf<T> =
 		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-	pub type AssetIdOf<T> =
-		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 	pub type AssetBalanceOf<T> =
 		<<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
-	pub type PoolIdOf<T> = (AssetIdOf<T>, AssetIdOf<T>);
+	pub type PoolIdOf<T> = (<T as Config>::AssetId, <T as Config>::AssetId);
 
 	#[pallet::storage]
 	pub type Pools<T: Config> = StorageMap<
@@ -137,7 +134,7 @@ pub mod pallet {
 		PoolIdOf<T>,
 		PoolInfo<
 			T::AccountId,
-			AssetIdOf<T>,
+			T::AssetId,
 			T::PoolAssetId,
 			AssetBalanceOf<T>,
 		>,
@@ -179,8 +176,8 @@ pub mod pallet {
 		SwapExecuted {
 			who: T::AccountId,
 			send_to: T::AccountId,
-			asset1: AssetIdOf<T>,
-			asset2: AssetIdOf<T>,
+			asset1: T::AssetId,
+			asset2: T::AssetId,
 			pool_id: PoolIdOf<T>,
 			amount_in: AssetBalanceOf<T>,
 			amount_out: AssetBalanceOf<T>,
@@ -224,32 +221,9 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		#[pallet::weight(0)]
-		pub fn setup(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
-			let sender = ensure_signed(origin)?;
-			let pallet_account = Self::account_id();
-			T::Currency::transfer(
-				&sender,
-				&pallet_account,
-				amount,
-				ExistenceRequirement::KeepAlive,
-			)?;
-
-			T::Assets::create(1.into(), sender.clone(), true, 1u64.into())?;
-			T::Assets::set(1.into(), &sender, "DOT".into(), "DOT".into(), 0)?;
-
-			T::Assets::create(2.into(), sender.clone(), true, 1u64.into())?;
-			T::Assets::set(2.into(), &sender, "USDC".into(), "USDC".into(), 0)?;
-
-			T::Assets::mint_into(1.into(), &sender, 10000000000000000000u64.into())?;
-			T::Assets::mint_into(2.into(), &sender, 10000000000000000000u64.into())?;
-
-			Ok(())
-		}
-
-		#[pallet::weight(0)]
 		pub fn create_pool(
 			origin: OriginFor<T>,
-			asset1: AssetIdOf<T>, // TODO: convert into MultiToken
+			asset1: T::AssetId, // TODO: convert into MultiToken
 			asset2: T::AssetId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
@@ -288,8 +262,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn add_liquidity(
 			origin: OriginFor<T>,
-			asset1: AssetIdOf<T>,
-			asset2: AssetIdOf<T>,
+			asset1: T::AssetId,
+			asset2: T::AssetId,
 			amount1_desired: AssetBalanceOf<T>,
 			amount2_desired: AssetBalanceOf<T>,
 			amount1_min: AssetBalanceOf<T>,
@@ -396,8 +370,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn remove_liquidity(
 			origin: OriginFor<T>,
-			asset1: AssetIdOf<T>,
-			asset2: AssetIdOf<T>,
+			asset1: T::AssetId,
+			asset2: T::AssetId,
 			liquidity: AssetBalanceOf<T>,
 			amount1_min: AssetBalanceOf<T>,
 			amount2_min: AssetBalanceOf<T>,
@@ -471,8 +445,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn swap_exact_tokens_for_tokens(
 			origin: OriginFor<T>,
-			asset1: AssetIdOf<T>,
-			asset2: AssetIdOf<T>,
+			asset1: T::AssetId,
+			asset2: T::AssetId,
 			amount_in: AssetBalanceOf<T>,
 			amount_out_min: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -534,8 +508,8 @@ pub mod pallet {
 		#[pallet::weight(0)]
 		pub fn swap_tokens_for_exact_tokens(
 			origin: OriginFor<T>,
-			asset1: AssetIdOf<T>,
-			asset2: AssetIdOf<T>,
+			asset1: T::AssetId,
+			asset2: T::AssetId,
 			amount_out: AssetBalanceOf<T>,
 			amount_in_max: AssetBalanceOf<T>,
 			send_to: T::AccountId,
@@ -605,7 +579,7 @@ pub mod pallet {
 		}
 
 		/// Returns a pool id constructed from 2 sorted assets.
-		pub fn get_pool_id(asset1: AssetIdOf<T>, asset2: AssetIdOf<T>) -> PoolIdOf<T> {
+		pub fn get_pool_id(asset1: T::AssetId, asset2: T::AssetId) -> PoolIdOf<T> {
 			if asset1 <= asset2 {
 				(asset1, asset2)
 			} else {
@@ -711,12 +685,12 @@ pub mod pallet {
 		}
 
 		pub fn validate_swap(
-			asset_from: AssetIdOf<T>,
+			asset_from: T::AssetId,
 			amount_out: AssetBalanceOf<T>,
 			pool_id: PoolIdOf<T>,
 			reserve1: AssetBalanceOf<T>,
 			reserve2: AssetBalanceOf<T>,
-		) -> Result<(AssetIdOf<T>, AssetBalanceOf<T>), Error<T>> {
+		) -> Result<(T::AssetId, AssetBalanceOf<T>), Error<T>> {
 			let (pool_asset1, pool_asset2) = pool_id;
 
 			if asset_from == pool_asset1 {
