@@ -789,7 +789,7 @@ where
 				self.on_demand_justifications.request(block);
 			}
 		} else {
-			info!(target: "beefy", "🥩 Skipping voting while major syncing.");
+			debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
 		}
 	}
 
