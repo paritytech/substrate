@@ -125,7 +125,9 @@
 //! Manual intervention in the form of
 //! [`frame_support::traits::ServiceQueues::execute_overweight`] is necessary. Overweight messages
 //! emit an [`Event::OverweightEnqueued`] event which can be used to extract the arguments for
-//! manual execution. This only works on permanently overweight messages.
+//! manual execution. This only works on permanently overweight messages. There is no guarantee that
+//! this will work since the message could be part of a stale page and be reaped before execution
+//! commences.
 //!
 //! # Terminology
 //!
@@ -382,11 +384,13 @@ impl<
 	}
 }
 
-/// The neighbours of a queue in the a double-linked list
+/// A single link in the double-linked Ready Ring list.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
 #[cfg_attr(feature = "std", derive(PartialEq))]
 pub struct Neighbours<MessageOrigin> {
+	/// The previous queue.
 	prev: MessageOrigin,
+	/// The next queue.
 	next: MessageOrigin,
 }
 
@@ -745,7 +749,9 @@ impl<T: Config> Pallet<T> {
 			// insert into ready queue.
 			match Self::ready_ring_knit(origin) {
 				Ok(neighbours) => book_state.ready_neighbours = Some(neighbours),
-				Err(()) => debug_assert!(false, "Ring state invalid when knitting"),
+				Err(()) => {
+					defensive!("Ring state invalid when knitting");
+				},
 			}
 		}
 		// No room on the page or no page - link in a new page.
@@ -819,7 +825,7 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Remove a page which has no more messages remaining to be processed.
+	/// Remove a stale page or one which has no more messages remaining to be processed.
 	fn do_reap_page(origin: &MessageOriginOf<T>, page_index: PageIndex) -> DispatchResult {
 		let mut book_state = BookStateFor::<T>::get(origin);
 		// definitely not reapable if the page's index is no less than the `begin`ning of ready
@@ -889,7 +895,6 @@ impl<T: Config> Pallet<T> {
 				PageExecutionStatus::Bailed => break,
 				// Go to the next page if this one is at the end.
 				PageExecutionStatus::NoMore => (),
-				// TODO @ggwpez think of a better enum here.
 				PageExecutionStatus::Partial => {
 					defensive!("should progress till the end or bail");
 				},
@@ -902,7 +907,7 @@ impl<T: Config> Pallet<T> {
 			if let Some(neighbours) = book_state.ready_neighbours.take() {
 				Self::ready_ring_unknit(&origin, neighbours);
 			} else {
-				debug_assert!(false, "Freshly processed queue must have been ready");
+				defensive!("Freshly processed queue must have been ready");
 			}
 		}
 		BookStateFor::<T>::insert(&origin, &book_state);
@@ -918,7 +923,7 @@ impl<T: Config> Pallet<T> {
 
 	/// Service as many messages of a page as possible.
 	///
-	/// Returns whether the execution bailed.
+	/// Returns how many messages were processed and the page's status.
 	fn service_page(
 		origin: &MessageOriginOf<T>,
 		book_state: &mut BookStateOf<T>,
@@ -937,7 +942,7 @@ impl<T: Config> Pallet<T> {
 		let mut page = match Pages::<T>::get(&origin, page_index) {
 			Some(p) => p,
 			None => {
-				debug_assert!(false, "message-queue: referenced page not found");
+				defensive!("message-queue: referenced page not found");
 				return (0, NoMore)
 			},
 		};
@@ -1245,9 +1250,6 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		T::QueueChangeHandler::on_queue_changed(origin, book_state.message_count, book_state.size);
 	}
 
-	/// Force removes a queue from the ready ring.
-	///
-	/// Does not remove its pages from the storage. Does nothing if the queue does not exist.
 	fn sweep_queue(origin: MessageOriginOf<T>) {
 		if !BookStateFor::<T>::contains_key(&origin) {
 			return
@@ -1260,7 +1262,6 @@ impl<T: Config> EnqueueMessage<MessageOriginOf<T>> for Pallet<T> {
 		BookStateFor::<T>::insert(&origin, &book_state);
 	}
 
-	/// Returns the [`Footprint`] of a queue.
 	fn footprint(origin: MessageOriginOf<T>) -> Footprint {
 		let book_state = BookStateFor::<T>::get(&origin);
 		Footprint { count: book_state.message_count, size: book_state.size }
