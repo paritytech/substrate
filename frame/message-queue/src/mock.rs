@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-#![cfg(any(test, feature = "std"))]
+#![cfg(test)]
 
 pub use super::mock_helpers::*;
 use super::*;
@@ -162,7 +162,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 		let weight = if message.starts_with(&b"weight="[..]) {
 			let mut w: u64 = 0;
 			for &c in &message[7..] {
-				if c >= b'0' && c <= b'9' {
+				if (b'0'..=b'9').contains(&c) {
 					w = w * 10 + (c - b'0') as u64;
 				} else {
 					break
@@ -215,7 +215,6 @@ impl ProcessMessage for CountingMessageProcessor {
 /// Create new test externalities.
 ///
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
-#[cfg(test)]
 pub fn new_test_ext<T: Config>() -> sp_io::TestExternalities
 where
 	<T as frame_system::Config>::BlockNumber: From<u32>,
@@ -229,7 +228,6 @@ where
 }
 
 /// Set the weight of a specific weight function.
-#[allow(dead_code)]
 pub fn set_weight(name: &str, w: Weight) {
 	MockedWeightInfo::set_weight::<Test>(name, w);
 }
@@ -238,7 +236,7 @@ pub fn set_weight(name: &str, w: Weight) {
 pub fn assert_pages(indices: &[u32]) {
 	assert_eq!(Pages::<Test>::iter().count(), indices.len());
 	for i in indices {
-		assert!(Pages::<Test>::contains_key(&MessageOrigin::Here, i));
+		assert!(Pages::<Test>::contains_key(MessageOrigin::Here, i));
 	}
 }
 
@@ -260,9 +258,9 @@ pub fn unknit(o: &MessageOrigin) {
 /// Build a ring with three queues: `Here`, `There` and `Everywhere(0)`.
 pub fn build_triple_ring() {
 	use MessageOrigin::*;
-	BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
-	BookStateFor::<Test>::insert(There, &empty_book::<Test>());
-	BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+	BookStateFor::<Test>::insert(Here, empty_book::<Test>());
+	BookStateFor::<Test>::insert(There, empty_book::<Test>());
+	BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 
 	// Knit them into the ready ring.
 	knit(&Here);
@@ -276,7 +274,7 @@ pub fn build_triple_ring() {
 /// Also check that all backlinks are valid and that the first element is the service head.
 pub fn assert_ring(neighbours: &[MessageOrigin]) {
 	for (i, origin) in neighbours.iter().enumerate() {
-		let book = BookStateFor::<Test>::get(&origin);
+		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(
 			book.ready_neighbours,
 			Some(Neighbours {

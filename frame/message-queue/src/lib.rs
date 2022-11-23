@@ -736,7 +736,7 @@ impl<T: Config> Pallet<T> {
 					return
 				},
 			};
-			if let Ok(_) = page.try_append_message::<T>(message) {
+			if page.try_append_message::<T>(message).is_ok() {
 				Pages::<T>::insert(origin, last, &page);
 				BookStateFor::<T>::insert(origin, book_state);
 				return
@@ -758,7 +758,7 @@ impl<T: Config> Pallet<T> {
 		book_state.end.saturating_inc();
 		book_state.count.saturating_inc();
 		let page = Page::from_message::<T>(message);
-		Pages::<T>::insert(origin, book_state.end - 1, &page);
+		Pages::<T>::insert(origin, book_state.end - 1, page);
 		// NOTE: `T::QueueChangeHandler` is called by the caller.
 		BookStateFor::<T>::insert(origin, book_state);
 	}
@@ -796,7 +796,7 @@ impl<T: Config> Pallet<T> {
 			// ^^^ We never recognise it as permanently overweight, since that would result in an
 			// additional overweight event being deposited.
 		) {
-			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight.into()),
+			Overweight | InsufficientWeight => Err(Error::<T>::InsufficientWeight),
 			Unprocessable | Processed => {
 				page.note_processed_at_pos(pos);
 				book_state.message_count.saturating_dec();
@@ -858,7 +858,7 @@ impl<T: Config> Pallet<T> {
 		book_state.count.saturating_dec();
 		book_state.message_count.saturating_reduce(page.remaining.into());
 		book_state.size.saturating_reduce(page.remaining_size.into());
-		BookStateFor::<T>::insert(&origin, &book_state);
+		BookStateFor::<T>::insert(origin, &book_state);
 		T::QueueChangeHandler::on_queue_changed(
 			origin.clone(),
 			book_state.message_count,
@@ -939,7 +939,7 @@ impl<T: Config> Pallet<T> {
 		}
 
 		let page_index = book_state.begin;
-		let mut page = match Pages::<T>::get(&origin, page_index) {
+		let mut page = match Pages::<T>::get(origin, page_index) {
 			Some(p) => p,
 			None => {
 				defensive!("message-queue: referenced page not found");
@@ -973,11 +973,11 @@ impl<T: Config> Pallet<T> {
 				status != PageExecutionStatus::Bailed,
 				"we never bail if a page became complete"
 			);
-			Pages::<T>::remove(&origin, page_index);
+			Pages::<T>::remove(origin, page_index);
 			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
 			book_state.count.saturating_dec();
 		} else {
-			Pages::<T>::insert(&origin, page_index, page);
+			Pages::<T>::insert(origin, page_index, page);
 		}
 		(total_processed, status)
 	}
@@ -1060,7 +1060,7 @@ impl<T: Config> Pallet<T> {
 					{
 						let msg = String::from_utf8_lossy(message.deref());
 						if processed {
-							page_info.push_str("*");
+							page_info.push('*');
 						}
 						page_info.push_str(&format!("{:?}, ", msg));
 						page.skip_first(true);

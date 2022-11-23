@@ -22,7 +22,7 @@
 use crate::{mock::*, *};
 
 use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, traits::Defensive, StorageNoopGuard,
+	assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
@@ -45,9 +45,9 @@ fn mocked_weight_works() {
 fn enqueue_within_one_page_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
-		MessageQueue::enqueue_message(msg(&"a"), Here);
-		MessageQueue::enqueue_message(msg(&"b"), Here);
-		MessageQueue::enqueue_message(msg(&"c"), Here);
+		MessageQueue::enqueue_message(msg("a"), Here);
+		MessageQueue::enqueue_message(msg("b"), Here);
+		MessageQueue::enqueue_message(msg("c"), Here);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessagesProcessed::get(), vec![(b"a".to_vec(), Here), (b"b".to_vec(), Here)]);
 
@@ -90,20 +90,20 @@ fn queue_priority_retains() {
 	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
 		assert_ring(&[]);
-		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
+		MessageQueue::enqueue_message(msg("a"), Everywhere(1));
 		assert_ring(&[Everywhere(1)]);
-		MessageQueue::enqueue_message(msg(&"b"), Everywhere(2));
+		MessageQueue::enqueue_message(msg("b"), Everywhere(2));
 		assert_ring(&[Everywhere(1), Everywhere(2)]);
-		MessageQueue::enqueue_message(msg(&"c"), Everywhere(3));
+		MessageQueue::enqueue_message(msg("c"), Everywhere(3));
 		assert_ring(&[Everywhere(1), Everywhere(2), Everywhere(3)]);
-		MessageQueue::enqueue_message(msg(&"d"), Everywhere(2));
+		MessageQueue::enqueue_message(msg("d"), Everywhere(2));
 		assert_ring(&[Everywhere(1), Everywhere(2), Everywhere(3)]);
 		// service head is 1, it will process a, leaving service head at 2. it also processes b but
 		// doees not empty queue 2, so service head will end at 2.
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![(vmsg(&"a"), Everywhere(1)), (vmsg(&"b"), Everywhere(2)),]
+			vec![(vmsg("a"), Everywhere(1)), (vmsg("b"), Everywhere(2)),]
 		);
 		assert_ring(&[Everywhere(2), Everywhere(3)]);
 		// service head is 2, so will process d first, then c.
@@ -111,10 +111,10 @@ fn queue_priority_retains() {
 		assert_eq!(
 			MessagesProcessed::get(),
 			vec![
-				(vmsg(&"a"), Everywhere(1)),
-				(vmsg(&"b"), Everywhere(2)),
-				(vmsg(&"d"), Everywhere(2)),
-				(vmsg(&"c"), Everywhere(3)),
+				(vmsg("a"), Everywhere(1)),
+				(vmsg("b"), Everywhere(2)),
+				(vmsg("d"), Everywhere(2)),
+				(vmsg("c"), Everywhere(3)),
 			]
 		);
 		assert_ring(&[]);
@@ -125,23 +125,23 @@ fn queue_priority_retains() {
 fn queue_priority_reset_once_serviced() {
 	new_test_ext::<Test>().execute_with(|| {
 		use MessageOrigin::*;
-		MessageQueue::enqueue_message(msg(&"a"), Everywhere(1));
-		MessageQueue::enqueue_message(msg(&"b"), Everywhere(2));
-		MessageQueue::enqueue_message(msg(&"c"), Everywhere(3));
+		MessageQueue::enqueue_message(msg("a"), Everywhere(1));
+		MessageQueue::enqueue_message(msg("b"), Everywhere(2));
+		MessageQueue::enqueue_message(msg("c"), Everywhere(3));
 		// service head is 1, it will process a, leaving service head at 2. it also processes b and
 		// empties queue 2, so service head will end at 3.
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
-		MessageQueue::enqueue_message(msg(&"d"), Everywhere(2));
+		MessageQueue::enqueue_message(msg("d"), Everywhere(2));
 		// service head is 3, so will process c first, then d.
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 
 		assert_eq!(
 			MessagesProcessed::get(),
 			vec![
-				(vmsg(&"a"), Everywhere(1)),
-				(vmsg(&"b"), Everywhere(2)),
-				(vmsg(&"c"), Everywhere(3)),
-				(vmsg(&"d"), Everywhere(2)),
+				(vmsg("a"), Everywhere(1)),
+				(vmsg("b"), Everywhere(2)),
+				(vmsg("c"), Everywhere(3)),
+				(vmsg("d"), Everywhere(2)),
 			]
 		);
 	});
@@ -152,15 +152,15 @@ fn reap_page_permanent_overweight_works() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
 		// Create 10 pages more than the stale limit.
-		for i in 0..(MaxStale::get() + 10) {
-			MessageQueue::enqueue_message(msg(&"weight=2"), Here);
+		for _ in 0..(MaxStale::get() + 10) {
+			MessageQueue::enqueue_message(msg("weight=2"), Here);
 		}
 		assert_eq!(Pages::<Test>::iter().count(), MaxStale::get() as usize + 10);
 		// Mark all pages as stale since their message is permanently overweight.
 		MessageQueue::service_queues(1.into_weight());
 
 		// Cannot reap any page within the stale limit.
-		for i in 10..(MaxStale::get() + 10) {
+		for _ in 10..(MaxStale::get() + 10) {
 			assert_noop!(MessageQueue::do_reap_page(&Here, 10), Error::<Test>::NotReapable);
 		}
 		// Can reap the stale ones below the watermark.
@@ -181,26 +181,26 @@ fn reaping_overweight_fails_properly() {
 
 	new_test_ext::<Test>().execute_with(|| {
 		// page 0
-		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
-		MessageQueue::enqueue_message(msg(&"a"), Here);
+		MessageQueue::enqueue_message(msg("weight=4"), Here);
+		MessageQueue::enqueue_message(msg("a"), Here);
 		// page 1
-		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
-		MessageQueue::enqueue_message(msg(&"b"), Here);
+		MessageQueue::enqueue_message(msg("weight=4"), Here);
+		MessageQueue::enqueue_message(msg("b"), Here);
 		// page 2
-		MessageQueue::enqueue_message(msg(&"weight=4"), Here);
-		MessageQueue::enqueue_message(msg(&"c"), Here);
+		MessageQueue::enqueue_message(msg("weight=4"), Here);
+		MessageQueue::enqueue_message(msg("c"), Here);
 		// page 3
-		MessageQueue::enqueue_message(msg(&"bigbig 1"), Here);
+		MessageQueue::enqueue_message(msg("bigbig 1"), Here);
 		// page 4
-		MessageQueue::enqueue_message(msg(&"bigbig 2"), Here);
+		MessageQueue::enqueue_message(msg("bigbig 2"), Here);
 		// page 5
-		MessageQueue::enqueue_message(msg(&"bigbig 3"), Here);
+		MessageQueue::enqueue_message(msg("bigbig 3"), Here);
 		// Double-check that exactly these pages exist.
 		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
 		// Start by servicing with 2 weight; this is enough for 0:"a" and 1:"b".
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
-		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"a"), Here), (vmsg(&"b"), Here)]);
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here), (vmsg("b"), Here)]);
 		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
 		// 0 and 1 are now since they both contain a permanently overweight message.
@@ -211,7 +211,7 @@ fn reaping_overweight_fails_properly() {
 
 		// Service with 1 weight; this is enough for 2:"c".
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
-		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"c"), Here)]);
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("c"), Here)]);
 
 		// 0, 1 and 2 are stale now because of a permanently overweight message.
 		// 0 should be reapable since it is over the stale limit of 2.
@@ -225,7 +225,7 @@ fn reaping_overweight_fails_properly() {
 
 		// Service page 3.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
-		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 1"), Here)]);
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("bigbig 1"), Here)]);
 		assert_pages(&[1, 2, 4, 5]);
 
 		// Nothing reapable.
@@ -235,7 +235,7 @@ fn reaping_overweight_fails_properly() {
 
 		// Service page 4.
 		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
-		assert_eq!(MessagesProcessed::take(), vec![(vmsg(&"bigbig 2"), Here)]);
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("bigbig 2"), Here)]);
 		assert_pages(&[1, 2, 5]);
 		assert_noop!(MessageQueue::do_reap_page(&Here, 3), Error::<Test>::NoPage);
 
@@ -305,7 +305,7 @@ fn service_page_works() {
 		let (page, mut msgs) = full_page::<Test>();
 		assert!(msgs >= 10, "pre-condition: need at least 10 msgs per page");
 		let mut book = book_for::<Test>(&page);
-		Pages::<Test>::insert(&Here, 0, page);
+		Pages::<Test>::insert(Here, 0, page);
 
 		// Call it a few times each with a random weight limit.
 		let mut rng = rand::rngs::StdRng::seed_from_u64(42);
@@ -327,7 +327,7 @@ fn service_page_works() {
 				assert_eq!(status, Bailed);
 			}
 		}
-		assert!(!Pages::<Test>::contains_key(&Here, 0), "The page got removed");
+		assert!(!Pages::<Test>::contains_key(Here, 0), "The page got removed");
 	});
 }
 
@@ -398,11 +398,11 @@ fn bump_service_head_works() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
 		// Create a ready ring with three queues.
-		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		knit(&Here);
-		BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(There, empty_book::<Test>());
 		knit(&There);
-		BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 		knit(&Everywhere(0));
 
 		// Bump 99 times.
@@ -455,11 +455,11 @@ fn bump_service_head_no_head_noops() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
 		// Create a ready ring with three queues.
-		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		knit(&Here);
-		BookStateFor::<Test>::insert(There, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(There, empty_book::<Test>());
 		knit(&There);
-		BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 		knit(&Everywhere(0));
 
 		// But remove the service head.
@@ -527,7 +527,7 @@ fn service_page_item_skips_perm_overweight_message() {
 		// Check that the message was skipped.
 		let (pos, processed, payload) = page.peek_index(0).unwrap();
 		assert_eq!(pos, 0);
-		assert_eq!(processed, false);
+		assert!(!processed);
 		assert_eq!(payload, b"TooMuch".encode());
 	});
 }
@@ -584,17 +584,17 @@ fn note_processed_at_pos_works() {
 
 		for i in 0..msgs {
 			let (pos, processed, _) = page.peek_index(i).unwrap();
-			assert_eq!(processed, false);
+			assert!(!processed);
 			assert_eq!(page.remaining as usize, msgs - i);
 
 			page.note_processed_at_pos(pos);
 
 			let (_, processed, _) = page.peek_index(i).unwrap();
-			assert_eq!(processed, true);
+			assert!(processed);
 			assert_eq!(page.remaining as usize, msgs - i - 1);
 		}
 		// `skip_first` still works fine.
-		for i in 0..msgs {
+		for _ in 0..msgs {
 			page.peek_first().unwrap();
 			page.skip_first(false);
 		}
@@ -642,7 +642,7 @@ fn is_complete_works() {
 		// Each message is marked as processed.
 		for i in 0..msgs {
 			let (_, processed, _) = page.peek_index(i).unwrap();
-			assert_eq!(processed, true);
+			assert!(processed);
 		}
 	});
 }
@@ -727,7 +727,7 @@ fn page_try_append_message_with_remaining_size_works_works() {
 	let mut rng = StdRng::seed_from_u64(42);
 	// Now we keep appending messages with different lengths.
 	while remaining >= header_size {
-		let take = rng.gen_range(0..=(remaining - header_size)) as usize;
+		let take = rng.gen_range(0..=(remaining - header_size));
 		let msg = vec![123u8; take];
 		page.try_append_message::<Test>(BoundedSlice::defensive_truncate_from(&msg))
 			.unwrap();
@@ -774,14 +774,14 @@ fn sweep_queue_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		build_triple_ring();
 
-		let book = BookStateFor::<Test>::get(&Here);
+		let book = BookStateFor::<Test>::get(Here);
 		assert!(book.begin != book.end);
 		// Removing the service head works
 		assert_eq!(ServiceHead::<Test>::get(), Some(Here));
 		MessageQueue::sweep_queue(Here);
 		assert_ring(&[There, Everywhere(0)]);
 		// The book still exits, but has updated begin and end.
-		let book = BookStateFor::<Test>::get(&Here);
+		let book = BookStateFor::<Test>::get(Here);
 		assert_eq!(book.begin, book.end);
 
 		// Removing something that is not the service head works.
@@ -789,12 +789,12 @@ fn sweep_queue_works() {
 		MessageQueue::sweep_queue(Everywhere(0));
 		assert_ring(&[There]);
 		// The book still exits, but has updated begin and end.
-		let book = BookStateFor::<Test>::get(&Everywhere(0));
+		let book = BookStateFor::<Test>::get(Everywhere(0));
 		assert_eq!(book.begin, book.end);
 
 		MessageQueue::sweep_queue(There);
 		// The book still exits, but has updated begin and end.
-		let book = BookStateFor::<Test>::get(&There);
+		let book = BookStateFor::<Test>::get(There);
 		assert_eq!(book.begin, book.end);
 		assert_ring(&[]);
 	})
@@ -805,7 +805,7 @@ fn sweep_queue_works() {
 fn sweep_queue_wraps_works() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
-		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 		knit(&Here);
 
 		MessageQueue::sweep_queue(Here);
@@ -828,7 +828,7 @@ fn footprint_works() {
 		let origin = MessageOrigin::Here;
 		let (page, msgs) = full_page::<Test>();
 		let book = book_for::<Test>(&page);
-		BookStateFor::<Test>::insert(&origin, &book);
+		BookStateFor::<Test>::insert(origin, book);
 
 		let info = MessageQueue::footprint(origin);
 		assert_eq!(info.count as usize, msgs);
@@ -871,9 +871,9 @@ fn execute_overweight_works() {
 
 		// Enqueue a message
 		let origin = MessageOrigin::Here;
-		MessageQueue::enqueue_message(msg(&"weight=6"), origin);
+		MessageQueue::enqueue_message(msg("weight=6"), origin);
 		// Load the current book
-		let book = BookStateFor::<Test>::get(&origin);
+		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
 
 		// Mark the message as permanently overweight.
@@ -898,7 +898,7 @@ fn execute_overweight_works() {
 				.unwrap();
 		assert_eq!(consumed, 6.into_weight());
 		// There is no message left in the book.
-		let book = BookStateFor::<Test>::get(&origin);
+		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 0);
 
 		// Doing it again with enough weight will error.
@@ -916,7 +916,7 @@ fn ready_ring_knit_basic_works() {
 	use MessageOrigin::*;
 
 	new_test_ext::<Test>().execute_with(|| {
-		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
 
 		for i in 0..10 {
 			if i % 2 == 0 {
@@ -937,9 +937,9 @@ fn ready_ring_knit_and_unknit_works() {
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Place three queues into the storage.
-		BookStateFor::<Test>::insert(Here, &empty_book::<Test>());
-		BookStateFor::<Test>::insert(There, &empty_book::<Test>());
-		BookStateFor::<Test>::insert(Everywhere(0), &empty_book::<Test>());
+		BookStateFor::<Test>::insert(Here, empty_book::<Test>());
+		BookStateFor::<Test>::insert(There, empty_book::<Test>());
+		BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
 
 		// Knit them into the ready ring.
 		assert_ring(&[]);
