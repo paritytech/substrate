@@ -143,6 +143,7 @@ impl Config for Test {
 	type Assets = Assets;
 	type PoolAssets = PoolAssets;
 	type AssetId = u32;
+	type PoolAssetId = u32;
 	type PalletId = DexPalletId;
 }
 

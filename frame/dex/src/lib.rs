@@ -16,6 +16,7 @@
 // limitations under the License.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+use frame_support::traits::Incrementable;
 
 mod types;
 
@@ -88,6 +89,18 @@ pub mod pallet {
 			+ PartialOrd
 			+ TypeInfo;
 
+		type PoolAssetId: Member
+			+ Parameter
+			+ Default
+			+ Copy
+			+ codec::HasCompact
+			+ From<u32>
+			+ MaybeSerializeDeserialize
+			+ MaxEncodedLen
+			+ PartialOrd
+			+ TypeInfo
+			+ Incrementable;
+
 		type Assets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
 			+ InspectEnumerable<Self::AccountId>
@@ -95,7 +108,7 @@ pub mod pallet {
 			+ MutateMetadata<Self::AccountId>
 			+ Transfer<Self::AccountId>;
 
-		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::AssetId, Balance = Self::AssetBalance>
+		type PoolAssets: Inspect<Self::AccountId, AssetId = Self::PoolAssetId, Balance = Self::AssetBalance>
 			+ Create<Self::AccountId>
 			+ InspectEnumerable<Self::AccountId>
 			+ Mutate<Self::AccountId>
@@ -122,9 +135,19 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		PoolIdOf<T>,
-		PoolInfo<T::AccountId, AssetIdOf<T>, AssetBalanceOf<T>>,
+		PoolInfo<
+			T::AccountId,
+			AssetIdOf<T>,
+			T::PoolAssetId,
+			AssetBalanceOf<T>,
+		>,
 		OptionQuery,
 	>;
+
+	/// Stores the `PoolAssetId` that is going to be used for the next lp token.
+	/// This gets incremented whenever a new lp pool is created.
+	#[pallet::storage]
+	pub type NextPoolAssetId<T: Config> = StorageValue<_, T::PoolAssetId, OptionQuery>;
 
 	// Pallet's events.
 	#[pallet::event]
@@ -133,7 +156,7 @@ pub mod pallet {
 		PoolCreated {
 			creator: T::AccountId,
 			pool_id: PoolIdOf<T>,
-			lp_token: AssetIdOf<T>,
+			lp_token: T::PoolAssetId,
 		},
 		LiquidityAdded {
 			who: T::AccountId,
@@ -141,7 +164,7 @@ pub mod pallet {
 			pool_id: PoolIdOf<T>,
 			amount1_provided: AssetBalanceOf<T>,
 			amount2_provided: AssetBalanceOf<T>,
-			lp_token: AssetIdOf<T>,
+			lp_token: T::PoolAssetId,
 			liquidity: AssetBalanceOf<T>,
 		},
 		LiquidityRemoved {
@@ -150,7 +173,7 @@ pub mod pallet {
 			pool_id: PoolIdOf<T>,
 			amount1: AssetBalanceOf<T>,
 			amount2: AssetBalanceOf<T>,
-			lp_token: AssetIdOf<T>,
+			lp_token: T::PoolAssetId,
 			liquidity: AssetBalanceOf<T>,
 		},
 		SwapExecuted {
@@ -227,8 +250,7 @@ pub mod pallet {
 		pub fn create_pool(
 			origin: OriginFor<T>,
 			asset1: AssetIdOf<T>, // TODO: convert into MultiToken
-			asset2: AssetIdOf<T>,
-			lp_token: AssetIdOf<T>,
+			asset2: T::AssetId,
 		) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			ensure!(asset1 != asset2, Error::<T>::EqualAssets);
@@ -238,6 +260,12 @@ pub mod pallet {
 			ensure!(!Pools::<T>::contains_key(&pool_id), Error::<T>::PoolExists);
 
 			let pallet_account = Self::account_id();
+
+			let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
+
+			let next_lp_token_id = lp_token.increment();
+			NextPoolAssetId::<T>::set(Some(next_lp_token_id));
+
 			T::PoolAssets::create(lp_token, pallet_account.clone(), true, MIN_LIQUIDITY.into())?;
 			T::PoolAssets::set(lp_token, &pallet_account, "LP".into(), "LP".into(), 0)?;
 
@@ -698,6 +726,11 @@ pub mod pallet {
 				ensure!(amount_out < reserve1, Error::<T>::InsufficientLiquidity);
 				Ok((pool_asset1, amount_out))
 			}
+		}
+
+		#[cfg(test)]
+		pub fn get_next_pool_asset_id() -> T::PoolAssetId {
+			NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
 		}
 	}
 }
