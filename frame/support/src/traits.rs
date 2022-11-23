@@ -91,7 +91,7 @@ pub mod schedule;
 mod storage;
 pub use storage::{
 	Instance, PartialStorageInfoTrait, StorageInfo, StorageInfoTrait, StorageInstance,
-	TrackedStorageKey, WhitelistedStorageKeys,
+	TrackedStorageKey, WhitelistedStorageKeys, Incrementable,
 };
 
 mod dispatch;

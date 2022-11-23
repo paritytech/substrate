@@ -19,11 +19,11 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 #[derive(Encode, Decode, Default, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
-pub struct PoolInfo<AccountId, AssetId, Balance> {
+pub struct PoolInfo<AccountId, AssetId, PoolAssetId, Balance> {
 	/// Owner of the pool
 	pub owner: AccountId,
-	/// LP asset
-	pub lp_token: AssetId,
+	/// Liquidity pool asset
+	pub lp_token: PoolAssetId,
 	/// The first asset supported by the pool
 	pub asset1: AssetId,
 	/// The second asset supported by the pool

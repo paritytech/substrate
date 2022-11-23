@@ -81,13 +81,14 @@ fn create_pool_should_work() {
 		let user = 1;
 		let token_1 = 1;
 		let token_2 = 2;
-		let lp_token = 3;
 		let pool_id = (token_1, token_2);
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
 
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1, lp_token));
+		let lp_token: u32 = Dex::get_next_pool_asset_id();
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
+		assert_eq!(lp_token + 1, Dex::get_next_pool_asset_id());
 
 		assert_eq!(events(), [Event::<Test>::PoolCreated { creator: user, pool_id, lp_token }]);
 		assert_eq!(pools(), vec![pool_id]);
@@ -97,17 +98,87 @@ fn create_pool_should_work() {
 }
 
 #[test]
+fn create_same_pool_twice_should_fail() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = 1;
+		let token_2 = 2;
+		topup_pallet();
+
+		create_tokens(user, vec![token_1, token_2]);
+
+		let lp_token: u32 = Dex::get_next_pool_asset_id();
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
+		let expected_free = lp_token + 1;
+		assert_eq!(expected_free, Dex::get_next_pool_asset_id());
+
+		assert_noop!(
+			Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1),
+			Error::<Test>::PoolExists
+		);
+		assert_eq!(expected_free, Dex::get_next_pool_asset_id());
+
+		// Try switching the same tokens around:
+		assert_noop!(
+			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2),
+			Error::<Test>::PoolExists
+		);
+		assert_eq!(expected_free, Dex::get_next_pool_asset_id());
+	});
+}
+
+#[test]
+fn different_pools_should_have_different_lp_tokens() {
+	new_test_ext().execute_with(|| {
+		let user = 1;
+		let token_1 = 1;
+		let token_2 = 2;
+		let token_3 = 3;
+		let pool_id_1_2 = (token_1, token_2);
+		let pool_id_1_3 = (token_1, token_3);
+		topup_pallet();
+
+		create_tokens(user, vec![token_1, token_2]);
+
+		let lp_token2_1: u32 = Dex::get_next_pool_asset_id();
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_2, token_1));
+		let lp_token3_1: u32 = Dex::get_next_pool_asset_id();
+
+		assert_eq!(
+			events(),
+			[Event::<Test>::PoolCreated {
+				creator: user,
+				pool_id: pool_id_1_2,
+				lp_token: lp_token2_1
+			}]
+		);
+
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_3, token_1));
+		assert_eq!(
+			events(),
+			[Event::<Test>::PoolCreated {
+				creator: user,
+				pool_id: pool_id_1_3,
+				lp_token: lp_token3_1
+			}]
+		);
+
+		assert_ne!(lp_token2_1, lp_token3_1);
+	});
+}
+
+#[test]
 fn add_liquidity_should_work() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = 1;
 		let token_2 = 2;
-		let lp_token = 3;
 		let pool_id = (token_1, token_2);
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		let lp_token = Dex::get_next_pool_asset_id();
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
@@ -147,12 +218,12 @@ fn remove_liquidity_should_work() {
 		let user = 1;
 		let token_1 = 1;
 		let token_2 = 2;
-		let lp_token = 3;
 		let pool_id = (token_1, token_2);
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		let lp_token = Dex::get_next_pool_asset_id();
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
@@ -207,11 +278,10 @@ fn quote_price_should_work() {
 		let user = 1;
 		let token_1 = 1;
 		let token_2 = 2;
-		let lp_token = 3;
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
@@ -238,11 +308,10 @@ fn swap_should_work() {
 		let user = 1;
 		let token_1 = 1;
 		let token_2 = 2;
-		let lp_token = 3;
 		topup_pallet();
 
 		create_tokens(user, vec![token_1, token_2]);
-		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2, lp_token));
+		assert_ok!(Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
 
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_1, user, 1000));
 		assert_ok!(Assets::mint(RuntimeOrigin::signed(user), token_2, user, 1000));
@@ -288,12 +357,11 @@ fn same_asset_swap_should_fail() {
 	new_test_ext().execute_with(|| {
 		let user = 1;
 		let token_1 = 1;
-		let lp_token = 3;
 		topup_pallet();
 
 		create_tokens(user, vec![token_1]);
 		assert_noop!(
-			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_1, lp_token),
+			Dex::create_pool(RuntimeOrigin::signed(user), token_1, token_1),
 			Error::<Test>::EqualAssets
 		);
 
