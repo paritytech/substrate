@@ -1117,7 +1117,7 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.defensive_unwrap_or_default(),
+							.expect("number runners up will never exceed T::DesiredRunnersUp. qed."),
 					);
 
 					// clean candidates.
