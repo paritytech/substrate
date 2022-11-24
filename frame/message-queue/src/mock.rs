@@ -84,7 +84,7 @@ impl Config for Test {
 	type WeightInfo = MockedWeightInfo;
 	type MessageProcessor = RecordingMessageProcessor;
 	type Size = u32;
-	type QueueChangeHandler = ();
+	type QueueChangeHandler = RecordingQueueChangeHandler;
 	type HeapSize = HeapSize;
 	type MaxStale = MaxStale;
 	type ServiceWeight = ServiceWeight;
@@ -212,6 +212,19 @@ impl ProcessMessage for CountingMessageProcessor {
 	}
 }
 
+parameter_types! {
+	/// Storage for `RecordingQueueChangeHandler`, do not use directly.
+	pub static QueueChanges: Vec<(MessageOrigin, u32, u32)> = vec![];
+}
+
+/// Records all queue changes into [`QueueChanges`].
+pub struct RecordingQueueChangeHandler;
+impl OnQueueChanged<MessageOrigin> for RecordingQueueChangeHandler {
+	fn on_queue_changed(id: MessageOrigin, items_count: u32, items_size: u32) {
+		QueueChanges::mutate(|cs| cs.push((id, items_count, items_size)));
+	}
+}
+
 /// Create new test externalities.
 ///
 /// Is generic since it is used by the unit test, integration tests and benchmarks.
@@ -221,6 +234,7 @@ where
 {
 	sp_tracing::try_init_simple();
 	WeightForCall::set(Default::default());
+	QueueChanges::set(Default::default());
 	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));

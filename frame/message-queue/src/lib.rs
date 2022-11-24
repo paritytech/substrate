@@ -619,9 +619,19 @@ enum PageExecutionStatus {
 	///  - The end of the page is reached but there could still be skipped messages.
 	///  - The storage is corrupted.
 	NoMore,
-	/// The execution progressed and executed some messages. The inner is the number of messages
-	/// removed from the queue.
-	Partial,
+}
+
+/// The status after trying to execute the next item of a [`Page`].
+#[derive(PartialEq, Debug)]
+enum ItemExecutionStatus {
+	/// The execution bailed because there was not enough weight remaining.
+	Bailed,
+	/// The item was not found.
+	NoItem,
+	/// Whether the execution of an item resulted in it being processed.
+	///
+	/// One reason for `false` would be permanently overweight.
+	Executed(bool),
 }
 
 /// The status of an attempt to process a message.
@@ -895,9 +905,6 @@ impl<T: Config> Pallet<T> {
 				PageExecutionStatus::Bailed => break,
 				// Go to the next page if this one is at the end.
 				PageExecutionStatus::NoMore => (),
-				PageExecutionStatus::Partial => {
-					defensive!("should progress till the end or bail");
-				},
 			};
 			book_state.begin.saturating_inc();
 		}
@@ -951,6 +958,7 @@ impl<T: Config> Pallet<T> {
 
 		// Execute as many messages as possible.
 		let status = loop {
+			use ItemExecutionStatus::*;
 			match Self::service_page_item(
 				origin,
 				page_index,
@@ -959,18 +967,17 @@ impl<T: Config> Pallet<T> {
 				weight,
 				overweight_limit,
 			) {
-				s @ Bailed | s @ NoMore => break s,
+				Bailed => break PageExecutionStatus::Bailed,
+				NoItem => break PageExecutionStatus::NoMore,
 				// Keep going as long as we make progress...
-				Partial => {
-					total_processed.saturating_inc();
-					continue
-				},
+				Executed(true) => total_processed.saturating_inc(),
+				Executed(false) => (),
 			}
 		};
 
 		if page.is_complete() {
 			debug_assert!(
-				status != PageExecutionStatus::Bailed,
+				status != Bailed,
 				"we never bail if a page became complete"
 			);
 			Pages::<T>::remove(origin, page_index);
@@ -990,19 +997,19 @@ impl<T: Config> Pallet<T> {
 		page: &mut PageOf<T>,
 		weight: &mut WeightMeter,
 		overweight_limit: Weight,
-	) -> PageExecutionStatus {
+	) -> ItemExecutionStatus {
 		// This ugly pre-checking is needed for the invariant
 		// "we never bail if a page became complete".
 		if page.is_complete() {
-			return PageExecutionStatus::NoMore
+			return ItemExecutionStatus::NoItem
 		}
 		if !weight.check_accrue(T::WeightInfo::service_page_item()) {
-			return PageExecutionStatus::Bailed
+			return ItemExecutionStatus::Bailed
 		}
 
 		let payload = &match page.peek_first() {
 			Some(m) => m,
-			None => return PageExecutionStatus::NoMore,
+			None => return ItemExecutionStatus::NoItem,
 		}[..];
 
 		use MessageExecutionStatus::*;
@@ -1014,16 +1021,17 @@ impl<T: Config> Pallet<T> {
 			weight,
 			overweight_limit,
 		) {
-			InsufficientWeight => return PageExecutionStatus::Bailed,
+			InsufficientWeight => return ItemExecutionStatus::Bailed,
 			Processed | Unprocessable => true,
 			Overweight => false,
 		};
+		
 		if is_processed {
 			book_state.message_count.saturating_dec();
 			book_state.size.saturating_reduce(payload.len() as u32);
 		}
 		page.skip_first(is_processed);
-		PageExecutionStatus::Partial
+		ItemExecutionStatus::Executed(is_processed)
 	}
 
 	/// Print the pages in each queue and the messages in each page.

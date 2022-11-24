@@ -156,6 +156,7 @@ fn reap_page_permanent_overweight_works() {
 			MessageQueue::enqueue_message(msg("weight=2"), Here);
 		}
 		assert_eq!(Pages::<Test>::iter().count(), MaxStale::get() as usize + 10);
+		assert_eq!(QueueChanges::take().len(), 12);
 		// Mark all pages as stale since their message is permanently overweight.
 		MessageQueue::service_queues(1.into_weight());
 
@@ -164,12 +165,15 @@ fn reap_page_permanent_overweight_works() {
 			assert_noop!(MessageQueue::do_reap_page(&Here, 10), Error::<Test>::NotReapable);
 		}
 		// Can reap the stale ones below the watermark.
+		let b = BookStateFor::<Test>::get(Here);
 		for i in 0..10 {
 			assert_ok!(MessageQueue::do_reap_page(&Here, i));
+			assert_eq!(QueueChanges::take(), vec![(Here, b.message_count - (i + 1), b.size - (i + 1) * 8)]);
 		}
 		// Cannot reap any more pages.
 		for (o, i, _) in Pages::<Test>::iter() {
 			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
+			assert!(QueueChanges::take().is_empty());
 		}
 	});
 }
@@ -388,7 +392,7 @@ fn service_page_item_bails() {
 				&mut weight,
 				overweight_limit,
 			),
-			PageExecutionStatus::Bailed
+			ItemExecutionStatus::Bailed
 		);
 	});
 }
@@ -487,7 +491,7 @@ fn service_page_item_consumes_correct_weight() {
 				&mut weight,
 				overweight_limit
 			),
-			PageExecutionStatus::Partial
+			ItemExecutionStatus::Executed(true)
 		);
 		assert_eq!(weight.consumed, 5.into_weight());
 	});
@@ -511,7 +515,7 @@ fn service_page_item_skips_perm_overweight_message() {
 				&mut weight,
 				overweight_limit
 			),
-			PageExecutionStatus::Partial
+			ItemExecutionStatus::Executed(false)
 		);
 		assert_eq!(weight.consumed, 2.into_weight());
 		assert_last_event::<Test>(
@@ -797,6 +801,9 @@ fn sweep_queue_works() {
 		let book = BookStateFor::<Test>::get(There);
 		assert_eq!(book.begin, book.end);
 		assert_ring(&[]);
+
+		// Sweeping a queue never calls OnQueueChanged.
+		assert!(QueueChanges::take().is_empty());
 	})
 }
 
@@ -833,11 +840,15 @@ fn footprint_works() {
 		let info = MessageQueue::footprint(origin);
 		assert_eq!(info.count as usize, msgs);
 		assert_eq!(info.size, page.remaining_size);
+
+		// Sweeping a queue never calls OnQueueChanged.
+		assert!(QueueChanges::take().is_empty());
 	})
 }
 
+/// The footprint of an invalid queue is the default footprint.
 #[test]
-fn footprint_default_works() {
+fn footprint_invalid_works() {
 	new_test_ext::<Test>().execute_with(|| {
 		let origin = MessageOrigin::Here;
 		assert_eq!(MessageQueue::footprint(origin), Default::default());
@@ -876,8 +887,9 @@ fn execute_overweight_works() {
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
 
-		// Mark the message as permanently overweight.
+		// Mark the message as peermanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
+		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
 		assert_last_event::<Test>(
 			Event::OverweightEnqueued {
 				hash: <Test as frame_system::Config>::Hashing::hash(b"weight=6"),
@@ -887,16 +899,18 @@ fn execute_overweight_works() {
 			}
 			.into(),
 		);
+
 		// Now try to execute it with too few weight.
 		let consumed =
 			<MessageQueue as ServiceQueues>::execute_overweight(5.into_weight(), (origin, 0, 0));
 		assert_eq!(consumed, Err(ExecuteOverweightError::InsufficientWeight));
 
 		// Execute it with enough weight.
+		assert!(QueueChanges::take().is_empty());
 		let consumed =
 			<MessageQueue as ServiceQueues>::execute_overweight(7.into_weight(), (origin, 0, 0))
 				.unwrap();
-		assert_eq!(consumed, 6.into_weight());
+		assert_eq!(QueueChanges::take(), vec![(origin, 0, 0)]);
 		// There is no message left in the book.
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 0);
@@ -905,6 +919,7 @@ fn execute_overweight_works() {
 		let consumed =
 			<MessageQueue as ServiceQueues>::execute_overweight(70.into_weight(), (origin, 0, 0));
 		assert_eq!(consumed, Err(ExecuteOverweightError::NotFound));
+		assert!(QueueChanges::take().is_empty());
 	});
 }
 
