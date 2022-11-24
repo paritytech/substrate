@@ -385,8 +385,7 @@ impl<
 }
 
 /// A single link in the double-linked Ready Ring list.
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
-#[cfg_attr(any(feature = "std", feature = "runtime-benchmarks"), derive(PartialEq))]
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, PartialEq)]
 pub struct Neighbours<MessageOrigin> {
 	/// The previous queue.
 	prev: MessageOrigin,

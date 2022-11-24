@@ -117,6 +117,7 @@ pub fn book_for<T: Config>(page: &PageOf<T>) -> BookStateOf<T> {
 }
 
 /// Assert the last event that was emitted.
+#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
 pub fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
 	assert!(
 		!frame_system::Pallet::<T>::block_number().is_zero(),
