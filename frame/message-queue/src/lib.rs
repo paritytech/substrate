@@ -386,7 +386,7 @@ impl<
 
 /// A single link in the double-linked Ready Ring list.
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug)]
-#[cfg_attr(feature = "std", derive(PartialEq))]
+#[cfg_attr(any(feature = "std", feature = "runtime-benchmarks"), derive(PartialEq))]
 pub struct Neighbours<MessageOrigin> {
 	/// The previous queue.
 	prev: MessageOrigin,
@@ -565,8 +565,6 @@ pub mod pallet {
 		/// Check all assumptions about [`crate::Config`].
 		fn integrity_test() {
 			assert!(!MaxMessageLenOf::<T>::get().is_zero(), "HeapSize too low");
-			// This value gets squared and should not overflow.
-			assert!(T::MaxStale::get().checked_pow(2).is_some(), "MaxStale too large");
 		}
 	}
 
@@ -694,7 +692,6 @@ impl<T: Config> Pallet<T> {
 			});
 			if let Some(head) = ServiceHead::<T>::get() {
 				if &head == origin {
-					// NOTE: This case is benchmarked by `ready_ring_unknit`.
 					ServiceHead::<T>::put(neighbours.next);
 				}
 			} else {
@@ -1151,14 +1148,14 @@ impl<Origin: MaxEncodedLen, Size: MaxEncodedLen + Into<u32>, HeapSize: Get<Size>
 	}
 }
 
-/// The maximal message length of this pallet.
+/// The maximal message length.
 pub type MaxMessageLenOf<T> =
 	MaxMessageLen<MessageOriginOf<T>, <T as Config>::Size, <T as Config>::HeapSize>;
-/// The maximal encoded origin length of this pallet.
+/// The maximal encoded origin length.
 pub type MaxOriginLenOf<T> = MaxEncodedLenOf<MessageOriginOf<T>>;
-/// The `MessageOrigin` or this pallet.
+/// The `MessageOrigin` of this pallet.
 pub type MessageOriginOf<T> = <<T as Config>::MessageProcessor as ProcessMessage>::Origin;
-/// The maximal heap size of this pallet.
+/// The maximal heap size of a page.
 pub type HeapSizeU32Of<T> = IntoU32<<T as Config>::HeapSize, <T as Config>::Size>;
 /// The [`Page`] of this pallet.
 pub type PageOf<T> = Page<<T as Config>::Size, <T as Config>::HeapSize>;
