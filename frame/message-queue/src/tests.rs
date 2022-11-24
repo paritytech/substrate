@@ -47,37 +47,28 @@ fn enqueue_within_one_page_works() {
 		MessageQueue::enqueue_message(msg("b"), Here);
 		MessageQueue::enqueue_message(msg("c"), Here);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
-		assert_eq!(MessagesProcessed::get(), vec![(b"a".to_vec(), Here), (b"b".to_vec(), Here)]);
+		assert_eq!(MessagesProcessed::take(), vec![(b"a".to_vec(), Here), (b"b".to_vec(), Here)]);
 
-		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 1.into_weight());
-		assert_eq!(MessagesProcessed::get(), vec![(b"c".to_vec(), Here)]);
+		assert_eq!(MessagesProcessed::take(), vec![(b"c".to_vec(), Here)]);
 
-		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
-		assert_eq!(MessagesProcessed::get(), vec![]);
+		assert!(MessagesProcessed::get().is_empty());
 
-		MessageQueue::enqueue_messages(
-			[
-				BoundedSlice::truncate_from(&b"a"[..]),
-				BoundedSlice::truncate_from(&b"b"[..]),
-				BoundedSlice::truncate_from(&b"c"[..]),
-			]
-			.into_iter(),
-			There,
+		MessageQueue::enqueue_messages([msg("a"), msg("b"), msg("c")].into_iter(), There);
+
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(
+			MessagesProcessed::take(),
+			vec![(b"a".to_vec(), There), (b"b".to_vec(), There),]
 		);
 
-		MessagesProcessed::set(vec![]);
-		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
-		assert_eq!(MessagesProcessed::get(), vec![(b"a".to_vec(), There), (b"b".to_vec(), There),]);
+		MessageQueue::enqueue_message(msg("d"), Everywhere(1));
 
-		MessageQueue::enqueue_message(BoundedSlice::truncate_from(&b"d"[..]), Everywhere(1));
-
-		MessagesProcessed::set(vec![]);
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 0.into_weight());
 		assert_eq!(
-			MessagesProcessed::get(),
+			MessagesProcessed::take(),
 			vec![(b"c".to_vec(), There), (b"d".to_vec(), Everywhere(1))]
 		);
 	});
@@ -100,7 +91,7 @@ fn queue_priority_retains() {
 		// doees not empty queue 2, so service head will end at 2.
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
-			MessagesProcessed::get(),
+			MessagesProcessed::take(),
 			vec![(vmsg("a"), Everywhere(1)), (vmsg("b"), Everywhere(2)),]
 		);
 		assert_ring(&[Everywhere(2), Everywhere(3)]);
@@ -108,12 +99,7 @@ fn queue_priority_retains() {
 		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
 		assert_eq!(
 			MessagesProcessed::get(),
-			vec![
-				(vmsg("a"), Everywhere(1)),
-				(vmsg("b"), Everywhere(2)),
-				(vmsg("d"), Everywhere(2)),
-				(vmsg("c"), Everywhere(3)),
-			]
+			vec![(vmsg("d"), Everywhere(2)), (vmsg("c"), Everywhere(3)),]
 		);
 		assert_ring(&[]);
 	});
@@ -240,7 +226,7 @@ fn reaping_overweight_fails_properly() {
 		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here), (vmsg("b"), Here)]);
 		assert_pages(&[0, 1, 2, 3, 4, 5]);
 
-		// 0 and 1 are now since they both contain a permanently overweight message.
+		// 0 and 1 are now stale since they both contain a permanently overweight message.
 		// Nothing is reapable yet, because we haven't hit the stale limit of 2.
 		for (o, i, _) in Pages::<Test>::iter() {
 			assert_noop!(MessageQueue::do_reap_page(&o, i), Error::<Test>::NotReapable);
@@ -906,6 +892,7 @@ fn footprint_on_swept_works() {
 	})
 }
 
+// TODO test page removal
 #[test]
 fn execute_overweight_works() {
 	new_test_ext::<Test>().execute_with(|| {
@@ -920,7 +907,7 @@ fn execute_overweight_works() {
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
 
-		// Mark the message as peermanently overweight.
+		// Mark the message as permanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
 		assert_eq!(QueueChanges::take(), vec![(origin, 1, 8)]);
 		assert_last_event::<Test>(
@@ -939,6 +926,7 @@ fn execute_overweight_works() {
 		assert_eq!(consumed, Err(ExecuteOverweightError::InsufficientWeight));
 
 		// Execute it with enough weight.
+		assert_eq!(Pages::<Test>::iter().count(), 1);
 		assert!(QueueChanges::take().is_empty());
 		let consumed =
 			<MessageQueue as ServiceQueues>::execute_overweight(7.into_weight(), (origin, 0, 0))
@@ -948,6 +936,8 @@ fn execute_overweight_works() {
 		// There is no message left in the book.
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 0);
+		// And no more pages.
+		assert_eq!(Pages::<Test>::iter().count(), 0);
 
 		// Doing it again with enough weight will error.
 		let consumed =
