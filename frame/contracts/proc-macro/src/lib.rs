@@ -172,7 +172,7 @@ impl HostFnReturn {
 			Self::U32 | Self::ReturnCode => quote! { ::core::primitive::u32 },
 		};
 		quote! {
-			Result<#ok, ::wasmi::core::Trap>
+			::core::result::Result<#ok, ::wasmi::core::Trap>
 		}
 	}
 }
@@ -389,8 +389,8 @@ fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
 		impl<'a, E> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
 		where
 			E: Ext,
-			<E::T as frame_system::Config>::AccountId:
-				sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
+			<E::T as ::frame_system::Config>::AccountId:
+				::sp_core::crypto::UncheckedFrom<<E::T as ::frame_system::Config>::Hash> + ::core::convert::AsRef<[::core::primitive::u8]>,
 		{
 			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>) -> Result<(), ::wasmi::errors::LinkerError> {
 				#impls
@@ -474,7 +474,7 @@ fn expand_functions(
 				let mut func = #inner;
 				func()
 					.map_err(#map_err)
-					.map(Into::into)
+					.map(::core::convert::Into::into)
 			}))?;
 		}
 	});
