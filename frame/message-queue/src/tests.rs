@@ -148,6 +148,38 @@ fn queue_priority_reset_once_serviced() {
 }
 
 #[test]
+fn service_queues_basic_works() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		MessageQueue::enqueue_messages(vec![msg("a"), msg("ab"), msg("abc")].into_iter(), Here);
+		MessageQueue::enqueue_messages(vec![msg("x"), msg("xy"), msg("xyz")].into_iter(), There);
+		assert_eq!(QueueChanges::take(), vec![(Here, 3, 6), (There, 3, 6)]);
+
+		// Service one message from `Here`.
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("a"), Here)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, 2, 5)]);
+
+		// Service one message from `There`.
+		ServiceHead::<Test>::set(There.into());
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("x"), There)]);
+		assert_eq!(QueueChanges::take(), vec![(There, 2, 5)]);
+
+		// Service the remaining from `Here`.
+		ServiceHead::<Test>::set(Here.into());
+		assert_eq!(MessageQueue::service_queues(2.into_weight()), 2.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("ab"), Here), (vmsg("abc"), Here)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, 0, 0)]);
+
+		// Service all remaining messages.
+		assert_eq!(MessageQueue::service_queues(Weight::MAX), 2.into_weight());
+		assert_eq!(MessagesProcessed::take(), vec![(vmsg("xy"), There), (vmsg("xyz"), There)]);
+		assert_eq!(QueueChanges::take(), vec![(There, 0, 0)]);
+	});
+}
+
+#[test]
 fn reap_page_permanent_overweight_works() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
@@ -972,5 +1004,65 @@ fn ready_ring_knit_and_unknit_works() {
 		assert_ring(&[Everywhere(0)]);
 		unknit(&Everywhere(0));
 		assert_ring(&[]);
+	});
+}
+
+#[test]
+fn enqueue_message_works() {
+	use MessageOrigin::*;
+	let max_msg_per_page = <Test as Config>::HeapSize::get() / (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
+
+	new_test_ext::<Test>().execute_with(|| {
+		// Enqueue messages which should fill three pages.
+		let n = (max_msg_per_page * 3);
+		for i in 1..=n {
+			MessageQueue::enqueue_message(msg("a"), Here);
+			assert_eq!(QueueChanges::take(), vec![(Here, i, i)], "OnQueueChanged not called");
+		}
+		assert_eq!(Pages::<Test>::iter().count(), 3);
+
+		// Enqueue one more onto page 4.
+		MessageQueue::enqueue_message(msg("abc"), Here);
+		assert_eq!(QueueChanges::take(), vec![(Here, n+1, n+3)]);
+		assert_eq!(Pages::<Test>::iter().count(), 4);
+
+		// Check the state.
+		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
+		let book = BookStateFor::<Test>::get(Here);
+		assert_eq!(book.message_count, n+1);
+		assert_eq!(book.size, n+3);
+		assert_eq!((book.begin, book.end), (0, 4));
+		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
+	});
+}
+
+#[test]
+fn enqueue_messages_works() {
+	use MessageOrigin::*;
+	let max_msg_per_page = <Test as Config>::HeapSize::get() / (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
+
+	new_test_ext::<Test>().execute_with(|| {
+		// Enqueue messages which should fill three pages.
+		let n = (max_msg_per_page * 3);
+		let msgs = vec![msg("a"); n as usize];
+
+		// Now queue all messages at once.
+		MessageQueue::enqueue_messages(msgs.into_iter(), Here);
+		// The changed handler should only be called once.
+		assert_eq!(QueueChanges::take(), vec![(Here, n, n)], "OnQueueChanged not called");
+		assert_eq!(Pages::<Test>::iter().count(), 3);
+
+		// Enqueue one more onto page 4.
+		MessageQueue::enqueue_message(msg("abc"), Here);
+		assert_eq!(QueueChanges::take(), vec![(Here, n+1, n+3)]);
+		assert_eq!(Pages::<Test>::iter().count(), 4);
+
+		// Check the state.
+		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
+		let book = BookStateFor::<Test>::get(Here);
+		assert_eq!(book.message_count, n+1);
+		assert_eq!(book.size, n+3);
+		assert_eq!((book.begin, book.end), (0, 4));
+		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
 	});
 }
