@@ -222,6 +222,8 @@ pub mod pallet {
 		/// Identifier for the class of asset.
 		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
 
+		type AssetIdParameter: Parameter + Copy + Into<Self::AssetId> + From<Self::AssetId>;
+
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
 
@@ -554,10 +556,11 @@ pub mod pallet {
 		#[pallet::call_index(30)]
 		pub fn create(
 			origin: OriginFor<T>,
-			id: T::AssetId,
+			id: T::AssetIdParameter,
 			admin: AccountIdLookupOf<T>,
 			min_balance: T::Balance,
 		) -> DispatchResult {
+			let id: T::AssetId = id.into();
 			let owner = T::CreateOrigin::ensure_origin(origin, &id)?;
 			let admin = T::Lookup::lookup(admin)?;
 
