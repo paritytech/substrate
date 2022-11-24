@@ -132,7 +132,7 @@
 //! added, given the right flag:
 //!
 //! ```ignore
-//!
+//! 
 //! #[cfg(feature = try-runtime)]
 //! fn pre_upgrade() -> Result<Vec<u8>, &'static str> {}
 //!
@@ -634,7 +634,7 @@ impl State {
 			);
 
 			if new_version.spec_name != old_version.spec_name {
-				return Err("Spec names must match.".into());
+				return Err("Spec names must match.".into())
 			}
 		}
 

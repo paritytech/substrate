@@ -2133,7 +2133,7 @@ impl_runtime_apis! {
 				"try-runtime: executing block {:?} / state root check: {:?} / signature check: {:?} / try-state-select: {:?}",
 				block.header.hash(),
 				state_root_check,
-				false
+				false,
 				select,
 			);
 			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to

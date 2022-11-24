@@ -137,7 +137,6 @@ where
 		let state_ext =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-
 		let result = state_machine_call_with_proof::<Block, HostFns>(
 			state_ext,
 			&executor,
@@ -147,7 +146,12 @@ where
 		);
 
 		if let Err(why) = result {
-			log::error!(target: LOG_TARGET, "failed to execute block {:?} due to {:?}", number, why);
+			log::error!(
+				target: LOG_TARGET,
+				"failed to execute block {:?} due to {:?}",
+				number,
+				why
+			);
 			continue
 		}
 
