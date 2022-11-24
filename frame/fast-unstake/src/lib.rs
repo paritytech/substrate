@@ -122,6 +122,7 @@ pub mod pallet {
 
 		/// Deposit to take for unstaking, to make sure we're able to slash the it in order to cover
 		/// the costs of resources on unsuccessful unstake.
+		#[pallet::constant]
 		type Deposit: Get<BalanceOf<Self>>;
 
 		/// The origin that can control this pallet.
@@ -166,9 +167,6 @@ pub mod pallet {
 		Unstaked { stash: T::AccountId, result: DispatchResult },
 		/// A staker was slashed for requesting fast-unstake whilst being exposed.
 		Slashed { stash: T::AccountId, amount: BalanceOf<T> },
-		/// Some internal error happened while migrating stash. They are removed as head as a
-		/// consequence.
-		Errored { stash: T::AccountId },
 		/// An internal error happened. Operations will be paused now.
 		InternalError,
 		/// A batch was partially checked for the given eras, but the process did not finish.
