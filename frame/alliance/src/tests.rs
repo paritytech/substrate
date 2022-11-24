@@ -546,8 +546,8 @@ fn abdicate_works() {
 		assert_eq!(Alliance::members(MemberRole::Fellow), vec![1, 2, 3]);
 		assert_ok!(Alliance::abdicate_fellow_status(RuntimeOrigin::signed(3)));
 
-		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::MemberAbdicated {
-			member: (3),
+		System::assert_last_event(mock::RuntimeEvent::Alliance(crate::Event::FellowAbdicated {
+			fellow: (3),
 		}));
 
 		assert_powerless(RuntimeOrigin::signed(3), true);

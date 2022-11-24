@@ -799,7 +799,7 @@ benchmarks_instance_pallet! {
 		assert!(Alliance::<T, I>::is_member_of(&fellow2, MemberRole::Ally));
 
 		assert_last_event::<T, I>(
-			Event::MemberAbdicated {member: fellow2}.into()
+			Event::FellowAbdicated {fellow: fellow2}.into()
 		);
 	}
 

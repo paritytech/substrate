@@ -397,8 +397,8 @@ pub mod pallet {
 		UnscrupulousItemRemoved { items: Vec<UnscrupulousItemOf<T, I>> },
 		/// Alliance disbanded. Includes number deleted members and unreserved deposits.
 		AllianceDisbanded { fellow_members: u32, ally_members: u32, unreserved: u32 },
-		/// A member abdicated their voting rights. They are now an Ally.
-		MemberAbdicated { member: T::AccountId },
+		/// A Fellow abdicated their voting rights. They are now an Ally.
+		FellowAbdicated { fellow: T::AccountId },
 	}
 
 	#[pallet::genesis_config]
@@ -944,7 +944,7 @@ pub mod pallet {
 			Self::remove_member(&who, role)?;
 			Self::add_member(&who, MemberRole::Ally)?;
 
-			Self::deposit_event(Event::MemberAbdicated { member: who });
+			Self::deposit_event(Event::FellowAbdicated { fellow: who });
 			Ok(())
 		}
 	}
