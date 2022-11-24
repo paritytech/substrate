@@ -973,10 +973,7 @@ impl<T: Config> Pallet<T> {
 		};
 
 		if page.is_complete() {
-			debug_assert!(
-				status != Bailed,
-				"we never bail if a page became complete"
-			);
+			debug_assert!(status != Bailed, "we never bail if a page became complete");
 			Pages::<T>::remove(origin, page_index);
 			debug_assert!(book_state.count > 0, "completing a page implies there are pages");
 			book_state.count.saturating_dec();
@@ -1022,7 +1019,7 @@ impl<T: Config> Pallet<T> {
 			Processed | Unprocessable => true,
 			Overweight => false,
 		};
-		
+
 		if is_processed {
 			book_state.message_count.saturating_dec();
 			book_state.size.saturating_reduce(payload.len() as u32);

@@ -21,9 +21,7 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{
-	assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard,
-};
+use frame_support::{assert_noop, assert_ok, assert_storage_noop, StorageNoopGuard};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[test]
@@ -200,7 +198,10 @@ fn reap_page_permanent_overweight_works() {
 		let b = BookStateFor::<Test>::get(Here);
 		for i in 0..10 {
 			assert_ok!(MessageQueue::do_reap_page(&Here, i));
-			assert_eq!(QueueChanges::take(), vec![(Here, b.message_count - (i + 1), b.size - (i + 1) * 8)]);
+			assert_eq!(
+				QueueChanges::take(),
+				vec![(Here, b.message_count - (i + 1), b.size - (i + 1) * 8)]
+			);
 		}
 		// Cannot reap any more pages.
 		for (o, i, _) in Pages::<Test>::iter() {
@@ -1011,7 +1012,8 @@ fn ready_ring_knit_and_unknit_works() {
 #[test]
 fn enqueue_message_works() {
 	use MessageOrigin::*;
-	let max_msg_per_page = <Test as Config>::HeapSize::get() / (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
+	let max_msg_per_page = <Test as Config>::HeapSize::get() /
+		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
@@ -1024,14 +1026,14 @@ fn enqueue_message_works() {
 
 		// Enqueue one more onto page 4.
 		MessageQueue::enqueue_message(msg("abc"), Here);
-		assert_eq!(QueueChanges::take(), vec![(Here, n+1, n+3)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, n + 1, n + 3)]);
 		assert_eq!(Pages::<Test>::iter().count(), 4);
 
 		// Check the state.
 		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
 		let book = BookStateFor::<Test>::get(Here);
-		assert_eq!(book.message_count, n+1);
-		assert_eq!(book.size, n+3);
+		assert_eq!(book.message_count, n + 1);
+		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
 	});
@@ -1040,7 +1042,8 @@ fn enqueue_message_works() {
 #[test]
 fn enqueue_messages_works() {
 	use MessageOrigin::*;
-	let max_msg_per_page = <Test as Config>::HeapSize::get() / (ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
+	let max_msg_per_page = <Test as Config>::HeapSize::get() /
+		(ItemHeader::<<Test as Config>::Size>::max_encoded_len() as u32 + 1);
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
@@ -1055,14 +1058,14 @@ fn enqueue_messages_works() {
 
 		// Enqueue one more onto page 4.
 		MessageQueue::enqueue_message(msg("abc"), Here);
-		assert_eq!(QueueChanges::take(), vec![(Here, n+1, n+3)]);
+		assert_eq!(QueueChanges::take(), vec![(Here, n + 1, n + 3)]);
 		assert_eq!(Pages::<Test>::iter().count(), 4);
 
 		// Check the state.
 		assert_eq!(BookStateFor::<Test>::iter().count(), 1);
 		let book = BookStateFor::<Test>::get(Here);
-		assert_eq!(book.message_count, n+1);
-		assert_eq!(book.size, n+3);
+		assert_eq!(book.message_count, n + 1);
+		assert_eq!(book.size, n + 3);
 		assert_eq!((book.begin, book.end), (0, 4));
 		assert_eq!(book.count as usize, Pages::<Test>::iter().count());
 	});

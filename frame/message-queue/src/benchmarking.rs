@@ -96,7 +96,7 @@ benchmarks! {
 		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
 	}
 
-	
+
 	// Processing a single message from a page.
 	service_page_item {
 		let msg = vec![1u8; MaxMessageLenOf::<T>::get() as usize];

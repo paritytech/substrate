@@ -152,7 +152,9 @@ pub fn unknit<T: Config>(o: &<<T as Config>::MessageProcessor as ProcessMessage>
 }
 
 /// Build a ring with three queues: `Here`, `There` and `Everywhere(0)`.
-pub fn build_ring<T: Config>(queues: &[<<T as Config>::MessageProcessor as ProcessMessage>::Origin]) {
+pub fn build_ring<T: Config>(
+	queues: &[<<T as Config>::MessageProcessor as ProcessMessage>::Origin],
+) {
 	for queue in queues {
 		BookStateFor::<T>::insert(queue, empty_book::<T>());
 	}
@@ -165,7 +167,9 @@ pub fn build_ring<T: Config>(queues: &[<<T as Config>::MessageProcessor as Proce
 /// Check that the Ready Ring consists of `queues` in that exact order.
 ///
 /// Also check that all backlinks are valid and that the first element is the service head.
-pub fn assert_ring<T: Config>(queues: &[<<T as Config>::MessageProcessor as ProcessMessage>::Origin]) {
+pub fn assert_ring<T: Config>(
+	queues: &[<<T as Config>::MessageProcessor as ProcessMessage>::Origin],
+) {
 	for (i, origin) in queues.iter().enumerate() {
 		let book = BookStateFor::<T>::get(origin);
 		assert_eq!(
