@@ -302,7 +302,7 @@ impl TestNetworkBuilder {
 		>::new(config::Params {
 			block_announce_config,
 			role: config::Role::Full,
-			executor: None,
+			executor: Box::new(|f| { tokio::spawn(f); }),
 			network_config,
 			chain: client.clone(),
 			protocol_id,

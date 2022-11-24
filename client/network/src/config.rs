@@ -68,7 +68,7 @@ where
 
 	/// How to spawn background tasks. If you pass `None`, then a threads pool will be used by
 	/// default.
-	pub executor: Option<Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>>,
+	pub executor: Box<dyn Fn(Pin<Box<dyn Future<Output = ()> + Send>>) + Send>,
 
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
