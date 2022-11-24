@@ -111,14 +111,19 @@ where
 	})
 }
 
+/// Current state migration status.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct MigrationStatusResult {
-	top_remaining_to_migrate: u64,
-	child_remaining_to_migrate: u64,
-	total_top: u64,
-	total_child: u64,
+	/// Number of top items that should migrate.
+	pub top_remaining_to_migrate: u64,
+	/// Number of child items that should migrate.
+	pub child_remaining_to_migrate: u64,
+	/// Number of top items that we will iterate on.
+	pub total_top: u64,
+	/// Number of child items that we will iterate on.
+	pub total_child: u64,
 }
 
 /// Migration RPC methods.
