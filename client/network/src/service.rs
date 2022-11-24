@@ -38,7 +38,6 @@ use crate::{
 	transport, ChainSyncInterface, ReputationChange,
 };
 
-use codec::Encode;
 use futures::{channel::oneshot, prelude::*};
 use libp2p::{
 	core::{either::EitherError, upgrade, ConnectedPoint, Executor},
@@ -264,11 +263,6 @@ where
 		let num_connected = Arc::new(AtomicUsize::new(0));
 		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
-		let block_request_protocol_name = params.block_request_protocol_config.name.clone();
-		let state_request_protocol_name = params.state_request_protocol_config.name.clone();
-		let warp_sync_protocol_name =
-			params.warp_sync_protocol_config.as_ref().map(|c| c.name.clone());
-
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
 			let user_agent = format!(
@@ -366,10 +360,6 @@ where
 					user_agent,
 					local_public,
 					discovery_config,
-					params.block_request_protocol_config,
-					params.state_request_protocol_config,
-					params.warp_sync_protocol_config,
-					params.light_client_request_protocol_config,
 					params.network_config.request_response_protocols,
 					peerset_handle.clone(),
 				);
@@ -466,9 +456,6 @@ where
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
-			block_request_protocol_name,
-			state_request_protocol_name,
-			warp_sync_protocol_name,
 			_marker: Default::default(),
 		})
 	}
@@ -1287,15 +1274,6 @@ where
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Shared with the [`NetworkService`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
-	/// Protocol name used to send out block requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	block_request_protocol_name: ProtocolName,
-	/// Protocol name used to send out state requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	state_request_protocol_name: ProtocolName,
-	/// Protocol name used to send out warp sync requests via
-	/// [`crate::request_responses::RequestResponsesBehaviour`].
-	warp_sync_protocol_name: Option<ProtocolName>,
 	/// Marker to pin the `H` generic. Serves no purpose except to not break backwards
 	/// compatibility.
 	_marker: PhantomData<H>,
@@ -1473,84 +1451,6 @@ where
 						metrics.import_queue_justifications_submitted.inc();
 					}
 					this.import_queue.import_justifications(origin, hash, nb, justifications);
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::BlockRequest {
-					target,
-					request,
-					pending_response,
-				})) => {
-					match this
-						.network_service
-						.behaviour()
-						.user_protocol()
-						.encode_block_request(&request)
-					{
-						Ok(data) => {
-							this.network_service.behaviour_mut().send_request(
-								&target,
-								&this.block_request_protocol_name,
-								data,
-								pending_response,
-								IfDisconnected::ImmediateError,
-							);
-						},
-						Err(err) => {
-							log::warn!(
-								target: "sync",
-								"Failed to encode block request {:?}: {:?}",
-								request, err
-							);
-						},
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::StateRequest {
-					target,
-					request,
-					pending_response,
-				})) => {
-					match this
-						.network_service
-						.behaviour()
-						.user_protocol()
-						.encode_state_request(&request)
-					{
-						Ok(data) => {
-							this.network_service.behaviour_mut().send_request(
-								&target,
-								&this.state_request_protocol_name,
-								data,
-								pending_response,
-								IfDisconnected::ImmediateError,
-							);
-						},
-						Err(err) => {
-							log::warn!(
-								target: "sync",
-								"Failed to encode state request {:?}: {:?}",
-								request, err
-							);
-						},
-					}
-				},
-				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::WarpSyncRequest {
-					target,
-					request,
-					pending_response,
-				})) => match &this.warp_sync_protocol_name {
-					Some(name) => this.network_service.behaviour_mut().send_request(
-						&target,
-						&name,
-						request.encode(),
-						pending_response,
-						IfDisconnected::ImmediateError,
-					),
-					None => {
-						log::warn!(
-							target: "sync",
-							"Trying to send warp sync request when no protocol is configured {:?}",
-							request,
-						);
-					},
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::InboundRequest {
 					protocol,

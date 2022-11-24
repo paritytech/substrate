@@ -948,7 +948,7 @@ impl<T: Config> ElectionDataProvider for Pallet<T> {
 	}
 
 	fn electable_targets(maybe_max_len: Option<usize>) -> data_provider::Result<Vec<T::AccountId>> {
-		let target_count = Validators::<T>::count();
+		let target_count = T::TargetList::count();
 
 		// We can't handle this case yet -- return an error.
 		if maybe_max_len.map_or(false, |max_len| target_count > max_len as u32) {
