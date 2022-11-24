@@ -70,7 +70,7 @@ fn count_migrate<'a, H: Hasher>(
 }
 
 /// Check trie migration status.
-pub fn migration_status<H, B>(backend: &B) -> std::result::Result<(u64, u64, u64, u64), String>
+pub fn migration_status<H, B>(backend: &B) -> std::result::Result<MigrationStatusResult, String>
 where
 	H: Hasher,
 	H::Out: codec::Codec,
@@ -78,10 +78,10 @@ where
 {
 	let trie_backend = backend.as_trie_backend();
 	let essence = trie_backend.essence();
-	let (nb_to_migrate, total_nb, trie) = count_migrate(essence, essence.root())?;
+	let (top_remaining_to_migrate, total_top, trie) = count_migrate(essence, essence.root())?;
 
-	let mut nb_to_migrate_child = 0;
-	let mut total_nb_child = 0;
+	let mut child_remaining_to_migrate = 0;
+	let mut total_child = 0;
 	let mut child_roots: Vec<(ChildInfo, Vec<u8>)> = Vec::new();
 	// get all child trie roots
 	for key_value in trie.iter().map_err(|e| format!("TrieDB node iterator error: {}", e))? {
@@ -98,12 +98,17 @@ where
 		let storage = KeySpacedDB::new(essence, child_info.keyspace());
 
 		child_root.as_mut()[..].copy_from_slice(&root[..]);
-		let (nb, total_nb, _) = count_migrate(&storage, &child_root)?;
-		nb_to_migrate_child += nb;
-		total_nb_child += total_nb;
+		let (nb, total_top, _) = count_migrate(&storage, &child_root)?;
+		child_remaining_to_migrate += nb;
+		total_child += total_top;
 	}
 
-	Ok((nb_to_migrate, nb_to_migrate_child, total_nb, total_nb_child))
+	Ok(MigrationStatusResult {
+		top_remaining_to_migrate,
+		child_remaining_to_migrate,
+		total_top,
+		total_child,
+	})
 }
 
 #[derive(Serialize, Deserialize)]
@@ -154,15 +159,7 @@ where
 
 		let hash = at.unwrap_or_else(|| self.client.info().best_hash);
 		let state = self.backend.state_at(hash).map_err(error_into_rpc_err)?;
-		let (top, child, total_top, total_child) =
-			migration_status(&state).map_err(error_into_rpc_err)?;
-
-		Ok(MigrationStatusResult {
-			top_remaining_to_migrate: top,
-			child_remaining_to_migrate: child,
-			total_top,
-			total_child,
-		})
+		migration_status(&state).map_err(error_into_rpc_err)
 	}
 }
 
