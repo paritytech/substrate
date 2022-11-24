@@ -389,7 +389,7 @@ where
 	// We might not receive all new blocks reports, also pin the block here.
 	handle.pin_block(last_finalized)?;
 
-	// The tree route contains the exclusive path from the latest finalized block
+	// The tree route contains the exclusive path from the last finalized block
 	// to the block reported by the notification. Ensure the finalized block is
 	// properly reported to that path.
 	let mut finalized_block_hashes = notification.tree_route.iter().cloned().collect::<Vec<_>>();
@@ -496,7 +496,7 @@ where
 					Ok((new_block, None)) => stream::iter(vec![new_block]),
 					Ok((new_block, Some(best_block))) => stream::iter(vec![new_block, best_block]),
 					Err(_) => {
-						debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to import blocks", subscription_id);
+						debug!(target: "rpc-spec-v2", "[follow][id={:?}] Failed to handle block import notification.", subscription_id);
 						handle.stop();
 						stream::iter(vec![])
 					},
