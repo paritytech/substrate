@@ -173,10 +173,7 @@ where
 		let block = Decode::decode(&mut request.block.as_ref())?;
 
 		let response = match self.client.execution_proof(block, &request.method, &request.data) {
-			Ok((_, proof)) => {
-				let r = schema::v1::light::RemoteCallResponse { proof: proof.encode() };
-				Some(schema::v1::light::response::Response::RemoteCallResponse(r))
-			},
+			Ok((_, proof)) => schema::v1::light::RemoteCallResponse { proof: Some(proof.encode()) },
 			Err(e) => {
 				trace!(
 					"remote call request from {} ({} at {:?}) failed with: {}",
@@ -185,11 +182,13 @@ where
 					request.block,
 					e,
 				);
-				None
+				schema::v1::light::RemoteCallResponse { proof: None }
 			},
 		};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response {
+			response: Some(schema::v1::light::response::Response::RemoteCallResponse(response)),
+		})
 	}
 
 	fn on_remote_read_request(
@@ -213,10 +212,7 @@ where
 
 		let response =
 			match self.client.read_proof(block, &mut request.keys.iter().map(AsRef::as_ref)) {
-				Ok(proof) => {
-					let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
-					Some(schema::v1::light::response::Response::RemoteReadResponse(r))
-				},
+				Ok(proof) => schema::v1::light::RemoteReadResponse { proof: Some(proof.encode()) },
 				Err(error) => {
 					trace!(
 						"remote read request from {} ({} at {:?}) failed with: {}",
@@ -225,11 +221,13 @@ where
 						request.block,
 						error,
 					);
-					None
+					schema::v1::light::RemoteReadResponse { proof: None }
 				},
 			};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response {
+			response: Some(schema::v1::light::response::Response::RemoteReadResponse(response)),
+		})
 	}
 
 	fn on_remote_read_child_request(
@@ -264,10 +262,7 @@ where
 				&mut request.keys.iter().map(AsRef::as_ref),
 			)
 		}) {
-			Ok(proof) => {
-				let r = schema::v1::light::RemoteReadResponse { proof: proof.encode() };
-				Some(schema::v1::light::response::Response::RemoteReadResponse(r))
-			},
+			Ok(proof) => schema::v1::light::RemoteReadResponse { proof: Some(proof.encode()) },
 			Err(error) => {
 				trace!(
 					"remote read child request from {} ({} {} at {:?}) failed with: {}",
@@ -277,11 +272,13 @@ where
 					request.block,
 					error,
 				);
-				None
+				schema::v1::light::RemoteReadResponse { proof: None }
 			},
 		};
 
-		Ok(schema::v1::light::Response { response })
+		Ok(schema::v1::light::Response {
+			response: Some(schema::v1::light::response::Response::RemoteReadResponse(response)),
+		})
 	}
 }
 

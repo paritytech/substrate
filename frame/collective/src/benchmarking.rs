@@ -34,6 +34,10 @@ fn assert_last_event<T: Config<I>, I: 'static>(generic_event: <T as Config<I>>::
 	frame_system::Pallet::<T>::assert_last_event(generic_event.into());
 }
 
+fn id_to_remark_data(id: u32, length: usize) -> Vec<u8> {
+	id.to_le_bytes().into_iter().cycle().take(length).collect()
+}
+
 benchmarks_instance_pallet! {
 	set_members {
 		let m in 0 .. T::MaxMembers::get();
@@ -64,9 +68,7 @@ benchmarks_instance_pallet! {
 			let length = 100;
 			for i in 0 .. p {
 				// Proposals should be different so that different proposal hashes are generated
-				let proposal: T::Proposal = SystemCall::<T>::remark {
-					remark: vec![i as u8; length]
-				}.into();
+				let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, length) }.into();
 				Collective::<T, I>::propose(
 					SystemOrigin::Signed(old_members.last().unwrap().clone()).into(),
 					threshold,
@@ -105,7 +107,7 @@ benchmarks_instance_pallet! {
 	}
 
 	execute {
-		let b in 1 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		let m in 1 .. T::MaxMembers::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
@@ -122,7 +124,7 @@ benchmarks_instance_pallet! {
 
 		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
 
-		let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![1; b as usize] }.into();
+		let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(1, b as usize) }.into();
 
 	}: _(SystemOrigin::Signed(caller), Box::new(proposal.clone()), bytes_in_storage)
 	verify {
@@ -135,7 +137,7 @@ benchmarks_instance_pallet! {
 
 	// This tests when execution would happen immediately after proposal
 	propose_execute {
-		let b in 1 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		let m in 1 .. T::MaxMembers::get();
 
 		let bytes_in_storage = b + size_of::<u32>() as u32;
@@ -152,7 +154,7 @@ benchmarks_instance_pallet! {
 
 		Collective::<T, I>::set_members(SystemOrigin::Root.into(), members, None, T::MaxMembers::get())?;
 
-		let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![1; b as usize] }.into();
+		let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(1, b as usize) }.into();
 		let threshold = 1;
 
 	}: propose(SystemOrigin::Signed(caller), threshold, Box::new(proposal.clone()), bytes_in_storage)
@@ -166,7 +168,7 @@ benchmarks_instance_pallet! {
 
 	// This tests when proposal is created and queued as "proposed"
 	propose_proposed {
-		let b in 1 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		let m in 2 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
 
@@ -186,7 +188,7 @@ benchmarks_instance_pallet! {
 		// Add previous proposals.
 		for i in 0 .. p - 1 {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![i as u8; b as usize] }.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -197,7 +199,7 @@ benchmarks_instance_pallet! {
 
 		assert_eq!(Collective::<T, I>::proposals().len(), (p - 1) as usize);
 
-		let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![p as u8; b as usize] }.into();
+		let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(p, b as usize) }.into();
 
 	}: propose(SystemOrigin::Signed(caller.clone()), threshold, Box::new(proposal.clone()), bytes_in_storage)
 	verify {
@@ -234,7 +236,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![i as u8; b as usize] }.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -309,9 +311,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark {
-				remark: vec![i as u8; bytes as usize]
-			}.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, bytes as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(proposer.clone()).into(),
 				threshold,
@@ -364,7 +364,7 @@ benchmarks_instance_pallet! {
 	}
 
 	close_early_approved {
-		let b in 1 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
@@ -388,7 +388,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![i as u8; b as usize] }.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -474,9 +474,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark {
-				remark: vec![i as u8; bytes as usize]
-			}.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, bytes as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -529,7 +527,7 @@ benchmarks_instance_pallet! {
 	}
 
 	close_approved {
-		let b in 1 .. MAX_BYTES;
+		let b in 2 .. MAX_BYTES;
 		// We choose 4 as a minimum so we always trigger a vote in the voting loop (`for j in ...`)
 		let m in 4 .. T::MaxMembers::get();
 		let p in 1 .. T::MaxProposals::get();
@@ -558,7 +556,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![i as u8; b as usize] }.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
@@ -629,7 +627,7 @@ benchmarks_instance_pallet! {
 		let mut last_hash = T::Hash::default();
 		for i in 0 .. p {
 			// Proposals should be different so that different proposal hashes are generated
-			let proposal: T::Proposal = SystemCall::<T>::remark { remark: vec![i as u8; b as usize] }.into();
+			let proposal: T::Proposal = SystemCall::<T>::remark { remark: id_to_remark_data(i, b as usize) }.into();
 			Collective::<T, I>::propose(
 				SystemOrigin::Signed(caller.clone()).into(),
 				threshold,
