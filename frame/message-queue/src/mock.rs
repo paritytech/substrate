@@ -257,48 +257,21 @@ pub fn assert_pages(indices: &[u32]) {
 	}
 }
 
-/// Knit a queue into the ready-ring and write it back to storage.
-pub fn knit(o: &MessageOrigin) {
-	let mut b = BookStateFor::<Test>::get(o);
-	b.ready_neighbours = MessageQueue::ready_ring_knit(o).ok().defensive();
-	BookStateFor::<Test>::insert(o, b);
-}
-
-/// Unknit a queue into the ready-ring and write it back to storage.
-pub fn unknit(o: &MessageOrigin) {
-	let mut b = BookStateFor::<Test>::get(o);
-	MessageQueue::ready_ring_unknit(o, b.ready_neighbours.unwrap());
-	b.ready_neighbours = None;
-	BookStateFor::<Test>::insert(o, b);
-}
-
 /// Build a ring with three queues: `Here`, `There` and `Everywhere(0)`.
 pub fn build_triple_ring() {
 	use MessageOrigin::*;
-	BookStateFor::<Test>::insert(Here, empty_book::<Test>());
-	BookStateFor::<Test>::insert(There, empty_book::<Test>());
-	BookStateFor::<Test>::insert(Everywhere(0), empty_book::<Test>());
-
-	// Knit them into the ready ring.
-	knit(&Here);
-	knit(&There);
-	knit(&Everywhere(0));
-	assert_ring(&[Here, There, Everywhere(0)]);
+	build_ring::<Test>(&[Here, There, Everywhere(0)])
 }
 
-/// Check that the Ready Ring consists of `neighbours` in that exact order.
-///
-/// Also check that all backlinks are valid and that the first element is the service head.
-pub fn assert_ring(neighbours: &[MessageOrigin]) {
-	for (i, origin) in neighbours.iter().enumerate() {
-		let book = BookStateFor::<Test>::get(origin);
-		assert_eq!(
-			book.ready_neighbours,
-			Some(Neighbours {
-				prev: neighbours[(i + neighbours.len() - 1) % neighbours.len()],
-				next: neighbours[(i + 1) % neighbours.len()],
-			})
-		);
-	}
-	assert_eq!(ServiceHead::<Test>::get(), neighbours.first().cloned());
+/// Shim to get rid of the annoying `::<Test>` everywhere.
+pub fn assert_ring(queues: &[MessageOrigin]) {
+	super::mock_helpers::assert_ring::<Test>(queues);
+}
+
+pub fn knit(queue: &MessageOrigin) {
+	super::mock_helpers::knit::<Test>(queue);
+}
+
+pub fn unknit(queue: &MessageOrigin) {
+	super::mock_helpers::unknit::<Test>(queue);
 }
