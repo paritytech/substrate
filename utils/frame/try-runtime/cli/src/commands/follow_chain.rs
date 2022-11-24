@@ -137,13 +137,21 @@ where
 		let state_ext =
 			maybe_state_ext.as_mut().expect("state_ext either existed or was just created");
 
-		let (mut changes, encoded_result) = state_machine_call_with_proof::<Block, HostFns>(
+
+		let result = state_machine_call_with_proof::<Block, HostFns>(
 			state_ext,
 			&executor,
 			"TryRuntime_execute_block",
 			(block, command.state_root_check, command.try_state.clone()).encode().as_ref(),
 			full_extensions(),
-		)?;
+		);
+
+		if let Err(why) = result {
+			log::error!(target: LOG_TARGET, "failed to execute block {:?} due to {:?}", number, why);
+			continue
+		}
+
+		let (mut changes, encoded_result) = result.expect("checked to be Ok; qed");
 
 		let consumed_weight = <sp_weights::Weight as Decode>::decode(&mut &*encoded_result)
 			.map_err(|e| format!("failed to decode weight: {:?}", e))?;

@@ -11069,6 +11069,7 @@ dependencies = [
  "sc-service",
  "serde",
  "sp-core",
+ "sp-debug-derive",
  "sp-externalities",
  "sp-io",
  "sp-keystore",

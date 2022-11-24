@@ -264,11 +264,16 @@ where
 			Ok(r.map(|_| ()).map_err(|e| e.error))
 		};
 
-		extrinsics.into_iter().for_each(|e| {
+		for e in extrinsics {
 			if let Err(err) = try_apply_extrinsic(e.clone()) {
-				frame_support::log::error!(target: "runtime::executive", "executing transaction {:?} failed dur to {:?}. Aborting the rest of the block execution.", e, err);
+				frame_support::log::error!(
+					target: "runtime::executive", "executing transaction {:?} failed due to {:?}. Aborting the rest of the block execution.",
+					e,
+					err,
+				);
+				break
 			}
-		});
+		}
 
 		// post-extrinsics book-keeping
 		<frame_system::Pallet<System>>::note_finished_extrinsics();
