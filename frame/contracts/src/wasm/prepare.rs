@@ -401,7 +401,7 @@ where
 		// This is not our only defense: We check for float types later in the preparation
 		// process. Additionally, all instructions explictily  need to have weights assigned
 		// or the deployment will fail. We have none assigned for float instructions.
-		deterministic_only: matches!(determinism, Determinism::AllowIndeterminism),
+		deterministic_only: matches!(determinism, Determinism::Deterministic),
 		mutable_global: false,
 		saturating_float_to_int: false,
 		sign_extension: false,
