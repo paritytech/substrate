@@ -27,92 +27,89 @@ use std::{marker::PhantomData, sync::Arc};
 use futures::StreamExt;
 use log::{debug, error, trace, warn};
 
-use sc_client_api::{Backend, BlockchainEvents, FinalityNotification, FinalityNotifications};
+use sc_client_api::{Backend, BlockchainEvents, FinalityNotifications};
 use sc_offchain::OffchainDb;
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
 use sp_mmr_primitives::{utils, LeafIndex, MmrApi};
 use sp_runtime::{
 	generic::BlockId,
-	traits::{Block, Header, NumberFor, Zero},
+	traits::{Block, Header, NumberFor},
 };
 
 use crate::canon_engine::CanonEngine;
 use beefy_primitives::MmrRootHash;
+use sp_core::offchain::OffchainStorage;
 
 pub const LOG_TARGET: &str = "mmr";
 
-enum MaybeCanonEngine<B: Block, C, S> {
-	Uninitialized { client: Arc<C>, offchain_db: OffchainDb<S>, indexing_prefix: Vec<u8> },
-	Initialized(CanonEngine<C, B, S>),
+struct CanonEngineBuilder<B: Block, C, S> {
+	client: Arc<C>,
+	offchain_db: OffchainDb<S>,
+	indexing_prefix: Vec<u8>,
+
+	_phantom: PhantomData<B>,
 }
 
-impl<B, C, S> MaybeCanonEngine<B, C, S>
+impl<B, C, S> CanonEngineBuilder<B, C, S>
 where
 	B: Block,
-	C: ProvideRuntimeApi<B>,
+	C: ProvideRuntimeApi<B> + HeaderBackend<B> + HeaderMetadata<B>,
 	C::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
+	S: OffchainStorage,
 {
-	fn try_prepare_init(
-		&mut self,
-		notification: &FinalityNotification<B>,
-	) -> Option<<B::Header as Header>::Number> {
-		if let MaybeCanonEngine::Uninitialized { client, .. } = self {
+	async fn try_build(
+		self,
+		finality_notifications: &mut FinalityNotifications<B>,
+	) -> Option<CanonEngine<C, B, S>> {
+		while let Some(notification) = finality_notifications.next().await {
 			let best_block = *notification.header.number();
-			return match client.runtime_api().mmr_leaves_count(&BlockId::number(best_block)) {
+			match self.client.runtime_api().mmr_leaves_count(&BlockId::number(best_block)) {
 				Ok(Ok(mmr_leaves_count)) => {
 					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaves_count) {
-						Ok(first_mmr_block) => Some(first_mmr_block),
+						Ok(first_mmr_block) => {
+							let mut engine = CanonEngine {
+								client: self.client,
+								offchain_db: self.offchain_db,
+								indexing_prefix: self.indexing_prefix,
+								first_mmr_block,
+
+								_phantom: Default::default(),
+							};
+							// We have to canonicalize and prune the blocks in the
+							// finality notification that lead to building the engine  as well.
+							engine.canonicalize_and_prune(&notification);
+							return Some(engine)
+						},
 						Err(e) => {
 							error!(
 								target: LOG_TARGET,
 								"Error calculating the first mmr block: {:?}", e
 							);
-							return None
 						},
 					}
 				},
 				_ => {
 					trace!(target: LOG_TARGET, "Finality notification: {:?}", notification);
 					debug!(target: LOG_TARGET, "Waiting for MMR pallet to become available ...");
-
-					None
 				},
 			}
 		}
 
+		warn!(
+			target: LOG_TARGET,
+			"Finality notifications stream closed unexpectedly. \
+			Couldn't build the canonicalization engine",
+		);
 		None
-	}
-
-	fn try_init(self, first_mmr_block: <B::Header as Header>::Number) -> Self {
-		if let MaybeCanonEngine::Uninitialized { client, offchain_db, indexing_prefix } = self {
-			debug!(
-				target: LOG_TARGET,
-				"MMR pallet available since block {:?}. \
-				Starting offchain MMR leafs canonicalization.",
-				first_mmr_block
-			);
-
-			return MaybeCanonEngine::Initialized(CanonEngine {
-				client,
-				offchain_db,
-				indexing_prefix,
-				first_mmr_block,
-				_phantom: Default::default(),
-			})
-		}
-
-		return self
 	}
 }
 
 /// A MMR Gadget.
 pub struct MmrGadget<B: Block, BE: Backend<B>, C> {
 	finality_notifications: FinalityNotifications<B>,
-	best_finalized_head: (<B::Header as Header>::Number, B::Hash),
-	maybe_engine: MaybeCanonEngine<B, C, BE::OffchainStorage>,
 
-	_phantom: PhantomData<(B, BE)>,
+	_phantom: PhantomData<(B, BE, C)>,
 }
 
 impl<B, BE, C> MmrGadget<B, BE, C>
@@ -123,7 +120,19 @@ where
 	C: BlockchainEvents<B> + HeaderBackend<B> + HeaderMetadata<B> + ProvideRuntimeApi<B>,
 	C::Api: MmrApi<B, MmrRootHash, NumberFor<B>>,
 {
-	fn new(client: Arc<C>, backend: Arc<BE>, indexing_prefix: Vec<u8>) -> Option<Self> {
+	async fn run(mut self, engine_builder: CanonEngineBuilder<B, C, BE::OffchainStorage>) {
+		let mut engine = match engine_builder.try_build(&mut self.finality_notifications).await {
+			Some(engine) => engine,
+			None => return,
+		};
+
+		while let Some(notification) = self.finality_notifications.next().await {
+			engine.canonicalize_and_prune(&notification);
+		}
+	}
+
+	/// Create and run the MMR gadget.
+	pub async fn start(client: Arc<C>, backend: Arc<BE>, indexing_prefix: Vec<u8>) {
 		let offchain_db = match backend.offchain_storage() {
 			Some(offchain_storage) => OffchainDb::new(offchain_storage),
 			None => {
@@ -131,40 +140,23 @@ where
 					target: LOG_TARGET,
 					"Can't spawn a MmrGadget for a node without offchain storage."
 				);
-				return None
+				return
 			},
 		};
 
-		Some(MmrGadget {
+		let mmr_gadget = MmrGadget::<B, BE, C> {
 			finality_notifications: client.finality_notification_stream(),
-			best_finalized_head: (Zero::zero(), client.info().genesis_hash),
-			maybe_engine: MaybeCanonEngine::Uninitialized { client, offchain_db, indexing_prefix },
 
 			_phantom: Default::default(),
-		})
-	}
-
-	async fn run(mut self) {
-		while let Some(notification) = self.finality_notifications.next().await {
-			// Initialize the canonicalization engine if the MMR pallet is available.
-			if let Some(first_mmr_block) = self.maybe_engine.try_prepare_init(&notification) {
-				self.maybe_engine = self.maybe_engine.try_init(first_mmr_block);
-			}
-
-			if let MaybeCanonEngine::Initialized(engine) = &mut self.maybe_engine {
-				// Perform the actual logic.
-				engine.canonicalize_and_prune(&self.best_finalized_head, &notification);
-			}
-
-			self.best_finalized_head = (*notification.header.number(), notification.hash);
-		}
-	}
-
-	/// Create and run the MMR gadget.
-	pub async fn start(client: Arc<C>, backend: Arc<BE>, indexing_prefix: Vec<u8>) {
-		if let Some(mmr_gadget) = Self::new(client, backend, indexing_prefix) {
-			mmr_gadget.run().await
-		}
+		};
+		mmr_gadget
+			.run(CanonEngineBuilder {
+				client,
+				offchain_db,
+				indexing_prefix,
+				_phantom: Default::default(),
+			})
+			.await
 	}
 }
 

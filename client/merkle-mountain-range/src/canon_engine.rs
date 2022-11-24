@@ -22,13 +22,10 @@ use log::{debug, error, warn};
 
 use sc_client_api::FinalityNotification;
 use sc_offchain::OffchainDb;
-use sp_blockchain::{ForkBackend, HeaderBackend, HeaderMetadata};
+use sp_blockchain::{CachedHeaderMetadata, ForkBackend, HeaderBackend, HeaderMetadata};
 use sp_core::offchain::{DbExternalities, OffchainStorage, StorageKind};
 use sp_mmr_primitives::{utils, utils::NodesUtils, NodeIndex};
-use sp_runtime::{
-	traits::{Block, Header, One},
-	Saturating,
-};
+use sp_runtime::traits::{Block, Header};
 
 use crate::LOG_TARGET;
 
@@ -55,48 +52,68 @@ where
 		NodesUtils::node_canon_offchain_key(&self.indexing_prefix, pos)
 	}
 
-	fn right_branch_ending_in_block(
+	fn header_metadata_or_log(
 		&self,
-		block_num: <B::Header as Header>::Number,
-	) -> Result<Vec<NodeIndex>, sp_mmr_primitives::Error> {
-		let leaf_idx =
-			utils::block_num_to_leaf_index::<B::Header>(block_num, self.first_mmr_block)?;
-		Ok(NodesUtils::right_branch_ending_in_leaf(leaf_idx))
-	}
-
-	fn prune_branch(&mut self, block_hash: &B::Hash) {
-		let header = match self.client.header_metadata(*block_hash) {
-			Ok(header) => header,
+		hash: B::Hash,
+		action: &str,
+	) -> Option<CachedHeaderMetadata<B>> {
+		match self.client.header_metadata(hash) {
+			Ok(header) => Some(header),
 			_ => {
 				error!(
 					target: LOG_TARGET,
-					"Stale block {} not found. Couldn't prune associated stale branch.", block_hash
+					"Block {} not found. Couldn't {} associated branch.", hash, action
 				);
-				return
+				None
 			},
+		}
+	}
+
+	fn right_branch_ending_in_block_or_log(
+		&self,
+		block_num: <B::Header as Header>::Number,
+		action: &str,
+	) -> Option<Vec<NodeIndex>> {
+		match utils::block_num_to_leaf_index::<B::Header>(block_num, self.first_mmr_block) {
+			Ok(leaf_idx) => {
+				let branch = NodesUtils::right_branch_ending_in_leaf(leaf_idx);
+				debug!(
+					target: LOG_TARGET,
+					"Nodes to {} for block {}: {:?}", action, block_num, branch
+				);
+				Some(branch)
+			},
+			Err(e) => {
+				error!(
+					target: LOG_TARGET,
+					"Error converting block number {} to leaf index: {:?}. \
+					Couldn't {} associated branch.",
+					block_num,
+					e,
+					action
+				);
+				None
+			},
+		}
+	}
+
+	fn prune_branch(&mut self, block_hash: &B::Hash) {
+		let action = "prune";
+		let header = match self.header_metadata_or_log(*block_hash, action) {
+			Some(header) => header,
+			_ => return,
 		};
 
 		// We prune the leaf associated with the provided block and all the nodes added by that
 		// leaf.
-		let stale_nodes = match self.right_branch_ending_in_block(header.number) {
-			Ok(nodes) => nodes,
-			Err(e) => {
+		let stale_nodes = match self.right_branch_ending_in_block_or_log(header.number, action) {
+			Some(nodes) => nodes,
+			None => {
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
-				error!(
-					target: LOG_TARGET,
-					"Error converting block number {} to leaf index: {:?}. \
-					Won't be able to prune stale branch.",
-					header.number,
-					e
-				);
 				return
 			},
 		};
-		debug!(
-			target: LOG_TARGET,
-			"Nodes to prune for stale block {}: {:?}", header.number, stale_nodes
-		);
 
 		for pos in stale_nodes {
 			let temp_key = self.node_temp_offchain_key(pos, &header.parent);
@@ -105,41 +122,32 @@ where
 		}
 	}
 
-	fn canonicalize_branch(
-		&mut self,
-		block_num: <B::Header as Header>::Number,
-		parent_hash: &B::Hash,
-	) {
+	fn canonicalize_branch(&mut self, block_hash: &B::Hash) {
+		let action = "canonicalize";
+		let header = match self.header_metadata_or_log(*block_hash, action) {
+			Some(header) => header,
+			_ => return,
+		};
+
 		// Don't canonicalize branches corresponding to blocks for which the MMR pallet
 		// wasn't yet initialized.
-		if block_num < self.first_mmr_block {
+		if header.number < self.first_mmr_block {
 			return
 		}
 
 		// We "canonicalize" the leaf associated with the provided block
 		// and all the nodes added by that leaf.
-		let to_canon_nodes = match self.right_branch_ending_in_block(block_num) {
-			Ok(nodes) => nodes,
-			Err(e) => {
+		let to_canon_nodes = match self.right_branch_ending_in_block_or_log(header.number, action) {
+			Some(nodes) => nodes,
+			None => {
 				// If we can't convert the block number to a leaf index, the chain state is probably
 				// corrupted. We only log the error, hoping that the chain state will be fixed.
-				error!(
-					target: LOG_TARGET,
-					"Error converting block number {} to leaf index: {:?}. \
-					Won't be able to canonicalize finalized branch.",
-					block_num,
-					e
-				);
 				return
 			},
 		};
-		debug!(
-			target: LOG_TARGET,
-			"Nodes to canonicalize for block {}: {:?}", block_num, to_canon_nodes
-		);
 
 		for pos in to_canon_nodes {
-			let temp_key = self.node_temp_offchain_key(pos, parent_hash);
+			let temp_key = self.node_temp_offchain_key(pos, &header.parent);
 			if let Some(elem) =
 				self.offchain_db.local_storage_get(StorageKind::PERSISTENT, &temp_key)
 			{
@@ -165,23 +173,11 @@ where
 	/// Move leafs and nodes added by finalized blocks in offchain db from _fork-aware key_ to
 	/// _canonical key_.
 	/// Prune leafs and nodes added by stale blocks in offchain db from _fork-aware key_.
-	pub fn canonicalize_and_prune(
-		&mut self,
-		best_finalized: &(<B::Header as Header>::Number, B::Hash),
-		notification: &FinalityNotification<B>,
-	) {
+	pub fn canonicalize_and_prune(&mut self, notification: &FinalityNotification<B>) {
 		// Move offchain MMR nodes for finalized blocks to canonical keys.
-		let (mut parent_number, mut parent_hash) = *best_finalized;
-		for block_hash in notification
-			.tree_route
-			.iter()
-			.cloned()
-			.chain(std::iter::once(notification.hash))
+		for block_hash in notification.tree_route.iter().chain(std::iter::once(&notification.hash))
 		{
-			let block_number = parent_number.saturating_add(One::one());
-			self.canonicalize_branch(block_number, &parent_hash);
-
-			(parent_number, parent_hash) = (block_number, block_hash);
+			self.canonicalize_branch(block_hash);
 		}
 
 		// Remove offchain MMR nodes for stale forks.
