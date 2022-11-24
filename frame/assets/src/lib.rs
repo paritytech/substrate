@@ -220,17 +220,16 @@ pub mod pallet {
 		type RemoveItemsLimit: Get<u32>;
 
 		/// Identifier for the class of asset.
-		type AssetId: Member
-			+ Parameter
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ From<Self::AssetIdParameter>
-			+ MaxEncodedLen;
+		type AssetId: Member + Parameter + Copy + MaybeSerializeDeserialize + MaxEncodedLen;
 
 		/// Wrapper around `Self::AssetId` to use in dispatchable call signatures. Allows the use
 		/// of compact encoding in instances of the pallet, which will prevent breaking changes
 		/// resulting from the removal of `HasCompact` from `Self::AssetId`.
-		type AssetIdParameter: Parameter + Copy + From<Self::AssetId> + MaxEncodedLen;
+		type AssetIdParameter: Parameter
+			+ Copy
+			+ From<Self::AssetId>
+			+ Into<Self::AssetId>
+			+ MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
