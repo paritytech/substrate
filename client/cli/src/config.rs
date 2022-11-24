@@ -659,17 +659,6 @@ pub trait CliConfiguration<DCV: DefaultConfigurationValues = ()>: Sized {
 			}
 		}
 
-		if self.import_params().map_or(false, |p| {
-			#[allow(deprecated)]
-			p.unsafe_pruning
-		}) {
-			// according to https://github.com/substrate/issues/8103;
-			warn!(
-				"WARNING: \"--unsafe-pruning\" CLI-flag is deprecated and has no effect. \
-				In future builds it will be removed, and providing this flag will lead to an error."
-			);
-		}
-
 		Ok(())
 	}
 }

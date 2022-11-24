@@ -26,11 +26,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate self as sp_weights;
-
 mod weight_v2;
 
-use codec::{Decode, Encode};
+use codec::{CompactAs, Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -52,6 +50,27 @@ pub mod constants {
 	pub const WEIGHT_PER_MICROS: Weight = Weight::from_ref_time(1_000_000);
 	pub const WEIGHT_PER_NANOS: Weight = Weight::from_ref_time(1_000);
 }
+
+/// The old weight type.
+///
+/// NOTE: This type exists purely for compatibility purposes! Use [`weight_v2::Weight`] in all other
+/// cases.
+#[derive(
+	Decode,
+	Encode,
+	CompactAs,
+	PartialEq,
+	Eq,
+	Clone,
+	Copy,
+	RuntimeDebug,
+	Default,
+	MaxEncodedLen,
+	TypeInfo,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(transparent))]
+pub struct OldWeight(pub u64);
 
 /// The weight of database operations that the runtime can invoke.
 ///
@@ -87,7 +106,7 @@ impl RuntimeDbWeight {
 /// coeff_integer * x^(degree) + coeff_frac * x^(degree)
 /// ```
 ///
-/// The `negative` value encodes whether the term is added or substracted from the
+/// The `negative` value encodes whether the term is added or subtracted from the
 /// overall polynomial result.
 #[derive(Clone, Encode, Decode, TypeInfo)]
 pub struct WeightToFeeCoefficient<Balance> {

@@ -21,7 +21,7 @@ use frame_support::{
 	dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo},
 	pallet_prelude::*,
 	parameter_types,
-	traits::{fungibles::Mutate, ConstU32, ConstU64, ConstU8, FindAuthor},
+	traits::{fungibles::Mutate, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor},
 	weights::{Weight, WeightToFee as WeightToFeeT},
 	ConsensusEngineId,
 };
@@ -71,7 +71,7 @@ impl Get<frame_system::limits::BlockWeights> for BlockWeights {
 				weights.base_extrinsic = ExtrinsicBaseWeight::get().into();
 			})
 			.for_class(DispatchClass::non_mandatory(), |weights| {
-				weights.max_total = Weight::from_ref_time(1024).into();
+				weights.max_total = Weight::from_ref_time(1024).set_proof_size(u64::MAX).into();
 			})
 			.build_or_panic()
 	}
@@ -157,6 +157,7 @@ impl pallet_assets::Config for Runtime {
 	type Balance = Balance;
 	type AssetId = u32;
 	type Currency = Balances;
+	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
 	type AssetDeposit = ConstU64<2>;
 	type AssetAccountDeposit = ConstU64<2>;

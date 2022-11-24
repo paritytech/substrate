@@ -86,8 +86,7 @@ members = [
 	"frame/child-bounties",
 	"frame/collective",
 	"frame/contracts",
-	"frame/contracts/rpc",
-	"frame/contracts/rpc/runtime-api",
+	"frame/contracts/primitives",
 	"frame/conviction-voting",
 	"frame/democracy",
 	"frame/fast-unstake",
@@ -99,7 +98,6 @@ members = [
 	"frame/election-provider-support/solution-type/fuzzer",
 	"frame/examples/basic",
 	"frame/examples/offchain-worker",
-	"frame/examples/parallel",
 	"frame/executive",
 	"frame/gilt",
 	"frame/grandpa",
@@ -117,6 +115,7 @@ members = [
 	"frame/preimage",
 	"frame/proxy",
 	"frame/nomination-pools",
+	"frame/nomination-pools/fuzzer",
 	"frame/nomination-pools/benchmarking",
 	"frame/nomination-pools/test-staking",
 	"frame/nomination-pools/runtime-api",
@@ -135,6 +134,7 @@ members = [
 	"frame/staking/reward-fn",
 	"frame/state-trie-migration",
 	"frame/sudo",
+	"frame/root-offences",
 	"frame/support",
 	"frame/support/procedural",
 	"frame/support/procedural/tools",
@@ -204,7 +204,6 @@ members = [
 	"primitives/state-machine",
 	"primitives/std",
 	"primitives/storage",
-	"primitives/tasks",
 	"primitives/test-primitives",
 	"primitives/timestamp",
 	"primitives/tracing",
@@ -232,6 +231,7 @@ members = [
 	"utils/frame/rpc/system",
 	"utils/frame/generate-bags",
 	"utils/frame/generate-bags/node-runtime",
+	"utils/frame/rpc/client",
 	"utils/prometheus",
 	"utils/wasm-builder",
 ]
@@ -253,7 +253,6 @@ members = [
 # This list is ordered alphabetically.
 [profile.dev.package]
 blake2 = { opt-level = 3 }
-blake2-rfc = { opt-level = 3 }
 blake2b_simd = { opt-level = 3 }
 chacha20poly1305 = { opt-level = 3 }
 cranelift-codegen = { opt-level = 3 }
