@@ -136,6 +136,9 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	fn service_page_item() -> Weight {
 		WeightForCall::get().get("service_page_item").copied().unwrap_or_default()
 	}
+	fn ready_ring_knit() -> Weight {
+		WeightForCall::get().get("ready_ring_knit").copied().unwrap_or_default()
+	}
 	fn ready_ring_unknit() -> Weight {
 		WeightForCall::get().get("ready_ring_unknit").copied().unwrap_or_default()
 	}

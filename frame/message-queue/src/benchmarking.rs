@@ -17,27 +17,56 @@
 //! Benchmarking for the message queue pallet.
 
 #![cfg(feature = "runtime-benchmarks")]
+#![allow(unused_assignments)] // Needed for `ready_ring_knit`.
 
 use super::{mock_helpers::*, Pallet as MessageQueue, *};
 
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::traits::Get;
-use frame_system::{Pallet as System, RawOrigin};
+use frame_system::RawOrigin;
 use sp_std::prelude::*;
 
 benchmarks! {
 	where_clause {
 		where
-			// NOTE: We need to generate multiple origins, therefore Origin is `From<u32>`.
-			<<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32>,
+			// NOTE: We need to generate multiple origins, therefore Origin is `From<u32>`. The
+			// `PartialEq` is for asserting the outcome of the ring (un)knitting and *could* be
+			// removed if really necessary.
+			<<T as Config>::MessageProcessor as ProcessMessage>::Origin: From<u32> + PartialEq,
 			<T as Config>::Size: From<u32>,
 	}
 
-	// `service_queue` without any page processing or unknitting.
-	service_queue_base {
-		let mut meter = WeightMeter::max_limit();
+	// Worst case path of `ready_ring_knit`. The benchmark is unused and for verification only.
+	ready_ring_knit {
+		let mid: MessageOriginOf::<T> = 1.into();
+		build_ring::<T>(&[0.into(), mid.clone(), 2.into()]);
+		unknit::<T>(&mid);
+		assert_ring::<T>(&[0.into(), 2.into()]);
+		let mut neighbours = None;
 	}: {
-		MessageQueue::<T>::service_queue(0u32.into(), &mut meter, Weight::MAX)
+		neighbours = MessageQueue::<T>::ready_ring_knit(&mid).ok();
+	} verify {
+		// The neighbours needs to be modified manually.
+		BookStateFor::<T>::mutate(&mid, |b| { b.ready_neighbours = neighbours });
+		assert_ring::<T>(&[0.into(), 2.into(), mid]);
+	}
+
+	// Worst case path of `ready_ring_unknit`. The benchmark is unused and for verification only.
+	ready_ring_unknit {
+		build_ring::<T>(&[0.into(), 1.into(), 2.into()]);
+		assert_ring::<T>(&[0.into(), 1.into(), 2.into()]);
+		let o: MessageOriginOf::<T> = 0.into();
+		let neighbours = BookStateFor::<T>::get(&o).ready_neighbours.unwrap();
+	}: {
+		MessageQueue::<T>::ready_ring_unknit(&o, neighbours);
+	} verify {
+		assert_ring::<T>(&[1.into(), 2.into()]);
+	}
+
+	// `service_queues` without any queue processing.
+	service_queue_base {
+	}: {
+		MessageQueue::<T>::service_queue(0.into(), &mut WeightMeter::max_limit(), Weight::MAX)
 	}
 
 	// `service_page` without any message processing but with page completion.
@@ -67,18 +96,7 @@ benchmarks! {
 		MessageQueue::<T>::service_page(&origin, &mut book_state, &mut meter, limit)
 	}
 
-	// Worst case path of `ready_ring_unknit`.
-	ready_ring_unknit {
-		let origin: MessageOriginOf<T> = 0.into();
-		let neighbours = Neighbours::<MessageOriginOf<T>> {
-			prev: 0.into(),
-			next: 1.into()
-		};
-		ServiceHead::<T>::put(&origin);
-	}: {
-		MessageQueue::<T>::ready_ring_unknit(&origin, neighbours);
-	}
-
+	
 	// Processing a single message from a page.
 	service_page_item {
 		let msg = vec![1u8; MaxMessageLenOf::<T>::get() as usize];
@@ -88,7 +106,7 @@ benchmarks! {
 		let mut weight = WeightMeter::max_limit();
 	}: {
 		let status = MessageQueue::<T>::service_page_item(&0u32.into(), 0, &mut book, &mut page, &mut weight, Weight::MAX);
-		assert_eq!(status, PageExecutionStatus::Partial);
+		assert_eq!(status, ItemExecutionStatus::Executed(true));
 	} verify {
 		// Check that it was processed.
 		assert_last_event::<T>(Event::Processed {
@@ -108,6 +126,7 @@ benchmarks! {
 		MessageQueue::<T>::bump_service_head(&mut weight);
 	} verify {
 		assert_eq!(ServiceHead::<T>::get().unwrap(), 10u32.into());
+		assert_eq!(weight.consumed, T::WeightInfo::bump_service_head());
 	}
 
 	reap_page {
@@ -135,20 +154,24 @@ benchmarks! {
 		assert!(!Pages::<T>::contains_key(&origin, 0));
 	}
 
+	// Worst case for `execute_overweight`.
+	//
+	// The worst case occurs when executing the last message in a page of which all are skipped since it is using `peek_index` which has linear complexities.
+	// TODO one for page remove and one for insert path
 	execute_overweight {
-		// Mock the storage
 		let origin: MessageOriginOf<T> = 0.into();
-		let msg = vec![1u8; MaxMessageLenOf::<T>::get() as usize];
-		let mut page = page::<T>(&msg);
-		page.skip_first(false); // One skipped un-processed overweight message.
+		let (mut page, msgs) = full_page::<T>();
+		// Skip all messages.
+		for _ in 0..msgs {
+			page.skip_first(false);
+		}
 		let book = book_for::<T>(&page);
 		Pages::<T>::insert(&origin, 0, &page);
 		BookStateFor::<T>::insert(&origin, &book);
-
-	}: _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0u32, 0u32.into(), Weight::MAX)
+	}: _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX)
 	verify {
 		assert_last_event::<T>(Event::Processed {
-			hash: T::Hashing::hash(&msg), origin: 0.into(),
+			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
 			weight_used: Weight::from_parts(1, 1), success: true
 		}.into());
 	}
