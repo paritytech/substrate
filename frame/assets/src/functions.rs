@@ -770,10 +770,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ensure!(details.approvals == 0, Error::<T, I>::InUse);
 
 			let metadata = Metadata::<T, I>::take(&id);
-			T::Currency::unreserve(
-				&details.owner.unwrap(),
-				details.deposit.saturating_add(metadata.deposit),
-			);
+			if details.owner.is_some() {
+				T::Currency::unreserve(
+					&details.owner.unwrap(),
+					details.deposit.saturating_add(metadata.deposit),
+				);
+			}
 			Self::deposit_event(Event::Destroyed { asset_id: id });
 
 			Ok(())

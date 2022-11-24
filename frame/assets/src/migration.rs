@@ -122,8 +122,8 @@ pub mod v1 {
 }
 
 pub mod v2 {
-	use frame_support::{pallet_prelude::*, weights::Weight};
 	use super::*;
+	use frame_support::{pallet_prelude::*, weights::Weight};
 
 	#[derive(Decode)]
 	pub struct OldAssetDetails<Balance, AccountId, DepositBalance> {
@@ -217,6 +217,3 @@ pub mod v2 {
 		}
 	}
 }
-
-
-
