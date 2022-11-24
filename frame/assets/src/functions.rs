@@ -677,7 +677,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Asset::<T, I>::try_mutate_exists(id, |maybe_details| -> Result<(), DispatchError> {
 			let mut details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 			if let Some(check_owner) = maybe_check_owner {
-				ensure!(details.owner == check_owner, Error::<T, I>::NoPermission);
+				ensure!(details.owner.clone().unwrap() == check_owner, Error::<T, I>::NoPermission);
 			}
 			details.status = AssetStatus::Destroying;
 
@@ -771,7 +771,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 			let metadata = Metadata::<T, I>::take(&id);
 			T::Currency::unreserve(
-				&details.owner,
+				&details.owner.unwrap(),
 				details.deposit.saturating_add(metadata.deposit),
 			);
 			Self::deposit_event(Event::Destroyed { asset_id: id });
@@ -891,7 +891,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 		ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-		ensure!(from == &d.owner, Error::<T, I>::NoPermission);
+		ensure!(from == &d.owner.unwrap(), Error::<T, I>::NoPermission);
 
 		Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 			ensure!(metadata.as_ref().map_or(true, |m| !m.is_frozen), Error::<T, I>::NoPermission);

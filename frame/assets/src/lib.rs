@@ -142,7 +142,6 @@ mod functions;
 mod impl_fungibles;
 mod impl_stored_map;
 mod types;
-
 pub use types::*;
 
 use codec::HasCompact;
@@ -523,13 +522,6 @@ pub mod pallet {
 		NotFrozen,
 	}
 
-	#[pallet::hooks]
-	impl<T: Config<I>, I: 'static> Hooks<BlockNumberFor<T>> for Pallet<T, I> {
-		fn on_runtime_upgrade() -> frame_support::weights::Weight {
-			migration::migrate_to_v1::<T, I, Self>()
-		}
-	}
-
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Issue a new class of fungible assets from a public origin.
@@ -882,7 +874,7 @@ pub mod pallet {
 				d.status == AssetStatus::Live || d.status == AssetStatus::Frozen,
 				Error::<T, I>::AssetNotLive
 			);
-			ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+			ensure!(origin == d.freezer.unwrap(), Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
@@ -917,7 +909,7 @@ pub mod pallet {
 				details.status == AssetStatus::Live || details.status == AssetStatus::Frozen,
 				Error::<T, I>::AssetNotLive
 			);
-			ensure!(origin == details.admin, Error::<T, I>::NoPermission);
+			ensure!(origin == details.admin.unwrap(), Error::<T, I>::NoPermission);
 			let who = T::Lookup::lookup(who)?;
 
 			Account::<T, I>::try_mutate(id, &who, |maybe_account| -> DispatchResult {
@@ -948,7 +940,7 @@ pub mod pallet {
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-				ensure!(origin == d.freezer, Error::<T, I>::NoPermission);
+				ensure!(origin == d.freezer.clone().unwrap(), Error::<T, I>::NoPermission);
 
 				d.status = AssetStatus::Frozen;
 
@@ -975,7 +967,7 @@ pub mod pallet {
 
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let d = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
-				ensure!(origin == d.admin, Error::<T, I>::NoPermission);
+				ensure!(origin == d.admin.clone().unwrap(), Error::<T, I>::NoPermission);
 				ensure!(d.status == AssetStatus::Frozen, Error::<T, I>::NotFrozen);
 
 				d.status = AssetStatus::Live;
@@ -1007,8 +999,8 @@ pub mod pallet {
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(details.status == AssetStatus::Live, Error::<T, I>::LiveAsset);
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
-				if details.owner == owner {
+				ensure!(origin == details.owner.clone().unwrap(), Error::<T, I>::NoPermission);
+				if details.owner == Some(owner.clone()) {
 					return Ok(())
 				}
 
@@ -1058,7 +1050,7 @@ pub mod pallet {
 			Asset::<T, I>::try_mutate(id, |maybe_details| {
 				let details = maybe_details.as_mut().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(details.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-				ensure!(origin == details.owner, Error::<T, I>::NoPermission);
+				ensure!(origin == details.owner.clone().unwrap(), Error::<T, I>::NoPermission);
 
 				details.issuer = Some(issuer.clone());
 				details.admin = Some(admin.clone());
@@ -1117,7 +1109,7 @@ pub mod pallet {
 
 			let d = Asset::<T, I>::get(id).ok_or(Error::<T, I>::Unknown)?;
 			ensure!(d.status == AssetStatus::Live, Error::<T, I>::AssetNotLive);
-			ensure!(origin == d.owner, Error::<T, I>::NoPermission);
+			ensure!(origin == d.owner.clone().unwrap(), Error::<T, I>::NoPermission);
 
 			Metadata::<T, I>::try_mutate_exists(id, |metadata| {
 				let deposit = metadata.take().ok_or(Error::<T, I>::Unknown)?.deposit;
@@ -1246,10 +1238,10 @@ pub mod pallet {
 			Asset::<T, I>::try_mutate(id, |maybe_asset| {
 				let mut asset = maybe_asset.take().ok_or(Error::<T, I>::Unknown)?;
 				ensure!(asset.status != AssetStatus::Destroying, Error::<T, I>::AssetNotLive);
-				asset.owner = T::Lookup::lookup(owner)?;
-				asset.issuer = T::Lookup::lookup(issuer)?;
-				asset.admin = T::Lookup::lookup(admin)?;
-				asset.freezer = T::Lookup::lookup(freezer)?;
+				asset.owner = Some(T::Lookup::lookup(owner)?);
+				asset.issuer = Some(T::Lookup::lookup(issuer)?);
+				asset.admin = Some(T::Lookup::lookup(admin)?);
+				asset.freezer = Some(T::Lookup::lookup(freezer)?);
 				asset.min_balance = min_balance;
 				asset.is_sufficient = is_sufficient;
 				if is_frozen {
