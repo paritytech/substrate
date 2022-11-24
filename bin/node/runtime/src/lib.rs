@@ -1149,7 +1149,7 @@ impl pallet_elections_phragmen::migrations_3_0_0::V2ToV3 for PhragmenElectionDep
 }
 impl frame_support::traits::OnRuntimeUpgrade for PhragmenElectionDepositRuntimeUpgrade {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		pallet_elections_phragmen::migrations_3_0_0::apply::<Self>(5 * CENTS, DOLLARS)
+		pallet_elections_phragmen::migrations_3_0_0::apply::<Self>(1 * CENTS, DOLLARS)
 	}
 }
 
