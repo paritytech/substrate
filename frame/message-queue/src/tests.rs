@@ -942,6 +942,7 @@ fn execute_overweight_works() {
 		let consumed =
 			<MessageQueue as ServiceQueues>::execute_overweight(7.into_weight(), (origin, 0, 0))
 				.unwrap();
+		assert_eq!(consumed, 6.into_weight());
 		assert_eq!(QueueChanges::take(), vec![(origin, 0, 0)]);
 		// There is no message left in the book.
 		let book = BookStateFor::<Test>::get(origin);
@@ -1014,7 +1015,7 @@ fn enqueue_message_works() {
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
-		let n = (max_msg_per_page * 3);
+		let n = max_msg_per_page * 3;
 		for i in 1..=n {
 			MessageQueue::enqueue_message(msg("a"), Here);
 			assert_eq!(QueueChanges::take(), vec![(Here, i, i)], "OnQueueChanged not called");
@@ -1043,7 +1044,7 @@ fn enqueue_messages_works() {
 
 	new_test_ext::<Test>().execute_with(|| {
 		// Enqueue messages which should fill three pages.
-		let n = (max_msg_per_page * 3);
+		let n = max_msg_per_page * 3;
 		let msgs = vec![msg("a"); n as usize];
 
 		// Now queue all messages at once.

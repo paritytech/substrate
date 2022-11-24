@@ -22,7 +22,7 @@ use super::*;
 use crate as pallet_message_queue;
 use frame_support::{
 	parameter_types,
-	traits::{ConstU32, ConstU64, Defensive},
+	traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
 use sp_runtime::{
