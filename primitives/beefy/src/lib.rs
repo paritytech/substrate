@@ -113,7 +113,7 @@ pub mod crypto {
 /// The `ConsensusEngineId` of BEEFY.
 pub const BEEFY_ENGINE_ID: sp_runtime::ConsensusEngineId = *b"BEEF";
 
-/// Authority set id starts with zero at genesis
+/// Authority set id starts with zero at BEEFY pallet genesis.
 pub const GENESIS_AUTHORITY_SET_ID: u64 = 0;
 
 /// A typedef for validator set id.
