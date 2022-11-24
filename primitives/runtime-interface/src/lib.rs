@@ -153,7 +153,7 @@
 //!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
 //!			</tr>
 //!			<tr>
-//!				<td><code>Vec<u8><code></td>
+//!				<td><code>Vec<u8></code></td>
 //!				<td><code>u64</code></td>
 //!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
 //!			</tr>
@@ -186,12 +186,12 @@
 //!					<code>e.len() 32bit<< 32 &#124; e.as_ptr() 32bit</code></td>
 //!			</tr>
 //!			<tr>
-//!				<td><a href="./pass_by/index.html#Inner"><code>T where T: PassBy<PassBy=Inner><code></a></td>
+//!				<td><a href="./pass_by/index.html#Inner"><code>T where T: PassBy<PassBy=Inner></code></a></td>
 //!				<td>Depends on inner</td>
 //!				<td>Depends on inner</td>
 //!			</tr>
 //!			<tr>
-//!				<td><a href="./pass_by/index.html#Codec"><code>T where T: PassBy<PassBy=Codec><code></a></td>
+//!				<td><a href="./pass_by/index.html#Codec"><code>T where T: PassBy<PassBy=Codec></code></a></td>
 //!				<td><code>u64</code></td>
 //!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
 //!			</tr>
@@ -201,6 +201,9 @@
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+// `cargo doc` doc thinks that `Vec<u8>` has an invalid `u8` HTML tag which cannot be fixed by
+// backticks...
+#![allow(rustdoc::invalid_html_tags)]
 
 extern crate self as sp_runtime_interface;
 
