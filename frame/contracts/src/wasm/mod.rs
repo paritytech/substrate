@@ -215,7 +215,7 @@ where
 			.wasm_sign_extension(false)
 			.wasm_saturating_float_to_int(false);
 		let engine = Engine::new(&config);
-		let module = Module::new(&engine, code).unwrap();
+		let module = Module::new(&engine, code)?;
 		let mut store = Store::new(&engine, host_state);
 		let mut linker = Linker::new();
 		E::define(&mut store, &mut linker)?;
