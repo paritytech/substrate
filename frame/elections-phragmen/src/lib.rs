@@ -1104,7 +1104,7 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.defensive_unwrap_or_default(),
+							.expect("number members will never exceed T::DesiredMembers. qed."),
 					);
 					<RunnersUp<T>>::put::<BoundedVec<_, T::DesiredRunnersUp>>(
 						new_runners_up_sorted_by_rank
