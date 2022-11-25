@@ -59,7 +59,10 @@ use crate::{
 use gossip::{
 	FullCatchUpMessage, FullCommitMessage, GossipMessage, GossipValidator, PeerReport, VoteMessage,
 };
-use sc_network_common::service::{NetworkBlock, NetworkSyncForkRequest};
+use sc_network_common::{
+	service::{NetworkBlock, NetworkSyncForkRequest},
+	sync::SyncEventStream,
+};
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_finality_grandpa::{AuthorityId, AuthoritySignature, RoundNumber, SetId as SetIdNumber};
 
@@ -234,6 +237,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 	/// service taken from the VoterSetState.
 	pub(crate) fn new(
 		service: N,
+		sync: Arc<dyn SyncEventStream>,
 		config: crate::Config,
 		set_state: crate::environment::SharedVoterSetState<B>,
 		prometheus_registry: Option<&Registry>,
@@ -246,6 +250,7 @@ impl<B: BlockT, N: Network<B>> NetworkBridge<B, N> {
 		let validator = Arc::new(validator);
 		let gossip_engine = Arc::new(Mutex::new(GossipEngine::new(
 			service.clone(),
+			sync.clone(),
 			protocol,
 			validator.clone(),
 			prometheus_registry,

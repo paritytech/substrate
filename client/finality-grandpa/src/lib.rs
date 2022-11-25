@@ -68,7 +68,7 @@ use sc_client_api::{
 	StorageProvider, TransactionFor,
 };
 use sc_consensus::BlockImport;
-use sc_network_common::protocol::ProtocolName;
+use sc_network_common::{protocol::ProtocolName, sync::SyncEventStream};
 use sc_telemetry::{telemetry, TelemetryHandle, CONSENSUS_DEBUG, CONSENSUS_INFO};
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use sp_api::ProvideRuntimeApi;
@@ -673,6 +673,8 @@ pub struct GrandpaParams<Block: BlockT, C, N, SC, VR> {
 	/// `sc_network` crate, it is assumed that the Grandpa notifications protocol has been passed
 	/// to the configuration of the networking. See [`grandpa_peers_set_config`].
 	pub network: N,
+	/// Event stream for syncing-related events.
+	pub sync: Arc<dyn SyncEventStream>,
 	/// A voting rule used to potentially restrict target votes.
 	pub voting_rule: VR,
 	/// The prometheus metrics registry.
@@ -724,6 +726,7 @@ where
 		mut config,
 		link,
 		network,
+		sync,
 		voting_rule,
 		prometheus_registry,
 		shared_voter_state,
@@ -748,6 +751,7 @@ where
 
 	let network = NetworkBridge::new(
 		network,
+		sync,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		prometheus_registry.as_ref(),

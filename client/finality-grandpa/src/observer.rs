@@ -28,6 +28,7 @@ use futures::prelude::*;
 use log::{debug, info, warn};
 
 use sc_client_api::backend::Backend;
+use sc_network_common::sync::SyncEventStream;
 use sc_telemetry::TelemetryHandle;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
@@ -167,6 +168,7 @@ pub fn run_grandpa_observer<BE, Block: BlockT, Client, N, SC>(
 	config: Config,
 	link: LinkHalf<Block, Client, SC>,
 	network: N,
+	sync: Arc<dyn SyncEventStream>,
 ) -> sp_blockchain::Result<impl Future<Output = ()> + Send>
 where
 	BE: Backend<Block> + Unpin + 'static,
@@ -186,6 +188,7 @@ where
 
 	let network = NetworkBridge::new(
 		network,
+		sync,
 		config.clone(),
 		persistent_data.set_state.clone(),
 		None,

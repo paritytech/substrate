@@ -21,7 +21,10 @@ use crate::{
 	Network, Validator,
 };
 
-use sc_network_common::protocol::{event::Event, ProtocolName};
+use sc_network_common::{
+	protocol::{event::Event, ProtocolName},
+	sync::{SyncEvent, SyncEventStream},
+};
 use sc_peerset::ReputationChange;
 
 use futures::{
@@ -49,6 +52,8 @@ pub struct GossipEngine<B: BlockT> {
 
 	/// Incoming events from the network.
 	network_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	/// Incoming events from the syncing service.
+	sync_event_stream: Pin<Box<dyn Stream<Item = SyncEvent> + Send>>,
 	/// Outgoing events to the consumer.
 	message_sinks: HashMap<B::Hash, Vec<Sender<TopicNotification>>>,
 	/// Buffered messages (see [`ForwardingState`]).
@@ -77,6 +82,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
 	pub fn new<N: Network<B> + Send + Clone + 'static>(
 		network: N,
+		sync: Arc<dyn SyncEventStream>,
 		protocol: impl Into<ProtocolName>,
 		validator: Arc<dyn Validator<B>>,
 		metrics_registry: Option<&Registry>,
@@ -86,6 +92,7 @@ impl<B: BlockT> GossipEngine<B> {
 	{
 		let protocol = protocol.into();
 		let network_event_stream = network.event_stream("network-gossip");
+		let sync_event_stream = sync.event_stream("network-gossip");
 
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
@@ -94,6 +101,7 @@ impl<B: BlockT> GossipEngine<B> {
 			protocol,
 
 			network_event_stream,
+			sync_event_stream,
 			message_sinks: HashMap::new(),
 			forwarding_state: ForwardingState::Idle,
 
@@ -175,28 +183,25 @@ impl<B: BlockT> Future for GossipEngine<B> {
 		'outer: loop {
 			match &mut this.forwarding_state {
 				ForwardingState::Idle => {
-					match this.network_event_stream.poll_next_unpin(cx) {
+					// TODO(aaro): can this be refactored?
+					let net_event_stream = this.network_event_stream.poll_next_unpin(cx);
+					let sync_event_stream = this.sync_event_stream.poll_next_unpin(cx);
+
+					if net_event_stream.is_pending() && sync_event_stream.is_pending() {
+						break
+					}
+
+					match net_event_stream {
 						Poll::Ready(Some(event)) => match event {
-							Event::SyncConnected { remote } => {
-								this.network.add_set_reserved(remote, this.protocol.clone());
-							},
-							Event::SyncDisconnected { remote } => {
-								this.network.remove_peers_from_reserved_set(
-									this.protocol.clone(),
-									vec![remote],
-								);
-							},
-							Event::NotificationStreamOpened { remote, protocol, role, .. } => {
-								if protocol != this.protocol {
-									continue
-								}
-								this.state_machine.new_peer(&mut *this.network, remote, role);
-							},
+							Event::NotificationStreamOpened { remote, protocol, role, .. } =>
+								if protocol == this.protocol {
+									this.state_machine.new_peer(&mut *this.network, remote, role);
+								},
 							Event::NotificationStreamClosed { remote, protocol } => {
-								if protocol != this.protocol {
-									continue
+								if protocol == this.protocol {
+									this.state_machine
+										.peer_disconnected(&mut *this.network, remote);
 								}
-								this.state_machine.peer_disconnected(&mut *this.network, remote);
 							},
 							Event::NotificationsReceived { remote, messages } => {
 								let messages = messages
@@ -225,7 +230,30 @@ impl<B: BlockT> Future for GossipEngine<B> {
 							self.is_terminated = true;
 							return Poll::Ready(())
 						},
-						Poll::Pending => break,
+						Poll::Pending => {},
+					}
+
+					// TODO(aaro): this is not correct
+					match sync_event_stream {
+						Poll::Ready(Some(event)) => match event {
+							SyncEvent::PeerConnected(remote) => {
+								println!("bridge: {remote:?} connected");
+								this.network.add_set_reserved(remote, this.protocol.clone());
+							},
+							SyncEvent::PeerDisconnected(remote) => {
+								println!("bridge: {remote:?} disconnected");
+								this.network.remove_peers_from_reserved_set(
+									this.protocol.clone(),
+									vec![remote],
+								);
+							},
+						},
+						// The sync event stream closed. Do the same for [`GossipValidator`].
+						Poll::Ready(None) => {
+							self.is_terminated = true;
+							return Poll::Ready(())
+						},
+						Poll::Pending => {},
 					}
 				},
 				ForwardingState::Busy(to_forward) => {
@@ -424,7 +452,7 @@ mod tests {
 
 	impl NetworkNotification for TestNetwork {
 		fn write_notification(&self, _target: PeerId, _protocol: ProtocolName, _message: Vec<u8>) {
-			unimplemented!();
+			// TODO(aaro): why this must be disabled
 		}
 
 		fn notification_sender(
@@ -454,6 +482,28 @@ mod tests {
 		}
 	}
 
+	#[derive(Clone, Default)]
+	struct TestSync {
+		inner: Arc<Mutex<TestSyncInner>>,
+	}
+
+	#[derive(Clone, Default)]
+	struct TestSyncInner {
+		event_senders: Vec<UnboundedSender<SyncEvent>>,
+	}
+
+	impl SyncEventStream for TestSync {
+		fn event_stream(
+			&self,
+			_name: &'static str,
+		) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
+			let (tx, rx) = unbounded();
+			self.inner.lock().unwrap().event_senders.push(tx);
+
+			Box::pin(rx)
+		}
+	}
+
 	struct AllowAll;
 	impl Validator<Block> for AllowAll {
 		fn validate(
@@ -473,8 +523,10 @@ mod tests {
 	#[test]
 	fn returns_when_network_event_stream_closes() {
 		let network = TestNetwork::default();
+		let sync = Arc::new(TestSync::default());
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
+			sync,
 			"/my_protocol",
 			Arc::new(AllowAll {}),
 			None,
@@ -500,9 +552,11 @@ mod tests {
 		let protocol = ProtocolName::from("/my_protocol");
 		let remote_peer = PeerId::random();
 		let network = TestNetwork::default();
+		let sync = Arc::new(TestSync::default());
 
 		let mut gossip_engine = GossipEngine::<Block>::new(
 			network.clone(),
+			sync.clone(),
 			protocol.clone(),
 			Arc::new(AllowAll {}),
 			None,
@@ -617,6 +671,7 @@ mod tests {
 			let protocol = ProtocolName::from("/my_protocol");
 			let remote_peer = PeerId::random();
 			let network = TestNetwork::default();
+			let sync = Arc::new(TestSync::default());
 
 			let num_channels_per_topic = channels.iter().fold(
 				HashMap::new(),
@@ -643,6 +698,7 @@ mod tests {
 
 			let mut gossip_engine = GossipEngine::<Block>::new(
 				network.clone(),
+				sync.clone(),
 				protocol.clone(),
 				Arc::new(TestValidator {}),
 				None,
@@ -669,6 +725,7 @@ mod tests {
 			}
 
 			let mut event_sender = network.inner.lock().unwrap().event_senders.pop().unwrap();
+			let mut _syncevent_sender = sync.inner.lock().unwrap().event_senders.pop().unwrap();
 
 			// Register the remote peer.
 			event_sender

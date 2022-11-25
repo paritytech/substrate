@@ -62,8 +62,10 @@ use sc_network_common::{
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
-	block_request_handler::BlockRequestHandler, service::network::NetworkServiceProvider,
-	state_request_handler::StateRequestHandler, warp_request_handler,
+	block_request_handler::BlockRequestHandler,
+	service::{chain_sync::ChainSyncInterfaceHandle, network::NetworkServiceProvider},
+	state_request_handler::StateRequestHandler,
+	warp_request_handler,
 };
 use sc_service::client::Client;
 use sp_blockchain::{
@@ -235,7 +237,7 @@ pub struct Peer<D, BlockImport> {
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, <Block as BlockT>::Hash, PeersFullClient>,
-	chain_sync_service: Box<dyn ChainSyncInterface<Block>>,
+	chain_sync_service: Arc<ChainSyncInterfaceHandle<Block>>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	listen_addr: Multiaddr,
@@ -507,6 +509,10 @@ where
 	/// Get a reference to the network service.
 	pub fn network_service(&self) -> &Arc<NetworkService<Block, <Block as BlockT>::Hash>> {
 		self.network.service()
+	}
+
+	pub fn sync_service(&self) -> &Arc<ChainSyncInterfaceHandle<Block>> {
+		&self.chain_sync_service
 	}
 
 	/// Get a reference to the network worker.
@@ -947,6 +953,7 @@ where
 			protocol_id,
 			fork_id,
 			engine,
+			// TODO(aaro): fix arcs
 			chain_sync_service: Box::new(chain_sync_service.clone()),
 			metrics_registry: None,
 			block_announce_config,
@@ -991,7 +998,7 @@ where
 				block_import,
 				verifier,
 				network,
-				chain_sync_service: Box::new(chain_sync_service),
+				chain_sync_service: Arc::new(chain_sync_service),
 				listen_addr,
 			});
 		});

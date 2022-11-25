@@ -139,6 +139,10 @@ impl BeefyTestNet {
 		});
 	}
 
+	pub(crate) fn block_until_sync_connected(&mut self) {
+		todo!();
+	}
+
 	pub(crate) fn generate_blocks_and_sync(
 		&mut self,
 		count: usize,
@@ -342,6 +346,7 @@ where
 
 		let network_params = crate::BeefyNetworkParams {
 			network: peer.network_service().clone(),
+			sync: peer.sync_service().clone(),
 			gossip_protocol_name: beefy_gossip_proto_name(),
 			justifications_protocol_name: on_demand_justif_handler.protocol_name(),
 			_phantom: PhantomData,
@@ -954,6 +959,7 @@ fn test_voter_init_setup(
 		Arc::new(crate::communication::gossip::GossipValidator::new(known_peers));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		net.peer(0).network_service().clone(),
+		net.peer(0).sync_service().clone(),
 		"/beefy/whatever",
 		gossip_validator,
 		None,

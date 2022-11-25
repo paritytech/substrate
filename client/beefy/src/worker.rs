@@ -32,6 +32,7 @@ use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, Header
 use sc_network_common::{
 	protocol::event::Event as NetEvent,
 	service::{NetworkEventStream, NetworkRequest},
+	sync::{SyncEvent, SyncEventStream},
 };
 use sc_network_gossip::GossipEngine;
 
@@ -252,6 +253,7 @@ pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
 	pub network: N,
+	pub sync: Arc<dyn SyncEventStream>,
 	pub key_store: BeefyKeystore,
 	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
@@ -302,6 +304,7 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	backend: Arc<BE>,
 	payload_provider: P,
 	network: N,
+	sync: Arc<dyn SyncEventStream>,
 	key_store: BeefyKeystore,
 
 	// communication
@@ -346,6 +349,7 @@ where
 			payload_provider,
 			key_store,
 			network,
+			sync,
 			gossip_engine,
 			gossip_validator,
 			on_demand_justifications,
@@ -359,6 +363,7 @@ where
 			backend,
 			payload_provider,
 			network,
+			sync,
 			known_peers,
 			key_store,
 			gossip_engine,
@@ -794,7 +799,7 @@ where
 	) {
 		info!(target: "beefy", "🥩 run BEEFY worker, best grandpa: #{:?}.", self.best_grandpa_block());
 
-		let mut network_events = self.network.event_stream("network-gossip").fuse();
+		let mut sync_events = self.sync.event_stream("network-gossipzzz").fuse();
 		let mut votes = Box::pin(
 			self.gossip_engine
 				.messages_for(topic::<B>())
@@ -838,11 +843,11 @@ where
 					return;
 				},
 				// Keep track of connected peers.
-				net_event = network_events.next() => {
-					if let Some(net_event) = net_event {
-						self.handle_network_event(net_event);
+				sync_event = sync_events.next() => {
+					if let Some(sync_event) = sync_event {
+						self.handle_sync_event(sync_event);
 					} else {
-						error!(target: "beefy", "🥩 Network events stream terminated, closing worker.");
+						error!(target: "beefy", "🥩 Syncing events stream terminated, closing worker.");
 						return;
 					}
 				},
@@ -897,16 +902,14 @@ where
 	}
 
 	/// Update known peers based on network events.
-	fn handle_network_event(&mut self, event: NetEvent) {
+	fn handle_sync_event(&mut self, event: SyncEvent) {
 		match event {
-			NetEvent::SyncConnected { remote } => {
+			SyncEvent::PeerConnected(remote) => {
 				self.known_peers.lock().add_new(remote);
 			},
-			NetEvent::SyncDisconnected { remote } => {
+			SyncEvent::PeerDisconnected(remote) => {
 				self.known_peers.lock().remove(&remote);
 			},
-			// We don't care about other events.
-			_ => (),
 		}
 	}
 }
@@ -982,7 +985,8 @@ pub(crate) mod tests {
 	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
-	use sc_network::NetworkService;
+	use sc_network::{ChainSyncInterface, NetworkService};
+	use sc_network_common::sync::SyncEventStream;
 	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
@@ -1050,10 +1054,16 @@ pub(crate) mod tests {
 		let backend = peer.client().as_backend();
 		let api = Arc::new(TestApi {});
 		let network = peer.network_service().clone();
+		let sync = peer.sync_service().clone();
 		let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 		let gossip_validator = Arc::new(GossipValidator::new(known_peers.clone()));
-		let gossip_engine =
-			GossipEngine::new(network.clone(), "/beefy/1", gossip_validator.clone(), None);
+		let gossip_engine = GossipEngine::new(
+			network.clone(),
+			sync.clone(),
+			"/beefy/1",
+			gossip_validator.clone(),
+			None,
+		);
 		let on_demand_justifications = OnDemandJustificationsEngine::new(
 			network.clone(),
 			api.clone(),
@@ -1080,6 +1090,7 @@ pub(crate) mod tests {
 			gossip_validator,
 			metrics: None,
 			network,
+			sync,
 			on_demand_justifications,
 			persisted_state,
 		};

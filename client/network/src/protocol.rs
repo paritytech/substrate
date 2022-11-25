@@ -464,21 +464,12 @@ pub enum CustomMessageOutcome<B: BlockT> {
 		notifications_sink: NotificationsSink,
 	},
 	/// Notification protocols have been closed with a remote.
-	NotificationStreamClosed {
-		remote: PeerId,
-		protocol: ProtocolName,
-	},
+	NotificationStreamClosed { remote: PeerId, protocol: ProtocolName },
 	/// Messages have been received on one or more notifications protocols.
-	NotificationsReceived {
-		remote: PeerId,
-		messages: Vec<(ProtocolName, Bytes)>,
-	},
+	NotificationsReceived { remote: PeerId, messages: Vec<(ProtocolName, Bytes)> },
 	/// Peer has a reported a new head of chain.
 	PeerNewBest(PeerId, NumberFor<B>),
 	/// Now connected to a new peer for syncing purposes.
-	SyncConnected(PeerId),
-	/// No longer connected to a peer for syncing purposes.
-	SyncDisconnected(PeerId),
 	None,
 }
 
@@ -608,17 +599,14 @@ where
 
 							let roles = handshake.roles;
 							if self.engine.on_sync_peer_connected(peer_id, handshake).is_ok() {
-								self.pending_messages.push_back(
-									CustomMessageOutcome::NotificationStreamOpened {
-										remote: peer_id,
-										protocol: self.notification_protocols[usize::from(set_id)]
-											.clone(),
-										negotiated_fallback,
-										roles,
-										notifications_sink,
-									},
-								);
-								CustomMessageOutcome::SyncConnected(peer_id)
+								CustomMessageOutcome::NotificationStreamOpened {
+									remote: peer_id,
+									protocol: self.notification_protocols[usize::from(set_id)]
+										.clone(),
+									negotiated_fallback,
+									roles,
+									notifications_sink,
+								}
 							} else {
 								CustomMessageOutcome::None
 							}
@@ -644,18 +632,15 @@ where
 										.on_sync_peer_connected(peer_id, handshake)
 										.is_ok()
 									{
-										self.pending_messages.push_back(
-											CustomMessageOutcome::NotificationStreamOpened {
-												remote: peer_id,
-												protocol: self.notification_protocols
-													[usize::from(set_id)]
-												.clone(),
-												negotiated_fallback,
-												roles,
-												notifications_sink,
-											},
-										);
-										CustomMessageOutcome::SyncConnected(peer_id)
+										CustomMessageOutcome::NotificationStreamOpened {
+											remote: peer_id,
+											protocol: self.notification_protocols
+												[usize::from(set_id)]
+											.clone(),
+											negotiated_fallback,
+											roles,
+											notifications_sink,
+										}
 									} else {
 										CustomMessageOutcome::None
 									}
@@ -726,16 +711,15 @@ where
 			NotificationsOut::CustomProtocolClosed { peer_id, set_id } => {
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
-					if self.engine.on_sync_peer_disconnected(peer_id).is_ok() {
-						CustomMessageOutcome::SyncDisconnected(peer_id)
-					} else {
+					if self.engine.on_sync_peer_disconnected(peer_id).is_err() {
 						log::trace!(
 							target: "sync",
 							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
 							peer_id
 						);
-						CustomMessageOutcome::None
 					}
+
+					CustomMessageOutcome::None
 				} else if self.bad_handshake_substreams.remove(&(peer_id, set_id)) {
 					// The substream that has just been closed had been opened with a bad
 					// handshake. The outer layers have never received an opening event about this

@@ -22,14 +22,12 @@ use crate::{
 	config::MultiaddrWithPeerId,
 	protocol::{event::Event, ProtocolName},
 	request_responses::{IfDisconnected, RequestFailure},
-	sync::{warp::WarpSyncProgress, StateDownloadProgress, SyncState},
 };
 use futures::{channel::oneshot, Stream};
 pub use libp2p::{identity::error::SigningError, kad::record::Key as KademliaKey};
 use libp2p::{Multiaddr, PeerId};
 use sc_peerset::ReputationChange;
 pub use signature::Signature;
-use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{collections::HashSet, future::Future, pin::Pin, sync::Arc};
 
 mod signature;

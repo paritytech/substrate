@@ -38,11 +38,12 @@ use sc_network_common::{
 			BlockAnnounce, BlockAnnouncesHandshake, BlockState,
 		},
 		warp::WarpSyncProvider,
-		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncMode,
+		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
+		SyncMode,
 	},
 	utils::LruHashSet,
 };
-use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;
 use sp_consensus::block_validation::BlockAnnounceValidator;
 use sp_runtime::{
@@ -145,6 +146,9 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Genesis hash.
 	genesis_hash: B::Hash,
+
+	/// Set of channels for other protocols that have subscribed to syncing events.
+	event_streams: Vec<TracingUnboundedSender<SyncEvent>>,
 
 	/// All connected peers. Contains both full and light node peers.
 	pub peers: HashMap<PeerId, Peer<B>>,
@@ -255,6 +259,7 @@ where
 				default_peers_set_no_slot_peers,
 				default_peers_set_num_full,
 				default_peers_set_num_light,
+				event_streams: Vec::new(),
 				metrics: if let Some(r) = metrics_registry {
 					match Metrics::register(r) {
 						Ok(metrics) => Some(metrics),
@@ -488,6 +493,7 @@ where
 				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
 					self.chain_sync.set_sync_fork_request(peers, &hash, number);
 				},
+				ToServiceCommand::EventStream(tx) => self.event_streams.push(tx),
 				ToServiceCommand::RequestJustification(hash, number) =>
 					self.chain_sync.request_justification(&hash, number),
 				ToServiceCommand::ClearJustificationRequests =>
@@ -540,6 +546,8 @@ where
 		if let Some(_peer_data) = self.peers.remove(&peer) {
 			self.chain_sync.peer_disconnected(&peer);
 			self.default_peers_set_no_slot_connected_peers.remove(&peer);
+			self.event_streams
+				.retain(|stream| stream.unbounded_send(SyncEvent::PeerDisconnected(peer)).is_ok());
 			Ok(())
 		} else {
 			Err(())
@@ -674,6 +682,11 @@ where
 		if let Some(req) = req {
 			self.chain_sync.send_block_request(who, req);
 		}
+
+		self.event_streams.retain(|stream| {
+			println!("sync: {who:?} connected");
+			stream.unbounded_send(SyncEvent::PeerConnected(who)).is_ok()
+		});
 
 		Ok(())
 	}

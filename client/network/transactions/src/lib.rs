@@ -37,6 +37,7 @@ use sc_network_common::{
 	error,
 	protocol::{event::Event, role::ObservedRole, ProtocolName},
 	service::{NetworkEventStream, NetworkNotification, NetworkPeers},
+	sync::{SyncEvent, SyncEventStream},
 	utils::{interval, LruHashSet},
 	ExHashT,
 };
@@ -164,10 +165,12 @@ impl TransactionsHandlerPrototype {
 	>(
 		self,
 		service: S,
+		sync_service: Arc<dyn SyncEventStream>,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
 	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
-		let event_stream = service.event_stream("transactions-handler");
+		let net_event_stream = service.event_stream("transactions-handler-net");
+		let sync_event_stream = sync_service.event_stream("transactions-handler-sync");
 		let (to_handler, from_controller) = mpsc::unbounded();
 
 		let handler = TransactionsHandler {
@@ -176,7 +179,8 @@ impl TransactionsHandlerPrototype {
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
 			service,
-			event_stream,
+			net_event_stream,
+			sync_event_stream,
 			peers: HashMap::new(),
 			transaction_pool,
 			from_controller,
@@ -240,7 +244,9 @@ pub struct TransactionsHandler<
 	/// Network service to use to send messages and manage peers.
 	service: S,
 	/// Stream of networking events.
-	event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	net_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	/// Receiver for syncing-related events.
+	sync_event_stream: Pin<Box<dyn Stream<Item = SyncEvent> + Send>>,
 	// All connected peers
 	peers: HashMap<PeerId, Peer<H>>,
 	transaction_pool: Arc<dyn TransactionPool<H, B>>,
@@ -278,7 +284,7 @@ where
 						warn!(target: "sub-libp2p", "Inconsistent state, no peers for pending transaction!");
 					}
 				},
-				network_event = self.event_stream.next().fuse() => {
+				network_event = self.net_event_stream.next().fuse() => {
 					if let Some(network_event) = network_event {
 						self.handle_network_event(network_event).await;
 					} else {
@@ -286,6 +292,14 @@ where
 						return;
 					}
 				},
+				sync_event = self.sync_event_stream.next().fuse() => {
+					if let Some(sync_event) = sync_event {
+						self.handle_sync_event(sync_event);
+					} else {
+						// Syncing has seemingly closed. Closing as well.
+						return;
+					}
+				}
 				message = self.from_controller.select_next_some().fuse() => {
 					match message {
 						ToHandler::PropagateTransaction(hash) => self.propagate_transaction(&hash),
@@ -296,10 +310,9 @@ where
 		}
 	}
 
-	async fn handle_network_event(&mut self, event: Event) {
+	fn handle_sync_event(&mut self, event: SyncEvent) {
 		match event {
-			Event::Dht(_) => {},
-			Event::SyncConnected { remote } => {
+			SyncEvent::PeerConnected(remote) => {
 				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
 					.collect::<multiaddr::Multiaddr>();
 				let result = self.service.add_peers_to_reserved_set(
@@ -310,13 +323,18 @@ where
 					log::error!(target: "sync", "Add reserved peer failed: {}", err);
 				}
 			},
-			Event::SyncDisconnected { remote } => {
+			SyncEvent::PeerDisconnected(remote) => {
 				self.service.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(remote).collect(),
 				);
 			},
+		}
+	}
 
+	async fn handle_network_event(&mut self, event: Event) {
+		match event {
+			Event::Dht(_) => {},
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
 				if protocol == self.protocol_name =>
 			{

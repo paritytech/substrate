@@ -151,12 +151,6 @@ pub enum BehaviourOut {
 		messages: Vec<(ProtocolName, Bytes)>,
 	},
 
-	/// Now connected to a new peer for syncing purposes.
-	SyncConnected(PeerId),
-
-	/// No longer connected to a peer for syncing purposes.
-	SyncDisconnected(PeerId),
-
 	/// We have obtained identity information from a peer, including the addresses it is listening
 	/// on.
 	PeerIdentify {
@@ -321,9 +315,6 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 			CustomMessageOutcome::NotificationsReceived { remote, messages } =>
 				BehaviourOut::NotificationsReceived { remote, messages },
 			CustomMessageOutcome::PeerNewBest(_peer_id, _number) => BehaviourOut::None,
-			CustomMessageOutcome::SyncConnected(peer_id) => BehaviourOut::SyncConnected(peer_id),
-			CustomMessageOutcome::SyncDisconnected(peer_id) =>
-				BehaviourOut::SyncDisconnected(peer_id),
 			CustomMessageOutcome::None => BehaviourOut::None,
 		}
 	}

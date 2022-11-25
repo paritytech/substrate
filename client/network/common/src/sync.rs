@@ -286,6 +286,33 @@ where
 	}
 }
 
+/// Syncing-related events that other protocols can subscribe to.
+pub enum SyncEvent {
+	/// Peer that the syncing implementation is tracking connected.
+	PeerConnected(PeerId),
+
+	/// Peer that the syncing implementation was tracking disconnected.
+	PeerDisconnected(PeerId),
+}
+
+use futures::Stream;
+use std::pin::Pin;
+
+pub trait SyncEventStream: Send + Sync {
+	/// Subscribe to syncing-related events.
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>>;
+}
+
+impl<T> SyncEventStream for Arc<T>
+where
+	T: ?Sized,
+	T: SyncEventStream,
+{
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
+		T::event_stream(self, name)
+	}
+}
+
 /// Something that represents the syncing strategy to download past and future blocks of the chain.
 pub trait ChainSync<Block: BlockT>: Send {
 	/// Returns the state of the sync of the given peer.

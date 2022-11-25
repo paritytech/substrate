@@ -977,6 +977,8 @@ where
 
 	let (tx_handler, tx_handler_controller) = transactions_handler_proto.build(
 		network.clone(),
+		// TODO(aaro): wrap chainsyncinterface into an arc
+		Arc::new(chain_sync_service.clone()),
 		Arc::new(TransactionPoolAdapter { pool: transaction_pool, client: client.clone() }),
 		config.prometheus_config.as_ref().map(|config| &config.registry),
 	)?;

@@ -42,7 +42,7 @@ use prometheus::Registry;
 use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotifications, Finalizer};
 use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
-use sc_network_common::service::NetworkRequest;
+use sc_network_common::{service::NetworkRequest, sync::SyncEventStream};
 use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{
@@ -168,6 +168,8 @@ where
 pub struct BeefyNetworkParams<B: Block, N> {
 	/// Network implementing gossip, requests and sync-oracle.
 	pub network: Arc<N>,
+	/// Syncing service implementing event stream for peers.
+	pub sync: Arc<dyn SyncEventStream>,
 	/// Chain specific BEEFY gossip protocol name. See
 	/// [`communication::beefy_protocol_name::gossip_protocol_name`].
 	pub gossip_protocol_name: ProtocolName,
@@ -228,14 +230,20 @@ where
 		on_demand_justifications_handler,
 	} = beefy_params;
 
-	let BeefyNetworkParams { network, gossip_protocol_name, justifications_protocol_name, .. } =
-		network_params;
+	let BeefyNetworkParams {
+		network,
+		sync,
+		gossip_protocol_name,
+		justifications_protocol_name,
+		..
+	} = network_params;
 
 	let known_peers = Arc::new(Mutex::new(KnownPeers::new()));
 	let gossip_validator =
 		Arc::new(communication::gossip::GossipValidator::new(known_peers.clone()));
 	let mut gossip_engine = sc_network_gossip::GossipEngine::new(
 		network.clone(),
+		sync.clone(),
 		gossip_protocol_name,
 		gossip_validator.clone(),
 		None,
@@ -285,6 +293,7 @@ where
 		backend,
 		payload_provider,
 		network,
+		sync,
 		key_store: key_store.into(),
 		known_peers,
 		gossip_engine,

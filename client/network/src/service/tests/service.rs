@@ -205,10 +205,6 @@ fn notifications_state_consistent() {
 				},
 
 				// Add new events here.
-				future::Either::Left(Event::SyncConnected { .. }) => {},
-				future::Either::Right(Event::SyncConnected { .. }) => {},
-				future::Either::Left(Event::SyncDisconnected { .. }) => {},
-				future::Either::Right(Event::SyncDisconnected { .. }) => {},
 				future::Either::Left(Event::Dht(_)) => {},
 				future::Either::Right(Event::Dht(_)) => {},
 			};

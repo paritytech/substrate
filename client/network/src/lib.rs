@@ -272,7 +272,7 @@ pub use sc_network_common::{
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		ExtendedPeerInfo, StateDownloadProgress, SyncState, SyncStatusProvider,
+		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
 	},
 };
 pub use service::{
@@ -302,6 +302,7 @@ pub trait ChainSyncInterface<B: BlockT>:
 	+ Link<B>
 	+ NetworkBlock<B::Hash, NumberFor<B>>
 	+ SyncStatusProvider<B>
+	+ SyncEventStream
 	+ Send
 	+ Sync
 	+ 'static
@@ -314,6 +315,7 @@ impl<T, B: BlockT> ChainSyncInterface<B> for T where
 		+ Link<B>
 		+ NetworkBlock<B::Hash, NumberFor<B>>
 		+ SyncStatusProvider<B>
+		+ SyncEventStream
 		+ Send
 		+ Sync
 		+ 'static

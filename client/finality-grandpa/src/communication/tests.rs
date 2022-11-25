@@ -33,6 +33,7 @@ use sc_network_common::{
 		NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers,
 		NetworkSyncForkRequest, NotificationSender, NotificationSenderError,
 	},
+	sync::{SyncEvent as SyncStreamEvent, SyncEventStream},
 };
 use sc_network_gossip::Validator;
 use sc_network_test::{Block, Hash};
@@ -190,6 +191,24 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_topic(&mut self, _: &PeerId, _: Hash, _: bool) {}
 }
 
+pub(crate) enum SyncEvent {
+	EventStream(TracingUnboundedSender<SyncStreamEvent>),
+}
+
+#[derive(Clone)]
+pub(crate) struct TestSync {
+	sender: TracingUnboundedSender<SyncEvent>,
+}
+
+impl SyncEventStream for TestSync {
+	fn event_stream(
+		&self,
+		_name: &'static str,
+	) -> Pin<Box<dyn Stream<Item = SyncStreamEvent> + Send>> {
+		Box::pin(futures::stream::pending())
+	}
+}
+
 pub(crate) struct Tester {
 	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
 	gossip_validator: Arc<GossipValidator<Block>>,
@@ -259,6 +278,8 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
 	let (tx, rx) = tracing_unbounded("test");
 	let net = TestNetwork { sender: tx };
+	let (stx, srx) = tracing_unbounded("sync");
+	let sync = Arc::new(TestSync { sender: stx });
 
 	#[derive(Clone)]
 	struct Exit;
@@ -271,7 +292,8 @@ pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork)
 		}
 	}
 
-	let bridge = super::NetworkBridge::new(net.clone(), config(), voter_set_state(), None, None);
+	let bridge =
+		super::NetworkBridge::new(net.clone(), sync, config(), voter_set_state(), None, None);
 
 	(
 		futures::future::ready(Tester {

@@ -20,19 +20,20 @@
 // TODO(aaro): document functions
 // TODO(aaro): rename this file to sync_service.rs?
 
-use futures::channel::oneshot;
+use futures::{channel::oneshot, Stream};
 
 use libp2p::PeerId;
 use sc_consensus::{BlockImportError, BlockImportStatus, JustificationSyncLink, Link};
 use sc_network_common::{
 	service::{NetworkBlock, NetworkSyncForkRequest},
-	sync::{SyncStatus, SyncStatusProvider},
+	sync::{SyncEvent, SyncEventStream, SyncStatus, SyncStatusProvider},
 };
-use sc_utils::mpsc::TracingUnboundedSender;
+use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
+use std::pin::Pin;
+
 /// Commands send to `ChainSync`
-#[derive(Debug)]
 pub enum ToServiceCommand<B: BlockT> {
 	Status(oneshot::Sender<SyncStatus<B>>),
 	SetSyncForkRequest(Vec<PeerId>, B::Hash, NumberFor<B>),
@@ -46,6 +47,7 @@ pub enum ToServiceCommand<B: BlockT> {
 	JustificationImported(PeerId, B::Hash, NumberFor<B>, bool),
 	AnnounceBlock(B::Hash, Option<Vec<u8>>),
 	NewBestBlockImported(B::Hash, NumberFor<B>),
+	EventStream(TracingUnboundedSender<SyncEvent>),
 }
 
 /// Handle for communicating with `ChainSync` asynchronously
@@ -130,6 +132,15 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 
 	fn request_justification(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::RequestJustification(*hash, number));
+	}
+}
+
+impl<B: BlockT> SyncEventStream for ChainSyncInterfaceHandle<B> {
+	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
+		println!("sync: register {name}");
+		let (tx, rx) = tracing_unbounded(name);
+		let _ = self.tx.unbounded_send(ToServiceCommand::EventStream(tx));
+		Box::pin(rx)
 	}
 }
 
