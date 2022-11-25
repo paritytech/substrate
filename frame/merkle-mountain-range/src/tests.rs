@@ -167,13 +167,13 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 
 	let expected = Some(mmr::Node::Data(((0, H256::repeat_byte(1)), LeafData::new(1))));
 	assert_eq!(
-		offchain_db.get(&MMR::node_temp_offchain_key(0, &parent_b1)).map(decode_node),
+		offchain_db.get(&MMR::node_temp_offchain_key(0, parent_b1)).map(decode_node),
 		expected
 	);
 
 	let expected = Some(mmr::Node::Data(((1, H256::repeat_byte(2)), LeafData::new(2))));
 	assert_eq!(
-		offchain_db.get(&MMR::node_temp_offchain_key(1, &parent_b2)).map(decode_node),
+		offchain_db.get(&MMR::node_temp_offchain_key(1, parent_b2)).map(decode_node),
 		expected
 	);
 
@@ -181,11 +181,11 @@ fn should_append_to_mmr_when_on_initialize_is_called() {
 		"672c04a9cd05a644789d769daa552d35d8de7c33129f8a7cbf49e595234c4854",
 	)));
 	assert_eq!(
-		offchain_db.get(&MMR::node_temp_offchain_key(2, &parent_b2)).map(decode_node),
+		offchain_db.get(&MMR::node_temp_offchain_key(2, parent_b2)).map(decode_node),
 		expected
 	);
 
-	assert_eq!(offchain_db.get(&MMR::node_temp_offchain_key(3, &parent_b2)), None);
+	assert_eq!(offchain_db.get(&MMR::node_temp_offchain_key(3, parent_b2)), None);
 }
 
 #[test]
@@ -217,6 +217,27 @@ fn should_construct_larger_mmr_correctly() {
 			)
 		);
 	});
+}
+
+#[test]
+fn should_calculate_the_size_correctly() {
+	let _ = env_logger::try_init();
+
+	let leaves = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 21];
+	let sizes = vec![0, 1, 3, 4, 7, 8, 10, 11, 15, 16, 18, 19, 22, 23, 25, 26, 39];
+
+	// size cross-check
+	let mut actual_sizes = vec![];
+	for s in &leaves[1..] {
+		new_test_ext().execute_with(|| {
+			let mut mmr = mmr::Mmr::<mmr::storage::RuntimeStorage, crate::mock::Test, _, _>::new(0);
+			for i in 0..*s {
+				mmr.push(i);
+			}
+			actual_sizes.push(mmr.size());
+		})
+	}
+	assert_eq!(sizes[1..], actual_sizes[..]);
 }
 
 #[test]

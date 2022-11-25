@@ -64,9 +64,9 @@ where
 	) -> Option<CanonEngine<C, B, S>> {
 		while let Some(notification) = finality_notifications.next().await {
 			let best_block = *notification.header.number();
-			match self.client.runtime_api().mmr_leaves_count(&BlockId::number(best_block)) {
-				Ok(Ok(mmr_leaves_count)) => {
-					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaves_count) {
+			match self.client.runtime_api().mmr_leaf_count(&BlockId::number(best_block)) {
+				Ok(Ok(mmr_leaf_count)) => {
+					match utils::first_mmr_block_num::<B::Header>(best_block, mmr_leaf_count) {
 						Ok(first_mmr_block) => {
 							let mut engine = CanonEngine {
 								client: self.client,

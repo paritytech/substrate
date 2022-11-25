@@ -44,7 +44,7 @@ where
 	S: OffchainStorage,
 	B: Block,
 {
-	fn node_temp_offchain_key(&self, pos: NodeIndex, parent_hash: &B::Hash) -> Vec<u8> {
+	fn node_temp_offchain_key(&self, pos: NodeIndex, parent_hash: B::Hash) -> Vec<u8> {
 		NodesUtils::node_temp_offchain_key::<B::Header>(&self.indexing_prefix, pos, parent_hash)
 	}
 
@@ -116,7 +116,7 @@ where
 		};
 
 		for pos in stale_nodes {
-			let temp_key = self.node_temp_offchain_key(pos, &header.parent);
+			let temp_key = self.node_temp_offchain_key(pos, header.parent);
 			self.offchain_db.local_storage_clear(StorageKind::PERSISTENT, &temp_key);
 			debug!(target: LOG_TARGET, "Pruned elem at pos {} with temp key {:?}", pos, temp_key);
 		}
@@ -147,7 +147,7 @@ where
 		};
 
 		for pos in to_canon_nodes {
-			let temp_key = self.node_temp_offchain_key(pos, &header.parent);
+			let temp_key = self.node_temp_offchain_key(pos, header.parent);
 			if let Some(elem) =
 				self.offchain_db.local_storage_get(StorageKind::PERSISTENT, &temp_key)
 			{
@@ -181,10 +181,12 @@ where
 		}
 
 		// Remove offchain MMR nodes for stale forks.
-		let stale_forks = self.client.expand_forks(&notification.stale_heads).unwrap_or_else(|(stale_forks, e)| {
-			warn!(target: LOG_TARGET, "{:?}", e);
-			stale_forks
-		};
+		let stale_forks = self.client.expand_forks(&notification.stale_heads).unwrap_or_else(
+			|(stale_forks, e)| {
+				warn!(target: LOG_TARGET, "{:?}", e);
+				stale_forks
+			},
+		);
 		for hash in stale_forks.iter() {
 			self.prune_branch(hash);
 		}

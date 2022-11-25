@@ -91,7 +91,7 @@ impl MmrBlock {
 			OffchainKeyType::Temp => NodesUtils::node_temp_offchain_key::<Header>(
 				MockRuntimeApi::INDEXING_PREFIX,
 				node,
-				self.block.header.parent_hash(),
+				*self.block.header.parent_hash(),
 			),
 			OffchainKeyType::Canon =>
 				NodesUtils::node_canon_offchain_key(MockRuntimeApi::INDEXING_PREFIX, node),
@@ -144,7 +144,7 @@ impl MockClient {
 				let temp_key = NodesUtils::node_temp_offchain_key::<Header>(
 					MockRuntimeApi::INDEXING_PREFIX,
 					node,
-					&parent_hash,
+					parent_hash,
 				);
 				offchain_db.local_storage_set(
 					StorageKind::PERSISTENT,
@@ -283,7 +283,7 @@ sp_api::mock_impl_runtime_apis! {
 			Err(mmr::Error::PalletNotIncluded)
 		}
 
-		fn mmr_leaves_count(&self) -> Result<LeafIndex, mmr::Error> {
+		fn mmr_leaf_count(&self) -> Result<LeafIndex, mmr::Error> {
 			Ok(self.data.lock().unwrap().num_blocks)
 		}
 

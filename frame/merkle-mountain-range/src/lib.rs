@@ -281,7 +281,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// This combination makes the offchain (key,value) entry resilient to chain forks.
 	fn node_temp_offchain_key(
 		pos: NodeIndex,
-		parent_hash: &<T as frame_system::Config>::Hash,
+		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
 		NodesUtils::node_temp_offchain_key::<<T as frame_system::Config>::Header>(
 			&T::INDEXING_PREFIX,

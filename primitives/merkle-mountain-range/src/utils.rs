@@ -29,9 +29,9 @@ use crate::{Error, LeafIndex, NodeIndex};
 /// Get the first block with MMR.
 pub fn first_mmr_block_num<H: Header>(
 	best_block_num: H::Number,
-	mmr_leaves_count: LeafIndex,
+	mmr_leaf_count: LeafIndex,
 ) -> Result<H::Number, Error> {
-	let mmr_blocks_count = mmr_leaves_count.try_into().map_err(|_| {
+	let mmr_blocks_count = mmr_leaf_count.try_into().map_err(|_| {
 		Error::InvalidNumericOp
 			.log_debug("The number of leaves couldn't be converted to a block number.")
 	})?;
@@ -121,7 +121,7 @@ impl NodesUtils {
 	pub fn node_temp_offchain_key<H: Header>(
 		prefix: &[u8],
 		pos: NodeIndex,
-		parent_hash: &H::Hash,
+		parent_hash: H::Hash,
 	) -> Vec<u8> {
 		(prefix, pos, parent_hash).encode()
 	}

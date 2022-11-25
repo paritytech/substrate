@@ -96,7 +96,7 @@ where
 		let ancestor_parent_block_num =
 			Pallet::<T, I>::leaf_index_to_parent_block_num(ancestor_leaf_idx, leaves);
 		let ancestor_parent_hash = <frame_system::Pallet<T>>::block_hash(ancestor_parent_block_num);
-		let temp_key = Pallet::<T, I>::node_temp_offchain_key(pos, &ancestor_parent_hash);
+		let temp_key = Pallet::<T, I>::node_temp_offchain_key(pos, ancestor_parent_hash);
 		debug!(
 			target: "runtime::mmr::offchain",
 			"offchain db get {}: leaf idx {:?}, hash {:?}, temp key {:?}",
@@ -158,7 +158,7 @@ where
 				<Nodes<T, I>>::insert(node_index, elem.hash());
 			}
 			// We are storing full node off-chain (using indexing API).
-			Self::store_to_offchain(node_index, &parent_hash, &elem);
+			Self::store_to_offchain(node_index, parent_hash, &elem);
 
 			// Increase the indices.
 			if let Node::Data(..) = elem {
@@ -187,7 +187,7 @@ where
 {
 	fn store_to_offchain(
 		pos: NodeIndex,
-		parent_hash: &<T as frame_system::Config>::Hash,
+		parent_hash: <T as frame_system::Config>::Hash,
 		node: &NodeOf<T, I, L>,
 	) {
 		let encoded_node = node.encode();

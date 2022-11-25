@@ -31,6 +31,9 @@ use sp_std::prelude::Vec;
 
 pub mod utils;
 
+/// Prefix for elements stored in the Off-chain DB via Indexing API.
+pub const INDEXING_PREFIX: &str = "mmr";
+
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
 
@@ -424,7 +427,7 @@ sp_api::decl_runtime_apis! {
 		fn mmr_root() -> Result<Hash, Error>;
 
 		/// Return the number of MMR blocks in the chain.
-		fn mmr_leaves_count() -> Result<LeafIndex, Error>;
+		fn mmr_leaf_count() -> Result<LeafIndex, Error>;
 
 		/// Generate MMR proof for a series of block numbers. If `best_known_block_number = Some(n)`,
 		/// use historical MMR state at given block height `n`. Else, use current MMR state.

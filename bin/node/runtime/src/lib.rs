@@ -2064,7 +2064,7 @@ impl_runtime_apis! {
 			Ok(Mmr::mmr_root())
 		}
 
-		fn mmr_leaves_count() -> Result<mmr::LeafIndex, mmr::Error> {
+		fn mmr_leaf_count() -> Result<mmr::LeafIndex, mmr::Error> {
 			Ok(Mmr::mmr_leaves())
 		}
 

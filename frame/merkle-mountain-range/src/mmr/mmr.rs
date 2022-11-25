@@ -116,6 +116,12 @@ where
 		p.verify(root, leaves_positions_and_data)
 			.map_err(|e| Error::Verify.log_debug(e))
 	}
+
+	/// Return the internal size of the MMR (number of nodes).
+	#[cfg(test)]
+	pub fn size(&self) -> NodeIndex {
+		self.mmr.mmr_size()
+	}
 }
 
 /// Runtime specific MMR functions.
