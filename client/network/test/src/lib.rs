@@ -895,7 +895,9 @@ where
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
-			executor: Box::new(|f| { tokio::spawn(f); }),
+			executor: Box::new(|f| {
+				tokio::spawn(f);
+			}),
 			network_config,
 			chain: client.clone(),
 			protocol_id,
