@@ -133,6 +133,8 @@ impl<T> ScaleContainerStreamIter<T> {
 	/// Creates a new instance of the stream iterator.
 	///
 	/// - `key`: Storage key of the container in the state.
+	///
+	/// Same as [`Self::try_new`], but logs a potential error and sets the length to `0`.
 	pub fn new(key: Vec<u8>) -> Self {
 		let mut input = StorageInput::new(key);
 		let length = if input.exists() {
@@ -156,6 +158,18 @@ impl<T> ScaleContainerStreamIter<T> {
 
 		Self { marker: sp_std::marker::PhantomData, input, length, read: 0 }
 	}
+
+	/// Creates a new instance of the stream iterator.
+	///
+	/// - `key`: Storage key of the container in the state.
+	///
+	/// Returns an error if the length of the container fails to decode.
+	pub fn new_try(key: Vec<u8>) -> Result<Self, codec::Error> {
+		let mut input = StorageInput::new(key);
+		let length = if input.exists() { codec::Compact::<u32>::decode(&mut input)?.0 } else { 0 };
+
+		Ok(Self { marker: sp_std::marker::PhantomData, input, length, read: 0 })
+	}
 }
 
 impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
@@ -169,6 +183,12 @@ impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
 
 			codec::Decode::decode(&mut self.input).ok()
 		}
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		let left = self.length.saturating_sub(self.read) as usize;
+
+		(left, Some(left))
 	}
 }
 
@@ -266,7 +286,9 @@ impl StorageInput {
 
 impl codec::Input for StorageInput {
 	fn remaining_len(&mut self) -> Result<Option<usize>, codec::Error> {
-		Ok(Some(self.total_length.saturating_sub(self.buffer_pos as u32) as usize))
+		Ok(Some(self.total_length.saturating_sub(
+			self.offset.saturating_sub((self.buffer.len() - self.buffer_pos) as u32),
+		) as usize))
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
@@ -309,13 +331,74 @@ impl codec::Input for StorageInput {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
+	use codec::{Compact, CompactLen, Encode, Input};
 
 	#[crate::storage_alias]
 	pub type TestVecU32 = StorageValue<Test, Vec<u32>>;
 
 	#[crate::storage_alias]
 	pub type TestVecVecU8 = StorageValue<Test, Vec<Vec<u8>>>;
+
+	#[test]
+	fn remaining_len_works() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let data: Vec<u32> = vec![1, 2, 3, 4, 5];
+			TestVecU32::put(&data);
+
+			let mut input = StorageInput::new(TestVecU32::hashed_key().into());
+			assert_eq!(
+				5 * std::mem::size_of::<u32>() + Compact::<u32>::compact_len(&5) as usize,
+				input.remaining_len().ok().flatten().unwrap()
+			);
+
+			assert_eq!(5, Compact::<u32>::decode(&mut input).unwrap().0);
+			assert_eq!(
+				5 * std::mem::size_of::<u32>(),
+				input.remaining_len().ok().flatten().unwrap()
+			);
+
+			for i in &data {
+				assert_eq!(*i, u32::decode(&mut input).unwrap());
+				assert_eq!(
+					(5 - *i as usize) * std::mem::size_of::<u32>(),
+					input.remaining_len().ok().flatten().unwrap()
+				);
+			}
+
+			let data: Vec<Vec<u8>> = vec![
+				vec![0; 20],
+				vec![1; STORAGE_INPUT_BUFFER_CAPACITY * 2],
+				vec![2; STORAGE_INPUT_BUFFER_CAPACITY * 2],
+				vec![3; 30],
+				vec![4; 30],
+				vec![5; STORAGE_INPUT_BUFFER_CAPACITY * 2],
+				vec![6; 30],
+			];
+			TestVecVecU8::put(&data);
+
+			let mut input = StorageInput::new(TestVecVecU8::hashed_key().into());
+			let total_data_len = data
+				.iter()
+				.map(|v| v.len() + Compact::<u32>::compact_len(&(v.len() as u32)) as usize)
+				.sum::<usize>();
+			assert_eq!(
+				total_data_len + Compact::<u32>::compact_len(&(data.len() as u32)) as usize,
+				input.remaining_len().ok().flatten().unwrap()
+			);
+
+			assert_eq!(data.len(), Compact::<u32>::decode(&mut input).unwrap().0 as usize);
+			assert_eq!(total_data_len, input.remaining_len().ok().flatten().unwrap());
+
+			let mut remaining_len = total_data_len;
+			for i in data {
+				assert_eq!(i, Vec::<u8>::decode(&mut input).unwrap());
+
+				remaining_len -= i.len() + Compact::<u32>::compact_len(&(i.len() as u32)) as usize;
+
+				assert_eq!(remaining_len, input.remaining_len().ok().flatten().unwrap());
+			}
+		})
+	}
 
 	#[test]
 	fn stream_read_test() {
