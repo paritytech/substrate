@@ -21,24 +21,33 @@ use crate::{
 	exec::{ExecError, ExecResult, Ext, FixSizedKey, TopicOf, VarSizedKey},
 	gas::{ChargedAmount, Token},
 	schedule::HostFnWeights,
-	wasm::env_def::ConvertibleToWasm,
 	BalanceOf, CodeHash, Config, Error, SENTINEL,
 };
 
 use bitflags::bitflags;
 use codec::{Decode, DecodeLimit, Encode, MaxEncodedLen};
-use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight};
+use frame_support::{dispatch::DispatchError, ensure, traits::Get, weights::Weight, RuntimeDebug};
 use pallet_contracts_primitives::{ExecReturnValue, ReturnFlags};
 use pallet_contracts_proc_macro::define_env;
 use sp_core::crypto::UncheckedFrom;
 use sp_io::hashing::{blake2_128, blake2_256, keccak_256, sha2_256};
 use sp_runtime::traits::{Bounded, Zero};
-use sp_sandbox::SandboxMemory;
-use sp_std::prelude::*;
-use wasm_instrument::parity_wasm::elements::ValueType;
+use sp_std::{fmt, prelude::*};
+use wasmi::{core::HostError, errors::LinkerError, Linker, Memory, Store};
 
 /// The maximum nesting depth a contract can use when encoding types.
 const MAX_DECODE_NESTING: u32 = 256;
+
+/// Trait implemented by the [`define_env`](pallet_contracts_proc_macro::define_env) macro for the
+/// emitted `Env` struct.
+pub trait Environment<HostState> {
+	/// Adds all declared functions to the supplied [`Linker`](wasmi::Linker) and
+	/// [`Store`](wasmi::Store).
+	fn define(
+		store: &mut Store<HostState>,
+		linker: &mut Linker<HostState>,
+	) -> Result<(), LinkerError>;
+}
 
 /// Type of a storage key.
 #[allow(dead_code)]
@@ -104,19 +113,6 @@ pub enum ReturnCode {
 	EcdsaRecoverFailed = 11,
 }
 
-impl ConvertibleToWasm for ReturnCode {
-	const VALUE_TYPE: ValueType = ValueType::I32;
-	type NativeType = Self;
-
-	fn to_typed_value(self) -> sp_sandbox::Value {
-		sp_sandbox::Value::I32(self as i32)
-	}
-	fn from_typed_value(_: sp_sandbox::Value) -> Option<Self> {
-		debug_assert!(false, "We will never receive a ReturnCode but only send it to wasm.");
-		None
-	}
-}
-
 impl From<ExecReturnValue> for ReturnCode {
 	fn from(from: ExecReturnValue) -> Self {
 		if from.flags.contains(ReturnFlags::REVERT) {
@@ -127,7 +123,14 @@ impl From<ExecReturnValue> for ReturnCode {
 	}
 }
 
+impl From<ReturnCode> for u32 {
+	fn from(code: ReturnCode) -> u32 {
+		code as u32
+	}
+}
+
 /// The data passed through when a contract uses `seal_return`.
+#[derive(RuntimeDebug)]
 pub struct ReturnData {
 	/// The flags as passed through by the contract. They are still unchecked and
 	/// will later be parsed into a `ReturnFlags` bitflags struct.
@@ -142,6 +145,7 @@ pub struct ReturnData {
 /// occurred (the SupervisorError variant).
 /// The other case is where the trap does not constitute an error but rather was invoked
 /// as a quick way to terminate the application (all other variants).
+#[derive(RuntimeDebug)]
 pub enum TrapReason {
 	/// The supervisor trapped the contract because of an error condition occurred during
 	/// execution in privileged code.
@@ -158,6 +162,14 @@ impl<T: Into<DispatchError>> From<T> for TrapReason {
 		Self::SupervisorError(from.into())
 	}
 }
+
+impl fmt::Display for TrapReason {
+	fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+		Ok(())
+	}
+}
+
+impl HostError for TrapReason {}
 
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 #[derive(Copy, Clone)]
@@ -251,10 +263,10 @@ pub enum RuntimeCosts {
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
 	EcdsaToEthAddress,
-	/// Weight of calling `seal_reentrant_count`
+	/// Weight of calling `reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	ReentrantCount,
-	/// Weight of calling `seal_account_reentrance_count`
+	/// Weight of calling `account_reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	AccountEntranceCount,
 }
@@ -337,7 +349,7 @@ impl RuntimeCosts {
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
 			#[cfg(feature = "unstable-interface")]
-			ReentrantCount => s.reentrant_count,
+			ReentrantCount => s.reentrance_count,
 			#[cfg(feature = "unstable-interface")]
 			AccountEntranceCount => s.account_reentrance_count,
 		};
@@ -452,8 +464,7 @@ fn already_charged(_: u32) -> Option<RuntimeCosts> {
 pub struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: Option<Vec<u8>>,
-	memory: sp_sandbox::default_executor::Memory,
-	trap_reason: Option<TrapReason>,
+	memory: Option<Memory>,
 	chain_extension: Option<Box<<E::T as Config>::ChainExtension>>,
 }
 
@@ -463,58 +474,56 @@ where
 	<E::T as frame_system::Config>::AccountId:
 		UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
 {
-	pub fn new(
-		ext: &'a mut E,
-		input_data: Vec<u8>,
-		memory: sp_sandbox::default_executor::Memory,
-	) -> Self {
+	pub fn new(ext: &'a mut E, input_data: Vec<u8>) -> Self {
 		Runtime {
 			ext,
 			input_data: Some(input_data),
-			memory,
-			trap_reason: None,
+			memory: None,
 			chain_extension: Some(Box::new(Default::default())),
 		}
 	}
 
-	/// Converts the sandbox result and the runtime state into the execution outcome.
-	///
-	/// It evaluates information stored in the `trap_reason` variable of the runtime and
-	/// bases the outcome on the value if this variable. Only if `trap_reason` is `None`
-	/// the result of the sandbox is evaluated.
-	pub fn to_execution_result(
-		self,
-		sandbox_result: Result<sp_sandbox::ReturnValue, sp_sandbox::Error>,
-	) -> ExecResult {
-		// If a trap reason is set we base our decision solely on that.
-		if let Some(trap_reason) = self.trap_reason {
-			return match trap_reason {
-				// The trap was the result of the execution `return` host function.
-				TrapReason::Return(ReturnData { flags, data }) => {
-					let flags =
-						ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
-					Ok(ExecReturnValue { flags, data })
-				},
-				TrapReason::Termination =>
-					Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
-				TrapReason::SupervisorError(error) => return Err(error.into()),
-			}
-		}
+	pub fn memory(&self) -> Option<Memory> {
+		self.memory
+	}
 
-		// Check the exact type of the error.
+	pub fn set_memory(&mut self, memory: Memory) {
+		self.memory = Some(memory);
+	}
+
+	/// Converts the sandbox result and the runtime state into the execution outcome.
+	pub fn to_execution_result(self, sandbox_result: Result<(), wasmi::Error>) -> ExecResult {
+		use TrapReason::*;
 		match sandbox_result {
-			// No traps were generated. Proceed normally.
+			// Contract returned from main function -> no data was returned.
 			Ok(_) => Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
-			// `Error::Module` is returned only if instantiation or linking failed (i.e.
+			// Contract either trapped or some host function aborted the execution.
+			Err(wasmi::Error::Trap(trap)) => {
+				// If we encoded a reason then it is some abort generated by a host function.
+				// Otherwise the trap came from the contract.
+				let reason: TrapReason = *trap
+					.into_host()
+					.ok_or(Error::<E::T>::ContractTrapped)?
+					.downcast()
+					.expect("`TrapReason` is the only type we use to encode host errors; qed");
+				match reason {
+					Return(ReturnData { flags, data }) => {
+						let flags =
+							ReturnFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?;
+						Ok(ExecReturnValue { flags, data })
+					},
+					Termination =>
+						Ok(ExecReturnValue { flags: ReturnFlags::empty(), data: Vec::new() }),
+					SupervisorError(error) => return Err(error.into()),
+				}
+			},
+			// Any other error is returned only if instantiation or linking failed (i.e.
 			// wasm binary tried to import a function that is not provided by the host).
 			// This shouldn't happen because validation process ought to reject such binaries.
 			//
 			// Because panics are really undesirable in the runtime code, we treat this as
 			// a trap for now. Eventually, we might want to revisit this.
-			Err(sp_sandbox::Error::Module) => return Err("validation error".into()),
-			// Any other kind of a trap should result in a failure.
-			Err(sp_sandbox::Error::Execution) | Err(sp_sandbox::Error::OutOfBounds) =>
-				return Err(Error::<E::T>::ContractTrapped.into()),
+			Err(_) => Err(Error::<E::T>::CodeRejected.into()),
 		}
 	}
 
@@ -524,15 +533,6 @@ where
 	/// contract is executing in.
 	pub fn ext(&mut self) -> &mut E {
 		self.ext
-	}
-
-	/// Store the reason for a host function triggered trap.
-	///
-	/// This is called by the `define_env` macro in order to store any error returned by
-	/// the host functions defined through the said macro. It should **not** be called
-	/// manually.
-	pub fn set_trap_reason(&mut self, reason: TrapReason) {
-		self.trap_reason = Some(reason);
 	}
 
 	/// Charge the gas meter with the specified token.
@@ -556,12 +556,15 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - requested buffer is not within the bounds of the sandbox memory.
-	pub fn read_sandbox_memory(&self, ptr: u32, len: u32) -> Result<Vec<u8>, DispatchError> {
+	pub fn read_sandbox_memory(
+		&self,
+		memory: &[u8],
+		ptr: u32,
+		len: u32,
+	) -> Result<Vec<u8>, DispatchError> {
 		ensure!(len <= self.ext.schedule().limits.max_memory_size(), Error::<E::T>::OutOfBounds);
 		let mut buf = vec![0u8; len as usize];
-		self.memory
-			.get(ptr, buf.as_mut_slice())
-			.map_err(|_| Error::<E::T>::OutOfBounds)?;
+		self.read_sandbox_memory_into_buf(memory, ptr, buf.as_mut_slice())?;
 		Ok(buf)
 	}
 
@@ -572,10 +575,15 @@ where
 	/// - requested buffer is not within the bounds of the sandbox memory.
 	pub fn read_sandbox_memory_into_buf(
 		&self,
+		memory: &[u8],
 		ptr: u32,
 		buf: &mut [u8],
 	) -> Result<(), DispatchError> {
-		self.memory.get(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+		let ptr = ptr as usize;
+		let bound_checked =
+			memory.get(ptr..ptr + buf.len()).ok_or_else(|| Error::<E::T>::OutOfBounds)?;
+		buf.copy_from_slice(bound_checked);
+		Ok(())
 	}
 
 	/// Reads and decodes a type with a size fixed at compile time from contract memory.
@@ -586,10 +594,14 @@ where
 	/// contract callable function.
 	pub fn read_sandbox_memory_as<D: Decode + MaxEncodedLen>(
 		&self,
+		memory: &[u8],
 		ptr: u32,
 	) -> Result<D, DispatchError> {
-		let buf = self.read_sandbox_memory(ptr, D::max_encoded_len() as u32)?;
-		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
+		let ptr = ptr as usize;
+		let mut bound_checked = memory
+			.get(ptr..ptr + D::max_encoded_len() as usize)
+			.ok_or_else(|| Error::<E::T>::OutOfBounds)?;
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut bound_checked)
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -607,11 +619,14 @@ where
 	/// regard to the overall weight.
 	pub fn read_sandbox_memory_as_unbounded<D: Decode>(
 		&self,
+		memory: &[u8],
 		ptr: u32,
 		len: u32,
 	) -> Result<D, DispatchError> {
-		let buf = self.read_sandbox_memory(ptr, len)?;
-		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut &buf[..])
+		let ptr = ptr as usize;
+		let mut bound_checked =
+			memory.get(ptr..ptr + len as usize).ok_or_else(|| Error::<E::T>::OutOfBounds)?;
+		let decoded = D::decode_all_with_depth_limit(MAX_DECODE_NESTING, &mut bound_checked)
 			.map_err(|_| DispatchError::from(Error::<E::T>::DecodingFailed))?;
 		Ok(decoded)
 	}
@@ -637,6 +652,7 @@ where
 	/// `Err` if the size of the buffer located at `out_ptr` is too small to fit `buf`.
 	pub fn write_sandbox_output(
 		&mut self,
+		memory: &mut [u8],
 		out_ptr: u32,
 		out_len_ptr: u32,
 		buf: &[u8],
@@ -648,7 +664,7 @@ where
 		}
 
 		let buf_len = buf.len() as u32;
-		let len: u32 = self.read_sandbox_memory_as(out_len_ptr)?;
+		let len: u32 = self.read_sandbox_memory_as(memory, out_len_ptr)?;
 
 		if len < buf_len {
 			return Err(Error::<E::T>::OutputBufferTooSmall.into())
@@ -658,12 +674,8 @@ where
 			self.charge_gas(costs)?;
 		}
 
-		self.memory
-			.set(out_ptr, buf)
-			.and_then(|_| self.memory.set(out_len_ptr, &buf_len.encode()))
-			.map_err(|_| Error::<E::T>::OutOfBounds)?;
-
-		Ok(())
+		self.write_sandbox_memory(memory, out_ptr, buf)?;
+		self.write_sandbox_memory(memory, out_len_ptr, &buf_len.encode())
 	}
 
 	/// Write the given buffer to the designated location in the sandbox memory.
@@ -671,8 +683,17 @@ where
 	/// Returns `Err` if one of the following conditions occurs:
 	///
 	/// - designated area is not within the bounds of the sandbox memory.
-	fn write_sandbox_memory(&mut self, ptr: u32, buf: &[u8]) -> Result<(), DispatchError> {
-		self.memory.set(ptr, buf).map_err(|_| Error::<E::T>::OutOfBounds.into())
+	fn write_sandbox_memory(
+		&self,
+		memory: &mut [u8],
+		ptr: u32,
+		buf: &[u8],
+	) -> Result<(), DispatchError> {
+		let ptr = ptr as usize;
+		let bound_checked =
+			memory.get_mut(ptr..ptr + buf.len()).ok_or_else(|| Error::<E::T>::OutOfBounds)?;
+		bound_checked.copy_from_slice(buf);
+		Ok(())
 	}
 
 	/// Computes the given hash function on the supplied input.
@@ -688,7 +709,8 @@ where
 	///
 	/// The `input` and `output` buffers may overlap.
 	fn compute_hash_on_intermediate_buffer<F, R>(
-		&mut self,
+		&self,
+		memory: &mut [u8],
 		hash_fn: F,
 		input_ptr: u32,
 		input_len: u32,
@@ -699,11 +721,11 @@ where
 		R: AsRef<[u8]>,
 	{
 		// Copy input into supervisor memory.
-		let input = self.read_sandbox_memory(input_ptr, input_len)?;
+		let input = self.read_sandbox_memory(memory, input_ptr, input_len)?;
 		// Compute the hash on the input buffer using the given hash function.
 		let hash = hash_fn(&input);
 		// Write the resulting hash back into the sandboxed output buffer.
-		self.write_sandbox_memory(output_ptr, hash.as_ref())?;
+		self.write_sandbox_memory(memory, output_ptr, hash.as_ref())?;
 		Ok(())
 	}
 
@@ -740,6 +762,7 @@ where
 
 	fn set_storage(
 		&mut self,
+		memory: &[u8],
 		key_type: KeyType,
 		key_ptr: u32,
 		value_ptr: u32,
@@ -751,8 +774,8 @@ where
 		if value_len > max_size {
 			return Err(Error::<E::T>::ValueTooLarge.into())
 		}
-		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
-		let value = Some(self.read_sandbox_memory(value_ptr, value_len)?);
+		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
+		let value = Some(self.read_sandbox_memory(memory, value_ptr, value_len)?);
 		let write_outcome = match key_type {
 			KeyType::Fix => self.ext.set_storage(
 				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
@@ -773,9 +796,14 @@ where
 		Ok(write_outcome.old_len_with_sentinel())
 	}
 
-	fn clear_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
+	fn clear_storage(
+		&mut self,
+		memory: &[u8],
+		key_type: KeyType,
+		key_ptr: u32,
+	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ClearStorage(self.ext.max_value_size()))?;
-		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
 		let outcome = match key_type {
 			KeyType::Fix => self.ext.set_storage(
 				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
@@ -795,13 +823,14 @@ where
 
 	fn get_storage(
 		&mut self,
+		memory: &mut [u8],
 		key_type: KeyType,
 		key_ptr: u32,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::GetStorage(self.ext.max_value_size()))?;
-		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
 		let outcome = match key_type {
 			KeyType::Fix => self.ext.get_storage(
 				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
@@ -813,7 +842,14 @@ where
 
 		if let Some(value) = outcome {
 			self.adjust_gas(charged, RuntimeCosts::GetStorage(value.len() as u32));
-			self.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
+			self.write_sandbox_output(
+				memory,
+				out_ptr,
+				out_len_ptr,
+				&value,
+				false,
+				already_charged,
+			)?;
 			Ok(ReturnCode::Success)
 		} else {
 			self.adjust_gas(charged, RuntimeCosts::GetStorage(0));
@@ -821,9 +857,14 @@ where
 		}
 	}
 
-	fn contains_storage(&mut self, key_type: KeyType, key_ptr: u32) -> Result<u32, TrapReason> {
+	fn contains_storage(
+		&mut self,
+		memory: &[u8],
+		key_type: KeyType,
+		key_ptr: u32,
+	) -> Result<u32, TrapReason> {
 		let charged = self.charge_gas(RuntimeCosts::ContainsStorage(self.ext.max_value_size()))?;
-		let key = self.read_sandbox_memory(key_ptr, key_type.len::<E::T>()?)?;
+		let key = self.read_sandbox_memory(memory, key_ptr, key_type.len::<E::T>()?)?;
 		let outcome = match key_type {
 			KeyType::Fix => self.ext.get_storage_size(
 				&FixSizedKey::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
@@ -839,6 +880,7 @@ where
 
 	fn call(
 		&mut self,
+		memory: &mut [u8],
 		flags: CallFlags,
 		call_type: CallType,
 		input_data_ptr: u32,
@@ -855,14 +897,15 @@ where
 			self.input_data.take().ok_or(Error::<E::T>::InputForwarded)?
 		} else {
 			self.charge_gas(RuntimeCosts::CopyFromContract(input_data_len))?;
-			self.read_sandbox_memory(input_data_ptr, input_data_len)?
+			self.read_sandbox_memory(memory, input_data_ptr, input_data_len)?
 		};
 
 		let call_outcome = match call_type {
 			CallType::Call { callee_ptr, value_ptr, gas } => {
 				let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-					self.read_sandbox_memory_as(callee_ptr)?;
-				let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+					self.read_sandbox_memory_as(memory, callee_ptr)?;
+				let value: BalanceOf<<E as Ext>::T> =
+					self.read_sandbox_memory_as(memory, value_ptr)?;
 				if value > 0u32.into() {
 					self.charge_gas(RuntimeCosts::CallSurchargeTransfer)?;
 				}
@@ -878,7 +921,7 @@ where
 				if flags.contains(CallFlags::ALLOW_REENTRY) {
 					return Err(Error::<E::T>::InvalidCallFlags.into())
 				}
-				let code_hash = self.read_sandbox_memory_as(code_hash_ptr)?;
+				let code_hash = self.read_sandbox_memory_as(memory, code_hash_ptr)?;
 				self.ext.delegate_call(code_hash, input_data)
 			},
 		};
@@ -895,15 +938,21 @@ where
 		}
 
 		if let Ok(output) = &call_outcome {
-			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::CopyToContract(len))
-			})?;
+			self.write_sandbox_output(
+				memory,
+				output_ptr,
+				output_len_ptr,
+				&output.data,
+				true,
+				|len| Some(RuntimeCosts::CopyToContract(len)),
+			)?;
 		}
 		Ok(Runtime::<E>::exec_into_return_code(call_outcome)?)
 	}
 
 	fn instantiate(
 		&mut self,
+		memory: &mut [u8],
 		code_hash_ptr: u32,
 		gas: u64,
 		value_ptr: u32,
@@ -918,17 +967,19 @@ where
 	) -> Result<ReturnCode, TrapReason> {
 		let gas = Weight::from_ref_time(gas);
 		self.charge_gas(RuntimeCosts::InstantiateBase { input_data_len, salt_len })?;
-		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(value_ptr)?;
+		let value: BalanceOf<<E as Ext>::T> = self.read_sandbox_memory_as(memory, value_ptr)?;
 		if value > 0u32.into() {
 			self.charge_gas(RuntimeCosts::InstantiateSurchargeTransfer)?;
 		}
-		let code_hash: CodeHash<<E as Ext>::T> = self.read_sandbox_memory_as(code_hash_ptr)?;
-		let input_data = self.read_sandbox_memory(input_data_ptr, input_data_len)?;
-		let salt = self.read_sandbox_memory(salt_ptr, salt_len)?;
+		let code_hash: CodeHash<<E as Ext>::T> =
+			self.read_sandbox_memory_as(memory, code_hash_ptr)?;
+		let input_data = self.read_sandbox_memory(memory, input_data_ptr, input_data_len)?;
+		let salt = self.read_sandbox_memory(memory, salt_ptr, salt_len)?;
 		let instantiate_outcome = self.ext.instantiate(gas, code_hash, value, input_data, &salt);
 		if let Ok((address, output)) = &instantiate_outcome {
 			if !output.flags.contains(ReturnFlags::REVERT) {
 				self.write_sandbox_output(
+					memory,
 					address_ptr,
 					address_len_ptr,
 					&address.encode(),
@@ -936,17 +987,22 @@ where
 					already_charged,
 				)?;
 			}
-			self.write_sandbox_output(output_ptr, output_len_ptr, &output.data, true, |len| {
-				Some(RuntimeCosts::CopyToContract(len))
-			})?;
+			self.write_sandbox_output(
+				memory,
+				output_ptr,
+				output_len_ptr,
+				&output.data,
+				true,
+				|len| Some(RuntimeCosts::CopyToContract(len)),
+			)?;
 		}
 		Ok(Runtime::<E>::exec_into_return_code(instantiate_outcome.map(|(_, retval)| retval))?)
 	}
 
-	fn terminate(&mut self, beneficiary_ptr: u32) -> Result<(), TrapReason> {
+	fn terminate(&mut self, memory: &[u8], beneficiary_ptr: u32) -> Result<(), TrapReason> {
 		self.charge_gas(RuntimeCosts::Terminate)?;
 		let beneficiary: <<E as Ext>::T as frame_system::Config>::AccountId =
-			self.read_sandbox_memory_as(beneficiary_ptr)?;
+			self.read_sandbox_memory_as(memory, beneficiary_ptr)?;
 		self.ext.terminate(&beneficiary)?;
 		Err(TrapReason::Termination)
 	}
@@ -967,7 +1023,7 @@ pub mod env {
 	/// This call is supposed to be called only by instrumentation injected code.
 	///
 	/// - amount: How much gas is used.
-	fn gas(ctx: Runtime<E>, amount: u64) -> Result<(), TrapReason> {
+	fn gas(ctx: _, _memory: _, amount: u64) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::MeteringBlock(amount))?;
 		Ok(())
 	}
@@ -978,12 +1034,13 @@ pub mod env {
 	/// type. Still a valid thing to call when not interested in the return value.
 	#[prefixed_alias]
 	fn set_storage(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<(), TrapReason> {
-		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
+		ctx.set_storage(memory, KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 	}
 
 	/// Set the value at the given key in the contract storage.
@@ -1007,12 +1064,13 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn set_storage(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		ctx.set_storage(KeyType::Fix, key_ptr, value_ptr, value_len)
+		ctx.set_storage(memory, KeyType::Fix, key_ptr, value_ptr, value_len)
 	}
 
 	/// Set the value at the given key in the contract storage.
@@ -1034,13 +1092,14 @@ pub mod env {
 	#[version(2)]
 	#[prefixed_alias]
 	fn set_storage(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		key_len: u32,
 		value_ptr: u32,
 		value_len: u32,
 	) -> Result<u32, TrapReason> {
-		ctx.set_storage(KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
+		ctx.set_storage(memory, KeyType::Variable(key_len), key_ptr, value_ptr, value_len)
 	}
 
 	/// Clear the value at the given key in the contract storage.
@@ -1048,8 +1107,8 @@ pub mod env {
 	/// Equivalent to the newer version of `seal_clear_storage` with the exception of the return
 	/// type. Still a valid thing to call when not interested in the return value.
 	#[prefixed_alias]
-	fn clear_storage(ctx: Runtime<E>, key_ptr: u32) -> Result<(), TrapReason> {
-		ctx.clear_storage(KeyType::Fix, key_ptr).map(|_| ())
+	fn clear_storage(ctx: _, memory: _, key_ptr: u32) -> Result<(), TrapReason> {
+		ctx.clear_storage(memory, KeyType::Fix, key_ptr).map(|_| ())
 	}
 
 	/// Clear the value at the given key in the contract storage.
@@ -1065,8 +1124,8 @@ pub mod env {
 	/// `SENTINEL` is returned as a sentinel value.
 	#[version(1)]
 	#[prefixed_alias]
-	fn clear_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
-		ctx.clear_storage(KeyType::Variable(key_len), key_ptr)
+	fn clear_storage(ctx: _, memory: _, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
+		ctx.clear_storage(memory, KeyType::Variable(key_len), key_ptr)
 	}
 
 	/// Retrieve the value under the given key from storage.
@@ -1086,12 +1145,13 @@ pub mod env {
 	/// `ReturnCode::KeyNotFound`
 	#[prefixed_alias]
 	fn get_storage(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.get_storage(KeyType::Fix, key_ptr, out_ptr, out_len_ptr)
+		ctx.get_storage(memory, KeyType::Fix, key_ptr, out_ptr, out_len_ptr)
 	}
 
 	/// Retrieve the value under the given key from storage.
@@ -1115,13 +1175,14 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn get_storage(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		key_len: u32,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
-		ctx.get_storage(KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr)
+		ctx.get_storage(memory, KeyType::Variable(key_len), key_ptr, out_ptr, out_len_ptr)
 	}
 
 	/// Checks whether there is a value stored under the given key.
@@ -1138,8 +1199,8 @@ pub mod env {
 	/// Returns the size of the pre-existing value at the specified key if any. Otherwise
 	/// `SENTINEL` is returned as a sentinel value.
 	#[prefixed_alias]
-	fn contains_storage(ctx: Runtime<E>, key_ptr: u32) -> Result<u32, TrapReason> {
-		ctx.contains_storage(KeyType::Fix, key_ptr)
+	fn contains_storage(ctx: _, memory: _, key_ptr: u32) -> Result<u32, TrapReason> {
+		ctx.contains_storage(memory, KeyType::Fix, key_ptr)
 	}
 
 	/// Checks whether there is a value stored under the given key.
@@ -1157,8 +1218,8 @@ pub mod env {
 	/// `SENTINEL` is returned as a sentinel value.
 	#[version(1)]
 	#[prefixed_alias]
-	fn contains_storage(ctx: Runtime<E>, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
-		ctx.contains_storage(KeyType::Variable(key_len), key_ptr)
+	fn contains_storage(ctx: _, memory: _, key_ptr: u32, key_len: u32) -> Result<u32, TrapReason> {
+		ctx.contains_storage(memory, KeyType::Variable(key_len), key_ptr)
 	}
 
 	/// Retrieve and remove the value under the given key from storage.
@@ -1177,21 +1238,22 @@ pub mod env {
 	#[unstable]
 	#[prefixed_alias]
 	fn take_storage(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		key_len: u32,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		let charged = ctx.charge_gas(RuntimeCosts::TakeStorage(ctx.ext.max_value_size()))?;
-		let key = ctx.read_sandbox_memory(key_ptr, key_len)?;
+		let key = ctx.read_sandbox_memory(memory, key_ptr, key_len)?;
 		if let crate::storage::WriteOutcome::Taken(value) = ctx.ext.set_storage_transparent(
 			&VarSizedKey::<E::T>::try_from(key).map_err(|_| Error::<E::T>::DecodingFailed)?,
 			None,
 			true,
 		)? {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(value.len() as u32));
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &value, false, already_charged)?;
+			ctx.write_sandbox_output(memory, out_ptr, out_len_ptr, &value, false, already_charged)?;
 			Ok(ReturnCode::Success)
 		} else {
 			ctx.adjust_gas(charged, RuntimeCosts::TakeStorage(0));
@@ -1215,7 +1277,8 @@ pub mod env {
 	/// `ReturnCode::TransferFailed`
 	#[prefixed_alias]
 	fn transfer(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		account_ptr: u32,
 		_account_len: u32,
 		value_ptr: u32,
@@ -1223,8 +1286,8 @@ pub mod env {
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Transfer)?;
 		let callee: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(account_ptr)?;
-		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(value_ptr)?;
+			ctx.read_sandbox_memory_as(memory, account_ptr)?;
+		let value: BalanceOf<<E as Ext>::T> = ctx.read_sandbox_memory_as(memory, value_ptr)?;
 		let result = ctx.ext.transfer(&callee, value);
 		match result {
 			Ok(()) => Ok(ReturnCode::Success),
@@ -1249,7 +1312,8 @@ pub mod env {
 	/// compatibility. Consider switching to the newest version of this function.
 	#[prefixed_alias]
 	fn call(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		callee_ptr: u32,
 		_callee_len: u32,
 		gas: u64,
@@ -1261,6 +1325,7 @@ pub mod env {
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.call(
+			memory,
 			CallFlags::ALLOW_REENTRY,
 			CallType::Call { callee_ptr, value_ptr, gas },
 			input_data_ptr,
@@ -1302,7 +1367,8 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn call(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		flags: u32,
 		callee_ptr: u32,
 		gas: u64,
@@ -1313,6 +1379,7 @@ pub mod env {
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.call(
+			memory,
 			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
 			CallType::Call { callee_ptr, value_ptr, gas },
 			input_data_ptr,
@@ -1348,7 +1415,8 @@ pub mod env {
 	/// `ReturnCode::CodeNotFound`
 	#[prefixed_alias]
 	fn delegate_call(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		flags: u32,
 		code_hash_ptr: u32,
 		input_data_ptr: u32,
@@ -1357,6 +1425,7 @@ pub mod env {
 		output_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.call(
+			memory,
 			CallFlags::from_bits(flags).ok_or(Error::<E::T>::InvalidCallFlags)?,
 			CallType::DelegateCall { code_hash_ptr },
 			input_data_ptr,
@@ -1380,7 +1449,8 @@ pub mod env {
 	/// compatibility. Consider switching to the newest version of this function.
 	#[prefixed_alias]
 	fn instantiate(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		code_hash_ptr: u32,
 		_code_hash_len: u32,
 		gas: u64,
@@ -1396,6 +1466,7 @@ pub mod env {
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.instantiate(
+			memory,
 			code_hash_ptr,
 			gas,
 			value_ptr,
@@ -1453,7 +1524,8 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn instantiate(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		code_hash_ptr: u32,
 		gas: u64,
 		value_ptr: u32,
@@ -1467,6 +1539,7 @@ pub mod env {
 		salt_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.instantiate(
+			memory,
 			code_hash_ptr,
 			gas,
 			value_ptr,
@@ -1495,11 +1568,12 @@ pub mod env {
 	/// compatibility. Consider switching to the newest version of this function.
 	#[prefixed_alias]
 	fn terminate(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		beneficiary_ptr: u32,
 		_beneficiary_len: u32,
 	) -> Result<(), TrapReason> {
-		ctx.terminate(beneficiary_ptr)
+		ctx.terminate(memory, beneficiary_ptr)
 	}
 
 	/// Remove the calling account and transfer remaining **free** balance.
@@ -1519,8 +1593,8 @@ pub mod env {
 	/// - The deletion queue is full.
 	#[version(1)]
 	#[prefixed_alias]
-	fn terminate(ctx: Runtime<E>, beneficiary_ptr: u32) -> Result<(), TrapReason> {
-		ctx.terminate(beneficiary_ptr)
+	fn terminate(ctx: _, memory: _, beneficiary_ptr: u32) -> Result<(), TrapReason> {
+		ctx.terminate(memory, beneficiary_ptr)
 	}
 
 	/// Stores the input passed by the caller into the supplied buffer.
@@ -1534,10 +1608,10 @@ pub mod env {
 	///
 	/// This function traps if the input was previously forwarded by a `seal_call`.
 	#[prefixed_alias]
-	fn input(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn input(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::InputBase)?;
 		if let Some(input) = ctx.input_data.take() {
-			ctx.write_sandbox_output(out_ptr, out_len_ptr, &input, false, |len| {
+			ctx.write_sandbox_output(memory, out_ptr, out_len_ptr, &input, false, |len| {
 				Some(RuntimeCosts::CopyToContract(len))
 			})?;
 			ctx.input_data = Some(input);
@@ -1565,7 +1639,8 @@ pub mod env {
 	///
 	/// Using a reserved bit triggers a trap.
 	fn seal_return(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		flags: u32,
 		data_ptr: u32,
 		data_len: u32,
@@ -1573,7 +1648,7 @@ pub mod env {
 		ctx.charge_gas(RuntimeCosts::Return(data_len))?;
 		Err(TrapReason::Return(ReturnData {
 			flags,
-			data: ctx.read_sandbox_memory(data_ptr, data_len)?,
+			data: ctx.read_sandbox_memory(memory, data_ptr, data_len)?,
 		}))
 	}
 
@@ -1588,9 +1663,10 @@ pub mod env {
 	/// extrinsic will be returned. Otherwise, if this call is initiated by another contract then
 	/// the address of the contract will be returned. The value is encoded as T::AccountId.
 	#[prefixed_alias]
-	fn caller(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn caller(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Caller)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.caller().encode(),
@@ -1608,10 +1684,10 @@ pub mod env {
 	///
 	/// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
 	#[prefixed_alias]
-	fn is_contract(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
+	fn is_contract(ctx: _, memory: _, account_ptr: u32) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::IsContract)?;
 		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(account_ptr)?;
+			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 
 		Ok(ctx.ext.is_contract(&address) as u32)
 	}
@@ -1631,16 +1707,18 @@ pub mod env {
 	/// `ReturnCode::KeyNotFound`
 	#[prefixed_alias]
 	fn code_hash(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		account_ptr: u32,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::CodeHash)?;
 		let address: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(account_ptr)?;
+			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 		if let Some(value) = ctx.ext.code_hash(&address) {
 			ctx.write_sandbox_output(
+				memory,
 				out_ptr,
 				out_len_ptr,
 				&value.encode(),
@@ -1661,10 +1739,11 @@ pub mod env {
 	/// - `out_len_ptr`: in-out pointer into linear memory where the buffer length is read from and
 	///   the value length is written to.
 	#[prefixed_alias]
-	fn own_code_hash(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn own_code_hash(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::OwnCodeHash)?;
 		let code_hash_encoded = &ctx.ext.own_code_hash().encode();
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			code_hash_encoded,
@@ -1684,7 +1763,7 @@ pub mod env {
 	///
 	/// Returned value is a u32-encoded boolean: (0 = false, 1 = true).
 	#[prefixed_alias]
-	fn caller_is_origin(ctx: Runtime<E>) -> Result<u32, TrapReason> {
+	fn caller_is_origin(ctx: _, _memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::CallerIsOrigin)?;
 		Ok(ctx.ext.caller_is_origin() as u32)
 	}
@@ -1696,9 +1775,10 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	#[prefixed_alias]
-	fn address(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn address(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Address)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.address().encode(),
@@ -1722,7 +1802,8 @@ pub mod env {
 	/// gas can be smaller than one.
 	#[prefixed_alias]
 	fn weight_to_fee(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		gas: u64,
 		out_ptr: u32,
 		out_len_ptr: u32,
@@ -1730,6 +1811,7 @@ pub mod env {
 		let gas = Weight::from_ref_time(gas);
 		ctx.charge_gas(RuntimeCosts::WeightToFee)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.get_weight_price(gas).encode(),
@@ -1747,10 +1829,17 @@ pub mod env {
 	///
 	/// The data is encoded as Gas.
 	#[prefixed_alias]
-	fn gas_left(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn gas_left(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::GasLeft)?;
 		let gas_left = &ctx.ext.gas_meter().gas_left().ref_time().encode();
-		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, gas_left, false, already_charged)?)
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			gas_left,
+			false,
+			already_charged,
+		)?)
 	}
 
 	/// Stores the **free* balance of the current account into the supplied buffer.
@@ -1762,9 +1851,10 @@ pub mod env {
 	///
 	/// The data is encoded as T::Balance.
 	#[prefixed_alias]
-	fn balance(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn balance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Balance)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.balance().encode(),
@@ -1783,12 +1873,14 @@ pub mod env {
 	/// The data is encoded as T::Balance.
 	#[prefixed_alias]
 	fn value_transferred(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ValueTransferred)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.value_transferred().encode(),
@@ -1811,7 +1903,8 @@ pub mod env {
 	/// This function is deprecated. Users should migrate to the version in the "seal1" module.
 	#[prefixed_alias]
 	fn random(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		subject_ptr: u32,
 		subject_len: u32,
 		out_ptr: u32,
@@ -1821,8 +1914,9 @@ pub mod env {
 		if subject_len > ctx.ext.schedule().limits.subject_len {
 			return Err(Error::<E::T>::RandomSubjectTooLong.into())
 		}
-		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
+		let subject_buf = ctx.read_sandbox_memory(memory, subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.random(&subject_buf).0.encode(),
@@ -1855,7 +1949,8 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn random(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		subject_ptr: u32,
 		subject_len: u32,
 		out_ptr: u32,
@@ -1865,8 +1960,9 @@ pub mod env {
 		if subject_len > ctx.ext.schedule().limits.subject_len {
 			return Err(Error::<E::T>::RandomSubjectTooLong.into())
 		}
-		let subject_buf = ctx.read_sandbox_memory(subject_ptr, subject_len)?;
+		let subject_buf = ctx.read_sandbox_memory(memory, subject_ptr, subject_len)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.random(&subject_buf).encode(),
@@ -1882,9 +1978,10 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	#[prefixed_alias]
-	fn now(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn now(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Now)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.now().encode(),
@@ -1897,9 +1994,15 @@ pub mod env {
 	///
 	/// The data is encoded as T::Balance.
 	#[prefixed_alias]
-	fn minimum_balance(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn minimum_balance(
+		ctx: _,
+		memory: _,
+		out_ptr: u32,
+		out_len_ptr: u32,
+	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::MinimumBalance)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.minimum_balance().encode(),
@@ -1920,13 +2023,21 @@ pub mod env {
 	/// There is no longer a tombstone deposit. This function always returns 0.
 	#[prefixed_alias]
 	fn tombstone_deposit(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		out_ptr: u32,
 		out_len_ptr: u32,
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Balance)?;
 		let deposit = <BalanceOf<E::T>>::zero().encode();
-		Ok(ctx.write_sandbox_output(out_ptr, out_len_ptr, &deposit, false, already_charged)?)
+		Ok(ctx.write_sandbox_output(
+			memory,
+			out_ptr,
+			out_len_ptr,
+			&deposit,
+			false,
+			already_charged,
+		)?)
 	}
 
 	/// Was used to restore the given destination contract sacrificing the caller.
@@ -1937,7 +2048,8 @@ pub mod env {
 	/// backwards compatiblity
 	#[prefixed_alias]
 	fn restore_to(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		_dest_ptr: u32,
 		_dest_len: u32,
 		_code_hash_ptr: u32,
@@ -1960,7 +2072,8 @@ pub mod env {
 	#[version(1)]
 	#[prefixed_alias]
 	fn restore_to(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		_dest_ptr: u32,
 		_code_hash_ptr: u32,
 		_rent_allowance_ptr: u32,
@@ -1981,7 +2094,8 @@ pub mod env {
 	/// - data_len - the length of the data buffer.
 	#[prefixed_alias]
 	fn deposit_event(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		topics_ptr: u32,
 		topics_len: u32,
 		data_ptr: u32,
@@ -2006,7 +2120,7 @@ pub mod env {
 
 		let mut topics: Vec<TopicOf<<E as Ext>::T>> = match topics_len {
 			0 => Vec::new(),
-			_ => ctx.read_sandbox_memory_as_unbounded(topics_ptr, topics_len)?,
+			_ => ctx.read_sandbox_memory_as_unbounded(memory, topics_ptr, topics_len)?,
 		};
 
 		// If there are more than `event_topics`, then trap.
@@ -2021,7 +2135,7 @@ pub mod env {
 			return Err(Error::<E::T>::DuplicateTopics.into())
 		}
 
-		let event_data = ctx.read_sandbox_memory(data_ptr, data_len)?;
+		let event_data = ctx.read_sandbox_memory(memory, data_ptr, data_len)?;
 
 		ctx.ext.deposit_event(topics, event_data);
 
@@ -2036,7 +2150,8 @@ pub mod env {
 	/// backwards compatiblity.
 	#[prefixed_alias]
 	fn set_rent_allowance(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		_value_ptr: u32,
 		_value_len: u32,
 	) -> Result<(), TrapReason> {
@@ -2052,7 +2167,7 @@ pub mod env {
 	/// backwards compatiblity.
 	#[version(1)]
 	#[prefixed_alias]
-	fn set_rent_allowance(ctx: Runtime<E>, _value_ptr: u32) -> Result<(), TrapReason> {
+	fn set_rent_allowance(ctx: _, _memory: _, _value_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		Ok(())
 	}
@@ -2064,10 +2179,11 @@ pub mod env {
 	/// The state rent functionality was removed. This is stub only exists for
 	/// backwards compatiblity.
 	#[prefixed_alias]
-	fn rent_allowance(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn rent_allowance(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::Balance)?;
 		let rent_allowance = <BalanceOf<E::T>>::max_value().encode();
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&rent_allowance,
@@ -2083,9 +2199,10 @@ pub mod env {
 	/// `out_ptr`. This call overwrites it with the size of the value. If the available
 	/// space at `out_ptr` is less than the size of the value a trap is triggered.
 	#[prefixed_alias]
-	fn block_number(ctx: Runtime<E>, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
+	fn block_number(ctx: _, memory: _, out_ptr: u32, out_len_ptr: u32) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::BlockNumber)?;
 		Ok(ctx.write_sandbox_output(
+			memory,
 			out_ptr,
 			out_len_ptr,
 			&ctx.ext.block_number().encode(),
@@ -2113,13 +2230,16 @@ pub mod env {
 	///   function will write the result directly into this buffer.
 	#[prefixed_alias]
 	fn hash_sha2_256(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::HashSha256(input_len))?;
-		Ok(ctx.compute_hash_on_intermediate_buffer(sha2_256, input_ptr, input_len, output_ptr)?)
+		Ok(ctx.compute_hash_on_intermediate_buffer(
+			memory, sha2_256, input_ptr, input_len, output_ptr,
+		)?)
 	}
 
 	/// Computes the KECCAK 256-bit hash on the given input buffer.
@@ -2141,13 +2261,16 @@ pub mod env {
 	///   function will write the result directly into this buffer.
 	#[prefixed_alias]
 	fn hash_keccak_256(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::HashKeccak256(input_len))?;
-		Ok(ctx.compute_hash_on_intermediate_buffer(keccak_256, input_ptr, input_len, output_ptr)?)
+		Ok(ctx.compute_hash_on_intermediate_buffer(
+			memory, keccak_256, input_ptr, input_len, output_ptr,
+		)?)
 	}
 
 	/// Computes the BLAKE2 256-bit hash on the given input buffer.
@@ -2169,13 +2292,16 @@ pub mod env {
 	///   function will write the result directly into this buffer.
 	#[prefixed_alias]
 	fn hash_blake2_256(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::HashBlake256(input_len))?;
-		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_256, input_ptr, input_len, output_ptr)?)
+		Ok(ctx.compute_hash_on_intermediate_buffer(
+			memory, blake2_256, input_ptr, input_len, output_ptr,
+		)?)
 	}
 
 	/// Computes the BLAKE2 128-bit hash on the given input buffer.
@@ -2197,13 +2323,16 @@ pub mod env {
 	///   function will write the result directly into this buffer.
 	#[prefixed_alias]
 	fn hash_blake2_128(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		input_ptr: u32,
 		input_len: u32,
 		output_ptr: u32,
 	) -> Result<(), TrapReason> {
 		ctx.charge_gas(RuntimeCosts::HashBlake128(input_len))?;
-		Ok(ctx.compute_hash_on_intermediate_buffer(blake2_128, input_ptr, input_len, output_ptr)?)
+		Ok(ctx.compute_hash_on_intermediate_buffer(
+			memory, blake2_128, input_ptr, input_len, output_ptr,
+		)?)
 	}
 
 	/// Call into the chain extension provided by the chain if any.
@@ -2219,7 +2348,8 @@ pub mod env {
 	/// module error.
 	#[prefixed_alias]
 	fn call_chain_extension(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		id: u32,
 		input_ptr: u32,
 		input_len: u32,
@@ -2234,7 +2364,8 @@ pub mod env {
 			"Constructor initializes with `Some`. This is the only place where it is set to `None`.\
 			It is always reset to `Some` afterwards. qed"
 		);
-		let env = Environment::new(ctx, id, input_ptr, input_len, output_ptr, output_len_ptr);
+		let env =
+			Environment::new(ctx, memory, id, input_ptr, input_len, output_ptr, output_len_ptr);
 		let ret = match chain_extension.call(env)? {
 			RetVal::Converging(val) => Ok(val),
 			RetVal::Diverging { flags, data } =>
@@ -2263,13 +2394,14 @@ pub mod env {
 	/// return value of this function can be cached in order to prevent further calls at runtime.
 	#[prefixed_alias]
 	fn debug_message(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		str_ptr: u32,
 		str_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::DebugMessage)?;
 		if ctx.ext.append_debug_buffer("") {
-			let data = ctx.read_sandbox_memory(str_ptr, str_len)?;
+			let data = ctx.read_sandbox_memory(memory, str_ptr, str_len)?;
 			let msg =
 				core::str::from_utf8(&data).map_err(|_| <Error<E::T>>::DebugMessageInvalidUTF8)?;
 			ctx.ext.append_debug_buffer(msg);
@@ -2318,14 +2450,15 @@ pub mod env {
 	#[unstable]
 	#[prefixed_alias]
 	fn call_runtime(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		call_ptr: u32,
 		call_len: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		use frame_support::dispatch::{extract_actual_weight, GetDispatchInfo};
 		ctx.charge_gas(RuntimeCosts::CopyFromContract(call_len))?;
 		let call: <E::T as Config>::RuntimeCall =
-			ctx.read_sandbox_memory_as_unbounded(call_ptr, call_len)?;
+			ctx.read_sandbox_memory_as_unbounded(memory, call_ptr, call_len)?;
 		let dispatch_info = call.get_dispatch_info();
 		let charged = ctx.charge_gas(RuntimeCosts::CallRuntime(dispatch_info.weight))?;
 		let result = ctx.ext.call_runtime(call);
@@ -2356,7 +2489,8 @@ pub mod env {
 	/// `ReturnCode::EcdsaRecoverFailed`
 	#[prefixed_alias]
 	fn ecdsa_recover(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		signature_ptr: u32,
 		message_hash_ptr: u32,
 		output_ptr: u32,
@@ -2364,9 +2498,9 @@ pub mod env {
 		ctx.charge_gas(RuntimeCosts::EcdsaRecovery)?;
 
 		let mut signature: [u8; 65] = [0; 65];
-		ctx.read_sandbox_memory_into_buf(signature_ptr, &mut signature)?;
+		ctx.read_sandbox_memory_into_buf(memory, signature_ptr, &mut signature)?;
 		let mut message_hash: [u8; 32] = [0; 32];
-		ctx.read_sandbox_memory_into_buf(message_hash_ptr, &mut message_hash)?;
+		ctx.read_sandbox_memory_into_buf(memory, message_hash_ptr, &mut message_hash)?;
 
 		let result = ctx.ext.ecdsa_recover(&signature, &message_hash);
 
@@ -2374,7 +2508,7 @@ pub mod env {
 			Ok(pub_key) => {
 				// Write the recovered compressed ecdsa public key back into the sandboxed output
 				// buffer.
-				ctx.write_sandbox_memory(output_ptr, pub_key.as_ref())?;
+				ctx.write_sandbox_memory(memory, output_ptr, pub_key.as_ref())?;
 
 				Ok(ReturnCode::Success)
 			},
@@ -2410,9 +2544,10 @@ pub mod env {
 	///
 	/// `ReturnCode::CodeNotFound`
 	#[prefixed_alias]
-	fn set_code_hash(ctx: Runtime<E>, code_hash_ptr: u32) -> Result<ReturnCode, TrapReason> {
+	fn set_code_hash(ctx: _, memory: _, code_hash_ptr: u32) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::SetCodeHash)?;
-		let code_hash: CodeHash<<E as Ext>::T> = ctx.read_sandbox_memory_as(code_hash_ptr)?;
+		let code_hash: CodeHash<<E as Ext>::T> =
+			ctx.read_sandbox_memory_as(memory, code_hash_ptr)?;
 		match ctx.ext.set_code_hash(code_hash) {
 			Err(err) => {
 				let code = Runtime::<E>::err_into_return_code(err)?;
@@ -2440,17 +2575,18 @@ pub mod env {
 	/// `ReturnCode::EcdsaRecoverFailed`
 	#[prefixed_alias]
 	fn ecdsa_to_eth_address(
-		ctx: Runtime<E>,
+		ctx: _,
+		memory: _,
 		key_ptr: u32,
 		out_ptr: u32,
 	) -> Result<ReturnCode, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::EcdsaToEthAddress)?;
 		let mut compressed_key: [u8; 33] = [0; 33];
-		ctx.read_sandbox_memory_into_buf(key_ptr, &mut compressed_key)?;
+		ctx.read_sandbox_memory_into_buf(memory, key_ptr, &mut compressed_key)?;
 		let result = ctx.ext.ecdsa_to_eth_address(&compressed_key);
 		match result {
 			Ok(eth_address) => {
-				ctx.write_sandbox_memory(out_ptr, eth_address.as_ref())?;
+				ctx.write_sandbox_memory(memory, out_ptr, eth_address.as_ref())?;
 				Ok(ReturnCode::Success)
 			},
 			Err(_) => Ok(ReturnCode::EcdsaRecoverFailed),
@@ -2464,9 +2600,9 @@ pub mod env {
 	///
 	/// Returns 0 when there is no reentrancy.
 	#[unstable]
-	fn reentrant_count(ctx: Runtime<E>) -> Result<u32, TrapReason> {
+	fn reentrance_count(ctx: _, memory: _) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::ReentrantCount)?;
-		Ok(ctx.ext.reentrant_count())
+		Ok(ctx.ext.reentrance_count())
 	}
 
 	/// Returns the number of times specified contract exists on the call stack. Delegated calls are
@@ -2480,10 +2616,10 @@ pub mod env {
 	///
 	/// Returns 0 when the contract does not exist on the call stack.
 	#[unstable]
-	fn account_reentrance_count(ctx: Runtime<E>, account_ptr: u32) -> Result<u32, TrapReason> {
+	fn account_reentrance_count(ctx: _, memory: _, account_ptr: u32) -> Result<u32, TrapReason> {
 		ctx.charge_gas(RuntimeCosts::AccountEntranceCount)?;
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
-			ctx.read_sandbox_memory_as(account_ptr)?;
+			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 		Ok(ctx.ext.account_reentrance_count(&account_id))
 	}
 }
