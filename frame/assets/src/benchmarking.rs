@@ -47,6 +47,7 @@ fn create_default_asset<T: Config<I>, I: 'static>(
 		caller_lookup.clone(),
 		is_sufficient,
 		1u32.into(),
+		true,
 	)
 	.is_ok());
 	(caller, caller_lookup)
@@ -155,7 +156,7 @@ benchmarks_instance_pallet! {
 		let caller = T::CreateOrigin::ensure_origin(origin, &asset_id).unwrap();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
 		T::Currency::make_free_balance_be(&caller, DepositBalanceOf::<T, I>::max_value());
-	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, 1u32.into())
+	}: _(SystemOrigin::Signed(caller.clone()), asset_id, caller_lookup, 1u32.into(), true)
 	verify {
 		assert_last_event::<T, I>(Event::Created { asset_id, creator: caller.clone(), owner: caller }.into());
 	}
@@ -163,7 +164,7 @@ benchmarks_instance_pallet! {
 	force_create {
 		let caller: T::AccountId = whitelisted_caller();
 		let caller_lookup = T::Lookup::unlookup(caller.clone());
-	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true, 1u32.into())
+	}: _(SystemOrigin::Root, Default::default(), caller_lookup, true, 1u32.into(), true)
 	verify {
 		assert_last_event::<T, I>(Event::ForceCreated { asset_id: Default::default(), owner: caller }.into());
 	}
