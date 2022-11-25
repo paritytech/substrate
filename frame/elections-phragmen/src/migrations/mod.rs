@@ -23,3 +23,5 @@ pub mod v3;
 pub mod v4;
 /// Version 5.
 pub mod v5;
+/// Version 6.
+pub mod v6;

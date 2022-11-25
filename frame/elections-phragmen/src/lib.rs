@@ -1117,7 +1117,9 @@ impl<T: Config> Pallet<T> {
 							})
 							.collect::<Vec<_>>()
 							.try_into()
-							.expect("number runners up will never exceed T::DesiredRunnersUp. qed."),
+							.expect(
+								"number runners up will never exceed T::DesiredRunnersUp. qed.",
+							),
 					);
 
 					// clean candidates.
