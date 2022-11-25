@@ -46,6 +46,7 @@ pub trait Environment<HostState> {
 	fn define(
 		store: &mut Store<HostState>,
 		linker: &mut Linker<HostState>,
+		allow_unstable: bool,
 	) -> Result<(), LinkerError>;
 }
 
@@ -105,7 +106,6 @@ pub enum ReturnCode {
 	/// recording was disabled.
 	LoggingDisabled = 9,
 	/// The call dispatched by `seal_call_runtime` was executed but returned an error.
-	#[cfg(feature = "unstable-interface")]
 	CallRuntimeReturnedError = 10,
 	/// ECDSA pubkey recovery failed (most probably wrong recovery id or signature), or
 	/// ECDSA compressed pubkey conversion into Ethereum address failed (most probably
@@ -228,7 +228,6 @@ pub enum RuntimeCosts {
 	/// Weight of calling `seal_get_storage` with the specified size in storage.
 	GetStorage(u32),
 	/// Weight of calling `seal_take_storage` for the given size.
-	#[cfg(feature = "unstable-interface")]
 	TakeStorage(u32),
 	/// Weight of calling `seal_transfer`.
 	Transfer,
@@ -257,17 +256,14 @@ pub enum RuntimeCosts {
 	/// Weight charged by a chain extension through `seal_call_chain_extension`.
 	ChainExtension(u64),
 	/// Weight charged for calling into the runtime.
-	#[cfg(feature = "unstable-interface")]
 	CallRuntime(Weight),
 	/// Weight of calling `seal_set_code_hash`
 	SetCodeHash,
 	/// Weight of calling `ecdsa_to_eth_address`
 	EcdsaToEthAddress,
 	/// Weight of calling `reentrance_count`
-	#[cfg(feature = "unstable-interface")]
 	ReentrantCount,
 	/// Weight of calling `account_reentrance_count`
-	#[cfg(feature = "unstable-interface")]
 	AccountEntranceCount,
 }
 
@@ -316,7 +312,6 @@ impl RuntimeCosts {
 				.saturating_add(s.contains_storage_per_byte.saturating_mul(len.into())),
 			GetStorage(len) =>
 				s.get_storage.saturating_add(s.get_storage_per_byte.saturating_mul(len.into())),
-			#[cfg(feature = "unstable-interface")]
 			TakeStorage(len) => s
 				.take_storage
 				.saturating_add(s.take_storage_per_byte.saturating_mul(len.into())),
@@ -344,13 +339,10 @@ impl RuntimeCosts {
 				.saturating_add(s.hash_blake2_128_per_byte.saturating_mul(len.into())),
 			EcdsaRecovery => s.ecdsa_recover,
 			ChainExtension(amount) => amount,
-			#[cfg(feature = "unstable-interface")]
 			CallRuntime(weight) => weight.ref_time(),
 			SetCodeHash => s.set_code_hash,
 			EcdsaToEthAddress => s.ecdsa_to_eth_address,
-			#[cfg(feature = "unstable-interface")]
 			ReentrantCount => s.reentrance_count,
-			#[cfg(feature = "unstable-interface")]
 			AccountEntranceCount => s.account_reentrance_count,
 		};
 		RuntimeToken {
