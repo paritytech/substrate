@@ -846,7 +846,7 @@ where
 	};
 
 	let (chain_sync_network_provider, chain_sync_network_handle) = NetworkServiceProvider::new();
-	let (chain_sync, chain_sync_service) = ChainSync::new(
+	let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
 		match config.network.sync_mode {
 			SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 			SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -854,24 +854,17 @@ where
 			SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
 		},
 		client.clone(),
+		protocol_id.clone(),
+		&config.chain_spec.fork_id().map(ToOwned::to_owned),
+		Roles::from(&config.role),
 		block_announce_validator,
 		config.network.max_parallel_downloads,
 		warp_sync_provider,
 		chain_sync_network_handle,
+		block_request_protocol_config.name.clone(),
+		state_request_protocol_config.name.clone(),
+		warp_sync_protocol_config.as_ref().map(|config| config.name.clone()),
 	)?;
-
-	let block_announce_config = chain_sync.get_block_announce_proto_config(
-		protocol_id.clone(),
-		&config.chain_spec.fork_id().map(ToOwned::to_owned),
-		Roles::from(&config.role.clone()),
-		client.info().best_number,
-		client.info().best_hash,
-		client
-			.block_hash(Zero::zero())
-			.ok()
-			.flatten()
-			.expect("Genesis block exists; qed"),
-	);
 
 	request_response_protocol_configs.push(config.network.ipfs_server.then(|| {
 		let (handler, protocol_config) = BitswapRequestHandler::new(client.clone());
@@ -896,12 +889,14 @@ where
 		chain_sync_service,
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
-		block_request_protocol_config,
-		state_request_protocol_config,
-		warp_sync_protocol_config,
-		light_client_request_protocol_config,
 		request_response_protocol_configs: request_response_protocol_configs
 			.into_iter()
+			.chain([
+				Some(block_request_protocol_config),
+				Some(state_request_protocol_config),
+				Some(light_client_request_protocol_config),
+				warp_sync_protocol_config,
+			])
 			.flatten()
 			.collect::<Vec<_>>(),
 	};

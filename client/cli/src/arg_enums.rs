@@ -18,7 +18,7 @@
 
 //! Definitions of [`ValueEnum`] types.
 
-use clap::{builder::PossibleValue, ValueEnum};
+use clap::ValueEnum;
 
 /// The instantiation strategy to use in compiled mode.
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -51,57 +51,14 @@ pub const DEFAULT_WASMTIME_INSTANTIATION_STRATEGY: WasmtimeInstantiationStrategy
 	WasmtimeInstantiationStrategy::PoolingCopyOnWrite;
 
 /// How to execute Wasm runtime code.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
+#[value(rename_all = "kebab-case")]
 pub enum WasmExecutionMethod {
 	/// Uses an interpreter.
+	#[clap(name = "interpreted-i-know-what-i-do")]
 	Interpreted,
 	/// Uses a compiled runtime.
 	Compiled,
-}
-
-const INTERPRETED_NAME: &str = "interpreted-i-know-what-i-do";
-
-impl clap::ValueEnum for WasmExecutionMethod {
-	/// All possible argument values, in display order.
-	fn value_variants<'a>() -> &'a [Self] {
-		let variants = &[Self::Interpreted, Self::Compiled];
-		if cfg!(feature = "wasmtime") {
-			variants
-		} else {
-			&variants[..1]
-		}
-	}
-
-	/// Parse an argument into `Self`.
-	fn from_str(s: &str, _: bool) -> Result<Self, String> {
-		if s.eq_ignore_ascii_case(INTERPRETED_NAME) {
-			Ok(Self::Interpreted)
-		} else if s.eq_ignore_ascii_case("compiled") {
-			#[cfg(feature = "wasmtime")]
-			{
-				Ok(Self::Compiled)
-			}
-			#[cfg(not(feature = "wasmtime"))]
-			{
-				Err("`Compiled` variant requires the `wasmtime` feature to be enabled".into())
-			}
-		} else {
-			Err(format!("Unknown variant `{}`", s))
-		}
-	}
-
-	/// The canonical argument value.
-	///
-	/// The value is `None` for skipped variants.
-	fn to_possible_value(&self) -> Option<PossibleValue> {
-		match self {
-			#[cfg(feature = "wasmtime")]
-			WasmExecutionMethod::Compiled => Some(PossibleValue::new("compiled")),
-			#[cfg(not(feature = "wasmtime"))]
-			WasmExecutionMethod::Compiled => None,
-			WasmExecutionMethod::Interpreted => Some(PossibleValue::new(INTERPRETED_NAME)),
-		}
-	}
 }
 
 impl std::fmt::Display for WasmExecutionMethod {
@@ -121,7 +78,6 @@ pub fn execution_method_from_cli(
 ) -> sc_service::config::WasmExecutionMethod {
 	match execution_method {
 		WasmExecutionMethod::Interpreted => sc_service::config::WasmExecutionMethod::Interpreted,
-		#[cfg(feature = "wasmtime")]
 		WasmExecutionMethod::Compiled => sc_service::config::WasmExecutionMethod::Compiled {
 			instantiation_strategy: match _instantiation_strategy {
 				WasmtimeInstantiationStrategy::PoolingCopyOnWrite =>
@@ -136,20 +92,11 @@ pub fn execution_method_from_cli(
 					sc_service::config::WasmtimeInstantiationStrategy::LegacyInstanceReuse,
 			},
 		},
-		#[cfg(not(feature = "wasmtime"))]
-		WasmExecutionMethod::Compiled => panic!(
-			"Substrate must be compiled with \"wasmtime\" feature for compiled Wasm execution"
-		),
 	}
 }
 
 /// The default [`WasmExecutionMethod`].
-#[cfg(feature = "wasmtime")]
 pub const DEFAULT_WASM_EXECUTION_METHOD: WasmExecutionMethod = WasmExecutionMethod::Compiled;
-
-/// The default [`WasmExecutionMethod`].
-#[cfg(not(feature = "wasmtime"))]
-pub const DEFAULT_WASM_EXECUTION_METHOD: WasmExecutionMethod = WasmExecutionMethod::Interpreted;
 
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]

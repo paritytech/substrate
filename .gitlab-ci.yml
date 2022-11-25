@@ -47,7 +47,9 @@ variables:
   CARGO_INCREMENTAL:               0
   DOCKER_OS:                       "debian:stretch"
   ARCH:                            "x86_64"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
+  # staging image with rust 1.65 and nightly-2022-11-16
+  CI_IMAGE:                        "paritytech/ci-linux@sha256:786869e731963b3cc0a4aa9deb83367ed9e87a6ae48b6eb029d62b0cab4d87c1"
+  BUILDAH_IMAGE:                   "quay.io/buildah/stable:v1.27"
   RUSTY_CACHIER_SINGLE_BRANCH:     master
   RUSTY_CACHIER_DONT_OPERATE_ON_MAIN_BRANCH: "true"
 
@@ -135,7 +137,7 @@ default:
 # exclude cargo-check-benches from such runs
 .test-refs-check-benches:
   rules:
-    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/ 
+    - if: $CI_COMMIT_REF_NAME == "master" && $CI_PIPELINE_SOURCE == "parent_pipeline"  && $CI_IMAGE =~ /staging$/
       when: never
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "schedule"
@@ -279,6 +281,22 @@ rusty-cachier-notify:
     PR_NUM:                        "${PR_NUM}"
   trigger:
     project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch:                        "as-improve"
+
+remove-cancel-pipeline-message:
+  stage: .post
+  rules:
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
+  variables:
+    PROJECT_ID:                    "${CI_PROJECT_ID}"
+    PROJECT_NAME:                  "${CI_PROJECT_NAME}"
+    PIPELINE_ID:                   "${CI_PIPELINE_ID}"
+    FAILED_JOB_URL:                "https://gitlab.com"
+    FAILED_JOB_NAME:               "nope"
+    PR_NUM:                        "${CI_COMMIT_REF_NAME}"
+  trigger:
+    project:                       "parity/infrastructure/ci_cd/pipeline-stopper"
+    branch:                        "as-improve"
 
 # need to copy jobs this way because otherwise gitlab will wait
 # for all 3 jobs to finish instead of cancelling if one fails
@@ -312,10 +330,20 @@ cancel-pipeline-test-linux-stable-int:
   needs:
     - job:                         test-linux-stable-int
 
-cancel-pipeline-cargo-check-subkey:
+cancel-pipeline-cargo-check-each-crate-1:
   extends:                         .cancel-pipeline-template
   needs:
-    - job:                         cargo-check-subkey
+    - job:                         "cargo-check-each-crate 1/2"
+
+cancel-pipeline-cargo-check-each-crate-2:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         "cargo-check-each-crate 2/2"
+
+cancel-pipeline-cargo-check-each-crate-macos:
+  extends:                         .cancel-pipeline-template
+  needs:
+    - job:                         cargo-check-each-crate-macos
 
 cancel-pipeline-check-tracing:
   extends:                         .cancel-pipeline-template

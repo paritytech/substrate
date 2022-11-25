@@ -2797,6 +2797,14 @@ pub(crate) mod tests {
 		let b2 = insert_header(&backend, 2, b1, None, Default::default());
 
 		{
+			let tree_route = tree_route(blockchain, a1, a1).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a1);
+			assert!(tree_route.retracted().is_empty());
+			assert!(tree_route.enacted().is_empty());
+		}
+
+		{
 			let tree_route = tree_route(blockchain, a3, b2).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
