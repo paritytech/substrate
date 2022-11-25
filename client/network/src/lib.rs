@@ -272,13 +272,15 @@ pub use sc_network_common::{
 	},
 	sync::{
 		warp::{WarpSyncPhase, WarpSyncProgress},
-		ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState, SyncStatusProvider,
+		ChainSyncService, ExtendedPeerInfo, StateDownloadProgress, SyncEventStream, SyncState,
+		SyncStatusProvider,
 	},
 };
 pub use service::{
 	DecodingError, Keypair, NetworkService, NetworkWorker, NotificationSender,
 	NotificationSenderReady, OutboundFailure, PublicKey,
 };
+use sp_consensus::SyncOracle;
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 
 pub use sc_peerset::ReputationChange;
@@ -303,6 +305,8 @@ pub trait ChainSyncInterface<B: BlockT>:
 	+ NetworkBlock<B::Hash, NumberFor<B>>
 	+ SyncStatusProvider<B>
 	+ SyncEventStream
+	+ ChainSyncService<B>
+	+ SyncOracle
 	+ Send
 	+ Sync
 	+ 'static
@@ -316,6 +320,8 @@ impl<T, B: BlockT> ChainSyncInterface<B> for T where
 		+ NetworkBlock<B::Hash, NumberFor<B>>
 		+ SyncStatusProvider<B>
 		+ SyncEventStream
+		+ ChainSyncService<B>
+		+ SyncOracle
 		+ Send
 		+ Sync
 		+ 'static

@@ -1116,7 +1116,9 @@ where
 				while let Poll::Ready(Some(notification)) =
 					peer.finality_notification_stream.as_mut().poll_next(cx)
 				{
-					peer.network.on_block_finalized(notification.hash, notification.header);
+					use sc_network::ChainSyncService;
+					peer.chain_sync_service
+						.on_block_finalized(notification.hash, notification.header);
 				}
 			}
 		});

@@ -146,6 +146,10 @@ impl TestNetFactory for GrandpaTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<GrandpaPeer> {
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<GrandpaPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}

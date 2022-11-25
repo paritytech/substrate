@@ -23,6 +23,7 @@ pub mod metrics;
 pub mod warp;
 
 use crate::protocol::role::Roles;
+use futures::{channel::oneshot, Stream};
 
 use libp2p::PeerId;
 
@@ -37,7 +38,7 @@ use sp_runtime::{
 };
 use warp::WarpSyncProgress;
 
-use std::{any::Any, fmt, fmt::Formatter, sync::Arc, task::Poll};
+use std::{any::Any, fmt, fmt::Formatter, pin::Pin, sync::Arc, task::Poll};
 
 /// The sync status of a peer we are trying to sync with
 #[derive(Debug)]
@@ -295,9 +296,6 @@ pub enum SyncEvent {
 	PeerDisconnected(PeerId),
 }
 
-use futures::Stream;
-use std::pin::Pin;
-
 pub trait SyncEventStream: Send + Sync {
 	/// Subscribe to syncing-related events.
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>>;
@@ -468,4 +466,34 @@ pub trait ChainSync<Block: BlockT>: Send {
 
 	/// Send block request to peer
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<Block>);
+}
+
+// TODO(aaro): is this needed at all?
+#[async_trait::async_trait]
+pub trait ChainSyncService<Block: BlockT>: Send + Sync {
+	/// Returns the number of peers we're connected to and that are being queried.
+	async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled>;
+
+	/// Target sync block number.
+	async fn best_seen_block(&self) -> Result<Option<NumberFor<Block>>, oneshot::Canceled>;
+
+	/// Number of peers participating in syncing.
+	async fn num_sync_peers(&self) -> Result<u32, oneshot::Canceled>;
+
+	/// Number of blocks in the import queue.
+	async fn num_queued_blocks(&self) -> Result<u32, oneshot::Canceled>;
+
+	/// Number of downloaded blocks.
+	async fn num_downloaded_blocks(&self) -> Result<usize, oneshot::Canceled>;
+
+	/// Number of active sync requests.
+	async fn num_sync_requests(&self) -> Result<usize, oneshot::Canceled>;
+
+	/// Returns information about all the peers we are connected to after the handshake message.
+	async fn peers_info(&self)
+		-> Result<Vec<(PeerId, ExtendedPeerInfo<Block>)>, oneshot::Canceled>;
+
+	/// Call this when a block has been finalized. The sync layer may have some additional
+	/// requesting to perform.
+	fn on_block_finalized(&self, hash: Block::Hash, header: Block::Header);
 }

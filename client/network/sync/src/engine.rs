@@ -21,10 +21,12 @@ use crate::{
 	ChainSync, ChainSyncInterfaceHandle, ClientError,
 };
 
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use libp2p::PeerId;
 use lru::LruCache;
-use prometheus_endpoint::{register, Gauge, GaugeVec, Opts, PrometheusError, Registry, U64};
+use prometheus_endpoint::{
+	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
+};
 
 use codec::Encode;
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
@@ -41,7 +43,7 @@ use sc_network_common::{
 		BadPeer, ChainSync as ChainSyncT, ExtendedPeerInfo, PollBlockAnnounceValidation, SyncEvent,
 		SyncMode,
 	},
-	utils::LruHashSet,
+	utils::{interval, LruHashSet},
 };
 use sc_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver, TracingUnboundedSender};
 use sp_blockchain::HeaderMetadata;
@@ -55,9 +57,16 @@ use sp_runtime::{
 use std::{
 	collections::{HashMap, HashSet},
 	num::NonZeroUsize,
-	sync::Arc,
+	pin::Pin,
+	sync::{
+		atomic::{AtomicBool, AtomicUsize, Ordering},
+		Arc,
+	},
 	task::Poll,
 };
+
+/// Interval at which we perform time based maintenance
+const TICK_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1100);
 
 /// When light node connects to the full node and the full node is behind light node
 /// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
@@ -71,8 +80,8 @@ mod rep {
 	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when we are a light client and a peer is behind us.
 	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
-	/// We received a message that failed to decode.
-	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
+	// /// We received a message that failed to decode.
+	// pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
@@ -82,16 +91,17 @@ mod rep {
 }
 
 struct Metrics {
-	_peers: Gauge<U64>,
+	peers: Gauge<U64>,
 	queued_blocks: Gauge<U64>,
 	fork_targets: Gauge<U64>,
 	justifications: GaugeVec<U64>,
 }
 
 impl Metrics {
-	fn register(r: &Registry) -> Result<Self, PrometheusError> {
+	fn register(r: &Registry, major_syncing: Arc<AtomicBool>) -> Result<Self, PrometheusError> {
+		let _ = MajorSyncingGauge::register(r, major_syncing)?;
 		Ok(Self {
-			_peers: {
+			peers: {
 				let g = Gauge::new("substrate_sync_peers", "Number of peers we sync with")?;
 				register(g, r)?
 			},
@@ -118,6 +128,37 @@ impl Metrics {
 	}
 }
 
+/// The "major syncing" metric.
+#[derive(Clone)]
+pub struct MajorSyncingGauge(Arc<AtomicBool>);
+
+impl MajorSyncingGauge {
+	/// Registers the `MajorSyncGauge` metric whose value is
+	/// obtained from the given `AtomicBool`.
+	fn register(registry: &Registry, value: Arc<AtomicBool>) -> Result<(), PrometheusError> {
+		prometheus_endpoint::register(
+			SourcedGauge::new(
+				&Opts::new(
+					"substrate_sub_libp2p_is_major_syncing",
+					"Whether the node is performing a major sync or not.",
+				),
+				MajorSyncingGauge(value),
+			)?,
+			registry,
+		)?;
+
+		Ok(())
+	}
+}
+
+impl MetricSource for MajorSyncingGauge {
+	type N = u64;
+
+	fn collect(&self, mut set: impl FnMut(&[&str], Self::N)) {
+		set(&[], self.0.load(Ordering::Relaxed) as u64);
+	}
+}
+
 /// Peer information
 #[derive(Debug)]
 pub struct Peer<B: BlockT> {
@@ -135,6 +176,12 @@ pub struct SyncingEngine<B: BlockT, Client> {
 	/// Blockchain client.
 	client: Arc<Client>,
 
+	/// Number of peers we're connected to.
+	num_connected: Arc<AtomicUsize>,
+
+	/// Are we actively catching up with the chain?
+	is_major_syncing: Arc<AtomicBool>,
+
 	/// Network service.
 	network_service: service::network::NetworkServiceHandle,
 
@@ -149,6 +196,9 @@ pub struct SyncingEngine<B: BlockT, Client> {
 
 	/// Set of channels for other protocols that have subscribed to syncing events.
 	event_streams: Vec<TracingUnboundedSender<SyncEvent>>,
+
+	/// Interval at which we call `tick`.
+	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 
 	/// All connected peers. Contains both full and light node peers.
 	pub peers: HashMap<PeerId, Peer<B>>,
@@ -236,6 +286,8 @@ where
 
 		let block_announce_protocol_name = block_announce_config.notifications_protocol.clone();
 		let (tx, service_rx) = tracing_unbounded("mpsc_chain_sync");
+		let num_connected = Arc::new(AtomicUsize::new(0));
+		let is_major_syncing = Arc::new(AtomicBool::new(false));
 		let genesis_hash = client
 			.block_hash(0u32.into())
 			.ok()
@@ -251,6 +303,8 @@ where
 				peers: HashMap::new(),
 				block_announce_data_cache: LruCache::new(cache_capacity),
 				block_announce_protocol_name,
+				num_connected: num_connected.clone(),
+				is_major_syncing: is_major_syncing.clone(),
 				service_rx,
 				genesis_hash,
 				important_peers,
@@ -260,8 +314,9 @@ where
 				default_peers_set_num_full,
 				default_peers_set_num_light,
 				event_streams: Vec::new(),
+				tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 				metrics: if let Some(r) = metrics_registry {
-					match Metrics::register(r) {
+					match Metrics::register(r, is_major_syncing.clone()) {
 						Ok(metrics) => Some(metrics),
 						Err(err) => {
 							log::error!(target: "sync", "Failed to register metrics {err:?}");
@@ -272,7 +327,7 @@ where
 					None
 				},
 			},
-			ChainSyncInterfaceHandle::new(tx),
+			ChainSyncInterfaceHandle::new(tx, num_connected, is_major_syncing),
 			block_announce_config,
 		))
 	}
@@ -280,9 +335,8 @@ where
 	/// Report Prometheus metrics.
 	pub fn report_metrics(&self) {
 		if let Some(metrics) = &self.metrics {
-			// TODO(aaro): fix
-			// let n = u64::try_from(self.peers.len()).unwrap_or(std::u64::MAX);
-			// metrics.peers.set(n);
+			let n = u64::try_from(self.peers.len()).unwrap_or(std::u64::MAX);
+			metrics.peers.set(n);
 
 			let m = self.chain_sync.metrics();
 
@@ -317,7 +371,7 @@ where
 		}
 	}
 
-	// TODO: emit peernewbest event?
+	// TODO(aaro): emit peernewbest event?
 	/// Process the result of the block announce validation.
 	pub fn process_block_announce_validation_result(
 		&mut self,
@@ -482,14 +536,17 @@ where
 		)
 	}
 
-	// TODO(aaro): reorder match properly
 	pub fn poll(&mut self, cx: &mut std::task::Context) {
+		self.num_connected.store(self.peers.len(), Ordering::Relaxed);
+		self.is_major_syncing
+			.store(self.chain_sync.status().state.is_major_syncing(), Ordering::Relaxed);
+
+		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
+			self.report_metrics();
+		}
+
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {
 			match event {
-				ToServiceCommand::Status(tx) =>
-					if let Err(_) = tx.send(self.chain_sync.status()) {
-						log::warn!(target: "sync", "Failed to respond to `Status` query");
-					},
 				ToServiceCommand::SetSyncForkRequest(peers, hash, number) => {
 					self.chain_sync.set_sync_fork_request(peers, &hash, number);
 				},
@@ -525,6 +582,54 @@ where
 				ToServiceCommand::AnnounceBlock(hash, data) => self.announce_block(hash, data),
 				ToServiceCommand::NewBestBlockImported(hash, number) =>
 					self.new_best_block_imported(hash, number),
+				ToServiceCommand::Status(tx) =>
+					if let Err(_) = tx.send(self.chain_sync.status()) {
+						log::warn!(target: "sync", "Failed to respond to `Status` query");
+					},
+				ToServiceCommand::NumActivePeers(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.num_active_peers()) {
+						log::warn!(target: "sync", "response channel closed for `NumActivePeers`");
+					}
+				},
+				ToServiceCommand::SyncState(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.status()) {
+						log::warn!(target: "sync", "response channel closed for `SyncState`");
+					}
+				},
+				ToServiceCommand::BestSeenBlock(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.status().best_seen_block) {
+						log::warn!(target: "sync", "response channel closed for `BestSeenBlock`");
+					}
+				},
+				ToServiceCommand::NumSyncPeers(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.status().num_peers) {
+						log::warn!(target: "sync", "response channel closed for `NumSyncPeers`");
+					}
+				},
+				ToServiceCommand::NumQueuedBlocks(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.status().queued_blocks) {
+						log::warn!(target: "sync", "response channel closed for `NumQueuedBlocks`");
+					}
+				},
+				ToServiceCommand::NumDownloadedBlocks(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.num_downloaded_blocks()) {
+						log::warn!(target: "sync", "response channel closed for `NumDownloadedBlocks`");
+					}
+				},
+				ToServiceCommand::NumSyncRequests(tx) => {
+					if let Err(_) = tx.send(self.chain_sync.num_sync_requests()) {
+						log::warn!(target: "sync", "response channel closed for `NumSyncRequests`");
+					}
+				},
+				ToServiceCommand::PeersInfo(tx) => {
+					let peers_info =
+						self.peers.iter().map(|(id, peer)| (*id, peer.info.clone())).collect();
+					if let Err(_) = tx.send(peers_info) {
+						log::warn!(target: "sync", "response channel closed for `PeersInfo`");
+					}
+				},
+				ToServiceCommand::OnBlockFinalized(hash, header) =>
+					self.chain_sync.on_block_finalized(&hash, *header.number()),
 			}
 		}
 

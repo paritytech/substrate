@@ -209,6 +209,10 @@ impl TestNetFactory for BeefyTestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<BeefyPeer> {
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<BeefyPeer>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}

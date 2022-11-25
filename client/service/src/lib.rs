@@ -42,7 +42,9 @@ use jsonrpsee::{core::Error as JsonRpseeError, RpcModule};
 use log::{debug, error, warn};
 use sc_client_api::{blockchain::HeaderBackend, BlockBackend, BlockchainEvents, ProofProvider};
 use sc_network::PeerId;
-use sc_network_common::{config::MultiaddrWithPeerId, service::NetworkBlock};
+use sc_network_common::{
+	config::MultiaddrWithPeerId, service::NetworkBlock, sync::ChainSyncService,
+};
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
@@ -154,6 +156,7 @@ async fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
+	sync_service: Arc<dyn ChainSyncService<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {
@@ -190,7 +193,7 @@ async fn build_network_future<
 
 			// List of blocks that the client has finalized.
 			notification = finality_notification_stream.select_next_some() => {
-				network.on_block_finalized(notification.hash, notification.header);
+				sync_service.on_block_finalized(notification.hash, notification.header);
 			}
 
 			// Answer incoming RPC requests.

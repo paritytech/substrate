@@ -998,6 +998,7 @@ where
 		network_mut,
 		client,
 		system_rpc_rx,
+		Arc::new(chain_sync_service.clone()),
 		has_bootnodes,
 		config.announce_block,
 	);

@@ -69,7 +69,7 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::{ExtendedPeerInfo, SyncStatus},
+	sync::ExtendedPeerInfo,
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
@@ -85,7 +85,7 @@ use std::{
 	pin::Pin,
 	str,
 	sync::{
-		atomic::{AtomicBool, AtomicUsize, Ordering},
+		atomic::{AtomicUsize, Ordering},
 		Arc,
 	},
 	task::Poll,
@@ -107,8 +107,6 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	num_connected: Arc<AtomicUsize>,
 	/// The local external addresses.
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
-	/// Are we actively catching up with the chain?
-	is_major_syncing: Arc<AtomicBool>,
 	/// Local copy of the `PeerId` of the local node.
 	local_peer_id: PeerId,
 	/// The `KeyPair` that defines the `PeerId` of the local node.
@@ -229,7 +227,6 @@ where
 
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
-			params.chain.clone(),
 			&params.network_config,
 			params.block_announce_config,
 			params.engine,
@@ -266,7 +263,6 @@ where
 		})?;
 
 		let num_connected = Arc::new(AtomicUsize::new(0));
-		let is_major_syncing = Arc::new(AtomicBool::new(false));
 
 		// Build the swarm.
 		let (mut swarm, bandwidth): (Swarm<Behaviour<B, Client>>, _) = {
@@ -406,7 +402,6 @@ where
 				registry,
 				MetricSources {
 					bandwidth: bandwidth.clone(),
-					major_syncing: is_major_syncing.clone(),
 					connected_peers: num_connected.clone(),
 				},
 			)?),
@@ -436,7 +431,6 @@ where
 			bandwidth,
 			external_addresses: external_addresses.clone(),
 			num_connected: num_connected.clone(),
-			is_major_syncing: is_major_syncing.clone(),
 			peerset: peerset_handle,
 			local_peer_id,
 			local_identity,
@@ -452,7 +446,6 @@ where
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
-			is_major_syncing,
 			network_service: swarm,
 			service,
 			from_service,
@@ -527,14 +520,6 @@ where
 	/// manipulate the worker.
 	pub fn service(&self) -> &Arc<NetworkService<B, H>> {
 		&self.service
-	}
-
-	/// You must call this when a new block is finalized by the client.
-	pub fn on_block_finalized(&mut self, hash: B::Hash, header: B::Header) {
-		self.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.on_block_finalized(hash, &header);
 	}
 
 	/// Returns the local `PeerId`.
@@ -718,11 +703,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
 	fn is_major_syncing(&self) -> bool {
-		self.is_major_syncing.load(Ordering::Relaxed)
+		self.chain_sync_service.is_major_syncing()
 	}
 
 	fn is_offline(&self) -> bool {
-		self.num_connected.load(Ordering::Relaxed) == 0
+		self.chain_sync_service.is_offline()
 	}
 }
 
@@ -1244,8 +1229,6 @@ where
 	external_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
 	num_connected: Arc<AtomicUsize>,
-	/// Updated by the `NetworkWorker` and loaded by the `NetworkService`.
-	is_major_syncing: Arc<AtomicBool>,
 	/// The network service that can be extracted and shared through the codebase.
 	service: Arc<NetworkService<B, H>>,
 	/// The *actual* network.
@@ -1840,10 +1823,9 @@ where
 			};
 		}
 
+		// // Update the variables shared with the `NetworkService`.
 		let num_connected_peers =
 			this.network_service.behaviour_mut().user_protocol_mut().num_connected_peers();
-
-		// Update the variables shared with the `NetworkService`.
 		this.num_connected.store(num_connected_peers, Ordering::Relaxed);
 		{
 			let external_addresses =
@@ -1853,16 +1835,6 @@ where
 					.collect();
 			*this.external_addresses.lock() = external_addresses;
 		}
-
-		let is_major_syncing = this
-			.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.sync_state()
-			.state
-			.is_major_syncing();
-
-		this.is_major_syncing.store(is_major_syncing, Ordering::Relaxed);
 
 		if let Some(metrics) = this.metrics.as_ref() {
 			if let Some(buckets) = this.network_service.behaviour_mut().num_entries_per_kbucket() {

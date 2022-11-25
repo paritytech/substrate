@@ -29,7 +29,7 @@ use libp2p::{
 	},
 	Multiaddr, PeerId,
 };
-use log::{debug, error, log, trace, warn, Level};
+use log::{debug, error, trace, warn};
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
@@ -39,20 +39,17 @@ use sc_network_common::{
 	protocol::{role::Roles, ProtocolName},
 	sync::{
 		message::{BlockAnnounce, BlockAnnouncesHandshake},
-		BadPeer, ExtendedPeerInfo, SyncStatus,
+		ExtendedPeerInfo,
 	},
-	utils::{interval, LruHashSet},
+	utils::interval,
 };
-use sc_network_sync::engine::{Peer, SyncingEngine};
-use sp_arithmetic::traits::SaturatedConversion;
+use sc_network_sync::engine::SyncingEngine;
 use sp_blockchain::HeaderMetadata;
-use sp_runtime::traits::{Block as BlockT, CheckedSub, Header as HeaderT, NumberFor, Zero};
+use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use std::{
 	collections::{HashSet, VecDeque},
 	io, iter,
-	num::NonZeroUsize,
 	pin::Pin,
-	sync::Arc,
 	task::Poll,
 	time,
 };
@@ -62,12 +59,6 @@ mod notifications;
 pub mod message;
 
 pub use notifications::{NotificationsSink, NotifsHandlerError, Ready};
-
-/// Interval at which we perform time based maintenance
-const TICK_TIMEOUT: time::Duration = time::Duration::from_millis(1100);
-
-/// Maximum number of known block hashes to keep for a peer.
-const MAX_KNOWN_BLOCKS: usize = 1024; // ~32kb per peer + LruHashSet overhead
 
 /// Maximum size used for notifications in the block announce and transaction protocols.
 // Must be equal to `max(MAX_BLOCK_ANNOUNCE_SIZE, MAX_TRANSACTIONS_SIZE)`.
@@ -79,33 +70,16 @@ const HARDCODED_PEERSETS_SYNC: sc_peerset::SetId = sc_peerset::SetId::from(0);
 /// superior to this value corresponds to a user-defined protocol.
 const NUM_HARDCODED_PEERSETS: usize = 1;
 
-/// When light node connects to the full node and the full node is behind light node
-/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it not useful
-/// and disconnect to free connection slot.
-const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
-
 mod rep {
 	use sc_peerset::ReputationChange as Rep;
-	/// Reputation change when we are a light client and a peer is behind us.
-	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
 	/// We received a message that failed to decode.
 	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
-	/// Peer has different genesis.
-	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
-	/// Peer role does not match (e.g. light peer connecting to another light peer).
-	pub const BAD_ROLE: Rep = Rep::new_fatal("Unsupported role");
 }
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, Client> {
-	/// Interval at which we call `tick`.
-	tick_timeout: Pin<Box<dyn Stream<Item = ()> + Send>>,
 	/// Pending list of messages to return from `poll` as a priority.
 	pending_messages: VecDeque<CustomMessageOutcome<B>>,
-	/// Assigned roles.
-	roles: Roles,
-	genesis_hash: B::Hash,
-	chain: Arc<Client>,
 	/// Used to report reputation changes.
 	peerset_handle: sc_peerset::PeersetHandle,
 	/// Handles opening the unique substream and sending and receiving raw messages.
@@ -137,24 +111,10 @@ where
 	/// Create a new instance.
 	pub fn new(
 		roles: Roles,
-		chain: Arc<Client>,
 		network_config: &config::NetworkConfiguration,
 		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
 		engine: SyncingEngine<B, Client>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
-		let info = chain.info();
-
-		let default_peers_set_no_slot_peers = {
-			let mut no_slot_p: HashSet<PeerId> = network_config
-				.default_peers_set
-				.reserved_nodes
-				.iter()
-				.map(|reserved| reserved.peer_id)
-				.collect();
-			no_slot_p.shrink_to_fit();
-			no_slot_p
-		};
-
 		let mut known_addresses = Vec::new();
 
 		let (peerset, peerset_handle) = {
@@ -229,11 +189,7 @@ where
 		};
 
 		let protocol = Self {
-			tick_timeout: Box::pin(interval(TICK_TIMEOUT)),
 			pending_messages: VecDeque::new(),
-			roles,
-			chain,
-			genesis_hash: info.genesis_hash,
 			peerset_handle: peerset_handle.clone(),
 			behaviour,
 			notification_protocols: iter::once(block_announces_protocol.notifications_protocol)
@@ -280,11 +236,6 @@ where
 	/// Returns the number of peers we're connected to and that are being queried.
 	pub fn num_active_peers(&self) -> usize {
 		self.engine.chain_sync.num_active_peers()
-	}
-
-	/// Current global sync state.
-	pub fn sync_state(&self) -> SyncStatus<B> {
-		self.engine.chain_sync.status()
 	}
 
 	/// Target sync block number.
@@ -335,13 +286,6 @@ where
 				protocol
 			);
 		}
-	}
-
-	// TODO: implement block fianalized for chainsyncinterface
-	/// Call this when a block has been finalized. The sync layer may have some additional
-	/// requesting to perform.
-	pub fn on_block_finalized(&mut self, hash: B::Hash, header: &B::Header) {
-		self.engine.chain_sync.on_block_finalized(&hash, *header.number())
 	}
 
 	/// Set whether the syncing peers set is in reserved-only mode.
@@ -468,7 +412,7 @@ pub enum CustomMessageOutcome<B: BlockT> {
 	/// Messages have been received on one or more notifications protocols.
 	NotificationsReceived { remote: PeerId, messages: Vec<(ProtocolName, Bytes)> },
 	/// Peer has a reported a new head of chain.
-	PeerNewBest(PeerId, NumberFor<B>),
+	_PeerNewBest(PeerId, NumberFor<B>),
 	/// Now connected to a new peer for syncing purposes.
 	None,
 }
@@ -549,10 +493,6 @@ where
 
 		// poll syncing engine
 		self.engine.poll(cx);
-
-		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
-			self.engine.report_metrics();
-		}
 
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))

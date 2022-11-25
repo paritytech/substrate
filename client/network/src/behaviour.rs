@@ -314,7 +314,7 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 				BehaviourOut::NotificationStreamClosed { remote, protocol },
 			CustomMessageOutcome::NotificationsReceived { remote, messages } =>
 				BehaviourOut::NotificationsReceived { remote, messages },
-			CustomMessageOutcome::PeerNewBest(_peer_id, _number) => BehaviourOut::None,
+			CustomMessageOutcome::_PeerNewBest(_peer_id, _number) => BehaviourOut::None,
 			CustomMessageOutcome::None => BehaviourOut::None,
 		}
 	}
