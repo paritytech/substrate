@@ -20,6 +20,7 @@
 //! events that happen on the network like DHT get/put results received.
 
 use super::ProtocolName;
+use crate::protocol::role::ObservedRole;
 use bytes::Bytes;
 use libp2p::{core::PeerId, kad::record::Key};
 
@@ -96,27 +97,4 @@ pub enum Event {
 		/// Concerned protocol and associated message.
 		messages: Vec<(ProtocolName, Bytes)>,
 	},
-}
-
-/// Role that the peer sent to us during the handshake, with the addition of what our local node
-/// knows about that peer.
-///
-/// > **Note**: This enum is different from the `Role` enum. The `Role` enum indicates what a
-/// >			node says about itself, while `ObservedRole` is a `Role` merged with the
-/// >			information known locally about that node.
-#[derive(Debug, Clone)]
-pub enum ObservedRole {
-	/// Full node.
-	Full,
-	/// Light node.
-	Light,
-	/// Third-party authority.
-	Authority,
-}
-
-impl ObservedRole {
-	/// Returns `true` for `ObservedRole::Light`.
-	pub fn is_light(&self) -> bool {
-		matches!(self, Self::Light)
-	}
 }

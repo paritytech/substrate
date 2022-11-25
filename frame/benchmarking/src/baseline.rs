@@ -90,7 +90,7 @@ benchmarks! {
 	}
 
 	sr25519_verification {
-		let i in 1 .. 100;
+		let i in 0 .. 100;
 
 		let public = SignerId::generate_pair(None);
 

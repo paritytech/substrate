@@ -17,7 +17,7 @@
 
 //! Tests for the module.
 
-use super::{ConfigOp, Event, MaxUnlockingChunks, *};
+use super::{ConfigOp, Event, *};
 use frame_election_provider_support::{ElectionProvider, SortedListProvider, Support};
 use frame_support::{
 	assert_noop, assert_ok, assert_storage_noop, bounded_vec,
@@ -303,7 +303,11 @@ fn rewards_should_work() {
 		assert_eq!(mock::RewardRemainderUnbalanced::get(), maximum_payout - total_payout_0,);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPaid(0, total_payout_0, maximum_payout - total_payout_0)
+			Event::EraPaid {
+				era_index: 0,
+				validator_payout: total_payout_0,
+				remainder: maximum_payout - total_payout_0
+			}
 		);
 		mock::make_all_reward_payment(0);
 
@@ -341,7 +345,11 @@ fn rewards_should_work() {
 		);
 		assert_eq!(
 			*mock::staking_events().last().unwrap(),
-			Event::EraPaid(1, total_payout_1, maximum_payout - total_payout_1)
+			Event::EraPaid {
+				era_index: 1,
+				validator_payout: total_payout_1,
+				remainder: maximum_payout - total_payout_1
+			}
 		);
 		mock::make_all_reward_payment(1);
 
@@ -1346,7 +1354,8 @@ fn too_many_unbond_calls_should_not_work() {
 	ExtBuilder::default().build_and_execute(|| {
 		let mut current_era = 0;
 		// locked at era MaxUnlockingChunks - 1 until 3
-		for i in 0..MaxUnlockingChunks::get() - 1 {
+
+		for i in 0..<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() - 1 {
 			// There is only 1 chunk per era, so we need to be in a new era to create a chunk.
 			current_era = i as u32;
 			mock::start_active_era(current_era);
@@ -1361,7 +1370,7 @@ fn too_many_unbond_calls_should_not_work() {
 		assert_ok!(Staking::unbond(RuntimeOrigin::signed(10), 1));
 		assert_eq!(
 			Staking::ledger(&10).unwrap().unlocking.len(),
-			MaxUnlockingChunks::get() as usize
+			<<Test as Config>::MaxUnlockingChunks as Get<u32>>::get() as usize
 		);
 		// can't do more.
 		assert_noop!(Staking::unbond(RuntimeOrigin::signed(10), 1), Error::<Test>::NoMoreChunks);
@@ -1645,7 +1654,7 @@ fn rebond_emits_right_value_in_event() {
 			})
 		);
 		// Event emitted should be correct
-		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 100));
+		assert_eq!(*staking_events().last().unwrap(), Event::Bonded { stash: 11, amount: 100 });
 
 		// Re-bond way more than available
 		Staking::rebond(RuntimeOrigin::signed(10), 100_000).unwrap();
@@ -1660,7 +1669,7 @@ fn rebond_emits_right_value_in_event() {
 			})
 		);
 		// Event emitted should be correct, only 800
-		assert_eq!(*staking_events().last().unwrap(), Event::Bonded(11, 800));
+		assert_eq!(*staking_events().last().unwrap(), Event::Bonded { stash: 11, amount: 800 });
 	});
 }
 
@@ -2870,9 +2879,9 @@ fn deferred_slashes_are_deferred() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(3, 11075, 33225),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 }
 			]
 		);
 	})
@@ -2901,9 +2910,9 @@ fn retroactive_deferred_slashes_two_eras_before() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(3, 7100, 21300),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				Event::EraPaid { era_index: 3, validator_payout: 7100, remainder: 21300 },
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 },
 			]
 		);
 	})
@@ -2934,7 +2943,10 @@ fn retroactive_deferred_slashes_one_before() {
 		mock::start_active_era(4);
 		assert_eq!(
 			staking_events_since_last_call(),
-			vec![Event::StakersElected, Event::EraPaid(3, 11075, 33225)]
+			vec![
+				Event::StakersElected,
+				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 }
+			]
 		);
 
 		assert_eq!(Staking::ledger(10).unwrap().total, 1000);
@@ -2944,9 +2956,9 @@ fn retroactive_deferred_slashes_one_before() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(4, 11075, 33225),
-				Event::Slashed(11, 100),
-				Event::Slashed(101, 12)
+				Event::EraPaid { era_index: 4, validator_payout: 11075, remainder: 33225 },
+				Event::Slashed { staker: 11, amount: 100 },
+				Event::Slashed { staker: 101, amount: 12 }
 			]
 		);
 
@@ -3090,9 +3102,9 @@ fn remove_deferred() {
 			staking_events_since_last_call(),
 			vec![
 				Event::StakersElected,
-				Event::EraPaid(3, 11075, 33225),
-				Event::Slashed(11, 50),
-				Event::Slashed(101, 7)
+				Event::EraPaid { era_index: 3, validator_payout: 11075, remainder: 33225 },
+				Event::Slashed { staker: 11, amount: 50 },
+				Event::Slashed { staker: 101, amount: 7 }
 			]
 		);
 
@@ -4057,7 +4069,7 @@ fn offences_weight_calculated_correctly() {
 				&one_offender,
 				&[Perbill::from_percent(50)],
 				0,
-				DisableStrategy::WhenSlashed
+				DisableStrategy::WhenSlashed{}
 			),
 			one_offence_unapplied_weight
 		);
@@ -4955,10 +4967,10 @@ fn min_commission_works() {
 		// event emitted should be correct
 		assert_eq!(
 			*staking_events().last().unwrap(),
-			Event::ValidatorPrefsSet(
-				11,
-				ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
-			)
+			Event::ValidatorPrefsSet {
+				stash: 11,
+				prefs: ValidatorPrefs { commission: Perbill::from_percent(5), blocked: false }
+			}
 		);
 
 		assert_ok!(Staking::set_staking_configs(
@@ -5483,7 +5495,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 }
 
 #[test]
-fn reducing_history_depth_without_migration() {
+fn reducing_history_depth_abrupt() {
 	// Verifies initial conditions of mock
 	ExtBuilder::default().nominate(false).build_and_execute(|| {
 		let original_history_depth = HistoryDepth::get();
@@ -5559,4 +5571,110 @@ fn reducing_history_depth_without_migration() {
 		// fix the corrupted state for post conditions check
 		HistoryDepth::set(original_history_depth);
 	});
+}
+
+#[test]
+fn reducing_max_unlocking_chunks_abrupt() {
+	// Concern is on validators only
+	// By Default 11, 10 are stash and ctrl and 21,20
+	ExtBuilder::default().build_and_execute(|| {
+		// given a staker at era=10 and MaxUnlockChunks set to 2
+		MaxUnlockingChunks::set(2);
+		start_active_era(10);
+		assert_ok!(Staking::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Staked));
+		assert!(matches!(Staking::ledger(4), Some(_)));
+
+		// when staker unbonds
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 20));
+
+		// then an unlocking chunk is added at `current_era + bonding_duration`
+		// => 10 + 3 = 13
+		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
+			bounded_vec![UnlockChunk { value: 20 as Balance, era: 13 as EraIndex }];
+		assert!(matches!(Staking::ledger(4),
+			Some(StakingLedger {
+				unlocking,
+				..
+			}) if unlocking==expected_unlocking));
+
+		// when staker unbonds at next era
+		start_active_era(11);
+		assert_ok!(Staking::unbond(RuntimeOrigin::signed(4), 50));
+		// then another unlock chunk is added
+		let expected_unlocking: BoundedVec<UnlockChunk<Balance>, MaxUnlockingChunks> =
+			bounded_vec![UnlockChunk { value: 20, era: 13 }, UnlockChunk { value: 50, era: 14 }];
+		assert!(matches!(Staking::ledger(4),
+			Some(StakingLedger {
+				unlocking,
+				..
+			}) if unlocking==expected_unlocking));
+
+		// when staker unbonds further
+		start_active_era(12);
+		// then further unbonding not possible
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(4), 20), Error::<Test>::NoMoreChunks);
+
+		// when max unlocking chunks is reduced abruptly to a low value
+		MaxUnlockingChunks::set(1);
+		// then unbond, rebond ops are blocked with ledger in corrupt state
+		assert_noop!(Staking::unbond(RuntimeOrigin::signed(4), 20), Error::<Test>::NotController);
+		assert_noop!(Staking::rebond(RuntimeOrigin::signed(4), 100), Error::<Test>::NotController);
+
+		// reset the ledger corruption
+		MaxUnlockingChunks::set(2);
+	})
+}
+
+#[test]
+fn cannot_set_unsupported_validator_count() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		// set validator count works
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 30));
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 50));
+		// setting validator count above 100 does not work
+		assert_noop!(
+			Staking::set_validator_count(RuntimeOrigin::root(), 51),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}
+
+#[test]
+fn increase_validator_count_errors() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 40));
+
+		// increase works
+		assert_ok!(Staking::increase_validator_count(RuntimeOrigin::root(), 6));
+		assert_eq!(ValidatorCount::<Test>::get(), 46);
+
+		// errors
+		assert_noop!(
+			Staking::increase_validator_count(RuntimeOrigin::root(), 5),
+			Error::<Test>::TooManyValidators,
+		);
+	})
+}
+
+#[test]
+fn scale_validator_count_errors() {
+	ExtBuilder::default().build_and_execute(|| {
+		MaxWinners::set(50);
+		assert_ok!(Staking::set_validator_count(RuntimeOrigin::root(), 20));
+
+		// scale value works
+		assert_ok!(Staking::scale_validator_count(
+			RuntimeOrigin::root(),
+			Percent::from_percent(200)
+		));
+		assert_eq!(ValidatorCount::<Test>::get(), 40);
+
+		// errors
+		assert_noop!(
+			Staking::scale_validator_count(RuntimeOrigin::root(), Percent::from_percent(126)),
+			Error::<Test>::TooManyValidators,
+		);
+	})
 }

@@ -61,6 +61,8 @@ pub struct CallVariantDef {
 	pub call_index: u8,
 	/// Docs, used for metadata.
 	pub docs: Vec<syn::Lit>,
+	/// Attributes annotated at the top of the dispatchable function.
+	pub attrs: Vec<syn::Attribute>,
 }
 
 /// Attributes for functions in call impl block.
@@ -142,6 +144,7 @@ impl CallDef {
 		attr_span: proc_macro2::Span,
 		index: usize,
 		item: &mut syn::Item,
+		dev_mode: bool,
 	) -> syn::Result<Self> {
 		let item_impl = if let syn::Item::Impl(item) = item {
 			item
@@ -210,6 +213,14 @@ impl CallDef {
 							}
 						},
 					);
+
+				if weight_attrs.is_empty() && dev_mode {
+					// inject a default O(1) weight when dev mode is enabled and no weight has
+					// been specified on the call
+					let empty_weight: syn::Expr = syn::parse(quote::quote!(0).into())
+						.expect("we are parsing a quoted string; qed");
+					weight_attrs.push(FunctionAttr::Weight(empty_weight));
+				}
 
 				if weight_attrs.len() != 1 {
 					let msg = if weight_attrs.is_empty() {
@@ -287,6 +298,7 @@ impl CallDef {
 					call_index: final_index,
 					args,
 					docs,
+					attrs: method.attrs.clone(),
 				});
 			} else {
 				let msg = "Invalid pallet::call, only method accepted";

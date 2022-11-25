@@ -395,9 +395,6 @@ fn common_config(semantics: &Semantics) -> std::result::Result<wasmtime::Config,
 
 				// This determines how many instances of the module can be
 				// instantiated in parallel from the same `Module`.
-				//
-				// This includes nested instances spawned with `sp_tasks::spawn`
-				// from *within* the runtime.
 				count: 32,
 			},
 		});
@@ -544,6 +541,7 @@ pub struct Semantics {
 	pub max_memory_size: Option<usize>,
 }
 
+#[derive(Clone)]
 pub struct Config {
 	/// The WebAssembly standard requires all imports of an instantiated module to be resolved,
 	/// otherwise, the instantiation fails. If this option is set to `true`, then this behavior is

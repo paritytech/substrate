@@ -30,15 +30,15 @@ sp-block-builder = { path = "../../../primitives/block-builder", default-feature
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/inherents" }
 node-primitives = { version = "2.0.0", default-features = false, path = "../primitives" }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/offchain" }
-sp-core = { version = "6.0.0", default-features = false, path = "../../../primitives/core" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../../primitives/std" }
+sp-core = { version = "7.0.0", default-features = false, path = "../../../primitives/core" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/staking" }
 sp-session = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/session" }
 sp-transaction-pool = { version = "4.0.0-dev", default-features = false, path = "../../../primitives/transaction-pool" }
 sp-version = { version = "5.0.0", default-features = false, path = "../../../primitives/version" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../../primitives/io" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../../primitives/io" }
 sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../../primitives/sandbox" }
 
 # frame dependencies
@@ -61,8 +61,7 @@ pallet-bounties = { version = "4.0.0-dev", default-features = false, path = "../
 pallet-child-bounties = { version = "4.0.0-dev", default-features = false, path = "../../../frame/child-bounties" }
 pallet-collective = { version = "4.0.0-dev", default-features = false, path = "../../../frame/collective" }
 pallet-contracts = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts" }
-pallet-contracts-primitives = { version = "6.0.0", default-features = false, path = "../../../frame/contracts/common/" }
-pallet-contracts-rpc-runtime-api = { version = "4.0.0-dev", default-features = false, path = "../../../frame/contracts/rpc/runtime-api/" }
+pallet-contracts-primitives = { version = "7.0.0", default-features = false, path = "../../../frame/contracts/primitives/" }
 pallet-conviction-voting = { version = "4.0.0-dev", default-features = false, path = "../../../frame/conviction-voting" }
 pallet-democracy = { version = "4.0.0-dev", default-features = false, path = "../../../frame/democracy" }
 pallet-election-provider-multi-phase = { version = "4.0.0-dev", default-features = false, path = "../../../frame/election-provider-multi-phase" }
@@ -90,6 +89,7 @@ pallet-ranked-collective = { version = "4.0.0-dev", default-features = false, pa
 pallet-recovery = { version = "4.0.0-dev", default-features = false, path = "../../../frame/recovery" }
 pallet-referenda = { version = "4.0.0-dev", default-features = false, path = "../../../frame/referenda" }
 pallet-remark = { version = "4.0.0-dev", default-features = false, path = "../../../frame/remark" }
+pallet-root-testing = { version = "1.0.0-dev", default-features = false, path = "../../../frame/root-testing" }
 pallet-session = { version = "4.0.0-dev", features = [ "historical" ], path = "../../../frame/session", default-features = false }
 pallet-session-benchmarking = { version = "4.0.0-dev", path = "../../../frame/session/benchmarking", default-features = false, optional = true }
 pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../../../frame/staking" }
@@ -139,7 +139,6 @@ std = [
 	"pallet-collective/std",
 	"pallet-contracts/std",
 	"pallet-contracts-primitives/std",
-	"pallet-contracts-rpc-runtime-api/std",
 	"pallet-conviction-voting/std",
 	"pallet-democracy/std",
 	"pallet-elections-phragmen/std",
@@ -194,6 +193,7 @@ std = [
 	"pallet-ranked-collective/std",
 	"pallet-referenda/std",
 	"pallet-remark/std",
+	"pallet-root-testing/std",
 	"pallet-recovery/std",
 	"pallet-uniques/std",
 	"pallet-vesting/std",
@@ -256,7 +256,7 @@ runtime-benchmarks = [
 	"frame-system-benchmarking/runtime-benchmarks",
 ]
 try-runtime = [
-	"frame-try-runtime",
+	"frame-try-runtime/try-runtime",
 	"frame-executive/try-runtime",
 	"frame-system/try-runtime",
 	"frame-support/try-runtime",
@@ -294,6 +294,7 @@ try-runtime = [
 	"pallet-recovery/try-runtime",
 	"pallet-referenda/try-runtime",
 	"pallet-remark/try-runtime",
+	"pallet-root-testing/try-runtime",
 	"pallet-session/try-runtime",
 	"pallet-staking/try-runtime",
 	"pallet-state-trie-migration/try-runtime",

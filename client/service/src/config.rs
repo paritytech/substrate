@@ -20,17 +20,13 @@
 
 pub use sc_client_api::execution_extensions::{ExecutionStrategies, ExecutionStrategy};
 pub use sc_client_db::{BlocksPruning, Database, DatabaseSource, PruningMode};
-pub use sc_executor::WasmExecutionMethod;
-#[cfg(feature = "wasmtime")]
-pub use sc_executor::WasmtimeInstantiationStrategy;
+pub use sc_executor::{WasmExecutionMethod, WasmtimeInstantiationStrategy};
 pub use sc_network::{
-	config::{
-		NetworkConfiguration, NodeKeyConfig, NonDefaultSetConfig, Role, SetConfig, TransportConfig,
-	},
+	config::{NetworkConfiguration, NodeKeyConfig, Role},
 	Multiaddr,
 };
 pub use sc_network_common::{
-	config::{MultiaddrWithPeerId, ProtocolId},
+	config::{MultiaddrWithPeerId, NonDefaultSetConfig, ProtocolId, SetConfig, TransportConfig},
 	request_responses::{
 		IncomingRequest, OutgoingResponse, ProtocolConfig as RequestResponseConfig,
 	},
