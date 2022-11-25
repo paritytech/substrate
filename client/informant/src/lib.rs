@@ -22,7 +22,6 @@ use ansi_term::Colour;
 use futures::prelude::*;
 use futures_timer::Delay;
 use log::{debug, info, trace};
-use parity_util_mem::MallocSizeOf;
 use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network_common::service::NetworkStatusProvider;
 use sc_transaction_pool_api::TransactionPool;
@@ -56,13 +55,13 @@ impl Default for OutputFormat {
 pub async fn build<B: BlockT, C, N, P>(
 	client: Arc<C>,
 	network: N,
-	pool: Arc<P>,
+	_pool: Arc<P>,
 	format: OutputFormat,
 ) where
 	N: NetworkStatusProvider<B>,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
-	P: TransactionPool + MallocSizeOf,
+	P: TransactionPool,
 {
 	let mut display = display::InformantDisplay::new(format.clone());
 
@@ -83,11 +82,6 @@ pub async fn build<B: BlockT, C, N, P>(
 					"Usage statistics not displayed as backend does not provide it",
 				)
 			}
-			trace!(
-				target: "usage",
-				"Subsystems memory [txpool: {} kB]",
-				parity_util_mem::malloc_size(&*pool) / 1024,
-			);
 			display.display(&info, net_status);
 			future::ready(())
 		});

@@ -20,17 +20,19 @@
 //! Maintains trees of block overlays and allows discarding trees/roots
 //! The overlays are added in `insert` and removed in `canonicalize`.
 
-use super::{to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb, StateDbError};
+use super::{
+	to_meta_key, ChangeSet, CommitSet, DBValue, Error, Hash, MetaDb,
+	StateDbError,
+};
 use codec::{Decode, Encode};
 use log::trace;
-use std::collections::{hash_map::Entry, HashMap, VecDeque};
+use std::{collections::{hash_map::Entry, HashMap, VecDeque}};
 
 const NON_CANONICAL_JOURNAL: &[u8] = b"noncanonical_journal";
 pub(crate) const LAST_CANONICAL: &[u8] = b"last_canonical";
 const MAX_BLOCKS_PER_LEVEL: u64 = 32;
 
 /// See module documentation.
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	last_canonicalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<OverlayLevel<BlockHash, Key>>,
@@ -41,7 +43,6 @@ pub struct NonCanonicalOverlay<BlockHash: Hash, Key: Hash> {
 	pinned_insertions: HashMap<BlockHash, (Vec<Key>, u32)>,
 }
 
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 #[cfg_attr(test, derive(PartialEq, Debug))]
 struct OverlayLevel<BlockHash: Hash, Key: Hash> {
 	blocks: Vec<BlockOverlay<BlockHash, Key>>,
@@ -81,7 +82,6 @@ fn to_journal_key(block: u64, index: u64) -> Vec<u8> {
 }
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
-#[derive(parity_util_mem_derive::MallocSizeOf)]
 struct BlockOverlay<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	journal_index: u64,

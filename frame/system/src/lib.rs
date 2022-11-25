@@ -72,7 +72,7 @@ use sp_runtime::{
 	generic,
 	traits::{
 		self, AtLeast32Bit, AtLeast32BitUnsigned, BadOrigin, BlockNumberProvider, Bounded,
-		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay, MaybeMallocSizeOf,
+		CheckEqual, Dispatchable, Hash, Lookup, LookupError, MaybeDisplay,
 		MaybeSerializeDeserialize, Member, One, Saturating, SimpleBitOps, StaticLookup, Zero,
 	},
 	DispatchError, RuntimeDebug,
@@ -250,7 +250,6 @@ pub mod pallet {
 			+ Copy
 			+ sp_std::hash::Hash
 			+ sp_std::str::FromStr
-			+ MaybeMallocSizeOf
 			+ MaxEncodedLen
 			+ TypeInfo;
 
@@ -268,7 +267,6 @@ pub mod pallet {
 			+ sp_std::hash::Hash
 			+ AsRef<[u8]>
 			+ AsMut<[u8]>
-			+ MaybeMallocSizeOf
 			+ MaxEncodedLen;
 
 		/// The hashing system (algorithm) being used in the runtime (e.g. Blake2).
