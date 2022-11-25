@@ -16,7 +16,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive"] }
 pallet-dex = { version = "4.0.0-dev", default-features = false, path = "../../../dex" }
 sp-api = { version = "4.0.0-dev", default-features = false, path = "../../../../primitives/api" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", default-features = false, path = "../../../../primitives/runtime" }
 
 [features]
 default = ["std"]
