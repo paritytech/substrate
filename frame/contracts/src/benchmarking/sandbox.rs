@@ -19,22 +19,20 @@
 /// ! sandbox to execute the wasm code. This is because we do not need the full
 /// ! environment that provides the seal interface as imported functions.
 use super::{code::WasmModule, Config};
+use crate::wasm::{Environment, PrefabWasmModule};
 use sp_core::crypto::UncheckedFrom;
-use sp_sandbox::{
-	default_executor::{EnvironmentDefinitionBuilder, Instance, Memory},
-	SandboxEnvironmentBuilder, SandboxInstance,
-};
+use wasmi::{errors::LinkerError, Func, Linker, StackLimits, Store};
 
-/// Minimal execution environment without any exported functions.
+/// Minimal execution environment without any imported functions.
 pub struct Sandbox {
-	instance: Instance<()>,
-	_memory: Option<Memory>,
+	entry_point: Func,
+	store: Store<()>,
 }
 
 impl Sandbox {
 	/// Invoke the `call` function of a contract code and panic on any execution error.
 	pub fn invoke(&mut self) {
-		self.instance.invoke("call", &[], &mut ()).unwrap();
+		self.entry_point.call(&mut self.store, &[], &mut []).unwrap();
 	}
 }
 
@@ -46,10 +44,27 @@ where
 	/// Creates an instance from the supplied module and supplies as much memory
 	/// to the instance as the module declares as imported.
 	fn from(module: &WasmModule<T>) -> Self {
-		let mut env_builder = EnvironmentDefinitionBuilder::new();
-		let memory = module.add_memory(&mut env_builder);
-		let instance = Instance::new(&module.code, &env_builder, &mut ())
-			.expect("Failed to create benchmarking Sandbox instance");
-		Self { instance, _memory: memory }
+		let memory = module
+			.memory
+			.as_ref()
+			.map(|mem| (mem.min_pages, mem.max_pages))
+			.unwrap_or((0, 0));
+		let (store, _memory, instance) = PrefabWasmModule::<T>::instantiate::<EmptyEnv, _>(
+			&module.code,
+			(),
+			memory,
+			StackLimits::default(),
+		)
+		.expect("Failed to create benchmarking Sandbox instance");
+		let entry_point = instance.get_export(&store, "call").unwrap().into_func().unwrap();
+		Self { entry_point, store }
+	}
+}
+
+struct EmptyEnv;
+
+impl Environment<()> for EmptyEnv {
+	fn define(_store: &mut Store<()>, _linker: &mut Linker<()>) -> Result<(), LinkerError> {
+		Ok(())
 	}
 }
