@@ -32,7 +32,7 @@ use sp_std::prelude::Vec;
 pub mod utils;
 
 /// Prefix for elements stored in the Off-chain DB via Indexing API.
-pub const INDEXING_PREFIX: &str = "mmr";
+pub const INDEXING_PREFIX: &'static [u8] = b"mmr";
 
 /// A type to describe node position in the MMR (node index).
 pub type NodeIndex = u64;
