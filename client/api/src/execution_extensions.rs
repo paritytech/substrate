@@ -110,7 +110,7 @@ impl<Block: BlockT, T: ExtensionsFactory<Block>> ExtensionsFactory<Block> for Ve
 	}
 }
 
-/// An [`ExtensionFactory`] that registers an [`Extension`] before a certain block.
+/// An [`ExtensionsFactory`] that registers an [`Extension`] before a certain block.
 pub struct ExtensionBeforeBlock<Block: BlockT, Ext> {
 	before: NumberFor<Block>,
 	_marker: PhantomData<fn(Ext) -> Ext>,

@@ -46,7 +46,7 @@ pub trait CallExecutor<B: BlockT>: RuntimeVersionOf {
 	/// The backend used by the node.
 	type Backend: crate::backend::Backend<B>;
 
-	/// Returns the [`ExtensionExtensions`].
+	/// Returns the [`ExecutionExtensions`].
 	fn execution_extensions(&self) -> &ExecutionExtensions<B>;
 
 	/// Execute a call to a contract on top of state in a block of given hash.
