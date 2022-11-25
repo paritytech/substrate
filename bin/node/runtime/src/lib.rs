@@ -1452,6 +1452,7 @@ impl pallet_assets::Config<Instance1> for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 impl pallet_assets::Config<Instance2> for Runtime {

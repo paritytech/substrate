@@ -109,34 +109,27 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<G: RuntimeGenesis, E> BuildStorage for ChainSpec<G, E> {
-	fn build_storage(&self) -> Result<Storage, String> {
+	fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
 		match self.genesis.resolve()? {
-			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => Ok(Storage {
-				top: map.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-				children_default: children_map
-					.into_iter()
-					.map(|(storage_key, child_content)| {
-						let child_info = ChildInfo::new_default(storage_key.0.as_slice());
-						(
-							storage_key.0,
-							StorageChild {
-								data: child_content.into_iter().map(|(k, v)| (k.0, v.0)).collect(),
-								child_info,
-							},
-						)
-					})
-					.collect(),
-			}),
+			Genesis::Runtime(gc) => gc.assimilate_storage(storage),
+			Genesis::Raw(RawGenesis { top: map, children_default: children_map }) => {
+				storage.top.extend(map.into_iter().map(|(k, v)| (k.0, v.0)));
+				children_map.into_iter().for_each(|(k, v)| {
+					let child_info = ChildInfo::new_default(k.0.as_slice());
+					storage
+						.children_default
+						.entry(k.0)
+						.or_insert_with(|| StorageChild { data: Default::default(), child_info })
+						.data
+						.extend(v.into_iter().map(|(k, v)| (k.0, v.0)));
+				});
+				Ok(())
+			},
 			// The `StateRootHash` variant exists as a way to keep note that other clients support
 			// it, but Substrate itself isn't capable of loading chain specs with just a hash at the
 			// moment.
 			Genesis::StateRootHash(_) => Err("Genesis storage in hash format not supported".into()),
 		}
-	}
-
-	fn assimilate_storage(&self, _: &mut Storage) -> Result<(), String> {
-		Err("`assimilate_storage` not implemented for `ChainSpec`.".into())
 	}
 }
 

@@ -21,7 +21,7 @@ pallet-staking = { version = "4.0.0-dev", default-features = false, path = "../.
 
 frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
 frame-system = { version = "4.0.0-dev", default-features = false, path = "../system" }
-sp-runtime = { version = "6.0.0", default-features = false, path = "../../primitives/runtime" }
+sp-runtime = { version = "7.0.0", path = "../../primitives/runtime" }
 sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
 [dev-dependencies]
@@ -29,9 +29,9 @@ pallet-balances = { version = "4.0.0-dev", path = "../balances" }
 pallet-timestamp = { version = "4.0.0-dev", path = "../timestamp" }
 pallet-staking-reward-curve = { version = "4.0.0-dev", path = "../staking/reward-curve" }
 
-sp-core = { version = "6.0.0", path = "../../primitives/core" }
-sp-io = { version = "6.0.0", default-features = false, path = "../../primitives/io" }
-sp-std = { version = "4.0.0", default-features = false, path = "../../primitives/std" }
+sp-core = { version = "7.0.0", path = "../../primitives/core" }
+sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
+sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
 
 frame-election-provider-support = { version = "4.0.0-dev", path = "../election-provider-support" }
 
