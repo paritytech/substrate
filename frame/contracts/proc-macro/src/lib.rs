@@ -29,29 +29,27 @@ use alloc::{
 	string::{String, ToString},
 	vec::Vec,
 };
-use proc_macro2::TokenStream;
+use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Ident};
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, FnArg, Ident};
 
 /// This derives `Debug` for a struct where each field must be of some numeric type.
 /// It interprets each field as its represents some weight and formats it as times so that
 /// it is readable by humans.
 #[proc_macro_derive(WeightDebug)]
-pub fn derive_weight_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_weight_debug(input: TokenStream) -> TokenStream {
 	derive_debug(input, format_weight)
 }
 
 /// This is basically identical to the std libs Debug derive but without adding any
 /// bounds to existing generics.
 #[proc_macro_derive(ScheduleDebug)]
-pub fn derive_schedule_debug(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn derive_schedule_debug(input: TokenStream) -> TokenStream {
 	derive_debug(input, format_default)
 }
 
-fn derive_debug(
-	input: proc_macro::TokenStream,
-	fmt: impl Fn(&Ident) -> TokenStream,
-) -> proc_macro::TokenStream {
+fn derive_debug(input: TokenStream, fmt: impl Fn(&Ident) -> TokenStream2) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = &input.ident;
 	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -72,7 +70,7 @@ fn derive_debug(
 	let fields = {
 		drop(fmt);
 		drop(data);
-		TokenStream::new()
+		TokenStream2::new()
 	};
 
 	let tokens = quote! {
@@ -91,7 +89,7 @@ fn derive_debug(
 
 /// This is only used then the `full` feature is activated.
 #[cfg(feature = "full")]
-fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -> TokenStream {
+fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream2) -> TokenStream2 {
 	use syn::Fields;
 
 	match &data.fields {
@@ -119,7 +117,7 @@ fn iterate_fields(data: &syn::DataStruct, fmt: impl Fn(&Ident) -> TokenStream) -
 	}
 }
 
-fn format_weight(field: &Ident) -> TokenStream {
+fn format_weight(field: &Ident) -> TokenStream2 {
 	quote_spanned! { field.span() =>
 		&if self.#field > 1_000_000_000 {
 			format!(
@@ -142,7 +140,7 @@ fn format_weight(field: &Ident) -> TokenStream {
 	}
 }
 
-fn format_default(field: &Ident) -> TokenStream {
+fn format_default(field: &Ident) -> TokenStream2 {
 	quote_spanned! { field.span() =>
 		&self.#field
 	}
@@ -167,8 +165,20 @@ enum HostFnReturn {
 	ReturnCode,
 }
 
+impl HostFnReturn {
+	fn to_wasm_sig(&self) -> TokenStream2 {
+		let ok = match self {
+			Self::Unit => quote! { () },
+			Self::U32 | Self::ReturnCode => quote! { ::core::primitive::u32 },
+		};
+		quote! {
+			::core::result::Result<#ok, ::wasmi::core::Trap>
+		}
+	}
+}
+
 impl ToTokens for HostFn {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
+	fn to_tokens(&self, tokens: &mut TokenStream2) {
 		self.item.to_tokens(tokens);
 	}
 }
@@ -179,6 +189,8 @@ impl HostFn {
 			let msg = format!("Invalid host function definition. {}", msg);
 			syn::Error::new(span, msg)
 		};
+
+		// process attributes
 		let msg = "only #[version(<u8>)] or #[unstable] attribute is allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
@@ -201,16 +213,31 @@ impl HostFn {
 			_ => Err(err(span, msg)),
 		}?;
 
+		// process arguments: The first and second arg are treated differently (ctx, memory)
+		// they must exist and be `ctx: _` and `memory: _`.
+		let msg = "Every function must start with two inferred parameters: ctx: _ and memory: _";
+		let special_args = item
+			.sig
+			.inputs
+			.iter()
+			.take(2)
+			.enumerate()
+			.map(|(i, arg)| is_valid_special_arg(i, arg))
+			.fold(0u32, |acc, valid| if valid { acc + 1 } else { acc });
+
+		if special_args != 2 {
+			return Err(err(span, msg))
+		}
+
+		// process return type
 		let msg = r#"Should return one of the following:
 				- Result<(), TrapReason>,
 				- Result<ReturnCode, TrapReason>,
 				- Result<u32, TrapReason>"#;
-
 		let ret_ty = match item.clone().sig.output {
 			syn::ReturnType::Type(_, ty) => Ok(ty.clone()),
 			_ => Err(err(span, &msg)),
 		}?;
-
 		match *ret_ty {
 			syn::Type::Path(tp) => {
 				let result = &tp.path.segments.last().ok_or(err(span, &msg))?;
@@ -265,38 +292,19 @@ impl HostFn {
 							},
 							_ => Err(err(ok_ty.span(), &msg)),
 						}?;
-
 						let returns = match ok_ty_str.as_str() {
 							"()" => Ok(HostFnReturn::Unit),
 							"u32" => Ok(HostFnReturn::U32),
 							"ReturnCode" => Ok(HostFnReturn::ReturnCode),
 							_ => Err(err(arg1.span(), &msg)),
 						}?;
+
 						Ok(Self { item, module, name, returns })
 					},
 					_ => Err(err(span, &msg)),
 				}
 			},
 			_ => Err(err(span, &msg)),
-		}
-	}
-
-	fn to_wasm_sig(&self) -> TokenStream {
-		let args = self.item.sig.inputs.iter().skip(1).filter_map(|a| match a {
-			syn::FnArg::Typed(pt) => Some(&pt.ty),
-			_ => None,
-		});
-		let returns = match &self.returns {
-			HostFnReturn::U32 => quote! { vec![ <u32>::VALUE_TYPE ] },
-			HostFnReturn::ReturnCode => quote! { vec![ <ReturnCode>::VALUE_TYPE ] },
-			HostFnReturn::Unit => quote! { vec![] },
-		};
-
-		quote! {
-			 wasm_instrument::parity_wasm::elements::FunctionType::new(
-				vec! [ #(<#args>::VALUE_TYPE),* ],
-				#returns,
-			)
 		}
 	}
 }
@@ -343,149 +351,135 @@ impl EnvDef {
 	}
 }
 
+fn is_valid_special_arg(idx: usize, arg: &FnArg) -> bool {
+	let pat = if let FnArg::Typed(pat) = arg { pat } else { return false };
+	let ident = if let syn::Pat::Ident(ref ident) = *pat.pat { &ident.ident } else { return false };
+	let name_ok = match idx {
+		0 => ident == "ctx" || ident == "_ctx",
+		1 => ident == "memory" || ident == "_memory",
+		_ => false,
+	};
+	if !name_ok {
+		return false
+	}
+	matches!(*pat.ty, syn::Type::Infer(_))
+}
+
 /// Expands environment definiton.
 /// Should generate source code for:
-///  - wasm import satisfy checks (see `expand_can_satisfy()`);
 ///  - implementations of the host functions to be added to the wasm runtime environment (see
 ///    `expand_impls()`).
-fn expand_env(def: &mut EnvDef) -> proc_macro2::TokenStream {
-	let can_satisfy = expand_can_satisfy(def);
+fn expand_env(def: &mut EnvDef) -> TokenStream2 {
 	let impls = expand_impls(def);
 
 	quote! {
 		pub struct Env;
-		#can_satisfy
 		#impls
 	}
 }
 
-/// Generates `can_satisfy()` method for every host function, to be used to check
-/// these functions versus expected module, name and signatures when imporing them from a wasm
-/// module.
-fn expand_can_satisfy(def: &mut EnvDef) -> proc_macro2::TokenStream {
-	let checks = def.host_funcs.iter().map(|f| {
-		let (module, name, signature) = (&f.module, &f.name, &f.to_wasm_sig());
-		quote! {
-			if module == #module.as_bytes()
-				&& name == #name.as_bytes()
-				&& signature == &#signature
-			{
-				return true;
-			}
-		}
-	});
-	let satisfy_checks = quote! {
-		#( #checks )*
-	};
+/// Generates for every host function:
+///   - real implementation, to register it in the contract execution environment;
+///   - dummy implementation, to be used as mocks for contract validation step.
+fn expand_impls(def: &mut EnvDef) -> TokenStream2 {
+	let impls = expand_functions(def, true, quote! { crate::wasm::Runtime<E> });
+	let dummy_impls = expand_functions(def, false, quote! { () });
 
 	quote! {
-		impl crate::wasm::env_def::ImportSatisfyCheck for Env {
-			fn can_satisfy(
-					module: &[u8],
-					name: &[u8],
-					signature: &wasm_instrument::parity_wasm::elements::FunctionType,
-				) -> bool {
-					use crate::wasm::env_def::ConvertibleToWasm;
-					#[cfg(not(feature = "unstable-interface"))]
-					if module == b"__unstable__" {
-						return false;
-					}
-					#satisfy_checks
-					return false;
-				}
+		impl<'a, E> crate::wasm::Environment<crate::wasm::runtime::Runtime<'a, E>> for Env
+		where
+			E: Ext,
+			<E::T as ::frame_system::Config>::AccountId:
+				::sp_core::crypto::UncheckedFrom<<E::T as ::frame_system::Config>::Hash> + ::core::convert::AsRef<[::core::primitive::u8]>,
+		{
+			fn define(store: &mut ::wasmi::Store<crate::wasm::Runtime<E>>, linker: &mut ::wasmi::Linker<crate::wasm::Runtime<E>>) -> Result<(), ::wasmi::errors::LinkerError> {
+				#impls
+				Ok(())
+			}
+		}
+
+		impl crate::wasm::Environment<()> for Env
+		{
+			fn define(store: &mut ::wasmi::Store<()>, linker: &mut ::wasmi::Linker<()>) -> Result<(), ::wasmi::errors::LinkerError> {
+				#dummy_impls
+				Ok(())
+			}
 		}
 	}
 }
 
-/// Generates implementation for every host function, to register it in the contract execution
-/// environment.
-fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
-	let impls =  def.host_funcs.iter().map(|f| {
-		let params = &f.item.sig.inputs.iter().skip(1).map(|arg| {
-			match arg {
-				syn::FnArg::Typed(pt) => {
-					if let syn::Pat::Ident(ident) = &*pt.pat {
-						let p_type = &pt.ty;
-						let p_name = ident.ident.clone();
-						quote! {
-							let #p_name : <#p_type as crate::wasm::env_def::ConvertibleToWasm>::NativeType =
-							args.next()
-							.and_then(|v| <#p_type as crate::wasm::env_def::ConvertibleToWasm>::from_typed_value(v.clone()))
-							.expect(
-								"precondition: all imports should be checked against the signatures of corresponding
-								functions defined by `#[define_env]` proc macro by the user of the macro;
-								thus this can never be `None`;
-								qed;"
-							);
-						}
-					} else { quote! { } }
-				},
-				_ => quote! { },
-			}
-		});
+fn expand_functions(
+	def: &mut EnvDef,
+	expand_blocks: bool,
+	host_state: TokenStream2,
+) -> TokenStream2 {
+	let impls = def.host_funcs.iter().map(|f| {
+		// skip the context and memory argument
+		let params = f.item.sig.inputs.iter().skip(2);
+		let (module, name, body, wasm_output, output) = (
+			&f.module,
+			&f.name,
+			&f.item.block,
+			f.returns.to_wasm_sig(),
+			&f.item.sig.output
+		);
+		let unstable_feat = match module.as_str() {
+			"__unstable__" => quote! { #[cfg(feature = "unstable-interface")] },
+			_ => quote! {},
+		};
 
-		let outline = match &f.returns {
-			HostFnReturn::Unit => quote! {
-				body().map_err(|reason| {
-					ctx.set_trap_reason(reason);
-					sp_sandbox::HostError
-				})?;
-				return Ok(sp_sandbox::ReturnValue::Unit);
-			},
-			_ => quote! {
-					let r = body().map_err(|reason| {
-							ctx.set_trap_reason(reason);
-							sp_sandbox::HostError
-						})?;
-					return Ok(sp_sandbox::ReturnValue::Value({
-						r.to_typed_value()
-					}));
-				},
-	};
-	let params = params.clone();
-	let (module, name, ident, body) = (&f.module, &f.name, &f.item.sig.ident, &f.item.block);
-	let unstable_feat = match module.as_str() {
-		"__unstable__" => quote! { #[cfg(feature = "unstable-interface")] },
-		_ => quote! { },
-	};
-	quote! {
-		#unstable_feat
-		f(#module.as_bytes(), #name.as_bytes(), {
-			fn #ident<E: Ext>(
-				ctx: &mut crate::wasm::Runtime<E>,
-				args: &[sp_sandbox::Value],
-			) -> Result<sp_sandbox::ReturnValue, sp_sandbox::HostError>
-			where
-				<E::T as frame_system::Config>::AccountId: sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash>
-				+ AsRef<[u8]>,
-			{
-				#[allow(unused)]
-				let mut args = args.iter();
-				let mut body = || {
-					#( #params )*
-					#body
-				};
-				#outline
+		// If we don't expand blocks (implementing for `()`) we change a few things:
+		// - We replace any code by unreachable!
+		// - Allow unused variables as the code that uses is not expanded
+		// - We don't need to map the error as we simply panic if they code would ever be executed
+		let inner = if expand_blocks {
+			quote! { || #output {
+				let (memory, ctx) = __caller__
+					.host_data()
+					.memory()
+					.expect("Memory must be set when setting up host data; qed")
+					.data_and_store_mut(&mut __caller__);
+				#body
+			} }
+		} else {
+			quote! { || -> #wasm_output {
+				// This is part of the implementation for `Environment<()>` which is not
+				// meant to be actually executed. It is only for validation which will
+				// never call host functions.
+				::core::unreachable!()
+			} }
+		};
+		let map_err = if expand_blocks {
+			quote! {
+				|reason| {
+					::wasmi::core::Trap::host(reason)
+				}
 			}
-			#ident::<E>
-		});
-	}
-	});
-
-	let packed_impls = quote! {
-	   #( #impls )*
-	};
-
-	quote! {
-		impl<E: Ext> crate::wasm::env_def::FunctionImplProvider<E> for Env
-		where
-			<E::T as frame_system::Config>::AccountId:
-			sp_core::crypto::UncheckedFrom<<E::T as frame_system::Config>::Hash> + AsRef<[u8]>,
-		{
-			fn impls<F: FnMut(&[u8], &[u8], crate::wasm::env_def::HostFunc<E>)>(f: &mut F) {
-				#packed_impls
+		} else {
+			quote! {
+				|reason| { reason }
 			}
+		};
+		let allow_unused =  if expand_blocks {
+			quote! { }
+		} else {
+			quote! { #[allow(unused_variables)] }
+		};
+
+
+		quote! {
+			#unstable_feat
+			#allow_unused
+			linker.define(#module, #name, ::wasmi::Func::wrap(&mut*store, |mut __caller__: ::wasmi::Caller<#host_state>, #( #params, )*| -> #wasm_output {
+				let mut func = #inner;
+				func()
+					.map_err(#map_err)
+					.map(::core::convert::Into::into)
+			}))?;
 		}
+	});
+	quote! {
+		#( #impls )*
 	}
 }
 
@@ -502,7 +496,7 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// ```nocompile
 /// #[define_env]
 /// pub mod some_env {
-/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
+/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<(), TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
@@ -517,12 +511,12 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// #[define_env]
 /// pub mod some_env {
 /// 	#[version(1)]
-/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
 /// 	#[unstable]
-/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
@@ -540,12 +534,12 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// pub mod some_env {
 /// 	#[version(1)]
 /// 	#[prefixed_alias]
-/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
+/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 ///
 /// 	#[unstable]
-/// 	fn some_host_fn(ctx: Runtime<E>, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
+/// 	fn some_host_fn(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<u32, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
 /// }
@@ -562,16 +556,16 @@ fn expand_impls(def: &mut EnvDef) -> proc_macro2::TokenStream {
 /// - `Result<u32, TrapReason>`.
 ///
 /// The macro expands to `pub struct Env` declaration, with the following traits implementations:
-/// - `pallet_contracts::wasm::env_def::ImportSatisfyCheck`
-/// - `pallet_contracts::wasm::env_def::FunctionImplProvider`
+/// - `pallet_contracts::wasm::Environment<Runtime<E>> where E: Ext`
+/// - `pallet_contracts::wasm::Environment<()>`
+///
+/// The implementation on `()` can be used in places where no `Ext` exists, yet. This is useful
+/// when only checking whether a code can be instantiated without actually executing any code.
 #[proc_macro_attribute]
-pub fn define_env(
-	attr: proc_macro::TokenStream,
-	item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
+pub fn define_env(attr: TokenStream, item: TokenStream) -> TokenStream {
 	if !attr.is_empty() {
 		let msg = "Invalid `define_env` attribute macro: expected no attributes: `#[define_env]`.";
-		let span = proc_macro2::TokenStream::from(attr).span();
+		let span = TokenStream2::from(attr).span();
 		return syn::Error::new(span, msg).to_compile_error().into()
 	}
 
