@@ -7692,6 +7692,7 @@ dependencies = [
  "substrate-test-runtime-client",
  "tempfile",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -7740,6 +7741,7 @@ dependencies = [
  "substrate-prometheus-endpoint",
  "substrate-test-runtime-client",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
