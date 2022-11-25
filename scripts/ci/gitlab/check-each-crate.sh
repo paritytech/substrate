@@ -8,17 +8,23 @@
 set -Eeu -o pipefail
 shopt -s inherit_errexit
 
-set -x
+set -vx
 
 target_group="$1"
 groups_total="$2"
 
 readarray -t workspace_crates < <(\
-  cargo tree --workspace --depth 0 | \
-  awk '{ if (length($1) == 0 || substr($1, 1, 1) == "[") { skip } else { print $1 } }'
+  cargo tree --workspace --depth 0 --prefix none |
+  awk '{ if (length($1) == 0 || substr($1, 1, 1) == "[") { skip } else { print $1 } }' |
+  sort |
+  uniq
 )
 
 crates_total=${#workspace_crates[*]}
+if [ "$crates_total" -lt 1 ]; then
+  >&2 echo "No crates detected for $PWD"
+  exit 1
+fi
 
 if [ "$crates_total" -lt "$groups_total" ]; then
   # `crates_total / groups_total` would result in 0, so round it up to 1
@@ -37,7 +43,9 @@ fi
 group=1
 for ((i=0; i < crates_total; i += crates_per_group)); do
   if [ $group -eq "$target_group" ]; then
-    for crate in "${workspace_crates[@]:$i:$crates_per_group}"; do
+    crates_in_group=("${workspace_crates[@]:$i:$crates_per_group}")
+    echo "crates in the group: ${crates_in_group[*]}" >/dev/null # >/dev/null due to "set -x"
+    for crate in "${crates_in_group[@]}"; do
       cargo check --locked --release -p "$crate"
     done
     break

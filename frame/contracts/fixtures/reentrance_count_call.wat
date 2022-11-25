@@ -1,10 +1,10 @@
-;; This fixture recursively tests if reentrant_count returns correct reentrant count value when
+;; This fixture recursively tests if reentrance_count returns correct reentrant count value when
 ;; using seal_call to make caller contract call to itself
 (module
 	(import "seal0" "seal_input" (func $seal_input (param i32 i32)))
 	(import "seal0" "seal_address" (func $seal_address (param i32 i32)))
 	(import "seal1" "seal_call" (func $seal_call (param i32 i32 i64 i32 i32 i32 i32 i32) (result i32)))
-	(import "__unstable__" "reentrant_count" (func $reentrant_count (result i32)))
+	(import "__unstable__" "reentrance_count" (func $reentrance_count (result i32)))
 	(import "env" "memory" (memory 1 1))
 
 	;; [0, 32) reserved for $seal_address output
@@ -26,7 +26,7 @@
 		)
 	)
 	(func (export "call")
-		(local $expected_reentrant_count i32)
+		(local $expected_reentrance_count i32)
 		(local $seal_call_exit_code i32)
 
 		;; reading current contract address
@@ -36,19 +36,19 @@
 		(call $seal_input (i32.const 32) (i32.const 36))
 
 		;; reading manually passed reentrant count
-		(set_local $expected_reentrant_count (i32.load (i32.const 32)))
+		(set_local $expected_reentrance_count (i32.load (i32.const 32)))
 
 		;; reentrance count is calculated correctly
 		(call $assert
-			(i32.eq (call $reentrant_count) (get_local $expected_reentrant_count))
+			(i32.eq (call $reentrance_count) (get_local $expected_reentrance_count))
 		)
 
 		;; re-enter 5 times in a row and assert that the reentrant counter works as expected
-		(i32.eq (call $reentrant_count) (i32.const 5))
+		(i32.eq (call $reentrance_count) (i32.const 5))
 		(if
 			(then) ;; recursion exit case
 			(else
-				;; incrementing $expected_reentrant_count passed to the contract
+				;; incrementing $expected_reentrance_count passed to the contract
 				(i32.store (i32.const 32) (i32.add (i32.load (i32.const 32)) (i32.const 1)))
 
 				;; Call to itself
