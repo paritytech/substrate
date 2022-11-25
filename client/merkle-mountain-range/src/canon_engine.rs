@@ -181,12 +181,9 @@ where
 		}
 
 		// Remove offchain MMR nodes for stale forks.
-		let stale_forks = match self.client.expand_forks(&notification.stale_heads) {
-			Ok(stale_forks) => stale_forks,
-			Err((stale_forks, e)) => {
-				warn!(target: LOG_TARGET, "{:?}", e,);
-				stale_forks
-			},
+		let stale_forks = self.client.expand_forks(&notification.stale_heads).unwrap_or_else(|(stale_forks, e)| {
+			warn!(target: LOG_TARGET, "{:?}", e);
+			stale_forks
 		};
 		for hash in stale_forks.iter() {
 			self.prune_branch(hash);
