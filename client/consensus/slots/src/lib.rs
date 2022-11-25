@@ -819,7 +819,6 @@ mod test {
 
 	const SLOT_DURATION: Duration = Duration::from_millis(6000);
 
-	#[derive(Clone)]
 	struct TestInherentDataProvider;
 
 	const ERROR_TO_STRING: &str = "Found error!";
