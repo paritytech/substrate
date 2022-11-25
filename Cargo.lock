@@ -7959,7 +7959,6 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-state-machine",
- "sp-timestamp",
  "substrate-test-runtime-client",
  "thiserror",
 ]
@@ -10387,7 +10386,6 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "2.0.0"
 dependencies = [
- "async-trait",
  "beefy-merkle-tree",
  "beefy-primitives",
  "cfg-if",

@@ -660,30 +660,6 @@ mod tests {
 		TestClient,
 	};
 
-	#[derive(Clone)]
-	struct TestInherentDataProvider;
-
-	const ERROR_TO_STRING: &str = "Found error!";
-	const TEST_INHERENT_0: sp_inherents::InherentIdentifier = *b"testinh0";
-
-	#[async_trait::async_trait]
-	impl sp_inherents::InherentDataProvider for TestInherentDataProvider {
-		async fn provide_inherent_data(
-			&self,
-			data: &mut sp_inherents::InherentData,
-		) -> Result<(), sp_inherents::Error> {
-			data.put_data(TEST_INHERENT_0, &42)
-		}
-
-		async fn try_handle_error(
-			&self,
-			_: &sp_inherents::InherentIdentifier,
-			_: &[u8],
-		) -> Option<Result<(), sp_inherents::Error>> {
-			Some(Err(sp_inherents::Error::Application(Box::from(ERROR_TO_STRING))))
-		}
-	}
-
 	const SLOT_DURATION_MS: u64 = 1000;
 
 	type Error = sp_blockchain::Error;
@@ -984,7 +960,7 @@ mod tests {
 		let res = executor::block_on(worker.on_slot(SlotInfo {
 			slot: 0.into(),
 			ends_at: Instant::now() + Duration::from_secs(100),
-			create_inherent_data: Box::new(TestInherentDataProvider),
+			create_inherent_data: Box::new(()),
 			duration: Duration::from_millis(1000),
 			chain_head: head,
 			block_size_limit: None,

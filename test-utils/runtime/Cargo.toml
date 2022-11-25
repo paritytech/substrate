@@ -48,7 +48,6 @@ sp-state-machine = { version = "0.13.0", default-features = false, path = "../..
 sp-externalities = { version = "0.13.0", default-features = false, path = "../../primitives/externalities" }
 
 # 3rd party
-async-trait = "0.1.57"
 cfg-if = "1.0"
 log = { version = "0.4.17", default-features = false }
 serde = { version = "1.0.136", optional = true, features = ["derive"] }

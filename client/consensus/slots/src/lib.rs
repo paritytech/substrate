@@ -267,7 +267,9 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		if Instant::now() > slot_info.ends_at {
 			warn!(
 				target: "slots",
-				"Creating inherent data took more time than we had left for the slot.",
+				"Creating inherent data took more time than we had left for slot {} for block {:?}.",
+				slot_info.slot,
+				slot_info.chain_head.hash(),
 			);
 
 			return None
