@@ -49,7 +49,7 @@ pub  trait BeefyKeystore<AuthorityId, TSignature> : From<Option<SyncCryptoStoreP
 	
         fn authority_id(&self, keys: &[AuthorityId]) -> Option<Self::Public>;
 
-	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<(TSignature),  error::Error>;
+	fn sign(&self, public: &Self::Public, message: &[u8]) -> Result<TSignature,  error::Error>;
 
 	fn public_keys(&self) -> Result<Vec<Self::Public>, error::Error>;
 
@@ -143,7 +143,7 @@ impl BeefyKeystore<ECDSAPublic,ECDSASignature> for  BeefyECDSAKeystore
 		
 	/// Use the `public` key to verify that `sig` is a valid signature for `message`.
 	///
-	/// Return `true` if the signature is authentic, `false` otherwise.
+
 	fn verify(public: &Self::Public, sig: &ECDSASignature, message: &[u8]) -> bool {
 		let msg = keccak_256(message);
 		let sig = sig.as_ref();
@@ -338,14 +338,21 @@ pub mod tests {
 	use sp_keystore::{SyncCryptoStore, SyncCryptoStorePtr};
 
 	use beefy_primitives::{ecdsa_crypto, KEY_TYPE};
+        use sp_runtime::testing::TestSignature;
 
-	use super::{BeefyKeystore, BeefyECDSAKeystore};
+        use super::{BeefyKeystore, BeefyECDSAKeystore};
+        use codec::{Decode, Encode};
+        use core::fmt::Debug;
+    	use std::marker::PhantomData;
+
+
 	use crate::error::Error;
 
 	/// Set of test accounts using [`beefy_primitives::crypto`] types.
 	#[allow(missing_docs)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumIter)]
-	pub(crate) enum Keyring {
+	pub(crate) enum Identity
+         {
 		Alice,
 		Bob,
 		Charlie,
@@ -353,106 +360,134 @@ pub mod tests {
 		Eve,
 		Ferdie,
 		One,
-		Two,
+	     Two,
+		 
 	}
 
-	impl Keyring {
-		/// Sign `msg`.
-		pub fn sign(self, msg: &[u8]) -> ecdsa_crypto::Signature {
-			let msg = keccak_256(msg);
-			ecdsa::Pair::from(self).sign_prehashed(&msg).into()
-		}
+    pub trait  Keyring {
+	type Signature: Encode + Decode + Debug + Clone + Sync + Send;
+	type Public:  Encode + Decode + Debug;
+        type KeyPair: Clone + Sync + Send;
+	
+	/// Sign `msg`.
+	fn sign(self, msg: &[u8]) -> Self::Signature;
 
-		/// Return key pair.
-		pub fn pair(self) -> ecdsa_crypto::Pair {
-			ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
-		}
+	/// Return key pair.
+	fn pair(self) -> Self::KeyPair;
 
-		/// Return public key.
-		pub fn public(self) -> ecdsa_crypto::Public {
-			self.pair().public()
-		}
+	/// Return public key.
+	fn public(self) -> Self::Public;
 
-		/// Return seed string.
-		pub fn to_seed(self) -> String {
-			format!("//{}", self)
-		}
+	/// Return seed string.
+	fn to_seed(self) -> String; 
+    }
+
+    #[derive(Clone)]
+    pub struct ECDSAKeyring(pub Identity);
+	
+    impl Keyring for ECDSAKeyring {
+	type Signature = ecdsa_crypto::Signature;
+	type Public = ecdsa_crypto::Public;
+        type KeyPair = ecdsa_crypto::Pair;
+	
+	/// Sign `msg`.
+	fn sign(self, msg: &[u8]) -> ecdsa_crypto::Signature {
+	    let msg = keccak_256(msg);
+	    ecdsa::Pair::from(self).sign_prehashed(&msg).into()
 	}
 
-	impl From<Keyring> for ecdsa_crypto::Pair {
-		fn from(k: Keyring) -> Self {
-			k.pair()
-		}
+	/// Return key pair.
+	fn pair(self) -> ecdsa_crypto::Pair {
+	    ecdsa::Pair::from_string(self.to_seed().as_str(), None).unwrap().into()
 	}
 
-	impl From<Keyring> for ecdsa::Pair {
-		fn from(k: Keyring) -> Self {
-			k.pair().into()
-		}
+	/// Return public key.
+	fn public(self) -> ecdsa_crypto::Public {
+	    self.pair().public()
 	}
 
-	fn keystore() -> SyncCryptoStorePtr {
-		Arc::new(LocalKeystore::in_memory())
+	/// Return seed string.
+	fn to_seed(self) -> String {
+	    format!("//{}", self.0)
 	}
 
-	#[test]
-	fn verify_should_work() {
+    }
+
+    impl From<ECDSAKeyring> for ecdsa_crypto::Pair
+    {
+	fn from(k: ECDSAKeyring) -> Self {
+	    k.pair()
+	}
+    }
+
+    impl From<ECDSAKeyring> for ecdsa::Pair {
+	fn from(k: ECDSAKeyring) -> Self {
+	    k.pair().into()
+	}
+    }
+
+    fn keystore() -> SyncCryptoStorePtr {
+	Arc::new(LocalKeystore::in_memory())
+    }
+
+    #[test]
+    fn verify_should_work() {
 		let msg = keccak_256(b"I am Alice!");
-		let sig = Keyring::Alice.sign(b"I am Alice!");
+		let sig = ECDSAKeyring(Identity::Alice).sign(b"I am Alice!");
 
 		assert!(ecdsa::Pair::verify_prehashed(
 			&sig.clone().into(),
 			&msg,
-			&Keyring::Alice.public().into(),
+			&ECDSAKeyring(Identity::Alice).public().into(),
 		));
 
 		// different public key -> fail
 		assert!(!ecdsa::Pair::verify_prehashed(
 			&sig.clone().into(),
 			&msg,
-			&Keyring::Bob.public().into(),
+			&ECDSAKeyring(Identity::Bob).public().into(),
 		));
 
 		let msg = keccak_256(b"I am not Alice!");
 
 		// different msg -> fail
 		assert!(
-			!ecdsa::Pair::verify_prehashed(&sig.into(), &msg, &Keyring::Alice.public().into(),)
+			!ecdsa::Pair::verify_prehashed(&sig.into(), &msg, &ECDSAKeyring(Identity::Alice).public().into(),)
 		);
 	}
 
 	#[test]
 	fn pair_works() {
 		let want = ecdsa_crypto::Pair::from_string("//Alice", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Alice.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Alice).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//Bob", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Bob.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Bob).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//Charlie", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Charlie.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Charlie).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//Dave", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Dave.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Dave).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//Eve", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Eve.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Eve).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//Ferdie", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Ferdie.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Ferdie).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//One", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::One.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::One).pair().to_raw_vec();
 		assert_eq!(want, got);
 
 		let want = ecdsa_crypto::Pair::from_string("//Two", None).expect("Pair failed").to_raw_vec();
-		let got = Keyring::Two.pair().to_raw_vec();
+		let got = ECDSAKeyring(Identity::Two).pair().to_raw_vec();
 		assert_eq!(want, got);
 	}
 
@@ -461,13 +496,13 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: ecdsa_crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&ECDSAKeyring(Identity::Alice).to_seed()))
 				.ok()
 				.unwrap()
 				.into();
 
-		let bob = Keyring::Bob.public();
-		let charlie = Keyring::Charlie.public();
+		let bob = ECDSAKeyring(Identity::Bob).public();
+		let charlie = ECDSAKeyring(Identity::Charlie).public();
 
 		let store: BeefyECDSAKeystore = BeefyECDSAKeystore::new(store);
 
@@ -487,7 +522,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: ecdsa_crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&ECDSAKeyring(Identity::Alice).to_seed()))
 				.ok()
 				.unwrap()
 				.into();
@@ -497,7 +532,7 @@ pub mod tests {
 		let msg = b"are you involved or commited?";
 
 		let sig1 = store.sign(&alice, msg).unwrap();
-		let sig2 = Keyring::Alice.sign(msg);
+		let sig2 = ECDSAKeyring(Identity::Alice).sign(msg);
 
 		assert_eq!(sig1, sig2);
 	}
@@ -507,13 +542,13 @@ pub mod tests {
 		let store = keystore();
 
 		let _ =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Bob.to_seed()))
+			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&ECDSAKeyring(Identity::Bob).to_seed()))
 				.ok()
 				.unwrap();
 
 		let store = BeefyECDSAKeystore::new(store);
 
-		let alice = Keyring::Alice.public();
+		let alice = ECDSAKeyring(Identity::Alice).public();
 
 		let msg = b"are you involved or commited?";
 		let sig = store.sign(&alice, msg).err().unwrap();
@@ -541,7 +576,7 @@ pub mod tests {
 		let store = keystore();
 
 		let alice: ecdsa_crypto::Public =
-			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&Keyring::Alice.to_seed()))
+			SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&ECDSAKeyring(Identity::Alice).to_seed()))
 				.ok()
 				.unwrap()
 				.into();
@@ -571,15 +606,15 @@ pub mod tests {
 		};
 
 		// test keys
-		let _ = add_key(TEST_TYPE, Some(Keyring::Alice.to_seed().as_str()));
-		let _ = add_key(TEST_TYPE, Some(Keyring::Bob.to_seed().as_str()));
+		let _ = add_key(TEST_TYPE, Some(ECDSAKeyring(Identity::Alice).to_seed().as_str()));
+		let _ = add_key(TEST_TYPE, Some(ECDSAKeyring(Identity::Bob).to_seed().as_str()));
 
 		let _ = add_key(TEST_TYPE, None);
 		let _ = add_key(TEST_TYPE, None);
 
 		// BEEFY keys
-		let _ = add_key(KEY_TYPE, Some(Keyring::Dave.to_seed().as_str()));
-		let _ = add_key(KEY_TYPE, Some(Keyring::Eve.to_seed().as_str()));
+		let _ = add_key(KEY_TYPE, Some(ECDSAKeyring(Identity::Dave).to_seed().as_str()));
+		let _ = add_key(KEY_TYPE, Some(ECDSAKeyring(Identity::Eve).to_seed().as_str()));
 
 		let key1: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
 		let key2: ecdsa_crypto::Public = add_key(KEY_TYPE, None).into();
@@ -589,8 +624,8 @@ pub mod tests {
 		let keys = store.public_keys().ok().unwrap();
 
 		assert!(keys.len() == 4);
-		assert!(keys.contains(&Keyring::Dave.public()));
-		assert!(keys.contains(&Keyring::Eve.public()));
+		assert!(keys.contains(&ECDSAKeyring(Identity::Dave).public()));
+		assert!(keys.contains(&ECDSAKeyring(Identity::Eve).public()));
 		assert!(keys.contains(&key1));
 		assert!(keys.contains(&key2));
 	}

@@ -355,7 +355,7 @@ mod tests {
 		}
 	}
 
-	fn sign_commitment<BN: Encode>(who: &Keyring, commitment: &Commitment<BN>) -> ecdsa_crypto::Signature {
+	fn sign_commitment<BN: Encode, TKeyring: Keyring>(who: &TKeyring, commitment: &Commitment<BN>) -> ecdsa_crypto::Signature {
 		let store: SyncCryptoStorePtr = std::sync::Arc::new(LocalKeystore::in_memory());
 		SyncCryptoStore::ecdsa_generate_new(&*store, KEY_TYPE, Some(&who.to_seed())).unwrap();
 

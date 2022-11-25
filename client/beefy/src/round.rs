@@ -186,7 +186,7 @@ mod tests {
 	use beefy_primitives::{ecdsa_crypto::{Public, self}, ValidatorSet};
 
 	use super::{threshold, Block as BlockT, Hash, RoundTracker, Rounds};
-	use crate::keystore::tests::Keyring;
+	use crate::keystore::tests::{Keyring, ECDSAKeyring, Identity};
 
 	impl<P, B> Rounds<P, B, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>
 	where
@@ -201,7 +201,7 @@ mod tests {
 	#[test]
 	fn round_tracker() {
 		let mut rt = RoundTracker::default();
-		let bob_vote = (Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed"));
+		let bob_vote = (ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Bob).sign(b"I am committed"));
 		let threshold = 2;
 
 		// self vote not added yet
@@ -218,7 +218,7 @@ mod tests {
 		// vote is not done
 		assert!(!rt.is_done(threshold));
 
-		let alice_vote = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+		let alice_vote = (ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am committed"));
 		// adding new vote (self vote this time) allowed
 		assert!(rt.add_vote(alice_vote, true));
 
@@ -243,7 +243,7 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::<Public>::new(
-			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			vec![ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Charlie).public()],
 			42,
 		)
 		.unwrap();
@@ -254,7 +254,7 @@ mod tests {
 		assert_eq!(42, rounds.validator_set_id());
 		assert_eq!(1, rounds.session_start());
 		assert_eq!(
-			&vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			&vec![ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Charlie).public()],
 			rounds.validators()
 		);
 	}
@@ -265,10 +265,10 @@ mod tests {
 
 		let validators = ValidatorSet::<Public>::new(
 			vec![
-				Keyring::Alice.public(),
-				Keyring::Bob.public(),
-				Keyring::Charlie.public(),
-				Keyring::Eve.public(),
+				ECDSAKeyring(Identity::Alice).public(),
+				ECDSAKeyring(Identity::Bob).public(),
+				ECDSAKeyring(Identity::Charlie).public(),
+				ECDSAKeyring(Identity::Eve).public(),
 			],
 			Default::default(),
 		)
@@ -284,7 +284,7 @@ mod tests {
 		// add 1st good vote
 		assert!(rounds.add_vote(
 			&round,
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am committed")),
 			true
 		));
 		// round not concluded
@@ -295,14 +295,14 @@ mod tests {
 		// double voting not allowed
 		assert!(!rounds.add_vote(
 			&round,
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am committed")),
 			true
 		));
 
 		// invalid vote (Dave is not a validator)
 		assert!(!rounds.add_vote(
 			&round,
-			(Keyring::Dave.public(), Keyring::Dave.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Dave).public(), ECDSAKeyring(Identity::Dave).sign(b"I am committed")),
 			false
 		));
 		assert!(rounds.should_conclude(&round).is_none());
@@ -310,7 +310,7 @@ mod tests {
 		// add 2nd good vote
 		assert!(rounds.add_vote(
 			&round,
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Bob).sign(b"I am committed")),
 			false
 		));
 		// round not concluded
@@ -319,7 +319,7 @@ mod tests {
 		// add 3rd good vote
 		assert!(rounds.add_vote(
 			&round,
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Charlie).public(), ECDSAKeyring(Identity::Charlie).sign(b"I am committed")),
 			false
 		));
 		// round concluded
@@ -329,7 +329,7 @@ mod tests {
 		// Eve is a validator, but round was concluded, adding vote disallowed
 		assert!(!rounds.add_vote(
 			&round,
-			(Keyring::Eve.public(), Keyring::Eve.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Eve).public(), ECDSAKeyring(Identity::Eve).sign(b"I am committed")),
 			false
 		));
 	}
@@ -339,11 +339,11 @@ mod tests {
 		sp_tracing::try_init_simple();
 
 		let validators = ValidatorSet::<Public>::new(
-			vec![Keyring::Alice.public(), Keyring::Bob.public(), Keyring::Charlie.public()],
+			vec![ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Charlie).public()],
 			42,
 		)
 		.unwrap();
-		let alice = (Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed"));
+		let alice = (ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am committed"));
 
 		let session_start = 10u64.into();
 		let mut rounds = Rounds::<H256, Block, ecdsa_crypto::AuthorityId, ecdsa_crypto::Signature>::new(session_start, validators);
@@ -377,10 +377,10 @@ mod tests {
 
 		let validators = ValidatorSet::<Public>::new(
 			vec![
-				Keyring::Alice.public(),
-				Keyring::Bob.public(),
-				Keyring::Charlie.public(),
-				Keyring::Dave.public(),
+				ECDSAKeyring(Identity::Alice).public(),
+				ECDSAKeyring(Identity::Bob).public(),
+				ECDSAKeyring(Identity::Charlie).public(),
+				ECDSAKeyring(Identity::Dave).public(),
 			],
 			Default::default(),
 		)
@@ -392,51 +392,51 @@ mod tests {
 		// round 1
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am committed")),
 			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Bob).sign(b"I am committed")),
 			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(1), 1),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am committed")),
+			(ECDSAKeyring(Identity::Charlie).public(), ECDSAKeyring(Identity::Charlie).sign(b"I am committed")),
 			false,
 		));
 
 		// round 2
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am again committed")),
+			(ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am again committed")),
 			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am again committed")),
+			(ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Bob).sign(b"I am again committed")),
 			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(2), 2),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am again committed")),
+			(ECDSAKeyring(Identity::Charlie).public(), ECDSAKeyring(Identity::Charlie).sign(b"I am again committed")),
 			false,
 		));
 
 		// round 3
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
-			(Keyring::Alice.public(), Keyring::Alice.sign(b"I am still committed")),
+			(ECDSAKeyring(Identity::Alice).public(), ECDSAKeyring(Identity::Alice).sign(b"I am still committed")),
 			true,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
-			(Keyring::Bob.public(), Keyring::Bob.sign(b"I am still committed")),
+			(ECDSAKeyring(Identity::Bob).public(), ECDSAKeyring(Identity::Bob).sign(b"I am still committed")),
 			false,
 		));
 		assert!(rounds.add_vote(
 			&(H256::from_low_u64_le(3), 3),
-			(Keyring::Charlie.public(), Keyring::Charlie.sign(b"I am still committed")),
+			(ECDSAKeyring(Identity::Charlie).public(), ECDSAKeyring(Identity::Charlie).sign(b"I am still committed")),
 			false,
 		));
 		assert_eq!(3, rounds.rounds.len());
@@ -453,9 +453,9 @@ mod tests {
 		assert_eq!(
 			signatures,
 			vec![
-				Some(Keyring::Alice.sign(b"I am again committed")),
-				Some(Keyring::Bob.sign(b"I am again committed")),
-				Some(Keyring::Charlie.sign(b"I am again committed")),
+				Some(ECDSAKeyring(Identity::Alice).sign(b"I am again committed")),
+				Some(ECDSAKeyring(Identity::Bob).sign(b"I am again committed")),
+				Some(ECDSAKeyring(Identity::Charlie).sign(b"I am again committed")),
 				None
 			]
 		);

@@ -88,11 +88,11 @@ pub(crate) mod tests {
 	use super::*;
 	use crate::{keystore::{tests::Keyring, BeefyECDSAKeystore}, tests::make_beefy_ids};
 
-	pub(crate) fn new_finality_proof(
+	pub(crate) fn new_finality_proof<TKeyring>(
 		block_num: NumberFor<Block>,
 		validator_set: &ValidatorSet<ecdsa_crypto::AuthorityId>,
-		keys: &[Keyring],
-	) -> BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature> {
+		keys: &[TKeyring],
+	) -> BeefyVersionedFinalityProof<Block, ecdsa_crypto::Signature> where TKeyring: Keyring {
 		let commitment = Commitment {
 			payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![]),
 			block_number: block_num,

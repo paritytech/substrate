@@ -1014,9 +1014,9 @@ pub(crate) mod tests {
 		Backend, ClientExt,
 	};
 
-	fn create_beefy_worker<AuthId, TSignature, BKS>(
-		peer: &BeefyPeer,
-		key: &Keyring,
+	fn create_beefy_worker<TKeyring, AuthId, TSignature, BKS>(
+		peer: &BeefyPeer<TSignature>,
+		key: &TKeyring,
 		min_block_delta: u32,
 	) -> BeefyWorker<
 		Block,
@@ -1028,7 +1028,8 @@ pub(crate) mod tests {
 		AuthId,
 		TSignature,
 		BKS,		
-		> where
+	    > where
+	        TKeyring: Keyring,
 	        AuthId: Encode + Decode + Debug + Ord + Sync + Send + std::hash::Hash,
 		TSignature: Encode + Decode + Debug + Clone + Sync + Send,
 		BKS: BeefyKeystore<AuthId, TSignature, Public = AuthId>,
