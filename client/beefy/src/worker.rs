@@ -549,11 +549,7 @@ where
 				self.finalize(finality_proof)?;
 			} else {
 				let mandatory_round =
-					if let Some((number, _)) = self.voting_oracle().mandatory_pending() {
-						number == round.1
-					} else {
-						false
-					};
+					self.voting_oracle().mandatory_pending().map(|p| p.0 == round.1).unwrap_or(false);
 				// Persist state after handling self vote to avoid double voting in case
 				// of voter restarts.
 				// Also persist state after handling mandatory block vote.
