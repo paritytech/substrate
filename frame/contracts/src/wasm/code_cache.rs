@@ -192,7 +192,10 @@ where
 pub fn reinstrument<T: Config>(
 	prefab_module: &mut PrefabWasmModule<T>,
 	schedule: &Schedule<T>,
-) -> Result<u32, DispatchError> {
+) -> Result<u32, DispatchError>
+where
+	T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]>,
+{
 	let original_code =
 		<PristineCode<T>>::get(&prefab_module.code_hash).ok_or(Error::<T>::CodeNotFound)?;
 	let original_code_len = original_code.len();
@@ -201,9 +204,12 @@ pub fn reinstrument<T: Config>(
 	// as the contract is already deployed and every change in size would be the result
 	// of changes in the instrumentation algorithm controlled by the chain authors.
 	prefab_module.code = WeakBoundedVec::force_from(
-		prepare::reinstrument_contract::<T>(&original_code, schedule, prefab_module.determinism)
-			.map_err(|_| <Error<T>>::CodeRejected)?,
-		Some("Contract exceeds limit after re-instrumentation."),
+		prepare::reinstrument::<super::runtime::Env, T>(
+			&original_code,
+			schedule,
+			prefab_module.determinism,
+		)?,
+		Some("Contract exceeds size limit after re-instrumentation."),
 	);
 	prefab_module.instruction_weights_version = schedule.instruction_weights.version;
 	<CodeStorage<T>>::insert(&prefab_module.code_hash, &*prefab_module);
