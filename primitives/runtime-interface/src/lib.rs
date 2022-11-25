@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Custom inner attributes are unstable, so we need to faky disable the attribute.
+// rustfmt still honors the attribute to not format the rustdocs below.
+#![cfg_attr(feature = "never", rustfmt::skip)]
 //! Substrate runtime interface
 //!
 //! This crate provides types, traits and macros around runtime interfaces. A runtime interface is
@@ -78,132 +81,33 @@
 //! The following table documents how values of types are passed between the wasm and
 //! the host side and how they are converted into the corresponding type.
 //!
-//! <table>
-//! 	<thread>
-//!			<tr>
-//!				<th>Type</th>
-//!				<th>FFI Type</th>
-//!				<th>Conversion</th>
-//!			</tr>
-//! 	</thread>
-//!		<tbody>
-//!			<tr>
-//!				<td><code>u8</code></td>
-//!				<td><code>u32</code></td>
-//!				<td>zero-extended to 32-bits</td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>u16</code></td>
-//!				<td><code>u32</code></td>
-//!				<td>zero-extended to 32-bits</td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>u32</code></td>
-//!				<td><code>u32</code></td>
-//!				<td><code>Identity</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>u64</code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>Identity</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>i128</code></td>
-//!				<td><code>u32</code></td>
-//!				<td><code>v.as_ptr()</code>(pointer to a 16 byte array)</td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>i8</code></td>
-//!				<td><code>i32</code></td>
-//!				<td>sign-extended to 32-bits</td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>i16</code></td>
-//!				<td><code>i32</code></td>
-//!				<td>sign-extended to 32-bits</td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>i32</code></td>
-//!				<td><code>i32</code></td>
-//!				<td><code>Identity</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>i64</code></td>
-//!				<td><code>i64</code></td>
-//!				<td><code>Identity</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>u128</code></td>
-//!				<td><code>u32</code></td>
-//!				<td><code>v.as_ptr()</code>(pointer to a 16 byte array)</td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>bool</code></td>
-//!				<td><code>u32</code></td>
-//!				<td><code>if v { 1 } else { 0 }</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>&str</code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>&[u8]</code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>Vec<u8></code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>Vec<T>where T: Encode</code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>let e = v.encode();</code><br>
-//!				    <code>e.len() 32bit<< 32 &#124; e.as_ptr() 32bit</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>&[T] where T: Encode</code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>let e = v.encode();</code><br>
-//!					<code>e.len() 32bit<< 32 &#124; e.as_ptr() 32bit</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>[u8; N]</code></td>
-//!				<td><code>u32</code></td>
-//!				<td><code>v.as_ptr()</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>*const T</code></td>
-//!				<td><code>u32</code></td>
-//!				<td><code>Identity</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><code>Option<T><code></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>let e = v.encode();</code><br>
-//!					<code>e.len() 32bit<< 32 &#124; e.as_ptr() 32bit</code></td>
-//!			</tr>
-//!			<tr>
-//!				<td><a href="./pass_by/index.html#Inner"><code>T where T: PassBy<PassBy=Inner></code></a></td>
-//!				<td>Depends on inner</td>
-//!				<td>Depends on inner</td>
-//!			</tr>
-//!			<tr>
-//!				<td><a href="./pass_by/index.html#Codec"><code>T where T: PassBy<PassBy=Codec></code></a></td>
-//!				<td><code>u64</code></td>
-//!				<td><code>v.len() 32bit<< 32 &#124; v.as_ptr() 32bit</code></td>
-//!			</tr>
-//!	</tbody>
-//! </table>
+//! | Type | FFI type | Conversion |
+//! |----|----|----|
+//! | `u8` | `u32` | zero-extended to 32-bits |
+//! | `u16` | `u32` | zero-extended to 32-bits |
+//! | `u32` | `u32` | `Identity` |
+//! | `u64` | `u64` | `Identity` |
+//! | `i128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
+//! | `i8` | `i32` | sign-extended to 32-bits |
+//! | `i16` | `i32` | sign-extended to 32-bits |
+//! | `i32` | `i32` | `Identity` |
+//! | `i64` | `i64` | `Identity` |
+//! | `u128` | `u32` | `v.as_ptr()` (pointer to a 16 byte array) |
+//! | `bool` | `u32` | `if v { 1 } else { 0 }` |
+//! | `&str` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | `&[u8]` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | `Vec<u8>` | `u64` | <code>v.len() 32bit << 32 &#124; v.as_ptr() 32bit</code> |
+//! | `Vec<T> where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | `&[T] where T: Encode` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | `[u8; N]` | `u32` | `v.as_ptr()` |
+//! | `*const T` | `u32` | `Identity` |
+//! | `Option<T>` | `u64` | `let e = v.encode();`<br><br><code>e.len() 32bit << 32 &#124; e.as_ptr() 32bit</code> |
+//! | [`T where T: PassBy<PassBy=Inner>`](./pass_by#Inner) | Depends on inner | Depends on inner |
+//! | [`T where T: PassBy<PassBy=Codec>`](./pass_by#Codec)|`u64`|<code>v.len() 32bit << 32 &#124;v.as_ptr() 32bit</code>|
 //!
 //! `Identity` means that the value is converted directly into the corresponding FFI type.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-// `cargo doc` doc thinks that `Vec<u8>` has an invalid `u8` HTML tag which cannot be fixed by
-// backticks...
-#![allow(rustdoc::invalid_html_tags)]
 
 extern crate self as sp_runtime_interface;
 
