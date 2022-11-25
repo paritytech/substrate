@@ -96,9 +96,9 @@ impl<B: Block> OnDemandJustificationsEngine<B> {
 
 	fn request_from_peer(&mut self, peer: PeerId, req_info: RequestInfo<B>) {
 		debug!(
-			target: "beefy::sync", 
+			target: "beefy::sync",
 			"🥩 requesting justif #{:?} from peer {:?}",
-			req_info.block, 
+			req_info.block,
 			peer,
 		);
 

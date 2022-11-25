@@ -165,7 +165,7 @@ impl<B: Block> VoterOracle<B> {
 		Ok(())
 	}
 
-	/// Return current pending mandatory block, if any.
+	/// Return current pending mandatory block, if any, plus its active validator set.
 	pub fn mandatory_pending(&self) -> Option<(NumberFor<B>, ValidatorSet<AuthorityId>)> {
 		self.sessions.front().and_then(|round| {
 			if round.mandatory_done() {
@@ -548,8 +548,11 @@ where
 				// New state is persisted after finalization.
 				self.finalize(finality_proof)?;
 			} else {
-				let mandatory_round =
-					self.voting_oracle().mandatory_pending().map(|p| p.0 == round.1).unwrap_or(false);
+				let mandatory_round = self
+					.voting_oracle()
+					.mandatory_pending()
+					.map(|p| p.0 == round.1)
+					.unwrap_or(false);
 				// Persist state after handling self vote to avoid double voting in case
 				// of voter restarts.
 				// Also persist state after handling mandatory block vote.
