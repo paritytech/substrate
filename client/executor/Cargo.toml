@@ -23,7 +23,7 @@ wasmi = "0.13"
 codec = { package = "parity-scale-codec", version = "3.0.0" }
 sc-executor-common = { version = "0.10.0-dev", path = "common" }
 sc-executor-wasmi = { version = "0.10.0-dev", path = "wasmi" }
-sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime", optional = true }
+sc-executor-wasmtime = { version = "0.10.0-dev", path = "wasmtime" }
 sp-api = { version = "4.0.0-dev", path = "../../primitives/api" }
 sp-core = { version = "7.0.0", path = "../../primitives/core" }
 sp-core-hashing-proc-macro = { version = "5.0.0", path = "../../primitives/core/hashing/proc-macro" }
@@ -61,5 +61,4 @@ default = ["std"]
 # This crate does not have `no_std` support, we just require this for tests
 std = []
 wasm-extern-trace = []
-wasmtime = ["sc-executor-wasmtime"]
 wasmer-sandbox = ["sc-executor-common/wasmer-sandbox"]

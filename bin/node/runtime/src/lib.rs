@@ -1612,8 +1612,7 @@ impl pallet_collective::Config<AllianceCollective> for Runtime {
 }
 
 parameter_types! {
-	pub const MaxFounders: u32 = 10;
-	pub const MaxFellows: u32 = AllianceMaxMembers::get() - MaxFounders::get();
+	pub const MaxFellows: u32 = AllianceMaxMembers::get();
 	pub const MaxAllies: u32 = 100;
 	pub const AllyDeposit: Balance = 10 * DOLLARS;
 	pub const RetirementPeriod: BlockNumber = ALLIANCE_MOTION_DURATION_IN_BLOCKS + (1 * DAYS);
@@ -1644,7 +1643,6 @@ impl pallet_alliance::Config for Runtime {
 	type IdentityVerifier = ();
 	type ProposalProvider = AllianceProposalProvider;
 	type MaxProposals = AllianceMaxProposals;
-	type MaxFounders = MaxFounders;
 	type MaxFellows = MaxFellows;
 	type MaxAllies = MaxAllies;
 	type MaxUnscrupulousItems = ConstU32<100>;
