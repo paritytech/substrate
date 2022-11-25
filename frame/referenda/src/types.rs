@@ -101,16 +101,16 @@ impl<T: Ord, S: Get<u32>> InsertSorted<T> for BoundedVec<T, S> {
 pub struct DecidingStatus<BlockNumber> {
 	/// When this referendum began being "decided". If confirming, then the
 	/// end will actually be delayed until the end of the confirmation period.
-	pub(crate) since: BlockNumber,
+	pub since: BlockNumber,
 	/// If `Some`, then the referendum has entered confirmation stage and will end at
 	/// the block number as long as it doesn't lose its approval in the meantime.
-	pub(crate) confirming: Option<BlockNumber>,
+	pub confirming: Option<BlockNumber>,
 }
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct Deposit<AccountId, Balance> {
-	pub(crate) who: AccountId,
-	pub(crate) amount: Balance,
+	pub who: AccountId,
+	pub amount: Balance,
 }
 
 #[derive(Clone, Encode, TypeInfo)]
@@ -171,28 +171,28 @@ pub struct ReferendumStatus<
 	ScheduleAddress: Eq + PartialEq + Debug + Encode + Decode + TypeInfo + Clone,
 > {
 	/// The track of this referendum.
-	pub(crate) track: TrackId,
+	pub track: TrackId,
 	/// The origin for this referendum.
-	pub(crate) origin: RuntimeOrigin,
+	pub origin: RuntimeOrigin,
 	/// The hash of the proposal up for referendum.
-	pub(crate) proposal: Call,
+	pub proposal: Call,
 	/// The time the proposal should be scheduled for enactment.
-	pub(crate) enactment: DispatchTime<Moment>,
+	pub enactment: DispatchTime<Moment>,
 	/// The time of submission. Once `UndecidingTimeout` passes, it may be closed by anyone if
 	/// `deciding` is `None`.
-	pub(crate) submitted: Moment,
+	pub submitted: Moment,
 	/// The deposit reserved for the submission of this referendum.
-	pub(crate) submission_deposit: Deposit<AccountId, Balance>,
+	pub submission_deposit: Deposit<AccountId, Balance>,
 	/// The deposit reserved for this referendum to be decided.
-	pub(crate) decision_deposit: Option<Deposit<AccountId, Balance>>,
+	pub decision_deposit: Option<Deposit<AccountId, Balance>>,
 	/// The status of a decision being made. If `None`, it has not entered the deciding period.
-	pub(crate) deciding: Option<DecidingStatus<Moment>>,
+	pub deciding: Option<DecidingStatus<Moment>>,
 	/// The current tally of votes in this referendum.
-	pub(crate) tally: Tally,
+	pub tally: Tally,
 	/// Whether we have been placed in the queue for being decided or not.
-	pub(crate) in_queue: bool,
+	pub in_queue: bool,
 	/// The next scheduled wake-up, if `Some`.
-	pub(crate) alarm: Option<(Moment, ScheduleAddress)>,
+	pub alarm: Option<(Moment, ScheduleAddress)>,
 }
 
 /// Info regarding a referendum, present or past.

@@ -1452,6 +1452,7 @@ impl pallet_assets::Config<Instance1> for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 impl pallet_assets::Config<Instance2> for Runtime {
@@ -1470,6 +1471,7 @@ impl pallet_assets::Config<Instance2> for Runtime {
 	type Freezer = ();
 	type Extra = ();
 	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+	type RemoveItemsLimit = ConstU32<1000>;
 }
 
 parameter_types! {
@@ -1483,6 +1485,7 @@ impl pallet_dex::Config for Runtime {
 	type Assets = Assets;
 	type PoolAssets = PoolAssets;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
+	type PoolAssetId = <Self as pallet_assets::Config<Instance2>>::AssetId;
 	type PalletId = DexPalletId;
 }
 
