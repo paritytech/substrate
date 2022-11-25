@@ -812,7 +812,6 @@ impl<N> BackoffAuthoringBlocksStrategy<N> for () {
 #[cfg(test)]
 mod test {
 	use super::*;
-	use sp_inherents::{Error, InherentData, InherentDataProvider, InherentIdentifier};
 	use sp_runtime::traits::NumberFor;
 	use std::time::{Duration, Instant};
 	use substrate_test_runtime_client::runtime::{Block, Header};
