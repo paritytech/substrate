@@ -29,11 +29,8 @@ use crate::{
 	DEFAULT_MAX_BLOCK_CONSTRAINT,
 };
 use codec::{Decode, Encode};
-use log::{error, trace, warn};
-use std::{
-	cmp,
-	collections::{HashMap, HashSet, VecDeque},
-};
+use log::trace;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub(crate) const LAST_PRUNED: &[u8] = b"last_pruned";
 const PRUNING_JOURNAL: &[u8] = b"pruning_journal";
@@ -44,14 +41,8 @@ pub struct RefWindow<BlockHash: Hash, Key: Hash, D: MetaDb> {
 	/// A queue of blocks keep tracking keys that should be deleted for each block in the
 	/// pruning window.
 	queue: DeathRowQueue<BlockHash, Key, D>,
-	/// Block number that corresponds to the front of `death_rows`.
+	/// Block number that is next to be pruned.
 	base: u64,
-	/// Number of call of `note_canonical` after
-	/// last call `apply_pending` or `revert_pending`
-	pending_canonicalizations: usize,
-	/// Number of calls of `prune_one` after
-	/// last call `apply_pending` or `revert_pending`
-	pending_prunings: usize,
 }
 
 /// `DeathRowQueue` used to keep track of blocks in the pruning window, there are two flavors:
@@ -72,13 +63,13 @@ enum DeathRowQueue<BlockHash: Hash, Key: Hash, D: MetaDb> {
 		#[ignore_malloc_size_of = "Shared data"]
 		db: D,
 		/// A queue of keys that should be deleted for each block in the pruning window.
-		/// Only caching the first fews blocks of the pruning window, blocks inside are
+		/// Only caching the first few blocks of the pruning window, blocks inside are
 		/// successive and ordered by block number
 		cache: VecDeque<DeathRow<BlockHash, Key>>,
 		/// A soft limit of the cache's size
 		cache_capacity: usize,
-		/// The number of blocks in queue that are not loaded into `cache`.
-		uncached_blocks: usize,
+		/// Last block number added to the window
+		last: Option<u64>,
 	},
 }
 
@@ -99,7 +90,7 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 					let record: JournalRecord<BlockHash, Key> =
 						Decode::decode(&mut record.as_slice())?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
-					queue.import(base, record);
+					queue.import(base, block, record);
 				},
 				None => break,
 			}
@@ -113,36 +104,30 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	fn new_db_backed(
 		db: D,
 		base: u64,
-		mut uncached_blocks: usize,
+		last: Option<u64>,
 		window_size: u32,
 	) -> Result<DeathRowQueue<BlockHash, Key, D>, Error<D::Error>> {
 		// limit the cache capacity from 1 to `DEFAULT_MAX_BLOCK_CONSTRAINT`
 		let cache_capacity = window_size.clamp(1, DEFAULT_MAX_BLOCK_CONSTRAINT) as usize;
 		let mut cache = VecDeque::with_capacity(cache_capacity);
 		trace!(target: "state-db", "Reading pruning journal for the database-backed queue. Pending #{}", base);
-		// Load block from db
-		DeathRowQueue::load_batch_from_db(
-			&db,
-			&mut uncached_blocks,
-			&mut cache,
-			base,
-			cache_capacity,
-		)?;
-		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, uncached_blocks })
+		DeathRowQueue::load_batch_from_db(&db, &mut cache, base, cache_capacity)?;
+		Ok(DeathRowQueue::DbBacked { db, cache, cache_capacity, last })
 	}
 
 	/// import a new block to the back of the queue
-	fn import(&mut self, base: u64, journal_record: JournalRecord<BlockHash, Key>) {
+	fn import(&mut self, base: u64, num: u64, journal_record: JournalRecord<BlockHash, Key>) {
 		let JournalRecord { hash, inserted, deleted } = journal_record;
+		trace!(target: "state-db", "Importing {}, base={}", num, base);
 		match self {
-			DeathRowQueue::DbBacked { uncached_blocks, cache, cache_capacity, .. } => {
-				// `uncached_blocks` is zero means currently all block are loaded into `cache`
-				// thus if `cache` is not full, load the next block into `cache` too
-				if *uncached_blocks == 0 && cache.len() < *cache_capacity {
+			DeathRowQueue::DbBacked { cache, cache_capacity, last, .. } => {
+				// If the new block continues cached range and there is space, load it directly into
+				// cache.
+				if num == base + cache.len() as u64 && cache.len() < *cache_capacity {
+					trace!(target: "state-db", "Adding to DB backed cache {:?} (#{})", hash, num);
 					cache.push_back(DeathRow { hash, deleted: deleted.into_iter().collect() });
-				} else {
-					*uncached_blocks += 1;
 				}
+				*last = Some(num);
 			},
 			DeathRowQueue::Mem { death_rows, death_index } => {
 				// remove all re-inserted keys from death rows
@@ -168,16 +153,9 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		base: u64,
 	) -> Result<Option<DeathRow<BlockHash, Key>>, Error<D::Error>> {
 		match self {
-			DeathRowQueue::DbBacked { db, uncached_blocks, cache, cache_capacity } => {
-				if cache.is_empty() && *uncached_blocks != 0 {
-					// load more blocks from db since there are still blocks in it
-					DeathRowQueue::load_batch_from_db(
-						db,
-						uncached_blocks,
-						cache,
-						base,
-						*cache_capacity,
-					)?;
+			DeathRowQueue::DbBacked { db, cache, cache_capacity, .. } => {
+				if cache.is_empty() {
+					DeathRowQueue::load_batch_from_db(db, cache, base, *cache_capacity)?;
 				}
 				Ok(cache.pop_front())
 			},
@@ -193,113 +171,37 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 		}
 	}
 
-	/// Revert recent additions to the queue, namely remove `amount` number of blocks from the back
-	/// of the queue, `base` is the block number of the first block of the queue
-	fn revert_recent_add(&mut self, base: u64, amout: usize) {
-		debug_assert!(amout <= self.len());
-		match self {
-			DeathRowQueue::DbBacked { uncached_blocks, cache, .. } => {
-				// remove from `uncached_blocks` if it can cover
-				if *uncached_blocks >= amout {
-					*uncached_blocks -= amout;
-					return
-				}
-				// reset `uncached_blocks` and remove remain blocks from `cache`
-				let remain = amout - *uncached_blocks;
-				*uncached_blocks = 0;
-				cache.truncate(cache.len() - remain);
-			},
-			DeathRowQueue::Mem { death_rows, death_index } => {
-				// Revert recent addition to the queue
-				// Note that pending insertions might cause some existing deletions to be removed
-				// from `death_index` We don't bother to track and revert that for now. This means
-				// that a few nodes might end up no being deleted in case transaction fails and
-				// `revert_pending` is called.
-				death_rows.truncate(death_rows.len() - amout);
-				let new_max_block = death_rows.len() as u64 + base;
-				death_index.retain(|_, block| *block < new_max_block);
-			},
-		}
-	}
-
-	/// Load a batch of blocks from the backend database into `cache`, start from (and include) the
-	/// next block followe the last block of `cache`, `base` is the block number of the first block
-	/// of the queue
+	/// Load a batch of blocks from the backend database into `cache`, starting from `base` and up
+	/// to `base + cache_capacity`
 	fn load_batch_from_db(
 		db: &D,
-		uncached_blocks: &mut usize,
 		cache: &mut VecDeque<DeathRow<BlockHash, Key>>,
 		base: u64,
 		cache_capacity: usize,
 	) -> Result<(), Error<D::Error>> {
-		// return if all blocks already loaded into `cache` and there are no other
-		// blocks in the backend database
-		if *uncached_blocks == 0 {
-			return Ok(())
-		}
 		let start = base + cache.len() as u64;
-		let batch_size = cmp::min(*uncached_blocks, cache_capacity);
-		let mut loaded = 0;
+		let batch_size = cache_capacity;
 		for i in 0..batch_size as u64 {
 			match load_death_row_from_db::<BlockHash, Key, D>(db, start + i)? {
 				Some(row) => {
 					cache.push_back(row);
-					loaded += 1;
 				},
-				// block may added to the queue but not commit into the db yet, if there are
-				// data missing in the db `load_death_row_from_db` should return a db error
 				None => break,
 			}
 		}
-		*uncached_blocks -= loaded;
 		Ok(())
 	}
 
-	/// Get the block in the given index of the queue, `base` is the block number of the
-	/// first block of the queue
-	fn get(
-		&mut self,
-		base: u64,
-		index: usize,
-	) -> Result<Option<DeathRow<BlockHash, Key>>, Error<D::Error>> {
-		match self {
-			DeathRowQueue::DbBacked { db, uncached_blocks, cache, cache_capacity } => {
-				// check if `index` target a block reside on disk
-				if index >= cache.len() && index < cache.len() + *uncached_blocks {
-					// if `index` target the next batch of `DeathRow`, load a batch from db
-					if index - cache.len() < cmp::min(*uncached_blocks, *cache_capacity) {
-						DeathRowQueue::load_batch_from_db(
-							db,
-							uncached_blocks,
-							cache,
-							base,
-							*cache_capacity,
-						)?;
-					} else {
-						// load a single `DeathRow` from db, but do not insert it to `cache`
-						// because `cache` is a queue of successive `DeathRow`
-						// NOTE: this branch should not be entered because blocks are visited
-						// in successive increasing order, just keeping it for robustness
-						return load_death_row_from_db(db, base + index as u64)
-					}
-				}
-				Ok(cache.get(index).cloned())
-			},
-			DeathRowQueue::Mem { death_rows, .. } => Ok(death_rows.get(index).cloned()),
-		}
-	}
-
 	/// Check if the block at the given `index` of the queue exist
-	/// it is the caller's responsibility to ensure `index` won't be out of bound
+	/// it is the caller's responsibility to ensure `index` won't be out of bounds
 	fn have_block(&self, hash: &BlockHash, index: usize) -> HaveBlock {
 		match self {
 			DeathRowQueue::DbBacked { cache, .. } => {
 				if cache.len() > index {
 					(cache[index].hash == *hash).into()
 				} else {
-					// the block not exist in `cache`, but it may exist in the unload
-					// blocks
-					HaveBlock::MayHave
+					// The block is not in the cache but it still may exist on disk.
+					HaveBlock::Maybe
 				}
 			},
 			DeathRowQueue::Mem { death_rows, .. } => (death_rows[index].hash == *hash).into(),
@@ -307,11 +209,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	}
 
 	/// Return the number of block in the pruning window
-	fn len(&self) -> usize {
+	fn len(&self, base: u64) -> u64 {
 		match self {
-			DeathRowQueue::DbBacked { uncached_blocks, cache, .. } =>
-				cache.len() + *uncached_blocks,
-			DeathRowQueue::Mem { death_rows, .. } => death_rows.len(),
+			DeathRowQueue::DbBacked { last, .. } => last.map_or(0, |l| l + 1 - base),
+			DeathRowQueue::Mem { death_rows, .. } => death_rows.len() as u64,
 		}
 	}
 
@@ -326,10 +227,11 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> DeathRowQueue<BlockHash, Key, D> {
 	}
 
 	#[cfg(test)]
-	fn get_db_backed_queue_state(&self) -> Option<(&VecDeque<DeathRow<BlockHash, Key>>, usize)> {
+	fn get_db_backed_queue_state(
+		&self,
+	) -> Option<(&VecDeque<DeathRow<BlockHash, Key>>, Option<u64>)> {
 		match self {
-			DeathRowQueue::DbBacked { cache, uncached_blocks, .. } =>
-				Some((cache, *uncached_blocks)),
+			DeathRowQueue::DbBacked { cache, last, .. } => Some((cache, *last)),
 			DeathRowQueue::Mem { .. } => None,
 		}
 	}
@@ -369,20 +271,20 @@ fn to_journal_key(block: u64) -> Vec<u8> {
 /// The result return by `RefWindow::have_block`
 #[derive(Debug, PartialEq, Eq)]
 pub enum HaveBlock {
-	/// Definitely not having this block
-	NotHave,
-	/// May or may not have this block, need futher checking
-	MayHave,
-	/// Definitely having this block
-	Have,
+	/// Definitely don't have this block.
+	No,
+	/// May or may not have this block, need further checking
+	Maybe,
+	/// Definitely has this block
+	Yes,
 }
 
 impl From<bool> for HaveBlock {
 	fn from(have: bool) -> Self {
 		if have {
-			HaveBlock::Have
+			HaveBlock::Yes
 		} else {
-			HaveBlock::NotHave
+			HaveBlock::No
 		}
 	}
 }
@@ -409,37 +311,36 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		let queue = if count_insertions {
 			DeathRowQueue::new_mem(&db, base)?
 		} else {
-			let unload = match last_canonicalized_number {
+			let last = match last_canonicalized_number {
 				Some(last_canonicalized_number) => {
 					debug_assert!(last_canonicalized_number + 1 >= base);
-					last_canonicalized_number + 1 - base
+					Some(last_canonicalized_number)
 				},
 				// None means `LAST_CANONICAL` is never been wrote, since the pruning journals are
 				// in the same `CommitSet` as `LAST_CANONICAL`, it means no pruning journal have
 				// ever been committed to the db, thus set `unload` to zero
-				None => 0,
+				None => None,
 			};
-			DeathRowQueue::new_db_backed(db, base, unload as usize, window_size)?
+			DeathRowQueue::new_db_backed(db, base, last, window_size)?
 		};
 
-		Ok(RefWindow { queue, base, pending_canonicalizations: 0, pending_prunings: 0 })
+		Ok(RefWindow { queue, base })
 	}
 
 	pub fn window_size(&self) -> u64 {
-		(self.queue.len() - self.pending_prunings) as u64
+		self.queue.len(self.base) as u64
 	}
 
 	/// Get the hash of the next pruning block
 	pub fn next_hash(&mut self) -> Result<Option<BlockHash>, Error<D::Error>> {
-		let res = match &self.queue {
-			DeathRowQueue::DbBacked { cache, .. } =>
-				if self.pending_prunings < cache.len() {
-					cache.get(self.pending_prunings).map(|r| r.hash.clone())
-				} else {
-					self.get(self.pending_prunings)?.map(|r| r.hash)
-				},
-			DeathRowQueue::Mem { death_rows, .. } =>
-				death_rows.get(self.pending_prunings).map(|r| r.hash.clone()),
+		let res = match &mut self.queue {
+			DeathRowQueue::DbBacked { db, cache, cache_capacity, .. } => {
+				if cache.is_empty() {
+					DeathRowQueue::load_batch_from_db(db, cache, self.base, *cache_capacity)?;
+				}
+				cache.front().map(|r| r.hash.clone())
+			},
+			DeathRowQueue::Mem { death_rows, .. } => death_rows.front().map(|r| r.hash.clone()),
 		};
 		Ok(res)
 	}
@@ -448,68 +349,34 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		0
 	}
 
-	// Return the block number of the first block that not been pending pruned
-	pub fn pending(&self) -> u64 {
-		self.base + self.pending_prunings as u64
-	}
-
 	fn is_empty(&self) -> bool {
-		self.queue.len() <= self.pending_prunings
+		self.window_size() == 0
 	}
 
 	// Check if a block is in the pruning window and not be pruned yet
 	pub fn have_block(&self, hash: &BlockHash, number: u64) -> HaveBlock {
 		// if the queue is empty or the block number exceed the pruning window, we definitely
 		// do not have this block
-		if self.is_empty() ||
-			number < self.pending() ||
-			number >= self.base + self.queue.len() as u64
-		{
-			return HaveBlock::NotHave
+		if self.is_empty() || number < self.base || number >= self.base + self.window_size() {
+			return HaveBlock::No
 		}
 		self.queue.have_block(hash, (number - self.base) as usize)
 	}
 
-	fn get(&mut self, index: usize) -> Result<Option<DeathRow<BlockHash, Key>>, Error<D::Error>> {
-		if index >= self.queue.len() {
-			return Ok(None)
-		}
-		match self.queue.get(self.base, index)? {
-			None => {
-				if matches!(self.queue, DeathRowQueue::DbBacked { .. }) &&
-					// whether trying to get a pending canonicalize block which may not commit to the db yet
-					index >= self.queue.len() - self.pending_canonicalizations
-				{
-					trace!(target: "state-db", "Trying to get a pending canonicalize block that not commit to the db yet");
-					Err(Error::StateDb(StateDbError::BlockUnavailable))
-				} else {
-					// A block of the queue is missing, this may happen if `CommitSet` are commit to
-					// db concurrently and calling `apply_pending/revert_pending` out of order, this
-					// should not happen under current implementation but keeping it as a defensive
-					error!(target: "state-db", "Block record is missing from the pruning window, block number {}", self.base + index as u64);
-					Err(Error::StateDb(StateDbError::BlockMissing))
-				}
-			},
-			s => Ok(s),
-		}
-	}
-
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
 	pub fn prune_one(&mut self, commit: &mut CommitSet<Key>) -> Result<(), Error<D::Error>> {
-		if let Some(pruned) = self.get(self.pending_prunings)? {
+		if let Some(pruned) = self.queue.pop_front(self.base)? {
 			trace!(target: "state-db", "Pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			let index = self.base + self.pending_prunings as u64;
+			let index = self.base;
 			commit.data.deleted.extend(pruned.deleted.into_iter());
 			commit.meta.inserted.push((to_meta_key(LAST_PRUNED, &()), index.encode()));
-			commit
-				.meta
-				.deleted
-				.push(to_journal_key(self.base + self.pending_prunings as u64));
-			self.pending_prunings += 1;
+			commit.meta.deleted.push(to_journal_key(self.base));
+			self.base += 1;
+			Ok(())
 		} else {
-			warn!(target: "state-db", "Trying to prune when there's nothing to prune");
+			trace!(target: "state-db", "Trying to prune when there's nothing to prune");
+			Err(Error::StateDb(StateDbError::BlockUnavailable))
 		}
-		Ok(())
 	}
 
 	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
@@ -519,10 +386,10 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		number: u64,
 		commit: &mut CommitSet<Key>,
 	) -> Result<(), Error<D::Error>> {
-		if self.base == 0 && self.queue.len() == 0 && number > 0 {
+		if self.base == 0 && self.is_empty() && number > 0 {
 			// assume that parent was canonicalized
 			self.base = number;
-		} else if (self.base + self.queue.len() as u64) != number {
+		} else if (self.base + self.window_size()) != number {
 			return Err(Error::StateDb(StateDbError::InvalidBlockNumber))
 		}
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
@@ -531,37 +398,11 @@ impl<BlockHash: Hash, Key: Hash, D: MetaDb> RefWindow<BlockHash, Key, D> {
 		} else {
 			Default::default()
 		};
-		let deleted = ::std::mem::take(&mut commit.data.deleted);
+		let deleted = std::mem::take(&mut commit.data.deleted);
 		let journal_record = JournalRecord { hash: hash.clone(), inserted, deleted };
 		commit.meta.inserted.push((to_journal_key(number), journal_record.encode()));
-		self.queue.import(self.base, journal_record);
-		self.pending_canonicalizations += 1;
+		self.queue.import(self.base, number, journal_record);
 		Ok(())
-	}
-
-	/// Apply all pending changes
-	pub fn apply_pending(&mut self) {
-		self.pending_canonicalizations = 0;
-		for _ in 0..self.pending_prunings {
-			let pruned = self
-				.queue
-				.pop_front(self.base)
-				// NOTE: `pop_front` should not return `MetaDb::Error` because blocks are visited
-				// by `RefWindow::prune_one` first then `RefWindow::apply_pending` and
-				// `DeathRowQueue::get` should load the blocks into cache already
-				.expect("block must loaded in cache thus no MetaDb::Error")
-				.expect("pending_prunings is always < queue.len()");
-			trace!(target: "state-db", "Applying pruning {:?} ({} deleted)", pruned.hash, pruned.deleted.len());
-			self.base += 1;
-		}
-		self.pending_prunings = 0;
-	}
-
-	/// Revert all pending changes
-	pub fn revert_pending(&mut self) {
-		self.queue.revert_recent_add(self.base, self.pending_canonicalizations);
-		self.pending_canonicalizations = 0;
-		self.pending_prunings = 0;
 	}
 }
 
@@ -601,13 +442,14 @@ mod tests {
 		let mut pruning: RefWindow<H256, H256, TestDb> =
 			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, true).unwrap();
 		let mut commit = CommitSet::default();
-		pruning.prune_one(&mut commit).unwrap();
+		assert_eq!(
+			Err(Error::StateDb(StateDbError::BlockUnavailable)),
+			pruning.prune_one(&mut commit)
+		);
 		assert_eq!(pruning.base, 0);
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
 		assert!(death_index.is_empty());
-		assert!(pruning.pending_prunings == 0);
-		assert!(pruning.pending_canonicalizations == 0);
 	}
 
 	#[test]
@@ -619,9 +461,8 @@ mod tests {
 		let hash = H256::random();
 		pruning.note_canonical(&hash, 0, &mut commit).unwrap();
 		db.commit(&commit);
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
-		pruning.apply_pending();
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Have);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Yes);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::Yes);
 		assert!(commit.data.deleted.is_empty());
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert_eq!(death_rows.len(), 1);
@@ -631,10 +472,9 @@ mod tests {
 
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::NotHave);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::No);
 		db.commit(&commit);
-		pruning.apply_pending();
-		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::NotHave);
+		assert_eq!(pruning.have_block(&hash, 0), HaveBlock::No);
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		let (death_rows, death_index) = pruning.queue.get_mem_queue_state().unwrap();
 		assert!(death_rows.is_empty());
@@ -653,7 +493,6 @@ mod tests {
 		let mut commit = make_commit(&[5], &[2]);
 		pruning.note_canonical(&H256::random(), 1, &mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 
 		check_journal(&pruning, &db);
@@ -661,12 +500,10 @@ mod tests {
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[2, 3, 4, 5])));
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
 		assert_eq!(pruning.base, 2);
 	}
@@ -690,7 +527,6 @@ mod tests {
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
 		assert_eq!(pruning.base, 2);
 	}
@@ -710,7 +546,6 @@ mod tests {
 		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
-		pruning.apply_pending();
 
 		check_journal(&pruning, &db);
 
@@ -725,7 +560,6 @@ mod tests {
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
-		pruning.apply_pending();
 		assert_eq!(pruning.base, 3);
 	}
 
@@ -756,7 +590,6 @@ mod tests {
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
-		pruning.apply_pending();
 		assert_eq!(pruning.base, 3);
 	}
 
@@ -775,7 +608,6 @@ mod tests {
 		pruning.note_canonical(&H256::random(), 2, &mut commit).unwrap();
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
-		pruning.apply_pending();
 
 		check_journal(&pruning, &db);
 
@@ -861,9 +693,9 @@ mod tests {
 		let cache_capacity = DEFAULT_MAX_BLOCK_CONSTRAINT as usize;
 
 		// start as an empty queue
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		let (cache, last) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), 0);
-		assert_eq!(uncached_blocks, 0);
+		assert_eq!(last, None);
 
 		// import blocks
 		// queue size and content should match
@@ -872,21 +704,19 @@ mod tests {
 			pruning.note_canonical(&(i as u64), i as u64, &mut commit).unwrap();
 			push_last_canonicalized(i as u64, &mut commit);
 			db.commit(&commit);
-			// block will fill in cache first
-			let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+			// blocks will fill the cache first
+			let (cache, last) = pruning.queue.get_db_backed_queue_state().unwrap();
 			if i < cache_capacity {
 				assert_eq!(cache.len(), i + 1);
-				assert_eq!(uncached_blocks, 0);
 			} else {
 				assert_eq!(cache.len(), cache_capacity);
-				assert_eq!(uncached_blocks, i - cache_capacity + 1);
 			}
+			assert_eq!(last, Some(i as u64));
 		}
-		pruning.apply_pending();
-		assert_eq!(pruning.queue.len(), cache_capacity + 10);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.window_size(), cache_capacity as u64 + 10);
+		let (cache, last) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
-		assert_eq!(uncached_blocks, 10);
+		assert_eq!(last, Some(cache_capacity as u64 + 10 - 1));
 		for i in 0..cache_capacity {
 			assert_eq!(cache[i].hash, i as u64);
 		}
@@ -897,29 +727,26 @@ mod tests {
 		pruning
 			.note_canonical(&(cache_capacity as u64 + 10), cache_capacity as u64 + 10, &mut commit)
 			.unwrap();
-		assert_eq!(pruning.queue.len(), cache_capacity + 11);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.window_size(), cache_capacity as u64 + 11);
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
-		assert_eq!(uncached_blocks, 11);
 
 		// revert the last add that no apply yet
 		// NOTE: do not commit the previous `CommitSet` to db
-		pruning.revert_pending();
-		assert_eq!(pruning.queue.len(), cache_capacity + 10);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		pruning = RefWindow::new(db.clone(), DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
+		let cache_capacity = DEFAULT_MAX_BLOCK_CONSTRAINT as usize;
+		assert_eq!(pruning.window_size(), cache_capacity as u64 + 10);
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
-		assert_eq!(uncached_blocks, 10);
 
 		// remove one block from the start of the queue
 		// block is removed from the head of cache
 		let mut commit = CommitSet::default();
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-		pruning.apply_pending();
-		assert_eq!(pruning.queue.len(), cache_capacity + 9);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.window_size(), cache_capacity as u64 + 9);
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity - 1);
-		assert_eq!(uncached_blocks, 10);
 		for i in 0..(cache_capacity - 1) {
 			assert_eq!(cache[i].hash, (i + 1) as u64);
 		}
@@ -928,10 +755,9 @@ mod tests {
 		// `cache` is full again but the content of the queue should be the same
 		let pruning: RefWindow<u64, H256, TestDb> =
 			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
-		assert_eq!(pruning.queue.len(), cache_capacity + 9);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.window_size(), cache_capacity as u64 + 9);
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
-		assert_eq!(uncached_blocks, 9);
 		for i in 0..cache_capacity {
 			assert_eq!(cache[i].hash, (i + 1) as u64);
 		}
@@ -952,24 +778,13 @@ mod tests {
 			db.commit(&commit);
 		}
 
-		// the following operations won't triger loading block from db:
+		// the following operations won't trigger loading block from db:
 		// - getting block in cache
 		// - getting block not in the queue
-		let index = cache_capacity;
-		assert_eq!(
-			pruning.queue.get(0, index - 1).unwrap().unwrap().hash,
-			cache_capacity as u64 - 1
-		);
-		assert_eq!(pruning.queue.get(0, cache_capacity * 2 + 10).unwrap(), None);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.next_hash().unwrap().unwrap(), 0);
+		let (cache, last) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), cache_capacity);
-		assert_eq!(uncached_blocks, cache_capacity + 10);
-
-		// getting a block not in cache will triger loading block from db
-		assert_eq!(pruning.queue.get(0, index).unwrap().unwrap().hash, cache_capacity as u64);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
-		assert_eq!(cache.len(), cache_capacity * 2);
-		assert_eq!(uncached_blocks, 10);
+		assert_eq!(last, Some(cache_capacity as u64 * 2 + 10 - 1));
 
 		// clear all block loaded in cache
 		for _ in 0..cache_capacity * 2 {
@@ -977,29 +792,22 @@ mod tests {
 			pruning.prune_one(&mut commit).unwrap();
 			db.commit(&commit);
 		}
-		pruning.apply_pending();
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert!(cache.is_empty());
-		assert_eq!(uncached_blocks, 10);
 
-		// getting the hash of block that not in cache will also triger loading
+		// getting the hash of block that not in cache will also trigger loading
 		// the remaining blocks from db
-		assert_eq!(
-			pruning.queue.get(pruning.base, 0).unwrap().unwrap().hash,
-			(cache_capacity * 2) as u64
-		);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.next_hash().unwrap().unwrap(), (cache_capacity * 2) as u64);
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), 10);
-		assert_eq!(uncached_blocks, 0);
 
 		// load a new queue from db
 		// `cache` should be the same
 		let pruning: RefWindow<u64, H256, TestDb> =
 			RefWindow::new(db, DEFAULT_MAX_BLOCK_CONSTRAINT, false).unwrap();
-		assert_eq!(pruning.queue.len(), 10);
-		let (cache, uncached_blocks) = pruning.queue.get_db_backed_queue_state().unwrap();
+		assert_eq!(pruning.window_size(), 10);
+		let (cache, _) = pruning.queue.get_db_backed_queue_state().unwrap();
 		assert_eq!(cache.len(), 10);
-		assert_eq!(uncached_blocks, 0);
 		for i in 0..10 {
 			assert_eq!(cache[i].hash, (cache_capacity * 2 + i) as u64);
 		}
@@ -1030,11 +838,8 @@ mod tests {
 			assert_eq!(pruning.next_hash().unwrap(), Some(i));
 			pruning.prune_one(&mut commit).unwrap();
 		}
-		// return `BlockUnavailable` for block that did not commit to db
-		assert_eq!(
-			pruning.next_hash().unwrap_err(),
-			Error::StateDb(StateDbError::BlockUnavailable)
-		);
+		// return `None` for block that did not commit to db
+		assert_eq!(pruning.next_hash().unwrap(), None);
 		assert_eq!(
 			pruning.prune_one(&mut commit).unwrap_err(),
 			Error::StateDb(StateDbError::BlockUnavailable)
@@ -1044,12 +849,5 @@ mod tests {
 		assert_eq!(pruning.next_hash().unwrap(), Some(index));
 		pruning.prune_one(&mut commit).unwrap();
 		db.commit(&commit);
-
-		// import a block and do not commit it to db before calling `apply_pending`
-		pruning
-			.note_canonical(&(index + 1), index + 1, &mut make_commit(&[], &[]))
-			.unwrap();
-		pruning.apply_pending();
-		assert_eq!(pruning.next_hash().unwrap_err(), Error::StateDb(StateDbError::BlockMissing));
 	}
 }

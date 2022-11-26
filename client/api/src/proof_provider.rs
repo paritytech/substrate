@@ -27,7 +27,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// Reads storage value at a given block + key, returning read proof.
 	fn read_proof(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
 
@@ -35,7 +35,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// read proof.
 	fn read_child_proof(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		child_info: &ChildInfo,
 		keys: &mut dyn Iterator<Item = &[u8]>,
 	) -> sp_blockchain::Result<StorageProof>;
@@ -46,7 +46,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// No changes are made.
 	fn execution_proof(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		method: &str,
 		call_data: &[u8],
 	) -> sp_blockchain::Result<(Vec<u8>, StorageProof)>;
@@ -61,7 +61,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// Returns combined proof and the numbers of collected keys.
 	fn read_proof_collection(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		start_keys: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<(CompactProof, u32)>;
@@ -76,7 +76,7 @@ pub trait ProofProvider<Block: BlockT> {
 	/// end.
 	fn storage_collection(
 		&self,
-		hash: &Block::Hash,
+		hash: Block::Hash,
 		start_key: &[Vec<u8>],
 		size_limit: usize,
 	) -> sp_blockchain::Result<Vec<(KeyValueStorageLevel, bool)>>;

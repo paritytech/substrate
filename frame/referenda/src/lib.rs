@@ -249,7 +249,7 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
-		/// A referendum has being submitted.
+		/// A referendum has been submitted.
 		Submitted {
 			/// Index of the referendum.
 			index: ReferendumIndex,
@@ -352,7 +352,7 @@ pub mod pallet {
 		HasDeposit,
 		/// The track identifier given was invalid.
 		BadTrack,
-		/// There are already a full complement of referendums in progress for this track.
+		/// There are already a full complement of referenda in progress for this track.
 		Full,
 		/// The queue of the track is empty.
 		QueueEmpty,
@@ -701,6 +701,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
+	/// Returns whether the referendum is passing.
+	/// Referendum must be ongoing and its track must exist.
+	pub fn is_referendum_passing(ref_index: ReferendumIndex) -> Result<bool, DispatchError> {
+		let info = ReferendumInfoFor::<T, I>::get(ref_index).ok_or(Error::<T, I>::BadReferendum)?;
+		match info {
+			ReferendumInfo::Ongoing(status) => {
+				let track = Self::track(status.track).ok_or(Error::<T, I>::NoTrack)?;
+				let elapsed = if let Some(deciding) = status.deciding {
+					frame_system::Pallet::<T>::block_number().saturating_sub(deciding.since)
+				} else {
+					Zero::zero()
+				};
+				Ok(Self::is_passing(
+					&status.tally,
+					elapsed,
+					track.decision_period,
+					&track.min_support,
+					&track.min_approval,
+					status.track,
+				))
+			},
+			_ => Err(Error::<T, I>::NotOngoing.into()),
+		}
+	}
+
 	// Enqueue a proposal from a referendum which has presumably passed.
 	fn schedule_enactment(
 		index: ReferendumIndex,
@@ -908,7 +933,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// In terms of storage, every call to it is expected to access:
 	/// - The scheduler, either to insert, remove or alter an entry;
-	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16).
+	/// - `TrackQueue`, which should be a `BoundedVec` with a low limit (8-16);
 	/// - `DecidingCount`.
 	///
 	/// Both of the two storage items will only have as many items as there are different tracks,

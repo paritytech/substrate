@@ -27,9 +27,9 @@ sc-utils = { version = "4.0.0-dev", path = "../../utils" }
 sp-api = { version = "4.0.0-dev", path = "../../../primitives/api" }
 sp-blockchain = { version = "4.0.0-dev", path = "../../../primitives/blockchain" }
 sp-consensus = { version = "0.10.0-dev", path = "../../../primitives/consensus/common" }
-sp-core = { version = "6.0.0", path = "../../../primitives/core" }
-sp-runtime = { version = "6.0.0", path = "../../../primitives/runtime" }
-sp-state-machine = { version = "0.12.0", path = "../../../primitives/state-machine" }
+sp-core = { version = "7.0.0", path = "../../../primitives/core" }
+sp-runtime = { version = "7.0.0", path = "../../../primitives/runtime" }
+sp-state-machine = { version = "0.13.0", path = "../../../primitives/state-machine" }
 
 [dev-dependencies]
 sp-test-primitives = { version = "2.0.0", path = "../../../primitives/test-primitives" }

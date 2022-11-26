@@ -5,6 +5,10 @@
 
 .check-dependent-project:
   stage:                           build
+  # DAG: this is artificial dependency
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   extends:
     - .docker-env
     - .test-refs-no-trigger-prs-only
@@ -86,9 +90,6 @@ build-linux-substrate:
   variables:
     # this variable gets overriden by "rusty-cachier environment inject", use the value as default
     CARGO_TARGET_DIR:              "$CI_PROJECT_DIR/target"
-  needs:
-    - job:                         cargo-check-subkey
-      artifacts:                   false
   before_script:
     - mkdir -p ./artifacts/subkey
     - !reference [.rusty-cachier, before_script]
@@ -147,6 +148,10 @@ build-rustdoc:
     expire_in:                     7 days
     paths:
     - ./crate-docs/
+  # DAG: this is artificial dependency
+  needs:
+    - job:                         cargo-clippy
+      artifacts:                   false
   script:
     - rusty-cachier snapshot create
     - time cargo +nightly doc --locked --workspace --all-features --verbose --no-deps
