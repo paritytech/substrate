@@ -775,7 +775,7 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	let mut net = TestNet::new(1);
 
 	// Produce some blocks
-	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true);
+	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true, true);
 
 	// Add a node and wait until they are connected
 	net.add_full_peer_with_config(Default::default());
@@ -818,20 +818,24 @@ fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 
 	let block_hash =
 		net.peer(0)
-			.push_blocks_at_without_informing_sync(BlockId::Number(0), 10_000, false);
+			.push_blocks_at_without_informing_sync(BlockId::Number(0), 10_000, false, false);
 
-	net.peer(1)
-		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false);
+	let block_hash2 = net.peer(1)
+		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false, false);
+
+	assert!(!net.peer(2).has_block(block_hash));
+	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
 
 	net.block_until_connected();
 	net.block_until_idle();
 
-	assert!(!net.peer(2).has_block(block_hash));
-
-	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
 	while !net.peer(2).has_block(block_hash) && !net.peer(1).has_block(block_hash) {
 		net.block_until_idle();
 	}
+
+	// verify that peer1 and peer3 also downloaded the other fork
+	assert!(net.peer(0).has_block(block_hash2));
+	assert!(net.peer(2).has_block(block_hash2));
 }
 
 /// Ensures that when we receive a block announcement with some data attached, that we propagate
