@@ -775,7 +775,9 @@ fn sync_to_tip_requires_that_sync_protocol_is_informed_about_best_block() {
 	let mut net = TestNet::new(1);
 
 	// Produce some blocks
-	let block_hash = net.peer(0).push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true, true);
+	let block_hash =
+		net.peer(0)
+			.push_blocks_at_without_informing_sync(BlockId::Number(0), 3, true, true);
 
 	// Add a node and wait until they are connected
 	net.add_full_peer_with_config(Default::default());
@@ -820,8 +822,9 @@ fn sync_to_tip_when_we_sync_together_with_multiple_peers() {
 		net.peer(0)
 			.push_blocks_at_without_informing_sync(BlockId::Number(0), 10_000, false, false);
 
-	let block_hash2 = net.peer(1)
-		.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false, false);
+	let block_hash2 =
+		net.peer(1)
+			.push_blocks_at_without_informing_sync(BlockId::Number(0), 5_000, false, false);
 
 	assert!(!net.peer(2).has_block(block_hash));
 	net.peer(0).network_service().new_best_block_imported(block_hash, 10_000);
