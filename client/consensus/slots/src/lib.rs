@@ -43,7 +43,11 @@ use sp_consensus::{Proposal, Proposer, SelectChain, SyncOracle};
 use sp_consensus_slots::{Slot, SlotDuration};
 use sp_inherents::CreateInherentDataProviders;
 use sp_runtime::traits::{Block as BlockT, HashFor, Header as HeaderT};
-use std::{fmt::Debug, ops::Deref, time::Duration};
+use std::{
+	fmt::Debug,
+	ops::Deref,
+	time::{Duration, Instant},
+};
 
 /// The changes that need to applied to the storage to create the state for a block.
 ///
@@ -251,10 +255,11 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		slot_info: &SlotInfo<B>,
 		logging_target: &str,
 	) -> Option<sp_inherents::InherentData> {
+		let remaining_duration = slot_info.ends_at - Instant::now();
 		let inherent_data = match slot_info
 			.create_inherent_data
 			.create_inherent_data()
-			.timeout(slot_info.duration)
+			.timeout(remaining_duration)
 			.await
 		{
 			Ok(Ok(data)) => data,
