@@ -70,14 +70,14 @@ impl<B: BlockT> SlotInfo<B> {
 	/// `ends_at` is calculated using `timestamp` and `duration`.
 	pub fn new(
 		slot: Slot,
-		inherent_data: Box<dyn InherentDataProvider>,
+		create_inherent_data: Box<dyn InherentDataProvider>,
 		duration: Duration,
 		chain_head: B::Header,
 		block_size_limit: Option<usize>,
 	) -> Self {
 		Self {
 			slot,
-			create_inherent_data: inherent_data,
+			create_inherent_data,
 			duration,
 			chain_head,
 			block_size_limit,

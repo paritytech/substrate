@@ -31,8 +31,8 @@ mod slots;
 pub use aux_schema::{check_equivocation, MAX_SLOT_CAPACITY, PRUNING_BOUND};
 pub use slots::SlotInfo;
 use slots::Slots;
-use std::time::Instant;
 
+use async_std::prelude::FutureExt;
 use futures::{future::Either, Future, TryFutureExt};
 use futures_timer::Delay;
 use log::{debug, info, warn};
@@ -251,29 +251,36 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		slot_info: &SlotInfo<B>,
 		logging_target: &str,
 	) -> Option<sp_inherents::InherentData> {
-		let inherent_data = match slot_info.create_inherent_data.create_inherent_data().await {
-			Ok(data) => data,
-			Err(err) => {
+		let inherent_data = match slot_info
+			.create_inherent_data
+			.create_inherent_data()
+			.timeout(slot_info.duration)
+			.await
+		{
+			Ok(Ok(data)) => data,
+			Ok(Err(err)) => {
 				warn!(
 					target: logging_target,
 					"Unable to create inherent data for block {:?}: {}",
 					slot_info.chain_head.hash(),
 					err,
 				);
+
+				return None
+			},
+
+			Err(err) => {
+				warn!(
+					target: logging_target,
+					"Creating inherent data for slot {} for block {:?} timed out: {}.",
+					slot_info.slot,
+					slot_info.chain_head.hash(),
+					err,
+				);
+
 				return None
 			},
 		};
-
-		if Instant::now() > slot_info.ends_at {
-			warn!(
-				target: "slots",
-				"Creating inherent data took more time than we had left for slot {} for block {:?}.",
-				slot_info.slot,
-				slot_info.chain_head.hash(),
-			);
-
-			return None
-		}
 
 		Some(inherent_data)
 	}

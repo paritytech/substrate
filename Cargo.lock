@@ -7943,6 +7943,7 @@ dependencies = [
 name = "sc-consensus-slots"
 version = "0.10.0-dev"
 dependencies = [
+ "async-std",
  "async-trait",
  "futures",
  "futures-timer",
