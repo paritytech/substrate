@@ -77,7 +77,7 @@ pub enum InvalidTransaction {
 	/// malicious validator or a buggy `provide_inherent`. In any case, it can result in
 	/// dangerously overweight blocks and therefore if found, invalidates the block.
 	BadMandatory,
-	/// An extrinsic with a Mandatory dispatch was tried to be validated.
+	/// An extrinsic with a mandatory dispatch tried to be validated.
 	/// This is invalid; only inherent extrinsics are allowed to have mandatory dispatches.
 	MandatoryValidation,
 	/// The sending address is disabled or known to be invalid.
