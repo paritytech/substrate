@@ -75,6 +75,9 @@ pub trait Inspect<AccountId> {
 		who: &AccountId,
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
+
+	/// Determines if an `asset` exists
+	fn asset_exists(asset: Self::AssetId) -> bool;
 }
 
 /// Trait for reading metadata from a fungible asset.
