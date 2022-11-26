@@ -21,7 +21,7 @@ sp-sandbox = { version = "0.10.0-dev", default-features = false, path = "../../.
 sp-std = { version = "5.0.0", default-features = false, path = "../../../primitives/std" }
 
 [build-dependencies]
-substrate-wasm-builder = { version = "5.0.0-dev", path = "../../../utils/wasm-builder" }
+substrate-wasm-builder = { version = "5.0.0-dev", default-features = false, path = "../../../utils/wasm-builder" }
 
 [features]
 default = ["std"]
@@ -31,4 +31,5 @@ std = [
 	"sp-runtime/std",
 	"sp-sandbox/std",
 	"sp-std/std",
+	"substrate-wasm-builder/std",
 ]

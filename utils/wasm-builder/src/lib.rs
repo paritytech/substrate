@@ -107,8 +107,14 @@
 
 use std::{fs, path::Path};
 
+#[cfg(feature = "std")]
 mod builder;
+#[cfg(not(feature = "std"))]
+#[path = "builder_wasm.rs"]
+mod builder;
+#[cfg(feature = "std")]
 mod env_vars;
+#[cfg(feature = "std")]
 mod utils;
 
 pub use builder::{WasmBuilder, WasmBuilderSelectProject};
