@@ -192,7 +192,8 @@ impl HostFn {
 		};
 
 		// process attributes
-		let msg = "only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
+		let msg =
+			"only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
 		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
