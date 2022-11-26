@@ -244,6 +244,13 @@ impl Metrics {
 						.inc_by(num);
 				});
 			},
+			Event::UncheckedNotificationStreamOpened { protocol, .. } => {
+				format_label("notif-open-", protocol, |protocol_label| {
+					self.events_total
+						.with_label_values(&[protocol_label, "sent", name])
+						.inc_by(num);
+				});
+			},
 			Event::NotificationStreamClosed { protocol, .. } => {
 				format_label("notif-closed-", protocol, |protocol_label| {
 					self.events_total
@@ -271,6 +278,11 @@ impl Metrics {
 				self.events_total.with_label_values(&["dht", "received", name]).inc();
 			},
 			Event::NotificationStreamOpened { protocol, .. } => {
+				format_label("notif-open-", protocol, |protocol_label| {
+					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
+				});
+			},
+			Event::UncheckedNotificationStreamOpened { protocol, .. } => {
 				format_label("notif-open-", protocol, |protocol_label| {
 					self.events_total.with_label_values(&[protocol_label, "received", name]).inc();
 				});

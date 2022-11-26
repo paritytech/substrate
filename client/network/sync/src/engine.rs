@@ -28,12 +28,12 @@ use prometheus_endpoint::{
 	register, Gauge, GaugeVec, MetricSource, Opts, PrometheusError, Registry, SourcedGauge, U64,
 };
 
-use codec::Encode;
+use codec::{Decode, DecodeAll, Encode};
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_consensus::import_queue::ImportQueueService;
 use sc_network_common::{
 	config::{NonDefaultSetConfig, ProtocolId},
-	protocol::{role::Roles, ProtocolName},
+	protocol::{event::Event, role::Roles, ProtocolName},
 	sync::{
 		message::{
 			generic::{BlockData, BlockResponse},
@@ -80,8 +80,8 @@ mod rep {
 	use sc_peerset::ReputationChange as Rep;
 	/// Reputation change when we are a light client and a peer is behind us.
 	pub const PEER_BEHIND_US_LIGHT: Rep = Rep::new(-(1 << 8), "Useless for a light peer");
-	// /// We received a message that failed to decode.
-	// pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
+	/// We received a message that failed to decode.
+	pub const BAD_MESSAGE: Rep = Rep::new(-(1 << 12), "Bad message");
 	/// Peer has different genesis.
 	pub const GENESIS_MISMATCH: Rep = Rep::new_fatal("Genesis mismatch");
 	/// Peer role does not match (e.g. light peer connecting to another light peer).
@@ -536,13 +536,98 @@ where
 		)
 	}
 
-	pub fn poll(&mut self, cx: &mut std::task::Context) {
+	pub fn poll(
+		&mut self,
+		cx: &mut std::task::Context,
+		event_stream: &mut Pin<Box<dyn Stream<Item = Event> + Send>>,
+	) {
 		self.num_connected.store(self.peers.len(), Ordering::Relaxed);
 		self.is_major_syncing
 			.store(self.chain_sync.status().state.is_major_syncing(), Ordering::Relaxed);
 
 		while let Poll::Ready(Some(())) = self.tick_timeout.poll_next_unpin(cx) {
 			self.report_metrics();
+		}
+
+		while let Poll::Ready(Some(event)) = event_stream.poll_next_unpin(cx) {
+			match event {
+				Event::UncheckedNotificationStreamOpened {
+					remote,
+					protocol,
+					received_handshake,
+					..
+				} => {
+					if protocol != self.block_announce_protocol_name {
+						continue
+					}
+
+					match <BlockAnnouncesHandshake<B> as DecodeAll>::decode_all(
+						&mut &received_handshake[..],
+					) {
+						Ok(handshake) => {
+							if self.on_sync_peer_connected(remote, handshake).is_err() {
+								log::debug!(
+									target: "sync",
+									"Failed to register peer {remote:?}: {received_handshake:?}",
+								);
+							}
+						},
+						Err(err) => {
+							log::debug!(
+								target: "sync",
+								"Couldn't decode handshake sent by {}: {:?}: {}",
+								remote,
+								received_handshake,
+								err,
+							);
+							self.network_service.report_peer(remote, rep::BAD_MESSAGE);
+						},
+					}
+				},
+				Event::NotificationStreamClosed { remote, protocol } => {
+					if protocol != self.block_announce_protocol_name {
+						continue
+					}
+
+					if self.on_sync_peer_disconnected(remote).is_err() {
+						log::trace!(
+							target: "sync",
+							"Disconnected peer which had earlier been refused by on_sync_peer_connected {}",
+							remote
+						);
+					}
+				},
+				Event::NotificationsReceived { remote, messages } => {
+					for (protocol, message) in messages {
+						if protocol != self.block_announce_protocol_name {
+							continue
+						}
+
+						if self.peers.contains_key(&remote) {
+							if let Ok(announce) = BlockAnnounce::decode(&mut message.as_ref()) {
+								self.push_block_announce_validation(remote, announce);
+
+								// Make sure that the newly added block announce validation future
+								// was polled once to be registered in the task.
+								if let Poll::Ready(res) =
+									self.chain_sync.poll_block_announce_validation(cx)
+								{
+									self.process_block_announce_validation_result(res)
+								}
+							} else {
+								log::warn!(target: "sub-libp2p", "Failed to decode block announce");
+							}
+						} else {
+							log::trace!(
+								target: "sync",
+								"Received sync for peer earlier refused by sync layer: {}",
+								remote
+							);
+						}
+					}
+				},
+				_ => {},
+			}
 		}
 
 		while let Poll::Ready(Some(event)) = self.service_rx.poll_next_unpin(cx) {

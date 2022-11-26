@@ -225,11 +225,13 @@ where
 			local_peer_id.to_base58(),
 		);
 
+		let (tx, rx) = out_events::channel("block-announce-protocol");
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			&params.network_config,
 			params.block_announce_config,
 			params.engine,
+			Box::pin(rx),
 		)?;
 
 		// List of multiaddresses that we know in the network.
@@ -443,13 +445,16 @@ where
 			_marker: PhantomData,
 		});
 
+		let mut event_streams = out_events::OutChannels::new(params.metrics_registry.as_ref())?;
+		event_streams.push(tx);
+
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
 			network_service: swarm,
 			service,
 			from_service,
-			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
+			event_streams,
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,
@@ -1537,6 +1542,34 @@ where
 						protocol,
 						negotiated_fallback,
 						role,
+					});
+				},
+				Poll::Ready(SwarmEvent::Behaviour(
+					BehaviourOut::UncheckedNotificationStreamOpened {
+						remote,
+						protocol,
+						negotiated_fallback,
+						notifications_sink,
+						received_handshake,
+					},
+				)) => {
+					if let Some(metrics) = this.metrics.as_ref() {
+						metrics
+							.notifications_streams_opened_total
+							.with_label_values(&[&protocol])
+							.inc();
+					}
+					{
+						let mut peers_notifications_sinks = this.peers_notifications_sinks.lock();
+						let _previous_value = peers_notifications_sinks
+							.insert((remote, protocol.clone()), notifications_sink);
+						debug_assert!(_previous_value.is_none());
+					}
+					this.event_streams.send(Event::UncheckedNotificationStreamOpened {
+						remote,
+						protocol,
+						negotiated_fallback,
+						received_handshake,
 					});
 				},
 				Poll::Ready(SwarmEvent::Behaviour(BehaviourOut::NotificationStreamReplaced {

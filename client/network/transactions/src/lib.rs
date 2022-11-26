@@ -334,7 +334,7 @@ where
 
 	async fn handle_network_event(&mut self, event: Event) {
 		match event {
-			Event::Dht(_) => {},
+			Event::Dht(_) | Event::UncheckedNotificationStreamOpened { .. } => {},
 			Event::NotificationStreamOpened { remote, protocol, role, .. }
 				if protocol == self.protocol_name =>
 			{

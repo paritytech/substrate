@@ -120,6 +120,28 @@ pub enum BehaviourOut {
 		role: ObservedRole,
 	},
 
+	/// Opened a substream with the given node with the given notifications protocol.
+	///
+	/// The protocol is always one of the notification protocols that have been registered.
+	///
+	/// Protocol must validate the received handshake and close the substream if the handshake is
+	/// invalid.
+	UncheckedNotificationStreamOpened {
+		/// Node we opened the substream with.
+		remote: PeerId,
+		/// The concerned protocol. Each protocol uses a different substream.
+		protocol: ProtocolName,
+		/// If the negotiation didn't use the main name of the protocol (the one in
+		/// `notifications_protocol`), then this field contains which name has actually been
+		/// used.
+		/// See also [`crate::Event::NotificationStreamOpened`].
+		negotiated_fallback: Option<ProtocolName>,
+		/// Object that permits sending notifications to the peer.
+		notifications_sink: NotificationsSink,
+		/// Received handshake.
+		received_handshake: Vec<u8>,
+	},
+
 	/// The [`NotificationsSink`] object used to send notifications with the given peer must be
 	/// replaced with a new one.
 	///
@@ -303,6 +325,19 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut {
 				protocol,
 				negotiated_fallback,
 				role: reported_roles_to_observed_role(roles),
+				notifications_sink,
+			},
+			CustomMessageOutcome::UncheckedNotificationStreamOpened {
+				remote,
+				protocol,
+				negotiated_fallback,
+				received_handshake,
+				notifications_sink,
+			} => BehaviourOut::UncheckedNotificationStreamOpened {
+				remote,
+				protocol,
+				negotiated_fallback,
+				received_handshake,
 				notifications_sink,
 			},
 			CustomMessageOutcome::NotificationStreamReplaced {
