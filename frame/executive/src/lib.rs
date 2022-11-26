@@ -501,7 +501,7 @@ where
 		// Mandatory(inherents) are not allowed to fail.
 		//
 		// The entire block should be discarded if an inherent fails to apply. Otherwise
-		// it may opens some attack vector.
+		// it may open an attack vector.
 		if r.is_err() && dispatch_info.class == DispatchClass::Mandatory {
 			return Err(InvalidTransaction::BadMandatory.into())
 		}
