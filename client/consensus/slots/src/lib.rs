@@ -255,7 +255,12 @@ pub trait SimpleSlotWorker<B: BlockT> {
 		slot_info: &SlotInfo<B>,
 		logging_target: &str,
 	) -> Option<sp_inherents::InherentData> {
-		let remaining_duration = slot_info.ends_at - Instant::now();
+		let now = Instant::now();
+		let remaining_duration = if now > slot_info.ends_at {
+			Duration::from_millis(0)
+		} else {
+			slot_info.ends_at - now
+		};
 		let inherent_data = match slot_info
 			.create_inherent_data
 			.create_inherent_data()
