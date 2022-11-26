@@ -192,7 +192,7 @@ impl HostFn {
 		};
 
 		// process attributes
-		let msg = "only #[version(<u8>)] or #[unstable] attributes is allowed.";
+		let msg = "only #[version(<u8>)], #[unstable] and #[prefixed_alias] attributes are allowed.";
 		let span = item.span();
 		let mut attrs = item.attrs.clone();
 		attrs.retain(|a| !(a.path.is_ident("doc") || a.path.is_ident("prefixed_alias")));
@@ -525,7 +525,7 @@ fn expand_functions(
 /// ```nocompile
 /// #[define_env]
 /// pub mod some_env {
-/// 	#[version(0)]
+/// 	#[version(2)]
 /// 	fn foo(ctx: _, memory: _, key_ptr: u32, value_ptr: u32, value_len: u32) -> Result<ReturnCode, TrapReason> {
 /// 		ctx.some_host_fn(KeyType::Fix, key_ptr, value_ptr, value_len).map(|_| ())
 /// 	}
