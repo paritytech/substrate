@@ -15,11 +15,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::env_vars::{FORCE_WASM_BUILD_ENV, SKIP_BUILD_ENV, WASM_BUILD_NO_COLOR};
+
 use std::{
 	env,
 	path::{Path, PathBuf},
 	process,
 };
+
+mod prerequisites;
+mod wasm_project;
 
 /// Returns the manifest dir from the `CARGO_MANIFEST_DIR` env.
 fn get_manifest_dir() -> PathBuf {
@@ -186,8 +191,7 @@ fn generate_crate_skip_build_env_name() -> String {
 
 /// Checks if the build of the WASM binary should be skipped.
 fn check_skip_build() -> bool {
-	env::var(crate::SKIP_BUILD_ENV).is_ok() ||
-		env::var(generate_crate_skip_build_env_name()).is_ok()
+	env::var(SKIP_BUILD_ENV).is_ok() || env::var(generate_crate_skip_build_env_name()).is_ok()
 }
 
 /// Provide a dummy WASM binary if there doesn't exist one.
@@ -205,8 +209,8 @@ fn provide_dummy_wasm_binary_if_not_exist(file_path: &Path) {
 /// rebuilt when needed.
 fn generate_rerun_if_changed_instructions() {
 	// Make sure that the `build.rs` is called again if one of the following env variables changes.
-	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
-	println!("cargo:rerun-if-env-changed={}", crate::FORCE_WASM_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", FORCE_WASM_BUILD_ENV);
 	println!("cargo:rerun-if-env-changed={}", generate_crate_skip_build_env_name());
 }
 
@@ -233,7 +237,7 @@ fn build_project(
 	features_to_enable: Vec<String>,
 	wasm_binary_name: Option<String>,
 ) {
-	let cargo_cmd = match crate::prerequisites::check() {
+	let cargo_cmd = match prerequisites::check() {
 		Ok(cmd) => cmd,
 		Err(err_msg) => {
 			eprintln!("{}", err_msg);
@@ -241,7 +245,7 @@ fn build_project(
 		},
 	};
 
-	let (wasm_binary, bloaty) = crate::wasm_project::create_and_compile(
+	let (wasm_binary, bloaty) = wasm_project::create_and_compile(
 		&project_cargo_toml,
 		&default_rustflags,
 		cargo_cmd,
@@ -266,4 +270,9 @@ fn build_project(
 			wasm_binary_bloaty = wasm_binary_bloaty,
 		),
 	);
+}
+
+/// Returns `true` when color output is enabled.
+fn color_output_enabled() -> bool {
+	env::var(WASM_BUILD_NO_COLOR).is_err()
 }

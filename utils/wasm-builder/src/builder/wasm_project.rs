@@ -15,7 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{write_file_if_changed, CargoCommandVersioned, OFFLINE};
+use crate::{
+	env_vars::{
+		OFFLINE, SKIP_BUILD_ENV, WASM_BUILD_RUSTFLAGS_ENV, WASM_BUILD_TOOLCHAIN,
+		WASM_BUILD_TYPE_ENV, WASM_BUILD_WORKSPACE_HINT, WASM_TARGET_DIRECTORY,
+	},
+	utils::{copy_file_if_changed, CargoCommandVersioned},
+	write_file_if_changed,
+};
 
 use build_helper::rerun_if_changed;
 use cargo_metadata::{CargoOpt, Metadata, MetadataCommand};
@@ -203,7 +210,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		}
 	}
 
-	if let Ok(workspace) = env::var(crate::WASM_BUILD_WORKSPACE_HINT) {
+	if let Ok(workspace) = env::var(WASM_BUILD_WORKSPACE_HINT) {
 		let path = PathBuf::from(workspace);
 
 		if path.join("Cargo.lock").exists() {
@@ -211,7 +218,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		} else {
 			build_helper::warning!(
 				"`{}` env variable doesn't point to a directory that contains a `Cargo.lock`.",
-				crate::WASM_BUILD_WORKSPACE_HINT,
+				WASM_BUILD_WORKSPACE_HINT,
 			);
 		}
 	}
@@ -225,7 +232,7 @@ fn find_cargo_lock(cargo_manifest: &Path) -> Option<PathBuf> {
 		 To fix this, point the `{}` env variable to the directory of the workspace being compiled.",
 		cargo_manifest.display(),
 		build_helper::out_dir().display(),
-		crate::WASM_BUILD_WORKSPACE_HINT,
+		WASM_BUILD_WORKSPACE_HINT,
 	);
 
 	None
@@ -480,7 +487,7 @@ fn create_project(
 
 	if let Some(crate_lock_file) = find_cargo_lock(project_cargo_toml) {
 		// Use the `Cargo.lock` of the main project.
-		crate::copy_file_if_changed(crate_lock_file, wasm_project_folder.join("Cargo.lock"));
+		copy_file_if_changed(crate_lock_file, wasm_project_folder.join("Cargo.lock"));
 	}
 
 	wasm_project_folder
@@ -507,9 +514,9 @@ impl Profile {
 	///
 	/// # Note
 	///
-	/// Can be overriden by setting [`crate::WASM_BUILD_TYPE_ENV`].
+	/// Can be overriden by setting [`WASM_BUILD_TYPE_ENV`].
 	fn detect(wasm_project: &Path) -> Profile {
-		let (name, overriden) = if let Ok(name) = env::var(crate::WASM_BUILD_TYPE_ENV) {
+		let (name, overriden) = if let Ok(name) = env::var(WASM_BUILD_TYPE_ENV) {
 			(name, true)
 		} else {
 			// First go backwards to the beginning of the target directory.
@@ -610,7 +617,7 @@ fn build_project(
 	let rustflags = format!(
 		"-C link-arg=--export-table {} {}",
 		default_rustflags,
-		env::var(crate::WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
+		env::var(WASM_BUILD_RUSTFLAGS_ENV).unwrap_or_default(),
 	);
 
 	build_cmd
@@ -626,7 +633,7 @@ fn build_project(
 		// env variable.
 		.env_remove("CARGO_ENCODED_RUSTFLAGS")
 		// We don't want to call ourselves recursively
-		.env(crate::SKIP_BUILD_ENV, "");
+		.env(SKIP_BUILD_ENV, "");
 
 	if super::color_output_enabled() {
 		build_cmd.arg("--color=always");
@@ -819,11 +826,11 @@ fn generate_rerun_if_changed_instructions(
 	rerun_if_changed(bloaty_wasm.wasm_binary_bloaty_path());
 
 	// Register our env variables
-	println!("cargo:rerun-if-env-changed={}", crate::SKIP_BUILD_ENV);
-	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TYPE_ENV);
-	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_RUSTFLAGS_ENV);
-	println!("cargo:rerun-if-env-changed={}", crate::WASM_TARGET_DIRECTORY);
-	println!("cargo:rerun-if-env-changed={}", crate::WASM_BUILD_TOOLCHAIN);
+	println!("cargo:rerun-if-env-changed={}", SKIP_BUILD_ENV);
+	println!("cargo:rerun-if-env-changed={}", WASM_BUILD_TYPE_ENV);
+	println!("cargo:rerun-if-env-changed={}", WASM_BUILD_RUSTFLAGS_ENV);
+	println!("cargo:rerun-if-env-changed={}", WASM_TARGET_DIRECTORY);
+	println!("cargo:rerun-if-env-changed={}", WASM_BUILD_TOOLCHAIN);
 }
 
 /// Track files and paths related to the given package to rerun `build.rs` on any relevant change.
@@ -852,7 +859,7 @@ fn package_rerun_if_changed(package: &DeduplicatePackage) {
 /// Copy the WASM binary to the target directory set in `WASM_TARGET_DIRECTORY` environment
 /// variable. If the variable is not set, this is a no-op.
 fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary) {
-	let target_dir = match env::var(crate::WASM_TARGET_DIRECTORY) {
+	let target_dir = match env::var(WASM_TARGET_DIRECTORY) {
 		Ok(path) => PathBuf::from(path),
 		Err(_) => return,
 	};
@@ -861,7 +868,7 @@ fn copy_wasm_to_target_directory(cargo_manifest: &Path, wasm_binary: &WasmBinary
 		// We use println! + exit instead of a panic in order to have a cleaner output.
 		println!(
 			"Environment variable `{}` with `{}` is not an absolute path!",
-			crate::WASM_TARGET_DIRECTORY,
+			WASM_TARGET_DIRECTORY,
 			target_dir.display(),
 		);
 		process::exit(1);

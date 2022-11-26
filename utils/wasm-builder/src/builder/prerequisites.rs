@@ -15,9 +15,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{write_file_if_changed, CargoCommand, CargoCommandVersioned};
+use crate::{
+	env_vars::WASM_BUILD_TOOLCHAIN,
+	utils::{CargoCommand, CargoCommandVersioned},
+	write_file_if_changed,
+};
 
-use std::{fs, path::Path};
+use std::{env, fs, io::BufRead, path::Path, process::Command};
 
 use ansi_term::Color;
 use tempfile::tempdir;
@@ -31,11 +35,62 @@ fn print_error_message(message: &str) -> String {
 	}
 }
 
+/// Get a cargo command that compiles with nightly
+fn get_nightly_cargo() -> CargoCommand {
+	let env_cargo =
+		CargoCommand::new(&env::var("CARGO").expect("`CARGO` env variable is always set by cargo"));
+	let default_cargo = CargoCommand::new("cargo");
+	let rustup_run_nightly = CargoCommand::new_with_args("rustup", &["run", "nightly", "cargo"]);
+	let wasm_toolchain = env::var(WASM_BUILD_TOOLCHAIN).ok();
+
+	// First check if the user requested a specific toolchain
+	if let Some(cmd) = wasm_toolchain.and_then(|t| get_rustup_nightly(Some(t))) {
+		cmd
+	} else if env_cargo.is_nightly() {
+		env_cargo
+	} else if default_cargo.is_nightly() {
+		default_cargo
+	} else if rustup_run_nightly.is_nightly() {
+		rustup_run_nightly
+	} else {
+		// If no command before provided us with a nightly compiler, we try to search one
+		// with rustup. If that fails as well, we return the default cargo and let the prequisities
+		// check fail.
+		get_rustup_nightly(None).unwrap_or(default_cargo)
+	}
+}
+
+/// Get a nightly from rustup. If `selected` is `Some(_)`, a `CargoCommand` using the given
+/// nightly is returned.
+fn get_rustup_nightly(selected: Option<String>) -> Option<CargoCommand> {
+	let host = format!("-{}", env::var("HOST").expect("`HOST` is always set by cargo"));
+
+	let version = match selected {
+		Some(selected) => selected,
+		None => {
+			let output = Command::new("rustup").args(&["toolchain", "list"]).output().ok()?.stdout;
+			let lines = output.as_slice().lines();
+
+			let mut latest_nightly = None;
+			for line in lines.filter_map(|l| l.ok()) {
+				if line.starts_with("nightly-") && line.ends_with(&host) {
+					// Rustup prints them sorted
+					latest_nightly = Some(line.clone());
+				}
+			}
+
+			latest_nightly?.trim_end_matches(&host).into()
+		},
+	};
+
+	Some(CargoCommand::new_with_args("rustup", &["run", &version, "cargo"]))
+}
+
 /// Checks that all prerequisites are installed.
 ///
 /// Returns the versioned cargo command on success.
 pub(crate) fn check() -> Result<CargoCommandVersioned, String> {
-	let cargo_command = crate::get_nightly_cargo();
+	let cargo_command = get_nightly_cargo();
 
 	if !cargo_command.is_nightly() {
 		return Err(print_error_message("Rust nightly not installed, please install it!"))
