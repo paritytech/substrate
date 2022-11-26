@@ -50,14 +50,14 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
-	ChainSyncInterface, Multiaddr, NetworkService, NetworkWorker,
+	ChainSyncInterface, ChainSyncService, Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
 	config::{
 		MultiaddrWithPeerId, NonDefaultSetConfig, NonReservedPeerMode, ProtocolId, TransportConfig,
 	},
 	protocol::{role::Roles, ProtocolName},
-	service::{NetworkBlock, NetworkStateInfo, NetworkSyncForkRequest},
+	service::{NetworkBlock, NetworkEventStream, NetworkStateInfo, NetworkSyncForkRequest},
 	sync::warp::{AuthorityList, EncodedProof, SetId, VerificationResult, WarpSyncProvider},
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -271,13 +271,13 @@ where
 	}
 
 	/// Returns the number of downloaded blocks.
-	pub fn num_downloaded_blocks(&self) -> usize {
-		self.network.num_downloaded_blocks()
+	pub async fn num_downloaded_blocks(&self) -> usize {
+		self.chain_sync_service.num_downloaded_blocks().await.unwrap()
 	}
 
 	/// Returns true if we have no peer.
 	pub fn is_offline(&self) -> bool {
-		self.num_peers() == 0
+		self.chain_sync_service.is_offline()
 	}
 
 	/// Request a justification for the given block.
@@ -715,13 +715,14 @@ pub struct FullPeerConfig {
 	pub storage_chain: bool,
 }
 
-pub trait TestNetFactory: Default + Sized
+#[async_trait::async_trait]
+pub trait TestNetFactory: Default + Sized + Send
 where
 	<Self::BlockImport as BlockImport<Block>>::Transaction: Send,
 {
 	type Verifier: 'static + Verifier<Block>;
 	type BlockImport: BlockImport<Block, Error = ConsensusError> + Clone + Send + Sync + 'static;
-	type PeerData: Default;
+	type PeerData: Default + Send;
 
 	/// This one needs to be implemented!
 	fn make_verifier(&self, client: PeersClient, peer_data: &Self::PeerData) -> Self::Verifier;
@@ -729,6 +730,7 @@ where
 	/// Get reference to peer.
 	fn peer(&mut self, i: usize) -> &mut Peer<Self::PeerData, Self::BlockImport>;
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>>;
+	fn peers_mut(&mut self) -> &mut Vec<Peer<Self::PeerData, Self::BlockImport>>;
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>)>(
 		&mut self,
 		closure: F,
@@ -952,7 +954,7 @@ where
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			engine,
+			// engine,
 			// TODO(aaro): fix arcs
 			chain_sync_service: Box::new(chain_sync_service.clone()),
 			metrics_registry: None,
@@ -973,9 +975,13 @@ where
 		async_std::task::spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
-		let service = Box::new(chain_sync_service.clone());
+		let service = chain_sync_service.clone();
 		async_std::task::spawn(async move {
-			import_queue.run(service).await;
+			import_queue.run(Box::new(service)).await;
+		});
+		let service = network.service().clone();
+		async_std::task::spawn(async move {
+			engine.run(service.event_stream("syncing")).await;
 		});
 
 		self.mut_peers(move |peers| {
@@ -1009,48 +1015,6 @@ where
 		async_std::task::spawn(f);
 	}
 
-	/// Polls the testnet until all nodes are in sync.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_sync(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
-
-		// Return `NotReady` if there's a mismatch in the highest block number.
-		let mut highest = None;
-		for peer in self.peers().iter() {
-			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
-			}
-			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending
-			}
-			match (highest, peer.client.info().best_hash) {
-				(None, b) => highest = Some(b),
-				(Some(ref a), ref b) if a == b => {},
-				(Some(_), _) => return Poll::Pending,
-			}
-		}
-		Poll::Ready(())
-	}
-
-	/// Polls the testnet until theres' no activiy of any kind.
-	///
-	/// Must be executed in a task context.
-	fn poll_until_idle(&mut self, cx: &mut FutureContext) -> Poll<()> {
-		self.poll(cx);
-
-		for peer in self.peers().iter() {
-			if peer.is_major_syncing() || peer.network.num_queued_blocks() != 0 {
-				return Poll::Pending
-			}
-			if peer.network.num_sync_requests() != 0 {
-				return Poll::Pending
-			}
-		}
-
-		Poll::Ready(())
-	}
-
 	/// Polls the testnet until all peers are connected to each other.
 	///
 	/// Must be executed in a task context.
@@ -1065,15 +1029,61 @@ where
 		Poll::Pending
 	}
 
+	async fn is_in_sync(&mut self) -> bool {
+		let mut highest = None;
+		let peers = self.peers_mut();
+
+		for peer in peers {
+			if peer.chain_sync_service.is_major_syncing() ||
+				peer.chain_sync_service.num_queued_blocks().await.unwrap() != 0
+			{
+				return false
+			}
+			if peer.chain_sync_service.num_sync_requests().await.unwrap() != 0 {
+				return false
+			}
+			match (highest, peer.client.info().best_hash) {
+				(None, b) => highest = Some(b),
+				(Some(ref a), ref b) if a == b => {},
+				(Some(_), _) => return false,
+			}
+		}
+
+		true
+	}
+
+	async fn is_idle(&mut self) -> bool {
+		let peers = self.peers_mut();
+		for peer in peers {
+			if peer.chain_sync_service.num_queued_blocks().await.unwrap() != 0 {
+				return false
+			}
+			if peer.chain_sync_service.num_sync_requests().await.unwrap() != 0 {
+				return false
+			}
+		}
+
+		true
+	}
+
 	/// Blocks the current thread until we are sync'ed.
 	///
 	/// Calls `poll_until_sync` repeatedly.
 	/// (If we've not synced within 10 mins then panic rather than hang.)
 	fn block_until_sync(&mut self) {
-		futures::executor::block_on(timeout(
-			Duration::from_secs(10 * 60),
-			futures::future::poll_fn::<(), _>(|cx| self.poll_until_sync(cx)),
-		))
+		futures::executor::block_on(timeout(Duration::from_secs(10 * 60), async move {
+			loop {
+				futures::future::poll_fn::<(), _>(|cx| {
+					self.poll(cx);
+					Poll::Ready(())
+				})
+				.await;
+
+				if self.is_in_sync().await {
+					break
+				}
+			}
+		}))
 		.expect("sync didn't happen within 10 mins");
 	}
 
@@ -1081,9 +1091,19 @@ where
 	///
 	/// Calls `poll_until_idle` repeatedly with the runtime passed as parameter.
 	fn block_until_idle(&mut self) {
-		futures::executor::block_on(futures::future::poll_fn::<(), _>(|cx| {
-			self.poll_until_idle(cx)
-		}));
+		futures::executor::block_on(async move {
+			loop {
+				futures::future::poll_fn::<(), _>(|cx| {
+					self.poll(cx);
+					Poll::Ready(())
+				})
+				.await;
+
+				if self.is_idle().await {
+					break
+				}
+			}
+		});
 	}
 
 	/// Blocks the current thread until all peers are connected to each other.
@@ -1158,6 +1178,10 @@ impl TestNetFactory for TestNet {
 		&self.peers
 	}
 
+	fn peers_mut(&mut self) -> &mut Vec<Peer<(), Self::BlockImport>> {
+		&mut self.peers
+	}
+
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<(), Self::BlockImport>>)>(&mut self, closure: F) {
 		closure(&mut self.peers);
 	}
@@ -1203,6 +1227,10 @@ impl TestNetFactory for JustificationTestNet {
 
 	fn peers(&self) -> &Vec<Peer<Self::PeerData, Self::BlockImport>> {
 		self.0.peers()
+	}
+
+	fn peers_mut(&mut self) -> &mut Vec<Peer<Self::PeerData, Self::BlockImport>> {
+		self.0.peers_mut()
 	}
 
 	fn mut_peers<F: FnOnce(&mut Vec<Peer<Self::PeerData, Self::BlockImport>>)>(

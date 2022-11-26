@@ -82,9 +82,8 @@ where
 	/// name on the wire.
 	pub fork_id: Option<String>,
 
-	/// Syncing engine.
-	pub engine: SyncingEngine<B, Client>,
-
+	// /// Syncing engine.
+	// pub engine: SyncingEngine<B, Client>,
 	/// Interface that can be used to delegate syncing-related function calls to `ChainSync`
 	pub chain_sync_service: Box<dyn ChainSyncInterface<B>>,
 

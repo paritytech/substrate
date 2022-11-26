@@ -230,7 +230,7 @@ where
 			From::from(&params.role),
 			&params.network_config,
 			params.block_announce_config,
-			params.engine,
+			// params.engine,
 			Box::pin(rx),
 		)?;
 
@@ -486,35 +486,35 @@ where
 		self.network_service.behaviour().user_protocol().num_connected_peers()
 	}
 
-	/// Returns the number of peers we're connected to and that are being queried.
-	pub fn num_active_peers(&self) -> usize {
-		self.network_service.behaviour().user_protocol().num_active_peers()
-	}
+	// /// Returns the number of peers we're connected to and that are being queried.
+	// pub fn num_active_peers(&self) -> usize {
+	// 	self.network_service.behaviour().user_protocol().num_active_peers()
+	// }
 
-	/// Target sync block number.
-	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.network_service.behaviour().user_protocol().best_seen_block()
-	}
+	// /// Target sync block number.
+	// pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
+	// 	self.network_service.behaviour().user_protocol().best_seen_block()
+	// }
 
-	/// Number of peers participating in syncing.
-	pub fn num_sync_peers(&self) -> u32 {
-		self.network_service.behaviour().user_protocol().num_sync_peers()
-	}
+	// /// Number of peers participating in syncing.
+	// pub fn num_sync_peers(&self) -> u32 {
+	// 	self.network_service.behaviour().user_protocol().num_sync_peers()
+	// }
 
-	/// Number of blocks in the import queue.
-	pub fn num_queued_blocks(&self) -> u32 {
-		self.network_service.behaviour().user_protocol().num_queued_blocks()
-	}
+	// /// Number of blocks in the import queue.
+	// pub fn num_queued_blocks(&self) -> u32 {
+	// 	self.network_service.behaviour().user_protocol().num_queued_blocks()
+	// }
 
-	/// Returns the number of downloaded blocks.
-	pub fn num_downloaded_blocks(&self) -> usize {
-		self.network_service.behaviour().user_protocol().num_downloaded_blocks()
-	}
+	// /// Returns the number of downloaded blocks.
+	// pub fn num_downloaded_blocks(&self) -> usize {
+	// 	self.network_service.behaviour().user_protocol().num_downloaded_blocks()
+	// }
 
-	/// Number of active sync requests.
-	pub fn num_sync_requests(&self) -> usize {
-		self.network_service.behaviour().user_protocol().num_sync_requests()
-	}
+	// /// Number of active sync requests.
+	// pub fn num_sync_requests(&self) -> usize {
+	// 	self.network_service.behaviour().user_protocol().num_sync_requests()
+	// }
 
 	/// Adds an address for a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
@@ -628,16 +628,6 @@ where
 			not_connected_peers,
 			peerset: swarm.behaviour_mut().user_protocol_mut().peerset_debug_info(),
 		}
-	}
-
-	/// Get currently connected peers.
-	pub fn peers_debug_info(&mut self) -> Vec<(PeerId, ExtendedPeerInfo<B>)> {
-		self.network_service
-			.behaviour_mut()
-			.user_protocol_mut()
-			.peers_info()
-			.map(|(id, info)| (*id, info.clone()))
-			.collect()
 	}
 
 	/// Removes a `PeerId` from the list of reserved peers.

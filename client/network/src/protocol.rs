@@ -95,8 +95,10 @@ pub struct Protocol<B: BlockT, Client> {
 	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
 	// TODO(aaro): remove
 	event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
+	_marker: std::marker::PhantomData<Client>,
+	peers: HashSet<PeerId>,
 	// TODO(aaro): remove eventually
-	engine: SyncingEngine<B, Client>,
+	// engine: SyncingEngine<B, Client>,
 }
 
 impl<B, Client> Protocol<B, Client>
@@ -115,7 +117,7 @@ where
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
 		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
-		engine: SyncingEngine<B, Client>,
+		// engine: SyncingEngine<B, Client>,
 		event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
@@ -199,7 +201,8 @@ where
 				.chain(network_config.extra_sets.iter().map(|s| s.notifications_protocol.clone()))
 				.collect(),
 			bad_handshake_substreams: Default::default(),
-			engine,
+			_marker: Default::default(),
+			peers: HashSet::new(),
 			event_stream,
 		};
 
@@ -221,6 +224,7 @@ where
 		if let Some(position) = self.notification_protocols.iter().position(|p| *p == protocol_name)
 		{
 			self.behaviour.disconnect_peer(peer_id, sc_peerset::SetId::from(position));
+			self.peers.remove(peer_id);
 		} else {
 			warn!(target: "sub-libp2p", "disconnect_peer() with invalid protocol name")
 		}
@@ -234,43 +238,7 @@ where
 	// TODO(aaro): implement using behaviour?
 	/// Returns the number of peers we're connected to.
 	pub fn num_connected_peers(&self) -> usize {
-		self.engine.peers.len()
-	}
-
-	/// Returns the number of peers we're connected to and that are being queried.
-	pub fn num_active_peers(&self) -> usize {
-		self.engine.chain_sync.num_active_peers()
-	}
-
-	/// Target sync block number.
-	pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-		self.engine.chain_sync.status().best_seen_block
-	}
-
-	/// Number of peers participating in syncing.
-	pub fn num_sync_peers(&self) -> u32 {
-		self.engine.chain_sync.status().num_peers
-	}
-
-	/// Number of blocks in the import queue.
-	pub fn num_queued_blocks(&self) -> u32 {
-		self.engine.chain_sync.status().queued_blocks
-	}
-
-	/// Number of downloaded blocks.
-	pub fn num_downloaded_blocks(&self) -> usize {
-		self.engine.chain_sync.num_downloaded_blocks()
-	}
-
-	/// Number of active sync requests.
-	pub fn num_sync_requests(&self) -> usize {
-		self.engine.chain_sync.num_sync_requests()
-	}
-
-	// TODO(aaro): implement using ChainSyncInterface
-	/// Returns information about all the peers we are connected to after the handshake message.
-	pub fn peers_info(&self) -> impl Iterator<Item = (&PeerId, &ExtendedPeerInfo<B>)> {
-		self.engine.peers.iter().map(|(id, peer)| (id, &peer.info))
+		self.peers.len()
 	}
 
 	/// Adjusts the reputation of a node.
@@ -506,9 +474,6 @@ where
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
 
-		// poll syncing engine
-		self.engine.poll(cx, &mut self.event_stream);
-
 		if let Some(message) = self.pending_messages.pop_front() {
 			return Poll::Ready(NetworkBehaviourAction::GenerateEvent(message))
 		}
@@ -538,6 +503,7 @@ where
 				notifications_sink,
 				negotiated_fallback,
 			} => {
+				self.peers.insert(peer_id);
 				// Set number 0 is hardcoded the default set of peers we sync from.
 				if set_id == HARDCODED_PEERSETS_SYNC {
 					// `received_handshake` can be either a `Status` message if received from the
@@ -568,6 +534,7 @@ where
 								msg,
 							);
 							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peers.remove(&peer_id);
 							CustomMessageOutcome::None
 						},
 						Err(err) => CustomMessageOutcome::UncheckedNotificationStreamOpened {
@@ -579,10 +546,8 @@ where
 						},
 					}
 				} else {
-					match (
-						Roles::decode_all(&mut &received_handshake[..]),
-						self.engine.peers.get(&peer_id),
-					) {
+					// TODO(aaro): fix this
+					match (Roles::decode_all(&mut &received_handshake[..]), None::<B>) {
 						(Ok(roles), _) => CustomMessageOutcome::NotificationStreamOpened {
 							remote: peer_id,
 							protocol: self.notification_protocols[usize::from(set_id)].clone(),
@@ -591,23 +556,25 @@ where
 							notifications_sink,
 						},
 						(Err(_), Some(peer)) if received_handshake.is_empty() => {
+							panic!("not supported anymore");
 							// As a convenience, we allow opening substreams for "external"
 							// notification protocols with an empty handshake. This fetches the
 							// roles from the locally-known roles.
 							// TODO: remove this after https://github.com/paritytech/substrate/issues/5685
-							CustomMessageOutcome::NotificationStreamOpened {
-								remote: peer_id,
-								protocol: self.notification_protocols[usize::from(set_id)].clone(),
-								negotiated_fallback,
-								roles: peer.info.roles,
-								notifications_sink,
-							}
+							// CustomMessageOutcome::NotificationStreamOpened {
+							// 	remote: peer_id,
+							// 	protocol: self.notification_protocols[usize::from(set_id)].clone(),
+							// 	negotiated_fallback,
+							// 	roles: peer.info.roles,
+							// 	notifications_sink,
+							// }
 						},
 						(Err(err), _) => {
 							debug!(target: "sync", "Failed to parse remote handshake: {}", err);
 							self.bad_handshake_substreams.insert((peer_id, set_id));
 							self.behaviour.disconnect_peer(&peer_id, set_id);
 							self.peerset_handle.report_peer(peer_id, rep::BAD_MESSAGE);
+							self.peers.remove(&peer_id);
 							CustomMessageOutcome::None
 						},
 					}

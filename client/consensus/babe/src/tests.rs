@@ -353,6 +353,7 @@ impl TestNetFactory for BabeTestNet {
 	}
 
 	fn peers_mut(&mut self) -> &mut Vec<BabePeer> {
+		trace!(target: "babe", "Retrieving peers, mutable");
 		&mut self.peers
 	}
 

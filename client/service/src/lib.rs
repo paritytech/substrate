@@ -201,7 +201,7 @@ async fn build_network_future<
 				match request {
 					sc_rpc::system::Request::Health(sender) => {
 						let _ = sender.send(sc_rpc::system::Health {
-							peers: network.peers_debug_info().len(),
+							peers: sync_service.peers_info().await.expect("syncing to stay active").len(),
 							is_syncing: network.service().is_major_syncing(),
 							should_have_peers,
 						});
@@ -218,7 +218,7 @@ async fn build_network_future<
 						let _ = sender.send(addresses);
 					},
 					sc_rpc::system::Request::Peers(sender) => {
-						let _ = sender.send(network.peers_debug_info().into_iter().map(|(peer_id, p)|
+						let _ = sender.send(sync_service.peers_info().await.expect("syncing to stay active").into_iter().map(|(peer_id, p)|
 							sc_rpc::system::PeerInfo {
 								peer_id: peer_id.to_base58(),
 								roles: format!("{:?}", p.roles),
@@ -281,7 +281,7 @@ async fn build_network_future<
 						let _ = sender.send(SyncState {
 							starting_block,
 							current_block: best_number,
-							highest_block: network.best_seen_block().unwrap_or(best_number),
+							highest_block: sync_service.best_seen_block().await.expect("syncing to stay active").unwrap_or(best_number),
 						});
 					}
 				}

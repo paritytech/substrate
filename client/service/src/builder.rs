@@ -41,7 +41,7 @@ use sc_network::{config::SyncMode, ChainSyncInterface, NetworkService};
 use sc_network_bitswap::BitswapRequestHandler;
 use sc_network_common::{
 	protocol::role::Roles,
-	service::{NetworkStateInfo, NetworkStatusProvider},
+	service::{NetworkEventStream, NetworkStateInfo, NetworkStatusProvider},
 	sync::warp::WarpSyncProvider,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -939,7 +939,7 @@ where
 		chain: client.clone(),
 		protocol_id: protocol_id.clone(),
 		fork_id: config.chain_spec.fork_id().map(ToOwned::to_owned),
-		engine,
+		// engine,
 		chain_sync_service: Box::new(chain_sync_service.clone()),
 		metrics_registry: config.prometheus_config.as_ref().map(|config| config.registry.clone()),
 		block_announce_config,
@@ -990,6 +990,9 @@ where
 		chain_sync_network_provider.run(network.clone()),
 	);
 	spawn_handle.spawn("import-queue", None, import_queue.run(Box::new(sync_service)));
+
+	let event_stream = network.event_stream("syncing");
+	spawn_handle.spawn("syncing", None, engine.run(event_stream));
 
 	let (system_rpc_tx, system_rpc_rx) = tracing_unbounded("mpsc_system_rpc");
 

@@ -207,6 +207,9 @@ fn notifications_state_consistent() {
 				// Add new events here.
 				future::Either::Left(Event::Dht(_)) => {},
 				future::Either::Right(Event::Dht(_)) => {},
+
+				future::Either::Left(Event::UncheckedNotificationStreamOpened { .. }) => {},
+				future::Either::Right(Event::UncheckedNotificationStreamOpened { .. }) => {},
 			};
 		}
 	});
@@ -214,6 +217,7 @@ fn notifications_state_consistent() {
 
 #[async_std::test]
 async fn lots_of_incoming_peers_works() {
+	sp_tracing::try_init_simple();
 	let listen_addr = config::build_multiaddr![Memory(rand::random::<u64>())];
 
 	let (main_node, _) = TestNetworkBuilder::new()
@@ -247,6 +251,7 @@ async fn lots_of_incoming_peers_works() {
 			let mut timer = futures_timer::Delay::new(Duration::from_secs(3600 * 24 * 7)).fuse();
 
 			let mut event_stream = event_stream.fuse();
+			let mut sync_protocol_name = None;
 			loop {
 				futures::select! {
 					_ = timer => {
@@ -255,15 +260,22 @@ async fn lots_of_incoming_peers_works() {
 					}
 					ev = event_stream.next() => {
 						match ev.unwrap() {
+							Event::UncheckedNotificationStreamOpened { protocol, .. } => {
+								if let None = sync_protocol_name {
+									sync_protocol_name = Some(protocol.clone());
+								}
+							}
 							Event::NotificationStreamOpened { remote, .. } => {
 								assert_eq!(remote, main_node_peer_id);
 								// Test succeeds after 5 seconds. This timer is here in order to
 								// detect a potential problem after opening.
 								timer = futures_timer::Delay::new(Duration::from_secs(5)).fuse();
 							}
-							Event::NotificationStreamClosed { .. } => {
-								// Test failed.
-								panic!();
+							Event::NotificationStreamClosed { protocol, .. } => {
+								if Some(protocol) != sync_protocol_name {
+									// Test failed.
+									panic!();
+								}
 							}
 							_ => {}
 						}
@@ -288,10 +300,19 @@ fn notifications_back_pressure() {
 
 	let receiver = async_std::task::spawn(async move {
 		let mut received_notifications = 0;
+		let mut sync_protocol_name = None;
 
 		while received_notifications < TOTAL_NOTIFS {
 			match events_stream2.next().await.unwrap() {
-				Event::NotificationStreamClosed { .. } => panic!(),
+				Event::UncheckedNotificationStreamOpened { protocol, .. } =>
+					if let None = sync_protocol_name {
+						sync_protocol_name = Some(protocol);
+					},
+				Event::NotificationStreamClosed { protocol, .. } => {
+					if Some(protocol) != sync_protocol_name {
+						panic!()
+					}
+				},
 				Event::NotificationsReceived { messages, .. } =>
 					for message in messages {
 						assert_eq!(message.0, PROTOCOL_NAME.into());

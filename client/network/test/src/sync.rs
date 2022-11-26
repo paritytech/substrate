@@ -630,12 +630,12 @@ fn imports_stale_once() {
 	// check that NEW block is imported from announce message
 	let new_hash = net.peer(0).push_blocks(1, false);
 	import_with_announce(&mut net, new_hash);
-	assert_eq!(net.peer(1).num_downloaded_blocks(), 1);
+	assert_eq!(futures::executor::block_on(net.peer(1).num_downloaded_blocks()), 1);
 
 	// check that KNOWN STALE block is imported from announce message
 	let known_stale_hash = net.peer(0).push_blocks_at(BlockId::Number(0), 1, true);
 	import_with_announce(&mut net, known_stale_hash);
-	assert_eq!(net.peer(1).num_downloaded_blocks(), 2);
+	assert_eq!(futures::executor::block_on(net.peer(1).num_downloaded_blocks()), 2);
 }
 
 #[test]
@@ -1007,13 +1007,19 @@ fn syncs_all_forks_from_single_peer() {
 	let branch1 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, true);
 
 	// Wait till peer 1 starts downloading
-	block_on(futures::future::poll_fn::<(), _>(|cx| {
-		net.poll(cx);
-		if net.peer(1).network().best_seen_block() != Some(12) {
-			return Poll::Pending
+	block_on(async {
+		loop {
+			futures::future::poll_fn::<(), _>(|cx| {
+				net.poll(cx);
+				Poll::Ready(())
+			})
+			.await;
+
+			if net.peer(1).sync_service().best_seen_block().await.unwrap() == Some(12) {
+				break
+			}
 		}
-		Poll::Ready(())
-	}));
+	});
 
 	// Peer 0 produces and announces another fork
 	let branch2 = net.peer(0).push_blocks_at(BlockId::Number(10), 2, false);

@@ -292,7 +292,6 @@ impl TestNetworkBuilder {
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			engine,
 			chain_sync_service: Box::new(chain_sync_service),
 			metrics_registry: None,
 			request_response_protocol_configs: [
@@ -318,6 +317,8 @@ impl TestNetworkBuilder {
 				async_std::task::sleep(std::time::Duration::from_millis(250)).await;
 			}
 		});
+		let stream = worker.service().event_stream("syncing");
+		async_std::task::spawn(async move { engine.run(stream).await });
 
 		TestNetwork::new(worker)
 	}

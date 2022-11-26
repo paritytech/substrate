@@ -536,11 +536,17 @@ where
 		)
 	}
 
+	pub async fn run(mut self, mut stream: Pin<Box<dyn Stream<Item = Event> + Send>>) {
+		loop {
+			futures::future::poll_fn(|cx| self.poll(cx, &mut stream)).await;
+		}
+	}
+
 	pub fn poll(
 		&mut self,
 		cx: &mut std::task::Context,
 		event_stream: &mut Pin<Box<dyn Stream<Item = Event> + Send>>,
-	) {
+	) -> Poll<()> {
 		self.num_connected.store(self.peers.len(), Ordering::Relaxed);
 		self.is_major_syncing
 			.store(self.chain_sync.status().state.is_major_syncing(), Ordering::Relaxed);
@@ -721,6 +727,8 @@ where
 		while let Poll::Ready(result) = self.chain_sync.poll(cx) {
 			self.process_block_announce_validation_result(result);
 		}
+
+		Poll::Pending
 	}
 
 	/// Called by peer when it is disconnecting.
