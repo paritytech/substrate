@@ -133,7 +133,7 @@ impl pallet_nis::Config for Test {
 	type QueueCount = ConstU32<3>;
 	type MaxQueueLen = ConstU32<3>;
 	type FifoQueueLen = ConstU32<1>;
-	type Period = ConstU64<3>;
+	type BasePeriod = ConstU64<3>;
 	type MinBid = ConstU64<2>;
 	type IntakePeriod = ConstU64<2>;
 	type MaxIntakeWeight = MaxIntakeWeight;

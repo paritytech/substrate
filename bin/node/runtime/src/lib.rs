@@ -1461,7 +1461,7 @@ parameter_types! {
 	pub const QueueCount: u32 = 300;
 	pub const MaxQueueLen: u32 = 1000;
 	pub const FifoQueueLen: u32 = 500;
-	pub const Period: BlockNumber = 30 * DAYS;
+	pub const NisBasePeriod: BlockNumber = 30 * DAYS;
 	pub const MinBid: Balance = 100 * DOLLARS;
 	pub const MinReceipt: Perquintill = Perquintill::from_percent(1);
 	pub const IntakePeriod: BlockNumber = 10;
@@ -1486,7 +1486,7 @@ impl pallet_nis::Config for Runtime {
 	type QueueCount = QueueCount;
 	type MaxQueueLen = MaxQueueLen;
 	type FifoQueueLen = FifoQueueLen;
-	type Period = Period;
+	type BasePeriod = NisBasePeriod;
 	type MinBid = MinBid;
 	type MinReceipt = MinReceipt;
 	type IntakePeriod = IntakePeriod;

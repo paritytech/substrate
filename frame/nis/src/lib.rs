@@ -268,7 +268,7 @@ pub mod pallet {
 		/// The base period for the duration queues. This is the common multiple across all
 		/// supported freezing durations that can be bid upon.
 		#[pallet::constant]
-		type Period: Get<Self::BlockNumber>;
+		type BasePeriod: Get<Self::BlockNumber>;
 
 		/// The minimum amount of funds that may be placed in a bid. Note that this
 		/// does not actually limit the amount which may be represented in a receipt since bids may
@@ -854,7 +854,7 @@ pub mod pallet {
 			weight: &mut WeightCounter,
 		) -> u32 {
 			let mut queue: BoundedVec<BidOf<T>, _> = Queues::<T>::get(&duration);
-			let expiry = now.saturating_add(T::Period::get().saturating_mul(duration.into()));
+			let expiry = now.saturating_add(T::BasePeriod::get().saturating_mul(duration.into()));
 			let mut count = 0;
 
 			while count < max_bids &&
