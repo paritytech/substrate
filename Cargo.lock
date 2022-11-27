@@ -4525,6 +4525,7 @@ dependencies = [
  "node-primitives",
  "node-rpc",
  "pallet-asset-tx-payment",
+ "pallet-assets",
  "pallet-balances",
  "pallet-im-online",
  "pallet-timestamp",

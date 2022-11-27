@@ -1477,7 +1477,7 @@ impl pallet_nis::Config for Runtime {
 	type Currency = Balances;
 	type CurrencyBalance = Balance;
 	type FundOrigin = frame_system::EnsureSigned<AccountId>;
-	type Counterpart = ItemOf<Assets, ConstU32<0u32>, AccountId>;
+	type Counterpart = ItemOf<Assets, ConstU32<9u32>, AccountId>;
 	type CounterpartAmount = WithMaximumOf<ConstU128<21_000_000_000_000_000_000u128>>;
 	type Deficit = ();
 	type IgnoredIssuance = IgnoredIssuance;
