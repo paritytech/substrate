@@ -331,7 +331,6 @@ mod tests {
 		sync::{Arc, Mutex},
 	};
 	use substrate_test_runtime_client::runtime::Block;
-	use tokio::spawn;
 
 	#[derive(Clone, Default)]
 	struct TestNetwork {
@@ -490,8 +489,8 @@ mod tests {
 		}))
 	}
 
-	#[test]
-	fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
+	#[tokio::test(flavor = "multi_thread")]
+	async fn keeps_multiple_subscribers_per_topic_updated_with_both_old_and_new_messages() {
 		let topic = H256::default();
 		let protocol = ProtocolName::from("/my_protocol");
 		let remote_peer = PeerId::random();
@@ -541,8 +540,10 @@ mod tests {
 			.start_send(events[1].clone())
 			.expect("Event stream is unbounded; qed.");
 
-		spawn(gossip_engine);
+		tokio::spawn(gossip_engine);
 
+		// Note: `block_on_stream()`-derived iterator will block the current thread,
+		//       so we need a `multi_thread` `tokio::test` runtime flavor.
 		let mut subscribers =
 			subscribers.into_iter().map(|s| block_on_stream(s)).collect::<Vec<_>>();
 
