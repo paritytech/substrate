@@ -76,7 +76,7 @@ pub trait Inspect<AccountId> {
 		amount: Self::Balance,
 	) -> WithdrawConsequence<Self::Balance>;
 
-	/// Determines if an `asset` exists
+	/// Returns `true` if an `asset` exists.
 	fn asset_exists(asset: Self::AssetId) -> bool;
 }
 
