@@ -191,14 +191,8 @@ impl sc_network_gossip::ValidatorContext<Block> for TestNetwork {
 	fn send_topic(&mut self, _: &PeerId, _: Hash, _: bool) {}
 }
 
-pub(crate) enum SyncEvent {
-	EventStream(TracingUnboundedSender<SyncStreamEvent>),
-}
-
 #[derive(Clone)]
-pub(crate) struct TestSync {
-	sender: TracingUnboundedSender<SyncEvent>,
-}
+pub(crate) struct TestSync;
 
 impl SyncEventStream for TestSync {
 	fn event_stream(
@@ -278,8 +272,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
 	let (tx, rx) = tracing_unbounded("test");
 	let net = TestNetwork { sender: tx };
-	let (stx, srx) = tracing_unbounded("sync");
-	let sync = Arc::new(TestSync { sender: stx });
+	let sync = Arc::new(TestSync {});
 
 	#[derive(Clone)]
 	struct Exit;

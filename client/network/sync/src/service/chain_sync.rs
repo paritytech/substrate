@@ -66,7 +66,7 @@ pub enum ToServiceCommand<B: BlockT> {
 
 /// Handle for communicating with `ChainSync` asynchronously
 #[derive(Clone)]
-pub struct ChainSyncInterfaceHandle<B: BlockT> {
+pub struct SyncingService<B: BlockT> {
 	tx: TracingUnboundedSender<ToServiceCommand<B>>,
 	/// Number of peers we're connected to.
 	num_connected: Arc<AtomicUsize>,
@@ -74,7 +74,7 @@ pub struct ChainSyncInterfaceHandle<B: BlockT> {
 	is_major_syncing: Arc<AtomicBool>,
 }
 
-impl<B: BlockT> ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> SyncingService<B> {
 	/// Create new handle
 	pub fn new(
 		tx: TracingUnboundedSender<ToServiceCommand<B>>,
@@ -85,9 +85,7 @@ impl<B: BlockT> ChainSyncInterfaceHandle<B> {
 	}
 }
 
-impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>>
-	for ChainSyncInterfaceHandle<B>
-{
+impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>> for SyncingService<B> {
 	/// Configure an explicit fork sync request.
 	///
 	/// Note that this function should not be used for recent blocks.
@@ -103,7 +101,7 @@ impl<B: BlockT + 'static> NetworkSyncForkRequest<B::Hash, NumberFor<B>>
 	}
 }
 
-impl<B: BlockT> JustificationSyncLink<B> for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> JustificationSyncLink<B> for SyncingService<B> {
 	/// Request a justification for the given block from the network.
 	///
 	/// On success, the justification will be passed to the import queue that was part at
@@ -118,7 +116,7 @@ impl<B: BlockT> JustificationSyncLink<B> for ChainSyncInterfaceHandle<B> {
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT> SyncStatusProvider<B> for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> SyncStatusProvider<B> for SyncingService<B> {
 	/// Get high-level view of the syncing status.
 	async fn status(&self) -> Result<SyncStatus<B>, ()> {
 		let (rtx, rrx) = oneshot::channel();
@@ -128,7 +126,7 @@ impl<B: BlockT> SyncStatusProvider<B> for ChainSyncInterfaceHandle<B> {
 	}
 }
 
-impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> Link<B> for SyncingService<B> {
 	fn blocks_processed(
 		&mut self,
 		imported: usize,
@@ -157,7 +155,7 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 	}
 }
 
-impl<B: BlockT> SyncEventStream for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> SyncEventStream for SyncingService<B> {
 	/// Get syncing event stream.
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
 		let (tx, rx) = tracing_unbounded(name);
@@ -166,7 +164,7 @@ impl<B: BlockT> SyncEventStream for ChainSyncInterfaceHandle<B> {
 	}
 }
 
-impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for SyncingService<B> {
 	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
 		let _ = self.tx.unbounded_send(ToServiceCommand::AnnounceBlock(hash, data));
 	}
@@ -177,7 +175,7 @@ impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for ChainSyncInterfaceHandle
 }
 
 #[async_trait::async_trait]
-impl<B: BlockT> ChainSyncService<B> for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> ChainSyncService<B> for SyncingService<B> {
 	async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled> {
 		let (tx, rx) = oneshot::channel();
 		let _ = self.tx.unbounded_send(ToServiceCommand::NumActivePeers(tx));
@@ -232,7 +230,7 @@ impl<B: BlockT> ChainSyncService<B> for ChainSyncInterfaceHandle<B> {
 	}
 }
 
-impl<B: BlockT> sp_consensus::SyncOracle for ChainSyncInterfaceHandle<B> {
+impl<B: BlockT> sp_consensus::SyncOracle for SyncingService<B> {
 	fn is_major_syncing(&self) -> bool {
 		self.is_major_syncing.load(Ordering::Relaxed)
 	}

@@ -984,8 +984,7 @@ pub(crate) mod tests {
 	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
-	use sc_network::{ChainSyncInterface, NetworkService};
-	use sc_network_common::sync::SyncEventStream;
+	use sc_network::NetworkService;
 	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;

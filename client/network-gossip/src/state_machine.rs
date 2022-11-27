@@ -676,7 +676,7 @@ mod tests {
 			unimplemented!();
 		}
 
-		fn set_notification_handshake(&self, _protocol: ProtocolName, handshake: Vec<u8>) {
+		fn set_notification_handshake(&self, _protocol: ProtocolName, _handshake: Vec<u8>) {
 			unimplemented!();
 		}
 	}

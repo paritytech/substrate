@@ -18,7 +18,7 @@
 
 use crate::{
 	service::{self, chain_sync::ToServiceCommand},
-	ChainSync, ChainSyncInterfaceHandle, ClientError,
+	ChainSync, ClientError, SyncingService,
 };
 
 use futures::{Stream, StreamExt};
@@ -266,7 +266,7 @@ where
 		default_peers_set_no_slot_peers: HashSet<PeerId>,
 		default_peers_set_num_full: usize,
 		default_peers_set_num_light: usize,
-	) -> Result<(Self, ChainSyncInterfaceHandle<B>, NonDefaultSetConfig), ClientError> {
+	) -> Result<(Self, SyncingService<B>, NonDefaultSetConfig), ClientError> {
 		let (chain_sync, block_announce_config) = ChainSync::new(
 			mode,
 			client.clone(),
@@ -327,7 +327,7 @@ where
 					None
 				},
 			},
-			ChainSyncInterfaceHandle::new(tx, num_connected, is_major_syncing),
+			SyncingService::new(tx, num_connected, is_major_syncing),
 			block_announce_config,
 		))
 	}

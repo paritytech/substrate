@@ -63,7 +63,7 @@ use sc_network_common::{
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler,
-	service::{chain_sync::ChainSyncInterfaceHandle, network::NetworkServiceProvider},
+	service::{chain_sync::SyncingService, network::NetworkServiceProvider},
 	state_request_handler::StateRequestHandler,
 	warp_request_handler,
 };
@@ -237,7 +237,7 @@ pub struct Peer<D, BlockImport> {
 	select_chain: Option<LongestChain<substrate_test_runtime_client::Backend, Block>>,
 	backend: Option<Arc<substrate_test_runtime_client::Backend>>,
 	network: NetworkWorker<Block, <Block as BlockT>::Hash, PeersFullClient>,
-	chain_sync_service: Arc<ChainSyncInterfaceHandle<Block>>,
+	sync_service: Arc<SyncingService<Block>>,
 	imported_blocks_stream: Pin<Box<dyn Stream<Item = BlockImportNotification<Block>> + Send>>,
 	finality_notification_stream: Pin<Box<dyn Stream<Item = FinalityNotification<Block>> + Send>>,
 	listen_addr: Multiaddr,
@@ -272,12 +272,12 @@ where
 
 	/// Returns the number of downloaded blocks.
 	pub async fn num_downloaded_blocks(&self) -> usize {
-		self.chain_sync_service.num_downloaded_blocks().await.unwrap()
+		self.sync_service.num_downloaded_blocks().await.unwrap()
 	}
 
 	/// Returns true if we have no peer.
 	pub fn is_offline(&self) -> bool {
-		self.chain_sync_service.is_offline()
+		self.sync_service.is_offline()
 	}
 
 	/// Request a justification for the given block.
@@ -399,7 +399,7 @@ where
 		}
 
 		if inform_sync_about_new_best_block {
-			self.chain_sync_service.new_best_block_imported(
+			self.sync_service.new_best_block_imported(
 				at,
 				*full_client.header(&BlockId::Hash(at)).ok().flatten().unwrap().number(),
 			);
@@ -511,8 +511,8 @@ where
 		self.network.service()
 	}
 
-	pub fn sync_service(&self) -> &Arc<ChainSyncInterfaceHandle<Block>> {
-		&self.chain_sync_service
+	pub fn sync_service(&self) -> &Arc<SyncingService<Block>> {
+		&self.sync_service
 	}
 
 	/// Get a reference to the network worker.
@@ -880,7 +880,7 @@ where
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
 
-		let (engine, chain_sync_service, block_announce_config) =
+		let (engine, sync_service, block_announce_config) =
 			sc_network_sync::engine::SyncingEngine::new(
 				Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 				client.clone(),
@@ -946,6 +946,8 @@ where
 				},
 			)
 			.unwrap();
+		let sync_service_import_queue = Box::new(sync_service.clone());
+		let sync_service = Arc::new(sync_service.clone());
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
@@ -954,9 +956,7 @@ where
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			// engine,
-			// TODO(aaro): fix arcs
-			chain_sync_service: Box::new(chain_sync_service.clone()),
+			sync_service: sync_service.clone(),
 			metrics_registry: None,
 			block_announce_config,
 			request_response_protocol_configs: [
@@ -975,9 +975,8 @@ where
 		async_std::task::spawn(async move {
 			chain_sync_network_provider.run(service).await;
 		});
-		let service = chain_sync_service.clone();
 		async_std::task::spawn(async move {
-			import_queue.run(Box::new(service)).await;
+			import_queue.run(sync_service_import_queue).await;
 		});
 		let service = network.service().clone();
 		async_std::task::spawn(async move {
@@ -1004,7 +1003,7 @@ where
 				block_import,
 				verifier,
 				network,
-				chain_sync_service: Arc::new(chain_sync_service),
+				sync_service,
 				listen_addr,
 			});
 		});
@@ -1034,12 +1033,12 @@ where
 		let peers = self.peers_mut();
 
 		for peer in peers {
-			if peer.chain_sync_service.is_major_syncing() ||
-				peer.chain_sync_service.num_queued_blocks().await.unwrap() != 0
+			if peer.sync_service.is_major_syncing() ||
+				peer.sync_service.num_queued_blocks().await.unwrap() != 0
 			{
 				return false
 			}
-			if peer.chain_sync_service.num_sync_requests().await.unwrap() != 0 {
+			if peer.sync_service.num_sync_requests().await.unwrap() != 0 {
 				return false
 			}
 			match (highest, peer.client.info().best_hash) {
@@ -1055,10 +1054,10 @@ where
 	async fn is_idle(&mut self) -> bool {
 		let peers = self.peers_mut();
 		for peer in peers {
-			if peer.chain_sync_service.num_queued_blocks().await.unwrap() != 0 {
+			if peer.sync_service.num_queued_blocks().await.unwrap() != 0 {
 				return false
 			}
-			if peer.chain_sync_service.num_sync_requests().await.unwrap() != 0 {
+			if peer.sync_service.num_sync_requests().await.unwrap() != 0 {
 				return false
 			}
 		}
@@ -1137,7 +1136,7 @@ where
 					peer.finality_notification_stream.as_mut().poll_next(cx)
 				{
 					use sc_network::ChainSyncService;
-					peer.chain_sync_service
+					peer.sync_service
 						.on_block_finalized(notification.hash, notification.header);
 				}
 			}

@@ -139,10 +139,6 @@ impl BeefyTestNet {
 		});
 	}
 
-	pub(crate) fn block_until_sync_connected(&mut self) {
-		todo!();
-	}
-
 	pub(crate) fn generate_blocks_and_sync(
 		&mut self,
 		count: usize,

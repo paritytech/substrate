@@ -33,7 +33,6 @@ pub use sc_network_common::{
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 
-use crate::ChainSyncInterface;
 use core::{fmt, iter};
 use libp2p::{
 	identity::{ed25519, Keypair},
@@ -81,10 +80,9 @@ where
 	/// name on the wire.
 	pub fork_id: Option<String>,
 
-	// /// Syncing engine.
-	// pub engine: SyncingEngine<B, Client>,
+	// TODO(aaro): remove this
 	/// Interface that can be used to delegate syncing-related function calls to `ChainSync`
-	pub chain_sync_service: Box<dyn ChainSyncInterface<B>>,
+	pub sync_service: Arc<sc_network_sync::SyncingService<B>>,
 
 	/// Registry for recording prometheus metrics to.
 	pub metrics_registry: Option<Registry>,

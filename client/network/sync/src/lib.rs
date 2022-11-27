@@ -44,7 +44,6 @@ pub mod warp_request_handler;
 use crate::{
 	blocks::BlockCollection,
 	schema::v1::{StateRequest, StateResponse},
-	service::chain_sync::ChainSyncInterfaceHandle,
 	state::StateSync,
 	warp::{WarpProofImportResult, WarpSync},
 };
@@ -79,6 +78,7 @@ use sc_network_common::{
 		SyncState, SyncStatus,
 	},
 };
+pub use service::chain_sync::SyncingService;
 use sp_arithmetic::traits::Saturating;
 use sp_blockchain::{Error as ClientError, HeaderBackend, HeaderMetadata};
 use sp_consensus::{

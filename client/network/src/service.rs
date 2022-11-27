@@ -35,7 +35,7 @@ use crate::{
 		NetworkState, NotConnectedPeer as NetworkStateNotConnectedPeer, Peer as NetworkStatePeer,
 	},
 	protocol::{self, NotificationsSink, NotifsHandlerError, Protocol, Ready},
-	transport, ChainSyncInterface, ReputationChange,
+	transport, ReputationChange,
 };
 
 use futures::{channel::oneshot, prelude::*};
@@ -117,8 +117,9 @@ pub struct NetworkService<B: BlockT + 'static, H: ExHashT> {
 	peerset: PeersetHandle,
 	/// Channel that sends messages to the actual worker.
 	to_worker: TracingUnboundedSender<ServiceToWorkerMsg>,
+	// TODO(aaro): remove this
 	/// Interface that can be used to delegate calls to `ChainSync`
-	chain_sync_service: Box<dyn ChainSyncInterface<B>>,
+	sync_service: Arc<sc_network_sync::SyncingService<B>>,
 	/// For each peer and protocol combination, an object that allows sending notifications to
 	/// that peer. Updated by the [`NetworkWorker`].
 	peers_notifications_sinks: Arc<Mutex<HashMap<(PeerId, ProtocolName), NotificationsSink>>>,
@@ -433,7 +434,7 @@ where
 			local_peer_id,
 			local_identity,
 			to_worker,
-			chain_sync_service: params.chain_sync_service,
+			sync_service: params.sync_service,
 			peers_notifications_sinks: peers_notifications_sinks.clone(),
 			notifications_sizes_metric: metrics
 				.as_ref()
@@ -691,11 +692,11 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 
 impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
 	fn is_major_syncing(&self) -> bool {
-		self.chain_sync_service.is_major_syncing()
+		self.sync_service.is_major_syncing()
 	}
 
 	fn is_offline(&self) -> bool {
-		self.chain_sync_service.is_offline()
+		self.sync_service.is_offline()
 	}
 }
 
@@ -705,11 +706,11 @@ impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkSe
 	/// On success, the justification will be passed to the import queue that was part at
 	/// initialization as part of the configuration.
 	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.chain_sync_service.request_justification(hash, number);
+		let _ = self.sync_service.request_justification(hash, number);
 	}
 
 	fn clear_justification_requests(&self) {
-		let _ = self.chain_sync_service.clear_justification_requests();
+		let _ = self.sync_service.clear_justification_requests();
 	}
 }
 
@@ -773,7 +774,7 @@ where
 	/// a stale fork missing.
 	/// Passing empty `peers` set effectively removes the sync request.
 	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		self.chain_sync_service.set_sync_fork_request(peers, hash, number);
+		self.sync_service.set_sync_fork_request(peers, hash, number);
 	}
 }
 
@@ -1088,11 +1089,11 @@ where
 	H: ExHashT,
 {
 	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let _ = self.chain_sync_service.announce_block(hash, data);
+		let _ = self.sync_service.announce_block(hash, data);
 	}
 
 	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.chain_sync_service.new_best_block_imported(hash, number);
+		let _ = self.sync_service.new_best_block_imported(hash, number);
 	}
 }
 
