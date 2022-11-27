@@ -269,6 +269,8 @@ pub enum RuntimeCosts {
 	/// Weight of calling `account_reentrance_count`
 	#[cfg(feature = "unstable-interface")]
 	AccountEntranceCount,
+	/// Weight of calling `instantiation_nonce`
+	InstantationNonce,
 }
 
 impl RuntimeCosts {
@@ -352,6 +354,7 @@ impl RuntimeCosts {
 			ReentrantCount => s.reentrance_count,
 			#[cfg(feature = "unstable-interface")]
 			AccountEntranceCount => s.account_reentrance_count,
+			InstantationNonce => s.instantiation_nonce,
 		};
 		RuntimeToken {
 			#[cfg(test)]
@@ -2621,5 +2624,15 @@ pub mod env {
 		let account_id: <<E as Ext>::T as frame_system::Config>::AccountId =
 			ctx.read_sandbox_memory_as(memory, account_ptr)?;
 		Ok(ctx.ext.account_reentrance_count(&account_id))
+	}
+
+	/// Returns a nonce that is unique per contract instantiation.
+	///
+	/// The nonce is incremented for each succesful contract instantiation. This is a
+	/// sensible default salt for contract instantiations.
+	#[unstable]
+	fn instantiation_nonce(ctx: _, _memory: _) -> Result<u64, TrapReason> {
+		ctx.charge_gas(RuntimeCosts::InstantationNonce)?;
+		Ok(ctx.ext.nonce())
 	}
 }
