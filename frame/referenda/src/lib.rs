@@ -85,6 +85,7 @@ use sp_runtime::{
 use sp_std::{fmt::Debug, prelude::*};
 
 mod branch;
+pub mod migration;
 mod types;
 pub mod weights;
 
@@ -140,8 +141,12 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
+	/// The current storage version.
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T, I = ()>(_);
 
 	#[pallet::config]
@@ -495,7 +500,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::Cancelled { index, tally: status.tally });
 			let info = ReferendumInfo::Cancelled(
 				frame_system::Pallet::<T>::block_number(),
-				status.submission_deposit,
+				Some(status.submission_deposit),
 				status.decision_deposit,
 			);
 			ReferendumInfoFor::<T, I>::insert(index, info);
@@ -1007,7 +1012,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					return (
 						ReferendumInfo::TimedOut(
 							now,
-							status.submission_deposit,
+							Some(status.submission_deposit),
 							status.decision_deposit,
 						),
 						true,
@@ -1039,7 +1044,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							return (
 								ReferendumInfo::Approved(
 									now,
-									status.submission_deposit,
+									Some(status.submission_deposit),
 									status.decision_deposit,
 								),
 								true,
@@ -1064,7 +1069,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						return (
 							ReferendumInfo::Rejected(
 								now,
-								status.submission_deposit,
+								Some(status.submission_deposit),
 								status.decision_deposit,
 							),
 							true,

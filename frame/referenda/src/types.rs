@@ -221,13 +221,13 @@ pub enum ReferendumInfo<
 		>,
 	),
 	/// Referendum finished with approval. Submission deposit is held.
-	Approved(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Approved(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with rejection. Submission deposit is held.
-	Rejected(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Rejected(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with cancellation. Submission deposit is held.
-	Cancelled(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	Cancelled(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished and was never decided. Submission deposit is held.
-	TimedOut(Moment, Deposit<AccountId, Balance>, Option<Deposit<AccountId, Balance>>),
+	TimedOut(Moment, Option<Deposit<AccountId, Balance>>, Option<Deposit<AccountId, Balance>>),
 	/// Referendum finished with a kill.
 	Killed(Moment),
 }
