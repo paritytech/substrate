@@ -795,9 +795,13 @@ impl<T: Config> Pallet<T> {
 				// defensive-only: Members and runners-up are disjoint. This will always be err and
 				// give us an index to insert.
 				if let Err(index) = members.binary_search_by(|m| m.who.cmp(&next_best.who)) {
-					members
-						.try_insert(index, next_best.clone())
-						.expect("Cannot accept more than DesiredMembers.");
+					let _ = members.try_insert(index, next_best.clone()).map_err(|_| {
+						// This can never happen.
+						log::error!(
+							target: "runtime::elections-phragmen",
+							"There must be an empty place for a new member since we just removed one.",
+						);
+					});
 				} else {
 					// overlap. This can never happen. If so, it seems like our intended replacement
 					// is already a member, so not much more to do.
