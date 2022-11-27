@@ -20,7 +20,7 @@
 
 use crate::keyring::*;
 use kitchensink_runtime::{
-	constants::currency::*, wasm_binary_unwrap, AccountId, BabeConfig, BalancesConfig,
+	constants::currency::*, wasm_binary_unwrap, AccountId, AssetsConfig, BabeConfig, BalancesConfig,
 	GenesisConfig, GrandpaConfig, IndicesConfig, SessionConfig, SocietyConfig, StakerStatus,
 	StakingConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
 };
@@ -88,7 +88,7 @@ pub fn config_endowed(code: Option<&[u8]>, extra_endowed: Vec<AccountId>) -> Gen
 		treasury: Default::default(),
 		society: SocietyConfig { members: vec![alice(), bob()], pot: 0, max_members: 999 },
 		vesting: Default::default(),
-		assets: pallet_assets::Config { assets: vec![(0, alice(), true, 0)], ..Default::default() },
+		assets: AssetsConfig { assets: vec![(0, alice(), true, 0)], ..Default::default() },
 		transaction_storage: Default::default(),
 		transaction_payment: Default::default(),
 		alliance: Default::default(),
