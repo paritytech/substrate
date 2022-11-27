@@ -256,6 +256,19 @@ impl<
 			Killed(_) => Ok(None),
 		}
 	}
+
+	/// Take the Submission Deposit from `self`, if there is one. Returns an `Err` if `self` is not
+	/// in a valid state for the Submission Deposit to be refunded.
+	pub fn take_submission_deposit(&mut self) -> Result<Option<Deposit<AccountId, Balance>>, ()> {
+		use ReferendumInfo::*;
+		match self {
+			// Cannot refund deposit if Ongoing as this breaks assumptions.
+			Ongoing(_) => Err(()),
+			Approved(_, d, _) | Rejected(_, d, _) | TimedOut(_, d, _) | Cancelled(_, d, _) =>
+				Ok(d.take()),
+			Killed(_) => Ok(None),
+		}
+	}
 }
 
 /// Type for describing a curve over the 2-dimensional space of axes between 0-1, as represented

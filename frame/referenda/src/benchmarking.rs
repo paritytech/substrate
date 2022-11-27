@@ -264,6 +264,15 @@ benchmarks_instance_pallet! {
 		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, _, None)));
 	}
 
+	refund_submission_deposit {
+		let (origin, index) = create_referendum::<T, I>();
+		assert_ok!(Referenda::<T, I>::cancel(T::CancelOrigin::successful_origin(), index));
+		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, Some(_), _)));
+	}: _<T::RuntimeOrigin>(origin, index)
+	verify {
+		assert_matches!(ReferendumInfoFor::<T, I>::get(index), Some(ReferendumInfo::Cancelled(_, None, _)));
+	}
+
 	cancel {
 		let (_origin, index) = create_referendum::<T, I>();
 		place_deposit::<T, I>(index);
