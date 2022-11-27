@@ -241,11 +241,12 @@ where
 		None,
 	);
 
+	// The `GossipValidator` adds and removes known peers based on valid votes and network events.
 	let on_demand_justifications = OnDemandJustificationsEngine::new(
 		network.clone(),
 		runtime.clone(),
 		justifications_protocol_name,
-		known_peers.clone(),
+		known_peers,
 	);
 
 	let metrics =
@@ -286,7 +287,6 @@ where
 		payload_provider,
 		network,
 		key_store: key_store.into(),
-		known_peers,
 		gossip_engine,
 		gossip_validator,
 		on_demand_justifications,
