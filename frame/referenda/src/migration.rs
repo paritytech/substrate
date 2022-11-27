@@ -101,10 +101,10 @@ pub mod v1 {
 			let referendum_count = v0::ReferendumInfoFor::<T, I>::iter().count();
 			log::info!(
 				target: TARGET,
-				"pre-upgrade state contains '%d' referendums.",
-				referenda_count
+				"pre-upgrade state contains '{}' referendums.",
+				referendum_count
 			);
-			Ok((referendum_count as u32).encode());
+			Ok((referendum_count as u32).encode())
 		}
 
 		fn on_runtime_upgrade() -> Weight {
@@ -150,7 +150,7 @@ pub mod v1 {
 			assert_eq!(onchain_version, 1, "must upgrade from version 0 to 1.");
 			let pre_referendum_count: u32 = Decode::decode(&mut &state[..])
 				.expect("failed to decode the state from pre-upgrade.");
-			let post_referendum_count = ReferendumInfoFor::<T, I>::iter().count();
+			let post_referendum_count = ReferendumInfoFor::<T, I>::iter().count() as u32;
 			assert_eq!(
 				post_referendum_count, pre_referendum_count,
 				"must migrate all referendums."

@@ -264,8 +264,8 @@ impl<
 		match self {
 			// Cannot refund deposit if Ongoing as this breaks assumptions.
 			Ongoing(_) => Err(()),
-			Approved(_, d, _) | Rejected(_, d, _) | TimedOut(_, d, _) | Cancelled(_, d, _) =>
-				Ok(d.take()),
+			Approved(_, s, _) | Rejected(_, s, _) | TimedOut(_, s, _) | Cancelled(_, s, _) =>
+				Ok(s.take()),
 			Killed(_) => Ok(None),
 		}
 	}
