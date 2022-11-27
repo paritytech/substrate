@@ -295,7 +295,8 @@ fn notifications_back_pressure() {
 
 	let runtime = tokio::runtime::Runtime::new().unwrap();
 
-	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto(runtime.handle());
+	let (node1, mut events_stream1, node2, mut events_stream2) =
+		build_nodes_one_proto(runtime.handle());
 	let node2_id = node2.local_peer_id();
 
 	let receiver = runtime.spawn(async move {
@@ -415,7 +416,8 @@ fn fallback_name_working() {
 // protocol name and verify that `SyncDisconnected` event is emitted
 #[tokio::test]
 async fn disconnect_sync_peer_using_block_announcement_protocol_name() {
-	let (node1, mut events_stream1, node2, mut events_stream2) = build_nodes_one_proto(&Handle::current());
+	let (node1, mut events_stream1, node2, mut events_stream2) =
+		build_nodes_one_proto(&Handle::current());
 
 	async fn wait_for_events(stream: &mut (impl Stream<Item = Event> + std::marker::Unpin)) {
 		let mut notif_received = false;
