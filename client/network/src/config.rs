@@ -30,7 +30,6 @@ pub use sc_network_common::{
 	sync::warp::WarpSyncProvider,
 	ExHashT,
 };
-use sc_network_sync::engine::SyncingEngine;
 
 pub use libp2p::{build_multiaddr, core::PublicKey, identity};
 

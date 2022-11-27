@@ -16,10 +16,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// TODO(aaro): reorder traits properly
-// TODO(aaro): document functions
-// TODO(aaro): rename this file to sync_service.rs?
-
 use futures::{channel::oneshot, Stream};
 use libp2p::PeerId;
 
@@ -162,8 +158,8 @@ impl<B: BlockT> Link<B> for ChainSyncInterfaceHandle<B> {
 }
 
 impl<B: BlockT> SyncEventStream for ChainSyncInterfaceHandle<B> {
+	/// Get syncing event stream.
 	fn event_stream(&self, name: &'static str) -> Pin<Box<dyn Stream<Item = SyncEvent> + Send>> {
-		println!("sync: register {name}");
 		let (tx, rx) = tracing_unbounded(name);
 		let _ = self.tx.unbounded_send(ToServiceCommand::EventStream(tx));
 		Box::pin(rx)
@@ -180,7 +176,6 @@ impl<B: BlockT> NetworkBlock<B::Hash, NumberFor<B>> for ChainSyncInterfaceHandle
 	}
 }
 
-// TODO(aaro): is this needed at all?
 #[async_trait::async_trait]
 impl<B: BlockT> ChainSyncService<B> for ChainSyncInterfaceHandle<B> {
 	async fn num_active_peers(&self) -> Result<usize, oneshot::Canceled> {

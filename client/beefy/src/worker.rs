@@ -30,7 +30,6 @@ use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
 use sc_network_common::{
-	protocol::event::Event as NetEvent,
 	service::{NetworkEventStream, NetworkRequest},
 	sync::{SyncEvent, SyncEventStream},
 };

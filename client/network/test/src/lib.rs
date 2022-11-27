@@ -50,7 +50,7 @@ use sc_consensus::{
 };
 use sc_network::{
 	config::{NetworkConfiguration, RequestResponseConfig, Role, SyncMode},
-	ChainSyncInterface, ChainSyncService, Multiaddr, NetworkService, NetworkWorker,
+	ChainSyncService, Multiaddr, NetworkService, NetworkWorker,
 };
 use sc_network_common::{
 	config::{

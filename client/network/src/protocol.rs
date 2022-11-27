@@ -19,8 +19,7 @@
 use crate::config;
 
 use bytes::Bytes;
-use codec::{Decode, DecodeAll, Encode};
-use futures::prelude::*;
+use codec::{DecodeAll, Encode};
 use libp2p::{
 	core::{connection::ConnectionId, transport::ListenerId, ConnectedPoint},
 	swarm::{
@@ -29,29 +28,22 @@ use libp2p::{
 	},
 	Multiaddr, PeerId,
 };
-use log::{debug, error, trace, warn};
+use log::{debug, error, warn};
 use message::{generic::Message as GenericMessage, Message};
 use notifications::{Notifications, NotificationsOut};
 use sc_client_api::{BlockBackend, HeaderBackend, ProofProvider};
 use sc_network_common::{
 	config::NonReservedPeerMode,
 	error,
-	protocol::{event::Event, role::Roles, ProtocolName},
-	sync::{
-		message::{BlockAnnounce, BlockAnnouncesHandshake},
-		ExtendedPeerInfo,
-	},
-	utils::interval,
+	protocol::{role::Roles, ProtocolName},
+	sync::message::BlockAnnouncesHandshake,
 };
-use sc_network_sync::engine::SyncingEngine;
 use sp_blockchain::HeaderMetadata;
-use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::{
 	collections::{HashSet, VecDeque},
 	io, iter,
-	pin::Pin,
 	task::Poll,
-	time,
 };
 
 mod notifications;
@@ -93,12 +85,8 @@ pub struct Protocol<B: BlockT, Client> {
 	/// solve this, an entry is added to this map whenever an invalid handshake is received.
 	/// Entries are removed when the corresponding "substream closed" is later received.
 	bad_handshake_substreams: HashSet<(PeerId, sc_peerset::SetId)>,
-	// TODO(aaro): remove
-	event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
-	_marker: std::marker::PhantomData<Client>,
 	peers: HashSet<PeerId>,
-	// TODO(aaro): remove eventually
-	// engine: SyncingEngine<B, Client>,
+	_marker: std::marker::PhantomData<Client>,
 }
 
 impl<B, Client> Protocol<B, Client>
@@ -117,8 +105,6 @@ where
 		roles: Roles,
 		network_config: &config::NetworkConfiguration,
 		block_announces_protocol: sc_network_common::config::NonDefaultSetConfig,
-		// engine: SyncingEngine<B, Client>,
-		event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	) -> error::Result<(Self, sc_peerset::PeersetHandle, Vec<(PeerId, Multiaddr)>)> {
 		let mut known_addresses = Vec::new();
 
@@ -203,7 +189,6 @@ where
 			bad_handshake_substreams: Default::default(),
 			_marker: Default::default(),
 			peers: HashSet::new(),
-			event_stream,
 		};
 
 		Ok((protocol, peerset_handle, known_addresses))
@@ -537,7 +522,7 @@ where
 							self.peers.remove(&peer_id);
 							CustomMessageOutcome::None
 						},
-						Err(err) => CustomMessageOutcome::UncheckedNotificationStreamOpened {
+						Err(_err) => CustomMessageOutcome::UncheckedNotificationStreamOpened {
 							remote: peer_id,
 							protocol: self.notification_protocols[usize::from(set_id)].clone(),
 							negotiated_fallback,
@@ -555,7 +540,7 @@ where
 							roles,
 							notifications_sink,
 						},
-						(Err(_), Some(peer)) if received_handshake.is_empty() => {
+						(Err(_), Some(_peer)) if received_handshake.is_empty() => {
 							panic!("not supported anymore");
 							// As a convenience, we allow opening substreams for "external"
 							// notification protocols with an empty handshake. This fetches the

@@ -69,7 +69,6 @@ use sc_network_common::{
 		NotificationSender as NotificationSenderT, NotificationSenderError,
 		NotificationSenderReady as NotificationSenderReadyT, Signature, SigningError,
 	},
-	sync::ExtendedPeerInfo,
 	ExHashT,
 };
 use sc_peerset::PeersetHandle;
@@ -225,13 +224,10 @@ where
 			local_peer_id.to_base58(),
 		);
 
-		let (tx, rx) = out_events::channel("block-announce-protocol");
 		let (protocol, peerset_handle, mut known_addresses) = Protocol::new(
 			From::from(&params.role),
 			&params.network_config,
 			params.block_announce_config,
-			// params.engine,
-			Box::pin(rx),
 		)?;
 
 		// List of multiaddresses that we know in the network.
@@ -445,16 +441,13 @@ where
 			_marker: PhantomData,
 		});
 
-		let mut event_streams = out_events::OutChannels::new(params.metrics_registry.as_ref())?;
-		event_streams.push(tx);
-
 		Ok(NetworkWorker {
 			external_addresses,
 			num_connected,
 			network_service: swarm,
 			service,
 			from_service,
-			event_streams,
+			event_streams: out_events::OutChannels::new(params.metrics_registry.as_ref())?,
 			peers_notifications_sinks,
 			metrics,
 			boot_node_ids,

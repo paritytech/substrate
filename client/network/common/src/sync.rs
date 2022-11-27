@@ -468,7 +468,6 @@ pub trait ChainSync<Block: BlockT>: Send {
 	fn send_block_request(&mut self, who: PeerId, request: BlockRequest<Block>);
 }
 
-// TODO(aaro): is this needed at all?
 #[async_trait::async_trait]
 pub trait ChainSyncService<Block: BlockT>: Send + Sync {
 	/// Returns the number of peers we're connected to and that are being queried.
