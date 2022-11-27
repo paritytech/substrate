@@ -181,7 +181,21 @@ impl<T: codec::Decode> sp_std::iter::Iterator for ScaleContainerStreamIter<T> {
 		} else {
 			self.read += 1;
 
-			codec::Decode::decode(&mut self.input).ok()
+			match codec::Decode::decode(&mut self.input) {
+				Ok(r) => Some(r),
+				Err(e) => {
+					self.read = self.length;
+
+					log::error!(
+						target: "runtime::storage",
+						"Corrupted state at `{:?}`: {:?}",
+						self.input.key,
+						e,
+					);
+
+					None
+				},
+			}
 		}
 	}
 
@@ -250,29 +264,24 @@ impl StorageInput {
 			self.buffer.set_len(self.buffer.capacity());
 		}
 
-		if let Some(after_offset) =
+		if let Some(length_minus_offset) =
 			sp_io::storage::read(&self.key, &mut self.buffer[present_bytes..], self.offset)
 		{
-			let buffer_len = if (after_offset as usize) < (self.buffer.len() - present_bytes) {
-				present_bytes + after_offset as usize
-			} else {
-				self.buffer.len()
-			};
-
+			let bytes_read =
+				sp_std::cmp::min(length_minus_offset as usize, self.buffer.len() - present_bytes);
+			let buffer_len = present_bytes + bytes_read;
 			unsafe {
 				self.buffer.set_len(buffer_len);
 			}
 
-			self.offset += (buffer_len - present_bytes) as u32;
-			self.buffer_pos = 0;
+			self.ensure_total_length_did_not_change(length_minus_offset)?;
+
+			self.offset += bytes_read as u32;
 
 			Ok(())
 		} else {
 			// The value was deleted, let's ensure we don't read anymore.
-			self.offset = self.total_length;
-			unsafe {
-				self.buffer.set_len(0);
-			}
+			self.stop_reading();
 
 			Err("Value doesn't exist in the state?".into())
 		}
@@ -281,6 +290,72 @@ impl StorageInput {
 	/// Returns if the value to read exists in the state.
 	fn exists(&self) -> bool {
 		self.exists
+	}
+
+	/// Reads directly into the given slice `into`.
+	///
+	/// Should be used when `into.len() > self.buffer.capacity()` to reduce the number of reads from
+	/// the state.
+	#[inline(never)]
+	fn read_big_item(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
+		let num_cached = self.buffer.len() - self.buffer_pos;
+
+		into[..num_cached].copy_from_slice(&self.buffer[self.buffer_pos..]);
+
+		self.buffer_pos = 0;
+		unsafe {
+			self.buffer.set_len(0);
+		}
+
+		if let Some(length_minus_offset) =
+			sp_io::storage::read(&self.key, &mut into[num_cached..], self.offset)
+		{
+			let required_to_read = (into.len() - num_cached) as u32;
+
+			if length_minus_offset < required_to_read {
+				return Err("Not enough data to fill the buffer".into())
+			}
+
+			self.ensure_total_length_did_not_change(length_minus_offset)?;
+
+			self.offset += required_to_read;
+
+			Ok(())
+		} else {
+			// The value was deleted, let's ensure we don't read anymore.
+			self.stop_reading();
+
+			Err("Value doesn't exist in the state?".into())
+		}
+	}
+
+	/// Ensures that the expected total length of the value did not change.
+	///
+	/// On error ensures that further reading is prohibited.
+	fn ensure_total_length_did_not_change(
+		&mut self,
+		length_minus_offset: u32,
+	) -> Result<(), codec::Error> {
+		if self.total_length == self.offset + length_minus_offset {
+			Ok(())
+		} else {
+			// The value total length changed, let's ensure we don't read anymore.
+			self.stop_reading();
+
+			Err("Storage value changed while it is being read!".into())
+		}
+	}
+
+	/// Ensure that we are stop reading from this value in the state.
+	///
+	/// Should be used when there happened an unrecoverable error while reading.
+	fn stop_reading(&mut self) {
+		self.offset = self.total_length;
+
+		self.buffer_pos = 0;
+		unsafe {
+			self.buffer.set_len(0);
+		}
 	}
 }
 
@@ -292,32 +367,19 @@ impl codec::Input for StorageInput {
 	}
 
 	fn read(&mut self, into: &mut [u8]) -> Result<(), codec::Error> {
-		if into.len() > self.buffer.capacity() {
-			let num_cached = self.buffer.len() - self.buffer_pos;
-
-			into[..num_cached].copy_from_slice(&self.buffer[self.buffer_pos..]);
-			self.buffer_pos = self.buffer.len();
-
-			if let Some(after_offset) =
-				sp_io::storage::read(&self.key, &mut into[num_cached..], self.offset)
-			{
-				let required_to_read = (into.len() - num_cached) as u32;
-
-				if after_offset < required_to_read {
-					return Err("not enough data to fill the buffer".into())
-				}
-
-				self.offset += required_to_read;
-				return Ok(())
-			} else {
-				return Err("Value doesn't exist in the state?".into())
+		// If there is still data left to be read from the state.
+		if self.offset < self.total_length {
+			if into.len() > self.buffer.capacity() {
+				return self.read_big_item(into)
+			} else if self.buffer_pos + into.len() >= self.buffer.len() {
+				self.fill_buffer()?;
 			}
-		} else if self.buffer_pos + into.len() >= self.buffer.len() &&
-			self.offset < self.total_length
-		{
-			self.fill_buffer()?;
-		} else if into.len() + self.buffer_pos > self.buffer.len() {
-			return Err("not enough data to fill the buffer".into())
+		}
+
+		// Guard against `fill_buffer` not reading enough data or just not having enough data
+		// anymore.
+		if into.len() + self.buffer_pos > self.buffer.len() {
+			return Err("Not enough data to fill the buffer".into())
 		}
 
 		let end = self.buffer_pos + into.len();
@@ -401,6 +463,41 @@ mod tests {
 	}
 
 	#[test]
+	fn detects_value_total_length_change() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let test_data: Vec<Vec<Vec<u8>>> = vec![
+				vec![vec![0; 20], vec![1; STORAGE_INPUT_BUFFER_CAPACITY * 2]],
+				vec![
+					vec![0; STORAGE_INPUT_BUFFER_CAPACITY - 1],
+					vec![1; STORAGE_INPUT_BUFFER_CAPACITY - 1],
+				],
+			];
+
+			for data in test_data {
+				TestVecVecU8::put(&data);
+
+				let mut input = StorageInput::new(TestVecVecU8::hashed_key().into());
+
+				Compact::<u32>::decode(&mut input).unwrap();
+				Vec::<u8>::decode(&mut input).unwrap();
+
+				TestVecVecU8::append(vec![1, 2, 3]);
+
+				assert!(Vec::<u8>::decode(&mut input)
+					.unwrap_err()
+					.to_string()
+					.contains("Storage value changed while it is being read"));
+
+				// Reading a second time should now prevent reading at all.
+				assert!(Vec::<u8>::decode(&mut input)
+					.unwrap_err()
+					.to_string()
+					.contains("Not enough data to fill the buffer"));
+			}
+		})
+	}
+
+	#[test]
 	fn stream_read_test() {
 		sp_io::TestExternalities::default().execute_with(|| {
 			let data: Vec<u32> = vec![1, 2, 3, 4, 5];
@@ -436,6 +533,27 @@ mod tests {
 			TestVecVecU8::put(&data);
 
 			assert_eq!(data, TestVecVecU8::stream_iter().collect::<Vec<_>>());
+		})
+	}
+
+	#[test]
+	fn reading_more_data_as_in_the_state_is_detected() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let data: Vec<Vec<u8>> = vec![vec![0; 20], vec![1; STORAGE_INPUT_BUFFER_CAPACITY * 2]];
+			TestVecVecU8::put(&data);
+
+			let mut input = StorageInput::new(TestVecVecU8::hashed_key().into());
+
+			Compact::<u32>::decode(&mut input).unwrap();
+
+			Vec::<u8>::decode(&mut input).unwrap();
+
+			let mut buffer = vec![0; STORAGE_INPUT_BUFFER_CAPACITY * 4];
+			assert!(input
+				.read(&mut buffer)
+				.unwrap_err()
+				.to_string()
+				.contains("Not enough data to fill the buffer"));
 		})
 	}
 
@@ -483,6 +601,65 @@ mod tests {
 			TestVecVecU8::put(&data);
 
 			assert_eq!(data, TestVecVecU8::stream_iter().collect::<Vec<_>>());
+
+			let mut input = StorageInput::new(TestVecVecU8::hashed_key().into());
+
+			Compact::<u32>::decode(&mut input).unwrap();
+
+			(0..data.len() - 1).into_iter().for_each(|_| {
+				Vec::<u8>::decode(&mut input).unwrap();
+			});
+
+			// Try reading a more data than there should be left.
+			let mut result_buffer = vec![0; BUFFER_SIZE * 2];
+			assert!(input
+				.read(&mut result_buffer)
+				.unwrap_err()
+				.to_string()
+				.contains("Not enough data to fill the buffer"));
+		})
+	}
+
+	#[test]
+	fn detect_value_deleted_in_state() {
+		sp_io::TestExternalities::default().execute_with(|| {
+			let data: Vec<Vec<u8>> = vec![vec![0; 20], vec![1; STORAGE_INPUT_BUFFER_CAPACITY * 2]];
+			TestVecVecU8::put(&data);
+
+			let mut input = StorageInput::new(TestVecVecU8::hashed_key().into());
+			TestVecVecU8::kill();
+
+			Compact::<u32>::decode(&mut input).unwrap();
+			Vec::<u8>::decode(&mut input).unwrap();
+
+			assert!(Vec::<u8>::decode(&mut input)
+				.unwrap_err()
+				.to_string()
+				.contains("Value doesn't exist in the state?"));
+
+			const BUFFER_SIZE: usize = 300;
+			// Ensure that the capacity isn't dividable by `300`.
+			assert!(STORAGE_INPUT_BUFFER_CAPACITY % BUFFER_SIZE != 0, "Please update buffer size");
+			// Create some items where the last item is partially in the inner buffer so that
+			// we need to fill the buffer to read the entire item.
+			let data: Vec<Vec<u8>> = (0..=(STORAGE_INPUT_BUFFER_CAPACITY / BUFFER_SIZE))
+				.into_iter()
+				.map(|i| vec![i as u8; BUFFER_SIZE])
+				.collect::<Vec<Vec<u8>>>();
+			TestVecVecU8::put(&data);
+
+			let mut input = StorageInput::new(TestVecVecU8::hashed_key().into());
+			TestVecVecU8::kill();
+
+			Compact::<u32>::decode(&mut input).unwrap();
+			(0..data.len() - 1).into_iter().for_each(|_| {
+				Vec::<u8>::decode(&mut input).unwrap();
+			});
+
+			assert!(Vec::<u8>::decode(&mut input)
+				.unwrap_err()
+				.to_string()
+				.contains("Value doesn't exist in the state?"));
 		})
 	}
 }
