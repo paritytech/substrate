@@ -87,7 +87,10 @@ pub struct Stake<AccountId, Balance> {
 /// The rest of the data can be retrieved by using `StakingInterface`.
 pub trait OnStakingUpdate<AccountId, Balance> {
 	/// Track ledger updates.
-	fn on_update_ledger(prev_stake: Stake<AccountId, Balance>) -> DispatchResult;
+	fn on_update_ledger(
+		who: &AccountId,
+		prev_stake: Option<Stake<AccountId, Balance>>,
+	) -> DispatchResult;
 	/// Track nominators, those reinstated and also new ones.
 	fn on_nominator_add(who: &AccountId, prev_nominations: Vec<AccountId>) -> DispatchResult;
 	/// Track validators, those reinstated and new.

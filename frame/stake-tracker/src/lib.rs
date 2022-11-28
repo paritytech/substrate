@@ -16,7 +16,9 @@
 // limitations under the License.
 
 use crate::pallet::{ApprovalStake, Error, Pallet};
-use frame_election_provider_support::{ReadOnlySortedListProvider, SortedListProvider, VoteWeight};
+use frame_election_provider_support::{
+	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight,
+};
 use frame_support::{
 	defensive,
 	traits::{Currency, CurrencyToVote, Defensive, DefensiveOption},
@@ -84,9 +86,12 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
-	fn on_update_ledger(prev_stake: Stake<T::AccountId, BalanceOf<T>>) -> DispatchResult {
-		let current_stake = T::Staking::stake(&prev_stake.stash)?;
-		let prev_active = prev_stake.active;
+	fn on_update_ledger(
+		who: &T::AccountId,
+		prev_stake: Option<Stake<T::AccountId, BalanceOf<T>>>,
+	) -> DispatchResult {
+		let current_stake = T::Staking::stake(who)?;
+		let prev_active = prev_stake.map(|s| s.active).unwrap_or_default();
 		let current_active = current_stake.active;
 
 		let update_approval_stake = |who: &T::AccountId| {
@@ -217,5 +222,18 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 		ApprovalStake::<T>::remove(who);
 
 		Ok(())
+	}
+}
+
+impl<T: Config> ScoreProvider<T::AccountId> for Pallet<T> {
+	type Score = BalanceOf<T>;
+
+	fn score(who: &T::AccountId) -> Self::Score {
+		Self::approval_stake(who).unwrap_or_default()
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn set_score_of(_: &T::AccountId, _: Self::Score) {
+		todo!()
 	}
 }

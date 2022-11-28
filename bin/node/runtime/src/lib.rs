@@ -546,6 +546,13 @@ impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 	type MaxValidators = ConstU32<1000>;
 }
 
+impl pallet_stake_tracker::Config for Runtime {
+	type Currency = Balances;
+	type Staking = Staking;
+	type VoterList: pallet_staking::UseValidatorsMap<Self>;
+	type TargetList: pallet_staking::UseValidatorsMap<Self>;
+}
+
 impl pallet_staking::Config for Runtime {
 	type MaxNominations = MaxNominations;
 	type Currency = Balances;
@@ -579,6 +586,7 @@ impl pallet_staking::Config for Runtime {
 	type OnStakerSlash = NominationPools;
 	type WeightInfo = pallet_staking::weights::SubstrateWeight<Runtime>;
 	type BenchmarkingConfig = StakingBenchmarkingConfig;
+	type EventListener = StakeTracker;
 }
 
 impl pallet_fast_unstake::Config for Runtime {
@@ -756,6 +764,21 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type Score = VoteWeight;
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
+
+// parameter_types! {
+// 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
+// }
+//
+// type TargetBagsListInstance = pallet_bags_list::Instance2;
+// impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
+// 	type RuntimeEvent = RuntimeEvent;
+// 	/// The voter bags-list is loosely kept up to date, and the real source of truth for the score
+// 	/// of each node is the staking pallet.
+// 	type ScoreProvider = Staking;
+// 	type BagThresholds = BagThresholds;
+// 	type Score = VoteWeight;
+// 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
+// }
 
 parameter_types! {
 	pub const PostUnbondPoolsWindow: u32 = 4;
@@ -1682,6 +1705,7 @@ construct_runtime!(
 		RankedPolls: pallet_referenda::<Instance2>,
 		RankedCollective: pallet_ranked_collective,
 		FastUnstake: pallet_fast_unstake,
+		StakeTracker: pallet_stake_tracker,
 	}
 );
 

@@ -230,13 +230,15 @@ impl<T: Config> Pallet<T> {
 	///
 	/// This will also update the stash lock.
 	pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
-		let prev_ledger = Self::ledger(controller)
-			.map(|l| Stake { stash: l.stash, total: l.total, active: l.active })
-			.unwrap_or_default();
+		let prev_ledger = Self::ledger(controller).map(|l| Stake {
+			stash: l.stash,
+			total: l.total,
+			active: l.active,
+		});
 
 		T::Currency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
 		<Ledger<T>>::insert(controller, ledger);
-		let _ = T::EventListener::on_update_ledger(prev_ledger);
+		let _ = T::EventListener::on_update_ledger(&ledger.stash, prev_ledger);
 	}
 
 	/// Chill a stash account.

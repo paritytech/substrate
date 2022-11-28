@@ -3418,6 +3418,7 @@ dependencies = [
  "pallet-session",
  "pallet-session-benchmarking",
  "pallet-society",
+ "pallet-stake-tracker",
  "pallet-staking",
  "pallet-staking-reward-curve",
  "pallet-state-trie-migration",
