@@ -242,7 +242,7 @@ fn mint_should_work() {
 		System::set_block_number(1);
 		assert_noop!(
 			Nfts::mint(RuntimeOrigin::signed(1), 0, 43, None),
-			Error::<Test>::MintNotStated
+			Error::<Test>::MintNotStarted
 		);
 		System::set_block_number(4);
 		assert_noop!(Nfts::mint(RuntimeOrigin::signed(1), 0, 43, None), Error::<Test>::MintEnded);

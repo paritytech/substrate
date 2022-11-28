@@ -584,7 +584,7 @@ pub mod pallet {
 		/// Some roles were not cleared.
 		RolesNotCleared,
 		/// Mint has not started yet.
-		MintNotStated,
+		MintNotStarted,
 		/// Mint has already ended.
 		MintEnded,
 		/// The provided Item was already used for claiming.
@@ -750,7 +750,7 @@ pub mod pallet {
 					let now = frame_system::Pallet::<T>::block_number();
 
 					if let Some(start_block) = mint_settings.start_block {
-						ensure!(start_block <= now, Error::<T, I>::MintNotStated);
+						ensure!(start_block <= now, Error::<T, I>::MintNotStarted);
 					}
 					if let Some(end_block) = mint_settings.end_block {
 						ensure!(end_block >= now, Error::<T, I>::MintEnded);
