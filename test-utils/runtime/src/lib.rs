@@ -378,6 +378,8 @@ cfg_if! {
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 				/// Traces log "Hey I'm runtime."
 				fn do_trace_log();
+				/// Verify the given signature, public & message bundle.
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool;
 			}
 		}
 	} else {
@@ -428,6 +430,8 @@ cfg_if! {
 				fn test_multiple_arguments(data: Vec<u8>, other: Vec<u8>, num: u32);
 				/// Traces log "Hey I'm runtime."
 				fn do_trace_log();
+				/// Verify the given signature, public & message bundle.
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool;
 			}
 		}
 	}
@@ -863,6 +867,10 @@ cfg_if! {
 				fn do_trace_log() {
 					log::trace!("Hey I'm runtime");
 				}
+
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool {
+					sp_io::crypto::ed25519_verify(&sig, &message, &public)
+				}
 			}
 
 			impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
@@ -1136,6 +1144,10 @@ cfg_if! {
 
 				fn do_trace_log() {
 					log::trace!("Hey I'm runtime: {}", log::STATIC_MAX_LEVEL);
+				}
+
+				fn verify_ed25519(sig: ed25519::Signature, public: ed25519::Public, message: Vec<u8>) -> bool {
+					sp_io::crypto::ed25519_verify(&sig, &message, &public)
 				}
 			}
 

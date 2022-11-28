@@ -8689,6 +8689,7 @@ dependencies = [
  "sp-consensus",
  "sp-core",
  "sp-externalities",
+ "sp-io",
  "sp-panic-handler",
  "sp-runtime",
  "sp-state-machine",
@@ -9682,6 +9683,7 @@ name = "sp-io"
 version = "7.0.0"
 dependencies = [
  "bytes",
+ "ed25519-dalek",
  "futures",
  "hash-db",
  "libsecp256k1",
