@@ -50,7 +50,7 @@ use sp_std::marker::PhantomData;
 pub trait WeightInfo {
 	fn create() -> Weight;
 	fn force_create() -> Weight;
-	fn destroy(n: u32, ) -> Weight;
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight;
 	fn mint() -> Weight;
 	fn force_mint() -> Weight;
 	fn burn() -> Weight;
@@ -123,11 +123,17 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	// Storage: Nfts ItemConfigOf (r:0 w:20)
 	// Storage: Nfts Account (r:0 w:20)
 	/// The range of component `n` is `[0, 1000]`.
-	fn destroy(n: u32, ) -> Weight {
+	/// The range of component `m` is `[0, 1000]`.
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		// Minimum execution time: 65_846 nanoseconds.
 		Weight::from_ref_time(66_082_000)
 			// Standard Error: 27_878
 			.saturating_add(Weight::from_ref_time(26_747_590).saturating_mul(n.into()))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(315_839 as u64).saturating_mul(m.into()))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(217_497 as u64).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().reads((2_u64).saturating_mul(n.into())))
 			.saturating_add(T::DbWeight::get().writes(5))
@@ -497,11 +503,17 @@ impl WeightInfo for () {
 	// Storage: Nfts ItemConfigOf (r:0 w:20)
 	// Storage: Nfts Account (r:0 w:20)
 	/// The range of component `n` is `[0, 1000]`.
-	fn destroy(n: u32, ) -> Weight {
+	/// The range of component `m` is `[0, 1000]`.
+	/// The range of component `a` is `[0, 1000]`.
+	fn destroy(n: u32, m: u32, a: u32, ) -> Weight {
 		// Minimum execution time: 65_846 nanoseconds.
 		Weight::from_ref_time(66_082_000)
 			// Standard Error: 27_878
 			.saturating_add(Weight::from_ref_time(26_747_590).saturating_mul(n.into()))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(315_839 as u64).saturating_mul(m.into()))
+			// Standard Error: 27_329
+			.saturating_add(Weight::from_ref_time(217_497 as u64).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().reads((2_u64).saturating_mul(n.into())))
 			.saturating_add(RocksDbWeight::get().writes(5))

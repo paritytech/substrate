@@ -171,12 +171,24 @@ benchmarks_instance_pallet! {
 
 	destroy {
 		let n in 0 .. 1_000;
+		let m in 0 .. 1_000;
+		let a in 0 .. 1_000;
 
 		let (collection, caller, caller_lookup) = create_collection::<T, I>();
 		add_collection_metadata::<T, I>();
 		for i in 0..n {
 			mint_item::<T, I>(i as u16);
+		}
+		for i in 0..m {
+			if !Item::<T, I>::contains_key(collection, T::Helper::item(i as u16)) {
+				mint_item::<T, I>(i as u16);
+			}
 			add_item_metadata::<T, I>(T::Helper::item(i as u16));
+		}
+		for i in 0..a {
+			if !Item::<T, I>::contains_key(collection, T::Helper::item(i as u16)) {
+				mint_item::<T, I>(i as u16);
+			}
 			add_item_attribute::<T, I>(T::Helper::item(i as u16));
 		}
 		let witness = Collection::<T, I>::get(collection).unwrap().destroy_witness();

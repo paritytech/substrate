@@ -1393,7 +1393,9 @@ pub mod pallet {
 		/// - `delegate`: The previously approved account to remove.
 		///
 		/// Emits `ItemAttributesApprovalRemoved` on success.
-		#[pallet::weight(T::WeightInfo::cancel_item_attributes_approval())]
+		#[pallet::weight(T::WeightInfo::cancel_item_attributes_approval(
+			witness.account_attributes
+		))]
 		pub fn cancel_item_attributes_approval(
 			origin: OriginFor<T>,
 			collection: T::CollectionId,
