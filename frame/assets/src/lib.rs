@@ -225,7 +225,15 @@ pub mod pallet {
 		/// Wrapper around `Self::AssetId` to use in dispatchable call signatures. Allows the use
 		/// of compact encoding in instances of the pallet, which will prevent breaking changes
 		/// resulting from the removal of `HasCompact` from `Self::AssetId`.
-		type AssetIdParameter: Parameter + Copy + Into<Self::AssetId> + MaxEncodedLen;
+		///
+		/// This type includes the `From<Self::AssetId>` bound, since tightly coupled pallets may
+		/// want to convert an `AssetId` into a parameter for calling dispatchable functions
+		/// directly.
+		type AssetIdParameter: Parameter
+			+ Copy
+			+ From<Self::AssetId>
+			+ Into<Self::AssetId>
+			+ MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
