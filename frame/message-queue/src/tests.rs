@@ -892,7 +892,6 @@ fn footprint_on_swept_works() {
 	})
 }
 
-// TODO test page removal
 #[test]
 fn execute_overweight_works() {
 	new_test_ext::<Test>().execute_with(|| {
@@ -906,6 +905,7 @@ fn execute_overweight_works() {
 		// Load the current book
 		let book = BookStateFor::<Test>::get(origin);
 		assert_eq!(book.message_count, 1);
+		assert!(Pages::<Test>::contains_key(&origin, 0));
 
 		// Mark the message as permanently overweight.
 		assert_eq!(MessageQueue::service_queues(4.into_weight()), 4.into_weight());
@@ -944,6 +944,7 @@ fn execute_overweight_works() {
 			<MessageQueue as ServiceQueues>::execute_overweight(70.into_weight(), (origin, 0, 0));
 		assert_eq!(consumed, Err(ExecuteOverweightError::NotFound));
 		assert!(QueueChanges::take().is_empty());
+		assert!(!Pages::<Test>::contains_key(&origin, 0), "Page is gone");
 	});
 }
 

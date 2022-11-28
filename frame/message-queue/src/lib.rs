@@ -155,7 +155,7 @@
 //!
 //! **Liveness - Enqueueing**
 //!
-//! It is always possible to enqueue any message for any `MessageOrigin`. TODO is this true?!
+//! It is always possible to enqueue any message for any `MessageOrigin`.
 //!
 //! **Liveness - Processing**
 //!
