@@ -249,6 +249,7 @@ impl DiscoveryConfig {
 				NonZeroUsize::new(MAX_KNOWN_EXTERNAL_ADDRESSES)
 					.expect("value is a constant; constant is non-zero; qed."),
 			),
+			outbound_query_records: Vec::new(),
 		}
 	}
 }
@@ -286,6 +287,8 @@ pub struct DiscoveryBehaviour {
 	allow_non_globals_in_dht: bool,
 	/// A cache of discovered external addresses. Only used for logging purposes.
 	known_external_addresses: LruHashSet<Multiaddr>,
+	/// A cache of outbound query records.
+	outbound_query_records: Vec<(record::Key, Vec<u8>)>,
 }
 
 impl DiscoveryBehaviour {
@@ -695,10 +698,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						let ev = match res {
 							Ok(ok) =>
 								if let GetRecordOk::FoundRecord(r) = ok {
-									DiscoveryOut::ValueFound(
-										vec![(r.record.key, r.record.value)],
-										stats.duration().unwrap_or_default(),
-									)
+									self.outbound_query_records
+										.push((r.record.key, r.record.value));
+									continue
 								} else {
 									debug!(
 										target: "sub-libp2p",
@@ -706,7 +708,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 										step.count,
 										step.last,
 									);
-									continue
+									if step.last {
+										let records =
+											self.outbound_query_records.drain(..).collect();
+										DiscoveryOut::ValueFound(
+											records,
+											stats.duration().unwrap_or_default(),
+										)
+									} else {
+										continue
+									}
 								},
 							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 								trace!(
