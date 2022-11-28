@@ -58,8 +58,8 @@ use libp2p::{
 			self,
 			store::{MemoryStore, RecordStore},
 		},
-		GetClosestPeersError, Kademlia, KademliaBucketInserts, KademliaConfig, KademliaEvent,
-		QueryId, QueryResult, Quorum, Record,
+		GetClosestPeersError, GetRecordOk, Kademlia, KademliaBucketInserts, KademliaConfig,
+		KademliaEvent, QueryId, QueryResult, Quorum, Record,
 	},
 	mdns::{async_io::Behaviour as Mdns, Config as MdnsConfig, Event as MdnsEvent},
 	multiaddr::Protocol,
@@ -366,7 +366,7 @@ impl DiscoveryBehaviour {
 	/// A corresponding `ValueFound` or `ValueNotFound` event will later be generated.
 	pub fn get_value(&mut self, key: record::Key) {
 		if let Some(k) = self.kademlia.as_mut() {
-			k.get_record(key.clone(), Quorum::One);
+			k.get_record(key.clone());
 		}
 	}
 
@@ -642,6 +642,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			}
 		}
 
+		let records = Vec::new();
 		while let Poll::Ready(ev) = self.kademlia.poll(cx, params) {
 			match ev {
 				NetworkBehaviourAction::GenerateEvent(ev) => match ev {
@@ -661,7 +662,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 					KademliaEvent::InboundRequest { .. } => {
 						// We are not interested in this event at the moment.
 					},
-					KademliaEvent::OutboundQueryCompleted {
+					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::GetClosestPeers(res),
 						..
 					} => match res {
@@ -686,24 +687,28 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 							}
 						},
 					},
-					KademliaEvent::OutboundQueryCompleted {
+					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::GetRecord(res),
 						stats,
+						step,
 						..
 					} => {
 						let ev = match res {
-							Ok(ok) => {
-								let results = ok
-									.records
-									.into_iter()
-									.map(|r| (r.record.key, r.record.value))
-									.collect();
-
-								DiscoveryOut::ValueFound(
-									results,
-									stats.duration().unwrap_or_default(),
-								)
-							},
+							Ok(ok) =>
+								if let GetRecordOk::FoundRecord(r) = ok {
+									DiscoveryOut::ValueFound(
+										vec![(r.record.key, r.record.value)],
+										stats.duration().unwrap_or_default(),
+									)
+								} else {
+									debug!(
+										target: "sub-libp2p",
+										"Libp2p => Query progressed to {:?} step (last: {:?})",
+										step.count,
+										step.last,
+									);
+									continue
+								},
 							Err(e @ libp2p::kad::GetRecordError::NotFound { .. }) => {
 								trace!(
 									target: "sub-libp2p",
@@ -729,7 +734,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						};
 						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 					},
-					KademliaEvent::OutboundQueryCompleted {
+					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::PutRecord(res),
 						stats,
 						..
@@ -751,7 +756,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						};
 						return Poll::Ready(NetworkBehaviourAction::GenerateEvent(ev))
 					},
-					KademliaEvent::OutboundQueryCompleted {
+					KademliaEvent::OutboundQueryProgressed {
 						result: QueryResult::RepublishRecord(res),
 						..
 					} => match res {
@@ -767,7 +772,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 						),
 					},
 					// We never start any other type of query.
-					KademliaEvent::OutboundQueryCompleted { result: e, .. } => {
+					KademliaEvent::OutboundQueryProgressed { result: e, .. } => {
 						warn!(target: "sub-libp2p", "Libp2p => Unhandled Kademlia event: {:?}", e)
 					},
 				},
