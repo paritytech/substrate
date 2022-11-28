@@ -642,7 +642,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 			}
 		}
 
-		let records = Vec::new();
 		while let Poll::Ready(ev) = self.kademlia.poll(cx, params) {
 			match ev {
 				NetworkBehaviourAction::GenerateEvent(ev) => match ev {
