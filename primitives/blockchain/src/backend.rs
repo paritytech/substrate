@@ -21,11 +21,10 @@ use log::warn;
 use parking_lot::RwLock;
 use sp_runtime::{
 	generic::BlockId,
-	sp_std,
 	traits::{Block as BlockT, Header as HeaderT, NumberFor, Saturating},
 	Justifications,
 };
-use sp_std::collections::btree_set::BTreeSet;
+use std::collections::btree_set::BTreeSet;
 
 use crate::header_metadata::HeaderMetadata;
 
@@ -101,7 +100,7 @@ pub trait ForkBackend<Block: BlockT>:
 	fn expand_forks(
 		&self,
 		fork_heads: &[Block::Hash],
-	) -> sp_std::result::Result<BTreeSet<Block::Hash>, (BTreeSet<Block::Hash>, Error)> {
+	) -> std::result::Result<BTreeSet<Block::Hash>, (BTreeSet<Block::Hash>, Error)> {
 		let mut missing_blocks = vec![];
 		let mut expanded_forks = BTreeSet::new();
 		for fork_head in fork_heads {

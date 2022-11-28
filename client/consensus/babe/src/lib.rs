@@ -516,12 +516,12 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 	client: &C,
 	notification: &FinalityNotification<Block>,
 ) -> AuxDataOperations {
-	let mut aux_keys = HashSet::new();
+	let mut hashes = HashSet::new();
 
 	let first = notification.tree_route.first().unwrap_or(&notification.hash);
 	match client.header_metadata(*first) {
 		Ok(meta) => {
-			aux_keys.insert(meta.parent);
+			hashes.insert(meta.parent);
 		},
 		Err(err) => warn!(
 			target: "babe",
@@ -532,7 +532,7 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 	}
 
 	// Cleans data for finalized block's ancestors
-	aux_keys.extend(
+	hashes.extend(
 		notification
 			.tree_route
 			.iter()
@@ -549,9 +549,9 @@ fn aux_storage_cleanup<C: HeaderMetadata<Block> + HeaderBackend<Block>, Block: B
 			stale_forks
 		},
 	};
-	aux_keys.extend(stale_forks.iter());
+	hashes.extend(stale_forks.iter());
 
-	aux_keys
+	hashes
 		.into_iter()
 		.map(|val| (aux_schema::block_weight_key(val), None))
 		.collect()
