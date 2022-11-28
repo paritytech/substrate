@@ -38,6 +38,7 @@ test-dependency-rules:
 test-rust-features:
   stage:                           check
   extends:
+    - .docker-env
     - .test-refs-no-trigger-prs-only
   script:
     - git clone
