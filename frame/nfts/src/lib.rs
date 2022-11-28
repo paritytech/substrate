@@ -1230,16 +1230,20 @@ pub mod pallet {
 			Self::do_clear_all_transfer_approvals(maybe_check_origin, collection, item)
 		}
 
-		/// Disallows changing the metadata of attributes of the item.
+		/// Disallows changing the metadata or attributes of the item.
 		///
 		/// Origin must be either `ForceOrigin` or Signed and the sender should be the Owner of the
 		/// `collection`.
 		///
 		/// - `collection`: The collection if the `item`.
 		/// - `item`: An item to be locked.
-		/// - `lock_config`: The config with the settings to be locked.
+		/// - `lock_metadata`: Specifies whether the metadata should be locked.
+		/// - `lock_attributes`: Specifies whether the attributes in the `CollectionOwner` namespace
+		///   should be locked.
 		///
-		/// Note: when the metadata or attributes are locked, it won't be possible the unlock them.
+		/// Note: `lock_attributes` affects the attributes in the `CollectionOwner` namespace
+		/// only. When the metadata or attributes are locked, it won't be possible the unlock them.
+		///
 		/// Emits `ItemPropertiesLocked`.
 		///
 		/// Weight: `O(1)`
