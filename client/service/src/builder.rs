@@ -1047,7 +1047,7 @@ where
 		system_rpc_tx,
 		tx_handler_controller,
 		NetworkStarter(network_start_tx),
-		sync_service.clone()
+		sync_service.clone(),
 	))
 }
 

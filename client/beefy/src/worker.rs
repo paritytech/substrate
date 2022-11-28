@@ -29,10 +29,7 @@ use log::{debug, error, info, log_enabled, trace, warn};
 use parking_lot::Mutex;
 
 use sc_client_api::{Backend, FinalityNotification, FinalityNotifications, HeaderBackend};
-use sc_network_common::{
-	service::{NetworkEventStream, NetworkRequest},
-	sync::{SyncEvent, SyncEventStream},
-};
+use sc_network_common::sync::{SyncEvent, SyncEventStream};
 use sc_network_gossip::GossipEngine;
 
 use sp_api::{BlockId, ProvideRuntimeApi};
@@ -248,11 +245,10 @@ impl<B: Block> VoterOracle<B> {
 	}
 }
 
-pub(crate) struct WorkerParams<B: Block, BE, P, R, N> {
+pub(crate) struct WorkerParams<B: Block, BE, P, R, S> {
 	pub backend: Arc<BE>,
 	pub payload_provider: P,
-	pub network: N,
-	pub sync: Arc<dyn SyncEventStream>,
+	pub sync: Arc<S>,
 	pub key_store: BeefyKeystore,
 	pub known_peers: Arc<Mutex<KnownPeers<B>>>,
 	pub gossip_engine: GossipEngine<B>,
@@ -298,12 +294,11 @@ impl<B: Block> PersistedState<B> {
 }
 
 /// A BEEFY worker plays the BEEFY protocol
-pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
+pub(crate) struct BeefyWorker<B: Block, BE, P, R, S> {
 	// utilities
 	backend: Arc<BE>,
 	payload_provider: P,
-	network: N,
-	sync: Arc<dyn SyncEventStream>,
+	sync: Arc<S>,
 	key_store: BeefyKeystore,
 
 	// communication
@@ -327,14 +322,14 @@ pub(crate) struct BeefyWorker<B: Block, BE, P, R, N> {
 	persisted_state: PersistedState<B>,
 }
 
-impl<B, BE, P, R, N> BeefyWorker<B, BE, P, R, N>
+impl<B, BE, P, R, S> BeefyWorker<B, BE, P, R, S>
 where
 	B: Block + Codec,
 	BE: Backend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: NetworkEventStream + NetworkRequest + SyncOracle + Send + Sync + Clone + 'static,
+	S: SyncEventStream + SyncOracle,
 {
 	/// Return a new BEEFY worker instance.
 	///
@@ -342,12 +337,11 @@ where
 	/// BEEFY pallet has been deployed on-chain.
 	///
 	/// The BEEFY pallet is needed in order to keep track of the BEEFY authority set.
-	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, N>) -> Self {
+	pub(crate) fn new(worker_params: WorkerParams<B, BE, P, R, S>) -> Self {
 		let WorkerParams {
 			backend,
 			payload_provider,
 			key_store,
-			network,
 			sync,
 			gossip_engine,
 			gossip_validator,
@@ -361,7 +355,6 @@ where
 		BeefyWorker {
 			backend,
 			payload_provider,
-			network,
 			sync,
 			known_peers,
 			key_store,
@@ -815,7 +808,7 @@ where
 
 		loop {
 			// Don't bother voting or requesting justifications during major sync.
-			if !self.network.is_major_syncing() {
+			if !self.sync.is_major_syncing() {
 				// If the current target is a mandatory block,
 				// make sure there's also an on-demand justification request out for it.
 				if let Some(block) = self.voting_oracle().mandatory_pending() {
@@ -984,7 +977,7 @@ pub(crate) mod tests {
 	use beefy_primitives::{known_payloads, mmr::MmrRootProvider};
 	use futures::{executor::block_on, future::poll_fn, task::Poll};
 	use sc_client_api::{Backend as BackendT, HeaderBackend};
-	use sc_network::NetworkService;
+	use sc_network_sync::SyncingService;
 	use sc_network_test::TestNetFactory;
 	use sp_api::HeaderT;
 	use sp_blockchain::Backend as BlockchainBackendT;
@@ -1028,7 +1021,7 @@ pub(crate) mod tests {
 		Backend,
 		MmrRootProvider<Block, TestApi>,
 		TestApi,
-		Arc<NetworkService<Block, H256>>,
+		Arc<SyncingService<Block>>,
 	> {
 		let keystore = create_beefy_keystore(*key);
 
@@ -1087,8 +1080,7 @@ pub(crate) mod tests {
 			gossip_engine,
 			gossip_validator,
 			metrics: None,
-			network,
-			sync,
+			sync: Arc::new(sync),
 			on_demand_justifications,
 			persisted_state,
 		};

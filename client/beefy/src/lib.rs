@@ -165,11 +165,11 @@ where
 }
 
 /// BEEFY gadget network parameters.
-pub struct BeefyNetworkParams<B: Block, N> {
+pub struct BeefyNetworkParams<B: Block, N, S> {
 	/// Network implementing gossip, requests and sync-oracle.
 	pub network: Arc<N>,
-	/// Syncing service implementing event stream for peers.
-	pub sync: Arc<dyn SyncEventStream>,
+	/// Syncing service implementing a sync oracle and an event stream for peers.
+	pub sync: Arc<S>,
 	/// Chain specific BEEFY gossip protocol name. See
 	/// [`communication::beefy_protocol_name::gossip_protocol_name`].
 	pub gossip_protocol_name: ProtocolName,
@@ -181,7 +181,7 @@ pub struct BeefyNetworkParams<B: Block, N> {
 }
 
 /// BEEFY gadget initialization parameters.
-pub struct BeefyParams<B: Block, BE, C, N, P, R> {
+pub struct BeefyParams<B: Block, BE, C, N, P, R, S> {
 	/// BEEFY client
 	pub client: Arc<C>,
 	/// Client Backend
@@ -193,7 +193,7 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 	/// Local key store
 	pub key_store: Option<SyncCryptoStorePtr>,
 	/// BEEFY voter network params
-	pub network_params: BeefyNetworkParams<B, N>,
+	pub network_params: BeefyNetworkParams<B, N, S>,
 	/// Minimal delta between blocks, BEEFY should vote for
 	pub min_block_delta: u32,
 	/// Prometheus metric registry
@@ -207,15 +207,17 @@ pub struct BeefyParams<B: Block, BE, C, N, P, R> {
 /// Start the BEEFY gadget.
 ///
 /// This is a thin shim around running and awaiting a BEEFY worker.
-pub async fn start_beefy_gadget<B, BE, C, N, P, R>(beefy_params: BeefyParams<B, BE, C, N, P, R>)
-where
+pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
+	beefy_params: BeefyParams<B, BE, C, N, P, R, S>,
+) where
 	B: Block,
 	BE: Backend<B>,
 	C: Client<B, BE> + BlockBackend<B>,
 	P: PayloadProvider<B>,
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
-	N: GossipNetwork<B> + NetworkRequest + SyncOracle + Send + Sync + 'static,
+	N: GossipNetwork<B> + NetworkRequest + Send + Sync + 'static,
+	S: SyncEventStream + SyncOracle + 'static,
 {
 	let BeefyParams {
 		client,
@@ -292,7 +294,6 @@ where
 	let worker_params = worker::WorkerParams {
 		backend,
 		payload_provider,
-		network,
 		sync,
 		key_store: key_store.into(),
 		known_peers,

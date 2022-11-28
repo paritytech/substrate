@@ -365,7 +365,7 @@ where
 			prometheus_registry: None,
 			on_demand_justifications_handler: on_demand_justif_handler,
 		};
-		let task = crate::start_beefy_gadget::<_, _, _, _, _, _>(beefy_params);
+		let task = crate::start_beefy_gadget::<_, _, _, _, _, _, _>(beefy_params);
 
 		fn assert_send<T: Send>(_: &T) {}
 		assert_send(&task);
