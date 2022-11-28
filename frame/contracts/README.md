@@ -142,7 +142,7 @@ this pallet contains the concept of an unstable interface. Akin to the rust nigh
 it allows us to add new interfaces but mark them as unstable so that contract languages can
 experiment with them and give feedback before we stabilize those.
 
-In order to access interfaces marked as `__unstable__` in `runtime.rs` one need to compile
+In order to access interfaces marked as `#[unstable]` in `runtime.rs` one need to compile
 this crate with the `unstable-interface` feature enabled. It should be obvious that any
 live runtime should never be compiled with this feature: In addition to be subject to
 change or removal those interfaces do not have proper weights associated with them and
