@@ -154,11 +154,33 @@ benchmarks! {
 		assert!(!Pages::<T>::contains_key(&origin, 0));
 	}
 
-	// Worst case for `execute_overweight`.
+	// Worst case for `execute_overweight` where the page is removed as completed.
 	//
 	// The worst case occurs when executing the last message in a page of which all are skipped since it is using `peek_index` which has linear complexities.
-	// TODO one for page remove and one for insert path
-	execute_overweight {
+	execute_overweight_page_removed {
+		let origin: MessageOriginOf<T> = 0.into();
+		let (mut page, msgs) = full_page::<T>();
+		// Skip all messages.
+		for _ in 1..msgs {
+			page.skip_first(true);
+		}
+		page.skip_first(false);
+		let book = book_for::<T>(&page);
+		Pages::<T>::insert(&origin, 0, &page);
+		BookStateFor::<T>::insert(&origin, &book);
+	}: {
+		MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX).unwrap()
+	}
+	verify {
+		assert_last_event::<T>(Event::Processed {
+			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
+			weight_used: Weight::from_parts(1, 1), success: true
+		}.into());
+		assert!(!Pages::<T>::contains_key(&origin, 0), "Page must be removed");
+	}
+
+	// Worst case for `execute_overweight` where the page is updated.
+	execute_overweight_page_updated {
 		let origin: MessageOriginOf<T> = 0.into();
 		let (mut page, msgs) = full_page::<T>();
 		// Skip all messages.
@@ -168,12 +190,15 @@ benchmarks! {
 		let book = book_for::<T>(&page);
 		Pages::<T>::insert(&origin, 0, &page);
 		BookStateFor::<T>::insert(&origin, &book);
-	}: _(RawOrigin::Signed(whitelisted_caller()), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX)
+	}: {
+		MessageQueue::<T>::execute_overweight(RawOrigin::Signed(whitelisted_caller()).into(), 0u32.into(), 0u32, ((msgs - 1) as u32).into(), Weight::MAX).unwrap()
+	}
 	verify {
 		assert_last_event::<T>(Event::Processed {
 			hash: T::Hashing::hash(&((msgs - 1) as u32).encode()), origin: 0.into(),
 			weight_used: Weight::from_parts(1, 1), success: true
 		}.into());
+		assert!(Pages::<T>::contains_key(&origin, 0), "Page must be updated");
 	}
 
 	impl_benchmark_test_suite!(MessageQueue, crate::mock::new_test_ext::<crate::integration_test::Test>(), crate::integration_test::Test);

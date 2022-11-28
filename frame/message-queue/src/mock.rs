@@ -112,8 +112,17 @@ impl crate::weights::WeightInfo for MockedWeightInfo {
 	fn reap_page() -> Weight {
 		WeightForCall::get().get("reap_page").copied().unwrap_or_default()
 	}
-	fn execute_overweight() -> Weight {
-		WeightForCall::get().get("execute_overweight").copied().unwrap_or_default()
+	fn execute_overweight_page_updated() -> Weight {
+		WeightForCall::get()
+			.get("execute_overweight_page_updated")
+			.copied()
+			.unwrap_or_default()
+	}
+	fn execute_overweight_page_removed() -> Weight {
+		WeightForCall::get()
+			.get("execute_overweight_page_removed")
+			.copied()
+			.unwrap_or_default()
 	}
 	fn service_page_base_completion() -> Weight {
 		WeightForCall::get()

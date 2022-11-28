@@ -590,7 +590,9 @@ pub mod pallet {
 		///   of the message.
 		///
 		/// Benchmark complexity considerations: O(index + weight_limit).
-		#[pallet::weight(T::WeightInfo::execute_overweight())]
+		#[pallet::weight(
+			T::WeightInfo::execute_overweight_page_updated().max(
+			T::WeightInfo::execute_overweight_page_removed()))]
 		pub fn execute_overweight(
 			origin: OriginFor<T>,
 			message_origin: MessageOriginOf<T>,
@@ -1214,7 +1216,10 @@ impl<T: Config> ServiceQueues for Pallet<T> {
 		(message_origin, page, index): Self::OverweightMessageAddress,
 	) -> Result<Weight, ExecuteOverweightError> {
 		let mut weight = WeightMeter::from_limit(weight_limit);
-		if !weight.check_accrue(T::WeightInfo::execute_overweight()) {
+		if !weight.check_accrue(
+			T::WeightInfo::execute_overweight_page_removed()
+				.max(T::WeightInfo::execute_overweight_page_updated()),
+		) {
 			return Err(ExecuteOverweightError::InsufficientWeight)
 		}
 
