@@ -173,7 +173,7 @@ use frame_support::{
 		tokens::{fungible, BalanceStatus as Status, DepositConsequence, WithdrawConsequence},
 		Currency, DefensiveSaturating, ExistenceRequirement,
 		ExistenceRequirement::{AllowDeath, KeepAlive},
-		Get, Imbalance, LockIdentifier, LockableCurrency, NamedReservableCurrency, OnUnbalanced,
+		Get, Imbalance, LockIdentifier, Lockable, NamedReservableCurrency, OnUnbalanced,
 		ReservableCurrency, SignedImbalance, StoredMap, TryDrop, WithdrawReasons,
 	},
 	WeakBoundedVec,
@@ -2119,7 +2119,7 @@ where
 	}
 }
 
-impl<T: Config<I>, I: 'static> LockableCurrency<T::AccountId> for Pallet<T, I>
+impl<T: Config<I>, I: 'static> Lockable<T::AccountId> for Pallet<T, I>
 where
 	T::Balance: MaybeSerializeDeserialize + Debug,
 {

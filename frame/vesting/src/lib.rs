@@ -62,7 +62,7 @@ use frame_support::{
 	ensure,
 	storage::bounded_vec::BoundedVec,
 	traits::{
-		Currency, ExistenceRequirement, Get, LockIdentifier, LockableCurrency, VestingSchedule,
+		Currency, ExistenceRequirement, Get, LockIdentifier, Lockable, VestingSchedule,
 		WithdrawReasons,
 	},
 	weights::Weight,
@@ -84,7 +84,7 @@ pub use weights::WeightInfo;
 type BalanceOf<T> =
 	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type MaxLocksOf<T> =
-	<<T as Config>::Currency as LockableCurrency<<T as frame_system::Config>::AccountId>>::MaxLocks;
+	<<T as Config>::Currency as Lockable<<T as frame_system::Config>::AccountId>>::MaxLocks;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 const VESTING_ID: LockIdentifier = *b"vesting ";
@@ -159,7 +159,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The currency trait.
-		type Currency: LockableCurrency<Self::AccountId>;
+		type Currency: Lockable<Self::AccountId>;
 
 		/// Convert the block number into a balance.
 		type BlockNumberToBalance: Convert<Self::BlockNumber, BalanceOf<Self>>;

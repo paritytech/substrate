@@ -29,8 +29,11 @@ use sp_runtime::traits::Saturating;
 
 mod balanced;
 mod imbalance;
+pub mod lockable;
+
 pub use balanced::{Balanced, Unbalanced};
 pub use imbalance::{CreditOf, DebtOf, HandleImbalanceDrop, Imbalance};
+pub use lockable::Lockable;
 
 /// Trait for providing balance-inspection access to a fungible asset.
 pub trait Inspect<AccountId> {

@@ -608,7 +608,7 @@ mod tests {
 	use frame_support::{
 		assert_err, parameter_types,
 		traits::{
-			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, LockableCurrency,
+			ConstU32, ConstU64, ConstU8, Currency, LockIdentifier, Lockable,
 			WithdrawReasons,
 		},
 		weights::{ConstantMultiplier, IdentityFee, RuntimeDbWeight, Weight, WeightToFee},
@@ -1176,7 +1176,7 @@ mod tests {
 		let execute_with_lock = |lock: WithdrawReasons| {
 			let mut t = new_test_ext(1);
 			t.execute_with(|| {
-				<pallet_balances::Pallet<Runtime> as LockableCurrency<Balance>>::set_lock(
+				<pallet_balances::Pallet<Runtime> as Lockable<Balance>>::set_lock(
 					id, &1, 110, lock,
 				);
 				let xt = TestXt::new(

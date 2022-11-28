@@ -32,7 +32,12 @@ use sp_std::fmt::Debug;
 mod reservable;
 pub use reservable::{NamedReservableCurrency, ReservableCurrency};
 mod lockable;
-pub use lockable::{LockIdentifier, LockableCurrency, VestingSchedule};
+use super::fungible;
+
+// pub use lockable::{LockIdentifier, LockableCurrency, VestingSchedule};
+// pub use fungible::lockable::Lockable;
+pub use fungible::lockable::{LockIdentifier, Lockable};
+pub use lockable::VestingSchedule;
 
 /// Abstraction over a fungible assets system.
 pub trait Currency<AccountId> {

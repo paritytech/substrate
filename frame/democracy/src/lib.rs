@@ -158,7 +158,7 @@ use frame_support::{
 	traits::{
 		defensive_prelude::*,
 		schedule::{v3::Named as ScheduleNamed, DispatchTime},
-		Bounded, Currency, Get, LockIdentifier, LockableCurrency, OnUnbalanced, QueryPreimage,
+		Bounded, Currency, Get, LockIdentifier, Lockable, OnUnbalanced, QueryPreimage,
 		ReservableCurrency, StorePreimage, WithdrawReasons,
 	},
 	weights::Weight,
@@ -234,7 +234,7 @@ pub mod pallet {
 
 		/// Currency type for this pallet.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>;
+			+ Lockable<Self::AccountId, Moment = Self::BlockNumber>;
 
 		/// The period between a proposal being approved and enacted.
 		///

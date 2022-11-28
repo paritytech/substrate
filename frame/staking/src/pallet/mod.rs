@@ -25,7 +25,7 @@ use frame_support::{
 	pallet_prelude::*,
 	traits::{
 		Currency, CurrencyToVote, Defensive, DefensiveResult, DefensiveSaturating, EnsureOrigin,
-		EstimateNextNewSession, Get, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect,
+		EstimateNextNewSession, Get, LockIdentifier, Lockable, OnUnbalanced, TryCollect,
 		UnixTime,
 	},
 	weights::Weight,
@@ -78,7 +78,7 @@ pub mod pallet {
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		/// The staking balance.
-		type Currency: LockableCurrency<
+		type Currency: Lockable<
 			Self::AccountId,
 			Moment = Self::BlockNumber,
 			Balance = Self::CurrencyBalance,

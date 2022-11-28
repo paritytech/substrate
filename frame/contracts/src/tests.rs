@@ -37,8 +37,8 @@ use frame_support::{
 	parameter_types,
 	storage::child,
 	traits::{
-		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, LockableCurrency, OnIdle,
-		OnInitialize, ReservableCurrency, WithdrawReasons,
+		BalanceStatus, ConstU32, ConstU64, Contains, Currency, Get, Lockable, OnIdle, OnInitialize,
+		ReservableCurrency, WithdrawReasons,
 	},
 	weights::{constants::WEIGHT_PER_SECOND, Weight},
 };

@@ -31,7 +31,7 @@ use frame_support::{
 	dispatch::{DispatchError, DispatchResult},
 	ensure,
 	traits::{
-		fungible, Currency, Get, LockIdentifier, LockableCurrency, PollStatus, Polling,
+		fungible, Currency, Get, LockIdentifier, Lockable, PollStatus, Polling,
 		ReservableCurrency, WithdrawReasons,
 	},
 };
@@ -104,7 +104,7 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 		/// Currency type with which voting happens.
 		type Currency: ReservableCurrency<Self::AccountId>
-			+ LockableCurrency<Self::AccountId, Moment = Self::BlockNumber>
+			+ Lockable<Self::AccountId, Moment = Self::BlockNumber>
 			+ fungible::Inspect<Self::AccountId>;
 
 		/// The implementation of the logic which conducts polls.

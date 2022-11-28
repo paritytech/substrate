@@ -28,7 +28,7 @@ macro_rules! decl_tests {
 		use frame_support::{
 			assert_noop, assert_storage_noop, assert_ok, assert_err,
 			traits::{
-				LockableCurrency, LockIdentifier, WithdrawReasons,
+				Lockable, LockIdentifier, WithdrawReasons,
 				Currency, ReservableCurrency, ExistenceRequirement::AllowDeath
 			}
 		};
