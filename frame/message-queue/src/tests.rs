@@ -164,6 +164,49 @@ fn service_queues_basic_works() {
 }
 
 #[test]
+fn service_queues_failing_messages_works() {
+	use MessageOrigin::*;
+	new_test_ext::<Test>().execute_with(|| {
+		set_weight("service_page_item", 1.into_weight());
+		MessageQueue::enqueue_message(msg("badformat"), Here);
+		MessageQueue::enqueue_message(msg("corrupt"), Here);
+		MessageQueue::enqueue_message(msg("unsupported"), Here);
+		// Starts with three pages.
+		assert_pages(&[0, 1, 2]);
+
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_last_event::<Test>(
+			Event::ProcessingFailed {
+				hash: <Test as frame_system::Config>::Hashing::hash(b"badformat"),
+				origin: MessageOrigin::Here,
+				error: ProcessMessageError::BadFormat,
+			}
+			.into(),
+		);
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_last_event::<Test>(
+			Event::ProcessingFailed {
+				hash: <Test as frame_system::Config>::Hashing::hash(b"corrupt"),
+				origin: MessageOrigin::Here,
+				error: ProcessMessageError::Corrupt,
+			}
+			.into(),
+		);
+		assert_eq!(MessageQueue::service_queues(1.into_weight()), 1.into_weight());
+		assert_last_event::<Test>(
+			Event::ProcessingFailed {
+				hash: <Test as frame_system::Config>::Hashing::hash(b"unsupported"),
+				origin: MessageOrigin::Here,
+				error: ProcessMessageError::Unsupported,
+			}
+			.into(),
+		);
+		// All pages removed.
+		assert_pages(&[]);
+	});
+}
+
+#[test]
 fn reap_page_permanent_overweight_works() {
 	use MessageOrigin::*;
 	new_test_ext::<Test>().execute_with(|| {
@@ -172,7 +215,7 @@ fn reap_page_permanent_overweight_works() {
 			MessageQueue::enqueue_message(msg("weight=2"), Here);
 		}
 		assert_eq!(Pages::<Test>::iter().count(), MaxStale::get() as usize + 10);
-		assert_eq!(QueueChanges::take().len(), 12);
+		assert_eq!(QueueChanges::take().len(), MaxStale::get() as usize + 10);
 		// Mark all pages as stale since their message is permanently overweight.
 		MessageQueue::service_queues(1.into_weight());
 

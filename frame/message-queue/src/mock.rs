@@ -157,6 +157,7 @@ parameter_types! {
 	pub static MessagesProcessed: Vec<(Vec<u8>, MessageOrigin)> = vec![];
 }
 
+/// A message processor which records all processed messages into [`MessagesProcessed`].
 pub struct RecordingMessageProcessor;
 impl ProcessMessage for RecordingMessageProcessor {
 	/// The transport from where a message originates.
@@ -165,12 +166,15 @@ impl ProcessMessage for RecordingMessageProcessor {
 	/// Process the given message, using no more than `weight_limit` in weight to do so.
 	///
 	/// Consumes exactly `n` weight of all components if it starts `weight=n` and `1` otherwise.
-	/// Errors if given the `weight_limit` is insufficient to process the message.
+	/// Errors if given the `weight_limit` is insufficient to process the message or if the message
+	/// is `badformat`, `corrupt` or `unsupported` with the respective error.
 	fn process_message(
 		message: &[u8],
 		origin: Self::Origin,
 		weight_limit: Weight,
 	) -> Result<(bool, Weight), ProcessMessageError> {
+		processing_message(message)?;
+
 		let weight = if message.starts_with(&b"weight="[..]) {
 			let mut w: u64 = 0;
 			for &c in &message[7..] {
@@ -185,6 +189,7 @@ impl ProcessMessage for RecordingMessageProcessor {
 			1
 		};
 		let weight = Weight::from_parts(weight, weight);
+
 		if weight.all_lte(weight_limit) {
 			let mut m = MessagesProcessed::get();
 			m.push((message.to_vec(), origin));
@@ -196,8 +201,23 @@ impl ProcessMessage for RecordingMessageProcessor {
 	}
 }
 
+/// Processed a mocked message. Messages that end with `badformat`, `corrupt` or `unsupported` will fail with the respective error.
+fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
+	let msg = String::from_utf8_lossy(msg);
+	if msg.ends_with("badformat") {
+		Err(ProcessMessageError::BadFormat)
+	} else if msg.ends_with("corrupt") {
+		Err(ProcessMessageError::Corrupt)
+	} else if msg.ends_with("unsupported") {
+		Err(ProcessMessageError::Unsupported)
+	} else {
+		Ok(())
+	}
+}
+
 parameter_types! {
 	pub static NumMessagesProcessed: usize = 0;
+	pub static NumMessagesErrored: usize = 0;
 }
 
 /// Similar to [`RecordingMessageProcessor`] but only counts the number of messages processed and
@@ -209,10 +229,14 @@ impl ProcessMessage for CountingMessageProcessor {
 	type Origin = MessageOrigin;
 
 	fn process_message(
-		_message: &[u8],
+		message: &[u8],
 		_origin: Self::Origin,
 		weight_limit: Weight,
 	) -> Result<(bool, Weight), ProcessMessageError> {
+		if let Err(e) = processing_message(message) {
+			NumMessagesErrored::set(NumMessagesErrored::get() + 1);
+			return Err(e)
+		}
 		let weight = Weight::from_parts(1, 1);
 
 		if weight.all_lte(weight_limit) {
@@ -245,8 +269,9 @@ where
 	<T as frame_system::Config>::BlockNumber: From<u32>,
 {
 	sp_tracing::try_init_simple();
-	WeightForCall::set(Default::default());
-	QueueChanges::set(Default::default());
+	WeightForCall::take();
+	QueueChanges::take();
+	NumMessagesErrored::take();
 	let t = frame_system::GenesisConfig::default().build_storage::<T>().unwrap();
 	let mut ext = sp_io::TestExternalities::new(t);
 	ext.execute_with(|| frame_system::Pallet::<T>::set_block_number(1.into()));
