@@ -201,7 +201,8 @@ impl ProcessMessage for RecordingMessageProcessor {
 	}
 }
 
-/// Processed a mocked message. Messages that end with `badformat`, `corrupt` or `unsupported` will fail with the respective error.
+/// Processed a mocked message. Messages that end with `badformat`, `corrupt` or `unsupported` will
+/// fail with the respective error.
 fn processing_message(msg: &[u8]) -> Result<(), ProcessMessageError> {
 	let msg = String::from_utf8_lossy(msg);
 	if msg.ends_with("badformat") {
