@@ -148,23 +148,23 @@ pub struct WhitelistCallNames;
 
 /// Contains used by `BaseCallFiler` so this impl whitelists `Balances::transfer_keep_alive`
 /// and all DummyPallet calls. All others may be paused.
-impl Contains<(PalletNameOf<Test>, PausedCallsOf<Test>)> for WhitelistCallNames {
-	fn contains(this_pallet_calls_of: &(PalletNameOf<Test>, PausedCallsOf<Test>)) -> bool {
-		let whitelists: Vec<(PalletNameOf<Test>, PausedCallsOf<Test>)> = vec![
+impl Contains<(PalletNameOf<Test>, PausedOf<Test>)> for WhitelistCallNames {
+	fn contains(this_pallet_calls_of: &(PalletNameOf<Test>, PausedOf<Test>)) -> bool {
+		let whitelists: Vec<(PalletNameOf<Test>, PausedOf<Test>)> = vec![
 			(
 				b"Balances".to_vec().try_into().unwrap(),
-				PausedCallsOf::<Test>::TheseCalls(vec![b"transfer_keep_alive".to_vec().try_into().unwrap()].try_into().expect("Must have TheseCalls items less than MaxPausableCalls")),
+				PausedOf::<Test>::TheseCalls(vec![b"transfer_keep_alive".to_vec().try_into().unwrap()].try_into().expect("Must have TheseCalls items less than MaxPausableCalls")),
 			),
-			(b"DummyPallet".to_vec().try_into().unwrap(), PausedCallsOf::<Test>::AllCalls),
+			(b"DummyPallet".to_vec().try_into().unwrap(), PausedOf::<Test>::AllCalls),
 		];
 
 		for whitelist in whitelists {
 			let (whitelisted_pallet, whitelisted_calls_of) = whitelist;
 			if whitelisted_pallet == this_pallet_calls_of.0 {
 				match whitelisted_calls_of {
-					PausedCallsOf::<Test>::AllCalls => return true,
-					PausedCallsOf::<Test>::TheseCalls(whitelist_calls) =>
-						if let PausedCallsOf::<Test>::TheseCalls(paused_calls) = this_pallet_calls_of.1 {
+					PausedOf::<Test>::AllCalls => return true,
+					PausedOf::<Test>::TheseCalls(whitelist_calls) =>
+						if let PausedOf::<Test>::TheseCalls(paused_calls) = this_pallet_calls_of.1 {
 							for call in paused_calls {
 								if whitelist_calls.contains(&call) {
 									return true

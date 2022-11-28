@@ -31,21 +31,21 @@ benchmarks! {
 	verify {
 		let paused_calls_of = TxPause::<T>::paused_calls(pallet_name.clone())?;
 		match paused_calls_of {
-			PausedCallsOf::<Test>::AllCalls => false
-			PausedCallsOf::<Test>::TheseCalls(paused_calls) => {
+			PausedOf::<Test>::AllCalls => false
+			PausedOf::<Test>::TheseCalls(paused_calls) => {
 				assert!(these_calls.contains(call))
 			}
 		}
 	}
 
-	pause_pallet {
+	pause {
 		let pallet_name: PalletNameOf<T> = name::<T>(b"SomePalletName");
 		let origin = T::PauseOrigin::successful_origin();
 
 	}: _<T::Origin>(origin, pallet_name)
 	verify {
 		let paused_calls_of = TxPause::<T>::paused_calls(pallet_name.clone())?;
-		assert!(paused_calls_of == PausedCallsOf::<Test>::AllCalls)
+		assert!(paused_calls_of == PausedOf::<Test>::AllCalls)
 	}
 
   unpause_call {
@@ -53,7 +53,7 @@ benchmarks! {
 		let call_name: CallNameOf<T> = name::<T>(b"some_call_name");
 		let pause_origin = T::PauseOrigin::successful_origin();
 
-		TxPause::<T>::pause_call(
+		TxPause::<T>::pause(
 			pause_origin,
 			pallet_name.clone(),
 			call_name.clone(),
@@ -66,12 +66,12 @@ benchmarks! {
 		assert!(TxPause::<T>::paused_calls(pallet_name.clone()).is_none())
 	}
 
-	unpause_pallet {
+	unpause {
 		let pallet_name: PalletNameOf<T> = name::<T>(b"SomePalletName");
 		let call_name: CallNameOf<T> = name::<T>(b"some_call_name");
 		let pause_origin = T::PauseOrigin::successful_origin();
 
-		TxPause::<T>::pause_call(
+		TxPause::<T>::pause(
 			pause_origin,
 			pallet_name.clone(),
 			call_name.clone(),
@@ -82,7 +82,7 @@ benchmarks! {
 	}: _<T::Origin>(origin, pallet_name)
 	verify {
 		let paused_calls_of = TxPause::<T>::paused_calls(pallet_name.clone())?;
-		assert!(paused_calls_of == PausedCallsOf::<Test>::AllCalls)
+		assert!(paused_calls_of == PausedOf::<Test>::AllCalls)
 	}
 
 	impl_benchmark_test_suite!(TxPause, crate::mock::new_test_ext(), crate::mock::Test);
