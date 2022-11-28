@@ -23,20 +23,19 @@ frame-system = { version = "4.0.0-dev", default-features = false, path = "../sys
 sp-io = { version = "7.0.0", default-features = false, path = "../../primitives/io" }
 sp-runtime = { version = "7.0.0", default-features = false, path = "../../primitives/runtime" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
-sp-staking = { default-features = false, path = "../../primitives/staking" }
+sp-staking = { version = "4.0.0-dev", default-features = false, path = "../../primitives/staking" }
 
 frame-election-provider-support = { default-features = false, path = "../election-provider-support" }
 
 frame-benchmarking = { version = "4.0.0-dev", default-features = false, optional = true, path = "../benchmarking" }
 
 [dev-dependencies]
-sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 substrate-test-utils = { version = "4.0.0-dev", path = "../../test-utils" }
 sp-tracing = { version = "6.0.0", path = "../../primitives/tracing" }
 pallet-staking = { path = "../staking" }
 pallet-balances = { path = "../balances" }
 pallet-timestamp = { path = "../timestamp" }
-frame-support = { version = "4.0.0-dev", default-features = false, path = "../support" }
+
 
 
 

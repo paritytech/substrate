@@ -15,7 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::pallet::{ApprovalStake, Error, Pallet};
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use frame_election_provider_support::{
 	ReadOnlySortedListProvider, ScoreProvider, SortedListProvider, VoteWeight,
 };
@@ -23,9 +24,11 @@ use frame_support::{
 	defensive,
 	traits::{Currency, CurrencyToVote, Defensive, DefensiveOption},
 };
-use pallet::Config;
+pub use pallet::*;
 use sp_runtime::{DispatchResult, Saturating};
 use sp_staking::{OnStakingUpdate, Stake, StakingInterface};
+
+use sp_std::vec::Vec;
 
 /// The balance type of this pallet.
 pub type BalanceOf<T> = <<T as Config>::Staking as StakingInterface>::Balance;
@@ -212,7 +215,7 @@ impl<T: Config> OnStakingUpdate<T::AccountId, BalanceOf<T>> for Pallet<T> {
 				x.map(|b| b.saturating_sub(score))
 			})
 			.ok_or(Error::<T>::DoesNotExist)
-			.defensive();
+			.defensive()?;
 		}
 
 		Ok(())

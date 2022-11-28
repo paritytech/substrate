@@ -549,8 +549,8 @@ impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
 impl pallet_stake_tracker::Config for Runtime {
 	type Currency = Balances;
 	type Staking = Staking;
-	type VoterList: pallet_staking::UseValidatorsMap<Self>;
-	type TargetList: pallet_staking::UseValidatorsMap<Self>;
+	type VoterList = VoterListTracker;
+	type TargetList = TargetList;
 }
 
 impl pallet_staking::Config for Runtime {
@@ -751,7 +751,7 @@ impl pallet_election_provider_multi_phase::Config for Runtime {
 }
 
 parameter_types! {
-	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
+	pub const BagThresholds: &'static [VoteWeight] = &voter_bags::THRESHOLDS;
 }
 
 type VoterBagsListInstance = pallet_bags_list::Instance1;
@@ -765,20 +765,30 @@ impl pallet_bags_list::Config<VoterBagsListInstance> for Runtime {
 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
 }
 
-// parameter_types! {
-// 	pub const BagThresholds: &'static [u64] = &voter_bags::THRESHOLDS;
-// }
-//
-// type TargetBagsListInstance = pallet_bags_list::Instance2;
-// impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
-// 	type RuntimeEvent = RuntimeEvent;
-// 	/// The voter bags-list is loosely kept up to date, and the real source of truth for the score
-// 	/// of each node is the staking pallet.
-// 	type ScoreProvider = Staking;
-// 	type BagThresholds = BagThresholds;
-// 	type Score = VoteWeight;
-// 	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
-// }
+/// A special VoterList instance used to test the StakeTracker.
+type VoterBagsListTrackerInstance = pallet_bags_list::Instance3;
+impl pallet_bags_list::Config<VoterBagsListTrackerInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	/// The voter bags-list is loosely kept up to date, and the real source of truth for the score
+	/// of each node is the staking pallet.
+	type ScoreProvider = Staking;
+	type BagThresholds = BagThresholds;
+	type Score = VoteWeight;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
+}
+
+parameter_types! {
+	pub const BagThresholdsBalances: &'static [Balance] = &voter_bags::THRESHOLDS_BALANCES;
+}
+
+type TargetBagsListInstance = pallet_bags_list::Instance2;
+impl pallet_bags_list::Config<TargetBagsListInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type ScoreProvider = StakeTracker;
+	type BagThresholds = BagThresholdsBalances;
+	type Score = Balance;
+	type WeightInfo = pallet_bags_list::weights::SubstrateWeight<Runtime>;
+}
 
 parameter_types! {
 	pub const PostUnbondPoolsWindow: u32 = 4;
@@ -1694,6 +1704,9 @@ construct_runtime!(
 		Uniques: pallet_uniques,
 		TransactionStorage: pallet_transaction_storage,
 		VoterList: pallet_bags_list::<Instance1>,
+		TargetList: pallet_bags_list::<Instance2>,
+		// A special VoterList tha is used just to see if the stake-tracker works correctly.
+		VoterListTracker: pallet_bags_list::<Instance3>,
 		StateTrieMigration: pallet_state_trie_migration,
 		ChildBounties: pallet_child_bounties,
 		Referenda: pallet_referenda,
