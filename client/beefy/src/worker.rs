@@ -790,8 +790,6 @@ where
 				// This only starts new request if there isn't already an active one.
 				self.on_demand_justifications.request(block, active);
 			}
-		} else {
-			debug!(target: "beefy", "🥩 Skipping voting while major syncing.");
 		}
 	}
 
