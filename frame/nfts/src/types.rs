@@ -66,6 +66,7 @@ pub trait Incrementable {
 }
 impl_incrementable!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 
+/// Information about the collection.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct CollectionDetails<AccountId, DepositBalance> {
 	/// Collection's owner.
@@ -133,6 +134,7 @@ pub struct ItemDeposit<DepositBalance, AccountId> {
 	pub(super) amount: DepositBalance,
 }
 
+/// Information about the collection's metadata.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
 #[codec(mel_bound(DepositBalance: MaxEncodedLen))]
@@ -147,6 +149,7 @@ pub struct CollectionMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 }
 
+/// Information about the item's metadata.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(StringLimit))]
 #[codec(mel_bound(DepositBalance: MaxEncodedLen))]
@@ -161,6 +164,7 @@ pub struct ItemMetadata<DepositBalance, StringLimit: Get<u32>> {
 	pub(super) data: BoundedVec<u8, StringLimit>,
 }
 
+/// Information about the tip.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 	/// A collection of the item.
@@ -173,6 +177,7 @@ pub struct ItemTip<CollectionId, ItemId, AccountId, Amount> {
 	pub(super) amount: Amount,
 }
 
+/// Information about the pending swap.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, Default, TypeInfo, MaxEncodedLen)]
 pub struct PendingSwap<CollectionId, ItemId, ItemPriceWithDirection, Deadline> {
 	/// A collection of the item user wants to receive.
@@ -194,12 +199,16 @@ pub struct AttributeDeposit<DepositBalance, AccountId> {
 	pub(super) amount: DepositBalance,
 }
 
+/// Specifies whether the tokens will be send or received.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PriceDirection {
+	/// Tokens will be send.
 	Send,
+	/// Tokens will be received.
 	Receive,
 }
 
+/// Holds the details about the price.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct PriceWithDirection<Amount> {
 	/// An amount.
@@ -259,6 +268,7 @@ pub enum MintType<CollectionId> {
 	HolderOf(CollectionId),
 }
 
+/// Holds the information about minting.
 #[derive(Clone, Copy, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub struct MintSettings<Price, BlockNumber, CollectionId> {
 	/// Whether anyone can mint or if minters are restricted to some subset.
@@ -285,18 +295,21 @@ impl<Price, BlockNumber, CollectionId> Default for MintSettings<Price, BlockNumb
 	}
 }
 
+/// A witness data to cancel attributes approval operation.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo)]
 pub struct CancelAttributesApprovalWitness {
 	/// An amount of attributes previously created by account.
 	pub account_attributes: u32,
 }
 
+/// A list of possible pallet-level attributes.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum PalletAttributes<CollectionId> {
 	/// Marks an item as being used in order to claim another item.
 	UsedToClaim(CollectionId),
 }
 
+/// Collection's configuration.
 #[derive(
 	Clone, Copy, Decode, Default, Encode, MaxEncodedLen, PartialEq, RuntimeDebug, TypeInfo,
 )]
@@ -358,6 +371,7 @@ impl ItemSettings {
 
 impl_codec_bitflags!(ItemSettings, u64, ItemSetting);
 
+/// Item's configuration.
 #[derive(
 	Encode, Decode, Default, PartialEq, RuntimeDebug, Clone, Copy, MaxEncodedLen, TypeInfo,
 )]
