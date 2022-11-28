@@ -45,6 +45,7 @@ use sc_network::PeerId;
 use sc_network_common::{
 	config::MultiaddrWithPeerId, service::NetworkBlock, sync::ChainSyncService,
 };
+use sc_network_sync::SyncingService;
 use sc_rpc_server::WsConfig;
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_blockchain::HeaderMetadata;
@@ -156,7 +157,7 @@ async fn build_network_future<
 	mut network: sc_network::NetworkWorker<B, H, C>,
 	client: Arc<C>,
 	mut rpc_rx: TracingUnboundedReceiver<sc_rpc::system::Request<B>>,
-	sync_service: Arc<dyn ChainSyncService<B>>,
+	sync_service: Arc<SyncingService<B>>,
 	should_have_peers: bool,
 	announce_imported_blocks: bool,
 ) {
@@ -180,11 +181,11 @@ async fn build_network_future<
 				};
 
 				if announce_imported_blocks {
-					network.service().announce_block(notification.hash, None);
+					sync_service.announce_block(notification.hash, None);
 				}
 
 				if notification.is_new_best {
-					network.service().new_best_block_imported(
+					sync_service.new_best_block_imported(
 						notification.hash,
 						*notification.header.number(),
 					);
@@ -202,7 +203,7 @@ async fn build_network_future<
 					sc_rpc::system::Request::Health(sender) => {
 						let _ = sender.send(sc_rpc::system::Health {
 							peers: sync_service.peers_info().await.expect("syncing to stay active").len(),
-							is_syncing: network.service().is_major_syncing(),
+							is_syncing: sync_service.is_major_syncing(),
 							should_have_peers,
 						});
 					},

@@ -255,7 +255,7 @@ where
 
 	/// Returns true if we're major syncing.
 	pub fn is_major_syncing(&self) -> bool {
-		self.network.service().is_major_syncing()
+		self.sync_service.is_major_syncing()
 	}
 
 	// Returns a clone of the local SelectChain, only available on full nodes
@@ -282,12 +282,12 @@ where
 
 	/// Request a justification for the given block.
 	pub fn request_justification(&self, hash: &<Block as BlockT>::Hash, number: NumberFor<Block>) {
-		self.network.service().request_justification(hash, number);
+		self.sync_service.request_justification(hash, number);
 	}
 
 	/// Announces an important block on the network.
 	pub fn announce_block(&self, hash: <Block as BlockT>::Hash, data: Option<Vec<u8>>) {
-		self.network.service().announce_block(hash, data);
+		self.sync_service.announce_block(hash, data);
 	}
 
 	/// Request explicit fork sync.
@@ -297,7 +297,7 @@ where
 		hash: <Block as BlockT>::Hash,
 		number: NumberFor<Block>,
 	) {
-		self.network.service().set_sync_fork_request(peers, hash, number);
+		self.sync_service.set_sync_fork_request(peers, hash, number);
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
@@ -393,7 +393,7 @@ where
 			futures::executor::block_on(self.block_import.import_block(import_block, cache))
 				.expect("block_import failed");
 			if announce_block {
-				self.network.service().announce_block(hash, None);
+				self.sync_service.announce_block(hash, None);
 			}
 			at = hash;
 		}
@@ -1128,7 +1128,7 @@ where
 				while let Poll::Ready(Some(notification)) =
 					peer.imported_blocks_stream.as_mut().poll_next(cx)
 				{
-					peer.network.service().announce_block(notification.hash, None);
+					peer.sync_service.announce_block(notification.hash, None);
 				}
 
 				// We poll `finality_notification_stream`.

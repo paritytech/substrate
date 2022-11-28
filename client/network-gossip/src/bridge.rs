@@ -47,6 +47,7 @@ use std::{
 pub struct GossipEngine<B: BlockT> {
 	state_machine: ConsensusGossip<B>,
 	network: Box<dyn Network<B> + Send>,
+	sync: Box<dyn Syncing<B>>,
 	periodic_maintenance_interval: futures_timer::Delay,
 	protocol: ProtocolName,
 
@@ -99,6 +100,7 @@ impl<B: BlockT> GossipEngine<B> {
 		GossipEngine {
 			state_machine: ConsensusGossip::new(validator, protocol.clone(), metrics_registry),
 			network: Box::new(network),
+			sync: Box::new(sync),
 			periodic_maintenance_interval: futures_timer::Delay::new(PERIODIC_MAINTENANCE_INTERVAL),
 			protocol,
 
@@ -172,7 +174,7 @@ impl<B: BlockT> GossipEngine<B> {
 	/// Note: this method isn't strictly related to gossiping and should eventually be moved
 	/// somewhere else.
 	pub fn announce(&self, block: B::Hash, associated_data: Option<Vec<u8>>) {
-		self.network.announce_block(block, associated_data);
+		self.sync.announce_block(block, associated_data);
 	}
 }
 

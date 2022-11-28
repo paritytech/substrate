@@ -161,16 +161,17 @@ impl TransactionsHandlerPrototype {
 	pub fn build<
 		B: BlockT + 'static,
 		H: ExHashT,
-		S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+		N: NetworkPeers + NetworkEventStream + NetworkNotification,
+		S: SyncEventStream + sp_consensus::SyncOracle,
 	>(
 		self,
-		service: S,
-		sync_service: Arc<dyn SyncEventStream>,
+		network: N,
+		sync: S,
 		transaction_pool: Arc<dyn TransactionPool<H, B>>,
 		metrics_registry: Option<&Registry>,
-	) -> error::Result<(TransactionsHandler<B, H, S>, TransactionsHandlerController<H>)> {
-		let net_event_stream = service.event_stream("transactions-handler-net");
-		let sync_event_stream = sync_service.event_stream("transactions-handler-sync");
+	) -> error::Result<(TransactionsHandler<B, H, N, S>, TransactionsHandlerController<H>)> {
+		let net_event_stream = network.event_stream("transactions-handler-net");
+		let sync_event_stream = sync.event_stream("transactions-handler-sync");
 		let (to_handler, from_controller) = mpsc::unbounded();
 
 		let handler = TransactionsHandler {
@@ -178,7 +179,8 @@ impl TransactionsHandlerPrototype {
 			propagate_timeout: Box::pin(interval(PROPAGATE_TIMEOUT)),
 			pending_transactions: FuturesUnordered::new(),
 			pending_transactions_peers: HashMap::new(),
-			service,
+			network,
+			sync,
 			net_event_stream,
 			sync_event_stream,
 			peers: HashMap::new(),
@@ -229,7 +231,8 @@ enum ToHandler<H: ExHashT> {
 pub struct TransactionsHandler<
 	B: BlockT + 'static,
 	H: ExHashT,
-	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+	N: NetworkPeers + NetworkEventStream + NetworkNotification,
+	S: SyncEventStream + sp_consensus::SyncOracle,
 > {
 	protocol_name: ProtocolName,
 	/// Interval at which we call `propagate_transactions`.
@@ -242,7 +245,9 @@ pub struct TransactionsHandler<
 	/// multiple times concurrently.
 	pending_transactions_peers: HashMap<H, Vec<PeerId>>,
 	/// Network service to use to send messages and manage peers.
-	service: S,
+	network: N,
+	/// Syncing service.
+	sync: S,
 	/// Stream of networking events.
 	net_event_stream: Pin<Box<dyn Stream<Item = Event> + Send>>,
 	/// Receiver for syncing-related events.
@@ -263,11 +268,12 @@ struct Peer<H: ExHashT> {
 	role: ObservedRole,
 }
 
-impl<B, H, S> TransactionsHandler<B, H, S>
+impl<B, H, N, S> TransactionsHandler<B, H, N, S>
 where
 	B: BlockT + 'static,
 	H: ExHashT,
-	S: NetworkPeers + NetworkEventStream + NetworkNotification + sp_consensus::SyncOracle,
+	N: NetworkPeers + NetworkEventStream + NetworkNotification,
+	S: SyncEventStream + sp_consensus::SyncOracle,
 {
 	/// Turns the [`TransactionsHandler`] into a future that should run forever and not be
 	/// interrupted.
@@ -315,7 +321,7 @@ where
 			SyncEvent::PeerConnected(remote) => {
 				let addr = iter::once(multiaddr::Protocol::P2p(remote.into()))
 					.collect::<multiaddr::Multiaddr>();
-				let result = self.service.add_peers_to_reserved_set(
+				let result = self.network.add_peers_to_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(addr).collect(),
 				);
@@ -324,7 +330,7 @@ where
 				}
 			},
 			SyncEvent::PeerDisconnected(remote) => {
-				self.service.remove_peers_from_reserved_set(
+				self.network.remove_peers_from_reserved_set(
 					self.protocol_name.clone(),
 					iter::once(remote).collect(),
 				);
@@ -380,7 +386,7 @@ where
 	/// Called when peer sends us new transactions
 	fn on_transactions(&mut self, who: PeerId, transactions: Transactions<B::Extrinsic>) {
 		// Accept transactions only when node is not major syncing
-		if self.service.is_major_syncing() {
+		if self.sync.is_major_syncing() {
 			trace!(target: "sync", "{} Ignoring transactions while major syncing", who);
 			return
 		}
@@ -400,7 +406,7 @@ where
 				let hash = self.transaction_pool.hash_of(&t);
 				peer.known_transactions.insert(hash.clone());
 
-				self.service.report_peer(who, rep::ANY_TRANSACTION);
+				self.network.report_peer(who, rep::ANY_TRANSACTION);
 
 				match self.pending_transactions_peers.entry(hash.clone()) {
 					Entry::Vacant(entry) => {
@@ -421,9 +427,9 @@ where
 	fn on_handle_transaction_import(&mut self, who: PeerId, import: TransactionImport) {
 		match import {
 			TransactionImport::KnownGood =>
-				self.service.report_peer(who, rep::ANY_TRANSACTION_REFUND),
-			TransactionImport::NewGood => self.service.report_peer(who, rep::GOOD_TRANSACTION),
-			TransactionImport::Bad => self.service.report_peer(who, rep::BAD_TRANSACTION),
+				self.network.report_peer(who, rep::ANY_TRANSACTION_REFUND),
+			TransactionImport::NewGood => self.network.report_peer(who, rep::GOOD_TRANSACTION),
+			TransactionImport::Bad => self.network.report_peer(who, rep::BAD_TRANSACTION),
 			TransactionImport::None => {},
 		}
 	}
@@ -431,7 +437,7 @@ where
 	/// Propagate one transaction.
 	pub fn propagate_transaction(&mut self, hash: &H) {
 		// Accept transactions only when node is not major syncing
-		if self.service.is_major_syncing() {
+		if self.sync.is_major_syncing() {
 			return
 		}
 
@@ -468,7 +474,7 @@ where
 					propagated_to.entry(hash).or_default().push(who.to_base58());
 				}
 				trace!(target: "sync", "Sending {} transactions to {}", to_send.len(), who);
-				self.service
+				self.network
 					.write_notification(*who, self.protocol_name.clone(), to_send.encode());
 			}
 		}
@@ -483,7 +489,7 @@ where
 	/// Call when we must propagate ready transactions to peers.
 	fn propagate_transactions(&mut self) {
 		// Accept transactions only when node is not major syncing
-		if self.service.is_major_syncing() {
+		if self.sync.is_major_syncing() {
 			return
 		}
 

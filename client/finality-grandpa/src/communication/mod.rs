@@ -167,25 +167,12 @@ const TELEMETRY_VOTERS_LIMIT: usize = 10;
 /// A handle to the network.
 ///
 /// Something that provides the capabilities needed for the `gossip_network::Network` trait.
-pub trait Network<Block: BlockT>:
-	NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
-	+ NetworkBlock<Block::Hash, NumberFor<Block>>
-	+ GossipNetwork<Block>
-	+ Clone
-	+ Send
-	+ 'static
-{
-}
+pub trait Network<Block: BlockT>: GossipNetwork<Block> + Clone + Send + 'static {}
 
 impl<Block, T> Network<Block> for T
 where
 	Block: BlockT,
-	T: NetworkSyncForkRequest<Block::Hash, NumberFor<Block>>
-		+ NetworkBlock<Block::Hash, NumberFor<Block>>
-		+ GossipNetwork<Block>
-		+ Clone
-		+ Send
-		+ 'static,
+	T: GossipNetwork<Block> + Clone + Send + 'static,
 {
 }
 
@@ -499,7 +486,7 @@ impl<B: BlockT, N: Network<B>, S: Syncing<B>> NetworkBridge<B, N, S> {
 		hash: B::Hash,
 		number: NumberFor<B>,
 	) {
-		self.service.set_sync_fork_request(peers, hash, number)
+		self.sync.set_sync_fork_request(peers, hash, number)
 	}
 }
 

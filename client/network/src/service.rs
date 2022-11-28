@@ -480,36 +480,6 @@ where
 		self.network_service.behaviour().user_protocol().num_connected_peers()
 	}
 
-	// /// Returns the number of peers we're connected to and that are being queried.
-	// pub fn num_active_peers(&self) -> usize {
-	// 	self.network_service.behaviour().user_protocol().num_active_peers()
-	// }
-
-	// /// Target sync block number.
-	// pub fn best_seen_block(&self) -> Option<NumberFor<B>> {
-	// 	self.network_service.behaviour().user_protocol().best_seen_block()
-	// }
-
-	// /// Number of peers participating in syncing.
-	// pub fn num_sync_peers(&self) -> u32 {
-	// 	self.network_service.behaviour().user_protocol().num_sync_peers()
-	// }
-
-	// /// Number of blocks in the import queue.
-	// pub fn num_queued_blocks(&self) -> u32 {
-	// 	self.network_service.behaviour().user_protocol().num_queued_blocks()
-	// }
-
-	// /// Returns the number of downloaded blocks.
-	// pub fn num_downloaded_blocks(&self) -> usize {
-	// 	self.network_service.behaviour().user_protocol().num_downloaded_blocks()
-	// }
-
-	// /// Number of active sync requests.
-	// pub fn num_sync_requests(&self) -> usize {
-	// 	self.network_service.behaviour().user_protocol().num_sync_requests()
-	// }
-
 	/// Adds an address for a node.
 	pub fn add_known_address(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.network_service.behaviour_mut().add_known_address(peer_id, addr);
@@ -690,30 +660,6 @@ impl<B: BlockT + 'static, H: ExHashT> NetworkService<B, H> {
 	}
 }
 
-impl<B: BlockT + 'static, H: ExHashT> sp_consensus::SyncOracle for NetworkService<B, H> {
-	fn is_major_syncing(&self) -> bool {
-		self.sync_service.is_major_syncing()
-	}
-
-	fn is_offline(&self) -> bool {
-		self.sync_service.is_offline()
-	}
-}
-
-impl<B: BlockT, H: ExHashT> sc_consensus::JustificationSyncLink<B> for NetworkService<B, H> {
-	/// Request a justification for the given block from the network.
-	///
-	/// On success, the justification will be passed to the import queue that was part at
-	/// initialization as part of the configuration.
-	fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-		let _ = self.sync_service.request_justification(hash, number);
-	}
-
-	fn clear_justification_requests(&self) {
-		let _ = self.sync_service.clear_justification_requests();
-	}
-}
-
 impl<B, H> NetworkStateInfo for NetworkService<B, H>
 where
 	B: sp_runtime::traits::Block,
@@ -759,22 +705,6 @@ where
 	/// item on the [`NetworkWorker`] stream.
 	fn put_value(&self, key: KademliaKey, value: Vec<u8>) {
 		let _ = self.to_worker.unbounded_send(ServiceToWorkerMsg::PutValue(key, value));
-	}
-}
-
-impl<B, H> NetworkSyncForkRequest<B::Hash, NumberFor<B>> for NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	/// Configure an explicit fork sync request.
-	/// Note that this function should not be used for recent blocks.
-	/// Sync should be able to download all the recent forks normally.
-	/// `set_sync_fork_request` should only be used if external code detects that there's
-	/// a stale fork missing.
-	/// Passing empty `peers` set effectively removes the sync request.
-	fn set_sync_fork_request(&self, peers: Vec<PeerId>, hash: B::Hash, number: NumberFor<B>) {
-		self.sync_service.set_sync_fork_request(peers, hash, number);
 	}
 }
 
@@ -1080,20 +1010,6 @@ where
 			pending_response: tx,
 			connect,
 		});
-	}
-}
-
-impl<B, H> NetworkBlock<B::Hash, NumberFor<B>> for NetworkService<B, H>
-where
-	B: BlockT + 'static,
-	H: ExHashT,
-{
-	fn announce_block(&self, hash: B::Hash, data: Option<Vec<u8>>) {
-		let _ = self.sync_service.announce_block(hash, data);
-	}
-
-	fn new_best_block_imported(&self, hash: B::Hash, number: NumberFor<B>) {
-		let _ = self.sync_service.new_best_block_imported(hash, number);
 	}
 }
 

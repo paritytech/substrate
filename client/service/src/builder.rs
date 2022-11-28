@@ -48,7 +48,7 @@ use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
 use sc_network_sync::{
 	block_request_handler::BlockRequestHandler, engine::SyncingEngine,
 	service::network::NetworkServiceProvider, state_request_handler::StateRequestHandler,
-	warp_request_handler::RequestHandler as WarpSyncRequestHandler,
+	warp_request_handler::RequestHandler as WarpSyncRequestHandler, SyncingService,
 };
 use sc_rpc::{
 	author::AuthorApiServer,
@@ -368,7 +368,7 @@ pub struct SpawnTasksParams<'a, TBl: BlockT, TCl, TExPool, TRpc, Backend> {
 	pub tx_handler_controller:
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 	/// Syncing service.
-	pub sync_service: Arc<dyn ChainSyncInterface<TBl>>,
+	pub sync_service: Arc<SyncingService<TBl>>,
 	/// Telemetry instance for this node.
 	pub telemetry: Option<&'a mut Telemetry>,
 }
@@ -746,7 +746,7 @@ pub fn build_network<TBl, TExPool, TImpQu, TCl>(
 		TracingUnboundedSender<sc_rpc::system::Request<TBl>>,
 		sc_network_transactions::TransactionsHandlerController<<TBl as BlockT>::Hash>,
 		NetworkStarter,
-		Arc<dyn ChainSyncInterface<TBl>>,
+		Arc<SyncingService<TBl>>,
 	),
 	Error,
 >
