@@ -2178,7 +2178,7 @@ dependencies = [
  "handlebars",
  "hash-db",
  "itertools",
- "kvdb",
+ "kvdb 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static",
  "linked-hash-map",
  "log",
@@ -2311,7 +2311,6 @@ dependencies = [
  "log",
  "once_cell",
  "parity-scale-codec",
- "parity-util-mem",
  "paste",
  "pretty_assertions",
  "scale-info",
@@ -3465,6 +3464,13 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.12.0"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
+name = "kvdb"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "585089ceadba0197ffe9af6740ab350b325e3c1f5fccfbc3522e0250c750409b"
 dependencies = [
@@ -3478,9 +3484,22 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40d109c87bfb7759edd2a49b2649c1afe25af785d930ad6a38479b4dc70dd873"
 dependencies = [
- "kvdb",
+ "kvdb 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-util-mem",
  "parking_lot 0.12.1",
+]
+
+[[package]]
+name = "kvdb-rocksdb"
+version = "0.16.0"
+dependencies = [
+ "kvdb 0.12.0",
+ "log",
+ "num_cpus",
+ "parking_lot 0.12.1",
+ "regex",
+ "rocksdb",
+ "smallvec",
 ]
 
 [[package]]
@@ -3489,7 +3508,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c076cc2cdbac89b9910c853a36c957d3862a779f31c2661174222cefb49ee597"
 dependencies = [
- "kvdb",
+ "kvdb 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "num_cpus",
  "parity-util-mem",
@@ -4476,14 +4495,13 @@ dependencies = [
  "futures",
  "hash-db",
  "kitchensink-runtime",
- "kvdb",
- "kvdb-rocksdb",
+ "kvdb 0.12.0",
+ "kvdb-rocksdb 0.16.0",
  "lazy_static",
  "log",
  "node-primitives",
  "node-testing",
  "parity-db",
- "parity-util-mem",
  "rand 0.7.3",
  "sc-basic-authorship",
  "sc-client-api",
@@ -6453,7 +6471,6 @@ dependencies = [
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
  "parking_lot 0.12.1",
- "primitive-types",
  "smallvec",
  "winapi",
 ]
@@ -7704,9 +7721,9 @@ dependencies = [
  "criterion",
  "hash-db",
  "kitchensink-runtime",
- "kvdb",
+ "kvdb 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "kvdb-memorydb",
- "kvdb-rocksdb",
+ "kvdb-rocksdb 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map",
  "log",
  "parity-db",
@@ -8146,7 +8163,6 @@ dependencies = [
  "futures",
  "futures-timer",
  "log",
- "parity-util-mem",
  "sc-client-api",
  "sc-network-common",
  "sc-transaction-pool-api",
@@ -8578,7 +8594,6 @@ dependencies = [
  "jsonrpsee",
  "log",
  "parity-scale-codec",
- "parity-util-mem",
  "parking_lot 0.12.1",
  "pin-project",
  "rand 0.7.3",
@@ -8679,8 +8694,6 @@ version = "0.10.0-dev"
 dependencies = [
  "log",
  "parity-scale-codec",
- "parity-util-mem",
- "parity-util-mem-derive",
  "parking_lot 0.12.1",
  "sc-client-api",
  "sp-core",
@@ -8794,7 +8807,6 @@ dependencies = [
  "linked-hash-map",
  "log",
  "parity-scale-codec",
- "parity-util-mem",
  "parking_lot 0.12.1",
  "sc-block-builder",
  "sc-client-api",
@@ -9595,7 +9607,7 @@ dependencies = [
 name = "sp-database"
 version = "4.0.0-dev"
 dependencies = [
- "kvdb",
+ "kvdb 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.12.1",
 ]
 
@@ -9792,7 +9804,6 @@ dependencies = [
  "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
- "parity-util-mem",
  "paste",
  "rand 0.7.3",
  "scale-info",
@@ -9977,7 +9988,6 @@ name = "sp-test-primitives"
 version = "2.0.0"
 dependencies = [
  "parity-scale-codec",
- "parity-util-mem",
  "serde",
  "sp-application-crypto",
  "sp-core",
@@ -10397,7 +10407,6 @@ dependencies = [
  "pallet-babe",
  "pallet-timestamp",
  "parity-scale-codec",
- "parity-util-mem",
  "sc-block-builder",
  "sc-executor",
  "sc-service",
