@@ -43,7 +43,7 @@ use sc_client_api::{Backend, BlockBackend, BlockchainEvents, FinalityNotificatio
 use sc_consensus::BlockImport;
 use sc_network::ProtocolName;
 use sc_network_common::{service::NetworkRequest, sync::SyncEventStream};
-use sc_network_gossip::{GossipEngine, Network as GossipNetwork};
+use sc_network_gossip::{GossipEngine, Network as GossipNetwork, Syncing as GossipSyncing};
 use sp_api::{HeaderT, NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{
 	Backend as BlockchainBackend, Error as ClientError, HeaderBackend, Result as ClientResult,
@@ -217,7 +217,7 @@ pub async fn start_beefy_gadget<B, BE, C, N, P, R, S>(
 	R: ProvideRuntimeApi<B>,
 	R::Api: BeefyApi<B> + MmrApi<B, MmrRootHash, NumberFor<B>>,
 	N: GossipNetwork<B> + NetworkRequest + Send + Sync + 'static,
-	S: SyncEventStream + SyncOracle + 'static,
+	S: GossipSyncing<B> + SyncOracle + 'static,
 {
 	let BeefyParams {
 		client,

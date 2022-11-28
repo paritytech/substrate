@@ -1329,24 +1329,26 @@ fn voter_catches_up_to_latest_round_when_behind() {
 	runtime.block_on(future::select(test, drive_to_completion));
 }
 
-type TestEnvironment<N, VR> = Environment<
+type TestEnvironment<N, S, VR> = Environment<
 	substrate_test_runtime_client::Backend,
 	Block,
 	TestClient,
 	N,
+	S,
 	LongestChain<substrate_test_runtime_client::Backend, Block>,
 	VR,
 >;
 
-fn test_environment<N, VR>(
+fn test_environment<N, S, VR>(
 	link: &TestLinkHalf,
 	keystore: Option<SyncCryptoStorePtr>,
 	network_service: N,
-	sync_service: Arc<dyn SyncEventStream>,
+	sync_service: S,
 	voting_rule: VR,
-) -> TestEnvironment<N, VR>
+) -> TestEnvironment<N, S, VR>
 where
 	N: NetworkT<Block>,
+	S: SyncingT<Block>,
 	VR: VotingRule<Block, TestClient>,
 {
 	let PersistentData { ref authority_set, ref set_state, .. } = link.persistent_data;

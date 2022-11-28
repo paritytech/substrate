@@ -71,6 +71,7 @@ use libp2p::{multiaddr, PeerId};
 use sc_network_common::{
 	protocol::ProtocolName,
 	service::{NetworkBlock, NetworkEventStream, NetworkNotification, NetworkPeers},
+	sync::SyncEventStream,
 };
 use sp_runtime::traits::{Block as BlockT, NumberFor};
 use std::iter;
@@ -100,3 +101,8 @@ impl<T, B: BlockT> Network<B> for T where
 		+ NetworkBlock<B::Hash, NumberFor<B>>
 {
 }
+
+/// Abstraction over the syncing subsystem.
+pub trait Syncing<B: BlockT>: SyncEventStream + NetworkBlock<B::Hash, NumberFor<B>> {}
+
+impl<T, B: BlockT> Syncing<B> for T where T: SyncEventStream + NetworkBlock<B::Hash, NumberFor<B>> {}

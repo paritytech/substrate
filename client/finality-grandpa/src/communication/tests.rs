@@ -203,8 +203,22 @@ impl SyncEventStream for TestSync {
 	}
 }
 
+impl NetworkBlock<Hash, NumberFor<Block>> for TestSync {
+	fn announce_block(&self, hash: Hash, _data: Option<Vec<u8>>) {
+		todo!();
+	}
+
+	fn new_best_block_imported(&self, _hash: Hash, _number: NumberFor<Block>) {
+		unimplemented!();
+	}
+}
+
+impl NetworkSyncForkRequest<Hash, NumberFor<Block>> for TestSync {
+	fn set_sync_fork_request(&self, _peers: Vec<PeerId>, _hash: Hash, _number: NumberFor<Block>) {}
+}
+
 pub(crate) struct Tester {
-	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork>,
+	pub(crate) net_handle: super::NetworkBridge<Block, TestNetwork, TestSync>,
 	gossip_validator: Arc<GossipValidator<Block>>,
 	pub(crate) events: TracingUnboundedReceiver<Event>,
 }
@@ -272,7 +286,7 @@ fn voter_set_state() -> SharedVoterSetState<Block> {
 pub(crate) fn make_test_network() -> (impl Future<Output = Tester>, TestNetwork) {
 	let (tx, rx) = tracing_unbounded("test");
 	let net = TestNetwork { sender: tx };
-	let sync = Arc::new(TestSync {});
+	let sync = TestSync {};
 
 	#[derive(Clone)]
 	struct Exit;

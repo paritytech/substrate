@@ -287,7 +287,7 @@ impl TestNetworkBuilder {
 			chain: client.clone(),
 			protocol_id,
 			fork_id,
-			chain_sync_service: Box::new(chain_sync_service),
+			sync_service: Arc::new(chain_sync_service),
 			metrics_registry: None,
 			request_response_protocol_configs: [
 				block_request_protocol_config,

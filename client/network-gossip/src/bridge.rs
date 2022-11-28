@@ -18,7 +18,7 @@
 
 use crate::{
 	state_machine::{ConsensusGossip, TopicNotification, PERIODIC_MAINTENANCE_INTERVAL},
-	Network, Validator,
+	Network, Syncing, Validator,
 };
 
 use sc_network_common::{
@@ -80,15 +80,17 @@ impl<B: BlockT> Unpin for GossipEngine<B> {}
 
 impl<B: BlockT> GossipEngine<B> {
 	/// Create a new instance.
-	pub fn new<N: Network<B> + Send + Clone + 'static>(
+	pub fn new<N, S>(
 		network: N,
-		sync: Arc<dyn SyncEventStream>,
+		sync: S,
 		protocol: impl Into<ProtocolName>,
 		validator: Arc<dyn Validator<B>>,
 		metrics_registry: Option<&Registry>,
 	) -> Self
 	where
 		B: 'static,
+		N: Network<B> + Send + Clone + 'static,
+		S: Syncing<B> + Send + Clone + 'static,
 	{
 		let protocol = protocol.into();
 		let network_event_stream = network.event_stream("network-gossip");
@@ -501,6 +503,20 @@ mod tests {
 			self.inner.lock().unwrap().event_senders.push(tx);
 
 			Box::pin(rx)
+		}
+	}
+
+	impl NetworkBlock<<Block as BlockT>::Hash, NumberFor<Block>> for TestSync {
+		fn announce_block(&self, _hash: <Block as BlockT>::Hash, _data: Option<Vec<u8>>) {
+			unimplemented!();
+		}
+
+		fn new_best_block_imported(
+			&self,
+			_hash: <Block as BlockT>::Hash,
+			_number: NumberFor<Block>,
+		) {
+			unimplemented!();
 		}
 	}
 
