@@ -186,12 +186,18 @@ pub mod pallet {
 	pub struct Pallet<T, I = ()>(_);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	pub trait BenchmarkHelper<AssetId> {
+	pub trait BenchmarkHelper<AssetId, AssetIdParameter> {
 		fn create_asset_id(id: u32) -> AssetId;
+		fn create_asset_id_param(id: u32) -> AssetIdParameter;
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	impl<AssetId: From<u32>> BenchmarkHelper<AssetId> for () {
+	impl<AssetId: From<u32>, AssetIdParameter: From<u32>> BenchmarkHelper<AssetId, AssetIdParameter>
+		for ()
+	{
 		fn create_asset_id(id: u32) -> AssetId {
+			id.into()
+		}
+		fn create_asset_id_param(id: u32) -> AssetIdParameter {
 			id.into()
 		}
 	}
@@ -225,11 +231,7 @@ pub mod pallet {
 		/// Wrapper around `Self::AssetId` to use in dispatchable call signatures. Allows the use
 		/// of compact encoding in instances of the pallet, which will prevent breaking changes
 		/// resulting from the removal of `HasCompact` from `Self::AssetId`.
-		type AssetIdParameter: Parameter
-			+ Copy
-			+ From<Self::AssetId>
-			+ Into<Self::AssetId>
-			+ MaxEncodedLen;
+		type AssetIdParameter: Parameter + Copy + Into<Self::AssetId> + MaxEncodedLen;
 
 		/// The currency mechanism.
 		type Currency: ReservableCurrency<Self::AccountId>;
@@ -284,7 +286,7 @@ pub mod pallet {
 
 		/// Helper trait for benchmarks.
 		#[cfg(feature = "runtime-benchmarks")]
-		type BenchmarkHelper: BenchmarkHelper<Self::AssetId>;
+		type BenchmarkHelper: BenchmarkHelper<Self::AssetId, Self::AssetIdParameter>;
 	}
 
 	#[pallet::storage]
