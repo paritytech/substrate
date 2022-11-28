@@ -16,6 +16,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+//! Logic for canonicalizing MMR offchain entries for finalized forks,
+//! and for pruning MMR offchain entries for stale forks.
+
+#![warn(missing_docs)]
+
 use std::{marker::PhantomData, sync::Arc};
 
 use log::{debug, error, warn};
@@ -29,7 +34,8 @@ use sp_runtime::traits::{Block, Header};
 
 use crate::LOG_TARGET;
 
-pub struct CanonEngine<C, B: Block, S> {
+/// `OffchainMMR` exposes MMR offchain canonicalization and pruning logic.
+pub struct OffchainMMR<C, B: Block, S> {
 	pub client: Arc<C>,
 	pub offchain_db: OffchainDb<S>,
 	pub indexing_prefix: Vec<u8>,
@@ -38,7 +44,7 @@ pub struct CanonEngine<C, B: Block, S> {
 	pub _phantom: PhantomData<B>,
 }
 
-impl<C, S, B> CanonEngine<C, B, S>
+impl<C, S, B> OffchainMMR<C, B, S>
 where
 	C: HeaderBackend<B> + HeaderMetadata<B>,
 	S: OffchainStorage,

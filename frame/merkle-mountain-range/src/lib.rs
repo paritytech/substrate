@@ -24,7 +24,7 @@
 //!
 //! The MMR pallet constructs an MMR from leaf data obtained on every block from
 //! `LeafDataProvider`. MMR nodes are stored both in:
-//! - on-chain storage - hashes only; not full leaf content)
+//! - on-chain storage - hashes only; not full leaf content;
 //! - off-chain storage - via Indexing API we push full leaf content (and all internal nodes as
 //! well) to the Off-chain DB, so that the data is available for Off-chain workers.
 //! Hashing used for MMR is configurable independently from the rest of the runtime (i.e. not using
