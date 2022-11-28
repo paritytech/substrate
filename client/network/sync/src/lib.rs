@@ -642,16 +642,7 @@ where
 									warp_with_provider.clone(),
 								));
 							},
-							Some(WarpSyncParams::WaitForTarget(target_block)) => {
-								log::debug!(target: "sync", "Waiting for target block.");
-								futures::executor::block_on(async {
-									self.warp_sync = Some(WarpSync::new_with_target_block(
-										self.client.clone(),
-										target_block.await.unwrap(),
-									));
-								});
-							},
-							None => {},
+							_ => {},
 						}
 					}
 				}
@@ -1007,6 +998,17 @@ where
 		Ok(self.validate_and_queue_blocks(new_blocks, gap))
 	}
 
+
+	fn poll_warp_sync_target_block(&mut self, cx: &mut std::task::Context) -> Poll<B::Header> {
+		if let Some(WarpSyncParams::WaitForTarget(target_block)) = self.warp_sync_params.as_mut() {
+			return match target_block.poll_unpin(cx) {
+				Poll::Ready(Ok(target_block)) => Poll::Ready(target_block),
+				_ => Poll::Pending,
+			}
+		}
+		Poll::Pending
+	}
+	
 	fn process_block_response_data(&mut self, blocks_to_import: Result<OnBlockData<B>, BadPeer>) {
 		match blocks_to_import {
 			Ok(OnBlockData::Import(origin, blocks)) => self.import_blocks(origin, blocks),
@@ -1374,6 +1376,12 @@ where
 			}
 		}
 		self.process_outbound_requests();
+		match self.poll_warp_sync_target_block(cx) {
+			Poll::Ready(target_block) =>
+				self.warp_sync =
+					Some(WarpSync::new_with_target_block(self.client.clone(), target_block)),
+			Poll::Pending => (),
+		};
 
 		while let Poll::Ready(result) = self.poll_pending_responses(cx) {
 			match result {
