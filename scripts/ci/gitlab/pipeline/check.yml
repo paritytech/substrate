@@ -38,9 +38,7 @@ test-dependency-rules:
 test-rust-features:
   stage:                           check
   extends:
-    - .kubernetes-env
     - .test-refs-no-trigger-prs-only
-  allow_failure:                   true
   script:
     - git clone
         --depth=1
