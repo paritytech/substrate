@@ -51,6 +51,5 @@ sp-version = { version = "5.0.0", path = "../../primitives/version" }
 tempfile = "3.1.0"
 
 [features]
-default = ["rocksdb", "wasmtime"]
+default = ["rocksdb"]
 rocksdb = ["sc-client-db/rocksdb"]
-wasmtime = ["sc-service/wasmtime"]

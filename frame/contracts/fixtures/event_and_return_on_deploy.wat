@@ -3,8 +3,7 @@
 	(import "seal0" "seal_deposit_event" (func $seal_deposit_event (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 
-	(start $start)
-	(func $start
+	(func (export "deploy")
 		(call $seal_deposit_event
 			(i32.const 0) ;; The topics buffer
 			(i32.const 0) ;; The topics buffer's length
@@ -22,7 +21,6 @@
 	(func (export "call")
 		(unreachable)
 	)
-	(func (export "deploy"))
 
 	(data (i32.const 8) "\01\02\03\04")
 )

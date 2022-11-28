@@ -40,7 +40,6 @@ use sc_network_common::{
 		ProtocolName,
 	},
 	request_responses::{IfDisconnected, ProtocolConfig, RequestFailure},
-	sync::{warp::WarpProofRequest, OpaqueBlockRequest, OpaqueStateRequest},
 };
 use sc_peerset::{PeersetHandle, ReputationChange};
 use sp_blockchain::HeaderBackend;
@@ -163,36 +162,6 @@ pub enum BehaviourOut<B: BlockT> {
 		messages: Vec<(ProtocolName, Bytes)>,
 	},
 
-	/// A new block request must be emitted.
-	BlockRequest {
-		/// Node we send the request to.
-		target: PeerId,
-		/// Opaque implementation-specific block request.
-		request: OpaqueBlockRequest,
-		/// One-shot channel to receive the response.
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-
-	/// A new state request must be emitted.
-	StateRequest {
-		/// Node we send the request to.
-		target: PeerId,
-		/// Opaque implementation-specific state request.
-		request: OpaqueStateRequest,
-		/// One-shot channel to receive the response.
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-
-	/// A new warp sync request must be emitted.
-	WarpSyncRequest {
-		/// Node we send the request to.
-		target: PeerId,
-		/// Warp sync request.
-		request: WarpProofRequest<B>,
-		/// One-shot channel to receive the response.
-		pending_response: oneshot::Sender<Result<Vec<u8>, RequestFailure>>,
-	},
-
 	/// Now connected to a new peer for syncing purposes.
 	SyncConnected(PeerId),
 
@@ -230,21 +199,9 @@ where
 		user_agent: String,
 		local_public_key: PublicKey,
 		disco_config: DiscoveryConfig,
-		block_request_protocol_config: ProtocolConfig,
-		state_request_protocol_config: ProtocolConfig,
-		warp_sync_protocol_config: Option<ProtocolConfig>,
-		light_client_request_protocol_config: ProtocolConfig,
-		// All remaining request protocol configs.
-		mut request_response_protocols: Vec<ProtocolConfig>,
+		request_response_protocols: Vec<ProtocolConfig>,
 		peerset: PeersetHandle,
 	) -> Result<Self, request_responses::RegisterError> {
-		if let Some(config) = warp_sync_protocol_config {
-			request_response_protocols.push(config);
-		}
-		request_response_protocols.push(block_request_protocol_config);
-		request_response_protocols.push(state_request_protocol_config);
-		request_response_protocols.push(light_client_request_protocol_config);
-
 		Ok(Self {
 			substrate,
 			peer_info: peer_info::PeerInfoBehaviour::new(user_agent, local_public_key),
@@ -356,12 +313,6 @@ impl<B: BlockT> From<CustomMessageOutcome<B>> for BehaviourOut<B> {
 				BehaviourOut::BlockImport(origin, blocks),
 			CustomMessageOutcome::JustificationImport(origin, hash, nb, justification) =>
 				BehaviourOut::JustificationImport(origin, hash, nb, justification),
-			CustomMessageOutcome::BlockRequest { target, request, pending_response } =>
-				BehaviourOut::BlockRequest { target, request, pending_response },
-			CustomMessageOutcome::StateRequest { target, request, pending_response } =>
-				BehaviourOut::StateRequest { target, request, pending_response },
-			CustomMessageOutcome::WarpSyncRequest { target, request, pending_response } =>
-				BehaviourOut::WarpSyncRequest { target, request, pending_response },
 			CustomMessageOutcome::NotificationStreamOpened {
 				remote,
 				protocol,

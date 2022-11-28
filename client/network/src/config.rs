@@ -101,39 +101,6 @@ where
 	/// Block announce protocol configuration
 	pub block_announce_config: NonDefaultSetConfig,
 
-	/// Request response configuration for the block request protocol.
-	///
-	/// [`RequestResponseConfig::name`] is used to tag outgoing block requests with the correct
-	/// protocol name. In addition all of [`RequestResponseConfig`] is used to handle incoming
-	/// block requests, if enabled.
-	///
-	/// Can be constructed either via
-	/// `sc_network_sync::block_request_handler::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via `sc_network_sync::block_request_handler::
-	/// BlockRequestHandler::new` allowing both outgoing and incoming requests.
-	pub block_request_protocol_config: RequestResponseConfig,
-
-	/// Request response configuration for the light client request protocol.
-	///
-	/// Can be constructed either via
-	/// `sc_network_light::light_client_requests::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via
-	/// `sc_network_light::light_client_requests::handler::LightClientRequestHandler::new`
-	/// allowing both outgoing and incoming requests.
-	pub light_client_request_protocol_config: RequestResponseConfig,
-
-	/// Request response configuration for the state request protocol.
-	///
-	/// Can be constructed either via
-	/// `sc_network_sync::state_request_handler::generate_protocol_config` allowing outgoing but
-	/// not incoming requests, or constructed via
-	/// `sc_network_sync::state_request_handler::StateRequestHandler::new` allowing
-	/// both outgoing and incoming requests.
-	pub state_request_protocol_config: RequestResponseConfig,
-
-	/// Optional warp sync protocol config.
-	pub warp_sync_protocol_config: Option<RequestResponseConfig>,
-
 	/// Request response protocol configurations
 	pub request_response_protocol_configs: Vec<RequestResponseConfig>,
 }
