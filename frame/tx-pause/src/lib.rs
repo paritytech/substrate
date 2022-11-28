@@ -104,18 +104,19 @@ pub type PalletNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 pub type CallNameOf<T> = BoundedVec<u8, <T as Config>::MaxNameLen>;
 /// The presently paused calls within a pallet.
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Debug, MaxEncodedLen)]
-pub enum PausedCallsOf<T: Config> {
+pub enum PausedOf<T: Config> {
 	/// Specific calls in this pallet are paused, by their name.
 	TheseCalls(BoundedVec<CallNameOf<T>, <T as Config>::MaxPausableCalls>),
 	/// All calls of this pallet are paused.
 	AllCalls,
-	// Note: A pallet with `NoCalls` paused should not exist.
+	// Note: A pallet with `NoCalls` paused should never exist!
+	// Instead, the storage item for a pallet should be deleted.
 }
 
 //TODO is this correct and sufficient? Or is `NoCalls` item needed?
-impl<T: Config> Default for PausedCallsOf<T> {
-	fn default() -> PausedCallsOf<T> {
-		PausedCallsOf::<T>::AllCalls
+impl<T: Config> Default for PausedOf<T> {
+	fn default() -> PausedOf<T> {
+		PausedOf::<T>::AllCalls
 	}
 }
 
@@ -151,7 +152,7 @@ pub mod pallet {
 		///
 		/// The `TxMode` pallet cannot pause it's own calls, and does not need to be explicitly
 		/// added here.
-		type WhitelistCallNames: Contains<(PalletNameOf<Self>, PausedCallsOf<Self>)>;
+		type WhitelistCallNames: Contains<(PalletNameOf<Self>, PausedOf<Self>)>;
 
 		/// Maximum length for pallet and call SCALE encoded string names.
 		///
@@ -196,9 +197,6 @@ pub mod pallet {
 
 		/// There are too many calls paused to include another.
 		TooManyPaused,
-
-		/// The pallet or call does not exist in the runtime.
-		NotFound,
 	}
 
 	#[pallet::event]
@@ -206,19 +204,19 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A pallet call was paused. These calls are now paused for this pallet. \[pallet_name,
 		/// paused_calls\]
-		CallsPaused { pallet_name: PalletNameOf<T>, paused_calls: PausedCallsOf<T> },
+		CallsPaused { pallet_name: PalletNameOf<T>, paused_calls_of: PausedOf<T> },
 		/// A pallet call was unpaused. These calls are still paused for this pallet.
-		/// \[pallet_name, paused_calls\]
-		CallsUnpaused { pallet_name: PalletNameOf<T>, paused_calls: PausedCallsOf<T> },
+		/// \[pallet_name, Option<paused_calls>\]
+		CallsUnpaused { pallet_name: PalletNameOf<T>, maybe_paused_calls_of: PausedOf<T> },
 	}
 
 	/// The paused calls for a pallet.
-	/// Ether [`PausedCallsOf::AllCalls`] or a sorted, [`BoundedBTreeSet`] of
-	/// [`PausedCallsOf::TheseCalls`] are paused.
+	/// Ether [`PausedOf::AllCalls`] or a sorted, [`BoundedBTreeSet`] of
+	/// [`PausedOf::TheseCalls`] are paused.
 	#[pallet::storage]
 	#[pallet::getter(fn paused_calls)]
 	pub type PausedCalls<T: Config> =
-		StorageMap<_, Blake2_128Concat, PalletNameOf<T>, PausedCallsOf<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, PalletNameOf<T>, PausedOf<T>, ValueQuery>;
 
 	/// Configure the initial state of this pallet in the genesis block.
 	#[pallet::genesis_config]
@@ -240,104 +238,71 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			for (pallet_name, paused_call_names) in &self.paused {
-				if paused_call_names.iter().find(|&&call| call == CallNameOf::<T>::try_from(b"AllCalls".to_vec()).unwrap()).is_some() {
-					PausedCalls::<T>::insert(pallet_name, PausedCallsOf::<T>::AllCalls);
+			for (pallet_name, presently_paused_call_names) in &self.paused {
+				if presently_paused_call_names.iter().find(|&&call| call == CallNameOf::<T>::try_from(b"AllCalls".to_vec()).unwrap()).is_some() {
+					PausedCalls::<T>::insert(pallet_name, PausedOf::<T>::AllCalls);
 					continue
 				}
-				PausedCalls::<T>::insert(pallet_name, PausedCallsOf::<T>::TheseCalls(*paused_call_names));
+				PausedCalls::<T>::insert(pallet_name, PausedOf::<T>::TheseCalls(*presently_paused_call_names));
 			}
 		}
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Pause a pallet, or set of specific calls for it, by name.
+		/// Pause a pallet, or specific calls within it, by their names.
 		///
 		/// Can only be called by [`Config::PauseOrigin`].
 		/// Emits an [`Event::CallsPaused`] event on success.
 		#[pallet::weight(T::WeightInfo::pause())]
-		pub fn pause_calls(
+		pub fn pause(
 			origin: OriginFor<T>,
 			pallet_name: PalletNameOf<T>,
-			call_names: PausedCallsOf<T>,
+			paused_of: PausedOf<T>,
 		) -> DispatchResult {
 			T::PauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_pause(&pallet_name, &call_names)?;
-			let paused_calls = Self::insert_pause(&pallet_name, &call_names)?;
-			Self::deposit_event(Event::CallsPaused { pallet_name, paused_calls });
+			Self::ensure_can_pause(&pallet_name, &paused_of)?;
+			let paused_calls_of = Self::insert_pause(&pallet_name, &paused_of)?;
+			Self::deposit_event(Event::CallsPaused { pallet_name, paused_calls_of });
 
 			Ok(())
 		}
 
-		/// Unpause a specific call within a pallet, by their names.
+		/// Unpause a pallet, or specific calls within it, by their names.
 		///
 		/// Can only be called by [`Config::UnpauseOrigin`].
 		/// Emits an [`Event::CallsUnpaused`] event on success.
 		#[pallet::weight(T::WeightInfo::unpause())]
-		pub fn unpause_calls(
+		pub fn unpause(
 			origin: OriginFor<T>,
 			pallet_name: PalletNameOf<T>,
-			call_names: PausedCallsOf<T>,
+			paused_of: PausedOf<T>,
 		) -> DispatchResult {
 			T::UnpauseOrigin::ensure_origin(origin)?;
 
-			Self::ensure_can_unpause(&pallet_name, &call_names)?;
-			let paused_calls = Self::remove_pause(&pallet_name, &call_names)?;
-			Self::deposit_event(Event::CallsUnpaused { pallet_name, paused_calls });
+			Self::ensure_can_unpause(&pallet_name, &paused_of)?;
+			let maybe_paused_calls_of = Self::remove_pause(&pallet_name, &paused_of)?;
+			Self::deposit_event(Event::CallsUnpaused { pallet_name, maybe_paused_calls_of });
 			Ok(())
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Return whether this pallet or call is paused.
-	pub fn is_paused_unbound(pallet_name: Vec<u8>, call_name: Vec<u8>) -> bool {
+	/// Return whether a specific a call in a pallet is paused.
+	/// If the names are out of bounds [`Config::PauseTooLongNames`] determines if it is paused or not.
+	pub fn is_call_paused_unbound(pallet_name: Vec<u8>, call_name: Vec<u8>) -> bool {
 		let pallet_name = PalletNameOf::<T>::try_from(pallet_name);
 		let call_name = CallNameOf::<T>::try_from(call_name);
 
 		match (pallet_name, call_name) {
 			(Ok(pallet_name), Ok(call_name)) => {
+				let paused_call_of = PausedOf::<T>::TheseCalls(vec![call_name].try_into()?);
 				Self::is_call_paused(&pallet_name, &call_name)
 			},
 			_ => T::PauseTooLongNames::get(),
 		}
-	}
-
-	/// Return whether a specific a call in a pallet is paused.
-	fn is_paused(pallet_name: &PalletNameOf<T>, these_pause_calls_of: &PausedCallsOf<T>) -> bool {
-		// TODO should these safety checks only be a write time? in the ensure_is_paused below.
-		// Reason for: this reduces `is_paused_unbound` resources needed, as it's called in
-		// `contains` for the BaseCallFilter for **every call made to this chain**
-
-		// SAFETY: The `TxPause` pallet can never be paused.
-		if pallet_name.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
-			return false
-		}
-
-		// SAFETY: Everything that is whitelisted cannot be paused,
-		// including calls within paused pallets.
-		if T::WhitelistCallNames::contains(&(pallet_name.clone(), these_pause_calls_of.clone())) {
-			return false
-		};
-
-		if let Ok(present_paused_calls_of) = <PausedCalls<T>>::try_get(pallet_name) {
-			match present_paused_calls_of {
-				PausedCallsOf::<T>::AllCalls => return true,
-				PausedCallsOf::<T>::TheseCalls(present_paused_calls) => {
-					if let PausedCallsOf::<T>::TheseCalls(these_calls) = these_pause_calls_of {
-						for call in these_calls {
-							if these_calls.contains(&call) {
-								return true
-							}
-						}
-					}
-				},
-			}
-		}
-
-		false
 	}
 
 	/// Return whether a specific a call in a pallet is paused.
@@ -348,13 +313,34 @@ impl<T: Config> Pallet<T> {
 			let mut call_vec: BoundedVec<CallNameOf<T>, <T as Config>::MaxPausableCalls> = BoundedVec::with_bounded_capacity(1);
 			call_vec.force_push(*call_name);
 
-			let these_pause_calls_of = PausedCallsOf::<T>::TheseCalls(call_vec);
+			Self::is_paused(pallet_name, call_vec)
+		}
+	}
+
+	/// Return the set of calls for a pallet that are paused.
+	fn is_paused(pallet_name: &PalletNameOf<T>, paused_of: &PausedOf<T>) -> bool {
+		// TODO should these safety checks only be a write time? in the ensure_is_paused below.
+		// Reason for: this reduces `is_call_paused_unbound` resources needed, as it's called in
+		// `contains` for the BaseCallFilter for **every call made to this chain**
+
+		// SAFETY: The `TxPause` pallet can never be paused.
+		if pallet_name.as_ref() == <Self as PalletInfoAccess>::name().as_bytes().to_vec() {
+			return false
+		}
+
+		// SAFETY: Everything that is whitelisted cannot be paused,
+		// including calls within paused pallets.
+		if T::WhitelistCallNames::contains(&(pallet_name.clone(), paused_of.clone())) {
+			return false
+		};
+
+		if let Ok(present_paused_calls_of) = <PausedCalls<T>>::try_get(pallet_name) {
 			match present_paused_calls_of {
-				PausedCallsOf::<T>::AllCalls => return true,
-				PausedCallsOf::<T>::TheseCalls(present_paused_calls) => {
-					if let PausedCallsOf::<T>::TheseCalls(these_calls) = these_pause_calls_of {
-						for call in these_calls {
-							if these_calls.contains(&call) {
+				PausedOf::<T>::AllCalls => return true,
+				PausedOf::<T>::TheseCalls(present_paused_calls) => {
+					if let PausedOf::<T>::TheseCalls(checked_calls) = paused_of {
+						for call in checked_calls {
+							if present_paused_calls.contains(&call) {
 								return true
 							}
 						}
@@ -369,7 +355,7 @@ impl<T: Config> Pallet<T> {
 	/// Ensure that a pallet or set of calls in a pallet can be paused.
 	pub fn ensure_can_pause(
 		pallet_name: &PalletNameOf<T>,
-		these_pause_calls_of: &PausedCallsOf<T>,
+		these_pause_calls_of: &PausedOf<T>,
 	) -> Result<(), Error<T>> {
 		if Self::is_paused(pallet_name, these_pause_calls_of) {
 			return Err(Error::IsPaused)
@@ -380,7 +366,7 @@ impl<T: Config> Pallet<T> {
 	/// Ensure that a pallet or set of calls in a pallet can be unpaused.
 	pub fn ensure_can_unpause(
 		pallet_name: &PalletNameOf<T>,
-		these_pause_calls_of: &PausedCallsOf<T>,
+		these_pause_calls_of: &PausedOf<T>,
 	) -> Result<(), Error<T>> {
 		if Self::is_paused(pallet_name, these_pause_calls_of) {
 			// SAFETY: Everything that is paused, can be un-paused.
@@ -390,95 +376,76 @@ impl<T: Config> Pallet<T> {
 		}
 	}
 
-	/// Update the paused calls of a pallet and return it's present [`PausedCallsOf`].
+	/// Set or update the paused calls of a pallet and return it's present [`PausedOf`].
 	fn insert_pause(
 		pallet_name: &PalletNameOf<T>,
-		call_names: &PausedCallsOf<T>,
-	) -> Result<PausedCallsOf<T>, Error<T>> {
-		let presently_paused_calls = PausedCalls::<T>::try_get(&pallet_name).map_err(|_| Error::<T>::NotFound)?;
-		match presently_paused_calls {
-			PausedCallsOf::<T>::AllCalls => {
-				return Err(Error::IsPaused)
+		insert_paused_of: &PausedOf<T>,
+	) -> Result<PausedOf<T>, Error<T>> {
+		let maybe_presently_paused = PausedCalls::<T>::try_get(&pallet_name);
+		match maybe_presently_paused {
+			Ok(PausedOf::<T>::AllCalls) => {
+				return Err(Error::PalletPaused)
 			}
-			PausedCallsOf::<T>::TheseCalls(paused_call_names) => {
+			Ok(PausedOf::<T>::TheseCalls(presently_paused_call_names)) => {
+				if insert_paused_of == PausedOf::<T>::AllCalls {
+					PausedCalls::<T>::mutate_exists(&pallet_name, &PausedOf::<T>::AllCalls);
+					return Ok(PausedOf::<T>::AllCalls)
+				}
+
 				// TODO can we get a bounded vec "overloaded" to dedup or use some better method to compare elements and add if needed?
 				// BoundedBTreeSet would be a better fit for this!
-				let unbounded_names: Vec<BoundedVec<u8, <T as Config>::MaxNameLen>> = paused_call_names.iter().chain(call_names.iter()).collect();
-				let bounded_names = unbounded_names.dedup().try_into().map_err(Error::<T>::TooManyPaused)?;
-				PausedCalls::<T>::mutate_exists(&pallet_name, &bounded_names);
-				return Ok(call_names)
+				let new_names = presently_paused_call_names
+					.iter()
+					.chain(insert_paused_of.iter())
+					.collect()
+					.dedup()
+					.try_into()
+					.map_err(Error::<T>::TooManyPaused)?;
+				PausedCalls::<T>::mutate_exists(&pallet_name, &PausedOf::<T>::TheseCalls(new_names));
+				return Ok(PausedOf::<T>::TheseCalls(new_names))
+			}
+			Err(_) => {
+				PausedCalls::<T>::set(&pallet_name, &insert_paused_of);
+				return Ok(*insert_paused_of)
 			}
 		}
-		// PausedCalls::<T>::try_mutate(&pallet_name, |paused_calls| {
-		// 	if let PausedCallsOf::<T>::AllCalls = paused_calls {
-		// 		return Err(Error::PalletPaused)
-		// 	} 
-		// 	if let PausedCallsOf::<T>::TheseCalls(paused_call_names) = paused_calls {
-		// 		let is_new_pause = paused_call_names
-		// 			.try_push(*call_name)
-		// 			.map_err(|_| Error::<T>::TooManyPaused)?;
-		// 		match is_new_pause {
-		// 			false => return Err(Error::<T>::IsPaused),
-		// 			true => return Ok(PausedCallsOf::<T>::TheseCalls(*paused_call_names)),
-		// 		}
-		// 	} else {
-		// 		return Err(Error::IsPaused)
-		// 	}
-		// })
-		// .map_err(|_| Error::<T>::NotFound)
 	}
 
-	/// Update the paused calls of a pallet and return it's present [`PausedCallsOf`].
+	/// Update the paused calls of a pallet and return it's present [`PausedOf`].
 	/// Errors if the call is not found to be an existing pause, or the entire pallet is
 	/// paused already, and we cannot remove a specific call pause.  
 	fn remove_pause(
 		pallet_name: &PalletNameOf<T>,
-		call_names: &PausedCallsOf<T>,
-	) -> Result<PausedCallsOf<T>, Error<T>> {
-		let presently_paused_calls = PausedCalls::<T>::try_get(&pallet_name).map_err(|_| Error::<T>::NotFound)?;
-			match presently_paused_calls {
-				PausedCallsOf::<T>::AllCalls => {
-					if call_names == PausedCallsOf::<T>::AllCalls {
+		remove_paused_of: &PausedOf<T>,
+	) -> Result<Option<PausedOf<T>>, Error<T>> {
+		let presently_paused = PausedCalls::<T>::try_get(&pallet_name).map_err(|_| Error::<T>::IsUnpaused)?;
+			match presently_paused {
+				PausedOf::<T>::AllCalls => {
+					if remove_paused_of == &PausedOf::<T>::AllCalls {
 						PausedCalls::<T>::remove(&pallet_name);
-						return Ok(call_names)
+						return Ok(None)
 					} else {
 						// TODO note that you must remove `AllCalls` and then insert `TheseCalls(...)` as we cannot, in a guaranteed bounded way,
 						// take the list of all calls for a pallet and return all but the ones specified to remove.    
 						return Err(Error::<T>::PalletPaused)
 					}
 				}
-				PausedCallsOf::<T>::TheseCalls(paused_call_names) => {
-					let new_names: Vec<BoundedVec<u8, <T as Config>::MaxNameLen>> = paused_call_names.iter().chain(call_names.iter()).collect().dedup();
-					let new_names: BoundedVec<BoundedVec<u8, <T as Config>::MaxNameLen>, <T as Config>::MaxPausableCalls> = new_names.try_into().map_err(Error::<T>::TooManyPaused)?;
-					PausedCalls::<T>::set(&pallet_name, &bounded_names);
-					return Ok(call_names)
+				PausedOf::<T>::TheseCalls(presently_presently_paused_call_names) => {
+					if let PausedOf::<T>::TheseCalls(remove_names) = *remove_paused_of {
+						let new_names = presently_presently_paused_call_names;
+						new_names.retain(|call| !remove_names.contains(call) );
+
+						if new_names == presently_presently_paused_call_names {
+							return Err(Error::<T>::IsUnpaused)
+						}
+						
+						PausedCalls::<T>::set(&pallet_name, PausedOf::<T>::TheseCalls(new_names));
+						return Ok(Some(PausedOf::<T>::TheseCalls(new_names)))
+					} else {
+						return Err(Error::<T>::IsUnpaused)
+					};
 				}
 			}
-		// PausedCalls::<T>::try_mutate(&pallet_name, |paused_calls_of| {
-		// 	match paused_calls_of {
-		// 		PausedCallsOf::<T>::AllCalls => {
-		// 			if call_names == PausedCallsOf::<T>::AllCalls {
-		// 				return Ok();
-		// 			}
-		// 		}
-		// 		PausedCallsOf::<T>::TheseCalls(paused_call_names) => {
-
-		// 		}
-		// 	}
-		// 	if let PausedCallsOf::<T>::TheseCalls(paused_call_names) = paused_calls_of {
-		// 		let maybe_paused_position = paused_call_names.iter().position(|&call| call == *call_name);
-		// 		match maybe_paused_position {
-		// 			Some(position) => {
-		// 				paused_call_names.remove(position);
-		// 				return Ok(PausedCallsOf::<T>::TheseCalls(*paused_call_names))
-		// 			},
-		// 			None => return Err(Error::<T>::IsUnpaused),
-		// 		}
-		// 	} else {
-		// 		return Err(Error::IsUnpaused)
-		// 	}
-		// })
-		// .map_err(|_| Error::<T>::NotFound)
 	}
 }
 
@@ -489,6 +456,6 @@ where
 	/// Return whether the call is allowed to be dispatched.
 	fn contains(call: &<T as frame_system::Config>::RuntimeCall) -> bool {
 		let CallMetadata { pallet_name, function_name } = call.get_call_metadata();
-		!Pallet::<T>::is_paused_unbound(pallet_name.into(), function_name.into())
+		!Pallet::<T>::is_call_paused_unbound(pallet_name.into(), function_name.into())
 	}
 }
