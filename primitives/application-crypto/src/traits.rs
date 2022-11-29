@@ -157,8 +157,8 @@ pub trait RuntimeAppPublic: Sized {
 	fn to_raw_vec(&self) -> Vec<u8>;
 }
 
-/// Something that bound to a fixed `RuntimeAppPublic`.
+/// Something that bound to a fixed [`RuntimeAppPublic`].
 pub trait BoundToRuntimeAppPublic {
-	/// The `RuntimeAppPublic` this type is bound to.
+	/// The [`RuntimeAppPublic`] this type is bound to.
 	type Public: RuntimeAppPublic;
 }
