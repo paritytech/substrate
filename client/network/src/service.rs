@@ -351,7 +351,7 @@ where
 					config_mem,
 					params.network_config.yamux_window_size,
 					yamux_maximum_buffer_size,
-					params.network_config.quic_socket,
+					params.network_config.experimental_quic,
 				)
 			};
 

@@ -29,7 +29,7 @@ use libp2p::{
 	quic::{self, Config as QuicConfig, GenTransport as QuicTransport},
 	tcp, websocket, PeerId, Transport,
 };
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 pub use self::bandwidth::BandwidthSinks;
 
@@ -38,21 +38,13 @@ pub use self::bandwidth::BandwidthSinks;
 /// Returns None if socket is empty or any error occurred while building the transport.
 fn build_quic_transport(
 	keypair: &identity::Keypair,
-	quic_socket: Option<SocketAddr>,
-) -> Option<Boxed<(PeerId, StreamMuxerBox)>> {
-	let quic_socket = quic_socket?;
-
-	let addr = libp2p::Multiaddr::empty()
-		.with(quic_socket.ip().into())
-		.with(libp2p::multiaddr::Protocol::Udp(quic_socket.port()))
-		.with(libp2p::multiaddr::Protocol::Quic);
-
+) -> Boxed<(PeerId, StreamMuxerBox)> {
 	let config = QuicConfig::new(&keypair);
 	let transport = QuicTransport::<quic::async_std::Provider>::new(config)
 		.map(|(p, c), _| (p, StreamMuxerBox::new(c)))
 		.boxed();
 
-	Some(transport)
+	transport
 }
 
 /// Builds the transport that serves as a common ground for all connections.
@@ -75,7 +67,7 @@ pub fn build_transport(
 	memory_only: bool,
 	yamux_window_size: Option<u32>,
 	yamux_maximum_buffer_size: usize,
-	quic_socket: Option<SocketAddr>,
+	enable_quic: bool,
 ) -> (Boxed<(PeerId, StreamMuxerBox)>, Arc<BandwidthSinks>) {
 	// Build the base layer of the transport.
 	let transport = if !memory_only {
@@ -143,9 +135,10 @@ pub fn build_transport(
 		.multiplex(multiplexing_config)
 		.timeout(Duration::from_secs(20));
 
-	let quic_transport = match build_quic_transport(&keypair, quic_socket) {
-		Some(t) => OptionalTransport::some(t),
-		None => OptionalTransport::none(),
+	let quic_transport = if enable_quic {
+		OptionalTransport::some(build_quic_transport(&keypair))
+	} else {
+		OptionalTransport::none()
 	};
 
 	let transport = OrTransport::new(quic_transport, tcp_transport)

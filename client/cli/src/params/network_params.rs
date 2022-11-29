@@ -68,9 +68,9 @@ pub struct NetworkParams {
 	#[arg(long, value_name = "PORT", conflicts_with_all = &[ "listen_addr" ])]
 	pub port: Option<u16>,
 
-	/// UDP port to use for QUIC connections.
-	#[clap(long, value_name = "PORT")]
-	pub quic_port: Option<u16>,
+	/// Enable experimental QUIC transport.
+	#[clap(long)]
+	pub experimental_quic: bool,
 
 	/// Always forbid connecting to private IPv4 addresses (as specified in
 	/// [RFC1918](https://tools.ietf.org/html/rfc1918)), unless the address was passed with
@@ -165,12 +165,6 @@ impl NetworkParams {
 		default_listen_port: u16,
 	) -> NetworkConfiguration {
 		let port = self.port.unwrap_or(default_listen_port);
-		let quic_socket = self.quic_port.map(|port| {
-			use std::net::{IpAddr::V6, Ipv6Addr, SocketAddr};
-
-			let addr = Ipv6Addr::UNSPECIFIED;
-			SocketAddr::new(V6(addr), port)
-		});
 
 		let listen_addresses = if self.listen_addr.is_empty() {
 			if is_validator || is_dev {
@@ -250,7 +244,7 @@ impl NetworkParams {
 			yamux_window_size: None,
 			ipfs_server: self.ipfs_server,
 			sync_mode: self.sync.into(),
-			quic_socket,
+			experimental_quic: self.experimental_quic,
 		}
 	}
 }
