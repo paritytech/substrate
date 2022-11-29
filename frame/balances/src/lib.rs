@@ -1173,24 +1173,19 @@ impl<T: Config<I>, I: 'static> fungible::InspectHold<T::AccountId> for Pallet<T,
 	fn balance_on_hold(who: &T::AccountId) -> T::Balance {
 		Self::account(who).reserved
 	}
-	fn can_hold(who: &T::AccountId, amount: T::Balance, keep_alive: bool) -> bool {
+	fn can_hold(who: &T::AccountId, amount: T::Balance) -> bool {
 		let a = Self::account(who);
+		let min_balance = T::ExistentialDeposit::get().max(a.frozen(Reasons::All));
 		if a.reserved.checked_add(&amount).is_none() {
 			return false
 		}
-
-		if keep_alive {
-			let min_balance = T::ExistentialDeposit::get().max(a.frozen(Reasons::All));
-			// We require it to be min_balance + amount to ensure that the full reserved funds may
-			// be slashed without compromising locked funds or destroying the account.
-			let required_free = match min_balance.checked_add(&amount) {
-				Some(x) => x,
-				None => return false,
-			};
-			a.free >= required_free
-		} else {
-			a.free >= amount
-		}
+		// We require it to be min_balance + amount to ensure that the full reserved funds may be
+		// slashed without compromising locked funds or destroying the account.
+		let required_free = match min_balance.checked_add(&amount) {
+			Some(x) => x,
+			None => return false,
+		};
+		a.free >= required_free
 	}
 }
 impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, I> {
@@ -1199,7 +1194,7 @@ impl<T: Config<I>, I: 'static> fungible::MutateHold<T::AccountId> for Pallet<T, 
 			return Ok(())
 		}
 		ensure!(
-			<Self as fungible::InspectHold<T::AccountId>>::can_hold(who, amount, false),
+			<Self as fungible::InspectHold<T::AccountId>>::can_hold(who, amount),
 			Error::<T, I>::InsufficientBalance,
 		);
 		Self::try_mutate_account(who, |a, _| -> DispatchResult {

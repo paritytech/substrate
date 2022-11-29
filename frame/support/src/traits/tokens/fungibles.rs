@@ -185,15 +185,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	fn balance_on_hold(asset: Self::AssetId, who: &AccountId) -> Self::Balance;
 
 	/// Check to see if some `amount` of `asset` may be held on the account of `who`.
-	///
-	/// If `keep_alive` is set to `true`, then it also checks so that the free balance of `asset`
-	/// does not go below its existential deposit after holding `amount`.
-	fn can_hold(
-		asset: Self::AssetId,
-		who: &AccountId,
-		amount: Self::Balance,
-		keep_alive: bool,
-	) -> bool;
+	fn can_hold(asset: Self::AssetId, who: &AccountId, amount: Self::Balance) -> bool;
 }
 
 /// Trait for mutating a set of named fungible assets which can be placed on hold.

@@ -128,7 +128,7 @@ pub trait InspectHold<AccountId>: Inspect<AccountId> {
 	fn balance_on_hold(who: &AccountId) -> Self::Balance;
 
 	/// Check to see if some `amount` of funds of `who` may be placed on hold.
-	fn can_hold(who: &AccountId, amount: Self::Balance, keep_alive: bool) -> bool;
+	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool;
 }
 
 /// Trait for mutating a fungible asset which can be reserved.
@@ -269,8 +269,8 @@ impl<
 	fn balance_on_hold(who: &AccountId) -> Self::Balance {
 		<F as fungibles::InspectHold<AccountId>>::balance_on_hold(A::get(), who)
 	}
-	fn can_hold(who: &AccountId, amount: Self::Balance, keep_alive: bool) -> bool {
-		<F as fungibles::InspectHold<AccountId>>::can_hold(A::get(), who, amount, keep_alive)
+	fn can_hold(who: &AccountId, amount: Self::Balance) -> bool {
+		<F as fungibles::InspectHold<AccountId>>::can_hold(A::get(), who, amount)
 	}
 }
 
