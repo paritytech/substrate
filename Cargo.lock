@@ -4231,6 +4231,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "mmr-gadget"
+version = "4.0.0-dev"
+dependencies = [
+ "async-std",
+ "beefy-primitives",
+ "futures",
+ "log",
+ "parity-scale-codec",
+ "sc-block-builder",
+ "sc-client-api",
+ "sc-offchain",
+ "sp-api",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-io",
+ "sp-mmr-primitives",
+ "sp-runtime",
+ "substrate-test-runtime-client",
+ "tokio",
+]
+
+[[package]]
 name = "mockall"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5645,7 +5668,6 @@ name = "pallet-mmr"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
- "ckb-merkle-mountain-range",
  "env_logger",
  "frame-benchmarking",
  "frame-support",
@@ -9724,6 +9746,7 @@ name = "sp-mmr-primitives"
 version = "4.0.0-dev"
 dependencies = [
  "array-bytes",
+ "ckb-merkle-mountain-range",
  "log",
  "parity-scale-codec",
  "scale-info",
