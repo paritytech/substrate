@@ -84,6 +84,9 @@ pub struct Schedule<T: Config> {
 
 	/// The weights for each imported function a contract is allowed to call.
 	pub host_fn_weights: HostFnWeights<T>,
+
+	/// The additional weight for calling a function per local of that function.
+	pub call_per_local_cost: u32,
 }
 
 /// Describes the upper limits on various metrics.
@@ -117,6 +120,12 @@ pub struct Limits {
 	/// Globals are not limited through the `stack_height` as locals are. Neither does
 	/// the linear memory limit `memory_pages` applies to them.
 	pub globals: u32,
+
+	/// Maximum number of locals a function can have.
+	///
+	/// As wasm engine initializes each of the local, we need to limit their number to confine
+	/// execution costs.
+	pub locals: u32,
 
 	/// Maximum numbers of parameters a function can have.
 	///
@@ -522,6 +531,7 @@ impl Default for Limits {
 			// No stack limit required because we use a runtime resident execution engine.
 			stack_height: None,
 			globals: 256,
+			locals: 1024,
 			parameters: 128,
 			memory_pages: 16,
 			// 4k function pointers (This is in count not bytes).
@@ -791,6 +801,10 @@ impl<'a, T: Config> gas_metering::Rules for ScheduleRules<'a, T> {
 		// We benchmarked the memory.grow instruction with the maximum allowed pages.
 		// The cost for growing is therefore already included in the instruction cost.
 		gas_metering::MemoryGrowCost::Free
+	}
+
+	fn call_per_local_cost(&self) -> u32 {
+		self.schedule.call_per_local_cost
 	}
 }
 

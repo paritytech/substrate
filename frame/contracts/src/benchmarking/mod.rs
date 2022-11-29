@@ -2432,7 +2432,7 @@ benchmarks! {
 	// w_local_get = w_bench - 1 * w_param
 	instr_local_get {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
+		let max_locals = T::Schedule::get().limits.locals;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomGetLocal(0, max_locals),
 			Regular(Instruction::Drop),
@@ -2449,7 +2449,7 @@ benchmarks! {
 	// w_local_set = w_bench - 1 * w_param
 	instr_local_set {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
+		let max_locals = T::Schedule::get().limits.locals;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomSetLocal(0, max_locals),
@@ -2466,11 +2466,27 @@ benchmarks! {
 	// w_local_tee = w_bench - 2 * w_param
 	instr_local_tee {
 		let r in 0 .. INSTR_BENCHMARK_BATCHES;
-		let max_locals = T::Schedule::get().limits.stack_height.unwrap_or(512);
+		let max_locals = T::Schedule::get().limits.locals;
 		let mut call_body = body::repeated_dyn(r * INSTR_BENCHMARK_BATCH_SIZE, vec![
 			RandomI64Repeated(1),
 			RandomTeeLocal(0, max_locals),
 			Regular(Instruction::Drop),
+		]);
+		body::inject_locals(&mut call_body, max_locals);
+		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
+			call_body: Some(call_body),
+			.. Default::default()
+		}));
+	}: {
+		sbox.invoke();
+	}
+
+	// w_per_local = w_bench
+	call_per_local {
+		let r in 0 .. INSTR_BENCHMARK_BATCHES;
+		let max_locals = T::Schedule::get().limits.locals;
+		let mut call_body = body::plain(vec![
+				Instruction::End,
 		]);
 		body::inject_locals(&mut call_body, max_locals);
 		let mut sbox = Sandbox::from(&WasmModule::<T>::from(ModuleDefinition {
