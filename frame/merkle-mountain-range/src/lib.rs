@@ -24,7 +24,7 @@
 //!
 //! The MMR pallet constructs an MMR from leaf data obtained on every block from
 //! `LeafDataProvider`. MMR nodes are stored both in:
-//! - on-chain storage - hashes only; not full leaf content)
+//! - on-chain storage - hashes only; not full leaf content;
 //! - off-chain storage - via Indexing API we push full leaf content (and all internal nodes as
 //! well) to the Off-chain DB, so that the data is available for Off-chain workers.
 //! Hashing used for MMR is configurable independently from the rest of the runtime (i.e. not using
@@ -56,10 +56,9 @@
 //! NOTE This pallet is experimental and not proven to work in production.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use codec::Encode;
-use frame_support::{log, traits::Get, weights::Weight};
+use frame_support::{log, weights::Weight};
 use sp_runtime::{
-	traits::{self, CheckedSub, One, Saturating, UniqueSaturatedInto},
+	traits::{self, One, Saturating},
 	SaturatedConversion,
 };
 
@@ -73,7 +72,10 @@ mod mock;
 mod tests;
 
 pub use pallet::*;
-pub use sp_mmr_primitives::{self as primitives, Error, LeafDataProvider, LeafIndex, NodeIndex};
+use sp_mmr_primitives::utils;
+pub use sp_mmr_primitives::{
+	self as primitives, utils::NodesUtils, Error, LeafDataProvider, LeafIndex, NodeIndex,
+};
 use sp_std::prelude::*;
 
 /// The most common use case for MMRs is to store historical block hashes,
@@ -219,7 +221,7 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			use primitives::LeafDataProvider;
 			let leaves = Self::mmr_leaves();
-			let peaks_before = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let peaks_before = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
 			let data = T::LeafData::leaf_data();
 
 			// append new leaf to MMR
@@ -242,45 +244,9 @@ pub mod pallet {
 			<NumberOfLeaves<T, I>>::put(leaves);
 			<RootHash<T, I>>::put(root);
 
-			let peaks_after = mmr::utils::NodesUtils::new(leaves).number_of_peaks();
+			let peaks_after = sp_mmr_primitives::utils::NodesUtils::new(leaves).number_of_peaks();
 
 			T::WeightInfo::on_initialize(peaks_before.max(peaks_after))
-		}
-
-		fn offchain_worker(n: T::BlockNumber) {
-			use mmr::storage::{OffchainStorage, Storage};
-			// The MMR nodes can be found in offchain db under either:
-			//   - fork-unique keys `(prefix, pos, parent_hash)`, or,
-			//   - "canonical" keys `(prefix, pos)`,
-			//   depending on how many blocks in the past the node at position `pos` was
-			//   added to the MMR.
-			//
-			// For the fork-unique keys, the MMR pallet depends on
-			// `frame_system::block_hash(parent_num)` mappings to find the relevant parent block
-			// hashes, so it is limited by `frame_system::BlockHashCount` in terms of how many
-			// historical forks it can track. Nodes added to MMR by block `N` can be found in
-			// offchain db at:
-			//   - fork-unique keys `(prefix, pos, parent_hash)` when (`N` >= `latest_block` -
-			//     `frame_system::BlockHashCount`);
-			//   - "canonical" keys `(prefix, pos)` when (`N` < `latest_block` -
-			//     `frame_system::BlockHashCount`);
-			//
-			// The offchain worker is responsible for maintaining the nodes' positions in
-			// offchain db as the chain progresses by moving a rolling window of the same size as
-			// `frame_system::block_hash` map, where nodes/leaves added by blocks that are just
-			// about to exit the window are "canonicalized" so that their offchain key no longer
-			// depends on `parent_hash`.
-			//
-			// This approach works to eliminate fork-induced leaf collisions in offchain db,
-			// under the assumption that no fork will be deeper than `frame_system::BlockHashCount`
-			// blocks:
-			//   entries pertaining to block `N` where `N < current-BlockHashCount` are moved to a
-			//   key based solely on block number. The only way to have collisions is if two
-			//   competing forks are deeper than `frame_system::BlockHashCount` blocks and they
-			//   both "canonicalize" their view of block `N`
-			// Once a block is canonicalized, all MMR entries pertaining to sibling blocks from
-			// other forks are pruned from offchain db.
-			Storage::<OffchainStorage, T, I, LeafOf<T, I>>::canonicalize_and_prune(n);
 		}
 	}
 }
@@ -313,11 +279,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Build offchain key from `parent_hash` of block that originally added node `pos` to MMR.
 	///
 	/// This combination makes the offchain (key,value) entry resilient to chain forks.
-	fn node_offchain_key(
+	fn node_temp_offchain_key(
 		pos: NodeIndex,
 		parent_hash: <T as frame_system::Config>::Hash,
 	) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, pos, parent_hash).encode()
+		NodesUtils::node_temp_offchain_key::<<T as frame_system::Config>::Header>(
+			&T::INDEXING_PREFIX,
+			pos,
+			parent_hash,
+		)
 	}
 
 	/// Build canonical offchain key for node `pos` in MMR.
@@ -326,18 +296,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Never read keys using `node_canon_offchain_key` unless you sure that
 	/// there's no `node_offchain_key` key in the storage.
 	fn node_canon_offchain_key(pos: NodeIndex) -> sp_std::prelude::Vec<u8> {
-		(T::INDEXING_PREFIX, pos).encode()
-	}
-
-	/// Return size of rolling window of leaves saved in offchain under fork-unique keys.
-	///
-	/// Leaves outside this window are canonicalized.
-	/// Window size is `frame_system::BlockHashCount - 1` to make sure fork-unique keys
-	/// can be built using `frame_system::block_hash` map.
-	fn offchain_canonicalization_window() -> LeafIndex {
-		let window_size: LeafIndex =
-			<T as frame_system::Config>::BlockHashCount::get().unique_saturated_into();
-		window_size.saturating_sub(1)
+		NodesUtils::node_canon_offchain_key(&T::INDEXING_PREFIX, pos)
 	}
 
 	/// Provide the parent number for the block that added `leaf_index` to the MMR.
@@ -355,30 +314,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.saturating_add(leaf_index.saturated_into())
 	}
 
-	/// Convert a `block_num` into a leaf index.
-	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, primitives::Error>
+	/// Convert a block number into a leaf index.
+	fn block_num_to_leaf_index(block_num: T::BlockNumber) -> Result<LeafIndex, Error>
 	where
 		T: frame_system::Config,
 	{
-		// leaf_idx = (leaves_count - 1) - (current_block_num - block_num);
-		let best_block_num = <frame_system::Pallet<T>>::block_number();
-		let blocks_diff = best_block_num.checked_sub(&block_num).ok_or_else(|| {
-			primitives::Error::BlockNumToLeafIndex
-				.log_debug("The provided block_number is greater than the best block number.")
-		})?;
-		let blocks_diff_as_leaf_idx = blocks_diff.try_into().map_err(|_| {
-			primitives::Error::BlockNumToLeafIndex
-				.log_debug("The `blocks_diff` couldn't be converted to `LeafIndex`.")
-		})?;
+		let first_mmr_block = utils::first_mmr_block_num::<T::Header>(
+			<frame_system::Pallet<T>>::block_number(),
+			Self::mmr_leaves(),
+		)?;
 
-		let leaf_idx = Self::mmr_leaves()
-			.checked_sub(1)
-			.and_then(|last_leaf_idx| last_leaf_idx.checked_sub(blocks_diff_as_leaf_idx))
-			.ok_or_else(|| {
-				primitives::Error::BlockNumToLeafIndex
-					.log_debug("There aren't enough leaves in the chain.")
-			})?;
-		Ok(leaf_idx)
+		utils::block_num_to_leaf_index::<T::Header>(block_num, first_mmr_block)
 	}
 
 	/// Generate an MMR proof for the given `block_numbers`.
