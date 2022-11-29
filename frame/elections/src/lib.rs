@@ -940,7 +940,11 @@ impl<T: Config> Pallet<T> {
 					let max_voters = <T as Config>::MaxVoters::get() as usize;
 					return T::DbWeight::get().reads(3 + max_voters as u64)
 				},
-				_ => unreachable!("should not happen"),
+				_ => {
+					log!(error, "Unexpected pre-election error",);
+					let max_voters = <T as Config>::MaxVoters::get() as usize;
+					return T::DbWeight::get().reads(3 + max_voters as u64)
+				},
 			},
 		};
 
@@ -964,7 +968,7 @@ impl<T: Config> Pallet<T> {
 					Self::deposit_event(Event::ElectionError);
 				});
 
-		let post_election_weight = if let Ok(winners) = election_result {
+		let post_election_weight = if let Ok(winners) = election_winners {
 			Self::do_post_solve_election(winners, candidates_and_deposit, voters_and_stakes);
 			T::WeightInfo::post_solve_election(num_candidates, num_voters, num_edges)
 		} else {
@@ -1007,17 +1011,14 @@ impl<T: Config> Pallet<T> {
 		// used for prime election.
 		let mut voters_and_stakes = Vec::new();
 
-		match Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
+		Voting::<T>::iter().try_for_each(|(voter, Voter { stake, votes, .. })| {
 			if voters_and_stakes.len() < max_voters {
 				voters_and_stakes.push((voter, stake, votes));
 				Ok(())
 			} else {
-				Err(())
+				Err(Error::TooManyVotes)
 			}
-		}) {
-			Ok(_) => (),
-			Err(_) => return Err(Error::TooManyVotes),
-		}
+		})?;
 
 		// used for elections.
 		let voters_and_votes = voters_and_stakes
@@ -1051,7 +1052,7 @@ impl<T: Config> Pallet<T> {
 		// this is already sorted by id.
 		let old_members_ids_sorted =
 			<Members<T>>::take().into_iter().map(|m| m.who).collect::<Vec<T::AccountId>>();
-		// this one needs a sort by id.
+		// this one needs sorted by id.
 		let mut old_runners_up_ids_sorted =
 			<RunnersUp<T>>::take().into_iter().map(|r| r.who).collect::<Vec<T::AccountId>>();
 		old_runners_up_ids_sorted.sort();
