@@ -23,7 +23,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 sp-inherents = { version = "4.0.0-dev", default-features = false, path = "../../primitives/inherents" }
 sp-keyring = { version = "7.0.0", optional = true, path = "../../primitives/keyring" }
-memory-db = { version = "0.30.0", default-features = false }
+memory-db = { version = "0.31.0", default-features = false }
 sp-offchain = { version = "4.0.0-dev", default-features = false, path = "../../primitives/offchain" }
 sp-core = { version = "7.0.0", default-features = false, path = "../../primitives/core" }
 sp-std = { version = "5.0.0", default-features = false, path = "../../primitives/std" }
