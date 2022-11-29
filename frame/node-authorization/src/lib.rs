@@ -18,7 +18,7 @@
 //! # Node authorization pallet
 //!
 //! This pallet manages a configurable set of nodes for a permissioned network.
-//! Each node is dentified by a PeerId (i.e. Vec<u8>). It provides two ways to
+//! Each node is dentified by a PeerId (i.e. `Vec<u8>`). It provides two ways to
 //! authorize a node,
 //!
 //! - a set of well known nodes across different organizations in which the
