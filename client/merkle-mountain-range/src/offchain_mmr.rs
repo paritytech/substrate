@@ -66,7 +66,7 @@ where
 		match self.client.header_metadata(hash) {
 			Ok(header) => Some(header),
 			_ => {
-				error!(
+				debug!(
 					target: LOG_TARGET,
 					"Block {} not found. Couldn't {} associated branch.", hash, action
 				);
@@ -168,7 +168,7 @@ where
 					canon_key
 				);
 			} else {
-				error!(
+				debug!(
 					target: LOG_TARGET,
 					"Couldn't canonicalize elem at pos {} using temp key {:?}", pos, temp_key
 				);

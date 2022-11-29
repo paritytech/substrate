@@ -110,13 +110,16 @@ where
 					}
 				},
 				_ => {
-					trace!(target: LOG_TARGET, "Finality notification: {:?}", notification);
-					debug!(target: LOG_TARGET, "Waiting for MMR pallet to become available ...");
+					trace!(
+						target: LOG_TARGET,
+						"Waiting for MMR pallet to become available... (best finalized {:?})",
+						notification.header.number()
+					);
 				},
 			}
 		}
 
-		warn!(
+		error!(
 			target: LOG_TARGET,
 			"Finality notifications stream closed unexpectedly. \
 			Couldn't build the canonicalization engine",
