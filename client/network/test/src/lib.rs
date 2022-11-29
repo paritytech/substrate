@@ -77,7 +77,7 @@ use sp_core::H256;
 use sp_runtime::{
 	codec::{Decode, Encode},
 	generic::{BlockId, OpaqueDigestItemId},
-	traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero},
+	traits::{Block as BlockT, Header as HeaderT, NumberFor},
 	Justification, Justifications,
 };
 use substrate_test_runtime_client::AccountKeyring;
@@ -869,7 +869,7 @@ where
 			.unwrap_or_else(|| Box::new(DefaultBlockAnnounceValidator));
 		let (chain_sync_network_provider, chain_sync_network_handle) =
 			NetworkServiceProvider::new();
-		let (chain_sync, chain_sync_service) = ChainSync::new(
+		let (chain_sync, chain_sync_service, block_announce_config) = ChainSync::new(
 			match network_config.sync_mode {
 				SyncMode::Full => sc_network_common::sync::SyncMode::Full,
 				SyncMode::Fast { skip_proofs, storage_chain_mode } =>
@@ -880,24 +880,18 @@ where
 				SyncMode::Warp => sc_network_common::sync::SyncMode::Warp,
 			},
 			client.clone(),
+			protocol_id.clone(),
+			&fork_id,
+			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
 			block_announce_validator,
 			network_config.max_parallel_downloads,
 			Some(warp_sync),
 			chain_sync_network_handle,
+			block_request_protocol_config.name.clone(),
+			state_request_protocol_config.name.clone(),
+			Some(warp_protocol_config.name.clone()),
 		)
 		.unwrap();
-		let block_announce_config = chain_sync.get_block_announce_proto_config(
-			protocol_id.clone(),
-			&fork_id,
-			Roles::from(if config.is_authority { &Role::Authority } else { &Role::Full }),
-			client.info().best_number,
-			client.info().best_hash,
-			client
-				.block_hash(Zero::zero())
-				.ok()
-				.flatten()
-				.expect("Genesis block exists; qed"),
-		);
 
 		let network = NetworkWorker::new(sc_network::config::Params {
 			role: if config.is_authority { Role::Authority } else { Role::Full },
@@ -911,11 +905,13 @@ where
 			chain_sync_service,
 			metrics_registry: None,
 			block_announce_config,
-			block_request_protocol_config,
-			state_request_protocol_config,
-			light_client_request_protocol_config,
-			warp_sync_protocol_config: Some(warp_protocol_config),
-			request_response_protocol_configs: Vec::new(),
+			request_response_protocol_configs: [
+				block_request_protocol_config,
+				state_request_protocol_config,
+				light_client_request_protocol_config,
+				warp_protocol_config,
+			]
+			.to_vec(),
 		})
 		.unwrap();
 
@@ -994,6 +990,7 @@ where
 				return Poll::Pending
 			}
 		}
+
 		Poll::Ready(())
 	}
 
