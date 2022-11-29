@@ -24,7 +24,6 @@ use futures_timer::Delay;
 use log::{debug, info, trace};
 use sc_client_api::{BlockchainEvents, UsageProvider};
 use sc_network_common::service::NetworkStatusProvider;
-use sc_transaction_pool_api::TransactionPool;
 use sp_blockchain::HeaderMetadata;
 use sp_runtime::traits::{Block as BlockT, Header};
 use std::{collections::VecDeque, fmt::Display, sync::Arc, time::Duration};
@@ -52,16 +51,14 @@ impl Default for OutputFormat {
 }
 
 /// Builds the informant and returns a `Future` that drives the informant.
-pub async fn build<B: BlockT, C, N, P>(
+pub async fn build<B: BlockT, C, N>(
 	client: Arc<C>,
 	network: N,
-	_pool: Arc<P>,
 	format: OutputFormat,
 ) where
 	N: NetworkStatusProvider<B>,
 	C: UsageProvider<B> + HeaderMetadata<B> + BlockchainEvents<B>,
 	<C as HeaderMetadata<B>>::Error: Display,
-	P: TransactionPool,
 {
 	let mut display = display::InformantDisplay::new(format.clone());
 

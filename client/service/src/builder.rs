@@ -542,7 +542,6 @@ where
 		sc_informant::build(
 			client.clone(),
 			network,
-			transaction_pool.clone(),
 			config.informant_output_format,
 		),
 	);
