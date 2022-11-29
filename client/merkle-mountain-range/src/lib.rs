@@ -44,7 +44,7 @@ pub mod test_utils;
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::StreamExt;
-use log::{debug, error, trace, warn};
+use log::{error, trace, warn};
 
 use sc_client_api::{Backend, BlockchainEvents, FinalityNotifications};
 use sc_offchain::OffchainDb;
